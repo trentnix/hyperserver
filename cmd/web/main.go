@@ -25,23 +25,20 @@ func main() {
 		}
 	}()
 
-	if s.Config.HTTP.Port == 0 {
-		log.Fatalf("a port was not configured")
-	}
-
+	// confirm the working directory
 	wd, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("Error getting working directory: %v\n", err)
 		return
 	}
 
-	// Print the working directory
 	fmt.Printf("Current working directory: %s\n", wd)
 
 	// if err := os.Chdir("../.."); err != nil {
 	// 	log.Fatalf("Failed to set working directory: %v", err)
 	// }
 
+	// attach routes and their handlers to the router
 	if err := SetupHandlers(s); err != nil {
 		log.Fatalf("failed to build the handlers router: %v", err)
 	}
