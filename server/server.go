@@ -4,6 +4,7 @@ package server
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/trentnix/hyperserver/config"
 )
@@ -13,6 +14,7 @@ type (
 	// utilities that will be shared and used by the application
 	ApplicationServer struct {
 		Config *config.Config
+		Web    *http.ServeMux
 	}
 )
 
@@ -21,6 +23,7 @@ type (
 func NewApplicationServer() *ApplicationServer {
 	s := new(ApplicationServer)
 	s.initConfig()
+	s.initWeb()
 	return s
 }
 
@@ -37,4 +40,9 @@ func (s *ApplicationServer) initConfig() {
 	}
 
 	s.Config = &cfg
+}
+
+// initWeb initialzes the ApplicationServer router
+func (s *ApplicationServer) initWeb() {
+	s.Web = http.NewServeMux()
 }
