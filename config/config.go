@@ -45,10 +45,7 @@ type (
 
 	// AppConfig stores application configuration
 	AppConfig struct {
-		Name    string
-		Host    string
-		Title   string
-		Timeout time.Duration
+		Title string
 	}
 )
 

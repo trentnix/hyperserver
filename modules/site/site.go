@@ -20,7 +20,7 @@ func init() {
 }
 
 func (m *SiteModule) Init(s *server.ApplicationServer) error {
-	m.title = "Test Site"
+	m.title = s.Config.App.Title
 
 	return nil
 }
