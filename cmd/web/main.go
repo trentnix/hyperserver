@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/trentnix/hyperserver/server"
+	"github.com/trentnix/hyperserver/util"
 )
 
 const (
@@ -25,18 +25,13 @@ func main() {
 		}
 	}()
 
-	// confirm the working directory
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Error getting working directory: %v\n", err)
-		return
+	// if the working directory is configured, set the working directory
+	if s.Config.App.WorkingDirectory != "" {
+		err := util.SetWorkingDirectory(s.Config.App.WorkingDirectory)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-
-	fmt.Printf("Current working directory: %s\n", wd)
-
-	// if err := os.Chdir("../.."); err != nil {
-	// 	log.Fatalf("Failed to set working directory: %v", err)
-	// }
 
 	// attach routes and their handlers to the router
 	if err := SetupHandlers(s); err != nil {
@@ -48,7 +43,7 @@ func main() {
 		port = defaultPort
 	}
 
-	address := s.Config.HTTP.Hostname + ":" + port
+	address := fmt.Sprintf("%s:%s", s.Config.HTTP.Hostname, port)
 
 	server := &http.Server{
 		Addr:         address,
