@@ -23,7 +23,7 @@ func SetWorkingDirectory(wd string) error {
 	}
 
 	if err := os.Chdir(wd); err != nil {
-		NewErrFailedToSetWorkingDirectory(err)
+		return NewErrFailedToSetWorkingDirectory(err)
 	}
 
 	return nil
