@@ -13,7 +13,7 @@ type (
 
 const (
 	LoggerContextKey = contextKey("logger")
-	RequestIDKey     = "requestID"
+	RequestIDKey     = contextKey("requestID")
 )
 
 // Logger is a custom logging interface.
@@ -60,7 +60,7 @@ func LogRequestError(r *http.Request, message string, err error, httpStatus int)
 
 	ctxLogger := *Get(r.Context())
 	errorLogger := ctxLogger.With(
-		Field{Key: requestIDKey, Value: requestID},
+		Field{Key: string(requestIDKey), Value: requestID},
 		Field{Key: "method", Value: r.Method},
 		Field{Key: "path", Value: r.URL.Path},
 		Field{Key: "message", Value: message},

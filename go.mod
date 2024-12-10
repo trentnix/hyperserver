@@ -3,7 +3,7 @@ module github.com/trentnix/hyperserver
 go 1.23.3
 
 require (
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/google/uuid v1.4.0
 	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.0
 )

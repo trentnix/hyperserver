@@ -9,6 +9,8 @@ import (
 	"strconv"
 
 	"github.com/trentnix/hyperserver/server"
+	"github.com/trentnix/hyperserver/services/logger"
+	"github.com/trentnix/hyperserver/services/middleware"
 	"github.com/trentnix/hyperserver/util"
 )
 
@@ -38,6 +40,15 @@ func main() {
 		log.Fatalf("failed to build the handlers router: %v", err)
 	}
 
+	l, err := logger.NewZapLogger()
+	if err != nil {
+		log.Fatalf("failed to instantiate a logger: %v", err)
+	}
+
+	mux := middleware.ChainMiddleware(s.Web,
+		middleware.LoggerMiddleware(l),
+	)
+
 	port := strconv.Itoa(int(s.Config.HTTP.Port))
 	if port == "" {
 		port = defaultPort
@@ -47,7 +58,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:         address,
-		Handler:      s.Web,
+		Handler:      mux,
 		ReadTimeout:  s.Config.HTTP.ReadTimeout,
 		WriteTimeout: s.Config.HTTP.WriteTimeout,
 		IdleTimeout:  s.Config.HTTP.IdleTimeout,
