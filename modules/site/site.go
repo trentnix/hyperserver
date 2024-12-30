@@ -2,12 +2,13 @@
 package module_site
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
-	"text/template"
 
 	"github.com/trentnix/hyperserver/handlers"
 	"github.com/trentnix/hyperserver/server"
+	"github.com/trentnix/hyperserver/services/content"
 )
 
 type (
@@ -37,28 +38,13 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 }
 
 // Home renders the homepage and handles the following routes:
-//
-//	/
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
-	templatePath := filepath.Join("modules", "site", "templates", "html", "index.tmpl")
+	pageTemplate := filepath.Join("modules", "site", "templates", "html", "index.tmpl")
 
-	// Parse the template
-	tmpl, err := template.ParseFiles(templatePath)
+	homepage := content.NewContent(r)
+	homepage.AddTemplates(content.Template(pageTemplate))
+	err := homepage.Render(w)
 	if err != nil {
-		http.Error(w, "Error loading template: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Define the view model
-	viewModel := struct {
-		Title string
-	}{
-		Title: "Welcome to My Site",
-	}
-
-	// Render the template
-	err = tmpl.Execute(w, viewModel)
-	if err != nil {
-		http.Error(w, "Error rendering template: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
 	}
 }
