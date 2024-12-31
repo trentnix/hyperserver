@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins&display=swap');
 
-*{
+* {
     margin: 0;
     padding: 0;
 }
@@ -19,7 +19,118 @@ a {
     margin: auto;
 }
 
-.btn {
+#navbar {
+    background: #3170ff;
+    overflow: auto;
+}
+
+  #navbar h1 {
+    float: left;
+    padding-top: 20px;
+  }
+
+  #navbar ul {
+    list-style: none;
+    float: right;
+  }
+
+  #navbar ul li {
+    float: left;
+  }
+
+  #navbar ul li a {
+    display: block;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.5s;
+  }
+
+  #navbar ul li a:hover {
+    background: #4397EA;
+    transition: all 0.5s;
+  }
+
+  #navbar a {
+    color: #fff;
+    font-weight: bold;
+  }
+
+#showcase {
+    margin: 50px auto 150px auto;
+}
+
+  #showcase img {
+    display: block;
+    width: 30%;
+    margin: 0 auto;
+  }
+
+.section {
+    font-size: 18px;
+    margin: 0 auto 60px auto;
+}
+
+  .section h2 {
+    font-size: 40px;
+    line-height: 1.9em;
+  }
+
+  .section p {
+    margin-bottom: 25px;
+  }
+
+  .section ul {
+    margin-left: 20px;
+  }
+
+  .section h3 {
+    width: 100%;
+    border-bottom: 2px solid  #3170ff;
+    margin-bottom: 20px;
+    font-size: 20px;
+  }
+
+  .section h3 span {
+    background:  #3170ff;
+    padding: 10px 22px;
+    color: #fff;
+    text-align: center;
+    display: inline-block;
+  }
+
+.contact-form {
+    width: 100%;
+    margin: 40px auto 100px auto;
+}
+
+  .contact-form .form-group {
+    margin-bottom: 15px;
+  }
+
+  .contact-form label {
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  .contact-form input, 
+  .contact-form textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #000;
+    box-sizing: border-box;
+  }
+
+  .contact-form textarea {
+    height: 200px;
+  }
+
+  .contact-form input:focus,
+  .contact-form textarea:focus {
+    outline: none;
+    border-color: #265ede;
+  }
+
+  .contact-form button {
     display: inline-block;
     padding: 07px 16px;
     background: rgb(38, 94, 222);;
@@ -29,114 +140,7 @@ a {
     border-radius: 03px;
     color:#fff;
     transition: all 0.3;
-}
-
-#navbar {
-    background: #3170ff;
-    overflow: auto;
-}
-
-#navbar h1 {
-    float: left;
-    padding-top: 20px;
-}
-
-#navbar ul {
-    list-style: none;
-    float: right;
-}
-
-#navbar ul li {
-    float: left;
-}
-
-#navbar ul li a {
-    display: block;
-    padding: 20px;
-    text-align: center;
-    transition: all 0.5s;
-}
-
-#navbar ul li a:hover {
-    background: #4397EA;
-    transition: all 0.5s;
-}
-
-#navbar a {
-  color: #fff;
-}
-
-#showcase {
-    margin: 50px auto 150px auto;
-}
-
-.section h2 {
-   font-size: 40px;
-   line-height: 1.9em;
- }
-
- .section {
-   font-size: 18px;
- }
-
- .section p {
-    margin-bottom: 20px;
- }
-
- .section ul {
-   margin-left: 20px;
- }
-
- .section {
-    margin: 0 auto 60px auto;
- }
-
- .section h3 {
-    width: 100%;
-    border-bottom: 2px solid  #3170ff;
-    margin-bottom: 20px;
-    font-size: 20px;
- }
-
- .section h3 span {
-    background:  #3170ff;
-    padding: 10px 22px;
-    color: #fff;
-    text-align: center;
-    display: inline-block;
- }
-
-.contact-form {
-    width: 100%;
-    margin: 40px auto 100px auto;
-}
-
-.contact-form .form-group {
-    margin-bottom: 15px;
-}
-
-.contact-form label {
-    display: block;
-    margin-bottom: 5px;
-}
-
-.contact-form input, 
-.contact-form textarea {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #000;
-    box-sizing: border-box;
-}
-
-.contact-form textarea {
-    height: 200px;
-}
-
-.contact-form input:focus,
-.contact-form textarea:focus {
-    outline: none;
-    border-color: #265ede;
-}
+  }
 
 footer {
     background: #265ede;

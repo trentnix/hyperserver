@@ -1,5 +1,7 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -7,6 +9,7 @@
     <link rel="stylesheet" href="/css/site.css" />
     <title>{{ .Title }}</title>
   </head>
+
   <body>
     <header>
       
@@ -25,9 +28,17 @@
         <div class="container">
           <h2>{{ .Title }}</h2>
           <p>
-            HyperServer is a back-end framework to build hypermedia-based applications with a particular focus on HTMX. 
+            HyperServer is a back-end framework built in <a href="https://go.dev">Go</a> that can be used to build hypermedia-based applications with a particular focus on HTMX. 
             It's also intended to be usable for non-HTML-based hypermedia including HyperView, but I'm just working 
             on the basics at the moment.
+          </p>
+          <p>
+            <img src="/img/hyperserver.png" alt="HyperServer graphic of a hyper gopher - consider it a mascot for the project" />
+          </p>
+          <p>
+            The source code for HyperServer can be found at <a href="https://github.com/trentnix/hyperserver">Github</a>. Use it as you wish, 
+            just please let me know if you build anything with it, have any constructive criticisms, or have any ideas 
+            about how it can be made better.
           </p>
         </div>
       </section>
@@ -38,12 +49,12 @@
       <div class="container">
         <h3><span>About Me</span></h3>
         <p>
-          This project was started by Trent Nix, a technologist and developer that lives in a blissfully 
+          HyperServer is a project by Trent Nix, a technologist and developer that lives in a blissfully 
           boring part of the high plains of the United States. My personal site can be found at 
           <a href="https://www.trentnix.com/">trentnix.com</a>.
         </p>
         <p>
-          Inspiration, ideas, and code were frequently borrowed from a number of places, including:
+          Inspiration, ideas, and code in HyperServer were frequently borrowed from a number of places, including:
         </p>
         <ul>
           <li>Mike Stefanello's <a href="https://github.com/mikestefanello/pagoda">Pagoda</a> project, which advertises itself as a "rapid, easy full-stack web development starter kit in Go".</li>
@@ -69,7 +80,7 @@
               <label for="message">Message</label>
               <textarea name="message" id="message" cols="30" rows="10"></textarea>
             </div>
-            <button type="button" class="btn">Submit</button>
+            <button type="button">Submit</button>
           </form>
         </div>
       </div>
@@ -78,9 +89,10 @@
     <footer>
       <div class="container">
         <p>
-          Trent Nix &copy 2025
+          
         </p>
       </div>
     </footer>
   </body>
+  
 </html>
