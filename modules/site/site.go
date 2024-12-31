@@ -34,14 +34,20 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 // Routes registers routes with the provided router and, along with Init, satisfies
 // the Handler interface
 func (m *SiteModule) Routes(mux *http.ServeMux) {
+	// media paths
 	cssPath := filepath.Join("modules", "site", "templates", "html", "css")
 	jsPath := filepath.Join("modules", "site", "templates", "html", "js")
 	imgPath := filepath.Join("modules", "site", "templates", "html", "img")
 
+	// serve media
 	mux.Handle("/css/", http.StripPrefix("/css/", http.FileServer(http.Dir(cssPath)))) // Serve .css files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(jsPath))))    // Serve .js files
 	mux.Handle("/img/", http.StripPrefix("/img/", http.FileServer(http.Dir(imgPath)))) // Serve image files
-	// mux.HandleFunc("/favicon.ico", h.ServeFavicon)
+
+	// serve files
+	mux.HandleFunc("/favicon.ico", m.ServeFavicon)
+
+	// serve pages
 	mux.Handle("/", http.HandlerFunc(m.Home))
 }
 
@@ -55,4 +61,10 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
 	}
+}
+
+// ServeFavicon serves the favicon resource to a requestor
+func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
+	faviconPath := filepath.Join("modules", "site", "templates", "html", "img", "favicon.ico")
+	http.ServeFile(w, r, faviconPath)
 }
