@@ -34,12 +34,20 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 // Routes registers routes with the provided router and, along with Init, satisfies
 // the Handler interface
 func (m *SiteModule) Routes(mux *http.ServeMux) {
+	cssPath := filepath.Join("modules", "site", "templates", "html", "css")
+	jsPath := filepath.Join("modules", "site", "templates", "html", "js")
+	imgPath := filepath.Join("modules", "site", "templates", "html", "img")
+
+	mux.Handle("/css/", http.StripPrefix("/css/", http.FileServer(http.Dir(cssPath)))) // Serve .css files
+	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(jsPath))))    // Serve .js files
+	mux.Handle("/img/", http.StripPrefix("/img/", http.FileServer(http.Dir(imgPath)))) // Serve image files
+	// mux.HandleFunc("/favicon.ico", h.ServeFavicon)
 	mux.Handle("/", http.HandlerFunc(m.Home))
 }
 
 // Home renders the homepage and handles the following routes:
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
-	pageTemplate := filepath.Join("modules", "site", "templates", "html", "index.tmpl")
+	pageTemplate := filepath.Join("modules", "site", "templates", "html", "index.html")
 
 	homepage := content.NewContent(r)
 	homepage.AddTemplates(content.Template(pageTemplate))
