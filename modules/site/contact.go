@@ -11,7 +11,7 @@ import (
 
 // contactForm defines the fields used when logging in via email/password
 type (
-	contactForm struct {
+	ContactForm struct {
 		Name    string `validate:"required"`
 		Email   string `validate:"required,email"`
 		Message string `validate:"required"`
@@ -26,7 +26,7 @@ const (
 
 // GetContact retrieves an empty contact form
 func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
-	contactForm := contactForm{}
+	contactForm := ContactForm{}
 
 	contact := content.NewContent(r)
 	contact.AddTemplates(content.Template(contactFormTemplate))
