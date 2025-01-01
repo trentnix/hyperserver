@@ -7,6 +7,10 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/css/site.css" />
+    <script src="https://unpkg.com/htmx.org@2.0.1"
+      integrity="sha384-QWGpdj554B4ETpJJC9z+ZHJcA/i59TyjxEPXiiUgN2WmTyV5OEZWCD6gQhgkdpB/"
+      crossorigin="anonymous" defer>
+    </script>
     <title>{{ .Title }}</title>
   </head>
 
@@ -64,7 +68,10 @@
     </section>
 
     <section id="contact" class="section">
-      <div class="container">
+      <div hx-get="/contact" hx-target="this" hx-swap="outerHTML" hx-trigger="load">
+        Loading contact form...
+      </div>
+      <!-- <div class="container">
         <h3><span>Contact Me</span></h3>
         <div class="contact-form">
           <form>
@@ -83,7 +90,7 @@
             <button type="button">Submit</button>
           </form>
         </div>
-      </div>
+      </div> -->
     </section>
 
     <footer>

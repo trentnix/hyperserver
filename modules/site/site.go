@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/trentnix/hyperserver/components/content"
 	"github.com/trentnix/hyperserver/handlers"
 	"github.com/trentnix/hyperserver/server"
-	"github.com/trentnix/hyperserver/services/content"
 )
 
 type (
@@ -49,6 +49,10 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 
 	// serve pages
 	mux.Handle("/", http.HandlerFunc(m.Home))
+
+	// contact
+	mux.Handle("GET /contact", http.HandlerFunc(m.GetContact))
+	mux.Handle("POST /contact", http.HandlerFunc(m.Contact))
 }
 
 // Home renders the homepage and handles the following routes:
