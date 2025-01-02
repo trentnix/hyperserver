@@ -147,9 +147,17 @@ main {
   }
 
 footer {
-    background: #265ede;
-    padding: 20px;
-    margin-top: 20px;
-    text-align: center;
-    color:#fff;
+  background: #265ede;
+  padding: 20px;
+  margin-top: 20px;
+  text-align: center;
+  color:#fff;
+}
+
+footer a {
+  color: #fff;
+}
+
+footer a:hover {
+  text-decoration: underline;
 }
