@@ -55,8 +55,12 @@ a {
     font-weight: bold;
   }
 
+main {
+  margin-top: 50px;
+}
+
 #showcase {
-    margin: 50px auto 150px auto;
+    margin: 0 auto 150px auto;
 }
 
   #showcase img {

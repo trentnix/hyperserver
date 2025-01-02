@@ -15,7 +15,15 @@ type (
 	// SiteModule contains all of the data required to implement the site module
 	SiteModule struct {
 		title string
+
+		contentManager *content.ContentManagerService
 	}
+)
+
+const (
+	module             = "module_site"
+	pageLayoutTemplate = "modules/site/templates/html/layouts/site.html"
+	homeContent        = "modules/site/templates/html/index.html"
 )
 
 // init registers an instance of SiteModule with the application handlers. init runs
@@ -27,6 +35,9 @@ func init() {
 // Init takes care of initializing the specified SiteModule instance
 func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.title = s.Config.App.Title
+
+	m.contentManager = content.NewContentManager()
+	m.contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
 
 	return nil
 }
@@ -57,10 +68,8 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 
 // Home renders the homepage and handles the following routes:
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
-	pageTemplate := filepath.Join("modules", "site", "templates", "html", "index.html")
-
-	homepage := content.NewContent(r)
-	homepage.AddTemplates(content.Template(pageTemplate))
+	homepage := content.NewManagedContent(r, m.contentManager)
+	homepage.AddTemplate(homeContent)
 	err := homepage.Render(w)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)

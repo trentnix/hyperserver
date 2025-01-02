@@ -26,7 +26,7 @@ type (
 		ContentTemplates []Template
 
 		// Components contains shared components loaded into a template
-		Components Template
+		ComponentTemplates []Template
 
 		// Headers stores a list of HTTP headers and values to be set on the response
 		Headers map[string]string
@@ -44,6 +44,8 @@ type (
 
 		// complex data that needs to be rendered on a given page
 		Data any
+
+		ContentManager *ContentManagerService
 	}
 )
 
@@ -52,7 +54,7 @@ const (
 	DefaultTitle = "HyperServer"
 )
 
-// NewPage extracts Page data from the provided context
+// NewContent extracts Content data from the provided request
 func NewContent(r *http.Request) *Content {
 	c := Content{}
 	c.Title = DefaultTitle
@@ -69,16 +71,26 @@ func NewContent(r *http.Request) *Content {
 	return &c
 }
 
-// IsHtmx will let the caller determine whether the specified content is an HTMX response to an HTMX request
-func (c *Content) IsHtmx() bool {
-	if c.HTMX.Response != nil && c.HTMX.Request.Enabled {
-		return true
-	}
+// NewManagedContent extracts Content data from the provided request and also sets
+// the Content's ContentManagerService
+func NewManagedContent(r *http.Request, m *ContentManagerService) *Content {
+	c := NewContent(r)
+	c.ContentManager = m
 
-	return false
+	return c
 }
 
-// AddContents adds the content slice of strings to the Page.Content slice
+// IsHtmx will let the caller determine whether the specified content is an HTMX response to an HTMX request
+func (c *Content) IsHtmx() bool {
+	return c.HTMX.Request.Enabled
+}
+
+// AddTemplate adds the content slice of strings to the Page.Content slice
+func (c *Content) AddTemplate(content Template) {
+	c.ContentTemplates = append(c.ContentTemplates, content)
+}
+
+// AddTemplates adds the content slice of strings to the Page.Content slice
 func (c *Content) AddTemplates(contents ...Template) {
 	c.ContentTemplates = append(c.ContentTemplates, contents...)
 }
@@ -86,13 +98,31 @@ func (c *Content) AddTemplates(contents ...Template) {
 // Render parses the layout and content templates and executes them with the
 // specified Content as the view model
 func (c *Content) Render(w http.ResponseWriter) error {
-	templates := c.LayoutTemplates
+	if c.ContentManager != nil {
+		contentType := PageType
+		if c.IsHtmx() {
+			// partial page
+			contentType = HtmxType
+		}
+
+		// load the templates from the ContentManagerService *before* any templates that might be
+		// on the specified Content instance
+		c.LayoutTemplates = append(c.ContentManager.LayoutTemplates[contentType], c.LayoutTemplates...)
+		c.ContentTemplates = append(c.ContentManager.ContentTemplates[contentType], c.ContentTemplates...)
+		c.ComponentTemplates = append(c.ContentManager.ComponentTemplates[contentType], c.ComponentTemplates...)
+	}
+
+	// create a list of templates in order from the layout templates to the component templates
+	var templates []Template
+	templates = append(templates, c.LayoutTemplates...)
 	templates = append(templates, c.ContentTemplates...)
+	templates = append(templates, c.ComponentTemplates...)
 	if len(templates) == 0 {
 		return fmt.Errorf("No templates have been set")
 	}
 
-	tmpl, err := template.ParseFiles(templatesToStrings(c.ContentTemplates)...)
+	// parse the templates in the order specified
+	tmpl, err := template.ParseFiles(templatesToStrings(templates)...)
 	if err != nil {
 		return fmt.Errorf("Error loading template: %w", err)
 	}

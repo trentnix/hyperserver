@@ -21,15 +21,17 @@ type (
 )
 
 const (
-	contactFormTemplate = "modules/site/templates/html/contact.html"
+	contactPageTemplate = "modules/site/templates/html/contact.html"
+	contactFormTemplate = "modules/site/templates/html/contact-form.html"
 )
 
 // GetContact retrieves an empty contact form
 func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 	contactForm := ContactForm{}
 
-	contact := content.NewContent(r)
-	contact.AddTemplates(content.Template(contactFormTemplate))
+	contact := content.NewManagedContent(r, m.contentManager)
+	contact.AddTemplate(content.Template(contactPageTemplate))
+	contact.AddTemplate(content.Template(contactFormTemplate))
 	contact.Data = &contactForm
 
 	err := contact.Render(w)
