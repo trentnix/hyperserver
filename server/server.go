@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/database"
 )
 
 type (
 	// ApplicationServer is the application container that contains various services and
 	// utilities that will be shared and used by the application
 	ApplicationServer struct {
-		Config *config.Config
-		Web    *http.ServeMux
+		Config   *config.Config
+		Database *sqlx.DB
+		Web      *http.ServeMux
 	}
 )
 
@@ -22,8 +25,11 @@ type (
 // necessary setup
 func NewApplicationServer() *ApplicationServer {
 	s := new(ApplicationServer)
+
 	s.initConfig()
+	s.initDatabase()
 	s.initWeb()
+
 	return s
 }
 
@@ -40,6 +46,15 @@ func (s *ApplicationServer) initConfig() {
 	}
 
 	s.Config = &cfg
+}
+
+func (s *ApplicationServer) initDatabase() {
+	db, err := database.Setup(s.Config.Database.Driver, s.Config.Database.Connection)
+	if err != nil {
+		panic(err)
+	}
+
+	s.Database = db
 }
 
 // initWeb initialzes the ApplicationServer router

@@ -25,8 +25,9 @@ import (
 type (
 	// Config stores complete configuration
 	Config struct {
-		HTTP HTTPConfig
-		App  AppConfig
+		HTTP     HTTPConfig
+		Database DatabaseConfig
+		App      AppConfig
 	}
 
 	// HTTPConfig stores HTTP configuration
@@ -41,6 +42,13 @@ type (
 			Certificate string
 			Key         string
 		}
+	}
+
+	// DatabaseConfig stores the database configuration
+	DatabaseConfig struct {
+		Driver         string
+		Connection     string
+		TestConnection string
 	}
 
 	// AppConfig stores application configuration

@@ -7,6 +7,7 @@ import (
 
 	"github.com/trentnix/hyperserver/components/content"
 	"github.com/trentnix/hyperserver/components/form"
+	"github.com/trentnix/hyperserver/modules/site/models"
 )
 
 // contactForm defines the fields used when logging in via email/password
@@ -32,6 +33,7 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 	if !contact.IsHtmx() {
 		// we need to load the form in a page - load the page that will host the form
 		contact.AddLayoutTemplate(content.Template(contactPageTemplate))
+		contact.Title = "Contact Us"
 	}
 
 	contact.AddContentTemplate(content.Template(contactFormTemplate))
@@ -56,6 +58,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	if !contact.IsHtmx() {
 		// we need to load the form in a page - load the page that will host the form
 		contact.AddLayoutTemplate(content.Template(contactPageTemplate))
+		contact.Title = "Contact Us"
 	}
 
 	contact.AddContentTemplate(content.Template(contactFormTemplate))
@@ -79,16 +82,31 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
 		}
+
+		return
 	}
 
-	// TO DO: save the form details to the database
+	cs := models.ContactSubmission{
+		Name:    contactForm.Name,
+		Email:   contactForm.Email,
+		Message: contactForm.Message,
+	}
 
-	// if save successful
+	if err = cs.Create(m.Database); err != nil {
+		contactForm.SetFormError(fmt.Sprintf("There was an error creating the specified contact message: %v", err.Error()))
+		contact.Data = contactForm
+		err = contact.Render(w)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
+		}
+
+		return
+	}
 
 	contactForm.Name = r.FormValue("")
 	contactForm.Email = r.FormValue("")
 	contactForm.Message = r.FormValue("")
-	contactForm.SetFormMessage("<need a success message>")
+	contactForm.SetFormMessage("Your message has been submitted.")
 
 	contact.Data = contactForm
 	err = contact.Render(w)

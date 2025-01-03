@@ -13,6 +13,9 @@ import (
 // Page defines the various fields that describe a particular site page
 type (
 	Content struct {
+		// Site name
+		Site string
+
 		// Title of the content, if any
 		Title string
 
@@ -51,12 +54,14 @@ type (
 
 const (
 	// default page title and title prefix
+	DefaultSite  = "HyperServer"
 	DefaultTitle = "HyperServer"
 )
 
 // NewContent extracts Content data from the provided request
 func NewContent(r *http.Request) *Content {
 	c := Content{}
+	c.Site = DefaultSite
 	c.Title = DefaultTitle
 	c.ResponseStatusCode = 200
 

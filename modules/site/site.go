@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/components/content"
 	"github.com/trentnix/hyperserver/handlers"
 	"github.com/trentnix/hyperserver/server"
@@ -14,7 +15,8 @@ import (
 type (
 	// SiteModule contains all of the data required to implement the site module
 	SiteModule struct {
-		title string
+		Title    string
+		Database *sqlx.DB
 
 		contentManager *content.ContentManagerService
 	}
@@ -34,8 +36,9 @@ func init() {
 
 // Init takes care of initializing the specified SiteModule instance
 func (m *SiteModule) Init(s *server.ApplicationServer) error {
-	m.title = s.Config.App.Title
+	m.Title = s.Config.App.Title
 
+	m.Database = s.Database
 	m.contentManager = content.NewContentManager()
 	m.contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
 
@@ -69,6 +72,8 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 // Home renders the homepage and handles the following routes:
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	homepage := content.NewManagedContent(r, m.contentManager)
+	homepage.Site = m.Title
+	homepage.Title = "Home"
 	homepage.AddContentTemplate(homeContent)
 	err := homepage.Render(w)
 	if err != nil {
