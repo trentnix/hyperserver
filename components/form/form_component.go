@@ -74,7 +74,6 @@ func ValidateForm(f any) error {
 		formComponent.SetValidated(true)
 		if err != nil {
 			formComponent.SetFieldErrors(err)
-			formComponent.SetFormError("validation failed")
 		}
 	} else {
 		return fmt.Errorf("The specified form does not implement the FormComponent interface.")

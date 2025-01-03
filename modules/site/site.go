@@ -69,7 +69,7 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 // Home renders the homepage and handles the following routes:
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	homepage := content.NewManagedContent(r, m.contentManager)
-	homepage.AddTemplate(homeContent)
+	homepage.AddContentTemplate(homeContent)
 	err := homepage.Render(w)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)

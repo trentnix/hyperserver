@@ -85,14 +85,34 @@ func (c *Content) IsHtmx() bool {
 	return c.HTMX.Request.Enabled
 }
 
-// AddTemplate adds the content slice of strings to the Page.Content slice
-func (c *Content) AddTemplate(content Template) {
+// AddLayoutTemplate adds the content Template to the Content's LayoutTemplates
+func (c *Content) AddLayoutTemplate(content Template) {
+	c.LayoutTemplates = append(c.LayoutTemplates, content)
+}
+
+// AddLayoutTemplates adds the contents Templates to the Content's LayoutTemplates
+func (c *Content) AddLayoutTemplates(contents ...Template) {
+	c.LayoutTemplates = append(c.LayoutTemplates, contents...)
+}
+
+// AddContentTemplate adds the content Template to the Content's ContentTemplates
+func (c *Content) AddContentTemplate(content Template) {
 	c.ContentTemplates = append(c.ContentTemplates, content)
 }
 
-// AddTemplates adds the content slice of strings to the Page.Content slice
-func (c *Content) AddTemplates(contents ...Template) {
+// AddContentTemplates adds the contents Templates to the Content's ContentTemplates
+func (c *Content) AddContentTemplates(contents ...Template) {
 	c.ContentTemplates = append(c.ContentTemplates, contents...)
+}
+
+// AddComponentTemplate adds the content Template to the Content's ComponentTemplates
+func (c *Content) AddComponentTemplate(content Template) {
+	c.ComponentTemplates = append(c.ComponentTemplates, content)
+}
+
+// AddComponentTemplates adds the contents Templates to the Content's ComponentTemplates
+func (c *Content) AddComponentTemplates(contents ...Template) {
+	c.ComponentTemplates = append(c.ComponentTemplates, contents...)
 }
 
 // Render parses the layout and content templates and executes them with the
