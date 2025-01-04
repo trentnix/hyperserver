@@ -41,7 +41,7 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 
 	err := contact.Render(w)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
+		m.Error(w, r, "There was an error rendering the specified content.", err, true)
 	}
 }
 
@@ -49,7 +49,6 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, fmt.Sprintf("There was an error parsing the contact form: %v", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
@@ -71,7 +70,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	// validate the ContactForm form
 	err := form.ValidateForm(contactForm)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("There was an error validating the contact form: %v", err.Error()), http.StatusInternalServerError)
+		m.Error(w, r, "There was an error validating the contact form.", err, true)
 		return
 	}
 
@@ -80,7 +79,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		contact.Data = contactForm
 		err = contact.Render(w)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
+			m.Error(w, r, "There was an error rendering the specified content.", err, true)
 		}
 
 		return
@@ -98,7 +97,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		contact.Data = contactForm
 		err = contact.Render(w)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
+			m.Error(w, r, "There was an error rendering the specified content.", err, true)
 		}
 
 		return
@@ -113,6 +112,6 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	contact.Data = contactForm
 	err = contact.Render(w)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
+		m.Error(w, r, "There was an error rendering the specified content.", err, true)
 	}
 }

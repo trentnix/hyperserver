@@ -54,13 +54,11 @@ func LogRequestError(r *http.Request, message string, err error, httpStatus int)
 		return
 	}
 
-	requestIDKey := RequestIDKey
-
-	requestID, _ := r.Context().Value(requestIDKey).(string)
-
 	ctxLogger := *Get(r.Context())
+
+	requestID, _ := r.Context().Value(RequestIDKey).(string)
 	errorLogger := ctxLogger.With(
-		Field{Key: string(requestIDKey), Value: requestID},
+		Field{Key: string(RequestIDKey), Value: requestID},
 		Field{Key: "method", Value: r.Method},
 		Field{Key: "path", Value: r.URL.Path},
 		Field{Key: "message", Value: message},
