@@ -6,8 +6,10 @@ import (
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
-	sqliteDriver "github.com/mattn/go-sqlite3" // SQLite driver
+	sqlite3 "github.com/mattn/go-sqlite3" // SQLite driver
 
+	"github.com/golang-migrate/migrate/v4"
+	migrationDriver "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
@@ -19,26 +21,30 @@ func Setup(driver string, connection string) (*sqlx.DB, error) {
 		return nil, fmt.Errorf("error opening database file: %w", err)
 	}
 
+	return db, nil
+}
+
+func RunMigrations(db *sql.DB, migrationsLocation string) error {
 	// Use the underlying *sql.DB for migration
-	// sqlDriver, err := sqlite3.WithInstance(db.DB, &sqlite3.Config{})
-	// if err != nil {
-	// 	return nil, fmt.Errorf("could not start migration driver: %w", err)
-	// }
+	sqlDriver, err := migrationDriver.WithInstance(db, &migrationDriver.Config{})
+	if err != nil {
+		return fmt.Errorf("could not start migration driver: %w", err)
+	}
 
 	// Run migrations
-	// m, err := migrate.NewWithDatabaseInstance(
-	// 	"file://database/migrations",
-	// 	driver, sqlDriver)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("migration failed: %w", err)
-	// }
+	m, err := migrate.NewWithDatabaseInstance(
+		"file://modules/site/database/migrations",
+		"sqlite3", sqlDriver)
+	if err != nil {
+		return fmt.Errorf("migration failed: %w", err)
+	}
 
-	// // Apply migrations
-	// if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-	// 	return nil, fmt.Errorf("could not apply migrations: %w", err)
-	// }
+	// Apply migrations
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("could not apply migrations: %w", err)
+	}
 
-	return db, nil
+	return nil
 }
 
 // TableExists determines whether the table specified by tableName exists
@@ -49,7 +55,7 @@ func TableExists(db *sql.DB, tableName string) (bool, error) {
 	driver := db.Driver()
 
 	switch driver.(type) {
-	case *sqliteDriver.SQLiteDriver:
+	case *sqlite3.SQLiteDriver:
 		query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?;"
 		args = []interface{}{tableName}
 	default:

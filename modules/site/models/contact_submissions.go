@@ -4,9 +4,11 @@ package models
 
 import (
 	"fmt"
+	"net/mail"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/trentnix/hyperserver/modules/site/database"
 )
 
 type (
@@ -24,7 +26,7 @@ const (
 
 // Create adds the specified ContactSubmission to the database
 func (contactSubmission *ContactSubmission) Create(db *sqlx.DB) error {
-	if err := validateDatabase(db.DB, contactSubmissionsTable); err != nil {
+	if err := database.PrepareDatabase(db.DB, contactSubmissionsTable); err != nil {
 		return err
 	}
 
@@ -37,4 +39,10 @@ func (contactSubmission *ContactSubmission) Create(db *sqlx.DB) error {
 
 	_, err := db.NamedExec(query, contactSubmission)
 	return err
+}
+
+// IsValidEmail confirms that the email provided is a validly constructed email address.
+func IsValidEmail(email string) bool {
+	_, err := mail.ParseAddress(email)
+	return err == nil
 }
