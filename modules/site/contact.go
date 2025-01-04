@@ -54,7 +54,6 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contact := content.NewManagedContent(r, m.contentManager)
-
 	if !contact.IsHtmx() {
 		// we need to load the form in a page - load the page that will host the form
 		contact.AddLayoutTemplate(content.Template(contactPageTemplate))
@@ -69,7 +68,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	contactForm.Email = r.FormValue("email")
 	contactForm.Message = r.FormValue("message")
 
-	// validate the resetPasswordRequest form
+	// validate the ContactForm form
 	err := form.ValidateForm(contactForm)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("There was an error validating the contact form: %v", err.Error()), http.StatusInternalServerError)
@@ -77,6 +76,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if contactForm.HasErrors() {
+		// there are validation errors - render the form errors
 		contact.Data = contactForm
 		err = contact.Render(w)
 		if err != nil {
@@ -86,6 +86,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// add the contact submission to the database
 	cs := models.ContactSubmission{
 		Name:    contactForm.Name,
 		Email:   contactForm.Email,
@@ -108,6 +109,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	contactForm.Message = r.FormValue("")
 	contactForm.SetFormMessage("Your message has been submitted.")
 
+	// render the success response
 	contact.Data = contactForm
 	err = contact.Render(w)
 	if err != nil {
