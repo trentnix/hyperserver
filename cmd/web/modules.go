@@ -3,9 +3,9 @@
 package main
 
 import (
-	"github.com/trentnix/hyperserver/handlers"
 	_ "github.com/trentnix/hyperserver/modules/site"
-	"github.com/trentnix/hyperserver/server"
+	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/server"
 )
 
 // SetupHandlers iterates over the Handler instances that have self-registered, calls

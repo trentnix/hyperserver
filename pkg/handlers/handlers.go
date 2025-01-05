@@ -5,7 +5,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/trentnix/hyperserver/server"
+	"github.com/trentnix/hyperserver/pkg/server"
 )
 
 // handlers provides a global instance of Handlers that can be used in the application

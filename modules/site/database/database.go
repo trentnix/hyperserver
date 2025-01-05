@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/trentnix/hyperserver/database"
+	"github.com/trentnix/hyperserver/pkg/database"
 )
 
 const (

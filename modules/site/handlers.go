@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/trentnix/hyperserver/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/content"
 )
 
 // Home renders the homepage and handles the following routes:

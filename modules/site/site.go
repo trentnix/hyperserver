@@ -5,10 +5,10 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/trentnix/hyperserver/components/content"
-	"github.com/trentnix/hyperserver/handlers"
-	"github.com/trentnix/hyperserver/server"
-	"github.com/trentnix/hyperserver/services/logger"
+	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 type (

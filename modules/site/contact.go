@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/trentnix/hyperserver/components/content"
-	"github.com/trentnix/hyperserver/components/form"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/form"
 )
 
 // contactForm defines the fields used when logging in via email/password

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"text/template"
 
-	"github.com/trentnix/hyperserver/services/htmx"
+	"github.com/trentnix/hyperserver/pkg/services/htmx"
 )
 
 // Page defines the various fields that describe a particular site page

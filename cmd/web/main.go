@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/trentnix/hyperserver/server"
-	"github.com/trentnix/hyperserver/services/logger"
-	"github.com/trentnix/hyperserver/services/middleware"
-	"github.com/trentnix/hyperserver/util"
+	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/middleware"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 const (

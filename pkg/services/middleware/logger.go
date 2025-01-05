@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/trentnix/hyperserver/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 // LoggerMiddleware logs the details of a request, adds a logger instance to the

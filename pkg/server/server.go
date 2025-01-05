@@ -8,7 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/database"
+	"github.com/trentnix/hyperserver/pkg/database"
 )
 
 type (
