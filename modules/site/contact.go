@@ -77,6 +77,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	if contactForm.HasErrors() {
 		// there are validation errors - render the form errors
 		contact.Data = contactForm
+
 		err = contact.Render(w)
 		if err != nil {
 			m.Error(w, r, "There was an error rendering the specified content.", err, true)
@@ -92,9 +93,11 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		Message: contactForm.Message,
 	}
 
-	if err = cs.Create(m.Database); err != nil {
+	err = cs.Create(m.Database)
+	if err != nil {
 		contactForm.SetFormError(fmt.Sprintf("There was an error creating the specified contact message: %v", err.Error()))
 		contact.Data = contactForm
+
 		err = contact.Render(w)
 		if err != nil {
 			m.Error(w, r, "There was an error rendering the specified content.", err, true)
@@ -110,6 +113,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	// render the success response
 	contact.Data = contactForm
+
 	err = contact.Render(w)
 	if err != nil {
 		m.Error(w, r, "There was an error rendering the specified content.", err, true)
