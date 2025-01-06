@@ -18,7 +18,7 @@ func Setup(driver string, connection string) (*sqlx.DB, error) {
 	// Open the database using sqlx
 	db, err := sqlx.Open(driver, connection)
 	if err != nil {
-		return nil, fmt.Errorf("error opening database file: %w", err)
+		return nil, NewErrDatabaseConfiguration(fmt.Errorf("error opening database file: %w", err))
 	}
 
 	return db, nil
@@ -28,7 +28,7 @@ func RunMigrations(db *sql.DB, migrationsLocation string) error {
 	// Use the underlying *sql.DB for migration
 	sqlDriver, err := migrationDriver.WithInstance(db, &migrationDriver.Config{})
 	if err != nil {
-		return fmt.Errorf("could not start migration driver: %w", err)
+		return NewErrDatabaseMigrationFailed(fmt.Errorf("could not start migration driver: %w", err))
 	}
 
 	// Run migrations
@@ -36,12 +36,12 @@ func RunMigrations(db *sql.DB, migrationsLocation string) error {
 		"file://modules/site/database/migrations",
 		"sqlite3", sqlDriver)
 	if err != nil {
-		return fmt.Errorf("migration failed: %w", err)
+		return NewErrDatabaseMigrationFailed(err)
 	}
 
 	// Apply migrations
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("could not apply migrations: %w", err)
+		return NewErrDatabaseMigrationFailed(fmt.Errorf("could not apply migrations: %w", err))
 	}
 
 	return nil
@@ -59,7 +59,7 @@ func TableExists(db *sql.DB, tableName string) (bool, error) {
 		query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?;"
 		args = []interface{}{tableName}
 	default:
-		return false, fmt.Errorf("the database type %T is not supported", db.Driver())
+		return false, NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
 	}
 
 	var result string
@@ -68,7 +68,7 @@ func TableExists(db *sql.DB, tableName string) (bool, error) {
 		// table doesn't exist
 		return false, nil
 	} else if err != nil {
-		return false, fmt.Errorf("the was an error querying for the existence of table '%s': %w", tableName, err)
+		return false, NewErrDatabase(fmt.Errorf("the was an error querying for the existence of table '%s': %w", tableName, err))
 	}
 
 	return true, nil

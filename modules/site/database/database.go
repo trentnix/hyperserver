@@ -16,20 +16,19 @@ const (
 // PrepareDatabase ensures that the module's database is configured correctly and is ready for use
 func PrepareDatabase(db *sql.DB, contactSubmissionsTable string) error {
 	if db == nil {
-		return fmt.Errorf("the database is not valid")
+		return database.NewErrDatabaseUnavailable(fmt.Errorf("the database is not valid"))
 	}
 
 	tableExists, err := database.TableExists(db, contactSubmissionsTable)
 	if err != nil {
-		return err
+		return database.NewErrDatabase(err)
 	}
 
 	if !tableExists {
 		err = database.RunMigrations(db, MigrationsDirectory)
 		if err != nil {
-			return err
+			return database.NewErrDatabase(err)
 		}
-
 	}
 
 	return nil

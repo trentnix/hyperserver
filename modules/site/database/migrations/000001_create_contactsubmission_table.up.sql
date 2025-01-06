@@ -1,6 +1,7 @@
 CREATE TABLE hyperserver_contact_submission (
-    name TXT,
-    email TEXT NOT NULL,
+    id VARCHAR(36) PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    name TEXT,
     message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

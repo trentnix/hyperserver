@@ -7,12 +7,14 @@ import (
 	"net/mail"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/modules/site/database"
 )
 
 type (
 	ContactSubmission struct {
+		Id        string    `db:"id"`
 		Name      string    `db:"name"`
 		Email     string    `db:"email"`
 		Message   string    `db:"message"`
@@ -30,11 +32,12 @@ func (contactSubmission *ContactSubmission) Create(db *sqlx.DB) error {
 		return err
 	}
 
+	contactSubmission.Id = uuid.New().String()
 	contactSubmission.CreatedAt = time.Now()
 
 	query := fmt.Sprintf(`
-		INSERT INTO %s (name, email, message, created_at)
-		VALUES (:name, :email, :message, :created_at)
+		INSERT INTO %s (id, name, email, message, created_at)
+		VALUES (:id, :name, :email, :message, :created_at)
 		`, contactSubmissionsTable)
 
 	_, err := db.NamedExec(query, contactSubmission)
