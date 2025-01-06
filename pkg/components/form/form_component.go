@@ -61,7 +61,7 @@ func ValidateForm(f any) error {
 	// Ensure f is a pointer to a struct
 	val := reflect.ValueOf(f)
 	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("The form being validated should be passed as a reference (pointer).")
+		return NewErrInvalidForm(fmt.Errorf("The form being validated should be passed as a reference and not by value."))
 	}
 
 	// Extract the concrete struct value and validate
@@ -76,7 +76,7 @@ func ValidateForm(f any) error {
 			formComponent.SetFieldErrors(err)
 		}
 	} else {
-		return fmt.Errorf("The specified form does not implement the FormComponent interface.")
+		return NewErrFormComponentInterfaceNotImplemented(fmt.Errorf("The specified form does not implement the FormComponent interface."))
 	}
 
 	return nil
@@ -103,7 +103,7 @@ func AddFormToContext(ctx context.Context, form any) (context.Context, error) {
 	}
 
 	if _, ok := form.(FormComponent); !ok {
-		return ctx, fmt.Errorf("the form must implement the FormComponent interface")
+		return ctx, NewErrFormComponentInterfaceNotImplemented(fmt.Errorf("The specified form does not implement the FormComponent interface."))
 	}
 
 	return context.WithValue(ctx, FormKey, formPtr), nil
@@ -119,7 +119,7 @@ func GetFormFromContext(ctx context.Context) (any, error) {
 
 	// Check if f implements FormComponent
 	if _, ok := f.(FormComponent); !ok {
-		return nil, fmt.Errorf("the struct stored in the request context does not implement FormComponent")
+		return nil, NewErrFormComponentInterfaceNotImplemented(fmt.Errorf("the struct stored in the request context does not implement FormComponent"))
 	}
 
 	return f, nil
