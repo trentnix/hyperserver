@@ -9,7 +9,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/trentnix/hyperserver/modules/site/database"
+	site_db "github.com/trentnix/hyperserver/modules/site/database"
+	"github.com/trentnix/hyperserver/pkg/database"
+
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 type (
@@ -20,6 +23,13 @@ type (
 		Message   string    `db:"message"`
 		CreatedAt time.Time `db:"created_at"`
 	}
+
+	BaseError = hs_errors.BaseError
+
+	// ErrInvalidEmail indicates an email address field is invalid
+	ErrInvalidEmail struct {
+		*BaseError
+	}
 )
 
 const (
@@ -28,8 +38,13 @@ const (
 
 // Create adds the specified ContactSubmission to the database
 func (contactSubmission *ContactSubmission) Create(db *sqlx.DB) error {
-	if err := database.PrepareDatabase(db.DB, contactSubmissionsTable); err != nil {
+	if err := site_db.PrepareDatabase(db.DB, contactSubmissionsTable); err != nil {
 		return err
+	}
+
+	if !IsValidEmail(contactSubmission.Email) {
+		// the email provided is invalid
+		return NewErrInvalidEmail(fmt.Errorf("failed to create a new contact_submission record"))
 	}
 
 	contactSubmission.Id = uuid.New().String()
@@ -41,11 +56,25 @@ func (contactSubmission *ContactSubmission) Create(db *sqlx.DB) error {
 		`, contactSubmissionsTable)
 
 	_, err := db.NamedExec(query, contactSubmission)
-	return err
+	if err != nil {
+		return database.NewErrDatabase(err)
+	}
+
+	return nil
 }
 
 // IsValidEmail confirms that the email provided is a validly constructed email address.
 func IsValidEmail(email string) bool {
 	_, err := mail.ParseAddress(email)
 	return err == nil
+}
+
+// NewErrInvalidEmail creates an instance of ErrDatabase
+func NewErrInvalidEmail(err error) *ErrInvalidEmail {
+	return &ErrInvalidEmail{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "invalid email address",
+		},
+	}
 }
