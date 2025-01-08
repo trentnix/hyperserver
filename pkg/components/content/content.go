@@ -143,19 +143,19 @@ func (c *Content) Render(w http.ResponseWriter) error {
 	templates = append(templates, c.ContentTemplates...)
 	templates = append(templates, c.ComponentTemplates...)
 	if len(templates) == 0 {
-		return fmt.Errorf("No templates have been set")
+		return NewErrNoTemplates(fmt.Errorf("No templates have been set"))
 	}
 
 	// parse the templates in the order specified
 	tmpl, err := template.ParseFiles(templatesToStrings(templates)...)
 	if err != nil {
-		return fmt.Errorf("Error loading template: %w", err)
+		return NewErrParsingTemplates(err)
 	}
 
 	// render the template
 	err = tmpl.Execute(w, c)
 	if err != nil {
-		return fmt.Errorf("Error rendering template: %w", err)
+		return NewErrRenderingTemplates(err)
 	}
 
 	return nil
