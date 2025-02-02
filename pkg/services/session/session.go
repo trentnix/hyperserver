@@ -91,7 +91,7 @@ func (s *SessionManager) GetSessionData(r *http.Request) (interface{}, bool) {
 	return sessionData, true
 }
 
-// SetAuthTokenCookie sets the site cookie to the token value provided
+// StartSession creates a new session
 func (s *SessionManager) StartSession(w http.ResponseWriter, r *http.Request, token string) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.cookieSettings.Name,
@@ -105,7 +105,7 @@ func (s *SessionManager) StartSession(w http.ResponseWriter, r *http.Request, to
 	return nil
 }
 
-// DeleteAuthTokenCookie deletes the site cookie by expiring the MaxAge
+// EndSession ends the specified named session
 func (s *SessionManager) EndSession(w http.ResponseWriter, r *http.Request) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.cookieSettings.Name,
@@ -119,7 +119,7 @@ func (s *SessionManager) EndSession(w http.ResponseWriter, r *http.Request) erro
 	return nil
 }
 
-// GetSessionValue extracts the specified value from the session, if the session is valid
+// getSessionValue extracts the specified value from the session, if the session is valid
 func (s *SessionManager) getSessionValue(r *http.Request, key string) (interface{}, error) {
 	cookie, err := r.Cookie(s.cookieSettings.Name)
 	if err != nil {
