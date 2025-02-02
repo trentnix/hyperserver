@@ -42,6 +42,9 @@ type (
 			Certificate string
 			Key         string
 		}
+		Session struct {
+			Key string
+		}
 	}
 
 	// DatabaseConfig stores the database configuration

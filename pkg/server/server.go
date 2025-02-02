@@ -9,6 +9,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 type (
@@ -18,6 +19,7 @@ type (
 		Config   *config.Config
 		Database *sqlx.DB
 		Web      *http.ServeMux
+		Session  *session.SessionManager
 	}
 )
 
@@ -29,6 +31,7 @@ func NewApplicationServer() *ApplicationServer {
 	s.initConfig()
 	s.initDatabase()
 	s.initWeb()
+	s.initSessionManager()
 
 	return s
 }
@@ -60,4 +63,9 @@ func (s *ApplicationServer) initDatabase() {
 // initWeb initialzes the ApplicationServer router
 func (s *ApplicationServer) initWeb() {
 	s.Web = http.NewServeMux()
+}
+
+// initSessionManager
+func (s *ApplicationServer) initSessionManager() {
+	s.Session = session.NewSessionManager([]byte(s.Config.HTTP.Session.Key))
 }
