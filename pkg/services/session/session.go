@@ -5,7 +5,6 @@ package session
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -19,9 +18,8 @@ type (
 		config *config.Config
 
 		// Stores is a map of sessoin names to the type of store it should use
-		Stores       map[string]map[string]string
-		Types        map[string]string
-		defaultStore string
+		Stores map[string]map[string]string
+		Types  map[string]string
 	}
 
 	// Session is used to manage a user or usage session
@@ -37,6 +35,7 @@ type (
 
 var (
 	ErrStoreNotFound   = errors.New("session store not configured for the specified session")
+	ErrStoreDisabled   = errors.New("the specified session store is disabled")
 	ErrSessionNotFound = errors.New("session not found")
 	ErrSessionInvalid  = errors.New("the session is invalid")
 )
@@ -100,25 +99,25 @@ func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
 func (m *SessionManager) getStore(name string) (SessionStore, error) {
 	storeType, ok := m.Types[name]
 	if !ok {
-		return nil, fmt.Errorf("the session type '%s' does not have a configured store", name)
+		return nil, ErrStoreNotFound
 	}
 
 	storeType = strings.ToLower(storeType)
 
 	store, ok := m.Stores[storeType]
 	if !ok {
-		return nil, fmt.Errorf("the cookie store specified '%s' has not been configured", storeType)
+		return nil, ErrStoreNotFound
 	}
 
 	if strings.ToLower(store["enabled"]) != "true" && strings.ToLower(store["enabled"]) != "1" {
-		return nil, fmt.Errorf("the cookie store specified '%s' is configured as disabled", storeType)
+		return nil, ErrStoreDisabled
 	}
 
 	switch strings.ToLower(storeType) {
 	case strings.ToLower(cookieStoreName):
 		store, err := NewCookieStore(m.config)
 		if err != nil {
-			return nil, fmt.Errorf("the cookie store could not be created: %w", err)
+			return nil, errors.Join(ErrCookieStoreNotCreated, err)
 		}
 
 		return store, nil
