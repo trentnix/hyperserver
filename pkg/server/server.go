@@ -67,5 +67,5 @@ func (s *ApplicationServer) initWeb() {
 
 // initSessionManager
 func (s *ApplicationServer) initSessionManager() {
-	s.Session = session.NewSessionManager([]byte(s.Config.HTTP.Session.Key))
+	s.Session = session.NewSessionManager(s.Config)
 }

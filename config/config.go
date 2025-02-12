@@ -43,7 +43,11 @@ type (
 			Key         string
 		}
 		Session struct {
-			Key string
+			JwtKey    string
+			TokenAge  time.Duration
+			CookieAge time.Duration
+			Stores    map[string]map[string]string `mapstructure:"stores"`
+			Types     map[string]string            `mapstructure:"types"`
 		}
 	}
 

@@ -7,139 +7,157 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
+	"strings"
 
-	"github.com/dgrijalva/jwt-go"
-	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/google/uuid"
+	"github.com/trentnix/hyperserver/config"
 )
 
 type (
-	// SessionManager is used to manage a session
+	// SessionManager is used to manage sessions
 	SessionManager struct {
-		JwtKey         []byte
-		TokenLifetime  time.Duration
-		cookieSettings *CookieSettings
+		config *config.Config
+
+		// Stores is a map of sessoin names to the type of store it should use
+		Stores       map[string]map[string]string
+		Types        map[string]string
+		defaultStore string
 	}
 
-	// Settings for the cookie that will be written and read from the http.Writer and http.Response, respectively
-	CookieSettings struct {
-		Name   string
-		MaxAge int
+	// Session is used to manage a user or usage session
+	Session struct {
+		ID    string
+		Data  map[string]string
+		name  string
+		store SessionStore
 	}
 
-	// Claims contains the data that is serialized to and from a JWT
-	Claims struct {
-		SessionData any `json:"SessionData"`
-		jwt.StandardClaims
-	}
+	contextKey string
 )
 
 var (
-	ErrSessionKeyInvalid = errors.New("the session key is invalid")
-	ErrSessionNotFound   = errors.New("session not found")
-	ErrSessionInvalid    = errors.New("the session is invalid")
+	ErrStoreNotFound   = errors.New("session store not configured for the specified session")
+	ErrSessionNotFound = errors.New("session not found")
+	ErrSessionInvalid  = errors.New("the session is invalid")
+)
+
+const (
+	SessionContextKey contextKey = "auth-user"
 )
 
 // NewSessionManager creates a new instance of a SessionManager object with default values for
 // TokenLifetime and cookie name
-func NewSessionManager(jwtKey []byte) *SessionManager {
-	return &SessionManager{
-		JwtKey:        jwtKey,
-		TokenLifetime: time.Hour * 24,
-		cookieSettings: &CookieSettings{
-			Name:   "auth-token",
-			MaxAge: 86400,
-		},
+func NewSessionManager(c *config.Config) *SessionManager {
+	sm := SessionManager{
+		config: c,
 	}
+
+	sm.Stores = c.HTTP.Session.Stores
+	sm.Types = c.HTTP.Session.Types
+
+	return &sm
 }
 
-// SetSessionData takes the specified data and adds it to a session
-func (s *SessionManager) SetSessionData(sessionData any) (string, error) {
-	if len(s.JwtKey) == 0 {
-		return "", ErrSessionKeyInvalid
-	}
-
-	expirationTime := time.Now().Add(s.TokenLifetime)
-	claims := &Claims{
-		SessionData: sessionData,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
-		},
-	}
-
-	// Create and sign the token with the specified algorithm and claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(s.JwtKey)
+// Get returns any current sessions specified in the request with the specified name.
+// If a session is not found, a new session will be returned.
+func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
+	store, err := m.getStore(name)
 	if err != nil {
-		return "", errors.Join(ErrSessionKeyInvalid, err)
+		return nil, err
 	}
 
-	return tokenString, nil
+	// retrieve the session from the request
+	session, _ := store.Get(r, name)
+	if session == nil {
+		// if the request doesn't have a session, return a new session
+		return m.New(r, name)
+	}
+
+	return session, nil
 }
 
-// GetSessionData retrieves the data that was stored in the session
-func (s *SessionManager) GetSessionData(r *http.Request) (interface{}, bool) {
-	sessionData, err := s.getSessionValue(r, "SessionData")
+// New returns a new Session instance irrespective of whether one already exists with the
+// specified name
+func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
+	store, err := m.getStore(name)
 	if err != nil {
-		if !errors.Is(err, http.ErrNoCookie) {
-			logger.LogRequestError(r, "There was an error retrieving SessionData from the request.", err, 0)
+		return nil, err
+	}
+
+	// create a new session instance and return
+	return newSession(store, name), nil
+}
+
+// getStore retrieves the session store that has been configured in the
+// application. When a store is implemented this is where the SessionManager
+// will retrieve the specified store. The name provided is a session name.
+//
+// This means session names will need to be registered against a session store type
+// name. By allowing session names to be registered against a session store type,
+// multiple store types can be used concurrently and the session name can determine
+// which session store to use. For example, a visitor session might use cookie
+// storage but authenticated users might use filesystem storage or database storage.
+func (m *SessionManager) getStore(name string) (SessionStore, error) {
+	storeType, ok := m.Types[name]
+	if !ok {
+		return nil, fmt.Errorf("the session type '%s' does not have a configured store", name)
+	}
+
+	storeType = strings.ToLower(storeType)
+
+	store, ok := m.Stores[storeType]
+	if !ok {
+		return nil, fmt.Errorf("the cookie store specified '%s' has not been configured", storeType)
+	}
+
+	if strings.ToLower(store["enabled"]) != "true" && strings.ToLower(store["enabled"]) != "1" {
+		return nil, fmt.Errorf("the cookie store specified '%s' is configured as disabled", storeType)
+	}
+
+	switch strings.ToLower(storeType) {
+	case strings.ToLower(cookieStoreName):
+		store, err := NewCookieStore(m.config)
+		if err != nil {
+			return nil, fmt.Errorf("the cookie store could not be created: %w", err)
 		}
 
-		return nil, false
+		return store, nil
 	}
 
-	return sessionData, true
+	return nil, ErrStoreNotFound
 }
 
-// StartSession creates a new session
-func (s *SessionManager) StartSession(w http.ResponseWriter, r *http.Request, token string) error {
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.cookieSettings.Name,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   r.TLS != nil,
-		MaxAge:   s.cookieSettings.MaxAge,
-	})
+// newSession returns a new session instance using the specified session name
+// and specified session store. newSession is intended for use only within the
+// session package and preferably by a session store implementation.
+func newSession(s SessionStore, name string) *Session {
+	sessionID := uuid.New().String()
+	session := Session{
+		ID:    sessionID,
+		name:  name,
+		store: s,
+	}
 
-	return nil
+	session.Data = make(map[string]string)
+	return &session
 }
 
-// EndSession ends the specified named session
-func (s *SessionManager) EndSession(w http.ResponseWriter, r *http.Request) error {
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.cookieSettings.Name,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   r.TLS != nil,
-		MaxAge:   -1, // Delete now
-	})
+// Save saves the specified session to its corresponding store and writes the
+// session to a http cookie
+func (s *Session) Save(r *http.Request, w http.ResponseWriter) error {
+	if s.store == nil {
+		return ErrStoreNotFound
+	}
 
-	return nil
+	// save the session to the store
+	return s.store.Save(r, w, s)
 }
 
-// getSessionValue extracts the specified value from the session, if the session is valid
-func (s *SessionManager) getSessionValue(r *http.Request, key string) (interface{}, error) {
-	cookie, err := r.Cookie(s.cookieSettings.Name)
-	if err != nil {
-		return nil, errors.Join(ErrSessionNotFound, err)
+// End terminates the specified session in its corresponding store
+func (s *Session) End(r *http.Request, w http.ResponseWriter) error {
+	if s.store == nil {
+		return ErrStoreNotFound
 	}
 
-	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (interface{}, error) {
-		return s.JwtKey, nil
-	})
-	if err != nil || !token.Valid {
-		return nil, errors.Join(ErrSessionInvalid, err)
-	}
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok {
-		if val, ok := claims[key]; ok {
-			return val, nil
-		}
-
-		return nil, errors.Join(ErrSessionNotFound, fmt.Errorf("key %q not found in session", key))
-	}
-
-	return nil, ErrSessionInvalid
+	return s.store.End(r, w, s)
 }

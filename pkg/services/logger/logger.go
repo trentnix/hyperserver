@@ -49,7 +49,7 @@ func Get(ctx context.Context) *Logger {
 // LogRequestError writes an error log entry using the provided request, error message, error
 // instance, and http status value. Even though the same logger is retrieved from each context,
 // using .With guarantees thread safety.
-func LogRequestError(r *http.Request, message string, err error, httpStatus int) {
+func LogRequestError(r *http.Request, message string, err error) {
 	if r == nil {
 		return
 	}
@@ -63,7 +63,6 @@ func LogRequestError(r *http.Request, message string, err error, httpStatus int)
 		Field{Key: "path", Value: r.URL.Path},
 		Field{Key: "message", Value: message},
 		Field{Key: "error", Value: err},
-		Field{Key: "httpStatus", Value: httpStatus},
 	)
 	errorLogger.Error("Request Error")
 }

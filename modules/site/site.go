@@ -9,6 +9,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 type (
@@ -18,6 +19,7 @@ type (
 		Database *sqlx.DB
 
 		contentManager *content.ContentManagerService
+		sessionManager *session.SessionManager
 	}
 )
 
@@ -41,6 +43,8 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.contentManager = content.NewContentManager()
 	m.contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
 
+	m.sessionManager = s.Session
+
 	return nil
 }
 
@@ -48,7 +52,7 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 // if the logError parameter is true
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, errorMessage string, err error, logError bool) {
 	if logError {
-		logger.LogRequestError(r, errorMessage, err, http.StatusInternalServerError)
+		logger.LogRequestError(r, errorMessage, err)
 	}
 
 	http.Error(w, errorMessage, http.StatusInternalServerError)

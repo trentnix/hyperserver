@@ -1,6 +1,6 @@
 http:
-  hostname: ""
-  port: 8000
+  hostname: "localhost"
+  port: 8080
   readTimeout: "5s"
   writeTimeout: "10s"
   idleTimeout: "2m"
@@ -8,33 +8,14 @@ http:
     enabled: false
     certificate: ""
     key: ""
-
-app:
-  name: "DoulaWeb"
-  environment: "local"
-  host: "http://localhost:8080"
-  title: "DoulaWeb"
-  # Change this on any live environments
-  encryptionKey: "12345678901234567890123456789012" # need value
-  timeout: "20s"
-  passwordToken:
-      expiration: "60m"
-      length: 64
+  session:
+    key: <your JWT encryption key goes here>
 
 database:
   driver: "sqlite3"
-  connection: "doulaweb.db?_journal=WAL&_timeout=5000&_fk=true"
+  connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
   testConnection: ":memory:?_journal=WAL&_timeout=5000&_fk=true"
 
-auth:
-  authRedirect: "/"
-  googleRedirect: "http://localhost:8080/auth/google/callback"
-  googleCallbackURL: "/auth/google/callback"
-  googleClientID: "927425344108-4q26fsusroqdp7si07apvp88p78360ud.apps.googleusercontent.com"
-  googleClientSecret: "12345678901234567890123456789012345" # need value
-  jwtKey: "secret length 512" #need value
-  codeVerifierKey: "12345678901234567890123456789012" # need value
-  authVerificationTokenExpiration: "24h"
-  authResetTokenExpiration: "1h"
-  userVerificationRequired: true
-  requireNewAuthOnReset: true
+app:
+  title: "HyperServer"
+  workingDirectory: "D:/source/hyperserver"
