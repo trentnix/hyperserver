@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/trentnix/hyperserver/config"
@@ -24,10 +25,12 @@ type (
 
 	// Session is used to manage a user or usage session
 	Session struct {
-		ID    string
-		Data  map[string]string
-		name  string
-		store SessionStore
+		ID        string
+		Data      map[string]string
+		name      string
+		store     SessionStore
+		IsNew     bool
+		ExpiresAt time.Time
 	}
 
 	contextKey string
@@ -102,28 +105,29 @@ func (m *SessionManager) getStore(name string) (SessionStore, error) {
 		return nil, ErrStoreNotFound
 	}
 
-	storeType = strings.ToLower(storeType)
-
-	store, ok := m.Stores[storeType]
-	if !ok {
-		return nil, ErrStoreNotFound
-	}
-
-	if strings.ToLower(store["enabled"]) != "true" && strings.ToLower(store["enabled"]) != "1" {
-		return nil, ErrStoreDisabled
-	}
+	var store SessionStore
+	var storeErr error
 
 	switch strings.ToLower(storeType) {
 	case strings.ToLower(cookieStoreName):
-		store, err := NewCookieStore(m.config)
-		if err != nil {
-			return nil, errors.Join(ErrCookieStoreNotCreated, err)
-		}
-
-		return store, nil
+		store, storeErr = NewCookieStore(m.config)
+	case strings.ToLower(sqliteStoreName):
+		store, storeErr = NewSQLiteStore(m.config)
 	}
 
-	return nil, ErrStoreNotFound
+	if storeErr != nil {
+		return nil, errors.Join(ErrCookieStoreNotCreated, storeErr)
+	}
+
+	if !store.IsEnabled() {
+		return nil, ErrStoreDisabled
+	}
+
+	if store == nil {
+		return nil, ErrStoreNotFound
+	}
+
+	return store, nil
 }
 
 // newSession returns a new session instance using the specified session name
@@ -135,6 +139,7 @@ func newSession(s SessionStore, name string) *Session {
 		ID:    sessionID,
 		name:  name,
 		store: s,
+		IsNew: true,
 	}
 
 	session.Data = make(map[string]string)

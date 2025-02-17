@@ -5,6 +5,7 @@ package session
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -20,15 +21,17 @@ type (
 		TokenLifetime time.Duration
 		// lifetime of the cookie containing the JWT
 		CookieLifetime time.Duration
+		// enabled
+		enabled bool
 	}
 
 	// Claims contains the data that is serialized to and from a JWT
-	SessionClaims struct {
+	CookieStoreSessionClaims struct {
 		// identifies a unique session
 		ID string `json:"id"`
 		// values that can be stored in a session
 		Data map[string]string `json:"data"`
-
+		// stanard JWT claims embedded
 		jwt.StandardClaims
 	}
 )
@@ -42,22 +45,29 @@ const (
 // NewCookieStore returns an instance of a CookieStore that can be used
 // to get and save a session
 func NewCookieStore(c *config.Config) (*CookieStore, error) {
-	if c.HTTP.Session.JwtKey == "" {
-		return nil, ErrTokenKeyNotSet
+	configErr := checkStoreCookieConfig(c)
+	if configErr != nil {
+		return nil, configErr
 	}
 
-	return &CookieStore{
+	configOptions := getStoreConfigOptions(c, sqliteStoreName)
+
+	cookieStore := &CookieStore{
 		JwtKey:         []byte(c.HTTP.Session.JwtKey),
 		TokenLifetime:  c.HTTP.Session.TokenAge,
 		CookieLifetime: c.HTTP.Session.CookieAge,
-	}, nil
+	}
+
+	if strings.ToLower(configOptions["enabled"]) == "true" || strings.ToLower(configOptions["enabled"]) == "1" {
+		cookieStore.enabled = true
+	}
+
+	return cookieStore, nil
 }
 
 // Get retrieves a session from the specified request. If a session does not exist,
 // an empty (new) session is returned.
 func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
-	var sessionError error
-
 	session := newSession(c, name)
 
 	jwtValue := ""
@@ -78,6 +88,7 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 	// the session exists - overwrite the ID with the session data that was extracted from the cookie
 	session.ID = claimsData.ID
 	session.Data = claimsData.Data
+	session.IsNew = false
 
 	return session, nil
 }
@@ -95,7 +106,7 @@ func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, s *Session) e
 	}
 
 	expirationTime := time.Now().Add(c.TokenLifetime)
-	claims := &SessionClaims{
+	claims := &CookieStoreSessionClaims{
 		ID:   s.ID,
 		Data: s.Data,
 		StandardClaims: jwt.StandardClaims{
@@ -128,9 +139,9 @@ func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, s *Session) e
 
 // End terminates the specified session by setting the corresponding session cookie
 // to expired
-func (c *CookieStore) End(r *http.Request, w http.ResponseWriter, s *Session) error {
+func (c *CookieStore) End(r *http.Request, w http.ResponseWriter, session *Session) error {
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.name,
+		Name:     session.name,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
@@ -143,13 +154,13 @@ func (c *CookieStore) End(r *http.Request, w http.ResponseWriter, s *Session) er
 
 // parseJWT parses the specified token into a SessionClaims instance to extract
 // session data
-func (c *CookieStore) parseJWT(tokenString string) (*SessionClaims, error) {
+func (c *CookieStore) parseJWT(tokenString string) (*CookieStoreSessionClaims, error) {
 	if tokenString == "" {
 		return nil, ErrInvalidToken
 	}
 
 	// Parse and validate the JWT
-	token, err := jwt.ParseWithClaims(tokenString, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &CookieStoreSessionClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// Ensure the token is signed with the expected method
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
@@ -161,9 +172,15 @@ func (c *CookieStore) parseJWT(tokenString string) (*SessionClaims, error) {
 	}
 
 	// Extract claims
-	if claims, ok := token.Claims.(*SessionClaims); ok && token.Valid {
+	if claims, ok := token.Claims.(*CookieStoreSessionClaims); ok && token.Valid {
 		return claims, nil
 	}
 
 	return nil, ErrInvalidToken
+}
+
+// IsEnabled informs the called whether the specified CookieStore is enabled and
+// can be used
+func (c *CookieStore) IsEnabled() bool {
+	return c.enabled
 }
