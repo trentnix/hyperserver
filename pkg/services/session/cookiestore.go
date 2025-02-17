@@ -179,8 +179,7 @@ func (c *CookieStore) parseJWT(tokenString string) (*CookieStoreSessionClaims, e
 	return nil, ErrInvalidToken
 }
 
-// IsEnabled informs the called whether the specified CookieStore is enabled and
-// can be used
+// IsEnabled informs the called whether the specified CookieStore is enabled and can be used
 func (c *CookieStore) IsEnabled() bool {
 	return c.enabled
 }
