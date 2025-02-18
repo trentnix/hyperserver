@@ -222,3 +222,43 @@ func TestSQLiteStore_End_TLS(t *testing.T) {
 		t.Errorf("expected Secure to be true for TLS request, got false")
 	}
 }
+
+// TestSQLiteStore_New_Valid verifies that New returns a new session when the store is configured.
+func TestSQLiteStore_New_Valid(t *testing.T) {
+	store := setupSQLiteStore(t)
+	// Create a dummy request.
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+
+	session, err := store.New(req, "user")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if session == nil {
+		t.Fatal("expected a session object, got nil")
+	}
+	// Assuming newSession sets session.name and marks new sessions as IsNew.
+	if session.name != "user" {
+		t.Errorf("expected session name to be 'user', got %q", session.name)
+	}
+	if !session.IsNew {
+		t.Errorf("expected session.IsNew to be true for a new session")
+	}
+}
+
+// TestSQLiteStore_New_NotConfigured verifies that New returns an error when the database isn't configured.
+func TestSQLiteStore_New_NotConfigured(t *testing.T) {
+	store := setupSQLiteStore(t)
+	// Temporarily simulate the database not being configured.
+	original := sqliteStoreDbConfigured
+	sqliteStoreDbConfigured = false
+	defer func() { sqliteStoreDbConfigured = original }()
+
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	session, err := store.New(req, "user")
+	if err == nil {
+		t.Error("expected error due to database not being configured, got nil")
+	}
+	if session != nil {
+		t.Error("expected session to be nil when not configured, got non-nil")
+	}
+}
