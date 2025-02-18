@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/trentnix/hyperserver/config"
 )
 
@@ -260,5 +261,120 @@ func TestSQLiteStore_New_NotConfigured(t *testing.T) {
 	}
 	if session != nil {
 		t.Error("expected session to be nil when not configured, got non-nil")
+	}
+}
+
+// TestSQLiteStore_Save_NewSession verifies that Save properly saves a new session,
+// writes a valid JWT cookie, and sets the session expiration.
+func TestSQLiteStore_Save_NewSession(t *testing.T) {
+	store := setupSQLiteStore(t)
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	w := httptest.NewRecorder()
+
+	// Create a new session.
+	session, err := store.New(req, "user")
+	if err != nil {
+		t.Fatalf("failed to create new session: %v", err)
+	}
+
+	// Set some dummy session data.
+	session.Data["username"] = "testUser"
+
+	// Call Save.
+	err = store.Save(req, w, session)
+	if err != nil {
+		t.Fatalf("Save returned an error: %v", err)
+	}
+
+	// Verify that a cookie was written.
+	resp := w.Result()
+	cookies := resp.Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected a cookie to be set, got none")
+	}
+	cookie := cookies[0]
+
+	// Check cookie properties.
+	if cookie.Name != session.name {
+		t.Errorf("expected cookie name %q, got %q", session.name, cookie.Name)
+	}
+	if cookie.Value == "" {
+		t.Error("expected cookie value to be non-empty")
+	}
+	expectedMaxAge := int(store.CookieLifetime / time.Second)
+	if cookie.MaxAge != expectedMaxAge {
+		t.Errorf("expected cookie MaxAge to be %d, got %d", expectedMaxAge, cookie.MaxAge)
+	}
+
+	// Verify that the JWT in the cookie is valid and contains the expected claims.
+	token, err := jwt.ParseWithClaims(cookie.Value, &SQLiteStoreSessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return store.JwtKey, nil
+	})
+	if err != nil {
+		t.Errorf("failed to parse JWT from cookie: %v", err)
+	}
+	if !token.Valid {
+		t.Error("JWT from cookie is not valid")
+	}
+
+	// Ensure that session.ExpiresAt has been set.
+	if session.ExpiresAt.IsZero() {
+		t.Error("expected session.ExpiresAt to be set, got zero value")
+	}
+}
+
+// TestSQLiteStore_Save_ExistingSession verifies that saving an existing session
+// (IsNew == false) updates the session without error.
+func TestSQLiteStore_Save_ExistingSession(t *testing.T) {
+	store := setupSQLiteStore(t)
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	w := httptest.NewRecorder()
+
+	// Create and save a new session first.
+	session, err := store.New(req, "user")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	session.Data["foo"] = "bar"
+	if err := store.Save(req, w, session); err != nil {
+		t.Fatalf("initial Save returned error: %v", err)
+	}
+
+	// Simulate an update by marking the session as existing.
+	session.IsNew = false
+	w = httptest.NewRecorder() // Reset the ResponseRecorder.
+
+	// Save the updated session.
+	if err := store.Save(req, w, session); err != nil {
+		t.Fatalf("Save for existing session returned error: %v", err)
+	}
+
+	// Verify that a cookie was written.
+	resp := w.Result()
+	cookies := resp.Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected a cookie to be set for updated session, got none")
+	}
+}
+
+// TestSQLiteStore_Save_NotConfigured verifies that Save returns an error when
+// the database is not configured.
+func TestSQLiteStore_Save_NotConfigured(t *testing.T) {
+	store := setupSQLiteStore(t)
+	original := sqliteStoreDbConfigured
+	sqliteStoreDbConfigured = false
+	defer func() { sqliteStoreDbConfigured = original }()
+
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	w := httptest.NewRecorder()
+
+	session, err := store.New(req, "user")
+	if err != ErrDatabaseNotConfigured {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	err = store.Save(req, w, session)
+	if err == nil {
+		t.Fatal("expected an error when store is not configured, got nil")
 	}
 }
