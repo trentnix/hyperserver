@@ -79,7 +79,7 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 	}
 
 	// return the decoded Session data
-	claimsData, sessionError := c.parseJWT(jwtValue)
+	claimsData, sessionError := parseSessionJWT(jwtValue, c.JwtKey)
 	if sessionError != nil || jwtValue == "" {
 		// if there is no session data or there was an error, return the new, empty session (and any error)
 		return session, sessionError
@@ -150,33 +150,6 @@ func (c *CookieStore) End(r *http.Request, w http.ResponseWriter, session *Sessi
 	})
 
 	return nil
-}
-
-// parseJWT parses the specified token into a SessionClaims instance to extract
-// session data
-func (c *CookieStore) parseJWT(tokenString string) (*CookieStoreSessionClaims, error) {
-	if tokenString == "" {
-		return nil, ErrInvalidToken
-	}
-
-	// Parse and validate the JWT
-	token, err := jwt.ParseWithClaims(tokenString, &CookieStoreSessionClaims{}, func(token *jwt.Token) (interface{}, error) {
-		// Ensure the token is signed with the expected method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, ErrInvalidToken
-		}
-		return c.JwtKey, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract claims
-	if claims, ok := token.Claims.(*CookieStoreSessionClaims); ok && token.Valid {
-		return claims, nil
-	}
-
-	return nil, ErrInvalidToken
 }
 
 // IsEnabled informs the called whether the specified CookieStore is enabled and can be used

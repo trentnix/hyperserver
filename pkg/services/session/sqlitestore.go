@@ -1,7 +1,6 @@
 package session
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,7 +96,7 @@ func NewSQLiteStore(c *config.Config) (*SQLiteStore, error) {
 
 	once.Do(func() {
 		// configure the database
-		dbInitError = ensureDatabaseConfiguration(sqliteStore.db, sqliteStore.tableName)
+		dbInitError = sqliteStore.validateDatabase()
 	})
 
 	if dbInitError != nil {
@@ -125,7 +124,7 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 	}
 
 	// return the decoded Session data
-	claimsData, sessionError := s.parseJWT(jwtValue)
+	claimsData, sessionError := parseSessionJWT(jwtValue, s.JwtKey)
 	if sessionError != nil || jwtValue == "" {
 		// if there is no session data or there was an error, return the
 		// new, empty session (and any error)
@@ -149,44 +148,6 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 
 	session.IsNew = false
 	return session, nil
-}
-
-// getSessionFromDatabase attempts to retrieve the specified session from the database
-func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Session, error) {
-	if s.db == nil {
-		return nil, database.NewErrDatabaseUnavailable(nil)
-	}
-
-	if s.tableName == "" {
-		return nil, ErrSQLiteStoreNotConfigured
-	}
-
-	var dbSession SQLiteSession
-
-	query := fmt.Sprintf("SELECT id, session, expires_at, created_at, updated_at FROM %s WHERE id = ?", s.tableName)
-	err := s.db.Get(&dbSession, query, sessionID)
-	if err != nil {
-		return nil, err
-	}
-
-	if dbSession.ID == sessionID {
-		// create a new session and serialize the session data
-		session := newSession(s, name)
-		session.IsNew = false
-
-		sessionData, dataError := convertJsonToData(dbSession.Session)
-		if dataError != nil {
-			// the JSON text blob that was stored could not be serialized to a map[string]string
-			return nil, dataError
-		}
-
-		session.Data = sessionData
-
-		// the session was retrieved and can be returned successfully
-		return session, nil
-	}
-
-	return nil, nil
 }
 
 // New creates a new session and returns the newly created Session instance
@@ -234,7 +195,7 @@ func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 	cookieAge := int(s.CookieLifetime / time.Second)
 
 	// save the session to the database
-	saveErr := s.saveSessionToDatabase(session)
+	saveErr := s.save(session)
 	if saveErr != nil {
 		return saveErr
 	}
@@ -249,38 +210,6 @@ func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 		MaxAge:   cookieAge,
 	})
 
-	return nil
-}
-
-// saveSessionToDatabase creates or updates the specified session in the database
-func (s *SQLiteStore) saveSessionToDatabase(session *Session) error {
-	if s.db == nil {
-		return database.NewErrDatabaseUnavailable(nil)
-	}
-
-	jsonData, err := convertDataToJson(session.Data)
-	if err != nil {
-		return err
-	}
-
-	dbSession := SQLiteSession{
-		ID:         session.ID,
-		Session:    jsonData,
-		Expires_at: session.ExpiresAt,
-	}
-
-	var dbErr error
-	if session.IsNew {
-		dbErr = dbSession.Create(s.db, s.tableName, session)
-	} else {
-		dbErr = dbSession.Update(s.db, s.tableName, session)
-	}
-
-	if dbErr != nil {
-		return dbErr
-	}
-
-	session.IsNew = false
 	return nil
 }
 
@@ -303,16 +232,15 @@ func (s *SQLiteStore) IsEnabled() bool {
 	return s.enabled
 }
 
-// ensureDatabaseConfiguration determines whether the sessionsTable exists and,
-// if not, it creates it
-func ensureDatabaseConfiguration(db *sqlx.DB, sessionsTable string) error {
-	tableExists, err := sessionsTableExists(db, sessionsTable)
+// validateDatabase determines whether the sessionsTable exists and, if not, it creates it
+func (s *SQLiteStore) validateDatabase() error {
+	tableExists, err := database.TableExists(s.db.DB, s.tableName)
 	if err != nil {
 		return database.NewErrDatabaseConfiguration(err)
 	}
 
 	if !tableExists {
-		err = createSessionsTable(db, sessionsTable)
+		err = s.configureDatabase()
 		if err != nil {
 			return database.NewErrDatabase(err)
 		}
@@ -321,42 +249,12 @@ func ensureDatabaseConfiguration(db *sqlx.DB, sessionsTable string) error {
 	return nil
 }
 
-// sessionTableExists determines whether the sessionsTable exists
-func sessionsTableExists(db *sqlx.DB, sessionsTable string) (bool, error) {
-	var query string
-	var args []interface{}
-
-	// detect the database type by inspecting the driver
-	driver := db.Driver()
-
-	switch driver.(type) {
-	case *sqlite3.SQLiteDriver:
-		query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?;"
-		args = []interface{}{sessionsTable}
-	default:
-		// the database isn't a sqlite database
-		return false, database.NewErrDatabaseNotSupported(nil)
-	}
-
-	var result string
-	err := db.QueryRow(query, args...).Scan(&result)
-	if err == sql.ErrNoRows {
-		// the specified table does not exist
-		return false, nil
-	} else if err != nil {
-		// some other error occurred
-		return false, database.NewErrDatabase(err)
-	}
-
-	return true, nil
-}
-
-// createSessionTable creates the sessionTable according to the specified database vendor
-func createSessionsTable(db *sqlx.DB, sessionTable string) error {
+// configureDatabase creates the sessionTable according to the specified database vendor
+func (s *SQLiteStore) configureDatabase() error {
 	var createTableSQL string
 
 	// Detect the database type by inspecting the driver
-	driver := db.Driver()
+	driver := s.db.Driver()
 
 	switch driver.(type) {
 	case *sqlite3.SQLiteDriver:
@@ -367,17 +265,144 @@ func createSessionsTable(db *sqlx.DB, sessionTable string) error {
 				expires_at DATETIME,
 				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-			);`, sessionTable)
+			);`, s.tableName)
 	default:
-		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
+		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", s.db.Driver()))
 	}
 
-	_, err := db.Exec(createTableSQL)
+	_, err := s.db.Exec(createTableSQL)
 	if err != nil {
 		return database.NewErrDatabase(err)
 	}
 
 	return nil
+}
+
+// getSessionFromDatabase attempts to retrieve the specified session from the database
+func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Session, error) {
+	if s.db == nil {
+		return nil, database.NewErrDatabaseUnavailable(nil)
+	}
+
+	if s.tableName == "" {
+		return nil, ErrSQLiteStoreNotConfigured
+	}
+
+	var dbSession SQLiteSession
+
+	query := fmt.Sprintf("SELECT id, session, expires_at, created_at, updated_at FROM %s WHERE id = ?", s.tableName)
+	err := s.db.Get(&dbSession, query, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	if dbSession.ID == sessionID {
+		// create a new session and serialize the session data
+		session := newSession(s, name)
+		session.IsNew = false
+
+		sessionData, dataError := convertJsonToData(dbSession.Session)
+		if dataError != nil {
+			// the JSON text blob that was stored could not be serialized to a map[string]string
+			return nil, dataError
+		}
+
+		session.Data = sessionData
+
+		// the session was retrieved and can be returned successfully
+		return session, nil
+	}
+
+	return nil, nil
+}
+
+// saveSessionToDatabase creates or updates the specified session in the database
+func (s *SQLiteStore) save(session *Session) error {
+	if s.db == nil {
+		return database.NewErrDatabaseUnavailable(nil)
+	}
+
+	jsonData, err := convertDataToJson(session.Data)
+	if err != nil {
+		return err
+	}
+
+	dbSession := &SQLiteSession{
+		ID:         session.ID,
+		Session:    jsonData,
+		Expires_at: session.ExpiresAt,
+	}
+
+	var dbErr error
+	if session.IsNew {
+		dbErr = s.create(dbSession)
+	} else {
+		dbErr = s.update(dbSession)
+	}
+
+	if dbErr != nil {
+		return dbErr
+	}
+
+	session.IsNew = false
+	return nil
+}
+
+// create creates a new sessions table entry
+func (s *SQLiteStore) create(session *SQLiteSession) error {
+	if session.ID == "" {
+		return ErrSessionInvalid
+	}
+
+	session.Created_at = time.Now()
+	session.Updated_at = session.Created_at
+
+	query := fmt.Sprintf("INSERT INTO %s (id, session, expires_at, updated_at, created_at) VALUES (:id, :session, :expires_at, :created_at, :updated_at)", s.tableName)
+	_, err := s.db.NamedExec(query, session)
+
+	return err
+}
+
+// update updates the specified session in the sessions table
+func (s *SQLiteStore) update(session *SQLiteSession) error {
+	if session.ID == "" {
+		return ErrSessionInvalid
+	}
+
+	session.Updated_at = time.Now()
+
+	query := fmt.Sprintf("UPDATE %s SET session = :session, expires_at = :expires_at, updated_at = :updated_at WHERE id = :id", s.tableName)
+	_, err := s.db.NamedExec(query, session)
+
+	return err
+}
+
+// end updates the database to terminate a session by setting the expiration time
+// to the current time
+func (s *SQLiteStore) end(session *SQLiteSession) error {
+	if session.ID == "" {
+		return ErrSessionInvalid
+	}
+
+	query := fmt.Sprintf("UPDATE %s SET expires_at = :expires_at WHERE id = :id", s.tableName)
+	_, err := s.db.NamedExec(query, map[string]interface{}{
+		"expires_at": time.Now(),
+		"id":         session.ID,
+	})
+
+	return err
+}
+
+// delete deletes the specified session from the sessions table
+func (s *SQLiteStore) delete(session *SQLiteSession) error {
+	if session.ID == "" {
+		return ErrSessionInvalid
+	}
+
+	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", s.tableName)
+	_, err := s.db.Exec(query, session.ID)
+
+	return err
 }
 
 // convertDataToJson takes a map[string]string and converts it to JSON
@@ -406,91 +431,4 @@ func convertJsonToData(jsonString string) (map[string]string, error) {
 	}
 
 	return data, nil
-}
-
-// parseJWT parses the specified token into a SessionClaims instance to extract
-// session data
-func (c *SQLiteStore) parseJWT(tokenString string) (*SQLiteStoreSessionClaims, error) {
-	if tokenString == "" {
-		return nil, ErrInvalidToken
-	}
-
-	// Parse and validate the JWT
-	token, err := jwt.ParseWithClaims(tokenString, &SQLiteStoreSessionClaims{}, func(token *jwt.Token) (interface{}, error) {
-		// Ensure the token is signed with the expected method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, ErrInvalidToken
-		}
-		return c.JwtKey, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract claims
-	if claims, ok := token.Claims.(*SQLiteStoreSessionClaims); ok && token.Valid {
-		return claims, nil
-	}
-
-	return nil, ErrInvalidToken
-}
-
-// Create creates a new sessions table entry
-func (s *SQLiteSession) Create(db *sqlx.DB, table string, session *Session) error {
-	if session.ID == "" {
-		return ErrSessionInvalid
-	}
-
-	s.ID = session.ID
-	s.Created_at = time.Now()
-	s.Updated_at = time.Now()
-	s.Expires_at = session.ExpiresAt
-
-	query := fmt.Sprintf("INSERT INTO %s (id, session, expires_at, updated_at, created_at) VALUES (:id, :session, :expires_at, :created_at, :updated_at)", table)
-	_, err := db.NamedExec(query, s)
-
-	return err
-}
-
-// Update updates the specified session in the sessions table
-func (s *SQLiteSession) Update(db *sqlx.DB, table string, session *Session) error {
-	if session.ID == "" {
-		return ErrSessionInvalid
-	}
-
-	s.ID = session.ID
-	s.Created_at = time.Now()
-	s.Updated_at = time.Now()
-
-	query := fmt.Sprintf("UPDATE %s SET session = :session, expires_at = :expires_at, updated_at = :updated_at, created_at = :created_at WHERE id = :id", table)
-	_, err := db.NamedExec(query, s)
-
-	return err
-}
-
-// End updates the database to terminate a session by setting the expiration time to the current time
-func (s *SQLiteSession) End(db *sqlx.DB, table string, session *Session) error {
-	if session.ID == "" {
-		return ErrSessionInvalid
-	}
-
-	query := fmt.Sprintf("UPDATE %s SET expires_at = :expires_at WHERE id = :id", table)
-	_, err := db.NamedExec(query, map[string]interface{}{
-		"expires_at": time.Now(),
-		"id":         session.ID,
-	})
-
-	return err
-}
-
-// Delete deletes the specified session from the sessions table
-func (s *SQLiteSession) Delete(db *sqlx.DB, table string, session *Session) error {
-	if session.ID == "" {
-		return ErrSessionInvalid
-	}
-
-	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", table)
-	_, err := db.Exec(query, session.ID)
-
-	return err
 }

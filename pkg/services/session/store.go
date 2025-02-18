@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/trentnix/hyperserver/config"
 )
 
@@ -17,6 +18,16 @@ type (
 		Save(r *http.Request, w http.ResponseWriter, session *Session) error
 		End(r *http.Request, w http.ResponseWriter, session *Session) error
 		IsEnabled() bool
+	}
+
+	// SessionClaims contains the session data that is serialized to and from a JWT
+	SessionClaims struct {
+		// identifies a unique session
+		ID string `json:"id"`
+		// values that can be stored in a session
+		Data map[string]string `json:"data"`
+		// stanard JWT claims embedded
+		jwt.StandardClaims
 	}
 )
 
@@ -56,4 +67,31 @@ func checkStoreCookieConfig(c *config.Config) error {
 	}
 
 	return nil
+}
+
+// parseJWT parses the specified token into a SessionClaims instance to extract
+// session data
+func parseSessionJWT(tokenString string, jwtKey []byte) (*SessionClaims, error) {
+	if tokenString == "" {
+		return nil, ErrInvalidToken
+	}
+
+	// Parse and validate the JWT
+	token, err := jwt.ParseWithClaims(tokenString, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+		// Ensure the token is signed with the expected method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, ErrInvalidToken
+		}
+		return jwtKey, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract claims
+	if claims, ok := token.Claims.(*SessionClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, ErrInvalidToken
 }
