@@ -123,11 +123,17 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 		jwtValue = cookie.Value
 	}
 
+	if cookie == nil {
+		// if there is no cookie, return an empty session
+		session := newSession(s, name)
+		return session, nil
+	}
+
 	// return the decoded Session data
 	claimsData, sessionError := parseSessionJWT(jwtValue, s.JwtKey)
 	if sessionError != nil || jwtValue == "" {
-		// if there is no session data or there was an error, return the
-		// new, empty session (and any error)
+		// if there is no session data or there was an error, return a new
+		// session (and the error)
 		session := newSession(s, name)
 		return session, sessionError
 	}

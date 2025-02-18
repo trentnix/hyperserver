@@ -78,6 +78,12 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 		jwtValue = cookie.Value
 	}
 
+	if cookie == nil {
+		// if there is no cookie, return an empty session
+		session := newSession(c, name)
+		return session, nil
+	}
+
 	// return the decoded Session data
 	claimsData, sessionError := parseSessionJWT(jwtValue, c.JwtKey)
 	if sessionError != nil || jwtValue == "" {
