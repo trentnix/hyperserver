@@ -1,6 +1,7 @@
 package session
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -146,5 +147,78 @@ func TestSQLiteStore_Get_ValidCookie(t *testing.T) {
 	}
 	if retrievedSession.Data["username"] != "testUser" {
 		t.Errorf("expected session.Data[\"username\"] to be 'testUser', got %q", retrievedSession.Data["username"])
+	}
+}
+
+// TestSQLiteStore_End_NonTLS verifies that End writes a cookie that deletes the session
+// when the request is not over TLS.
+func TestSQLiteStore_End_NonTLS(t *testing.T) {
+	store := setupSQLiteStore(t)
+
+	// Create a dummy session. Since tests are in the same package,
+	// we can set unexported fields directly.
+	session := &Session{
+		name: "user",
+	}
+
+	// Create a non-TLS request.
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	w := httptest.NewRecorder()
+
+	// Call End
+	if err := store.End(req, w, session); err != nil {
+		t.Fatalf("End returned an unexpected error: %v", err)
+	}
+
+	// Check the resulting cookie.
+	resp := w.Result()
+	cookies := resp.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected 1 cookie to be set, got %d", len(cookies))
+	}
+	cookie := cookies[0]
+
+	if cookie.Name != session.name {
+		t.Errorf("expected cookie name %q, got %q", session.name, cookie.Name)
+	}
+	if cookie.Value != "" {
+		t.Errorf("expected cookie value to be empty, got %q", cookie.Value)
+	}
+	if cookie.MaxAge != -1 {
+		t.Errorf("expected cookie MaxAge to be -1, got %d", cookie.MaxAge)
+	}
+	if cookie.Secure {
+		t.Errorf("expected Secure to be false for non-TLS, got true")
+	}
+}
+
+// TestSQLiteStore_End_TLS verifies that End writes a cookie with Secure set to true
+// when the request is over TLS.
+func TestSQLiteStore_End_TLS(t *testing.T) {
+	store := setupSQLiteStore(t)
+
+	session := &Session{
+		name: "user",
+	}
+
+	// Create a TLS-enabled request. httptest.NewRequest doesn't set r.TLS,
+	// so we assign a dummy ConnectionState.
+	req := httptest.NewRequest("GET", "https://example.com/", nil)
+	req.TLS = &tls.ConnectionState{}
+	w := httptest.NewRecorder()
+
+	if err := store.End(req, w, session); err != nil {
+		t.Fatalf("End returned an unexpected error: %v", err)
+	}
+
+	resp := w.Result()
+	cookies := resp.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected 1 cookie to be set, got %d", len(cookies))
+	}
+	cookie := cookies[0]
+
+	if !cookie.Secure {
+		t.Errorf("expected Secure to be true for TLS request, got false")
 	}
 }
