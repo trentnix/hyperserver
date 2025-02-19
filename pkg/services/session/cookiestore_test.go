@@ -11,8 +11,8 @@ import (
 	"github.com/trentnix/hyperserver/config"
 )
 
-// setupSQLiteStore creates and returns a SQLiteStore instance for testing.
-func setupSQLiteStore(t *testing.T) *SQLiteStore {
+// setupCookieStore creates and returns a SQLiteStore instance for testing.
+func setupCookieStore(t *testing.T) *CookieStore {
 	// Create a sample config that matches your config struct.
 	c := &config.Config{
 		HTTP: config.HTTPConfig{
@@ -41,10 +41,8 @@ func setupSQLiteStore(t *testing.T) *SQLiteStore {
 				TokenAge:  1 * time.Hour,
 				CookieAge: 1 * time.Hour,
 				Stores: map[string]map[string]string{
-					"SQLiteStore": {
-						"enabled":      "true",
-						"connection":   "file::memory:?cache=shared",
-						"sessiontable": "sessions_test",
+					"CookieStore": {
+						"enabled": "true",
 					},
 				},
 				Types: map[string]string{},
@@ -52,7 +50,7 @@ func setupSQLiteStore(t *testing.T) *SQLiteStore {
 		},
 	}
 
-	store, err := NewSQLiteStore(c)
+	store, err := NewCookieStore(c)
 	if err != nil {
 		t.Fatalf("failed to create sqlite store: %v", err)
 	}
@@ -61,13 +59,13 @@ func setupSQLiteStore(t *testing.T) *SQLiteStore {
 }
 
 // Test when no cookie is present; expect a new session.
-func TestSQLiteStore_Get_NoCookie(t *testing.T) {
-	store := setupSQLiteStore(t)
+func TestCookieStore_Get_NoCookie(t *testing.T) {
+	store := setupCookieStore(t)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	// No cookie is set on the request.
 
-	session, err := store.Get(req, "sqlitestore_test")
+	session, err := store.Get(req, "cookiestore_test")
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
@@ -80,17 +78,17 @@ func TestSQLiteStore_Get_NoCookie(t *testing.T) {
 }
 
 // Test when an invalid JWT cookie is present; expect a new session and an error.
-func TestSQLiteStore_Get_InvalidJWT(t *testing.T) {
-	store := setupSQLiteStore(t)
+func TestCookieStore_Get_InvalidJWT(t *testing.T) {
+	store := setupCookieStore(t)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	// Set a cookie with an invalid JWT value.
 	req.AddCookie(&http.Cookie{
-		Name:  "sqlitestore_test",
+		Name:  "cookiestore_test",
 		Value: "invalid.jwt.token",
 	})
 
-	session, err := store.Get(req, "sqlitestore_test")
+	session, err := store.Get(req, "cookiestore_test")
 	if err == nil {
 		t.Error("expected an error for invalid JWT, got nil")
 	}
@@ -103,11 +101,11 @@ func TestSQLiteStore_Get_InvalidJWT(t *testing.T) {
 }
 
 // Test the valid cookie round-trip: create a session, save it, and retrieve it.
-func TestSQLiteStore_Get_ValidCookie(t *testing.T) {
-	store := setupSQLiteStore(t)
+func TestCookieStore_Get_ValidCookie(t *testing.T) {
+	store := setupCookieStore(t)
 
 	// Create a new session.
-	newSession, err := store.New(nil, "sqlitestore_test")
+	newSession, err := store.New(nil, "cookiestore_test")
 	if err != nil {
 		t.Fatalf("failed to create new session: %v", err)
 	}
@@ -136,7 +134,7 @@ func TestSQLiteStore_Get_ValidCookie(t *testing.T) {
 	req.AddCookie(cookie)
 
 	// Retrieve the session.
-	retrievedSession, err := store.Get(req, "sqlitestore_test")
+	retrievedSession, err := store.Get(req, "cookiestore_test")
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -151,15 +149,15 @@ func TestSQLiteStore_Get_ValidCookie(t *testing.T) {
 	}
 }
 
-// TestSQLiteStore_End_NonTLS verifies that End writes a cookie that deletes the session
+// TestCookieStore_End_NonTLS verifies that End writes a cookie that deletes the session
 // when the request is not over TLS.
-func TestSQLiteStore_End_NonTLS(t *testing.T) {
-	store := setupSQLiteStore(t)
+func TestCookieStore_End_NonTLS(t *testing.T) {
+	store := setupCookieStore(t)
 
 	// Create a dummy session. Since tests are in the same package,
 	// we can set unexported fields directly.
 	session := &Session{
-		name: "sqlitestore_test",
+		name: "cookiestore_test",
 	}
 
 	// Create a non-TLS request.
@@ -193,13 +191,13 @@ func TestSQLiteStore_End_NonTLS(t *testing.T) {
 	}
 }
 
-// TestSQLiteStore_End_TLS verifies that End writes a cookie with Secure set to true
+// TestCookieStore_End_TLS verifies that End writes a cookie with Secure set to true
 // when the request is over TLS.
-func TestSQLiteStore_End_TLS(t *testing.T) {
-	store := setupSQLiteStore(t)
+func TestCookieStore_End_TLS(t *testing.T) {
+	store := setupCookieStore(t)
 
 	session := &Session{
-		name: "sqlitestore_test",
+		name: "cookiestore_test",
 	}
 
 	// Create a TLS-enabled request. httptest.NewRequest doesn't set r.TLS,
@@ -224,13 +222,13 @@ func TestSQLiteStore_End_TLS(t *testing.T) {
 	}
 }
 
-// TestSQLiteStore_New_Valid verifies that New returns a new session when the store is configured.
-func TestSQLiteStore_New_Valid(t *testing.T) {
-	store := setupSQLiteStore(t)
+// TestCookieStore_New_Valid verifies that New returns a new session when the store is configured.
+func TestCookieStore_New_Valid(t *testing.T) {
+	store := setupCookieStore(t)
 	// Create a dummy request.
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 
-	session, err := store.New(req, "sqlitestore_test")
+	session, err := store.New(req, "cookiestore_test")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -238,41 +236,23 @@ func TestSQLiteStore_New_Valid(t *testing.T) {
 		t.Fatal("expected a session object, got nil")
 	}
 	// Assuming newSession sets session.name and marks new sessions as IsNew.
-	if session.name != "sqlitestore_test" {
-		t.Errorf("expected session name to be 'sqlitestore_test', got %q", session.name)
+	if session.name != "cookiestore_test" {
+		t.Errorf("expected session name to be 'cookiestore_test', got %q", session.name)
 	}
 	if !session.IsNew {
 		t.Errorf("expected session.IsNew to be true for a new session")
 	}
 }
 
-// TestSQLiteStore_New_NotConfigured verifies that New returns an error when the database isn't configured.
-func TestSQLiteStore_New_NotConfigured(t *testing.T) {
-	store := setupSQLiteStore(t)
-	// Temporarily simulate the database not being configured.
-	original := sqliteStoreDbConfigured
-	sqliteStoreDbConfigured = false
-	defer func() { sqliteStoreDbConfigured = original }()
-
-	req := httptest.NewRequest("GET", "http://example.com/", nil)
-	session, err := store.New(req, "sqlitestore_test")
-	if err == nil {
-		t.Error("expected error due to database not being configured, got nil")
-	}
-	if session != nil {
-		t.Error("expected session to be nil when not configured, got non-nil")
-	}
-}
-
-// TestSQLiteStore_Save_NewSession verifies that Save properly saves a new session,
+// TestCookieStore_Save_NewSession verifies that Save properly saves a new session,
 // writes a valid JWT cookie, and sets the session expiration.
-func TestSQLiteStore_Save_NewSession(t *testing.T) {
-	store := setupSQLiteStore(t)
+func TestCookieStore_Save_NewSession(t *testing.T) {
+	store := setupCookieStore(t)
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	w := httptest.NewRecorder()
 
 	// Create a new session.
-	session, err := store.New(req, "sqlitestore_test")
+	session, err := store.New(req, "cookiestore_test")
 	if err != nil {
 		t.Fatalf("failed to create new session: %v", err)
 	}
@@ -323,15 +303,15 @@ func TestSQLiteStore_Save_NewSession(t *testing.T) {
 	}
 }
 
-// TestSQLiteStore_Save_ExistingSession verifies that saving an existing session
+// TestCookieStore_Save_ExistingSession verifies that saving an existing session
 // (IsNew == false) updates the session without error.
-func TestSQLiteStore_Save_ExistingSession(t *testing.T) {
-	store := setupSQLiteStore(t)
+func TestCookieStore_Save_ExistingSession(t *testing.T) {
+	store := setupCookieStore(t)
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	w := httptest.NewRecorder()
 
 	// Create and save a new session first.
-	session, err := store.New(req, "sqlitestore_test")
+	session, err := store.New(req, "cookiestore_test")
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
 	}
@@ -354,27 +334,5 @@ func TestSQLiteStore_Save_ExistingSession(t *testing.T) {
 	cookies := resp.Cookies()
 	if len(cookies) == 0 {
 		t.Fatal("expected a cookie to be set for updated session, got none")
-	}
-}
-
-// TestSQLiteStore_Save_NotConfigured verifies that Save returns an error when
-// the database is not configured.
-func TestSQLiteStore_Save_NotConfigured(t *testing.T) {
-	store := setupSQLiteStore(t)
-	original := sqliteStoreDbConfigured
-	sqliteStoreDbConfigured = false
-	defer func() { sqliteStoreDbConfigured = original }()
-
-	req := httptest.NewRequest("GET", "http://example.com/", nil)
-	w := httptest.NewRecorder()
-
-	session, err := store.New(req, "sqlitestore_test")
-	if err != ErrDatabaseNotConfigured {
-		t.Fatalf("failed to create session: %v", err)
-	}
-
-	err = store.Save(req, w, session)
-	if err == nil {
-		t.Fatal("expected an error when store is not configured, got nil")
 	}
 }

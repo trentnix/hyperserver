@@ -24,16 +24,6 @@ type (
 		// enabled
 		enabled bool
 	}
-
-	// Claims contains the data that is serialized to and from a JWT
-	CookieStoreSessionClaims struct {
-		// identifies a unique session
-		ID string `json:"id"`
-		// values that can be stored in a session
-		Data map[string]string `json:"data"`
-		// stanard JWT claims embedded
-		jwt.StandardClaims
-	}
 )
 
 var ErrCookieStoreNotCreated = errors.New("a session store to store session data in a JWT in an HTTP cookie could not be created")
@@ -106,18 +96,27 @@ func (c *CookieStore) New(r *http.Request, name string) (*Session, error) {
 }
 
 // Save saves the specified Session to a token that can be added to a cookie
-func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, s *Session) error {
+func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, session *Session) error {
 	if len(c.JwtKey) == 0 {
 		return ErrSessionKeyInvalid
 	}
 
-	expirationTime := time.Now().Add(c.TokenLifetime)
-	claims := &CookieStoreSessionClaims{
-		ID:   s.ID,
-		Data: s.Data,
+	// create a token with just the session (and expiration)
+	var tokenExpiration time.Time
+
+	if session.IsNew {
+		tokenExpiration = time.Now().UTC().Add(c.TokenLifetime)
+		session.ExpiresAt = tokenExpiration
+	} else {
+		tokenExpiration = session.ExpiresAt
+	}
+
+	claims := &SessionClaims{
+		ID:   session.ID,
+		Data: session.Data,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
-			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: tokenExpiration.UTC().Unix(),
+			IssuedAt:  time.Now().UTC().Unix(),
 		},
 	}
 
@@ -128,11 +127,11 @@ func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, s *Session) e
 		return errors.Join(ErrSessionKeyInvalid, err)
 	}
 
-	cookieAge := int(c.CookieLifetime)
+	cookieAge := int(c.CookieLifetime / time.Second)
 
 	// write the cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.name,
+		Name:     session.name,
 		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,

@@ -34,14 +34,6 @@ type (
 		enabled bool
 	}
 
-	// Claims contains the data that is serialized to and from a JWT
-	SQLiteStoreSessionClaims struct {
-		// identifies a unique session
-		ID string `json:"id"`
-		// standard JWT claims embedded
-		jwt.StandardClaims
-	}
-
 	SQLiteSession struct {
 		ID         string    `db:"id"`
 		Session    string    `db:"session"`
@@ -177,19 +169,18 @@ func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 
 	if session.IsNew {
 		tokenExpiration = time.Now().UTC().Add(s.TokenLifetime)
+		session.ExpiresAt = tokenExpiration
 	} else {
 		tokenExpiration = session.ExpiresAt
 	}
 
-	claims := &SQLiteStoreSessionClaims{
+	claims := &SessionClaims{
 		ID: session.ID,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: tokenExpiration.UTC().Unix(),
 			IssuedAt:  time.Now().UTC().Unix(),
 		},
 	}
-
-	session.ExpiresAt = tokenExpiration
 
 	// Create and sign the token with the specified algorithm and claims
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
