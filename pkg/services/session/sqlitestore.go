@@ -44,8 +44,8 @@ type (
 )
 
 var (
-	once                    sync.Once
-	sqliteStoreDbConfigured bool
+	dbSQLiteSessionStore *sqlx.DB
+	dbOnce               sync.Once
 
 	ErrSQLiteStoreNotConfigured = errors.New("the sqliteStore is not configured")
 	ErrDatabaseNotConfigured    = errors.New("the session database is not configured")
@@ -74,35 +74,20 @@ func NewSQLiteStore(c *config.Config) (*SQLiteStore, error) {
 		CookieLifetime:   c.HTTP.Session.CookieAge,
 		connectionString: configOptions["connection"],
 		tableName:        configOptions["sessiontable"],
+		enabled:          strings.EqualFold(configOptions["enabled"], "true") || configOptions["enabled"] == "1",
 	}
 
-	if strings.ToLower(configOptions["enabled"]) == "true" || strings.ToLower(configOptions["enabled"]) == "1" {
-		sqliteStore.enabled = true
+	dbErr := sqliteStore.prepareDatabase()
+	if dbErr != nil {
+		return nil, dbErr
 	}
-
-	var dbInitError error
-	sqliteStore.db, dbInitError = database.Setup(sqliteDriver, sqliteStore.connectionString)
-	if dbInitError != nil {
-		return nil, dbInitError
-	}
-
-	once.Do(func() {
-		// configure the database
-		dbInitError = sqliteStore.validateDatabase()
-	})
-
-	if dbInitError != nil {
-		return nil, dbInitError
-	}
-
-	sqliteStoreDbConfigured = true
 
 	return sqliteStore, nil
 }
 
 // Get retrieves any session information from the request Cookie and,
 func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
-	if !sqliteStoreDbConfigured {
+	if s.db == nil {
 		return nil, ErrDatabaseNotConfigured
 	}
 
@@ -150,7 +135,7 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 
 // New creates a new session and returns the newly created Session instance
 func (s *SQLiteStore) New(r *http.Request, name string) (*Session, error) {
-	if !sqliteStoreDbConfigured {
+	if s.db == nil {
 		return nil, ErrDatabaseNotConfigured
 	}
 
@@ -160,7 +145,7 @@ func (s *SQLiteStore) New(r *http.Request, name string) (*Session, error) {
 // Save serializes specified Session to the database and saves the session identifier
 // to an HTTP cookie
 func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Session) error {
-	if !sqliteStoreDbConfigured {
+	if s.db == nil {
 		return ErrDatabaseNotConfigured
 	}
 
@@ -230,17 +215,38 @@ func (s *SQLiteStore) IsEnabled() bool {
 }
 
 // validateDatabase determines whether the sessionsTable exists and, if not, it creates it
-func (s *SQLiteStore) validateDatabase() error {
-	tableExists, err := database.TableExists(s.db.DB, s.tableName)
-	if err != nil {
-		return database.NewErrDatabaseConfiguration(err)
+func (s *SQLiteStore) prepareDatabase() error {
+	if dbSQLiteSessionStore != nil {
+		s.db = dbSQLiteSessionStore
+		return nil
 	}
 
-	if !tableExists {
-		err = s.configureDatabase()
-		if err != nil {
-			return database.NewErrDatabase(err)
+	var dbError error
+	dbOnce.Do(func() {
+		s.db, dbError = database.Setup(sqliteDriver, s.connectionString)
+		if dbError != nil {
+			return
 		}
+
+		tableExists, err := database.TableExists(s.db.DB, s.tableName)
+		if err != nil {
+			dbError = database.NewErrDatabaseConfiguration(err)
+			return
+		}
+
+		if !tableExists {
+			err = s.configureDatabase()
+			if err != nil {
+				dbError = database.NewErrDatabase(err)
+				return
+			}
+		}
+
+		dbSQLiteSessionStore = s.db
+	})
+
+	if dbError != nil {
+		return dbError
 	}
 
 	return nil

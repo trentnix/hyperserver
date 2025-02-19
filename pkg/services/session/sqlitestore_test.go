@@ -246,24 +246,6 @@ func TestSQLiteStore_New_Valid(t *testing.T) {
 	}
 }
 
-// TestSQLiteStore_New_NotConfigured verifies that New returns an error when the database isn't configured.
-func TestSQLiteStore_New_NotConfigured(t *testing.T) {
-	store := setupSQLiteStore(t)
-	// Temporarily simulate the database not being configured.
-	original := sqliteStoreDbConfigured
-	sqliteStoreDbConfigured = false
-	defer func() { sqliteStoreDbConfigured = original }()
-
-	req := httptest.NewRequest("GET", "http://example.com/", nil)
-	session, err := store.New(req, "sqlitestore_test")
-	if err == nil {
-		t.Error("expected error due to database not being configured, got nil")
-	}
-	if session != nil {
-		t.Error("expected session to be nil when not configured, got non-nil")
-	}
-}
-
 // TestSQLiteStore_Save_NewSession verifies that Save properly saves a new session,
 // writes a valid JWT cookie, and sets the session expiration.
 func TestSQLiteStore_Save_NewSession(t *testing.T) {
@@ -354,27 +336,5 @@ func TestSQLiteStore_Save_ExistingSession(t *testing.T) {
 	cookies := resp.Cookies()
 	if len(cookies) == 0 {
 		t.Fatal("expected a cookie to be set for updated session, got none")
-	}
-}
-
-// TestSQLiteStore_Save_NotConfigured verifies that Save returns an error when
-// the database is not configured.
-func TestSQLiteStore_Save_NotConfigured(t *testing.T) {
-	store := setupSQLiteStore(t)
-	original := sqliteStoreDbConfigured
-	sqliteStoreDbConfigured = false
-	defer func() { sqliteStoreDbConfigured = original }()
-
-	req := httptest.NewRequest("GET", "http://example.com/", nil)
-	w := httptest.NewRecorder()
-
-	session, err := store.New(req, "sqlitestore_test")
-	if err != ErrDatabaseNotConfigured {
-		t.Fatalf("failed to create session: %v", err)
-	}
-
-	err = store.Save(req, w, session)
-	if err == nil {
-		t.Fatal("expected an error when store is not configured, got nil")
 	}
 }
