@@ -6,23 +6,12 @@ package session
 import (
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/trentnix/hyperserver/config"
 )
 
 type (
-	// SessionManager is used to manage sessions
-	SessionManager struct {
-		config *config.Config
-
-		// Stores is a map of sessoin names to the type of store it should use
-		Stores map[string]map[string]string
-		Types  map[string]string
-	}
-
 	// Session is used to manage a user or usage session
 	Session struct {
 		ID        string
@@ -37,98 +26,16 @@ type (
 )
 
 var (
-	ErrStoreNotFound   = errors.New("session store not configured for the specified session")
-	ErrStoreDisabled   = errors.New("the specified session store is disabled")
-	ErrSessionNotFound = errors.New("session not found")
-	ErrSessionInvalid  = errors.New("the session is invalid")
+	ErrStoreNotFound            = errors.New("session store not configured for the specified session")
+	ErrStoreDisabled            = errors.New("the specified session store is disabled")
+	ErrSessionNotFound          = errors.New("session not found")
+	ErrSessionInvalid           = errors.New("the session is invalid")
+	ErrSessionCouldNotBeCreated = errors.New("could not create a new session")
 )
 
 const (
 	SessionContextKey contextKey = "auth-user"
 )
-
-// NewSessionManager creates a new instance of a SessionManager object with default values for
-// TokenLifetime and cookie name
-func NewSessionManager(c *config.Config) *SessionManager {
-	sm := SessionManager{
-		config: c,
-	}
-
-	sm.Stores = c.HTTP.Session.Stores
-	sm.Types = c.HTTP.Session.Types
-
-	return &sm
-}
-
-// Get returns any current sessions specified in the request with the specified name.
-// If a session is not found, a new session will be returned.
-func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
-	store, err := m.getStore(name)
-	if err != nil {
-		return nil, err
-	}
-
-	// retrieve the session from the request
-	session, _ := store.Get(r, name)
-	if session == nil {
-		// if the request doesn't have a session, return a new session
-		return m.New(r, name)
-	}
-
-	return session, nil
-}
-
-// New returns a new Session instance irrespective of whether one already exists with the
-// specified name
-func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
-	store, err := m.getStore(name)
-	if err != nil {
-		return nil, err
-	}
-
-	// create a new session instance and return
-	return newSession(store, name), nil
-}
-
-// getStore retrieves the session store that has been configured in the
-// application. When a store is implemented this is where the SessionManager
-// will retrieve the specified store. The name provided is a session name.
-//
-// This means session names will need to be registered against a session store type
-// name. By allowing session names to be registered against a session store type,
-// multiple store types can be used concurrently and the session name can determine
-// which session store to use. For example, a visitor session might use cookie
-// storage but authenticated users might use filesystem storage or database storage.
-func (m *SessionManager) getStore(name string) (SessionStore, error) {
-	storeType, ok := m.Types[name]
-	if !ok {
-		return nil, ErrStoreNotFound
-	}
-
-	var store SessionStore
-	var storeErr error
-
-	switch strings.ToLower(storeType) {
-	case strings.ToLower(cookieStoreName):
-		store, storeErr = NewCookieStore(m.config)
-	case strings.ToLower(sqliteStoreName):
-		store, storeErr = NewSQLiteStore(m.config)
-	}
-
-	if storeErr != nil {
-		return nil, errors.Join(ErrCookieStoreNotCreated, storeErr)
-	}
-
-	if !store.IsEnabled() {
-		return nil, ErrStoreDisabled
-	}
-
-	if store == nil {
-		return nil, ErrStoreNotFound
-	}
-
-	return store, nil
-}
 
 // newSession returns a new session instance using the specified session name
 // and specified session store. newSession is intended for use only within the
