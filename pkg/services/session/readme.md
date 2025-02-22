@@ -8,7 +8,26 @@ That doesn't mean I made a good decision, I just want to provide some context as
 
 ## Configuring Session Management and Session Storage
 
-To configure the server for session management, check out the config-template.yaml file in the /config folder. You should see a "session" section in the "http" section. This is where the magic happens.
+To configure the server for session management, check out the config-template.yaml file in the /config folder or the snippet below.
+
+    session:
+        key: <your JWT encryption key goes here>
+        tokenAge: "24h"
+        cookieAge: "24h"
+        stores:
+            cookieStore:
+            enabled: "true"
+        sqliteStore:
+            enabled: "true"
+            connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
+            sessionTable: "session"
+        types:
+            visit: sqliteStore
+            user: sqliteStore
+            cookie: cookieStore
+            sqlite: sqliteStore
+
+You should see a "session" section in the "http" section. This is where the magic happens.
 
 General, browser cookie-related settings (including a key to encode the JWT) are at the root level and include the following settings:
 
