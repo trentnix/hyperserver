@@ -10,6 +10,20 @@ http:
     key: ""
   session:
     key: <your JWT encryption key goes here>
+    tokenAge: "24h"
+    cookieAge: "24h"
+    stores:
+      cookieStore:
+        enabled: "true"
+      sqliteStore:
+        enabled: "true"
+        connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
+        sessionTable: "session"
+    types:
+      visit: sqliteStore
+      user: sqliteStore
+      cookie: cookieStore
+      sqlite: sqliteStore
 
 database:
   driver: "sqlite3"
