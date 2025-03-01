@@ -28,7 +28,7 @@ const (
 
 // GetContact retrieves an empty contact form
 func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
-	contact := content.NewManagedContent(r, m.contentManager)
+	contact := content.NewManagedContent(r)
 
 	if !contact.IsHtmx() {
 		// we need to load the form in a page - load the page that will host the form
@@ -52,7 +52,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contact := content.NewManagedContent(r, m.contentManager)
+	contact := content.NewManagedContent(r)
 	if !contact.IsHtmx() {
 		// we need to load the form in a page - load the page that will host the form
 		contact.AddLayoutTemplate(content.Template(contactPageTemplate))

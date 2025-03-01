@@ -18,7 +18,6 @@ type (
 		Title    string
 		Database *sqlx.DB
 
-		contentManager *content.ContentManagerService
 		sessionManager *session.SessionManager
 	}
 )
@@ -40,8 +39,8 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.Title = s.Config.App.Title
 
 	m.Database = s.Database
-	m.contentManager = content.NewContentManager()
-	m.contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
+	contentManager := content.GetContentManager()
+	contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
 
 	m.sessionManager = s.Session
 

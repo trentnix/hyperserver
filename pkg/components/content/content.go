@@ -78,9 +78,9 @@ func NewContent(r *http.Request) *Content {
 
 // NewManagedContent extracts Content data from the provided request and also sets
 // the Content's ContentManagerService
-func NewManagedContent(r *http.Request, m *ContentManagerService) *Content {
+func NewManagedContent(r *http.Request) *Content {
 	c := NewContent(r)
-	c.ContentManager = m
+	c.ContentManager = GetContentManager()
 
 	return c
 }
