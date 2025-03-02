@@ -24,7 +24,6 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 // Routes defines the routes the AuthManager handler will be responsible for
 func (a *AuthManager) Routes(mux *http.ServeMux) {
 	// login / logout
-	// mux.Handle("/auth/login", http.HandlerFunc(a.GetLogin))
 	mux.Handle("GET /auth/login/{authType}", http.HandlerFunc(a.GetLoginService))
 }
 

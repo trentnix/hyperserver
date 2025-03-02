@@ -3,9 +3,7 @@
 package auth
 
 import (
-	"html/template"
 	"net/http"
-	"os"
 
 	"github.com/trentnix/hyperserver/pkg/server"
 )
@@ -55,15 +53,4 @@ func GetLoadedAuthServices() []AuthService {
 	}
 
 	return loadedAuthServices
-}
-
-// LoadHTMLFromFile takes the file at the specified filePath and returns a template.HTML object with
-// its contents
-func LoadHTMLFromFile(filePath string) (template.HTML, error) {
-	htmlBytes, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", NewErrLoadingTemplate(err, filePath)
-	}
-
-	return template.HTML(htmlBytes), nil
 }
