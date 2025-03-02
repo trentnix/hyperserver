@@ -14,7 +14,6 @@ var authServices []AuthService
 
 const (
 	defaultAuthRedirect = "/"
-	AuthTypeGoogle      = "google"
 )
 
 // AuthService defines an interface for an authorization service that can be implemented
