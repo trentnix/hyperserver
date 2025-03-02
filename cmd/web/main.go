@@ -37,7 +37,12 @@ func main() {
 
 	// attach routes and their handlers to the router
 	if err := SetupHandlers(s); err != nil {
-		log.Fatalf("failed to build the handlers router: %v", err)
+		log.Fatalf("failed to set up the registered handlers: %v", err)
+	}
+
+	// set up auth components
+	if err := SetupAuthServices(s); err != nil {
+		log.Fatalf("failed to set up the authorization services: %v", err)
 	}
 
 	l, err := logger.NewZapLogger()

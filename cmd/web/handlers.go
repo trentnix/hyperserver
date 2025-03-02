@@ -1,9 +1,7 @@
-// modules.go is how modules get registered (by being imported anonymously) and
-// initialized via SetupHandlers
+// handlers.go initializes registered handlers
 package main
 
 import (
-	_ "github.com/trentnix/hyperserver/modules/site"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 )
