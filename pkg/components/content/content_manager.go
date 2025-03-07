@@ -180,3 +180,17 @@ func (c *ContentManagerService) isReservedContentType(contentType string) bool {
 
 	return false
 }
+
+// RenderHome provides a single function to render the default home page registered
+// with the application's content manager
+func RenderHome(w http.ResponseWriter, r *http.Request) {
+	contentManager := GetContentManager()
+	contentManager.HomeHandler(w, r)
+}
+
+// RenderError provides a single function to render the default error page registered
+// with the application's content manager
+func RenderError(w http.ResponseWriter, r *http.Request, code int, message string) {
+	contentManager := GetContentManager()
+	contentManager.ErrorHandler(w, r, code, message)
+}

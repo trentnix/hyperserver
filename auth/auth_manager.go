@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 
+	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 )
@@ -58,13 +59,13 @@ func (a *AuthManager) GetLoginService(w http.ResponseWriter, r *http.Request) {
 // the specified service's login entry point
 func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Request, authType string) {
 	if authType == "" {
-		http.Error(w, "No authorization service was specified. Unable to login.", http.StatusBadRequest)
+		content.RenderError(w, r, http.StatusBadRequest, "No authorization service was specified. Unable to login.")
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		http.Error(w, "No authorization service was found. Unable to login.", http.StatusBadRequest)
+		content.RenderError(w, r, http.StatusBadRequest, "No authorization service was found. Unable to login.")
 		return
 	}
 
@@ -75,13 +76,13 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		http.Error(w, "Login unavailable: no authorization service was specified.", http.StatusBadRequest)
+		content.RenderError(w, r, http.StatusBadRequest, "Login unavailable: no authorization service was specified.")
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		http.Error(w, "Login unavailable: the specified auth service was found.", http.StatusBadRequest)
+		content.RenderError(w, r, http.StatusBadRequest, "Login unavailable: the specified auth service was found.")
 		return
 	}
 

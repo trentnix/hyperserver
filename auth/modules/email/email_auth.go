@@ -117,8 +117,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	if !login.IsHtmx() {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
-		contentManager := content.GetContentManager()
-		contentManager.ErrorHandler(
+		content.RenderError(
 			w,
 			r,
 			http.StatusBadRequest,
@@ -173,21 +172,14 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 
 	r = content.AddUserSuccessMessage(r, "You have been successfully logged in")
 
-	contentManager := content.GetContentManager()
-	contentManager.HomeHandler(w, r)
+	content.RenderHome(w, r)
 
 	return true
 }
 
 // RenderFormError is a generic handler for rendering the specified content with
 // the specified form displaying the specified error
-func RenderFormError(
-	w http.ResponseWriter,
-	r *http.Request,
-	c *content.Content,
-	f form.FormComponent,
-	message string,
-) {
+func RenderFormError(w http.ResponseWriter, r *http.Request, c *content.Content, f form.FormComponent, message string) {
 	if message != "" {
 		f.SetFormError(message)
 	}
