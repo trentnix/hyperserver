@@ -1,4 +1,5 @@
-// email_auth.go is a email/password authorization implementation of the AuthService interface
+// email_auth.go is a email/password authorization implementation of the AuthService
+// interface
 package auth
 
 import (
@@ -81,10 +82,15 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
 
 	if !login.IsHtmx() {
-		// this should be an HTMX request
-		//  TO DO: may need to consider adding support for a layout template so that this could work
-		//         even if JavaScript is disabled
-		http.Error(w, "the login form should be rendered via an HTMX request", http.StatusBadRequest)
+		// this should be an HTMX request - may need to consider adding support for
+		// a layout template so that this could work even if JavaScript is disabled
+		contentManager := content.GetContentManager()
+		contentManager.ErrorHandler(
+			w,
+			r,
+			http.StatusBadRequest,
+			"The Login form must be rendered via an HTMX request")
+		return
 	}
 
 	login.AddContentTemplate(content.Template(emailLoginFormTemplate))
@@ -107,92 +113,89 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 //	  user verification is required but the authenciated user isn't verified -> verification required page
 //	  success -> redirect to the configured landing page (defaults to '/')
 func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
-	contentManager := content.GetContentManager()
-
 	login := content.NewManagedContent(r)
-	login.AddContentTemplate(emailLoginFormTemplate)
 	if !login.IsHtmx() {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
+		contentManager := content.GetContentManager()
 		contentManager.ErrorHandler(
 			w,
 			r,
 			http.StatusBadRequest,
-			"the login form should be rendered via an HTMX request")
+			"The Login form must be rendered via an HTMX request")
 		return false
 	}
+
+	login.AddContentTemplate(emailLoginFormTemplate)
+	LoginForm := &LoginForm{}
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
-		contentManager.ErrorHandler(
-			w,
-			r,
-			http.StatusBadRequest,
-			"the login form could not be parsed")
+		logger.LogRequestError(r, "there was an error parsing the login form data", err)
+		RenderFormError(w, r, login, LoginForm, "The login form data could not be parsed.")
 		return false
 	}
 
-	LoginForm := &LoginForm{}
 	LoginForm.Email = r.FormValue("email")
 	LoginForm.Password = r.FormValue("password")
 
 	// validate the login form
 	err := form.ValidateForm(LoginForm)
 	if err != nil {
-		LoginForm.SetFormError("the login form could not be validated")
-		login.Data = LoginForm
-		err = login.Render(w, r)
-		if err != nil {
-			http.Error(w, "the login form won't render", http.StatusInternalServerError)
-		}
-
+		RenderFormError(w, r, login, LoginForm, "The login form could not be validated")
 		return false
 	}
 
 	if LoginForm.HasErrors() {
 		// there are validation errors - render the form errors
-		login.Data = LoginForm
-		err = login.Render(w, r)
-		if err != nil {
-			http.Error(w, "the login form won't render", http.StatusInternalServerError)
-		}
-
+		RenderFormError(w, r, login, LoginForm, "")
 		return false
 	}
 
 	// authenticate the hs_user
 	hs_user, err := user.GetUserByEmail(a.db, LoginForm.Email)
 	if err != nil && err != sql.ErrNoRows {
-		LoginForm.SetFormError("The user specified could not be retrieved from the database")
-		login.Data = LoginForm
-		err = login.Render(w, r)
-		if err != nil {
-			http.Error(w, "the login form won't render", http.StatusInternalServerError)
-		}
-
+		RenderFormError(w, r, login, LoginForm, "The user specified could not be retrieved from the database")
 		return false
 	}
 
 	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(LoginForm.Password, hs_user.Password) {
-		LoginForm.SetFormError("The provided login credentials are invalid")
-		login.Data = LoginForm
-		err = login.Render(w, r)
-		if err != nil {
-			http.Error(w, "the login form won't render", http.StatusInternalServerError)
-		}
-
+		RenderFormError(w, r, login, LoginForm, "The provided login credentials are invalid")
 		return false
 	}
 
 	setAuthenticatedUserErr := user.SetAuthenticatedUser(r, w, hs_user)
 	if setAuthenticatedUserErr != nil {
 		logger.LogRequestError(r, "Could not save the newly authenticated user to a session", setAuthenticatedUserErr)
-		http.Error(w, "there was an error authenticating the user", http.StatusInternalServerError)
+		RenderFormError(w, r, login, LoginForm, "There was an internal error when trying to login")
 		return false
 	}
 
 	r = content.AddUserSuccessMessage(r, "You have been successfully logged in")
+
+	contentManager := content.GetContentManager()
 	contentManager.HomeHandler(w, r)
 
 	return true
+}
+
+// RenderFormError is a generic handler for rendering the specified content with
+// the specified form displaying the specified error
+func RenderFormError(
+	w http.ResponseWriter,
+	r *http.Request,
+	c *content.Content,
+	f form.FormComponent,
+	message string,
+) {
+	if message != "" {
+		f.SetFormError(message)
+	}
+
+	c.Data = f
+
+	if err := c.Render(w, r); err != nil {
+		logger.LogRequestError(r, "there was an error rendering the specified form", err)
+		http.Error(w, "unable to render the specified form", http.StatusInternalServerError)
+	}
 }
