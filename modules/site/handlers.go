@@ -23,6 +23,8 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Error is meant to provide a default error handler for the module that can be
+// used as the default error handler for the entire application
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, code int, message string) {
 	if code == 0 {
 		code = http.StatusInternalServerError
@@ -36,9 +38,11 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, code int, mes
 
 	w.WriteHeader(code)
 	if err := errorPage.Render(w, r); err != nil {
+		// given that this is an error handler intended to function as the default error
+		// handler for the application, this is the fallback in the case where the
+		// error content is unable to render
 		renderingError := fmt.Sprintf("Could not render the error page: %s", err.Error())
 		logger.LogRequestError(r, renderingError, err)
-
 		http.Error(w, renderingError, http.StatusInternalServerError)
 	}
 }
@@ -49,11 +53,12 @@ func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, faviconPath)
 }
 
-// Home renders the homepage and handles the following routes:
+// SessionTest is a method used for testing session functionality and will be removed
 func (m *SiteModule) SessionTest(w http.ResponseWriter, r *http.Request) {
 	session, sessionErr := m.sessionManager.Get(r, "cookie") // "cookie" for CookieStore, "visit" for SQLiteStore
 	if sessionErr != nil {
-		http.Error(w, fmt.Sprintf("session error: %s", sessionErr.Error()), http.StatusInternalServerError)
+		errMessage := fmt.Sprintf("session error: %s", sessionErr.Error())
+		content.RenderError(w, r, http.StatusInternalServerError, errMessage)
 		return
 	}
 
@@ -65,7 +70,8 @@ func (m *SiteModule) SessionTest(w http.ResponseWriter, r *http.Request) {
 	if userID != "" {
 		hs_user, userErr = user.GetUserByID(m.Database, userID)
 		if userErr != nil {
-			http.Error(w, fmt.Sprintf("user retrieval error"), http.StatusInternalServerError)
+			errMessage := fmt.Sprintf("user retrieval error")
+			content.RenderError(w, r, http.StatusInternalServerError, errMessage)
 			return
 		}
 	}
@@ -79,14 +85,16 @@ func (m *SiteModule) SessionTest(w http.ResponseWriter, r *http.Request) {
 		hs_user.Email = "trentnix@gmail.com"
 		userErr = hs_user.Save(m.Database)
 		if userErr != nil {
-			http.Error(w, fmt.Sprintf("user creation error: %v", userErr), http.StatusInternalServerError)
+			errMessage := fmt.Sprintf("user creation error: %v", userErr)
+			content.RenderError(w, r, http.StatusInternalServerError, errMessage)
 			return
 		}
 
 		session.Data["user_id"] = hs_user.ID
 		sessionErr := session.Save(r, w)
 		if sessionErr != nil {
-			http.Error(w, fmt.Sprintf("session error: %s", sessionErr.Error()), http.StatusInternalServerError)
+			errMessage := fmt.Sprintf("session error: %s", sessionErr.Error())
+			content.RenderError(w, r, http.StatusInternalServerError, errMessage)
 			return
 		}
 	}
@@ -97,12 +105,13 @@ func (m *SiteModule) SessionTest(w http.ResponseWriter, r *http.Request) {
 	homepage.AddContentTemplate(homeContent)
 	err := homepage.Render(w, r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
+		errMessage := fmt.Sprintf("There was an error rendering the specified content: %s", err.Error())
+		content.RenderError(w, r, http.StatusInternalServerError, errMessage)
 		return
 	}
 }
 
-// Login provides a handler to test login functionality
+// Login provides a handler to test login functionality - currently used for testing
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
 	login.Site = m.Title
@@ -112,7 +121,8 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
+		errMessage := fmt.Sprintf("There was an error rendering the specified content: %s", err.Error())
+		content.RenderError(w, r, http.StatusInternalServerError, errMessage)
 		return
 	}
 }

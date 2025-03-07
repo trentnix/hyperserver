@@ -5,8 +5,11 @@ package form
 import (
 	"fmt"
 	"html/template"
+	"net/http"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 // Form is an implementation of the FormComponent interface
@@ -133,4 +136,19 @@ func (f *Form) GetFormMessageHTML() template.HTML {
 // GetFormErrorHTML returns the HTML version of formError
 func (f *Form) GetFormErrorHTML() template.HTML {
 	return template.HTML(f.formError)
+}
+
+// RenderFormError is a generic handler for rendering the specified content with
+// the specified form displaying the specified error
+func RenderFormError(w http.ResponseWriter, r *http.Request, c *content.Content, f FormComponent, message string) {
+	if message != "" {
+		f.SetFormError(message)
+	}
+
+	c.Data = f
+
+	if err := c.Render(w, r); err != nil {
+		logger.LogRequestError(r, "there was an error rendering the specified form", err)
+		http.Error(w, "unable to render the specified form", http.StatusInternalServerError)
+	}
 }

@@ -70,19 +70,13 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	// validate the ContactForm form
 	err := form.ValidateForm(contactForm)
 	if err != nil {
-		m.Error(w, r, http.StatusInternalServerError, fmt.Sprintf("There was an error validating the contact form.: %s", err.Error()))
+		form.RenderFormError(w, r, contact, contactForm, "The login form could not be validated")
 		return
 	}
 
 	if contactForm.HasErrors() {
 		// there are validation errors - render the form errors
-		contact.Data = contactForm
-
-		err = contact.Render(w, r)
-		if err != nil {
-			m.Error(w, r, http.StatusInternalServerError, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()))
-		}
-
+		form.RenderFormError(w, r, contact, contactForm, "")
 		return
 	}
 
@@ -95,14 +89,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	err = cs.Create(m.Database)
 	if err != nil {
-		contactForm.SetFormError(fmt.Sprintf("There was an error creating the specified contact message: %v", err.Error()))
-		contact.Data = contactForm
-
-		err = contact.Render(w, r)
-		if err != nil {
-			m.Error(w, r, http.StatusInternalServerError, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()))
-		}
-
+		form.RenderFormError(w, r, contact, contactForm, fmt.Sprintf("There was an error creating the specified contact message: %v", err.Error()))
 		return
 	}
 

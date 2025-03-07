@@ -117,11 +117,8 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	if !login.IsHtmx() {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
-		content.RenderError(
-			w,
-			r,
-			http.StatusBadRequest,
-			"The Login form must be rendered via an HTMX request")
+		errMessage := "The Login form must be rendered via an HTMX request"
+		content.RenderError(w, r, http.StatusBadRequest, errMessage)
 		return false
 	}
 
@@ -131,7 +128,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
 		logger.LogRequestError(r, "there was an error parsing the login form data", err)
-		RenderFormError(w, r, login, LoginForm, "The login form data could not be parsed.")
+		form.RenderFormError(w, r, login, LoginForm, "The login form data could not be parsed.")
 		return false
 	}
 
@@ -141,32 +138,32 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	// validate the login form
 	err := form.ValidateForm(LoginForm)
 	if err != nil {
-		RenderFormError(w, r, login, LoginForm, "The login form could not be validated")
+		form.RenderFormError(w, r, login, LoginForm, "The login form could not be validated")
 		return false
 	}
 
 	if LoginForm.HasErrors() {
 		// there are validation errors - render the form errors
-		RenderFormError(w, r, login, LoginForm, "")
+		form.RenderFormError(w, r, login, LoginForm, "")
 		return false
 	}
 
 	// authenticate the hs_user
 	hs_user, err := user.GetUserByEmail(a.db, LoginForm.Email)
 	if err != nil && err != sql.ErrNoRows {
-		RenderFormError(w, r, login, LoginForm, "The user specified could not be retrieved from the database")
+		form.RenderFormError(w, r, login, LoginForm, "The user specified could not be retrieved from the database")
 		return false
 	}
 
 	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(LoginForm.Password, hs_user.Password) {
-		RenderFormError(w, r, login, LoginForm, "The provided login credentials are invalid")
+		form.RenderFormError(w, r, login, LoginForm, "The provided login credentials are invalid")
 		return false
 	}
 
 	setAuthenticatedUserErr := user.SetAuthenticatedUser(r, w, hs_user)
 	if setAuthenticatedUserErr != nil {
 		logger.LogRequestError(r, "Could not save the newly authenticated user to a session", setAuthenticatedUserErr)
-		RenderFormError(w, r, login, LoginForm, "There was an internal error when trying to login")
+		form.RenderFormError(w, r, login, LoginForm, "There was an internal error when trying to login")
 		return false
 	}
 
@@ -175,19 +172,4 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	content.RenderHome(w, r)
 
 	return true
-}
-
-// RenderFormError is a generic handler for rendering the specified content with
-// the specified form displaying the specified error
-func RenderFormError(w http.ResponseWriter, r *http.Request, c *content.Content, f form.FormComponent, message string) {
-	if message != "" {
-		f.SetFormError(message)
-	}
-
-	c.Data = f
-
-	if err := c.Render(w, r); err != nil {
-		logger.LogRequestError(r, "there was an error rendering the specified form", err)
-		http.Error(w, "unable to render the specified form", http.StatusInternalServerError)
-	}
 }
