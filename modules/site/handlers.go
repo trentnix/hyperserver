@@ -16,7 +16,6 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	homepage.Site = m.Title
 	homepage.Title = "Home"
 	homepage.AddContentTemplate(homeContent)
-	r = content.AddUserSuccessMessage(r, "Success loading the homepage!")
 	err := homepage.Render(w, r)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("There was an error rendering the specified content: %s", err.Error()), http.StatusInternalServerError)
