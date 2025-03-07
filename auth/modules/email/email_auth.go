@@ -128,7 +128,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
 		logger.LogRequestError(r, "there was an error parsing the login form data", err)
-		form.RenderFormError(w, r, login, LoginForm, "The login form data could not be parsed.")
+		content.RenderFormError(w, r, login, LoginForm, "The login form data could not be parsed.")
 		return false
 	}
 
@@ -138,32 +138,32 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	// validate the login form
 	err := form.ValidateForm(LoginForm)
 	if err != nil {
-		form.RenderFormError(w, r, login, LoginForm, "The login form could not be validated")
+		content.RenderFormError(w, r, login, LoginForm, "The login form could not be validated")
 		return false
 	}
 
 	if LoginForm.HasErrors() {
 		// there are validation errors - render the form errors
-		form.RenderFormError(w, r, login, LoginForm, "")
+		content.RenderFormError(w, r, login, LoginForm, "")
 		return false
 	}
 
 	// authenticate the hs_user
 	hs_user, err := user.GetUserByEmail(a.db, LoginForm.Email)
 	if err != nil && err != sql.ErrNoRows {
-		form.RenderFormError(w, r, login, LoginForm, "The user specified could not be retrieved from the database")
+		content.RenderFormError(w, r, login, LoginForm, "The user specified could not be retrieved from the database")
 		return false
 	}
 
 	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(LoginForm.Password, hs_user.Password) {
-		form.RenderFormError(w, r, login, LoginForm, "The provided login credentials are invalid")
+		content.RenderFormError(w, r, login, LoginForm, "The provided login credentials are invalid")
 		return false
 	}
 
 	setAuthenticatedUserErr := user.SetAuthenticatedUser(r, w, hs_user)
 	if setAuthenticatedUserErr != nil {
 		logger.LogRequestError(r, "Could not save the newly authenticated user to a session", setAuthenticatedUserErr)
-		form.RenderFormError(w, r, login, LoginForm, "There was an internal error when trying to login")
+		content.RenderFormError(w, r, login, LoginForm, "There was an internal error when trying to login")
 		return false
 	}
 

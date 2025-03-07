@@ -70,13 +70,13 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	// validate the ContactForm form
 	err := form.ValidateForm(contactForm)
 	if err != nil {
-		form.RenderFormError(w, r, contact, contactForm, "The login form could not be validated")
+		content.RenderFormError(w, r, contact, contactForm, "The login form could not be validated")
 		return
 	}
 
 	if contactForm.HasErrors() {
 		// there are validation errors - render the form errors
-		form.RenderFormError(w, r, contact, contactForm, "")
+		content.RenderFormError(w, r, contact, contactForm, "")
 		return
 	}
 
@@ -89,7 +89,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	err = cs.Create(m.Database)
 	if err != nil {
-		form.RenderFormError(w, r, contact, contactForm, fmt.Sprintf("There was an error creating the specified contact message: %v", err.Error()))
+		content.RenderFormError(w, r, contact, contactForm, fmt.Sprintf("There was an error creating the specified contact message: %v", err.Error()))
 		return
 	}
 

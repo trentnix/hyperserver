@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"text/template"
 
+	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 // Page defines the various fields that describe a particular site page
@@ -174,4 +176,19 @@ func templatesToStrings(templates []Template) []string {
 	}
 
 	return strings
+}
+
+// RenderFormError is a generic handler for rendering the specified content with
+// the specified form displaying the specified error
+func RenderFormError(w http.ResponseWriter, r *http.Request, c *Content, f form.FormComponent, message string) {
+	if message != "" {
+		f.SetFormError(message)
+	}
+
+	c.Data = f
+
+	if err := c.Render(w, r); err != nil {
+		logger.LogRequestError(r, "there was an error rendering the specified form", err)
+		http.Error(w, "unable to render the specified form", http.StatusInternalServerError)
+	}
 }
