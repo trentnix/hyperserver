@@ -2,20 +2,33 @@
 package auth
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 
+	"github.com/jmoiron/sqlx"
 	auth_services "github.com/trentnix/hyperserver/auth"
+	"github.com/trentnix/hyperserver/auth/password"
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/components/user"
+	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 // EmailAuthService implements the AuthService interface
 type (
-	EmailAuthService struct{}
+	EmailAuthService struct {
+		db     *sqlx.DB
+		config *config.Config
 
-	// loginForm defines the fields used when logging in via email/password
-	loginForm struct {
+		AuthRedirect string
+	}
+
+	// LoginForm defines the fields used when logging in via email/password
+	LoginForm struct {
 		Email    string `validate:"required,email"`
 		Password string
 
@@ -37,6 +50,13 @@ func init() {
 
 // Init initializes the EmailAuthService instance
 func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
+	if s.Database == nil {
+		return database.NewErrDatabaseUnavailable(errors.New("could not initialize EmailAuthService"))
+	}
+
+	a.db = s.Database
+	a.config = s.Config
+
 	return nil
 }
 
@@ -61,15 +81,118 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
 
 	if !login.IsHtmx() {
-		// this is subject to future change
+		// this should be an HTMX request
+		//  TO DO: may need to consider adding support for a layout template so that this could work
+		//         even if JavaScript is disabled
 		http.Error(w, "the login form should be rendered via an HTMX request", http.StatusBadRequest)
 	}
 
 	login.AddContentTemplate(content.Template(emailLoginFormTemplate))
-	login.Data = &loginForm{}
+	login.Data = &LoginForm{}
 
-	err := login.Render(w)
+	err := login.Render(w, r)
 	if err != nil {
 		http.Error(w, "the login form won't render", http.StatusInternalServerError)
 	}
+}
+
+// Login handles a login request, valides the input, confirms the password matches the
+// password stored in the database, and redirects the user back to configured auth landing page.
+//
+// The logic flow is as follows:
+//
+//	Login page
+//	  error -> back to login page with error displayed
+//	  authentication failed -> back to login with authentication failure displayed
+//	  user verification is required but the authenciated user isn't verified -> verification required page
+//	  success -> redirect to the configured landing page (defaults to '/')
+func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
+	contentManager := content.GetContentManager()
+
+	login := content.NewManagedContent(r)
+	login.AddContentTemplate(emailLoginFormTemplate)
+	if !login.IsHtmx() {
+		// this should be an HTMX request - may need to consider adding support for
+		// a layout template so that this could work even if JavaScript is disabled
+		contentManager.ErrorHandler(
+			w,
+			r,
+			http.StatusBadRequest,
+			"the login form should be rendered via an HTMX request")
+		return false
+	}
+
+	// extract login information, confirm the password, and authenticate the user
+	if err := r.ParseForm(); err != nil {
+		contentManager.ErrorHandler(
+			w,
+			r,
+			http.StatusBadRequest,
+			"the login form could not be parsed")
+		return false
+	}
+
+	LoginForm := &LoginForm{}
+	LoginForm.Email = r.FormValue("email")
+	LoginForm.Password = r.FormValue("password")
+
+	// validate the login form
+	err := form.ValidateForm(LoginForm)
+	if err != nil {
+		LoginForm.SetFormError("the login form could not be validated")
+		login.Data = LoginForm
+		err = login.Render(w, r)
+		if err != nil {
+			http.Error(w, "the login form won't render", http.StatusInternalServerError)
+		}
+
+		return false
+	}
+
+	if LoginForm.HasErrors() {
+		// there are validation errors - render the form errors
+		login.Data = LoginForm
+		err = login.Render(w, r)
+		if err != nil {
+			http.Error(w, "the login form won't render", http.StatusInternalServerError)
+		}
+
+		return false
+	}
+
+	// authenticate the hs_user
+	hs_user, err := user.GetUserByEmail(a.db, LoginForm.Email)
+	if err != nil && err != sql.ErrNoRows {
+		LoginForm.SetFormError("The user specified could not be retrieved from the database")
+		login.Data = LoginForm
+		err = login.Render(w, r)
+		if err != nil {
+			http.Error(w, "the login form won't render", http.StatusInternalServerError)
+		}
+
+		return false
+	}
+
+	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(LoginForm.Password, hs_user.Password) {
+		LoginForm.SetFormError("The provided login credentials are invalid")
+		login.Data = LoginForm
+		err = login.Render(w, r)
+		if err != nil {
+			http.Error(w, "the login form won't render", http.StatusInternalServerError)
+		}
+
+		return false
+	}
+
+	setAuthenticatedUserErr := user.SetAuthenticatedUser(r, w, hs_user)
+	if setAuthenticatedUserErr != nil {
+		logger.LogRequestError(r, "Could not save the newly authenticated user to a session", setAuthenticatedUserErr)
+		http.Error(w, "there was an error authenticating the user", http.StatusInternalServerError)
+		return false
+	}
+
+	r = content.AddUserSuccessMessage(r, "You have been successfully logged in")
+	contentManager.HomeHandler(w, r)
+
+	return true
 }

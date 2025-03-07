@@ -3,6 +3,7 @@
 package content
 
 import (
+	"net/http"
 	"sync"
 )
 
@@ -14,6 +15,10 @@ type (
 		ContentTemplates map[string][]Template
 		// components should be the helper templates used to manage layouts and content
 		ComponentTemplates map[string][]Template
+
+		HomeHandler http.HandlerFunc
+
+		ErrorHandler func(w http.ResponseWriter, r *http.Request, code int, message string)
 	}
 )
 
@@ -46,6 +51,15 @@ func NewContentManager() *ContentManagerService {
 	contentManager.LayoutTemplates = make(map[string][]Template)
 	contentManager.ContentTemplates = make(map[string][]Template)
 	contentManager.ComponentTemplates = make(map[string][]Template)
+
+	contentManager.ErrorHandler = func(w http.ResponseWriter, r *http.Request, code int, message string) {
+		http.Error(w, "An unspecified error occurred", http.StatusInternalServerError)
+	}
+
+	contentManager.HomeHandler = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("Welcome to HyperServer!"))
+	}
+
 	return &contentManager
 }
 

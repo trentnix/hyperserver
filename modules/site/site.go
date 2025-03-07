@@ -2,13 +2,10 @@
 package module_site
 
 import (
-	"net/http"
-
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
-	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -23,9 +20,11 @@ type (
 )
 
 const (
-	module             = "module_site"
-	pageLayoutTemplate = "modules/site/templates/html/layouts/site.html"
-	homeContent        = "modules/site/templates/html/index.html"
+	module                   = "module_site"
+	pageLayoutTemplate       = "modules/site/templates/html/layouts/site.html"
+	messageComponentTemplate = "modules/site/templates/html/components/message.html"
+	homeContent              = "modules/site/templates/html/index.html"
+	errorContent             = "modules/site/templates/html/error.html"
 )
 
 // init registers an instance of SiteModule with the application handlers. init runs
@@ -39,20 +38,13 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.Title = s.Config.App.Title
 
 	m.Database = s.Database
+	m.sessionManager = session.GetSessionManager()
+
 	contentManager := content.GetContentManager()
 	contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
-
-	m.sessionManager = s.Session
+	contentManager.AddPageComponentTemplate(content.Template(messageComponentTemplate))
+	contentManager.HomeHandler = m.Home
+	contentManager.ErrorHandler = m.Error
 
 	return nil
-}
-
-// Error notifies the requestor of the specified error message and logs the provided error
-// if the logError parameter is true
-func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, errorMessage string, err error, logError bool) {
-	if logError {
-		logger.LogRequestError(r, errorMessage, err)
-	}
-
-	http.Error(w, errorMessage, http.StatusInternalServerError)
 }

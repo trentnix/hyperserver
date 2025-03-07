@@ -52,21 +52,12 @@ type (
 
 		Messages []ContentMessage
 	}
-
-	ContentMessage struct {
-		Message     string
-		MessageType string
-	}
 )
 
 const (
 	// default page title and title prefix
 	DefaultSite  = "HyperServer"
 	DefaultTitle = "HyperServer"
-
-	messageTypeDefault = "default"
-	messageTypeSuccess = "success"
-	messageTypeError   = "error"
 )
 
 // NewContent extracts Content data from the provided request
@@ -133,7 +124,7 @@ func (c *Content) AddComponentTemplates(contents ...Template) {
 
 // Render parses the layout and content templates and executes them with the
 // specified Content as the view model
-func (c *Content) Render(w http.ResponseWriter) error {
+func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	if c.ContentManager != nil {
 		contentType := PageType
 		if c.IsHtmx() {
@@ -157,6 +148,9 @@ func (c *Content) Render(w http.ResponseWriter) error {
 		return NewErrNoTemplates(fmt.Errorf("No templates have been set"))
 	}
 
+	// get messages from the request context
+	c.Messages = GetContentMessages(r)
+
 	// parse the templates in the order specified
 	tmpl, err := template.ParseFiles(templatesToStrings(templates)...)
 	if err != nil {
@@ -172,26 +166,6 @@ func (c *Content) Render(w http.ResponseWriter) error {
 	return nil
 }
 
-// addMessage adds a new ContentMessage to the Messages slice
-func (c *Content) addMessage(message string, messageType string) {
-	c.Messages = append(c.Messages, ContentMessage{Message: message, MessageType: messageType})
-}
-
-// AddMessage adds simple message to the Messages slice
-func (c *Content) AddMessage(message string) {
-	c.addMessage(message, messageTypeDefault)
-}
-
-// AddErrorMessage adds an error message to the Messages slice
-func (c *Content) AddErrorMessage(message string) {
-	c.addMessage(message, messageTypeError)
-}
-
-// AddSuccessMessage adds an success message to the Messages slice
-func (c *Content) AddSuccessMessage(message string) {
-	c.addMessage(message, messageTypeSuccess)
-}
-
 // templatesToStrings takes the specified Template slice and converts it to a string slice
 func templatesToStrings(templates []Template) []string {
 	strings := make([]string, len(templates))
@@ -200,19 +174,4 @@ func templatesToStrings(templates []Template) []string {
 	}
 
 	return strings
-}
-
-// IsDefault returns true if the specified ContentMessage is a default message
-func (c *ContentMessage) IsDefault() bool {
-	return c.MessageType == messageTypeDefault
-}
-
-// IsSuccess returns true if the specified ContentMessage is a success message
-func (c *ContentMessage) IsSuccess() bool {
-	return c.MessageType == messageTypeSuccess
-}
-
-// IsError returns true if the specified ContentMessage is an error message
-func (c *ContentMessage) IsError() bool {
-	return c.MessageType == messageTypeError
 }

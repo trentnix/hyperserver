@@ -19,7 +19,6 @@ type (
 		Config   *config.Config
 		Database *sqlx.DB
 		Web      *http.ServeMux
-		Session  *session.SessionManager
 	}
 )
 
@@ -67,5 +66,5 @@ func (s *ApplicationServer) initWeb() {
 
 // initSessionManager
 func (s *ApplicationServer) initSessionManager() {
-	s.Session = session.NewSessionManager(s.Config)
+	session.InitializeSessionManager(s.Config)
 }

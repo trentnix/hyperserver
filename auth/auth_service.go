@@ -12,10 +12,6 @@ import (
 // implementation self-registers via init()
 var authServices []AuthService
 
-const (
-	defaultAuthRedirect = "/"
-)
-
 // AuthService defines an interface for an authorization service that can be implemented
 // and used in the application
 type AuthService interface {
@@ -30,6 +26,8 @@ type AuthService interface {
 
 	// handles the login request for the implemented AuthService
 	GetLogin(http.ResponseWriter, *http.Request)
+	// handles the login action for the implemented AuthService
+	Login(http.ResponseWriter, *http.Request) bool
 }
 
 // Register used by a Handler to register itself with the application

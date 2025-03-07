@@ -1,0 +1,12 @@
+{{ block "Content" . }}
+
+<section id="showcase" class="section">
+  <div class="container">
+    <h2>{{ .Title }}</h2>
+    <p>
+        There was an error: {{ .Data }}
+    </p>
+  </div>
+</section>
+
+{{ end }} <!-- Content -->

@@ -1,9 +1,12 @@
 // users.go defines the User model
-package hs_user
+package user
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 // User stores an authenticated user, the type of authentication used, whether the user has been verified,
@@ -36,7 +40,9 @@ var (
 
 const (
 	UserContextKey contextKey = "auth-user"
-	userTableName  string     = "HS_User"
+	userTableName  string     = "user"
+
+	userSession string = "auth-user-session"
 )
 
 func NewUser() *User {
@@ -51,9 +57,9 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
-	var user User
+	var hs_user User
 	if !userTableConfigured {
-		err := user.prepareDatabase(db)
+		err := hs_user.prepareDatabase(db)
 		if err != nil {
 			return nil, err
 		}
@@ -69,12 +75,12 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
         WHERE id = ?
     `, userTableName)
 
-	err := db.Get(&user, query, id)
+	err := db.Get(&hs_user, query, id)
 	if err != nil {
 		return nil, err
 	}
 
-	return &user, nil
+	return &hs_user, nil
 }
 
 // GetUserByEmail retrieves the user with the specified users.email value
@@ -189,7 +195,7 @@ func (user *User) Save(db *sqlx.DB) error {
 	}
 
 	dbUser, err := GetUserByEmail(db, user.Email)
-	if err != nil {
+	if err != sql.ErrNoRows && err != nil {
 		// there was an error trying to retrieve the user
 		return err
 	}
@@ -299,4 +305,55 @@ func GetUserFromContext(ctx context.Context) *User {
 func ClearUserFromContext(ctx context.Context) context.Context {
 	// Set the user value to nil to indicate clearing the user
 	return context.WithValue(ctx, UserContextKey, nil)
+}
+
+// SetAuthenticatedUser creates a user session for the specified user to indicate that
+// the user is authenticated
+func SetAuthenticatedUser(r *http.Request, w http.ResponseWriter, u *User) error {
+	if u == nil || u.ID == "" {
+		return errors.New("The specified user is not specified. The user's ID must be set.")
+	}
+
+	sessionManager := session.GetSessionManager()
+	s, err := sessionManager.Get(r, userSession)
+	if err != nil {
+		return err
+	}
+
+	s.Data[userSession] = u.ID
+	sessionSaveErr := s.Save(r, w)
+	if sessionSaveErr != nil {
+		return sessionSaveErr
+	}
+
+	return nil
+}
+
+// GetAuthenticatedUser retrieves the currently authenticated user
+func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
+	// first check the request context
+	hs_user := GetUserFromContext(r.Context())
+	if hs_user != nil {
+		return hs_user, nil
+	}
+
+	// check the session
+	sessionManager := session.GetSessionManager()
+	s, err := sessionManager.Get(r, userSession)
+	if err != nil {
+		return nil, err
+	}
+
+	userId := s.Data[userSession]
+	if userId == "" {
+		return nil, nil
+	}
+
+	// get the user's information from the database
+	user, userRetrievalErr := GetUserByID(db, userId)
+	if userRetrievalErr != nil {
+		return nil, userRetrievalErr
+	}
+
+	return user, nil
 }

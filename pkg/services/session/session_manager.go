@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/trentnix/hyperserver/config"
 )
@@ -29,17 +30,38 @@ const (
 	sessionRegistryKey ctxKey = iota
 )
 
+var (
+	// singleton instance of a ContentManagerService
+	sessionManager *SessionManager
+	// used to manage the singleton
+	once sync.Once
+)
+
+// GetContentManager returns the global ContentManagerService singleton
+func GetSessionManager() *SessionManager {
+	return sessionManager
+}
+
 // NewSessionManager creates a new instance of a SessionManager object with default values for
 // TokenLifetime and cookie name
-func NewSessionManager(c *config.Config) *SessionManager {
-	sm := SessionManager{
-		config: c,
+func InitializeSessionManager(c *config.Config) *SessionManager {
+	var sm *SessionManager
+	if sessionManager != nil {
+		return sessionManager
 	}
 
-	sm.Stores = c.HTTP.Session.Stores
-	sm.Types = c.HTTP.Session.Types
+	once.Do(func() {
+		sm = &SessionManager{
+			config: c,
+		}
 
-	return &sm
+		sm.Stores = c.HTTP.Session.Stores
+		sm.Types = c.HTTP.Session.Types
+
+		sessionManager = sm
+	})
+
+	return sm
 }
 
 // Get returns any current sessions specified in the request with the specified name.
