@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"html/template"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -23,6 +24,10 @@ type AuthService interface {
 	IsLoaded() bool
 	// returns the auth type
 	AuthType() string
+
+	// returns a template.HTML object so that the AuthService can render a button to access the
+	// login capabilities of the AuthService in question
+	GetLoginButton() template.HTML
 
 	// handles the login request for the implemented AuthService
 	GetLogin(http.ResponseWriter, *http.Request)

@@ -188,7 +188,8 @@ func RenderFormError(w http.ResponseWriter, r *http.Request, c *Content, f form.
 	c.Data = f
 
 	if err := c.Render(w, r); err != nil {
-		logger.LogRequestError(r, "there was an error rendering the specified form", err)
-		http.Error(w, "unable to render the specified form", http.StatusInternalServerError)
+		renderingError := fmt.Sprintf("there was an error rendering the specified form: %s", err.Error())
+		logger.LogRequestError(r, renderingError, err)
+		RenderError(w, r, http.StatusInternalServerError, renderingError)
 	}
 }

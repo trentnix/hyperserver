@@ -19,7 +19,7 @@ func LoadAuthenticatedUser(db *sqlx.DB) func(http.Handler) http.Handler {
 			ctx := r.Context()
 
 			hs_user, err := auth_services.GetAuthenticatedUser(r, db)
-			if !errors.Is(err, sql.ErrNoRows) {
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				logger.LogRequestError(r, "unable to retrieve the authenticated user from the request", err)
 			}
 

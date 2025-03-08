@@ -3,6 +3,7 @@ package util
 
 import (
 	"fmt"
+	"html/template"
 	"os"
 )
 
@@ -27,4 +28,15 @@ func SetWorkingDirectory(wd string) error {
 	}
 
 	return nil
+}
+
+// LoadHTMLFromFile takes the file at the specified filePath and returns a template.HTML object with
+// its contents
+func LoadHTMLFromFile(filePath string) (template.HTML, error) {
+	htmlBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", NewErrLoadingTemplate(err, filePath)
+	}
+
+	return template.HTML(htmlBytes), nil
 }

@@ -3,15 +3,22 @@
 package auth
 
 import (
+	"fmt"
+	"html/template"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 type (
 	AuthManager struct{}
+)
+
+const (
+	authLoginSelectionTemplate = "auth/templates/html/login.html"
 )
 
 // init registers the AuthManager handler with the application
@@ -27,28 +34,30 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 // Routes defines the routes the AuthManager handler will be responsible for
 func (a *AuthManager) Routes(mux *http.ServeMux) {
 	// login / logout
-	// mux.Handle("/auth/login", http.HandlerFunc(a.GetLogin))
+	mux.Handle("/auth/login", http.HandlerFunc(a.GetLogin))
 	mux.Handle("GET /auth/login/{authType}", http.HandlerFunc(a.GetLoginService))
 	mux.Handle("POST /auth/login/{authType}", http.HandlerFunc(a.Login))
 }
 
-// // Login handles serving the login page so the user can initiate a user login
-// func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
-// 	p := page.NewPage(r)
-// 	p.AddContents(authLoginSelectionTemplate)
+// Login handles serving the login page so the user can initiate a user login
+func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
+	c := content.NewManagedContent(r)
+	c.AddContentTemplate(authLoginSelectionTemplate)
 
-// 	var loginHTML []template.HTML
-// 	authServices := auth.GetLoadedAuthServices()
-// 	for _, service := range authServices {
-// 		loginHTML = append(loginHTML, service.GetLoginButton())
-// 	}
+	var loginHTML []template.HTML
+	authServices := GetLoadedAuthServices()
+	for _, service := range authServices {
+		loginHTML = append(loginHTML, service.GetLoginButton())
+	}
 
-// 	p.Data = loginHTML
+	c.Data = loginHTML
 
-// 	if err := a.RenderPage(w, p); err != nil {
-// 		a.Site.ErrorDefault(w, err.Error(), http.StatusInternalServerError)
-// 	}
-// }
+	if err := c.Render(w, r); err != nil {
+		renderingError := fmt.Sprintf("Could not render the home page: %s", err.Error())
+		logger.LogRequestError(r, renderingError, err)
+		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+	}
+}
 
 // GetLoginService retrieves the first step of login process for the given AuthService
 // (specified by authType)

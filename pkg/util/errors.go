@@ -1,6 +1,8 @@
 // errors.go defines the custom errors used by the util package
 package util
 
+import "fmt"
+
 // BaseError provides common error functionality
 type BaseError struct {
 	Err     error
@@ -58,6 +60,24 @@ func NewErrFailedToGetWorkingDirectory(err error) *ErrFailedToGetWorkingDirector
 		BaseError: &BaseError{
 			Err:     err,
 			Message: "failed to retrieve the working directory",
+		},
+	}
+}
+
+// ErrDatabaseUnavailable indicates the database is unavailable
+type ErrLoadingTemplate struct {
+	template string
+	*BaseError
+}
+
+// NewErrDatabaseUnavailable creates an instance of ErrDatabaseUnavailable
+func NewErrLoadingTemplate(err error, t string) *ErrLoadingTemplate {
+	errorMessage := fmt.Sprintf("there was an error loading the specified template: %s", t)
+	return &ErrLoadingTemplate{
+		template: t,
+		BaseError: &BaseError{
+			Err:     err,
+			Message: errorMessage,
 		},
 	}
 }

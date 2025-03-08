@@ -5,6 +5,8 @@ package auth
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"html/template"
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
@@ -17,6 +19,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // EmailAuthService implements the AuthService interface
@@ -26,6 +29,8 @@ type (
 		config *config.Config
 
 		AuthRedirect string
+
+		loginButton template.HTML
 	}
 
 	// LoginForm defines the fields used when logging in via email/password
@@ -40,8 +45,8 @@ type (
 const (
 	AuthTypeEmail = "email"
 
-	emailContainerTemplateName = "/auth/email/container"
-	emailLoginFormTemplate     = "auth/modules/email/templates/html/login-form.html"
+	emailLoginFormTemplate       = "auth/modules/email/templates/html/login-form.html"
+	emailLoginButtonTemplateName = "auth/modules/email/templates/html/login-link.html"
 )
 
 // init registers the AuthHandler handler with the application
@@ -57,6 +62,13 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 
 	a.db = s.Database
 	a.config = s.Config
+
+	var err error
+	loginButtonTemplate := emailLoginButtonTemplateName
+	a.loginButton, err = util.LoadHTMLFromFile(loginButtonTemplate)
+	if err != nil {
+		return fmt.Errorf("could not find %s", loginButtonTemplate)
+	}
 
 	return nil
 }
@@ -77,6 +89,12 @@ func (a *EmailAuthService) AuthType() string {
 	return AuthTypeEmail
 }
 
+// GetLoginButton returns the template.HTML object representing the way to start the login process
+// for email authorization
+func (a *EmailAuthService) GetLoginButton() template.HTML {
+	return a.loginButton
+}
+
 // GetLogin serves the login page with the login form
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
@@ -84,12 +102,8 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	if !login.IsHtmx() {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
-		contentManager := content.GetContentManager()
-		contentManager.ErrorHandler(
-			w,
-			r,
-			http.StatusBadRequest,
-			"The Login form must be rendered via an HTMX request")
+		errMessage := "The Login form must be rendered via an HTMX request"
+		content.RenderError(w, r, http.StatusBadRequest, errMessage)
 		return
 	}
 
@@ -98,7 +112,9 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		http.Error(w, "the login form won't render", http.StatusInternalServerError)
+		renderingError := fmt.Sprintf("Could not render the error page: %s", err.Error())
+		logger.LogRequestError(r, renderingError, err)
+		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
 	}
 }
 
