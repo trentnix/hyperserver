@@ -160,7 +160,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 
-	setAuthenticatedUserErr := user.SetAuthenticatedUser(r, w, hs_user)
+	setAuthenticatedUserErr := auth_services.SetAuthenticatedUser(r, w, hs_user)
 	if setAuthenticatedUserErr != nil {
 		logger.LogRequestError(r, "Could not save the newly authenticated user to a session", setAuthenticatedUserErr)
 		content.RenderFormError(w, r, login, LoginForm, "There was an internal error when trying to login")
