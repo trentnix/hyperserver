@@ -1,4 +1,5 @@
-// users.go defines the User model
+// users.go defines the User model, database interactions, and serializes a user
+// to and from a context
 package user
 
 import (

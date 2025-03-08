@@ -1,10 +1,6 @@
+// templates.go defines a Template and any functionality related to a Template
 package content
 
 type (
-	Template  string
-	Directory string
-)
-
-const (
-// PageHome     Template = "home"
+	Template string
 )

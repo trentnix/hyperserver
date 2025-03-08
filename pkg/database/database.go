@@ -1,4 +1,4 @@
-// database.go
+// database.go handles the setup and configuration for database usage in the application
 package database
 
 import (

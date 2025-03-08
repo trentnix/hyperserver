@@ -1,3 +1,4 @@
+// errors.go defines a BaseError structure and methods for use with custom error types
 package errors
 
 // BaseError provides common error functionality

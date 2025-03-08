@@ -1,3 +1,4 @@
+// message.go defines a ContentMessage and related methods
 package content
 
 import (

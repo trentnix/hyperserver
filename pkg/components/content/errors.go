@@ -1,3 +1,4 @@
+// errors.go defines custom errors in the content package
 package content
 
 import (

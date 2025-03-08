@@ -1,4 +1,4 @@
-// errors.go defines the custom errors used by the services pkg
+// errors.go defines the custom errors used by the database package
 package database
 
 import (

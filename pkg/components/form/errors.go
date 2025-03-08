@@ -1,3 +1,4 @@
+// errors.go defines custom errors for the form package
 package form
 
 import (

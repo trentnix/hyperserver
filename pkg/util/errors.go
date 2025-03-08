@@ -1,4 +1,4 @@
-// errors.go defines the custom errors used by the util pkg
+// errors.go defines the custom errors used by the util package
 package util
 
 // BaseError provides common error functionality

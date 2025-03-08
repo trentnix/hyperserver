@@ -1,3 +1,4 @@
+// auth.go defines middleware related to authorization
 package middleware
 
 import (

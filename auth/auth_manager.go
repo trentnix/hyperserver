@@ -1,3 +1,5 @@
+// auth_manager.go defines the AuthManager struct and methods that will be used
+// to handle general auth by calling specifically configured auth implementations
 package auth
 
 import (

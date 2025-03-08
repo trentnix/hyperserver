@@ -84,14 +84,14 @@ func ValidateForm(f any) error {
 
 // AddFormToContext takes the specified form and saves a pointer to the form to
 // the provided context
-func AddFormToContext(ctx context.Context, form any) (context.Context, error) {
-	if form == nil {
+func AddFormToContext(ctx context.Context, f any) (context.Context, error) {
+	if f == nil {
 		return ctx, nil
 	}
 
 	var formPtr any
 
-	val := reflect.ValueOf(form)
+	val := reflect.ValueOf(f)
 	if val.Kind() != reflect.Ptr {
 		// Create a pointer to the value
 		ptrVal := reflect.New(val.Type())
@@ -99,10 +99,10 @@ func AddFormToContext(ctx context.Context, form any) (context.Context, error) {
 		formPtr = ptrVal.Interface()
 	} else {
 		// form is already a pointer
-		formPtr = form
+		formPtr = f
 	}
 
-	if _, ok := form.(FormComponent); !ok {
+	if _, ok := f.(FormComponent); !ok {
 		return ctx, NewErrFormComponentInterfaceNotImplemented(fmt.Errorf("The specified form does not implement the FormComponent interface."))
 	}
 

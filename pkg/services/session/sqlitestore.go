@@ -1,3 +1,5 @@
+// sqlitestore.go defines an implementation of the SessionStore interface that
+// stores session data in SQLite
 package session
 
 import (
