@@ -43,6 +43,8 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 
 	// register
 	mux.Handle("/auth/register", http.HandlerFunc(a.GetRegister))
+	mux.Handle("GET /auth/register/{authType}", http.HandlerFunc(a.GetRegisterService))
+	mux.Handle("POST /auth/register/{authType}", http.HandlerFunc(a.Register))
 }
 
 // GetLogin renders the various authentication options to a user trying to login
@@ -142,6 +144,41 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	(*authService).Login(w, r)
+}
+
+// GetRegisterService retrieves the first step of registration process for the given
+// AuthService (specified by authType)
+func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request) {
+	authType := r.PathValue("authType")
+	if authType == "" {
+		content.RenderError(w, r, http.StatusBadRequest, "Register unavailable: no authorization service was specified.")
+		return
+	}
+
+	authService := getAuthService(authType)
+	if authService == nil {
+		content.RenderError(w, r, http.StatusBadRequest, "Register unavailable: the specified auth service was found.")
+		return
+	}
+
+	(*authService).GetRegister(w, r)
+}
+
+// Register starts the registration process for the given AuthService (specified by authType)
+func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
+	authType := r.PathValue("authType")
+	if authType == "" {
+		content.RenderError(w, r, http.StatusBadRequest, "Register unavailable: no authorization service was specified.")
+		return
+	}
+
+	authService := getAuthService(authType)
+	if authService == nil {
+		content.RenderError(w, r, http.StatusBadRequest, "Register unavailable: the specified auth service was found.")
+		return
+	}
+
+	(*authService).Register(w, r)
 }
 
 // getAuthService returns the authService specified by authType (if it is loaded)

@@ -41,6 +41,15 @@ type (
 
 		form.Form
 	}
+
+	// registerForm defines the fields used when registering a new user in via email/password
+	RegisterForm struct {
+		Email         string `validate:"required,email"`
+		Password      string `validate:"required,password"`
+		PasswordMatch string `validate:"required,password,eqfield=Password"`
+
+		form.Form
+	}
 )
 
 const (
@@ -110,7 +119,7 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 	return a.registerButton
 }
 
-// GetLogin serves the login page with the login form
+// GetLogin serves the login form
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
 
@@ -127,22 +136,21 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		renderingError := fmt.Sprintf("Could not render the error page: %s", err.Error())
+		renderingError := fmt.Sprintf("Could not render the email auth login page: %s", err.Error())
 		logger.LogRequestError(r, renderingError, err)
 		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
 	}
 }
 
 // Login handles a login request, valides the input, confirms the password matches the
-// password stored in the database, and redirects the user back to configured auth landing page.
+// password stored in the database, and handles the user response.
 //
 // The logic flow is as follows:
 //
 //	Login page
-//	  error -> back to login page with error displayed
-//	  authentication failed -> back to login with authentication failure displayed
-//	  user verification is required but the authenciated user isn't verified -> verification required page
-//	  success -> redirect to the configured landing page (defaults to '/')
+//	  error -> back to login form with error displayed
+//	  authentication failed -> back to login form with authentication failure displayed
+//	  success -> redirect to the configured home page
 func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	login := content.NewManagedContent(r)
 	if !login.IsHtmx() {
@@ -202,5 +210,42 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 
 	content.RenderHome(w, r)
 
+	return true
+}
+
+// GetRegister serves the register form
+func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
+	register := content.NewManagedContent(r)
+
+	if !register.IsHtmx() {
+		// this should be an HTMX request - may need to consider adding support for
+		// a layout template so that this could work even if JavaScript is disabled
+		errMessage := "The Login form must be rendered via an HTMX request"
+		content.RenderError(w, r, http.StatusBadRequest, errMessage)
+		return
+	}
+
+	register.AddContentTemplate(content.Template(emailRegisterFormTemplate))
+	register.Data = &RegisterForm{}
+
+	err := register.Render(w, r)
+	if err != nil {
+		renderingError := fmt.Sprintf("Could not render the email auth register page: %s", err.Error())
+		logger.LogRequestError(r, renderingError, err)
+		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+	}
+}
+
+// Register handles a registration request, valides the input, creates a new user account, sends
+// verification instructions (as configured), and handles the user response.
+//
+// The registration flow (TO DO) is as follows:
+//
+//	Register page
+//	  error -> back to register page
+//	  user already exists -> back to register page
+//	  success -> redirect to login
+func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool {
+	// TO DO
 	return true
 }

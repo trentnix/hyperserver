@@ -36,6 +36,11 @@ type AuthService interface {
 	GetLogin(http.ResponseWriter, *http.Request)
 	// handles the login action for the implemented AuthService
 	Login(http.ResponseWriter, *http.Request) bool
+
+	// handles the registration request for the implemented AuthService
+	GetRegister(http.ResponseWriter, *http.Request)
+	// handles the registration action for the implemented AuthService
+	Register(http.ResponseWriter, *http.Request) bool
 }
 
 // Register used by a Handler to register itself with the application
