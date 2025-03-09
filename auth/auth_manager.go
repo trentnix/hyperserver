@@ -18,8 +18,10 @@ type (
 )
 
 const (
-	authLoginSelectionTemplate = "auth/templates/html/login.html"
-	authLoginDefaultTemplate   = "auth/templates/html/login-default.html"
+	authLoginSelectionTemplate    = "auth/templates/html/login.html"
+	authRegisterSelectionTemplate = "auth/templates/html/register.html"
+	authLoginDefaultTemplate      = "auth/templates/html/login-default.html"
+	authRegisterDefaultTemplate   = "auth/templates/html/register-default.html"
 )
 
 // init registers the AuthManager handler with the application
@@ -38,9 +40,14 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 	mux.Handle("/auth/login", http.HandlerFunc(a.GetLogin))
 	mux.Handle("GET /auth/login/{authType}", http.HandlerFunc(a.GetLoginService))
 	mux.Handle("POST /auth/login/{authType}", http.HandlerFunc(a.Login))
+
+	// register
+	mux.Handle("/auth/register", http.HandlerFunc(a.GetRegister))
 }
 
-// Login handles serving the login page so the user can initiate a user login
+// GetLogin renders the various authentication options to a user trying to login
+// to the application. If there is only a single authentication option, the user is
+// sent directly to the login page of that authentication service.
 func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	c := content.NewManagedContent(r)
 
@@ -61,7 +68,36 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.Render(w, r); err != nil {
-		renderingError := fmt.Sprintf("Could not render the home page: %s", err.Error())
+		renderingError := fmt.Sprintf("Could not render the login page: %s", err.Error())
+		logger.LogRequestError(r, renderingError, err)
+		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+	}
+}
+
+// GetRegister renders the various authentication options to a user trying to register
+// with the application. If there is only a single authentication option, the user is
+// sent directly to the registration page of that authentication service.
+func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
+	c := content.NewManagedContent(r)
+
+	var loginHTML []template.HTML
+
+	authServices := GetLoadedAuthServices()
+	if len(authServices) == 1 {
+		// there is only 1 auth service - display the default
+		c.AddContentTemplate(authRegisterDefaultTemplate)
+		c.Data = "/auth/register/" + authServices[0].AuthType()
+	} else {
+		for _, service := range authServices {
+			loginHTML = append(loginHTML, service.GetRegisterButton())
+		}
+
+		c.AddContentTemplate(authRegisterSelectionTemplate)
+		c.Data = loginHTML
+	}
+
+	if err := c.Render(w, r); err != nil {
+		renderingError := fmt.Sprintf("Could not render the registration page: %s", err.Error())
 		logger.LogRequestError(r, renderingError, err)
 		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
 	}

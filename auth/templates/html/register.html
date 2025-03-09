@@ -1,0 +1,20 @@
+{{ define "Content" }}
+<style type="text/css">
+  .auth-options {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    height: 20vh;
+  }
+</style>
+<div class="auth-options">
+    {{ if .Data }}
+        {{ range .Data }}
+            {{ . }}<br/>
+        {{ end }}
+    {{ else }}
+        No authentication providers are configured
+    {{ end }}
+</div>
+{{ end }}

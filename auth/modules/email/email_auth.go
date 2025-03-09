@@ -30,7 +30,8 @@ type (
 
 		AuthRedirect string
 
-		loginButton template.HTML
+		loginButton    template.HTML
+		registerButton template.HTML
 	}
 
 	// LoginForm defines the fields used when logging in via email/password
@@ -45,8 +46,10 @@ type (
 const (
 	AuthTypeEmail = "email"
 
-	emailLoginFormTemplate       = "auth/modules/email/templates/html/login-form.html"
-	emailLoginButtonTemplateName = "auth/modules/email/templates/html/login-link.html"
+	emailLoginFormTemplate          = "auth/modules/email/templates/html/login-form.html"
+	emailLoginButtonTemplateName    = "auth/modules/email/templates/html/login-link.html"
+	emailRegisterFormTemplate       = "auth/modules/email/templates/html/register-form.html"
+	emailRegisterButtonTemplateName = "auth/modules/email/templates/html/register-link.html"
 )
 
 // init registers the AuthHandler handler with the application
@@ -68,6 +71,12 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	a.loginButton, err = util.LoadHTMLFromFile(loginButtonTemplate)
 	if err != nil {
 		return fmt.Errorf("could not find %s", loginButtonTemplate)
+	}
+
+	registerButtonTemplate := emailRegisterButtonTemplateName
+	a.registerButton, err = util.LoadHTMLFromFile(registerButtonTemplate)
+	if err != nil {
+		return fmt.Errorf("could not find %s", registerButtonTemplate)
 	}
 
 	return nil
@@ -93,6 +102,12 @@ func (a *EmailAuthService) AuthType() string {
 // for email authorization
 func (a *EmailAuthService) GetLoginButton() template.HTML {
 	return a.loginButton
+}
+
+// GetLoginButton returns the template.HTML object representing the way to start the login process
+// for email authorization
+func (a *EmailAuthService) GetRegisterButton() template.HTML {
+	return a.registerButton
 }
 
 // GetLogin serves the login page with the login form
