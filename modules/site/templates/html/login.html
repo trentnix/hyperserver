@@ -1,61 +1,7 @@
 {{ block "Content" . }}
-    <style type="text/css">
-        /* Container */
-form {
-  max-width: 400px;
-  margin: 2rem auto;
-  padding: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-/* Labels & Inputs */
-label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-weight: bold;
-}
-
-input[type="email"],
-input[type="password"] {
-  display: block;
-  width: 100%;
-  padding: 0.5rem;
-  margin-bottom: 0.75rem;
-  box-sizing: border-box;
-}
-
-/* Button */
-button {
-  cursor: pointer;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  background: #007bff;
-  color: #ffffff;
-  font-size: 1rem;
-  transition: background 0.2s ease-in-out;
-}
-
-button:hover {
-  background: #0056b3;
-}
-
-/* Messages */
-.error {
-  color: #cc0000;
-}
-
-.success {
-  color: #006400;
-}
-
-    </style>
-
-    <section id="login" class="section"  hx-get="/auth/login/email" hx-target="#login-form" hx-swap="innerHTML" hx-trigger="load">
-        <div id="login-form" class="container">
-        Loading login form...
-        </div>
-    </section>
-
+<section id="login" class="section"  hx-get="/auth/login/email" hx-target="#login-form" hx-swap="innerHTML" hx-trigger="load">
+    <div id="login-form" class="container">
+    Loading login form...
+    </div>
+</section>
 {{ end }}

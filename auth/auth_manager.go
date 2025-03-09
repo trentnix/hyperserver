@@ -19,6 +19,7 @@ type (
 
 const (
 	authLoginSelectionTemplate = "auth/templates/html/login.html"
+	authLoginDefaultTemplate   = "auth/templates/html/login-default.html"
 )
 
 // init registers the AuthManager handler with the application
@@ -42,15 +43,22 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 // Login handles serving the login page so the user can initiate a user login
 func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	c := content.NewManagedContent(r)
-	c.AddContentTemplate(authLoginSelectionTemplate)
 
 	var loginHTML []template.HTML
-	authServices := GetLoadedAuthServices()
-	for _, service := range authServices {
-		loginHTML = append(loginHTML, service.GetLoginButton())
-	}
 
-	c.Data = loginHTML
+	authServices := GetLoadedAuthServices()
+	if len(authServices) == 1 {
+		// there is only 1 auth service - display the default
+		c.AddContentTemplate(authLoginDefaultTemplate)
+		c.Data = "/auth/login/" + authServices[0].AuthType()
+	} else {
+		for _, service := range authServices {
+			loginHTML = append(loginHTML, service.GetLoginButton())
+		}
+
+		c.AddContentTemplate(authLoginSelectionTemplate)
+		c.Data = loginHTML
+	}
 
 	if err := c.Render(w, r); err != nil {
 		renderingError := fmt.Sprintf("Could not render the home page: %s", err.Error())
