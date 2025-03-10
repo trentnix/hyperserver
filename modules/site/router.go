@@ -29,7 +29,6 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 	mux.Handle("GET /contact", http.HandlerFunc(m.GetContact))
 	mux.Handle("POST /contact", http.HandlerFunc(m.Contact))
 
-	// session testing - don't commit
-	mux.Handle("/session", http.HandlerFunc(m.SessionTest))
+	// for testing - changes to come
 	mux.Handle("/login", http.HandlerFunc(m.Login))
 }

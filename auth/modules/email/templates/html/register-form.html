@@ -1,7 +1,7 @@
 {{ with .Data }}
-    <form id="login-form"
+    <form id="register-form"
           class="auth-email-form"
-          hx-post="/auth/login/email"
+          hx-post="/auth/register/email"
           hx-target="this"
           hx-swap="outerHTML"
           hx-trigger="submit">
@@ -29,11 +29,7 @@
                {{ if .HasFieldErrors "PasswordMatch" }} class="input-error" {{ end }}>
         {{template "field-errors" (.GetFieldErrors "PasswordMatch")}}
 
-        <button type="submit">Login</button>
-
-        <div>
-            <a href="/auth/reset/request/email">Forgot Password?</a>
-        </div>
+        <button type="submit">Register</button>
         
         {{ if .HasErrors }}
             <div>{{ .GetFormErrorHTML }}</div>
@@ -42,7 +38,7 @@
         {{ end }}
     </form>
 {{ else }}
-    <div>Unable to display login details.</div>
+    <div>Unable to display registration details.</div>
 {{ end }}
 
 {{define "field-errors"}}

@@ -12,9 +12,15 @@ import (
 
 // Home renders the homepage and handles the following routes:
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
+	welcomeMessage := "Welcome!"
+	hs_user := user.GetUserFromContext(r.Context())
+	if hs_user != nil {
+		welcomeMessage = "Welcome " + hs_user.Email + "!"
+	}
+
 	homepage := content.NewManagedContent(r)
 	homepage.Site = m.Title
-	homepage.Title = "Home"
+	homepage.Title = welcomeMessage
 	homepage.AddContentTemplate(homeContent)
 	err := homepage.Render(w, r)
 	if err != nil {
@@ -52,64 +58,6 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, code int, mes
 func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
 	faviconPath := filepath.Join("modules", "site", "templates", "html", "img", "favicon.ico")
 	http.ServeFile(w, r, faviconPath)
-}
-
-// SessionTest is a method used for testing session functionality and will be removed
-func (m *SiteModule) SessionTest(w http.ResponseWriter, r *http.Request) {
-	session, sessionErr := m.sessionManager.Get(r, "cookie") // "cookie" for CookieStore, "visit" for SQLiteStore
-	if sessionErr != nil {
-		errMessage := fmt.Sprintf("session error: %s", sessionErr.Error())
-		content.RenderError(w, r, http.StatusInternalServerError, errMessage)
-		return
-	}
-
-	var userEmail string
-	var hs_user *user.User
-	var userErr error
-
-	userID := session.Data["user_id"]
-	if userID != "" {
-		hs_user, userErr = user.GetUserByID(m.Database, userID)
-		if userErr != nil {
-			errMessage := fmt.Sprintf("user retrieval error")
-			content.RenderError(w, r, http.StatusInternalServerError, errMessage)
-			return
-		}
-	}
-
-	if hs_user != nil {
-		userEmail = hs_user.Email
-	} else {
-		userEmail = "No User"
-
-		hs_user = user.NewUser()
-		hs_user.Email = "trentnix@gmail.com"
-		userErr = hs_user.Save(m.Database)
-		if userErr != nil {
-			errMessage := fmt.Sprintf("user creation error: %v", userErr)
-			content.RenderError(w, r, http.StatusInternalServerError, errMessage)
-			return
-		}
-
-		session.Data["user_id"] = hs_user.ID
-		sessionErr := session.Save(r, w)
-		if sessionErr != nil {
-			errMessage := fmt.Sprintf("session error: %s", sessionErr.Error())
-			content.RenderError(w, r, http.StatusInternalServerError, errMessage)
-			return
-		}
-	}
-
-	homepage := content.NewManagedContent(r)
-	homepage.Site = m.Title
-	homepage.Title = userEmail
-	homepage.AddContentTemplate(homeContent)
-	err := homepage.Render(w, r)
-	if err != nil {
-		errMessage := fmt.Sprintf("There was an error rendering the specified content: %s", err.Error())
-		content.RenderError(w, r, http.StatusInternalServerError, errMessage)
-		return
-	}
 }
 
 // Login provides a handler to test login functionality - currently used for testing
