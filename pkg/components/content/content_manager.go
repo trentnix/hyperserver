@@ -16,8 +16,14 @@ type (
 		// components should be the helper templates used to manage layouts and content
 		ComponentTemplates map[string][]Template
 
-		HomeHandler http.HandlerFunc
+		// url of the default home page - used for redirects
+		HomeURL string
+		// url of the default authentication portal page - used for redirects
+		AuthURL string
 
+		// HomeHandler lets a caller access the "home" handler
+		HomeHandler http.HandlerFunc
+		// ErrorHandler lets the caller access the "error" handler
 		ErrorHandler func(w http.ResponseWriter, r *http.Request, code int, message string)
 	}
 )
@@ -27,6 +33,9 @@ const (
 	PageType = "page"
 	// HtmxType should be used when an HTMX response is required
 	HtmxType = "htmx"
+
+	homeDefault = "/"
+	authDefault = "/login"
 )
 
 var (
@@ -56,9 +65,12 @@ func NewContentManager() *ContentManagerService {
 		http.Error(w, "An unspecified error occurred", http.StatusInternalServerError)
 	}
 
+	contentManager.HomeURL = homeDefault
 	contentManager.HomeHandler = func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("Welcome to HyperServer!"))
 	}
+
+	contentManager.AuthURL = authDefault
 
 	return &contentManager
 }
@@ -193,4 +205,9 @@ func RenderHome(w http.ResponseWriter, r *http.Request) {
 func RenderError(w http.ResponseWriter, r *http.Request, code int, message string) {
 	contentManager := GetContentManager()
 	contentManager.ErrorHandler(w, r, code, message)
+}
+
+// HTMXRedirect provides an HTMX response to tell the client to redirect to the prodivided URL
+func HTMXRedirect(w http.ResponseWriter, redirectURL string) {
+	w.Header().Set("HX-Redirect", redirectURL)
 }

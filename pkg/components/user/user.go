@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -277,9 +278,11 @@ func (user *User) Delete(db *sqlx.DB) error {
 	return err
 }
 
-// AddUserToContext adds the specified user to the provided context
-func AddUserToContext(ctx context.Context, user *User) context.Context {
-	return context.WithValue(ctx, UserContextKey, user)
+// AddUserToRequestContext adds the specified user to the provided request
+func AddUserToRequestContext(r *http.Request, user *User) *http.Request {
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, UserContextKey, user)
+	return r.WithContext(ctx)
 }
 
 // GetUserFromContext adds the specified user to the provided context

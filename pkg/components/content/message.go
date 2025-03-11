@@ -2,21 +2,25 @@
 package content
 
 import (
-	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+
+	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 type (
 	ContentMessage struct {
-		Message     string
-		MessageType string
+		Message     string `json:"message"`
+		MessageType string `json:"messageType"`
 	}
 
-	contextKey string
+	sessionKey string
 )
 
 const (
-	messagesKey contextKey = "contentMessages"
+	messageSessionKey sessionKey = "hs-message-session"
 
 	messageTypeDefault = "default"
 	messageTypeSuccess = "success"
@@ -39,60 +43,144 @@ func (c *ContentMessage) IsError() bool {
 }
 
 // AddUserMessage adds an error ContentMessage to the request context
-func AddUserMessage(r *http.Request, message string) *http.Request {
+func AddMessage(r *http.Request, w http.ResponseWriter, message string) bool {
 	c := ContentMessage{
 		Message:     message,
 		MessageType: messageTypeDefault,
 	}
 
-	return addContentMessageToRequestContext(r, c)
+	return addMessage(r, w, c)
 }
 
 // AddUserErrorMessage adds an error ContentMessage to the request context
-func AddUserErrorMessage(r *http.Request, message string) *http.Request {
+func AddErrorMessage(r *http.Request, w http.ResponseWriter, message string) bool {
 	c := ContentMessage{
 		Message:     message,
 		MessageType: messageTypeError,
 	}
 
-	return addContentMessageToRequestContext(r, c)
+	return addMessage(r, w, c)
 }
 
 // AddUserSuccessMessage adds an success ContentMessage to the request context
-func AddUserSuccessMessage(r *http.Request, message string) *http.Request {
+func AddSuccessMessage(r *http.Request, w http.ResponseWriter, message string) bool {
 	c := ContentMessage{
 		Message:     message,
 		MessageType: messageTypeSuccess,
 	}
 
-	return addContentMessageToRequestContext(r, c)
+	return addMessage(r, w, c)
 }
 
-// GetContentMessages returns the slice of ContentMessage instances that may
-// have been saved to the request context of the specified request
-func GetContentMessages(r *http.Request) []ContentMessage {
-	val := r.Context().Value(messagesKey)
-	msgs, ok := val.([]ContentMessage)
-	if !ok {
+// RetrieveMessagesAndDelete returns the slice of ContentMessage instances that may
+// have been saved to a session and then deletes the associated messages from
+// the session
+func RetrieveMessagesAndDelete(r *http.Request, w http.ResponseWriter) []ContentMessage {
+	sessionManager := session.GetSessionManager()
+	s, err := sessionManager.Get(r, string(messageSessionKey))
+	if err != nil {
 		return nil
 	}
 
-	return msgs
-}
+	sContentMessages := s.Data[string(messageSessionKey)]
 
-// addContentMessageToRequestContext adds the specified ContentMessage to the request
-// context
-func addContentMessageToRequestContext(r *http.Request, contentMessage ContentMessage) *http.Request {
-	// get any existing slice from context
-	val := r.Context().Value(messagesKey)
-	messages, ok := val.([]ContentMessage)
-	if !ok {
-		messages = []ContentMessage{}
+	var convertErr error
+	contentMessages, convertErr := ConvertContentMessagesFromJSON(sContentMessages)
+	if convertErr != nil {
+		errMessage := fmt.Sprintf("there was an error retrieving content messages from the session - data: '%s'", sContentMessages)
+		logger.LogRequestError(r, errMessage, convertErr)
+		return nil
 	}
 
-	messages = append(messages, contentMessage)
+	err = s.End(r, w)
+	if err != nil {
+		errMessage := "there was an error ending the messages session"
+		logger.LogRequestError(r, errMessage, err)
+	}
 
-	ctx := context.WithValue(r.Context(), messagesKey, messages)
+	return contentMessages
+}
 
-	return r.WithContext(ctx)
+// RetrieveMessagesAndDelete returns the slice of ContentMessage instances that may
+// have been saved to a session but does not delete them so they can be retrieved again
+func RetrieveMessagesNoDelete(r *http.Request) []ContentMessage {
+	sessionManager := session.GetSessionManager()
+	s, err := sessionManager.Get(r, string(messageSessionKey))
+	if err != nil {
+		return nil
+	}
+
+	sContentMessages := s.Data[string(messageSessionKey)]
+
+	var convertErr error
+	contentMessages, convertErr := ConvertContentMessagesFromJSON(sContentMessages)
+	if convertErr != nil {
+		errMessage := fmt.Sprintf("there was an error retrieving content messages from the session - data: '%s'", sContentMessages)
+		logger.LogRequestError(r, errMessage, convertErr)
+		return nil
+	}
+
+	return contentMessages
+}
+
+// addMessage serializes the specified message to a session used explicitly for storing
+// content messages that can be accessed by handlers
+func addMessage(r *http.Request, w http.ResponseWriter, c ContentMessage) bool {
+	sessionManager := session.GetSessionManager()
+	s, err := sessionManager.Get(r, string(messageSessionKey))
+	if err != nil {
+		return false
+	}
+
+	sContentMessages := s.Data[string(messageSessionKey)]
+
+	var convertErr error
+	contentMessages, convertErr := ConvertContentMessagesFromJSON(sContentMessages)
+	if convertErr != nil {
+		errMessage := fmt.Sprintf("there was an error retrieving content messages from the session - data: '%s'", sContentMessages)
+		logger.LogRequestError(r, errMessage, convertErr)
+		return false
+	}
+
+	contentMessages = append(contentMessages, c)
+
+	sContentMessages, convertErr = ConvertContentMessagesToJSON(contentMessages)
+	if convertErr != nil {
+		errMessage := "there was an error converting content message data to JSON data"
+		logger.LogRequestError(r, errMessage, convertErr)
+		return false
+	}
+
+	s.Data[string(messageSessionKey)] = sContentMessages
+	err = s.Save(r, w)
+	if err != nil {
+		errMessage := "there was an error writing content messages to a session"
+		logger.LogRequestError(r, errMessage, convertErr)
+		return false
+	}
+
+	return true
+}
+
+// ConvertContentMessagesToJSON takes a slice of ContentMessage and returns a JSON string.
+func ConvertContentMessagesToJSON(messages []ContentMessage) (string, error) {
+	data, err := json.Marshal(messages)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// ConvertContentMessagesFromJSON takes a JSON string and returns a slice of ContentMessage.
+func ConvertContentMessagesFromJSON(jsonString string) ([]ContentMessage, error) {
+	var messages []ContentMessage
+	if jsonString == "" {
+		return messages, nil
+	}
+
+	err := json.Unmarshal([]byte(jsonString), &messages)
+	if err != nil {
+		return nil, err
+	}
+	return messages, nil
 }

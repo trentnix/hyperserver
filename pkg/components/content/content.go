@@ -150,9 +150,6 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		return NewErrNoTemplates(fmt.Errorf("No templates have been set"))
 	}
 
-	// get messages from the request context
-	c.Messages = GetContentMessages(r)
-
 	// parse the templates in the order specified
 	tmpl, err := template.ParseFiles(templatesToStrings(templates)...)
 	if err != nil {

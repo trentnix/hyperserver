@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/user"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -143,7 +144,25 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).Login(w, r)
+	hs_user := (*authService).Login(w, r)
+	if hs_user == nil {
+		return
+	}
+
+	setAuthenticatedUserErr := SetAuthenticatedUser(r, w, hs_user)
+	if setAuthenticatedUserErr != nil {
+		logger.LogRequestError(r, "Could not save the newly authenticated user to a session", setAuthenticatedUserErr)
+		content.RenderError(w, r, http.StatusBadRequest, "There was an internal error when trying to login")
+		return
+	}
+
+	r = user.AddUserToRequestContext(r, hs_user)
+	messageAdded := content.AddSuccessMessage(r, w, "You have been successfully logged in")
+	if !messageAdded {
+		logger.LogRequestError(r, "Could not add the specified message", nil)
+	}
+
+	content.HTMXRedirect(w, content.GetContentManager().HomeURL)
 }
 
 // GetRegisterService retrieves the first step of registration process for the given
@@ -179,6 +198,8 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	(*authService).Register(w, r)
+
+	content.HTMXRedirect(w, content.GetContentManager().AuthURL)
 }
 
 // getAuthService returns the authService specified by authType (if it is loaded)

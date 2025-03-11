@@ -151,14 +151,14 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 //	  error -> back to login form with error displayed
 //	  authentication failed -> back to login form with authentication failure displayed
 //	  success -> redirect to the configured home page
-func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
+func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.User {
 	login := content.NewManagedContent(r)
 	if !login.IsHtmx() {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Login action must be submitted via an HTMX request"
 		content.RenderError(w, r, http.StatusBadRequest, errMessage)
-		return false
+		return nil
 	}
 
 	login.AddContentTemplate(emailLoginFormTemplate)
@@ -168,7 +168,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	if err := r.ParseForm(); err != nil {
 		logger.LogRequestError(r, "there was an error parsing the login form data", err)
 		content.RenderFormError(w, r, login, loginForm, "The login form data could not be parsed.")
-		return false
+		return nil
 	}
 
 	loginForm.Email = r.FormValue("email")
@@ -178,40 +178,28 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) bool {
 	err := form.ValidateForm(loginForm)
 	if err != nil {
 		content.RenderFormError(w, r, login, loginForm, "The login form could not be validated")
-		return false
+		return nil
 	}
 
 	if loginForm.HasErrors() {
 		// there are validation errors - render the form errors
 		content.RenderFormError(w, r, login, loginForm, "")
-		return false
+		return nil
 	}
 
 	// authenticate the hs_user
 	hs_user, err := user.GetUserByEmail(a.db, loginForm.Email)
 	if err != nil && err != sql.ErrNoRows {
 		content.RenderFormError(w, r, login, loginForm, "The user specified could not be retrieved from the database")
-		return false
+		return nil
 	}
 
 	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(loginForm.Password, hs_user.Password) {
 		content.RenderFormError(w, r, login, loginForm, "The provided login credentials are invalid")
-		return false
+		return nil
 	}
 
-	setAuthenticatedUserErr := auth_services.SetAuthenticatedUser(r, w, hs_user)
-	if setAuthenticatedUserErr != nil {
-		logger.LogRequestError(r, "Could not save the newly authenticated user to a session", setAuthenticatedUserErr)
-		content.RenderFormError(w, r, login, loginForm, "There was an internal error when trying to login")
-		return false
-	}
-
-	r = content.AddUserSuccessMessage(r, "You have been successfully logged in")
-
-	ctx := user.AddUserToContext(r.Context(), hs_user)
-	content.RenderHome(w, r.WithContext(ctx))
-
-	return true
+	return hs_user
 }
 
 // GetRegister serves the register form
@@ -315,9 +303,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	r = content.AddUserSuccessMessage(r, "You have been successfully logged in")
-
-	a.GetLogin(w, r)
+	content.AddSuccessMessage(r, w, "You have been successfully registered")
 
 	return true
 }

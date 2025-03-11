@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 
+	"github.com/trentnix/hyperserver/pkg/components/user"
 	"github.com/trentnix/hyperserver/pkg/server"
 )
 
@@ -35,7 +36,7 @@ type AuthService interface {
 	// handles the login request for the implemented AuthService
 	GetLogin(http.ResponseWriter, *http.Request)
 	// handles the login action for the implemented AuthService
-	Login(http.ResponseWriter, *http.Request) bool
+	Login(http.ResponseWriter, *http.Request) *user.User
 
 	// handles the registration request for the implemented AuthService
 	GetRegister(http.ResponseWriter, *http.Request)

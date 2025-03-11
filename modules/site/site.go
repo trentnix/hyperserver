@@ -25,6 +25,9 @@ const (
 	messageComponentTemplate = "modules/site/templates/html/components/message.html"
 	homeContent              = "modules/site/templates/html/index.html"
 	errorContent             = "modules/site/templates/html/error.html"
+
+	homeURL = "/"
+	authURL = "/login"
 )
 
 // init registers an instance of SiteModule with the application handlers. init runs
@@ -43,8 +46,11 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	contentManager := content.GetContentManager()
 	contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
 	contentManager.AddPageComponentTemplate(content.Template(messageComponentTemplate))
+	contentManager.HomeURL = homeURL
 	contentManager.HomeHandler = m.Home
 	contentManager.ErrorHandler = m.Error
+
+	contentManager.AuthURL = authURL
 
 	return nil
 }

@@ -23,12 +23,12 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/favicon.ico", m.ServeFavicon)
 
 	// serve pages
-	mux.Handle("/", http.HandlerFunc(m.Home))
+	mux.Handle(homeURL, http.HandlerFunc(m.Home))
 
 	// contact
 	mux.Handle("GET /contact", http.HandlerFunc(m.GetContact))
 	mux.Handle("POST /contact", http.HandlerFunc(m.Contact))
 
 	// for testing - changes to come
-	mux.Handle("/login", http.HandlerFunc(m.Login))
+	mux.Handle(authURL, http.HandlerFunc(m.Login))
 }
