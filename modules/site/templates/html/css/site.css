@@ -250,3 +250,52 @@ button:hover {
 .success {
   color: #006400;
 }
+
+/* Toaster Messages */
+.toaster-container {
+  position: fixed;
+  bottom: 30px;
+  left: 30px;
+  z-index: 1000;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.toaster {
+  display: inline-block;
+  max-width: 40vw;
+  margin-bottom: 10px;
+  padding: 16px;
+  border-radius: 4px;
+  font-size: 1em;
+  background-color: #444;
+  color: #fff;
+
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+
+  animation: fadeinout 4s forwards;
+}
+
+@media (max-width: 767px) {
+  .toaster {
+      max-width: 80%;
+  }
+}
+
+.toaster.success {
+  background-color: #4CAF50;
+}
+.toaster.error {
+  background-color: #f44336;
+}
+
+@keyframes fadeinout {
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { opacity: 0; }
+}
