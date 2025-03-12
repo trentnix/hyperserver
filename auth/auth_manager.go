@@ -15,7 +15,9 @@ import (
 )
 
 type (
-	AuthManager struct{}
+	AuthManager struct {
+		Enabled bool
+	}
 )
 
 const (
@@ -32,20 +34,23 @@ func init() {
 
 // Init processes the initialization of the AuthManager handler
 func (a *AuthManager) Init(s *server.ApplicationServer) error {
+	a.Enabled = s.Config.Auth.Enabled
 	return nil
 }
 
 // Routes defines the routes the AuthManager handler will be responsible for
 func (a *AuthManager) Routes(mux *http.ServeMux) {
-	// login / logout
-	mux.Handle("/auth/login", http.HandlerFunc(a.GetLogin))
-	mux.Handle("GET /auth/login/{authType}", http.HandlerFunc(a.GetLoginService))
-	mux.Handle("POST /auth/login/{authType}", http.HandlerFunc(a.Login))
+	if a.Enabled {
+		// login / logout
+		mux.Handle("/auth/login", http.HandlerFunc(a.GetLogin))
+		mux.Handle("GET /auth/login/{authType}", http.HandlerFunc(a.GetLoginService))
+		mux.Handle("POST /auth/login/{authType}", http.HandlerFunc(a.Login))
 
-	// register
-	mux.Handle("/auth/register", http.HandlerFunc(a.GetRegister))
-	mux.Handle("GET /auth/register/{authType}", http.HandlerFunc(a.GetRegisterService))
-	mux.Handle("POST /auth/register/{authType}", http.HandlerFunc(a.Register))
+		// register
+		mux.Handle("/auth/register", http.HandlerFunc(a.GetRegister))
+		mux.Handle("GET /auth/register/{authType}", http.HandlerFunc(a.GetRegisterService))
+		mux.Handle("POST /auth/register/{authType}", http.HandlerFunc(a.Register))
+	}
 }
 
 // GetLogin renders the various authentication options to a user trying to login

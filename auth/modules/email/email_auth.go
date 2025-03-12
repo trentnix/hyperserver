@@ -28,8 +28,6 @@ type (
 		db     *sqlx.DB
 		config *config.Config
 
-		AuthRedirect string
-
 		loginButton    template.HTML
 		registerButton template.HTML
 	}

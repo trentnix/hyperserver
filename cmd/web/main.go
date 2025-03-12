@@ -40,8 +40,8 @@ func main() {
 		log.Fatalf("failed to set up the registered handlers: %v", err)
 	}
 
-	// set up auth components
-	if err := SetupAuthServices(s); err != nil {
+	// set up authentication services and components
+	if err := SetupAuthentication(s); err != nil {
 		log.Fatalf("failed to set up the authorization services: %v", err)
 	}
 

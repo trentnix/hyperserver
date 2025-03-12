@@ -28,6 +28,7 @@ type (
 		HTTP     HTTPConfig
 		Database DatabaseConfig
 		App      AppConfig
+		Auth     AuthConfig
 	}
 
 	// HTTPConfig stores HTTP configuration
@@ -49,6 +50,11 @@ type (
 			Stores    map[string]map[string]string `mapstructure:"stores"`
 			Types     map[string]string            `mapstructure:"types"`
 		}
+	}
+
+	AuthConfig struct {
+		Enabled  bool
+		Services map[string]map[string]string `mapstructure:"services"`
 	}
 
 	// DatabaseConfig stores the database configuration
