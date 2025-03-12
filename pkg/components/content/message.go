@@ -72,57 +72,6 @@ func AddSuccessMessage(r *http.Request, w http.ResponseWriter, message string) b
 	return addMessage(r, w, c)
 }
 
-// RetrieveMessagesAndDelete returns the slice of ContentMessage instances that may
-// have been saved to a session and then deletes the associated messages from
-// the session
-func RetrieveMessagesAndDelete(r *http.Request, w http.ResponseWriter) []ContentMessage {
-	sessionManager := session.GetSessionManager()
-	s, err := sessionManager.Get(r, string(messageSessionKey))
-	if err != nil {
-		return nil
-	}
-
-	sContentMessages := s.Data[string(messageSessionKey)]
-
-	var convertErr error
-	contentMessages, convertErr := ConvertContentMessagesFromJSON(sContentMessages)
-	if convertErr != nil {
-		errMessage := fmt.Sprintf("there was an error retrieving content messages from the session - data: '%s'", sContentMessages)
-		logger.LogRequestError(r, errMessage, convertErr)
-		return nil
-	}
-
-	err = s.End(r, w)
-	if err != nil {
-		errMessage := "there was an error ending the messages session"
-		logger.LogRequestError(r, errMessage, err)
-	}
-
-	return contentMessages
-}
-
-// RetrieveMessagesAndDelete returns the slice of ContentMessage instances that may
-// have been saved to a session but does not delete them so they can be retrieved again
-func RetrieveMessagesNoDelete(r *http.Request) []ContentMessage {
-	sessionManager := session.GetSessionManager()
-	s, err := sessionManager.Get(r, string(messageSessionKey))
-	if err != nil {
-		return nil
-	}
-
-	sContentMessages := s.Data[string(messageSessionKey)]
-
-	var convertErr error
-	contentMessages, convertErr := ConvertContentMessagesFromJSON(sContentMessages)
-	if convertErr != nil {
-		errMessage := fmt.Sprintf("there was an error retrieving content messages from the session - data: '%s'", sContentMessages)
-		logger.LogRequestError(r, errMessage, convertErr)
-		return nil
-	}
-
-	return contentMessages
-}
-
 // addMessage serializes the specified message to a session used explicitly for storing
 // content messages that can be accessed by handlers
 func addMessage(r *http.Request, w http.ResponseWriter, c ContentMessage) bool {
@@ -160,6 +109,35 @@ func addMessage(r *http.Request, w http.ResponseWriter, c ContentMessage) bool {
 	}
 
 	return true
+}
+
+// RetrieveMessagesAndDelete returns the slice of ContentMessage instances that may
+// have been saved to a session and then deletes the associated messages from
+// the session
+func RetrieveMessagesAndDelete(r *http.Request, w http.ResponseWriter) []ContentMessage {
+	sessionManager := session.GetSessionManager()
+	s, err := sessionManager.Get(r, string(messageSessionKey))
+	if err != nil {
+		return nil
+	}
+
+	sContentMessages := s.Data[string(messageSessionKey)]
+
+	var convertErr error
+	contentMessages, convertErr := ConvertContentMessagesFromJSON(sContentMessages)
+	if convertErr != nil {
+		errMessage := fmt.Sprintf("there was an error retrieving content messages from the session - data: '%s'", sContentMessages)
+		logger.LogRequestError(r, errMessage, convertErr)
+		return nil
+	}
+
+	err = s.End(r, w)
+	if err != nil {
+		errMessage := "there was an error ending the messages session"
+		logger.LogRequestError(r, errMessage, err)
+	}
+
+	return contentMessages
 }
 
 // ConvertContentMessagesToJSON takes a slice of ContentMessage and returns a JSON string.
