@@ -20,6 +20,7 @@ http:
         connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
         sessionTable: "session"
     types:
+      default: sqliteStore
       visit: sqliteStore
       user: sqliteStore
       cookie: cookieStore

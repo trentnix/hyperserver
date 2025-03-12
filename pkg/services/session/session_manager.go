@@ -29,6 +29,8 @@ type (
 
 const (
 	sessionRegistryKey ctxKey = iota
+
+	defaultStore = "default"
 )
 
 var (
@@ -133,7 +135,10 @@ func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
 func (m *SessionManager) getStore(name string) (SessionStore, error) {
 	storeType, ok := m.Types[name]
 	if !ok {
-		return nil, ErrStoreNotFound
+		// the session type isn't explicitly defined so check for a default configuration
+		if storeType, ok = m.Types[defaultStore]; !ok {
+			return nil, ErrStoreNotFound
+		}
 	}
 
 	var store SessionStore
