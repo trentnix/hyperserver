@@ -12,7 +12,7 @@ import (
 type (
 	// SiteModule contains all of the data required to implement the site module
 	SiteModule struct {
-		Title    string
+		AppName  string
 		Database *sqlx.DB
 
 		sessionManager *session.SessionManager
@@ -24,6 +24,7 @@ const (
 	pageLayoutTemplate       = "modules/site/templates/html/layouts/site.html"
 	messageComponentTemplate = "modules/site/templates/html/components/message.html"
 	homeContent              = "modules/site/templates/html/index.html"
+	loginContent             = "modules/site/templates/html/login.html"
 	errorContent             = "modules/site/templates/html/error.html"
 
 	homeURL = "/"
@@ -38,7 +39,7 @@ func init() {
 
 // Init takes care of initializing the specified SiteModule instance
 func (m *SiteModule) Init(s *server.ApplicationServer) error {
-	m.Title = s.Config.App.Title
+	m.AppName = s.Config.App.Name
 
 	m.Database = s.Database
 	m.sessionManager = session.GetSessionManager()
@@ -46,8 +47,8 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	contentManager := content.GetContentManager()
 	contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
 	contentManager.AddPageComponentTemplate(content.Template(messageComponentTemplate))
+
 	contentManager.HomeURL = homeURL
-	contentManager.HomeHandler = m.Home
 	contentManager.ErrorHandler = m.Error
 
 	contentManager.AuthURL = authURL

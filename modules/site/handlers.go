@@ -19,12 +19,12 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	homepage := content.NewManagedContent(r)
-	messages := content.RetrieveMessagesAndDelete(r, w)
-
-	homepage.Messages = messages
-	homepage.Site = m.Title
-	homepage.Title = welcomeMessage
 	homepage.AddContentTemplate(homeContent)
+
+	homepage.Messages = content.RetrieveMessagesAndDelete(r, w)
+	homepage.Site = m.AppName
+	homepage.Title = welcomeMessage
+
 	err := homepage.Render(w, r)
 	if err != nil {
 		renderingError := fmt.Sprintf("Could not render the home page: %s", err.Error())
@@ -41,7 +41,7 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, code int, mes
 	}
 
 	errorPage := content.NewManagedContent(r)
-	errorPage.Site = m.Title
+	errorPage.Site = m.AppName
 	errorPage.Title = "Error"
 	errorPage.AddContentTemplate(errorContent)
 	errorPage.Data = message
@@ -66,13 +66,12 @@ func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
 // Login provides a handler to test login functionality - currently used for testing
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
-	messages := content.RetrieveMessagesAndDelete(r, w)
 
-	login.Messages = messages
-	login.Site = m.Title
+	login.Messages = content.RetrieveMessagesAndDelete(r, w)
+	login.Site = m.AppName
 	login.Title = "Login"
 
-	login.AddContentTemplate(content.Template("modules/site/templates/html/login.html"))
+	login.AddContentTemplate(loginContent)
 
 	err := login.Render(w, r)
 	if err != nil {

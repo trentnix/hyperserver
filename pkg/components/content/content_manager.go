@@ -21,8 +21,6 @@ type (
 		// url of the default authentication portal page - used for redirects
 		AuthURL string
 
-		// HomeHandler lets a caller access the "home" handler
-		HomeHandler http.HandlerFunc
 		// ErrorHandler lets the caller access the "error" handler
 		ErrorHandler func(w http.ResponseWriter, r *http.Request, code int, message string)
 	}
@@ -66,10 +64,6 @@ func NewContentManager() *ContentManagerService {
 	}
 
 	contentManager.HomeURL = homeDefault
-	contentManager.HomeHandler = func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("Welcome to HyperServer!"))
-	}
-
 	contentManager.AuthURL = authDefault
 
 	return &contentManager
@@ -191,13 +185,6 @@ func (c *ContentManagerService) isReservedContentType(contentType string) bool {
 	}
 
 	return false
-}
-
-// RenderHome provides a single function to render the default home page registered
-// with the application's content manager
-func RenderHome(w http.ResponseWriter, r *http.Request) {
-	contentManager := GetContentManager()
-	contentManager.HomeHandler(w, r)
 }
 
 // RenderError provides a single function to render the default error page registered

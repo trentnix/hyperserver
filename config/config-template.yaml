@@ -31,5 +31,5 @@ database:
   testConnection: ":memory:?_journal=WAL&_timeout=5000&_fk=true"
 
 app:
-  title: "HyperServer"
+  name: "HyperServer"
   workingDirectory: "D:/source/hyperserver"

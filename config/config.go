@@ -60,7 +60,7 @@ type (
 
 	// AppConfig stores application configuration
 	AppConfig struct {
-		Title            string
+		Name             string
 		WorkingDirectory string
 	}
 )
