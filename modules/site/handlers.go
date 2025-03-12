@@ -10,7 +10,13 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
-// Home renders the homepage and handles the following routes:
+// ServeFavicon serves the favicon resource to a requestor
+func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
+	faviconPath := filepath.Join("modules", "site", "templates", "html", "img", "favicon.ico")
+	http.ServeFile(w, r, faviconPath)
+}
+
+// Home renders the homepage
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	welcomeMessage := "Welcome!"
 	hs_user := user.GetUserFromContext(r.Context())
@@ -30,6 +36,24 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 		renderingError := fmt.Sprintf("Could not render the home page: %s", err.Error())
 		logger.LogRequestError(r, renderingError, err)
 		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+	}
+}
+
+// Login provides a handler to test login functionality - currently used for testing
+func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
+	login := content.NewManagedContent(r)
+
+	login.Messages = content.RetrieveMessagesAndDelete(r, w)
+	login.Site = m.AppName
+	login.Title = "Login"
+
+	login.AddContentTemplate(loginContent)
+
+	err := login.Render(w, r)
+	if err != nil {
+		errMessage := fmt.Sprintf("There was an error rendering the specified content: %s", err.Error())
+		content.RenderError(w, r, http.StatusInternalServerError, errMessage)
+		return
 	}
 }
 
@@ -54,29 +78,5 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, code int, mes
 		renderingError := fmt.Sprintf("Could not render the error page: %s", err.Error())
 		logger.LogRequestError(r, renderingError, err)
 		http.Error(w, renderingError, http.StatusInternalServerError)
-	}
-}
-
-// ServeFavicon serves the favicon resource to a requestor
-func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
-	faviconPath := filepath.Join("modules", "site", "templates", "html", "img", "favicon.ico")
-	http.ServeFile(w, r, faviconPath)
-}
-
-// Login provides a handler to test login functionality - currently used for testing
-func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
-	login := content.NewManagedContent(r)
-
-	login.Messages = content.RetrieveMessagesAndDelete(r, w)
-	login.Site = m.AppName
-	login.Title = "Login"
-
-	login.AddContentTemplate(loginContent)
-
-	err := login.Render(w, r)
-	if err != nil {
-		errMessage := fmt.Sprintf("There was an error rendering the specified content: %s", err.Error())
-		content.RenderError(w, r, http.StatusInternalServerError, errMessage)
-		return
 	}
 }
