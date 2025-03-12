@@ -27,7 +27,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	homepage := content.NewManagedContent(r)
 	homepage.AddContentTemplate(homeContent)
 
-	homepage.Messages = content.RetrieveMessagesAndDelete(r, w)
+	homepage.Messages = content.RetrieveMessages(r, w)
 	homepage.Site = m.AppName
 	homepage.Title = welcomeMessage
 
@@ -43,7 +43,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
 
-	login.Messages = content.RetrieveMessagesAndDelete(r, w)
+	login.Messages = content.RetrieveMessages(r, w)
 	login.Site = m.AppName
 	login.Title = "Login"
 

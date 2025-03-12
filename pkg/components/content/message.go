@@ -111,10 +111,10 @@ func addMessage(r *http.Request, w http.ResponseWriter, c ContentMessage) bool {
 	return true
 }
 
-// RetrieveMessagesAndDelete returns the slice of ContentMessage instances that may
+// RetrieveMessages returns the slice of ContentMessage instances that may
 // have been saved to a session and then deletes the associated messages from
 // the session
-func RetrieveMessagesAndDelete(r *http.Request, w http.ResponseWriter) []ContentMessage {
+func RetrieveMessages(r *http.Request, w http.ResponseWriter) []ContentMessage {
 	sessionManager := session.GetSessionManager()
 	s, err := sessionManager.Get(r, string(messageSessionKey))
 	if err != nil {
