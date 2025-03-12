@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 type (
@@ -88,12 +89,14 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 			return nil, err
 		}
 
-		if session != nil {
-			setCachedSession(r, session)
-			return session, nil
+		if session == nil {
+			return nil, ErrSessionCouldNotBeCreated
 		}
+	}
 
-		return nil, ErrSessionCouldNotBeCreated
+	cacheSessionErr := setCachedSession(r, session)
+	if cacheSessionErr != nil {
+		logger.LogRequestError(r, "error caching the retrieved session", cacheSessionErr)
 	}
 
 	return session, nil
@@ -108,7 +111,11 @@ func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
 	}
 
 	session := newSession(store, name)
-	setCachedSession(r, session)
+
+	cacheSessionErr := setCachedSession(r, session)
+	if cacheSessionErr != nil {
+		logger.LogRequestError(r, "error caching the retrieved session", cacheSessionErr)
+	}
 
 	// create a new session instance and return
 	return session, nil

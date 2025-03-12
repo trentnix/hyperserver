@@ -1,54 +1,63 @@
 {{ define "content-messages" }}
-    <style>
-        .toaster {
-            position: fixed;
-            bottom: 30px;
-            left: 30px;
-            min-width: 250px;
-            margin-right: 30px;
-            padding: 16px;
-            border-radius: 4px;
-            font-size: 1em;
-            z-index: 1000;
-            opacity: 0;  /* start invisible */
-            animation: fadeinout 4s forwards;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            white-space: normal;
-            background-color: #444;
-            color: #fff;
-        }
+<style>
+  .toaster-container {
+      position: fixed;
+      bottom: 30px;
+      left: 30px;
+      z-index: 1000;
 
-        .toaster.success {
-            background-color: #4CAF50;
-        }
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+  }
 
-        .toaster.error {
-            background-color: #f44336;
-        }
+  .toaster {
+      display: inline-block;
+      max-width: 40vw;
+      margin-bottom: 10px;
+      padding: 16px;
+      border-radius: 4px;
+      font-size: 1em;
+      background-color: #444;
+      color: #fff;
 
-        @keyframes fadeinout {
-            0% {
-                opacity: 0;  /* iInvisible at the start */
-            }
-            10% {
-                opacity: 1;  /* fade in */
-            }
-            90% {
-                opacity: 1;  /* stay visible */
-            }
-            100% {
-                opacity: 0;  /* fade out at the end */
-            }
-        }
-    </style>
+      white-space: normal;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
 
-    <!-- Only render messages if there are any. -->
-    {{ if gt (len .Messages) 0 }}
-        {{ range .Messages }}
-            <div class="toaster{{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
-                {{ .Message }}
-            </div>
-        {{ end }}
-    {{ end }}
+      animation: fadeinout 4s forwards;
+  }
+
+  @media (max-width: 767px) {
+      .toaster {
+          max-width: 80%;
+      }
+  }
+
+  .toaster.success {
+      background-color: #4CAF50;
+  }
+  .toaster.error {
+      background-color: #f44336;
+  }
+
+  @keyframes fadeinout {
+      0%   { opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { opacity: 0; }
+  }
+</style>
+
+{{ if gt (len .Messages) 0 }}
+<div class="toaster-container">
+  {{ range .Messages }}
+    <div class="toaster{{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
+      {{ .Message }}
+    </div>
+  {{ end }}
+</div>
 {{ end }}
+
+{{ end }}
+ <!-- define "content-messages" -->
