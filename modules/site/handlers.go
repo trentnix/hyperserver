@@ -26,9 +26,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	homepage := content.NewManagedContent(r)
 	homepage.AddContentTemplate(homeContent)
-
-	homepage.Messages = content.RetrieveMessages(r, w)
-	homepage.Site = m.AppName
+	homepage.Messages, _ = content.RetrieveMessages(r, w)
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -42,9 +40,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 // Login provides a handler to test login functionality - currently used for testing
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
-
-	login.Messages = content.RetrieveMessages(r, w)
-	login.Site = m.AppName
+	login.Messages, _ = content.RetrieveMessages(r, w)
 	login.Title = "Login"
 
 	login.AddContentTemplate(loginContent)
@@ -65,7 +61,6 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, code int, mes
 	}
 
 	errorPage := content.NewManagedContent(r)
-	errorPage.Site = m.AppName
 	errorPage.Title = "Error"
 	errorPage.AddContentTemplate(errorContent)
 	errorPage.Data = message

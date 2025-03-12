@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
@@ -31,6 +32,7 @@ func NewApplicationServer() *ApplicationServer {
 	s.initDatabase()
 	s.initWeb()
 	s.initSessionManager()
+	s.initContentManager()
 
 	return s
 }
@@ -50,6 +52,7 @@ func (s *ApplicationServer) initConfig() {
 	s.Config = &cfg
 }
 
+// initDatabase initializes the database that is used and shared throughout the application
 func (s *ApplicationServer) initDatabase() {
 	db, err := database.Setup(s.Config.Database.Driver, s.Config.Database.Connection)
 	if err != nil {
@@ -64,7 +67,14 @@ func (s *ApplicationServer) initWeb() {
 	s.Web = http.NewServeMux()
 }
 
-// initSessionManager
+// initSessionManager initializes the session manager with the provided configuration
 func (s *ApplicationServer) initSessionManager() {
 	session.InitializeSessionManager(s.Config)
+}
+
+// initContentManager loads the configuration data in the singleton ContentManager that
+// is used throughout the application
+func (s *ApplicationServer) initContentManager() {
+	contentManager := content.GetContentManager()
+	contentManager.Configure(s.Config)
 }

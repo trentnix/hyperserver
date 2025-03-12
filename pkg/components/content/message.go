@@ -3,10 +3,8 @@ package content
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -43,7 +41,7 @@ func (c *ContentMessage) IsError() bool {
 }
 
 // AddUserMessage adds an error ContentMessage to the request context
-func AddMessage(r *http.Request, w http.ResponseWriter, message string) bool {
+func AddMessage(r *http.Request, w http.ResponseWriter, message string) error {
 	c := ContentMessage{
 		Message:     message,
 		MessageType: messageTypeDefault,
@@ -53,7 +51,7 @@ func AddMessage(r *http.Request, w http.ResponseWriter, message string) bool {
 }
 
 // AddUserErrorMessage adds an error ContentMessage to the request context
-func AddErrorMessage(r *http.Request, w http.ResponseWriter, message string) bool {
+func AddErrorMessage(r *http.Request, w http.ResponseWriter, message string) error {
 	c := ContentMessage{
 		Message:     message,
 		MessageType: messageTypeError,
@@ -63,7 +61,7 @@ func AddErrorMessage(r *http.Request, w http.ResponseWriter, message string) boo
 }
 
 // AddUserSuccessMessage adds an success ContentMessage to the request context
-func AddSuccessMessage(r *http.Request, w http.ResponseWriter, message string) bool {
+func AddSuccessMessage(r *http.Request, w http.ResponseWriter, message string) error {
 	c := ContentMessage{
 		Message:     message,
 		MessageType: messageTypeSuccess,
@@ -74,11 +72,11 @@ func AddSuccessMessage(r *http.Request, w http.ResponseWriter, message string) b
 
 // addMessage serializes the specified message to a session used explicitly for storing
 // content messages that can be accessed by handlers
-func addMessage(r *http.Request, w http.ResponseWriter, c ContentMessage) bool {
+func addMessage(r *http.Request, w http.ResponseWriter, c ContentMessage) error {
 	sessionManager := session.GetSessionManager()
 	s, err := sessionManager.Get(r, string(messageSessionKey))
 	if err != nil {
-		return false
+		return NewErrRetrievingContentMessages(err)
 	}
 
 	sContentMessages := s.Data[string(messageSessionKey)]
@@ -86,39 +84,33 @@ func addMessage(r *http.Request, w http.ResponseWriter, c ContentMessage) bool {
 	var convertErr error
 	contentMessages, convertErr := ConvertContentMessagesFromJSON(sContentMessages)
 	if convertErr != nil {
-		errMessage := fmt.Sprintf("there was an error retrieving content messages from the session - data: '%s'", sContentMessages)
-		logger.LogRequestError(r, errMessage, convertErr)
-		return false
+		return NewErrConvertingContentMessagesData(convertErr)
 	}
 
 	contentMessages = append(contentMessages, c)
 
 	sContentMessages, convertErr = ConvertContentMessagesToJSON(contentMessages)
 	if convertErr != nil {
-		errMessage := "there was an error converting content message data to JSON data"
-		logger.LogRequestError(r, errMessage, convertErr)
-		return false
+		return NewErrConvertingContentMessagesData(convertErr)
 	}
 
 	s.Data[string(messageSessionKey)] = sContentMessages
 	err = s.Save(r, w)
 	if err != nil {
-		errMessage := "there was an error writing content messages to a session"
-		logger.LogRequestError(r, errMessage, convertErr)
-		return false
+		return NewErrSavingContentMessages(err)
 	}
 
-	return true
+	return nil
 }
 
 // RetrieveMessages returns the slice of ContentMessage instances that may
 // have been saved to a session and then deletes the associated messages from
-// the session
-func RetrieveMessages(r *http.Request, w http.ResponseWriter) []ContentMessage {
+// the session. Once this is called, the session is no longer valid.
+func RetrieveMessages(r *http.Request, w http.ResponseWriter) ([]ContentMessage, error) {
 	sessionManager := session.GetSessionManager()
 	s, err := sessionManager.Get(r, string(messageSessionKey))
 	if err != nil {
-		return nil
+		return nil, NewErrRetrievingContentMessages(err)
 	}
 
 	sContentMessages := s.Data[string(messageSessionKey)]
@@ -126,18 +118,12 @@ func RetrieveMessages(r *http.Request, w http.ResponseWriter) []ContentMessage {
 	var convertErr error
 	contentMessages, convertErr := ConvertContentMessagesFromJSON(sContentMessages)
 	if convertErr != nil {
-		errMessage := fmt.Sprintf("there was an error retrieving content messages from the session - data: '%s'", sContentMessages)
-		logger.LogRequestError(r, errMessage, convertErr)
-		return nil
+		return nil, NewErrConvertingContentMessagesData(convertErr)
 	}
 
-	err = s.End(r, w)
-	if err != nil {
-		errMessage := "there was an error ending the messages session"
-		logger.LogRequestError(r, errMessage, err)
-	}
+	deleteMessagesErr := s.End(r, w)
 
-	return contentMessages
+	return contentMessages, deleteMessagesErr
 }
 
 // ConvertContentMessagesToJSON takes a slice of ContentMessage and returns a JSON string.

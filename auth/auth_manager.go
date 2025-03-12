@@ -157,9 +157,9 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r = user.AddUserToRequestContext(r, hs_user)
-	messageAdded := content.AddSuccessMessage(r, w, "You have been successfully logged in")
-	if !messageAdded {
-		logger.LogRequestError(r, "Could not add the specified message", nil)
+	err := content.AddSuccessMessage(r, w, "You have been successfully logged in")
+	if err != nil {
+		logger.LogRequestError(r, "Could not add the specified message", err)
 	}
 
 	content.HTMXRedirect(w, content.GetContentManager().HomeURL)

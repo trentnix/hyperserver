@@ -5,6 +5,8 @@ package content
 import (
 	"net/http"
 	"sync"
+
+	"github.com/trentnix/hyperserver/config"
 )
 
 type (
@@ -23,10 +25,17 @@ type (
 
 		// ErrorHandler lets the caller access the "error" handler
 		ErrorHandler func(w http.ResponseWriter, r *http.Request, code int, message string)
+
+		AppName  string
+		AppTitle string
 	}
 )
 
 const (
+	// default page title and title prefix
+	defaultAppName  = "HyperServer"
+	defaultAppTitle = "HyperServer"
+
 	// PageType should be used when an entire page is rendered
 	PageType = "page"
 	// HtmxType should be used when an HTMX response is required
@@ -66,7 +75,16 @@ func NewContentManager() *ContentManagerService {
 	contentManager.HomeURL = homeDefault
 	contentManager.AuthURL = authDefault
 
+	contentManager.AppName = defaultAppName
+	contentManager.AppTitle = defaultAppTitle
+
 	return &contentManager
+}
+
+func (c *ContentManagerService) Configure(cfg *config.Config) {
+	if cfg.App.Name != "" {
+		contentManager.AppName = cfg.App.Name
+	}
 }
 
 // RegisterLayoutTemplates overwrites the layout templates stored in the specified content manager service

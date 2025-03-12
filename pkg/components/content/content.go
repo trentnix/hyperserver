@@ -56,17 +56,11 @@ type (
 	}
 )
 
-const (
-	// default page title and title prefix
-	DefaultSite  = "HyperServer"
-	DefaultTitle = "HyperServer"
-)
-
 // NewContent extracts Content data from the provided request
 func NewContent(r *http.Request) *Content {
 	c := Content{}
-	c.Site = DefaultSite
-	c.Title = DefaultTitle
+	c.Site = defaultAppName
+	c.Title = defaultAppTitle
 	c.ResponseStatusCode = 200
 
 	if r != nil {
@@ -85,6 +79,8 @@ func NewContent(r *http.Request) *Content {
 func NewManagedContent(r *http.Request) *Content {
 	c := NewContent(r)
 	c.ContentManager = GetContentManager()
+	c.Site = c.ContentManager.AppName
+	c.Title = c.ContentManager.AppTitle
 
 	return c
 }
