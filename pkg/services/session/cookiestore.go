@@ -1,5 +1,5 @@
 // cookiestore.go implements the SessionStore interface with a way to manage session
-// as the value of a HTTP cookie
+// exclusively via an HTTP cookie.
 package session
 
 import (
@@ -13,7 +13,7 @@ import (
 )
 
 type (
-	// CookieStore implements the SessionStore interface
+	// CookieStore serializes a Session to a browser cookie
 	CookieStore struct {
 		// key to encode the session data into a JWT
 		JwtKey []byte
@@ -21,6 +21,7 @@ type (
 		TokenLifetime time.Duration
 		// lifetime of the cookie containing the JWT
 		CookieLifetime time.Duration
+
 		// enabled
 		enabled bool
 	}

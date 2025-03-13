@@ -1,6 +1,6 @@
 // session.go wraps session management so that whether a JWT or server-managed session is used is
 // abstracted from the caller. Currently, the implementation uses a JWT but this could be abstracted
-// so that the SessionManager uses a single interface irrespective of how a session is managed
+// so that the SessionManager uses a single interface irrespective of how a session is managed.
 package session
 
 import (
@@ -34,19 +34,13 @@ const (
 )
 
 var (
-	// singleton instance of a ContentManagerService
+	// singleton instance of a SessionManager service
 	sessionManager *SessionManager
 	// used to manage the singleton
 	once sync.Once
 )
 
-// GetContentManager returns the global ContentManagerService singleton
-func GetSessionManager() *SessionManager {
-	return sessionManager
-}
-
-// NewSessionManager creates a new instance of a SessionManager object with default values for
-// TokenLifetime and cookie name
+// InitializeSessionManager creates a new instance of the global SessionManager and
 func InitializeSessionManager(c *config.Config) *SessionManager {
 	var sm *SessionManager
 	if sessionManager != nil {
@@ -56,15 +50,17 @@ func InitializeSessionManager(c *config.Config) *SessionManager {
 	once.Do(func() {
 		sm = &SessionManager{
 			config: c,
+			Stores: c.HTTP.Session.Stores,
+			Types:  c.HTTP.Session.Types,
 		}
-
-		sm.Stores = c.HTTP.Session.Stores
-		sm.Types = c.HTTP.Session.Types
-
-		sessionManager = sm
 	})
 
 	return sm
+}
+
+// GetContentManager returns the global SessionManager service if it exists
+func GetSessionManager() *SessionManager {
+	return sessionManager
 }
 
 // Get returns any current sessions specified in the request with the specified name.
@@ -96,16 +92,17 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 		}
 	}
 
+	// cache the session so any subsequent retrieval is efficient
 	cacheSessionErr := setCachedSession(r, session)
 	if cacheSessionErr != nil {
-		logger.LogRequestError(r, "error caching the retrieved session", cacheSessionErr)
+		logger.LogRequestError(r, "there was an error caching the retrieved session", cacheSessionErr)
 	}
 
 	return session, nil
 }
 
 // New returns a new Session instance irrespective of whether one already exists with the
-// specified name
+// specified name. If there is an existing session with the same name, it is ignored.
 func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
 	store, err := m.getStore(name)
 	if err != nil {
@@ -114,24 +111,16 @@ func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
 
 	session := newSession(store, name)
 
+	// cache the session so any subsequent retrieval is efficient
 	cacheSessionErr := setCachedSession(r, session)
 	if cacheSessionErr != nil {
-		logger.LogRequestError(r, "error caching the retrieved session", cacheSessionErr)
+		logger.LogRequestError(r, "there was an error caching the specified session", cacheSessionErr)
 	}
 
-	// create a new session instance and return
 	return session, nil
 }
 
-// getStore retrieves the session store that has been configured in the
-// application. When a store is implemented this is where the SessionManager
-// will retrieve the specified store. The name provided is a session name.
-//
-// This means session names will need to be registered against a session store type
-// name. By allowing session names to be registered against a session store type,
-// multiple store types can be used concurrently and the session name can determine
-// which session store to use. For example, a visitor session might use cookie
-// storage but authenticated users might use filesystem storage or database storage.
+// getStore retrieves the session store that has been configured for the specified session name.
 func (m *SessionManager) getStore(name string) (SessionStore, error) {
 	storeType, ok := m.Types[name]
 	if !ok {

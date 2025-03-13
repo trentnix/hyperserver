@@ -1,3 +1,5 @@
+// sqlitestore_test.go provides tests for the SQLiteStore implementation of the
+// SessionStore interface
 package session
 
 import (

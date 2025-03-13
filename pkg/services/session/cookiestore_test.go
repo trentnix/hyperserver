@@ -1,3 +1,5 @@
+// cookiestore_test.go provides tests for the CookieStore implementation of the
+// SessionStore interface
 package session
 
 import (

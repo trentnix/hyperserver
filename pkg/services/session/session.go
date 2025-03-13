@@ -1,6 +1,4 @@
-// session.go wraps session management so that whether a JWT or server-managed session is used is
-// abstracted from the caller. Currently, the implementation uses a JWT but this could be abstracted
-// so that the SessionManager uses a single interface irrespective of how a session is managed
+// session.go defines the Session struct to store session data.
 package session
 
 import (
@@ -37,9 +35,9 @@ const (
 	SessionContextKey contextKey = "auth-user"
 )
 
-// newSession returns a new session instance using the specified session name
-// and specified session store. newSession is intended for use only within the
-// session package and preferably by a session store implementation.
+// newSession returns a new Session instance with the specified session name
+// serialized to the specified session store. newSession is intended for use
+// only within the session package by a session store implementation.
 func newSession(s SessionStore, name string) *Session {
 	sessionID := uuid.New().String()
 	session := Session{
@@ -54,7 +52,7 @@ func newSession(s SessionStore, name string) *Session {
 }
 
 // Save saves the specified session to its corresponding store and writes the
-// session to a http cookie
+// session to a http cookie.
 func (s *Session) Save(r *http.Request, w http.ResponseWriter) error {
 	if s.store == nil {
 		return ErrStoreNotFound
