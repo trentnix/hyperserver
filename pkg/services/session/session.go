@@ -2,7 +2,6 @@
 package session
 
 import (
-	"errors"
 	"net/http"
 	"time"
 
@@ -21,14 +20,6 @@ type (
 	}
 
 	contextKey string
-)
-
-var (
-	ErrStoreNotFound            = errors.New("session store not configured for the specified session")
-	ErrStoreDisabled            = errors.New("the specified session store is disabled")
-	ErrSessionNotFound          = errors.New("session not found")
-	ErrSessionInvalid           = errors.New("the session is invalid")
-	ErrSessionCouldNotBeCreated = errors.New("could not create a new session")
 )
 
 const (
@@ -55,7 +46,7 @@ func newSession(s SessionStore, name string) *Session {
 // session to a http cookie.
 func (s *Session) Save(r *http.Request, w http.ResponseWriter) error {
 	if s.store == nil {
-		return ErrStoreNotFound
+		return NewErrSessionStoreNotFound(nil)
 	}
 
 	// save the session to the store
@@ -65,7 +56,7 @@ func (s *Session) Save(r *http.Request, w http.ResponseWriter) error {
 // End terminates the specified session in its corresponding store
 func (s *Session) End(r *http.Request, w http.ResponseWriter) error {
 	if s.store == nil {
-		return ErrStoreNotFound
+		return NewErrSessionStoreNotFound(nil)
 	}
 
 	return s.store.End(r, w, s)

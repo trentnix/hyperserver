@@ -356,7 +356,7 @@ func (s *SQLiteStore) save(session *Session) error {
 // create creates a new sessions table entry
 func (s *SQLiteStore) create(session *SQLiteSession) error {
 	if session.ID == "" {
-		return ErrSessionInvalid
+		return NewErrSessionInvalid(nil)
 	}
 
 	session.Created_at = time.Now()
@@ -371,7 +371,7 @@ func (s *SQLiteStore) create(session *SQLiteSession) error {
 // update updates the specified session in the sessions table
 func (s *SQLiteStore) update(session *SQLiteSession) error {
 	if session.ID == "" {
-		return ErrSessionInvalid
+		return NewErrSessionInvalid(nil)
 	}
 
 	session.Updated_at = time.Now()
@@ -386,7 +386,7 @@ func (s *SQLiteStore) update(session *SQLiteSession) error {
 // to the current time
 func (s *SQLiteStore) end(session *SQLiteSession) error {
 	if session.ID == "" {
-		return ErrSessionInvalid
+		return NewErrSessionInvalid(nil)
 	}
 
 	query := fmt.Sprintf("UPDATE %s SET expires_at = :expires_at WHERE id = :id", s.tableName)
@@ -401,7 +401,7 @@ func (s *SQLiteStore) end(session *SQLiteSession) error {
 // delete deletes the specified session from the sessions table
 func (s *SQLiteStore) delete(session *SQLiteSession) error {
 	if session.ID == "" {
-		return ErrSessionInvalid
+		return NewErrSessionInvalid(nil)
 	}
 
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", s.tableName)

@@ -6,6 +6,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -83,12 +84,8 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 	if session == nil {
 		// if the request doesn't have a session, return a new session
 		session, err = m.New(r, name)
-		if err != nil {
-			return nil, err
-		}
-
-		if session == nil {
-			return nil, ErrSessionCouldNotBeCreated
+		if err != nil || session == nil {
+			return nil, NewErrSessionCouldNotBeCreated(err)
 		}
 	}
 
@@ -126,7 +123,7 @@ func (m *SessionManager) getStore(name string) (SessionStore, error) {
 	if !ok {
 		// the session type isn't explicitly defined so check for a default configuration
 		if storeType, ok = m.Types[defaultStore]; !ok {
-			return nil, ErrStoreNotFound
+			return nil, NewErrSessionStoreNotFound(nil)
 		}
 	}
 
@@ -136,20 +133,22 @@ func (m *SessionManager) getStore(name string) (SessionStore, error) {
 	switch {
 	case strings.EqualFold(storeType, cookieStoreName):
 		store, storeErr = NewCookieStore(m.config)
+		if storeErr != nil {
+			return nil, NewErrCookieStoreNotCreated(storeErr)
+		}
 	case strings.EqualFold(storeType, sqliteStoreName):
 		store, storeErr = NewSQLiteStore(m.config)
-	}
-
-	if storeErr != nil {
-		return nil, errors.Join(ErrCookieStoreNotCreated, storeErr)
+		if storeErr != nil {
+			return nil, NewErrSQLiteStoreNotCreated(storeErr)
+		}
 	}
 
 	if !store.IsEnabled() {
-		return nil, ErrStoreDisabled
+		return nil, NewErrStoreDisabled(fmt.Errorf("store type: %s", storeType))
 	}
 
 	if store == nil {
-		return nil, ErrStoreNotFound
+		return nil, NewErrSessionStoreNotFound(nil)
 	}
 
 	return store, nil

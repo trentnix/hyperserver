@@ -27,8 +27,6 @@ type (
 	}
 )
 
-var ErrCookieStoreNotCreated = errors.New("a session store to store session data in a JWT in an HTTP cookie could not be created")
-
 const (
 	cookieStoreName = "CookieStore"
 )
