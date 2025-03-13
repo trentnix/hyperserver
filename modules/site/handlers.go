@@ -80,7 +80,10 @@ func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, mes
 		logger.LogRequestError(r, message, e)
 	}
 
-	content.AddErrorMessage(w, r, message)
+	err := content.AddErrorMessage(w, r, message)
+	if err != nil {
+		logger.LogRequestError(r, "there was an error adding an error message before redirecting to the error page", err)
+	}
 
 	url := errorURL
 	contentManager := content.GetContentManager()
