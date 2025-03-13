@@ -31,9 +31,8 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	err := homepage.Render(w, r)
 	if err != nil {
-		renderingError := fmt.Sprintf("Could not render the home page: %s", err.Error())
-		logger.LogRequestError(r, renderingError, err)
-		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+		errMessage := fmt.Sprintf("There was an error rendering the homepage: %s", err.Error())
+		content.HandleError(w, r, errMessage, err)
 	}
 }
 
@@ -47,31 +46,48 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		errMessage := fmt.Sprintf("There was an error rendering the specified content: %s", err.Error())
-		content.RenderError(w, r, http.StatusInternalServerError, errMessage)
+		errMessage := fmt.Sprintf("There was an error rendering the login page: %s", err.Error())
+		content.HandleError(w, r, errMessage, err)
 		return
 	}
 }
 
-// Error is meant to provide a default error handler for the module that can be
-// used as the default error handler for the entire application
-func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request, code int, message string) {
-	if code == 0 {
-		code = http.StatusInternalServerError
+// RedirectToError writes the specified error to the messages store and redirects the
+// requestor to the error URL
+func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, message string, e error) {
+	if e != nil {
+		logger.LogRequestError(r, message, e)
+	}
+
+	content.AddErrorMessage(w, r, message)
+
+	url := errorURL
+	contentManager := content.GetContentManager()
+	if contentManager != nil {
+		url = contentManager.ErrorURL
+	}
+
+	content.RedirectToURL(w, r, url)
+}
+
+// Error is the handler for the /error endpoint
+func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
+	contentMessages, messagesErr := content.RetrieveMessages(r, w)
+	if messagesErr != nil {
+		// there was an error - create a new error to display for the user
+		message := fmt.Sprintf("there was an error retrieving content messages: %s", messagesErr.Error())
+		errContentMessage := content.NewContentMessage(message, content.MessageTypeError)
+		contentMessages = append(contentMessages, errContentMessage)
+
+		logger.LogRequestError(r, message, messagesErr)
 	}
 
 	errorPage := content.NewManagedContent(r)
 	errorPage.Title = "Error"
 	errorPage.AddContentTemplate(errorContent)
-	errorPage.Data = message
+	errorPage.Data = contentMessages
 
-	w.WriteHeader(code)
 	if err := errorPage.Render(w, r); err != nil {
-		// given that this is an error handler intended to function as the default error
-		// handler for the application, this is the fallback in the case where the
-		// error content is unable to render
-		renderingError := fmt.Sprintf("Could not render the error page: %s", err.Error())
-		logger.LogRequestError(r, renderingError, err)
-		http.Error(w, renderingError, http.StatusInternalServerError)
+		content.HandleRenderingError(w, r, "could not render the login page", err)
 	}
 }

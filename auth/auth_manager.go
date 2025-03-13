@@ -3,7 +3,6 @@
 package auth
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
 
@@ -76,9 +75,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.Render(w, r); err != nil {
-		renderingError := fmt.Sprintf("Could not render the login page: %s", err.Error())
-		logger.LogRequestError(r, renderingError, err)
-		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+		content.HandleRenderingError(w, r, "could not render the login page", err)
 	}
 }
 
@@ -105,9 +102,7 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.Render(w, r); err != nil {
-		renderingError := fmt.Sprintf("Could not render the registration page: %s", err.Error())
-		logger.LogRequestError(r, renderingError, err)
-		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+		content.HandleRenderingError(w, r, "could not render the registration page", err)
 	}
 }
 
@@ -122,13 +117,13 @@ func (a *AuthManager) GetLoginService(w http.ResponseWriter, r *http.Request) {
 // the specified service's login entry point
 func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Request, authType string) {
 	if authType == "" {
-		content.RenderError(w, r, http.StatusBadRequest, "No authorization service was specified. Unable to login.")
+		content.HandleError(w, r, "No authorization service was specified. Unable to login.", nil)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.RenderError(w, r, http.StatusBadRequest, "No authorization service was found. Unable to login.")
+		content.HandleError(w, r, "No authorization service was found. Unable to login.", nil)
 		return
 	}
 
@@ -139,13 +134,13 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.RenderError(w, r, http.StatusBadRequest, "Login unavailable: no authorization service was specified.")
+		content.HandleError(w, r, "No authorization service was specified. Unable to login.", nil)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.RenderError(w, r, http.StatusBadRequest, "Login unavailable: the specified auth service was found.")
+		content.HandleError(w, r, "No authorization service was found. Unable to login.", nil)
 		return
 	}
 
@@ -156,18 +151,23 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	setAuthenticatedUserErr := SetAuthenticatedUser(r, w, hs_user)
 	if setAuthenticatedUserErr != nil {
-		logger.LogRequestError(r, "Could not save the newly authenticated user to a session", setAuthenticatedUserErr)
-		content.RenderError(w, r, http.StatusBadRequest, "There was an internal error when trying to login")
+		content.HandleError(w, r, "There was an internal error when trying to login", setAuthenticatedUserErr)
 		return
 	}
 
 	r = user.AddUserToRequestContext(r, hs_user)
-	err := content.AddSuccessMessage(r, w, "You have been successfully logged in")
+	err := content.AddSuccessMessage(w, r, "You have been successfully logged in")
 	if err != nil {
 		logger.LogRequestError(r, "Could not add the specified message", err)
 	}
 
-	content.HTMXRedirect(w, content.GetContentManager().HomeURL)
+	homeURL := content.HomeDefault
+	contentManager := content.GetContentManager()
+	if contentManager != nil {
+		homeURL = contentManager.HomeURL
+	}
+
+	content.RedirectToURL(w, r, homeURL)
 }
 
 // GetRegisterService retrieves the first step of registration process for the given
@@ -175,13 +175,13 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.RenderError(w, r, http.StatusBadRequest, "Register unavailable: no authorization service was specified.")
+		content.HandleError(w, r, "No authorization service was specified. Unable to register.", nil)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.RenderError(w, r, http.StatusBadRequest, "Register unavailable: the specified auth service was found.")
+		content.HandleError(w, r, "Register unavailable: the specified auth service was found.", nil)
 		return
 	}
 
@@ -192,19 +192,25 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.RenderError(w, r, http.StatusBadRequest, "Register unavailable: no authorization service was specified.")
+		content.HandleError(w, r, "No authorization service was specified. Unable to register.", nil)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.RenderError(w, r, http.StatusBadRequest, "Register unavailable: the specified auth service was found.")
+		content.HandleError(w, r, "Register unavailable: the specified auth service was found.", nil)
 		return
 	}
 
 	(*authService).Register(w, r)
 
-	content.HTMXRedirect(w, content.GetContentManager().AuthURL)
+	authURL := content.AuthDefault
+	contentManager := content.GetContentManager()
+	if contentManager != nil {
+		authURL = contentManager.AuthURL
+	}
+
+	content.RedirectToURL(w, r, authURL)
 }
 
 // getAuthService returns the authService specified by authType (if it is loaded)

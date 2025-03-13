@@ -22,9 +22,11 @@ type (
 		HomeURL string
 		// url of the default authentication portal page - used for redirects
 		AuthURL string
+		// error URL
+		ErrorURL string
 
 		// ErrorHandler lets the caller access the "error" handler
-		ErrorHandler func(w http.ResponseWriter, r *http.Request, code int, message string)
+		ErrorHandler func(w http.ResponseWriter, r *http.Request, message string, err error)
 
 		AppName  string
 		AppTitle string
@@ -41,8 +43,9 @@ const (
 	// HtmxType should be used when an HTMX response is required
 	HtmxType = "htmx"
 
-	homeDefault = "/"
-	authDefault = "/login"
+	HomeDefault  = "/"
+	ErrorDefault = "/error"
+	AuthDefault  = "/login"
 )
 
 var (
@@ -68,12 +71,11 @@ func NewContentManager() *ContentManagerService {
 	contentManager.ContentTemplates = make(map[string][]Template)
 	contentManager.ComponentTemplates = make(map[string][]Template)
 
-	contentManager.ErrorHandler = func(w http.ResponseWriter, r *http.Request, code int, message string) {
-		http.Error(w, "An unspecified error occurred", http.StatusInternalServerError)
-	}
+	contentManager.ErrorHandler = DefaultErrorHandler
 
-	contentManager.HomeURL = homeDefault
-	contentManager.AuthURL = authDefault
+	contentManager.HomeURL = HomeDefault
+	contentManager.AuthURL = AuthDefault
+	contentManager.ErrorURL = ErrorDefault
 
 	contentManager.AppName = defaultAppName
 	contentManager.AppTitle = defaultAppTitle
@@ -190,29 +192,4 @@ func (c *ContentManagerService) AddHtmxComponentTemplate(template Template) {
 // AddHtmxComponentTemplates adds component templates for the HtmxType content type
 func (c *ContentManagerService) AddHtmxComponentTemplates(templates []Template) {
 	c.AddComponentTemplates(HtmxType, templates)
-}
-
-// isReservedContentType determines whether the specified content type is a content type
-// that is explicitly reserved for application use
-func (c *ContentManagerService) isReservedContentType(contentType string) bool {
-	switch contentType {
-	case PageType:
-		return true
-	case HtmxType:
-		return true
-	}
-
-	return false
-}
-
-// RenderError provides a single function to render the default error page registered
-// with the application's content manager
-func RenderError(w http.ResponseWriter, r *http.Request, code int, message string) {
-	contentManager := GetContentManager()
-	contentManager.ErrorHandler(w, r, code, message)
-}
-
-// HTMXRedirect provides an HTMX response to tell the client to redirect to the prodivided URL
-func HTMXRedirect(w http.ResponseWriter, redirectURL string) {
-	w.Header().Set("HX-Redirect", redirectURL)
 }

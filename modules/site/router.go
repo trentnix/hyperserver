@@ -24,6 +24,7 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 
 	// serve pages
 	mux.Handle(homeURL, http.HandlerFunc(m.Home))
+	mux.Handle(errorURL, http.HandlerFunc(m.Error))
 
 	// contact
 	mux.Handle("GET /contact", http.HandlerFunc(m.GetContact))

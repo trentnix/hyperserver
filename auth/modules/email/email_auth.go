@@ -125,7 +125,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Login form must be rendered via an HTMX request"
-		content.RenderError(w, r, http.StatusBadRequest, errMessage)
+		content.HandleError(w, r, errMessage, nil)
 		return
 	}
 
@@ -134,9 +134,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		renderingError := fmt.Sprintf("Could not render the email auth login page: %s", err.Error())
-		logger.LogRequestError(r, renderingError, err)
-		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+		content.HandleRenderingError(w, r, "could not render the login form in the email authorization service", err)
 	}
 }
 
@@ -155,7 +153,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Login action must be submitted via an HTMX request"
-		content.RenderError(w, r, http.StatusBadRequest, errMessage)
+		content.HandleError(w, r, errMessage, nil)
 		return nil
 	}
 
@@ -164,8 +162,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
-		logger.LogRequestError(r, "there was an error parsing the login form data", err)
-		content.RenderFormError(w, r, login, loginForm, "The login form data could not be parsed.")
+		content.HandleFormError(w, r, login, loginForm, "The login form data could not be parsed.")
 		return nil
 	}
 
@@ -175,25 +172,25 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	// validate the login form
 	err := form.ValidateForm(loginForm)
 	if err != nil {
-		content.RenderFormError(w, r, login, loginForm, "The login form could not be validated")
+		content.HandleFormError(w, r, login, loginForm, "The login form could not be validated")
 		return nil
 	}
 
 	if loginForm.HasErrors() {
 		// there are validation errors - render the form errors
-		content.RenderFormError(w, r, login, loginForm, "")
+		content.HandleFormError(w, r, login, loginForm, "")
 		return nil
 	}
 
 	// authenticate the hs_user
 	hs_user, err := user.GetUserByEmail(a.db, loginForm.Email)
 	if err != nil && err != sql.ErrNoRows {
-		content.RenderFormError(w, r, login, loginForm, "The user specified could not be retrieved from the database")
+		content.HandleFormError(w, r, login, loginForm, "The user specified could not be retrieved from the database")
 		return nil
 	}
 
 	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(loginForm.Password, hs_user.Password) {
-		content.RenderFormError(w, r, login, loginForm, "The provided login credentials are invalid")
+		content.HandleFormError(w, r, login, loginForm, "The provided login credentials are invalid")
 		return nil
 	}
 
@@ -208,7 +205,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Register form must be rendered via an HTMX request"
-		content.RenderError(w, r, http.StatusBadRequest, errMessage)
+		content.HandleError(w, r, errMessage, nil)
 		return
 	}
 
@@ -217,9 +214,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 
 	err := register.Render(w, r)
 	if err != nil {
-		renderingError := fmt.Sprintf("Could not render the email auth register page: %s", err.Error())
-		logger.LogRequestError(r, renderingError, err)
-		content.RenderError(w, r, http.StatusInternalServerError, renderingError)
+		content.HandleRenderingError(w, r, "could not render the registration form in the email authentication service", err)
 	}
 }
 
@@ -238,7 +233,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Register action must be submitted via an HTMX request"
-		content.RenderError(w, r, http.StatusBadRequest, errMessage)
+		content.HandleError(w, r, errMessage, nil)
 		return false
 	}
 
@@ -248,7 +243,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
 		logger.LogRequestError(r, "there was an error parsing the login form data", err)
-		content.RenderFormError(w, r, register, registerForm, "The registration form data could not be parsed.")
+		content.HandleFormError(w, r, register, registerForm, "The registration form data could not be parsed.")
 		return false
 	}
 
@@ -259,33 +254,33 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	// validate the register form
 	err := form.ValidateForm(registerForm)
 	if err != nil {
-		content.RenderFormError(w, r, register, registerForm, "The registration form could not be validated")
+		content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated")
 		return false
 	}
 
 	if registerForm.HasErrors() {
 		// there are validation errors - render the form errors
-		content.RenderFormError(w, r, register, registerForm, "")
+		content.HandleFormError(w, r, register, registerForm, "")
 		return false
 	}
 
 	//  validate user isn't already registered
 	hs_user, err := user.GetUserByEmail(a.db, registerForm.Email)
 	if err != nil && err != sql.ErrNoRows {
-		content.RenderFormError(w, r, register, registerForm, "The user specified could not be retrieved from the database")
+		content.HandleFormError(w, r, register, registerForm, "The user specified could not be retrieved from the database")
 		return false
 	}
 
 	if hs_user != nil {
 		// this user already exists
-		content.RenderFormError(w, r, register, registerForm, "A user is already registered to the specified email address.")
+		content.HandleFormError(w, r, register, registerForm, "A user is already registered to the specified email address.")
 		return false
 	}
 
 	hashedPassword, err := password.HashPassword(registerForm.Password)
 	if err != nil {
 		// the password could not be hashed
-		content.RenderFormError(w, r, register, registerForm, "The specified account could not be created")
+		content.HandleFormError(w, r, register, registerForm, "The specified account could not be created")
 		return false
 	}
 
@@ -297,11 +292,11 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 
 	err = hs_user.Save(a.db)
 	if err != nil {
-		content.RenderFormError(w, r, register, registerForm, "The specified account could not be created")
+		content.HandleFormError(w, r, register, registerForm, "The specified account could not be created")
 		return false
 	}
 
-	content.AddSuccessMessage(r, w, "You have been successfully registered")
+	content.AddSuccessMessage(w, r, "You have been successfully registered")
 
 	return true
 }

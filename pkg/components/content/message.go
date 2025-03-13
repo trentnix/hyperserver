@@ -14,65 +14,58 @@ type (
 		MessageType string `json:"messageType"`
 	}
 
-	sessionKey string
+	sessionKey  string
+	MessageType string
 )
 
 const (
 	messageSessionKey sessionKey = "hs-message-session"
 
-	messageTypeDefault = "default"
-	messageTypeSuccess = "success"
-	messageTypeError   = "error"
+	MessageTypeDefault MessageType = "default"
+	MessageTypeSuccess MessageType = "success"
+	MessageTypeError   MessageType = "error"
 )
 
 // IsDefault returns true if the specified ContentMessage is a default message
 func (c *ContentMessage) IsDefault() bool {
-	return c.MessageType == messageTypeDefault
+	return c.MessageType == string(MessageTypeDefault)
 }
 
 // IsSuccess returns true if the specified ContentMessage is a success message
 func (c *ContentMessage) IsSuccess() bool {
-	return c.MessageType == messageTypeSuccess
+	return c.MessageType == string(MessageTypeSuccess)
 }
 
 // IsError returns true if the specified ContentMessage is an error message
 func (c *ContentMessage) IsError() bool {
-	return c.MessageType == messageTypeError
+	return c.MessageType == string(MessageTypeError)
+}
+
+func NewContentMessage(message string, messageType MessageType) ContentMessage {
+	return ContentMessage{
+		Message:     message,
+		MessageType: string(messageType),
+	}
 }
 
 // AddUserMessage adds an error ContentMessage to the request context
-func AddMessage(r *http.Request, w http.ResponseWriter, message string) error {
-	c := ContentMessage{
-		Message:     message,
-		MessageType: messageTypeDefault,
-	}
-
-	return addMessage(r, w, c)
+func AddMessage(w http.ResponseWriter, r *http.Request, message string) error {
+	return addMessage(w, r, NewContentMessage(message, MessageTypeDefault))
 }
 
 // AddUserErrorMessage adds an error ContentMessage to the request context
-func AddErrorMessage(r *http.Request, w http.ResponseWriter, message string) error {
-	c := ContentMessage{
-		Message:     message,
-		MessageType: messageTypeError,
-	}
-
-	return addMessage(r, w, c)
+func AddErrorMessage(w http.ResponseWriter, r *http.Request, message string) error {
+	return addMessage(w, r, NewContentMessage(message, MessageTypeError))
 }
 
 // AddUserSuccessMessage adds an success ContentMessage to the request context
-func AddSuccessMessage(r *http.Request, w http.ResponseWriter, message string) error {
-	c := ContentMessage{
-		Message:     message,
-		MessageType: messageTypeSuccess,
-	}
-
-	return addMessage(r, w, c)
+func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string) error {
+	return addMessage(w, r, NewContentMessage(message, MessageTypeSuccess))
 }
 
 // addMessage serializes the specified message to a session used explicitly for storing
 // content messages that can be accessed by handlers
-func addMessage(r *http.Request, w http.ResponseWriter, c ContentMessage) error {
+func addMessage(w http.ResponseWriter, r *http.Request, c ContentMessage) error {
 	sessionManager := session.GetSessionManager()
 	s, err := sessionManager.Get(r, string(messageSessionKey))
 	if err != nil {

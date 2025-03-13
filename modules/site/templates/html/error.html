@@ -3,10 +3,17 @@
 <section id="showcase" class="section">
   <div class="container">
     <h2>{{ .Title }}</h2>
-    <p>
-        There was an error: {{ .Data }}
-    </p>
-  </div>
+    {{ if and .Data (gt (len .Data) 0) }}
+    <div>
+      {{ range .Data }}
+        <div class="error-message {{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
+          {{ .Message }}
+        </div>
+      {{ end }}
+    </div>
+    {{ else }}
+    No errors were specified.
+    {{ end }}
 </section>
 
 {{ end }} <!-- Content -->
