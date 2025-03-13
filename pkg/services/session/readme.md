@@ -22,10 +22,8 @@ To configure the server for session management, check out the config-template.ya
             connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
             sessionTable: "session"
         types:
-            visit: sqliteStore
-            user: sqliteStore
-            cookie: cookieStore
-            sqlite: sqliteStore
+            default: sqliteStore
+            visit: cookieStore
 
 You should see a "session" section in the "http" section. This is where the magic happens.
 
@@ -43,9 +41,11 @@ A *CookieStore* implementation is available that will serialize session data to 
 
 Additionally, a *SQLiteStore* implementation is available that will serialize data to a SQLite database. The data stored is serialized to a JSON string and stored as a field in a database table. If SQLite is not preferred, this implementation could easily be modified to support other databases.
 
-The **types** section maps a particular session name to a particular session storage implementation. Different session names can use different storage mechanisms, but each session name should only be listed once.
+The **types** section maps a particular session name to a particular session storage implementation. Different session names can use different storage mechanisms, but each session name should not be listed twice.
 
 The key is the session name. The value is the session storage implementation to be used. If you roll your own custom session storage implementation, you'll need to map your session names accordingly.
+
+The "default" key can be used to configure a default SessionStore to be used whenever a Session is created using a session name not explicitly specified. For example, in the configuration above, the "default" is *SQLiteStore* so a session name of "user" would use a *SQLiteStore* since a "user" session isn't explicitly configured to do otherwise.
 
 ## Session Management
 
@@ -106,6 +106,10 @@ End takes both a \*http.Request instance and a http.ResponseWriter instance as p
 Both *CookieStore* and *SQLiteStore* are currently available implementations that can be inspected in the source code. Each implements the *SessionStore* interface, which is utilized by the *SessionManager* to create, get, and save Session instances. These implementations are fairly spartan and are intended to primarily illustrate how to implement a session store. If you want to roll your own *Session* storage implementation, you might find it easiest to copy one of those and modify as needed.
 
 If you implement a new means to store a *Session*, you'll need to also modify the *SessionManager*.getStore() method. This evaluates the server configuration and returns the SessionStore implementation that corresponds to the provided Session name. The *SessionManager* will then be able to create an instance of your custom store when a session name is encountered that maps to your custom store (as defined in the configuration file).
+
+## Session Caching
+
+Session instances, or at least pointers to Session instances, are cached in a /*http.Request so that multiple retrievals of a Session won't need to go to its SessionStore. Whenever a Session is saved, the Session data is stored in the Session's configured SessionStore and the /*http.Request Context.
 
 ## Future (Potential) Roadmap
 
