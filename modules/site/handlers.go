@@ -82,10 +82,17 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, message, messagesErr)
 	}
 
+	var errorMessages []content.ContentMessage
+	for _, c := range contentMessages {
+		if c.IsError() {
+			errorMessages = append(errorMessages, c)
+		}
+	}
+
 	errorPage := content.NewManagedContent(r)
 	errorPage.Title = "Error"
 	errorPage.AddContentTemplate(errorContent)
-	errorPage.Data = contentMessages
+	errorPage.Data = errorMessages
 
 	if err := errorPage.Render(w, r); err != nil {
 		content.HandleRenderingError(w, r, "could not render the login page", err)

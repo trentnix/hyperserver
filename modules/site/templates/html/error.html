@@ -6,9 +6,11 @@
     {{ if and .Data (gt (len .Data) 0) }}
     <div>
       {{ range .Data }}
-        <div class="error-message {{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
+        {{ if .IsError }}
+        <div class="error-message error">
           {{ .Message }}
         </div>
+        {{ end }}
       {{ end }}
     </div>
     {{ else }}
