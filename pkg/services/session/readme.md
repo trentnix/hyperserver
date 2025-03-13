@@ -109,14 +109,13 @@ If you implement a new means to store a *Session*, you'll need to also modify th
 
 ## Session Caching
 
-Session instances, or at least pointers to Session instances, are cached in a /*http.Request so that multiple retrievals of a Session won't need to go to its SessionStore. Whenever a Session is saved, the Session data is stored in the Session's configured SessionStore and the /*http.Request Context.
+Session instances, or at least pointers to Session instances, are cached in a \*http.Request so that multiple retrievals of a Session won't need to go to its SessionStore. Whenever a Session is saved, the Session data is stored in the Session's configured SessionStore and the /*http.Request Context.
 
 ## Future (Potential) Roadmap
 
 There are no actual plans for what needs to be improved, but the list below are a few items off the top of my head that came to mind when I considered how session management might be improved.
 
 - Support multiple JWT keys to enable key rotation
-- Support a default session storage type for dynamically-named sessions
 - Support regular expressions to map session names to storage types
 - Improve configuration validation and provide detailed errors when session management isn't configured appropriately
 - consider a Redis session store
