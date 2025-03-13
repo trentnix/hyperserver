@@ -1,7 +1,6 @@
 package module_site
 
 import (
-	"fmt"
 	"net/http"
 	"path/filepath"
 
@@ -31,8 +30,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	err := homepage.Render(w, r)
 	if err != nil {
-		errMessage := fmt.Sprintf("There was an error rendering the homepage: %s", err.Error())
-		content.HandleError(w, r, errMessage, err)
+		content.HandleError(w, r, "there was an error rendering the home page", err)
 	}
 }
 
@@ -46,9 +44,32 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		errMessage := fmt.Sprintf("There was an error rendering the login page: %s", err.Error())
-		content.HandleError(w, r, errMessage, err)
+		content.HandleError(w, r, "there was an error rendering the login page", err)
 		return
+	}
+}
+
+// Error is the handler for the /error endpoint
+func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
+	contentMessages, messagesErr := content.RetrieveMessages(r, w)
+	if messagesErr != nil {
+		logger.LogRequestError(r, "there was an error retrieving content messages", messagesErr)
+	}
+
+	var errorMessages []content.ContentMessage
+	for _, c := range contentMessages {
+		if c.IsError() {
+			errorMessages = append(errorMessages, c)
+		}
+	}
+
+	errorPage := content.NewManagedContent(r)
+	errorPage.Title = "Error"
+	errorPage.AddContentTemplate(errorContent)
+	errorPage.Data = errorMessages
+
+	if err := errorPage.Render(w, r); err != nil {
+		content.HandleRenderingError(w, r, "there was an error rendering the error page", err)
 	}
 }
 
@@ -68,33 +89,4 @@ func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, mes
 	}
 
 	content.RedirectToURL(w, r, url)
-}
-
-// Error is the handler for the /error endpoint
-func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	contentMessages, messagesErr := content.RetrieveMessages(r, w)
-	if messagesErr != nil {
-		// there was an error - create a new error to display for the user
-		message := fmt.Sprintf("there was an error retrieving content messages: %s", messagesErr.Error())
-		errContentMessage := content.NewContentMessage(message, content.MessageTypeError)
-		contentMessages = append(contentMessages, errContentMessage)
-
-		logger.LogRequestError(r, message, messagesErr)
-	}
-
-	var errorMessages []content.ContentMessage
-	for _, c := range contentMessages {
-		if c.IsError() {
-			errorMessages = append(errorMessages, c)
-		}
-	}
-
-	errorPage := content.NewManagedContent(r)
-	errorPage.Title = "Error"
-	errorPage.AddContentTemplate(errorContent)
-	errorPage.Data = errorMessages
-
-	if err := errorPage.Render(w, r); err != nil {
-		content.HandleRenderingError(w, r, "could not render the login page", err)
-	}
 }
