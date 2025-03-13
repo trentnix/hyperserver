@@ -76,7 +76,7 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 
 	store, err := m.getStore(name)
 	if err != nil {
-		return nil, err
+		return nil, NewErrSessionStoreNotFound(err)
 	}
 
 	// retrieve the session from the request
