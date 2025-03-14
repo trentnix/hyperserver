@@ -1,6 +1,7 @@
 package module_site
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -100,13 +101,19 @@ func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, mes
 // a visit counter that will keep track of how many visits a particular user has made to
 // the URL this handler serves.
 func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
-	counterKey := "counter"
+	const counterKey = "counter"
 
 	// get the "counterSession" session
 	sessionManager := session.GetSessionManager()
+	if sessionManager == nil {
+		content.HandleError(w, r, "there was an error retrieving the session manager", session.NewErrSessionManagerNotFound(nil))
+		return
+	}
+
 	mySession, sessionManagerErr := sessionManager.Get(r, "counterSession")
 	if sessionManagerErr != nil || mySession == nil {
 		content.HandleError(w, r, "there was an error retrieving the session", sessionManagerErr)
+		return
 	}
 
 	// get the existing counter value from the session data
@@ -117,21 +124,23 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 
 	page := content.NewManagedContent(r)
 	page.AddContentTemplate(homeContent)
-	page.Title = "# of My Visits: " + strconv.Itoa(counter)
+	page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
 	// increment the counter and convert the value to a string
-	sCounter := strconv.Itoa(counter + 1)
+	sCounter := fmt.Sprintf("%d", counter+1)
 
 	// save the updated counter value in the session
 	mySession.Data[counterKey] = sCounter
 	sessionSaveErr := mySession.Save(r, w)
 	if sessionSaveErr != nil {
 		content.HandleError(w, r, "unable to save the counter session", sessionSaveErr)
+		return
 	}
 
 	// render the result
 	renderErr := page.Render(w, r)
 	if renderErr != nil {
 		content.HandleError(w, r, "there was an error rendering the home page", renderErr)
+		return
 	}
 }

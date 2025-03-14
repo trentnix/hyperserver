@@ -101,6 +101,38 @@ To end an active *Session* (and to expire any browser cookies) simply call the E
 
 End takes both a \*http.Request instance and a http.ResponseWriter instance as parameters so the browser cookie can be appropriately updated.
 
+### Example code
+
+The following code shows an example of a handler that gets a session, extracts a counter value from the session, increments the counter value, and saves it back to the session.
+
+    func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
+        const counterKey = "counter"
+
+        // get the "counterSession" session
+        mySession, _ := session.GetSessionManager().Get(r, "counterSession")
+
+        // get the existing counter value from the session data
+        counter, _ := strconv.Atoi(mySession.Data[counterKey])
+        
+        page := content.NewManagedContent(r)
+        page.AddContentTemplate(homeContent)
+        page.Title = fmt.Sprintf("# of My Visits: %d", counter)
+
+        // increment the counter and convert the value to a string
+        sCounter := fmt.Sprintf("%d", counter+1)
+
+        // save the updated counter value in the session
+        mySession.Data[counterKey] = sCounter
+        mySession.Save(r, w)
+
+        // render the result
+        renderErr := page.Render(w, r)
+    }
+
+A significant portion of the code handles the integer to string conversion since only string values can be stored in a session. Additional code handles rendering the result to the requestor.
+
+Error handling has been omitted, at least in the example, for brevity.
+
 ## Adding a New Session Store
 
 Both *CookieStore* and *SQLiteStore* are currently available implementations that can be inspected in the source code. Each implements the *SessionStore* interface, which is utilized by the *SessionManager* to create, get, and save Session instances. These implementations are fairly spartan and are intended to primarily illustrate how to implement a session store. If you want to roll your own *Session* storage implementation, you might find it easiest to copy one of those and modify as needed.
