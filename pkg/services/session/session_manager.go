@@ -4,8 +4,6 @@
 package session
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -152,45 +150,4 @@ func (m *SessionManager) getStore(name string) (SessionStore, error) {
 	}
 
 	return store, nil
-}
-
-// getCachedSession retrieves the cached session from the request's context.
-// If the session is not found, it returns an error.
-func getCachedSession(r *http.Request, name string) *Session {
-	if r == nil {
-		return nil
-	}
-
-	registry, ok := r.Context().Value(sessionRegistryKey).(map[string]*Session)
-	if !ok {
-		return nil
-	}
-
-	session, exists := registry[name]
-	if !exists {
-		return nil
-	}
-
-	return session
-}
-
-// setCachedSession stores a session in the request's session registry.
-// It returns a new request instance with the updated context.
-func setCachedSession(r *http.Request, session *Session) error {
-	if r == nil {
-		return errors.New("a request must be specified to cache the specified session")
-	}
-
-	registry, ok := r.Context().Value(sessionRegistryKey).(map[string]*Session)
-	if !ok {
-		// If the registry does not exist, create a new one.
-		registry = make(map[string]*Session)
-	}
-
-	// Store the session in the registry using session.name as the key.
-	registry[session.Name] = session
-
-	*r = *r.WithContext(context.WithValue(r.Context(), sessionRegistryKey, registry))
-
-	return nil
 }

@@ -157,3 +157,18 @@ func NewErrTokenLifetimeNotSet(err error) *ErrTokenLifetimeNotSet {
 		},
 	}
 }
+
+// ErrRequestNotSpecified is used when a *http.Request is not specified (is nil)
+type ErrRequestNotSpecified struct {
+	*BaseError
+}
+
+// NewErrRequestNotSpecified creates an instance of ErrRequestNotSpecified
+func NewErrRequestNotSpecified(err error) *ErrRequestNotSpecified {
+	return &ErrRequestNotSpecified{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the http.Request is not specified",
+		},
+	}
+}
