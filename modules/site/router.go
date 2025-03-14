@@ -32,4 +32,5 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 
 	// for testing - changes to come
 	mux.Handle(authURL, http.HandlerFunc(m.Login))
+	mux.Handle("/session-example", http.HandlerFunc(m.SessionExample))
 }
