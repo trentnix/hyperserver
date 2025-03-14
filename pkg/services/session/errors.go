@@ -82,3 +82,78 @@ func NewErrSessionCouldNotBeCreated(err error) *ErrSessionCouldNotBeCreated {
 		},
 	}
 }
+
+// ErrSessionKeyInvalid is used when a session key is invalid
+type ErrSessionKeyInvalid struct {
+	*BaseError
+}
+
+// NewErrSessionKeyInvalid creates an instance of ErrSessionKeyInvalid
+func NewErrSessionKeyInvalid(err error) *ErrSessionKeyInvalid {
+	return &ErrSessionKeyInvalid{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the session key is invalid",
+		},
+	}
+}
+
+// ErrInvalidToken is used when a the JWT token is invalid
+type ErrInvalidToken struct {
+	*BaseError
+}
+
+// NewErrInvalidToken creates an instance of ErrInvalidToken
+func NewErrInvalidToken(err error) *ErrInvalidToken {
+	return &ErrInvalidToken{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the session token is invalid",
+		},
+	}
+}
+
+// ErrTokenKeyNotSet is used when the JWT key is not set
+type ErrTokenKeyNotSet struct {
+	*BaseError
+}
+
+// NewErrTokenKeyNotSet creates an instance of ErrTokenKeyNotSet
+func NewErrTokenKeyNotSet(err error) *ErrTokenKeyNotSet {
+	return &ErrTokenKeyNotSet{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the JWT encryption key was not set",
+		},
+	}
+}
+
+// ErrCookieLifetimeNotSet is used when cookie lifetime is not set
+type ErrCookieLifetimeNotSet struct {
+	*BaseError
+}
+
+// NewErrCookieLifetimeNotSet creates an instance of ErrCookieLifetimeNotSet
+func NewErrCookieLifetimeNotSet(err error) *ErrCookieLifetimeNotSet {
+	return &ErrCookieLifetimeNotSet{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the lifetime of an HTTP cookie used to store session information is not set",
+		},
+	}
+}
+
+// ErrTokenLifetimeNotSet is used when the JWT key is not set
+type ErrTokenLifetimeNotSet struct {
+	*BaseError
+}
+
+// NewErrTokenLifetimeNotSet creates an instance of ErrTokenLifetimeNotSet
+func NewErrTokenLifetimeNotSet(err error) *ErrTokenLifetimeNotSet {
+	return &ErrTokenLifetimeNotSet{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the lifetime of a JWT token used to store session information is not set",
+		},
+	}
+}

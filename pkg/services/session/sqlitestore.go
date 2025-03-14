@@ -171,7 +171,7 @@ func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(s.JwtKey)
 	if err != nil {
-		return errors.Join(ErrSessionKeyInvalid, err)
+		return NewErrSessionKeyInvalid(err)
 	}
 
 	cookieAge := int(s.CookieLifetime / time.Second)
@@ -189,6 +189,7 @@ func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   cookieAge,
 	})
 
@@ -203,7 +204,8 @@ func (s *SQLiteStore) End(r *http.Request, w http.ResponseWriter, session *Sessi
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
-		MaxAge:   -1, // Delete now
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1, // delete now
 	})
 
 	return nil
@@ -307,7 +309,7 @@ func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Se
 		}
 
 		// create a new session and serialize the session data
-		s := &Session{
+		existingSession := &Session{
 			ID:        dbSession.ID,
 			Name:      name,
 			IsNew:     false,
@@ -316,7 +318,7 @@ func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Se
 			Store:     s,
 		}
 
-		return s, nil
+		return existingSession, nil
 	}
 
 	return nil, nil

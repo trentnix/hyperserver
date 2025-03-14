@@ -3,7 +3,7 @@
 package session
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -39,7 +39,7 @@ func NewCookieStore(c *config.Config) (*CookieStore, error) {
 		return nil, configErr
 	}
 
-	configOptions := getStoreConfigOptions(c, sqliteStoreName)
+	configOptions := getStoreConfigOptions(c, cookieStoreName)
 
 	cookieStore := &CookieStore{
 		JwtKey:         []byte(c.HTTP.Session.JwtKey),
@@ -47,18 +47,20 @@ func NewCookieStore(c *config.Config) (*CookieStore, error) {
 		CookieLifetime: c.HTTP.Session.CookieAge,
 	}
 
-	if strings.ToLower(configOptions["enabled"]) == "true" || strings.ToLower(configOptions["enabled"]) == "1" {
-		cookieStore.enabled = true
+	enabled, ok := configOptions["enabled"]
+	if ok {
+		enabled = strings.ToLower(enabled)
+		if enabled == "true" || enabled == "1" {
+			cookieStore.enabled = true
+		}
 	}
 
 	return cookieStore, nil
 }
 
 // Get retrieves a session from the specified request. If a session does not exist,
-// an empty (new) session is returned.
+// an empty (new) session is returned even if an error has occurred.
 func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
-	session := newSession(c, name)
-
 	jwtValue := ""
 
 	// check the request for a cookie
@@ -67,25 +69,34 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 		jwtValue = cookie.Value
 	}
 
-	if cookie == nil {
+	if cookie == nil || jwtValue == "" {
 		// if there is no cookie, return an empty session
-		session := newSession(c, name)
-		return session, nil
+		return newSession(c, name), nil
 	}
 
 	// return the decoded Session data
 	claimsData, sessionError := parseSessionJWT(jwtValue, c.JwtKey)
 	if sessionError != nil || jwtValue == "" {
 		// if there is no session data or there was an error, return the new, empty session (and any error)
-		return session, sessionError
+		return newSession(c, name), sessionError
 	}
 
 	// the session exists - overwrite the ID with the session data that was extracted from the cookie
-	session.ID = claimsData.ID
-	session.Data = claimsData.Data
-	session.IsNew = false
+	sessionData := claimsData.Data
+	if sessionData == nil {
+		sessionData = make(map[string]string)
+	}
 
-	return session, nil
+	existingSession := &Session{
+		ID:        claimsData.ID,
+		Name:      name,
+		IsNew:     false,
+		ExpiresAt: claimsData.ExpiresAtTime(),
+		Data:      sessionData,
+		Store:     c,
+	}
+
+	return existingSession, nil
 }
 
 // New creates an empty (new) session. An error will not be returned but the return
@@ -97,7 +108,7 @@ func (c *CookieStore) New(r *http.Request, name string) (*Session, error) {
 // Save saves the specified Session to a token that can be added to a cookie
 func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, session *Session) error {
 	if len(c.JwtKey) == 0 {
-		return ErrSessionKeyInvalid
+		return NewErrSessionKeyInvalid(fmt.Errorf("the JWT key is not set"))
 	}
 
 	// create a token with just the session (and expiration)
@@ -123,7 +134,7 @@ func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(c.JwtKey)
 	if err != nil {
-		return errors.Join(ErrSessionKeyInvalid, err)
+		return NewErrSessionKeyInvalid(err)
 	}
 
 	cookieAge := int(c.CookieLifetime / time.Second)
@@ -135,6 +146,7 @@ func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   cookieAge,
 	})
 
@@ -150,6 +162,7 @@ func (c *CookieStore) End(r *http.Request, w http.ResponseWriter, session *Sessi
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1, // Delete now
 	})
 
