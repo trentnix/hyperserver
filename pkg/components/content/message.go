@@ -76,7 +76,7 @@ func GetMessages(r *http.Request, w http.ResponseWriter) ([]ContentMessage, erro
 	sContentMessages := s.Data[string(messageSessionKey)]
 
 	var convertErr error
-	contentMessages, convertErr := convertFromJson(sContentMessages)
+	contentMessages, convertErr := contentMessagesFromJSON(sContentMessages)
 	if convertErr != nil {
 		return nil, NewErrConvertingContentMessagesData(convertErr)
 	}
@@ -98,14 +98,14 @@ func addMessage(w http.ResponseWriter, r *http.Request, c ContentMessage) error 
 	sContentMessages := s.Data[string(messageSessionKey)]
 
 	var convertErr error
-	contentMessages, convertErr := convertFromJson(sContentMessages)
+	contentMessages, convertErr := contentMessagesFromJSON(sContentMessages)
 	if convertErr != nil {
 		return NewErrConvertingContentMessagesData(convertErr)
 	}
 
 	contentMessages = append(contentMessages, c)
 
-	sContentMessages, convertErr = convertToJson(contentMessages)
+	sContentMessages, convertErr = contentMessagesToJSON(contentMessages)
 	if convertErr != nil {
 		return NewErrConvertingContentMessagesData(convertErr)
 	}
@@ -119,8 +119,12 @@ func addMessage(w http.ResponseWriter, r *http.Request, c ContentMessage) error 
 	return nil
 }
 
-// convertToJson takes a slice of ContentMessage and returns a JSON string.
-func convertToJson(messages []ContentMessage) (string, error) {
+// contentMessagesToJSON takes a slice of ContentMessage and returns a JSON string.
+func contentMessagesToJSON(messages []ContentMessage) (string, error) {
+	if messages == nil {
+		return "", nil
+	}
+
 	data, err := json.Marshal(messages)
 	if err != nil {
 		return "", err
@@ -128,8 +132,8 @@ func convertToJson(messages []ContentMessage) (string, error) {
 	return string(data), nil
 }
 
-// convertFromJson takes a JSON string and returns a slice of ContentMessage.
-func convertFromJson(jsonString string) ([]ContentMessage, error) {
+// contentMessagesFromJSON takes a JSON string and returns a slice of ContentMessage.
+func contentMessagesFromJSON(jsonString string) ([]ContentMessage, error) {
 	var messages []ContentMessage
 	if jsonString == "" {
 		return messages, nil
