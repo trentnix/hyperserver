@@ -28,7 +28,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	homepage := content.NewManagedContent(r)
 	homepage.AddContent(homeContent)
-	homepage.Messages, _ = content.RetrieveMessages(r, w)
+	homepage.Messages, _ = content.GetMessages(r, w)
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -40,7 +40,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 // Login provides a handler to test login functionality - currently used for testing
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
-	login.Messages, _ = content.RetrieveMessages(r, w)
+	login.Messages, _ = content.GetMessages(r, w)
 	login.Title = "Login"
 
 	login.AddContent(loginContent)
@@ -54,7 +54,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 // Error is the handler for the /error endpoint
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	contentMessages, messagesErr := content.RetrieveMessages(r, w)
+	contentMessages, messagesErr := content.GetMessages(r, w)
 	if messagesErr != nil {
 		logger.LogRequestError(r, "there was an error retrieving content messages", messagesErr)
 	}
