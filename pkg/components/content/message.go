@@ -14,51 +14,59 @@ type (
 		MessageType string `json:"messageType"`
 	}
 
-	sessionKey  string
+	SessionKey  string
 	MessageType string
 )
 
 const (
-	messageSessionKey sessionKey = "hs-message-session"
+	messageSessionKey SessionKey = "hs-message-session"
 
 	MessageTypeDefault MessageType = "default"
 	MessageTypeSuccess MessageType = "success"
 	MessageTypeError   MessageType = "error"
 )
 
+func (m MessageType) String() string {
+	return string(m)
+}
+
+func (s SessionKey) String() string {
+	return string(s)
+}
+
 // IsDefault returns true if the specified ContentMessage is a default message
 func (c *ContentMessage) IsDefault() bool {
-	return c.MessageType == string(MessageTypeDefault)
+	return c.MessageType == MessageTypeDefault.String()
 }
 
 // IsSuccess returns true if the specified ContentMessage is a success message
 func (c *ContentMessage) IsSuccess() bool {
-	return c.MessageType == string(MessageTypeSuccess)
+	return c.MessageType == MessageTypeSuccess.String()
 }
 
 // IsError returns true if the specified ContentMessage is an error message
 func (c *ContentMessage) IsError() bool {
-	return c.MessageType == string(MessageTypeError)
+	return c.MessageType == MessageTypeError.String()
 }
 
 func NewContentMessage(message string, messageType MessageType) ContentMessage {
 	return ContentMessage{
 		Message:     message,
-		MessageType: string(messageType),
+		MessageType: messageType.String(),
 	}
 }
 
-// AddUserMessage adds an error ContentMessage to the request context
+// AddMessage adds a default ContentMessage to a session
 func AddMessage(w http.ResponseWriter, r *http.Request, message string) error {
 	return addMessage(w, r, NewContentMessage(message, MessageTypeDefault))
 }
 
-// AddUserErrorMessage adds an error ContentMessage to the request context
+// AddErrorMessage adds an error ContentMessage to a session
 func AddErrorMessage(w http.ResponseWriter, r *http.Request, message string) error {
 	return addMessage(w, r, NewContentMessage(message, MessageTypeError))
 }
 
-// AddUserSuccessMessage adds an success ContentMessage to the request context
+// AddSuccessMessage adds a success ContentMessage to a session
 func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string) error {
 	return addMessage(w, r, NewContentMessage(message, MessageTypeSuccess))
 }
@@ -68,7 +76,7 @@ func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string) e
 // meaning that this function is not idempotent.
 func GetMessages(r *http.Request, w http.ResponseWriter) ([]ContentMessage, error) {
 	sessionManager := session.GetSessionManager()
-	s, err := sessionManager.Get(r, string(messageSessionKey))
+	s, err := sessionManager.Get(r, messageSessionKey.String())
 	if err != nil {
 		return nil, NewErrRetrievingContentMessages(err)
 	}
@@ -90,27 +98,26 @@ func GetMessages(r *http.Request, w http.ResponseWriter) ([]ContentMessage, erro
 // content messages that can be accessed by handlers
 func addMessage(w http.ResponseWriter, r *http.Request, c ContentMessage) error {
 	sessionManager := session.GetSessionManager()
-	s, err := sessionManager.Get(r, string(messageSessionKey))
+	s, err := sessionManager.Get(r, messageSessionKey.String())
 	if err != nil {
 		return NewErrRetrievingContentMessages(err)
 	}
 
-	sContentMessages := s.Data[string(messageSessionKey)]
+	msgData := s.Data[messageSessionKey.String()]
 
-	var convertErr error
-	contentMessages, convertErr := contentMessagesFromJSON(sContentMessages)
+	msgs, convertErr := contentMessagesFromJSON(msgData)
 	if convertErr != nil {
 		return NewErrConvertingContentMessagesData(convertErr)
 	}
 
-	contentMessages = append(contentMessages, c)
+	msgs = append(msgs, c)
 
-	sContentMessages, convertErr = contentMessagesToJSON(contentMessages)
+	msgData, convertErr = contentMessagesToJSON(msgs)
 	if convertErr != nil {
 		return NewErrConvertingContentMessagesData(convertErr)
 	}
 
-	s.Data[string(messageSessionKey)] = sContentMessages
+	s.Data[string(messageSessionKey)] = msgData
 	err = s.Save(r, w)
 	if err != nil {
 		return NewErrSavingContentMessages(err)
