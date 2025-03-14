@@ -90,7 +90,7 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 	// cache the session so any subsequent retrieval is efficient
 	cacheSessionErr := setCachedSession(r, session)
 	if cacheSessionErr != nil {
-		logger.LogRequestError(r, fmt.Errorf("there was an error caching the retrieved session: %w", cacheSessionErr))
+		logger.LogRequestError(r, cacheSessionErr)
 	}
 
 	return session, nil
@@ -109,19 +109,19 @@ func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
 	// cache the session so any subsequent retrieval is efficient
 	cacheSessionErr := setCachedSession(r, session)
 	if cacheSessionErr != nil {
-		logger.LogRequestError(r, fmt.Errorf("there was an error caching the specified session: %w", cacheSessionErr))
+		logger.LogRequestError(r, cacheSessionErr)
 	}
 
 	return session, nil
 }
 
 // getStore retrieves the session store that has been configured for the specified session name.
-func (m *SessionManager) getStore(name string) (SessionStore, error) {
-	storeType, ok := m.Types[name]
+func (m *SessionManager) getStore(sessionName string) (SessionStore, error) {
+	storeType, ok := m.Types[sessionName]
 	if !ok {
 		// the session type isn't explicitly defined so check for a default configuration
 		if storeType, ok = m.Types[defaultStore]; !ok {
-			return nil, NewErrSessionStoreNotFound(nil)
+			return nil, NewErrSessionStoreNotFound(fmt.Errorf("session name: %s", sessionName))
 		}
 	}
 
@@ -146,7 +146,7 @@ func (m *SessionManager) getStore(name string) (SessionStore, error) {
 	}
 
 	if store == nil {
-		return nil, NewErrSessionStoreNotFound(nil)
+		return nil, NewErrSessionStoreNotFound(fmt.Errorf("store type: %s", storeType))
 	}
 
 	return store, nil
