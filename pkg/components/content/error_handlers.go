@@ -17,7 +17,7 @@ func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, message string,
 		errMessage = fmt.Sprintf("%s: %v", message, err)
 	}
 
-	logger.LogRequestError(r, errMessage, err)
+	logger.LogRequestError(r, err)
 	http.Error(w, errMessage, http.StatusInternalServerError)
 }
 

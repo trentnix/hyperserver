@@ -92,7 +92,7 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 	// cache the session so any subsequent retrieval is efficient
 	cacheSessionErr := setCachedSession(r, session)
 	if cacheSessionErr != nil {
-		logger.LogRequestError(r, "there was an error caching the retrieved session", cacheSessionErr)
+		logger.LogRequestError(r, fmt.Errorf("there was an error caching the retrieved session: %w", cacheSessionErr))
 	}
 
 	return session, nil
@@ -111,7 +111,7 @@ func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
 	// cache the session so any subsequent retrieval is efficient
 	cacheSessionErr := setCachedSession(r, session)
 	if cacheSessionErr != nil {
-		logger.LogRequestError(r, "there was an error caching the specified session", cacheSessionErr)
+		logger.LogRequestError(r, fmt.Errorf("there was an error caching the specified session: %w", cacheSessionErr))
 	}
 
 	return session, nil

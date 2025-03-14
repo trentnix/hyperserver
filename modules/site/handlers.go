@@ -56,7 +56,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 	contentMessages, messagesErr := content.GetMessages(r, w)
 	if messagesErr != nil {
-		logger.LogRequestError(r, "there was an error retrieving content messages", messagesErr)
+		logger.LogRequestError(r, fmt.Errorf("there was an error retrieving content messages: %w", messagesErr))
 	}
 
 	var errorMessages []content.ContentMessage
@@ -80,12 +80,12 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 // requestor to the error URL
 func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, message string, e error) {
 	if e != nil {
-		logger.LogRequestError(r, message, e)
+		logger.LogRequestError(r, fmt.Errorf("%s: %w", message, e))
 	}
 
 	err := content.AddErrorMessage(w, r, message)
 	if err != nil {
-		logger.LogRequestError(r, "there was an error adding an error message before redirecting to the error page", err)
+		logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", err))
 	}
 
 	url := errorURL

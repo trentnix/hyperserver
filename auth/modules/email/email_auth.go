@@ -242,7 +242,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
-		logger.LogRequestError(r, "there was an error parsing the login form data", err)
+		logger.LogRequestError(r, fmt.Errorf("there was an error parsing the login form data: %w", err))
 		content.HandleFormError(w, r, register, registerForm, "The registration form data could not be parsed.")
 		return false
 	}

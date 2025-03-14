@@ -4,6 +4,7 @@ package middleware
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
@@ -18,7 +19,7 @@ func LoadAuthenticatedUser(db *sqlx.DB) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			hs_user, err := auth_services.GetAuthenticatedUser(r, db)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				logger.LogRequestError(r, "unable to retrieve the authenticated user from the request", err)
+				logger.LogRequestError(r, fmt.Errorf("unable to retrieve the authenticated user from the request: %w", err))
 			}
 
 			if hs_user != nil {
