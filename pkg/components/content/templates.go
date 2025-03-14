@@ -2,5 +2,5 @@
 package content
 
 type (
-	Template string
+	TemplatePath string
 )

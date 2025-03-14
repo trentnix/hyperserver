@@ -1,5 +1,4 @@
-// redirect.go contains utility functions related to redirecting a requestor to
-// a specified URL
+// redirect.go contains utility functions related to redirecting a requestor to a given URL
 package content
 
 import "net/http"

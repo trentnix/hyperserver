@@ -4,8 +4,8 @@ package content
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
-	"text/template"
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 )
@@ -23,13 +23,13 @@ type (
 		URL string
 
 		// Layouts specifies the root layout used in the page
-		Layouts []Template
+		Layouts []TemplatePath
 
 		// Contents is a list of the various templates that should be loaded
-		Contents []Template
+		Contents []TemplatePath
 
 		// Components contains shared components loaded into a template
-		Components []Template
+		Components []TemplatePath
 
 		// Headers stores a list of HTTP headers and values to be set on the response
 		Headers map[string]string
@@ -59,13 +59,14 @@ func NewContent(r *http.Request) *Content {
 	c := Content{}
 	c.Site = defaultAppName
 	c.Title = defaultAppTitle
-	c.ResponseStatusCode = 200
+	c.ResponseStatusCode = http.StatusOK
 
 	if r != nil {
 		// retrieve the user information from the session data
 		c.HTMX.Request = htmx.GetRequest(r)
 		if c.HTMX.Request.Enabled {
-			c.Layouts = []Template{}
+			// clear the layouts - an HTMX response should only render content and components
+			c.Layouts = []TemplatePath{}
 		}
 	}
 
@@ -89,38 +90,40 @@ func (c *Content) IsHtmx() bool {
 }
 
 // AddLayout adds the content Template to the Content's LayoutTemplates
-func (c *Content) AddLayout(content Template) {
+func (c *Content) AddLayout(content TemplatePath) {
 	c.Layouts = append(c.Layouts, content)
 }
 
 // AddLayouts adds the contents Templates to the Content's LayoutTemplates
-func (c *Content) AddLayouts(contents ...Template) {
+func (c *Content) AddLayouts(contents ...TemplatePath) {
 	c.Layouts = append(c.Layouts, contents...)
 }
 
 // AddContent adds the content Template to the Content's ContentTemplates
-func (c *Content) AddContent(content Template) {
+func (c *Content) AddContent(content TemplatePath) {
 	c.Contents = append(c.Contents, content)
 }
 
 // AddContents adds the contents Templates to the Content's ContentTemplates
-func (c *Content) AddContents(contents ...Template) {
+func (c *Content) AddContents(contents ...TemplatePath) {
 	c.Contents = append(c.Contents, contents...)
 }
 
 // AddComponent adds the content Template to the Content's ComponentTemplates
-func (c *Content) AddComponent(content Template) {
+func (c *Content) AddComponent(content TemplatePath) {
 	c.Components = append(c.Components, content)
 }
 
 // AddComponents adds the contents Templates to the Content's ComponentTemplates
-func (c *Content) AddComponents(contents ...Template) {
+func (c *Content) AddComponents(contents ...TemplatePath) {
 	c.Components = append(c.Components, contents...)
 }
 
-// Render parses the layout and content templates and executes them with the
-// specified Content as the view model
+// Render parses the layout and content templates and executes them with the specified Content as the
+// view model. If a ContentManager is specified, its templates will be prepended to the Content
+// instance templates before they are merged and rendered.
 func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
+	var managerLayouts, managerContents, managerComponents []TemplatePath
 	if c.ContentManager != nil {
 		contentType := PageType
 		if c.IsHtmx() {
@@ -130,18 +133,38 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 
 		// load the templates from the ContentManagerService *before* any templates that might be
 		// on the specified Content instance
-		c.Layouts = append(c.ContentManager.Layouts[contentType], c.Layouts...)
-		c.Contents = append(c.ContentManager.Contents[contentType], c.Contents...)
-		c.Components = append(c.ContentManager.Components[contentType], c.Components...)
+		managerLayouts = c.ContentManager.Layouts[contentType]
+		managerContents = c.ContentManager.Contents[contentType]
+		managerComponents = c.ContentManager.Components[contentType]
 	}
 
+	// merge them into local slices so we don't mutate c.*
+	allLayouts := append([]TemplatePath{}, managerLayouts...)
+	allLayouts = append(allLayouts, c.Layouts...)
+
+	allContents := append([]TemplatePath{}, managerContents...)
+	allContents = append(allContents, c.Contents...)
+
+	allComponents := append([]TemplatePath{}, managerComponents...)
+	allComponents = append(allComponents, c.Components...)
+
 	// create a list of templates in order from the layout templates to the component templates
-	var templates []Template
-	templates = append(templates, c.Layouts...)
-	templates = append(templates, c.Contents...)
-	templates = append(templates, c.Components...)
+	var templates []TemplatePath
+	templates = append(templates, allLayouts...)
+	templates = append(templates, allContents...)
+	templates = append(templates, allComponents...)
 	if len(templates) == 0 {
 		return NewErrNoTemplates(fmt.Errorf("No templates have been set"))
+	}
+
+	// set the headers
+	for k, v := range c.Headers {
+		w.Header().Set(k, v)
+	}
+
+	// write the response code
+	if c.ResponseStatusCode != 0 {
+		w.WriteHeader(c.ResponseStatusCode)
 	}
 
 	// parse the templates in the order specified
@@ -160,11 +183,11 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 }
 
 // templatesToStrings takes the specified Template slice and converts it to a string slice
-func templatesToStrings(templates []Template) []string {
-	strings := make([]string, len(templates))
+func templatesToStrings(templates []TemplatePath) []string {
+	paths := make([]string, len(templates))
 	for i, t := range templates {
-		strings[i] = string(t)
+		paths[i] = string(t)
 	}
 
-	return strings
+	return paths
 }
