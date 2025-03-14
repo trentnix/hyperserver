@@ -9,8 +9,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	auth_services "github.com/trentnix/hyperserver/auth"
-	"github.com/trentnix/hyperserver/pkg/components/user"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // LoadAuthenticatedUser extracts the authenticated user and adds it to the context

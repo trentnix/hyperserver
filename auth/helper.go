@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/trentnix/hyperserver/pkg/components/user"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 const (
