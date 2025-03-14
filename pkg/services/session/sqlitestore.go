@@ -16,6 +16,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 type (
@@ -301,21 +302,22 @@ func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Se
 		return nil, err
 	}
 
-	if dbSession.ID == sessionID {
-		// create a new session and serialize the session data
-		session := newSession(s, name)
-		session.IsNew = false
-
+	if dbSession.Session != "" {
 		sessionData, dataError := convertJsonToData(dbSession.Session)
 		if dataError != nil {
 			// the JSON text blob that was stored could not be serialized to a map[string]string
 			return nil, dataError
 		}
 
-		session.Data = sessionData
+		// create a new session and serialize the session data
+		s := &session.Session{
+			ID:        dbSession.ID,
+			IsNew:     false,
+			ExpiresAt: dbSession.Expires_at,
+			Data:      sessionData,
+		}
 
-		// the session was retrieved and can be returned successfully
-		return session, nil
+		return s, nil
 	}
 
 	return nil, nil

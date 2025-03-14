@@ -8,6 +8,21 @@ import (
 type BaseError = hs_errors.BaseError
 
 // ErrSessionStoreNotFound a session store could not be found
+type ErrSessionManagerNotFound struct {
+	*BaseError
+}
+
+// NewErrSessionManagerNotFound creates an instance of ErrSessionManagerNotFound
+func NewErrSessionManagerNotFound(err error) *ErrSessionManagerNotFound {
+	return &ErrSessionManagerNotFound{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the session manager is not configured",
+		},
+	}
+}
+
+// ErrSessionStoreNotFound a session store could not be found
 type ErrSessionStoreNotFound struct {
 	*BaseError
 }

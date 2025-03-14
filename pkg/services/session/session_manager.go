@@ -43,20 +43,20 @@ var (
 
 // InitializeSessionManager creates a new instance of the global SessionManager and
 func InitializeSessionManager(c *config.Config) *SessionManager {
-	var sm *SessionManager
 	if sessionManager != nil {
 		return sessionManager
 	}
 
 	once.Do(func() {
-		sm = &SessionManager{
+		// set the application's SessionManager instance
+		sessionManager = &SessionManager{
 			config: c,
 			Stores: c.HTTP.Session.Stores,
 			Types:  c.HTTP.Session.Types,
 		}
 	})
 
-	return sm
+	return sessionManager
 }
 
 // GetContentManager returns the global SessionManager service if it exists

@@ -45,6 +45,10 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
 
 	// check the session
 	sessionManager := session.GetSessionManager()
+	if sessionManager == nil {
+		return nil, session.NewErrSessionManagerNotFound(nil)
+	}
+
 	s, err := sessionManager.Get(r, userSessionKey)
 	if err != nil {
 		return nil, err
