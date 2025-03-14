@@ -10,20 +10,22 @@ That doesn't mean I made a good decision, I just want to provide some context as
 
 To configure the server for session management, check out the config-template.yaml file in the /config folder or the snippet below.
 
-    session:
-        key: <your JWT encryption key goes here>
-        tokenAge: "24h"
-        cookieAge: "24h"
-        stores:
-            cookieStore:
-            enabled: "true"
-        sqliteStore:
-            enabled: "true"
-            connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
-            sessionTable: "session"
-        types:
-            default: sqliteStore
-            visit: cookieStore
+```yaml
+session:
+    key: <your JWT encryption key goes here>
+    tokenAge: "24h"
+    cookieAge: "24h"
+    stores:
+        cookieStore:
+        enabled: "true"
+    sqliteStore:
+        enabled: "true"
+        connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
+        sessionTable: "session"
+    types:
+        default: sqliteStore
+        visit: cookieStore
+```
 
 You should see a "session" section in the "http" section. This is where the magic happens.
 
@@ -55,7 +57,9 @@ To create and use a *Session*, you'll need an instance of *SessionManager*. An i
 
 To get a \**Session* instance from the *SessionManager*, use the Get method:
 
-    sessionManager.Get(r, "session-name-goes-here")
+```go
+sessionManager.Get(r, "session-name-goes-here")
+```
 
 Get takes two parameters, an \*http.Request and a string that identifies the name of the *Session*. The name can be used to manage the Session and any data that needs to be stored in a session.
 
@@ -63,11 +67,15 @@ If the *Session* exists, a pointer to the existing Session is returned. If the S
 
 A *Session* has a simple interface and data can be stored in a Session in a string map called Session.Data.
 
-    session.Data["title"] = "This is the title"
+```go
+session.Data["title"] = "This is the title"
+```
 
 Both the map key and map values are strings. To retrieve data from a *Session*, just access the same map:
 
-    title = session.Data["title"]
+```go
+title = session.Data["title"]
+```
 
 No other data types can be stored in a session, currently. If you need to store objects or complex data in a Session, consider serializing the data you want to store into a JSON string and saving that to the Session.
 
@@ -77,7 +85,9 @@ If this limitation is a deal breaker for you, consider using [gorilla/session](h
 
 To create a new *Session*, use the New method:
 
-    sessionManager.New(r, "session-name-goes-here")
+```go
+sessionManager.New(r, "session-name-goes-here")
+```
 
 A pointer to a new *Session* is returned and, if saved, will overwrite any existing session with the same name.
 
@@ -85,7 +95,9 @@ A pointer to a new *Session* is returned and, if saved, will overwrite any exist
 
 To save a *Session* to session storage (so it will persist between requests), call Save:
 
-    err := session.Save(r, w)
+```go
+err := session.Save(r, w)
+```
 
 Save takes both a \*http.Request instance and a http.ResponseWriter instance as parameters. This allows the session to be written to a browser cookie that can be read from a subsequent request. The Cookie value is encoded as a [JWT](https://jwt.io/) to add some measure of security. That doesn't mean you should consider this approach to be secure.
 
@@ -97,7 +109,9 @@ Since a *Session* has a Session.store member, you can infer which storage mechan
 
 To end an active *Session* (and to expire any browser cookies) simply call the End method on a given *Session*:
 
-    err := session.End(r, w)
+```go
+err := session.End(r, w)
+```
 
 End takes both a \*http.Request instance and a http.ResponseWriter instance as parameters so the browser cookie can be appropriately updated.
 
@@ -105,29 +119,31 @@ End takes both a \*http.Request instance and a http.ResponseWriter instance as p
 
 The following code shows an example of a handler that gets a session, extracts a counter value from the session, increments the counter value, and saves it back to the session.
 
-    func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
-        const counterKey = "counter"
+```go
+func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
+    const counterKey = "counter"
 
-        // get the "counterSession" session
-        mySession, _ := session.GetSessionManager().Get(r, "counterSession")
+    // get the "counterSession" session
+    mySession, _ := session.GetSessionManager().Get(r, "counterSession")
 
-        // get the existing counter value from the session data
-        counter, _ := strconv.Atoi(mySession.Data[counterKey])
-        
-        page := content.NewManagedContent(r)
-        page.AddContentTemplate(homeContent)
-        page.Title = fmt.Sprintf("# of My Visits: %d", counter)
+    // get the existing counter value from the session data
+    counter, _ := strconv.Atoi(mySession.Data[counterKey])
+    
+    page := content.NewManagedContent(r)
+    page.AddContentTemplate(homeContent)
+    page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
-        // increment the counter and convert the value to a string
-        sCounter := fmt.Sprintf("%d", counter+1)
+    // increment the counter and convert the value to a string
+    sCounter := fmt.Sprintf("%d", counter+1)
 
-        // save the updated counter value in the session
-        mySession.Data[counterKey] = sCounter
-        mySession.Save(r, w)
+    // save the updated counter value in the session
+    mySession.Data[counterKey] = sCounter
+    mySession.Save(r, w)
 
-        // render the result
-        renderErr := page.Render(w, r)
-    }
+    // render the result
+    renderErr := page.Render(w, r)
+}
+```
 
 A significant portion of the code handles the integer to string conversion since only string values can be stored in a session. Additional code handles rendering the result to the requestor.
 
