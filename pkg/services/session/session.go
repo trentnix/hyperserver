@@ -13,8 +13,8 @@ type (
 	Session struct {
 		ID        string
 		Data      map[string]string
-		name      string
-		store     SessionStore
+		Name      string
+		Store     SessionStore
 		IsNew     bool
 		ExpiresAt time.Time
 	}
@@ -33,8 +33,8 @@ func newSession(s SessionStore, name string) *Session {
 	sessionID := uuid.New().String()
 	session := Session{
 		ID:    sessionID,
-		name:  name,
-		store: s,
+		Name:  name,
+		Store: s,
 		IsNew: true,
 	}
 
@@ -45,19 +45,19 @@ func newSession(s SessionStore, name string) *Session {
 // Save saves the specified session to its corresponding store and writes the
 // session to a http cookie.
 func (s *Session) Save(r *http.Request, w http.ResponseWriter) error {
-	if s.store == nil {
+	if s.Store == nil {
 		return NewErrSessionStoreNotFound(nil)
 	}
 
 	// save the session to the store
-	return s.store.Save(r, w, s)
+	return s.Store.Save(r, w, s)
 }
 
 // End terminates the specified session in its corresponding store
 func (s *Session) End(r *http.Request, w http.ResponseWriter) error {
-	if s.store == nil {
+	if s.Store == nil {
 		return NewErrSessionStoreNotFound(nil)
 	}
 
-	return s.store.End(r, w, s)
+	return s.Store.End(r, w, s)
 }

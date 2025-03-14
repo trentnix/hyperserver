@@ -130,7 +130,7 @@ func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 
 	// write the cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     session.name,
+		Name:     session.Name,
 		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,
@@ -145,7 +145,7 @@ func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 // to expired
 func (c *CookieStore) End(r *http.Request, w http.ResponseWriter, session *Session) error {
 	http.SetCookie(w, &http.Cookie{
-		Name:     session.name,
+		Name:     session.Name,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,

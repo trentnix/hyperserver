@@ -188,7 +188,7 @@ func setCachedSession(r *http.Request, session *Session) error {
 	}
 
 	// Store the session in the registry using session.name as the key.
-	registry[session.name] = session
+	registry[session.Name] = session
 
 	*r = *r.WithContext(context.WithValue(r.Context(), sessionRegistryKey, registry))
 

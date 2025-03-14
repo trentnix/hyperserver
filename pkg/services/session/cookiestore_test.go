@@ -159,7 +159,7 @@ func TestCookieStore_End_NonTLS(t *testing.T) {
 	// Create a dummy session. Since tests are in the same package,
 	// we can set unexported fields directly.
 	session := &Session{
-		name: "cookiestore_test",
+		Name: "cookiestore_test",
 	}
 
 	// Create a non-TLS request.
@@ -179,8 +179,8 @@ func TestCookieStore_End_NonTLS(t *testing.T) {
 	}
 	cookie := cookies[0]
 
-	if cookie.Name != session.name {
-		t.Errorf("expected cookie name %q, got %q", session.name, cookie.Name)
+	if cookie.Name != session.Name {
+		t.Errorf("expected cookie name %q, got %q", session.Name, cookie.Name)
 	}
 	if cookie.Value != "" {
 		t.Errorf("expected cookie value to be empty, got %q", cookie.Value)
@@ -199,7 +199,7 @@ func TestCookieStore_End_TLS(t *testing.T) {
 	store := setupCookieStore(t)
 
 	session := &Session{
-		name: "cookiestore_test",
+		Name: "cookiestore_test",
 	}
 
 	// Create a TLS-enabled request. httptest.NewRequest doesn't set r.TLS,
@@ -238,8 +238,8 @@ func TestCookieStore_New_Valid(t *testing.T) {
 		t.Fatal("expected a session object, got nil")
 	}
 	// Assuming newSession sets session.name and marks new sessions as IsNew.
-	if session.name != "cookiestore_test" {
-		t.Errorf("expected session name to be 'cookiestore_test', got %q", session.name)
+	if session.Name != "cookiestore_test" {
+		t.Errorf("expected session name to be 'cookiestore_test', got %q", session.Name)
 	}
 	if !session.IsNew {
 		t.Errorf("expected session.IsNew to be true for a new session")
@@ -277,8 +277,8 @@ func TestCookieStore_Save_NewSession(t *testing.T) {
 	cookie := cookies[0]
 
 	// Check cookie properties.
-	if cookie.Name != session.name {
-		t.Errorf("expected cookie name %q, got %q", session.name, cookie.Name)
+	if cookie.Name != session.Name {
+		t.Errorf("expected cookie name %q, got %q", session.Name, cookie.Name)
 	}
 	if cookie.Value == "" {
 		t.Error("expected cookie value to be non-empty")

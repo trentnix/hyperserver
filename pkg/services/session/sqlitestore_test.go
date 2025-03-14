@@ -161,7 +161,7 @@ func TestSQLiteStore_End_NonTLS(t *testing.T) {
 	// Create a dummy session. Since tests are in the same package,
 	// we can set unexported fields directly.
 	session := &Session{
-		name: "sqlitestore_test",
+		Name: "sqlitestore_test",
 	}
 
 	// Create a non-TLS request.
@@ -181,8 +181,8 @@ func TestSQLiteStore_End_NonTLS(t *testing.T) {
 	}
 	cookie := cookies[0]
 
-	if cookie.Name != session.name {
-		t.Errorf("expected cookie name %q, got %q", session.name, cookie.Name)
+	if cookie.Name != session.Name {
+		t.Errorf("expected cookie name %q, got %q", session.Name, cookie.Name)
 	}
 	if cookie.Value != "" {
 		t.Errorf("expected cookie value to be empty, got %q", cookie.Value)
@@ -201,7 +201,7 @@ func TestSQLiteStore_End_TLS(t *testing.T) {
 	store := setupSQLiteStore(t)
 
 	session := &Session{
-		name: "sqlitestore_test",
+		Name: "sqlitestore_test",
 	}
 
 	// Create a TLS-enabled request. httptest.NewRequest doesn't set r.TLS,
@@ -240,8 +240,8 @@ func TestSQLiteStore_New_Valid(t *testing.T) {
 		t.Fatal("expected a session object, got nil")
 	}
 	// Assuming newSession sets session.name and marks new sessions as IsNew.
-	if session.name != "sqlitestore_test" {
-		t.Errorf("expected session name to be 'sqlitestore_test', got %q", session.name)
+	if session.Name != "sqlitestore_test" {
+		t.Errorf("expected session name to be 'sqlitestore_test', got %q", session.Name)
 	}
 	if !session.IsNew {
 		t.Errorf("expected session.IsNew to be true for a new session")
@@ -297,8 +297,8 @@ func TestSQLiteStore_Save_NewSession(t *testing.T) {
 	cookie := cookies[0]
 
 	// Check cookie properties.
-	if cookie.Name != session.name {
-		t.Errorf("expected cookie name %q, got %q", session.name, cookie.Name)
+	if cookie.Name != session.Name {
+		t.Errorf("expected cookie name %q, got %q", session.Name, cookie.Name)
 	}
 	if cookie.Value == "" {
 		t.Error("expected cookie value to be non-empty")

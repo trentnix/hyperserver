@@ -16,7 +16,6 @@ import (
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
-	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 type (
@@ -128,11 +127,9 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 
 	// if the session does not exist, return a new session
 	if session == nil {
-		session := newSession(s, name)
-		return session, nil
+		session = newSession(s, name)
 	}
 
-	session.IsNew = false
 	return session, nil
 }
 
@@ -187,7 +184,7 @@ func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 
 	// write the cookie with the session token
 	http.SetCookie(w, &http.Cookie{
-		Name:     session.name,
+		Name:     session.Name,
 		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,
@@ -201,7 +198,7 @@ func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 // End terminates the specified session
 func (s *SQLiteStore) End(r *http.Request, w http.ResponseWriter, session *Session) error {
 	http.SetCookie(w, &http.Cookie{
-		Name:     session.name,
+		Name:     session.Name,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
@@ -310,11 +307,13 @@ func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Se
 		}
 
 		// create a new session and serialize the session data
-		s := &session.Session{
+		s := &Session{
 			ID:        dbSession.ID,
+			Name:      name,
 			IsNew:     false,
 			ExpiresAt: dbSession.Expires_at,
 			Data:      sessionData,
+			Store:     s,
 		}
 
 		return s, nil
