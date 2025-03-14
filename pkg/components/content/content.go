@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 )
 
 // Page defines the various fields that describe a particular site page
@@ -48,9 +49,12 @@ type (
 		// complex data that needs to be rendered on a given page
 		Data any
 
+		// ContentManager might contain layouts, content, and components that are used
+		// across the application and need to be combined when the Content is rendered
 		ContentManager *ContentManagerService
 
-		Messages []ContentMessage
+		// Messages that should be rendered
+		Messages []messages.ContentMessage
 	}
 )
 

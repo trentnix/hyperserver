@@ -1,5 +1,5 @@
 // message.go defines a ContentMessage and related methods
-package content
+package messages
 
 import (
 	"encoding/json"

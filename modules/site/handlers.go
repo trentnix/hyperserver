@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/components/user"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -28,7 +29,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	homepage := content.NewManagedContent(r)
 	homepage.AddContent(homeContent)
-	homepage.Messages, _ = content.GetMessages(r, w)
+	homepage.Messages, _ = messages.GetMessages(r, w)
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -40,7 +41,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 // Login provides a handler to test login functionality - currently used for testing
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
-	login.Messages, _ = content.GetMessages(r, w)
+	login.Messages, _ = messages.GetMessages(r, w)
 	login.Title = "Login"
 
 	login.AddContent(loginContent)
@@ -54,12 +55,12 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 // Error is the handler for the /error endpoint
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	contentMessages, messagesErr := content.GetMessages(r, w)
+	contentMessages, messagesErr := messages.GetMessages(r, w)
 	if messagesErr != nil {
 		logger.LogRequestError(r, fmt.Errorf("there was an error retrieving content messages: %w", messagesErr))
 	}
 
-	var errorMessages []content.ContentMessage
+	var errorMessages []messages.ContentMessage
 	for _, c := range contentMessages {
 		if c.IsError() {
 			errorMessages = append(errorMessages, c)
@@ -83,7 +84,7 @@ func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, mes
 		logger.LogRequestError(r, fmt.Errorf("%s: %w", message, e))
 	}
 
-	err := content.AddErrorMessage(w, r, message)
+	err := messages.AddErrorMessage(w, r, message)
 	if err != nil {
 		logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", err))
 	}

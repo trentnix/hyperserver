@@ -15,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/components/user"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -296,7 +297,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	content.AddSuccessMessage(w, r, "You have been successfully registered")
+	messages.AddSuccessMessage(w, r, "You have been successfully registered")
 
 	return true
 }

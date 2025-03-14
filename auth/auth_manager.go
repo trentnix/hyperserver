@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/components/user"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -157,7 +158,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r = user.AddUserToRequestContext(r, hs_user)
-	err := content.AddSuccessMessage(w, r, "You have been successfully logged in")
+	err := messages.AddSuccessMessage(w, r, "You have been successfully logged in")
 	if err != nil {
 		logger.LogRequestError(r, fmt.Errorf("Could not add the specified message: %w", err))
 	}
