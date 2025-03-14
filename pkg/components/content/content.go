@@ -22,14 +22,14 @@ type (
 		// URL of the displayed content - optional
 		URL string
 
-		// Layout specifies the root layout used in the page
-		LayoutTemplates []Template
+		// Layouts specifies the root layout used in the page
+		Layouts []Template
 
 		// Contents is a list of the various templates that should be loaded
-		ContentTemplates []Template
+		Contents []Template
 
 		// Components contains shared components loaded into a template
-		ComponentTemplates []Template
+		Components []Template
 
 		// Headers stores a list of HTTP headers and values to be set on the response
 		Headers map[string]string
@@ -65,7 +65,7 @@ func NewContent(r *http.Request) *Content {
 		// retrieve the user information from the session data
 		c.HTMX.Request = htmx.GetRequest(r)
 		if c.HTMX.Request.Enabled {
-			c.LayoutTemplates = []Template{}
+			c.Layouts = []Template{}
 		}
 	}
 
@@ -88,34 +88,34 @@ func (c *Content) IsHtmx() bool {
 	return c.HTMX.Request.Enabled
 }
 
-// AddLayoutTemplate adds the content Template to the Content's LayoutTemplates
-func (c *Content) AddLayoutTemplate(content Template) {
-	c.LayoutTemplates = append(c.LayoutTemplates, content)
+// AddLayout adds the content Template to the Content's LayoutTemplates
+func (c *Content) AddLayout(content Template) {
+	c.Layouts = append(c.Layouts, content)
 }
 
-// AddLayoutTemplates adds the contents Templates to the Content's LayoutTemplates
-func (c *Content) AddLayoutTemplates(contents ...Template) {
-	c.LayoutTemplates = append(c.LayoutTemplates, contents...)
+// AddLayouts adds the contents Templates to the Content's LayoutTemplates
+func (c *Content) AddLayouts(contents ...Template) {
+	c.Layouts = append(c.Layouts, contents...)
 }
 
-// AddContentTemplate adds the content Template to the Content's ContentTemplates
-func (c *Content) AddContentTemplate(content Template) {
-	c.ContentTemplates = append(c.ContentTemplates, content)
+// AddContent adds the content Template to the Content's ContentTemplates
+func (c *Content) AddContent(content Template) {
+	c.Contents = append(c.Contents, content)
 }
 
-// AddContentTemplates adds the contents Templates to the Content's ContentTemplates
-func (c *Content) AddContentTemplates(contents ...Template) {
-	c.ContentTemplates = append(c.ContentTemplates, contents...)
+// AddContents adds the contents Templates to the Content's ContentTemplates
+func (c *Content) AddContents(contents ...Template) {
+	c.Contents = append(c.Contents, contents...)
 }
 
-// AddComponentTemplate adds the content Template to the Content's ComponentTemplates
-func (c *Content) AddComponentTemplate(content Template) {
-	c.ComponentTemplates = append(c.ComponentTemplates, content)
+// AddComponent adds the content Template to the Content's ComponentTemplates
+func (c *Content) AddComponent(content Template) {
+	c.Components = append(c.Components, content)
 }
 
-// AddComponentTemplates adds the contents Templates to the Content's ComponentTemplates
-func (c *Content) AddComponentTemplates(contents ...Template) {
-	c.ComponentTemplates = append(c.ComponentTemplates, contents...)
+// AddComponents adds the contents Templates to the Content's ComponentTemplates
+func (c *Content) AddComponents(contents ...Template) {
+	c.Components = append(c.Components, contents...)
 }
 
 // Render parses the layout and content templates and executes them with the
@@ -130,16 +130,16 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 
 		// load the templates from the ContentManagerService *before* any templates that might be
 		// on the specified Content instance
-		c.LayoutTemplates = append(c.ContentManager.LayoutTemplates[contentType], c.LayoutTemplates...)
-		c.ContentTemplates = append(c.ContentManager.ContentTemplates[contentType], c.ContentTemplates...)
-		c.ComponentTemplates = append(c.ContentManager.ComponentTemplates[contentType], c.ComponentTemplates...)
+		c.Layouts = append(c.ContentManager.Layouts[contentType], c.Layouts...)
+		c.Contents = append(c.ContentManager.Contents[contentType], c.Contents...)
+		c.Components = append(c.ContentManager.Components[contentType], c.Components...)
 	}
 
 	// create a list of templates in order from the layout templates to the component templates
 	var templates []Template
-	templates = append(templates, c.LayoutTemplates...)
-	templates = append(templates, c.ContentTemplates...)
-	templates = append(templates, c.ComponentTemplates...)
+	templates = append(templates, c.Layouts...)
+	templates = append(templates, c.Contents...)
+	templates = append(templates, c.Components...)
 	if len(templates) == 0 {
 		return NewErrNoTemplates(fmt.Errorf("No templates have been set"))
 	}

@@ -63,14 +63,14 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	authServices := GetLoadedAuthServices()
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
-		c.AddContentTemplate(authLoginDefaultTemplate)
+		c.AddContent(authLoginDefaultTemplate)
 		c.Data = "/auth/login/" + authServices[0].AuthType()
 	} else {
 		for _, service := range authServices {
 			loginHTML = append(loginHTML, service.GetLoginButton())
 		}
 
-		c.AddContentTemplate(authLoginSelectionTemplate)
+		c.AddContent(authLoginSelectionTemplate)
 		c.Data = loginHTML
 	}
 
@@ -90,14 +90,14 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	authServices := GetLoadedAuthServices()
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
-		c.AddContentTemplate(authRegisterDefaultTemplate)
+		c.AddContent(authRegisterDefaultTemplate)
 		c.Data = "/auth/register/" + authServices[0].AuthType()
 	} else {
 		for _, service := range authServices {
 			loginHTML = append(loginHTML, service.GetRegisterButton())
 		}
 
-		c.AddContentTemplate(authRegisterSelectionTemplate)
+		c.AddContent(authRegisterSelectionTemplate)
 		c.Data = loginHTML
 	}
 

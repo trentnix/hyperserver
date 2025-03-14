@@ -46,8 +46,8 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.sessionManager = session.GetSessionManager()
 
 	contentManager := content.GetContentManager()
-	contentManager.AddPageLayoutTemplate(content.Template(pageLayoutTemplate))
-	contentManager.AddPageComponentTemplate(content.Template(messageComponentTemplate))
+	contentManager.AddPageLayout(content.Template(pageLayoutTemplate))
+	contentManager.AddPageComponent(content.Template(messageComponentTemplate))
 
 	contentManager.HomeURL = homeURL
 	contentManager.ErrorHandler = m.RedirectToError

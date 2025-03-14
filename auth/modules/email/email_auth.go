@@ -129,7 +129,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	login.AddContentTemplate(content.Template(emailLoginFormTemplate))
+	login.AddContent(content.Template(emailLoginFormTemplate))
 	login.Data = &LoginForm{}
 
 	err := login.Render(w, r)
@@ -157,7 +157,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		return nil
 	}
 
-	login.AddContentTemplate(emailLoginFormTemplate)
+	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 
 	// extract login information, confirm the password, and authenticate the user
@@ -209,7 +209,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	register.AddContentTemplate(content.Template(emailRegisterFormTemplate))
+	register.AddContent(content.Template(emailRegisterFormTemplate))
 	register.Data = &RegisterForm{}
 
 	err := register.Render(w, r)
@@ -237,7 +237,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	register.AddContentTemplate(emailRegisterFormTemplate)
+	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 
 	// extract login information, confirm the password, and authenticate the user

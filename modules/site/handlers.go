@@ -27,7 +27,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	homepage := content.NewManagedContent(r)
-	homepage.AddContentTemplate(homeContent)
+	homepage.AddContent(homeContent)
 	homepage.Messages, _ = content.RetrieveMessages(r, w)
 	homepage.Title = welcomeMessage
 
@@ -43,7 +43,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login.Messages, _ = content.RetrieveMessages(r, w)
 	login.Title = "Login"
 
-	login.AddContentTemplate(loginContent)
+	login.AddContent(loginContent)
 
 	err := login.Render(w, r)
 	if err != nil {
@@ -68,7 +68,7 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 
 	errorPage := content.NewManagedContent(r)
 	errorPage.Title = "Error"
-	errorPage.AddContentTemplate(errorContent)
+	errorPage.AddContent(errorContent)
 	errorPage.Data = errorMessages
 
 	if err := errorPage.Render(w, r); err != nil {
@@ -123,7 +123,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := content.NewManagedContent(r)
-	page.AddContentTemplate(homeContent)
+	page.AddContent(homeContent)
 	page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
 	// increment the counter and convert the value to a string
