@@ -20,12 +20,13 @@ type (
 )
 
 const (
-	module                   = "module_site"
-	pageLayoutTemplate       = "modules/site/templates/html/layouts/site.html"
-	messageComponentTemplate = "modules/site/templates/html/components/message.html"
-	homeContent              = "modules/site/templates/html/index.html"
-	loginContent             = "modules/site/templates/html/login.html"
-	errorContent             = "modules/site/templates/html/error.html"
+	module                          = "module_site"
+	pageLayoutTemplate              = "modules/site/templates/html/layouts/site.html"
+	messageComponentTemplate        = "modules/site/templates/html/components/content-messages.html"
+	consoleMessageComponentTemplate = "modules/site/templates/html/components/console-messages.html"
+	homeContent                     = "modules/site/templates/html/index.html"
+	loginContent                    = "modules/site/templates/html/login.html"
+	errorContent                    = "modules/site/templates/html/error.html"
 
 	homeURL  = "/"
 	authURL  = "/login"
@@ -48,6 +49,7 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	contentManager := content.GetContentManager()
 	contentManager.AddPageLayout(pageLayoutTemplate)
 	contentManager.AddPageComponent(messageComponentTemplate)
+	contentManager.AddPageComponent(consoleMessageComponentTemplate)
 
 	contentManager.HomeURL = homeURL
 	contentManager.ErrorHandler = m.RedirectToError

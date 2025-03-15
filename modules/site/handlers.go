@@ -31,7 +31,6 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	homepage.AddContent(homeContent)
 	homepage.Messages, _ = messages.GetMessages(r, w)
 	homepage.Title = welcomeMessage
-	homepage.ConsoleMessages = append(homepage.ConsoleMessages, "this is a console message")
 
 	err := homepage.Render(w, r)
 	if err != nil {
