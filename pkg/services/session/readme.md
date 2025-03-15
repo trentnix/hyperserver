@@ -1,14 +1,14 @@
 # Sessions and Session Management
 
-Session management has been designed with the intent to be easy to use, easy to extend, and easy to understand. The design and implementation will look familiar if you've seen the source code in [gorilla/session](https://www.github.com/gorilla/sessions). I used it both as an inspiration and a guide.
+Session management has been designed with the goal of being easy to use, extend, and understand. The design and implementation will look familiar if you've seen the source code of [gorilla/sessions](https://www.github.com/gorilla/sessions). It served as both inspiration and reference.
 
-That prompts the question, why didn't I use gorilla/mux? The short answer is: I was just tired of using external libraries. Modern software seems like library after library is welded together. There are certainly benefits to this approach, but it can often make projects more difficult to understand. It also means that you get a lot of baggage as your depdendency tree and binary size grow with limited awareness as to why. I also thought a simpler implementation was possible and I wanted to make sure I understood the implementation in detail.
+Why didn't I just use `gorilla/sessions`? The short answer: I was tired of relying heavily on external libraries. Modern software often seems like a patchwork of libraries welded together. While there are benefits to this approach, it often makes projects harder to understand and maintain. It introduces complexity, increases binary size, and expands the dependency tree. I believed a simpler implementation was possible.
 
-That doesn't mean I made a good decision, I just want to provide some context as to what I was thinking. If you want to use gorilla/sessions, there's nothing stopping you. It's more flexible, almost certainly more secure, and generally excellent. But you may not need all that comes with it, so do whatever make the best sense for your project.
+This doesn't make my approach is superior. `gorilla/sessions` is more flexible, likely more secure, and generally excellent. Feel free to use it if that's what you prefer.
 
 ## Configuring Session Management and Session Storage
 
-To configure the server for session management, check out the config-template.yaml file in the /config folder or the snippet below.
+To configure session management, refer to the `config-template.yaml` file in the `/config` folder or review the snippet below:
 
 ```yaml
 session:
@@ -27,144 +27,135 @@ session:
         visit: cookieStore
 ```
 
-You should see a "session" section in the "http" section. This is where the magic happens.
+Session-related configuration is found within the `session` section under the `http` settings.
 
-General, browser cookie-related settings (including a key to encode the JWT) are at the root level and include the following settings:
+General cookie-related settings include:
 
-- **key** - key used to encode and decode the data stored in the JWT set as the cookie value
-- **tokenAge** - lifetime of the JWT token that is used
-- **cookieAge** - lifetime of the browser cookie that is used to identify the session to retrieve
+- **key**: Used for encoding and decoding JWT session data stored in cookies.
+- **tokenAge**: Lifetime of the JWT token.
+- **cookieAge**: Lifetime of the browser cookie used for session identification.
 
-Two sub-sections remain: **stores** and **types**.
+Two sub-sections follow: **stores** and **types**.
 
-The **stores** sub-section contains the session storage implementations that can be used and configuration options related to those storage implementations.
+The **stores** subsection defines available session storage implementations and their configurations:
 
-A *CookieStore* implementation is available that will serialize session data to a JWT that will be saved in the requestor's browser. There is a limit on how much data can be stored on the client browser in a browser cookie. If you find yourself serializing a lot of data to your session, a different storage option is recommended.
+- **CookieStore**: Serializes session data into a JWT stored in the browser cookie. Note that browser cookies have size limitations, so large session data may require alternative storage.
 
-Additionally, a *SQLiteStore* implementation is available that will serialize data to a SQLite database. The data stored is serialized to a JSON string and stored as a field in a database table. If SQLite is not preferred, this implementation could easily be modified to support other databases.
+- **SQLiteStore**: Serializes session data as JSON stored in a SQLite database table. This implementation could be adapted for other database systems if desired.
 
-The **types** section maps a particular session name to a particular session storage implementation. Different session names can use different storage mechanisms, but each session name should not be listed twice.
+The **types** subsection maps session names to specific session storage implementations. Each session name should be unique within this mapping. You can create custom session storage implementations and map them here accordingly.
 
-The key is the session name. The value is the session storage implementation to be used. If you roll your own custom session storage implementation, you'll need to map your session names accordingly.
-
-The "default" key can be used to configure a default SessionStore to be used whenever a Session is created using a session name not explicitly specified. For example, in the configuration above, the "default" is *SQLiteStore* so a session name of "user" would use a *SQLiteStore* since a "user" session isn't explicitly configured to do otherwise.
+The `default` key specifies which session storage is used when no explicit mapping exists. In the provided example, sessions not explicitly mapped (e.g., `user`) default to `SQLiteStore`.
 
 ## Session Management
 
-To create and use a *Session*, you'll need an instance of *SessionManager*. An instance of *SessionManager* is available in the ApplicationServer object at ApplicationServer.Session.
+To create and manage a **Session**, you need an instance of the **SessionManager**, accessible via `ApplicationServer.Session`.
 
-### Get a Session
+### Retrieving a Session
 
-To get a \**Session* instance from the *SessionManager*, use the Get method:
+To retrieve a session, use the `Get` method:
 
 ```go
 sessionManager.Get(r, "session-name-goes-here")
 ```
 
-Get takes two parameters, an \*http.Request and a string that identifies the name of the *Session*. The name can be used to manage the Session and any data that needs to be stored in a session.
+`Get` accepts two parameters: an `*http.Request` and a string representing the session's name. If the session exists, it returns a pointer to the existing session; otherwise, it returns a pointer to a new, empty session.
 
-If the *Session* exists, a pointer to the existing Session is returned. If the Session does not exist, a pointer to a new, empty Session is returned.
-
-A *Session* has a simple interface and data can be stored in a Session in a string map called Session.Data.
+Session data is stored as strings in the `Session.Data` map:
 
 ```go
 session.Data["title"] = "This is the title"
 ```
 
-Both the map key and map values are strings. To retrieve data from a *Session*, just access the same map:
+Retrieve session data using the same map:
 
 ```go
 title = session.Data["title"]
 ```
 
-No other data types can be stored in a session, currently. If you need to store objects or complex data in a Session, consider serializing the data you want to store into a JSON string and saving that to the Session.
+Currently, only strings can be stored in sessions. To store complex data types, consider serializing them to JSON strings first.
 
-If this limitation is a deal breaker for you, consider using [gorilla/session](https://www.github.com/gorilla/sessions) instead.
+If this limitation is a problem for you, consider using [gorilla/session](https://www.github.com/gorilla/sessions).
 
 ### Create a New Session
 
-To create a new *Session*, use the New method:
+To explicitly create a new session (which overwrites any existing session with the same name upon saving), use the `New` method:
 
 ```go
 sessionManager.New(r, "session-name-goes-here")
 ```
 
-A pointer to a new *Session* is returned and, if saved, will overwrite any existing session with the same name.
-
 ### Saving a Session
 
-To save a *Session* to session storage (so it will persist between requests), call Save:
+Persist a session across requests by saving it:
 
 ```go
 err := session.Save(r, w)
 ```
 
-Save takes both a \*http.Request instance and a http.ResponseWriter instance as parameters. This allows the session to be written to a browser cookie that can be read from a subsequent request. The Cookie value is encoded as a [JWT](https://jwt.io/) to add some measure of security. That doesn't mean you should consider this approach to be secure.
+`Save` takes an `*http.Request` and a `http.ResponseWriter`, enabling session persistence via cookies encoded as JWTs. This adds a layer of security but does not ensure absolute security.
 
-Depending on what session storage mechanism that is used, the browser cookie may be the primary session storage mechanism. As a result, you should be careful not to store sensitive data in a Session without confirm that the Session is not writing sensitive Session data (other than, maybe, an identifier) to the browser cookie.
+Depending on your storage mechanism, cookies might be the primary storage method. Be cautious with sensitive data; verify your session implementation doesn't store sensitive information directly in cookies.
 
-Since a *Session* has a Session.store member, you can infer which storage mechanism is being used if you want to prevent a Session from being created if, say, the CookieStore session store implementation is being used.
+You can inspect the `Session.store` property to determine the storage mechanism used, if needed.
 
 ### Ending a Session
 
-To end an active *Session* (and to expire any browser cookies) simply call the End method on a given *Session*:
+To terminate an active session and expire the associated cookie, use the `End` method:
 
 ```go
 err := session.End(r, w)
 ```
 
-End takes both a \*http.Request instance and a http.ResponseWriter instance as parameters so the browser cookie can be appropriately updated.
+End requires an `*http.Request` and `http.ResponseWriter` to update the browser cookie.
 
-### Example code
+### Example Handler
 
-The following code shows an example of a handler that gets a session, extracts a counter value from the session, increments the counter value, and saves it back to the session.
+The following example demonstrates retrieving a session, updating a counter, and saving it back:
 
 ```go
 func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
     const counterKey = "counter"
 
-    // get the "counterSession" session
+    // retrieve session
     mySession, _ := session.GetSessionManager().Get(r, "counterSession")
 
-    // get the existing counter value from the session data
+    // extract the counter value
     counter, _ := strconv.Atoi(mySession.Data[counterKey])
     
+    // prepare the page content
     page := content.NewManagedContent(r)
     page.AddContentTemplate(homeContent)
     page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
-    // increment the counter and convert the value to a string
-    sCounter := fmt.Sprintf("%d", counter+1)
-
-    // save the updated counter value in the session
-    mySession.Data[counterKey] = sCounter
+    // increment the counter and save it to the session
+    mySession.Data[counterKey] = fmt.Sprintf("%d", counter+1)
     mySession.Save(r, w)
 
-    // render the result
+    // render content
     renderErr := page.Render(w, r)
 }
 ```
 
-A significant portion of the code handles the integer to string conversion since only string values can be stored in a session. Additional code handles rendering the result to the requestor.
-
-Error handling has been omitted, at least in the example, for brevity.
+This example highlights converting integers to strings for storage, session management, and rendering output. Error handling is minimal for brevity.
 
 ## Adding a New Session Store
 
-Both *CookieStore* and *SQLiteStore* are currently available implementations that can be inspected in the source code. Each implements the *SessionStore* interface, which is utilized by the *SessionManager* to create, get, and save Session instances. These implementations are fairly spartan and are intended to primarily illustrate how to implement a session store. If you want to roll your own *Session* storage implementation, you might find it easiest to copy one of those and modify as needed.
+Currently available session stores include **CookieStore** and **SQLiteStore**.
 
-If you implement a new means to store a *Session*, you'll need to also modify the *SessionManager*.getStore() method. This evaluates the server configuration and returns the SessionStore implementation that corresponds to the provided Session name. The *SessionManager* will then be able to create an instance of your custom store when a session name is encountered that maps to your custom store (as defined in the configuration file).
+To add a custom session store, implement the `SessionStore` interface, add any configuration to your application configuration (e.g. `config.yaml`), then update `SessionManager.getStore()` to recognize your implementation based on configuration settings.
 
 ## Session Caching
 
-Session instances, or at least pointers to Session instances, are cached in a \*http.Request so that multiple retrievals of a Session won't need to go to its SessionStore. Whenever a Session is saved, the Session data is stored in the Session's configured SessionStore and the /*http.Request Context.
+Sessions (or their pointers) are cached in the `*http.Request` context. Thus, repeated retrievals of a session won't cause multiple fetches from the session store. Upon saving, session data is stored both in the session's storage implementation and the request context.
 
 ## Future (Potential) Roadmap
 
 There are no actual plans for what needs to be improved, but the list below are a few items off the top of my head that came to mind when I considered how session management might be improved.
 
-- Support multiple JWT keys to enable key rotation
-- Support regular expressions to map session names to storage types
-- Improve configuration validation and provide detailed errors when session management isn't configured appropriately
-- consider a Redis session store
-- add support for non-HTTP cookie-based tokens
+- Supporting multiple JWT keys for key rotation.
+- Support non-string data types in session storage
+- Allowing regular expression-based mappings from session names to storage types.
+- Improving configuration validation and providing detailed error messages.
+- Implement a Redis-backed (or similar) session store.
+- Supporting session identification methods beyond HTTP cookies.
