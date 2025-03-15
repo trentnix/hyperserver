@@ -10,7 +10,7 @@ HyperServer is a framework to build HyperMedia applications with Go. To help fac
 
 This document will attempt to dive into each of these components, explain how they can be used, and explain some of the design decisions I made.
 
-## Content
+## content Package
 
 The *Content* struct is a view model defined in the **content** package to render a webpage or HTMX response. It stores metadata about a web page, such as Site, Title, and URL.
 
@@ -121,7 +121,7 @@ contentManager.AddPageComponent("templates/componenents/some-universal-component
 contentManager.AddHtmxComponent("templates/componenents/some-universal-component.html")
 ```
 
-## ContentMessage
+## messages Package
 
 A *ContentMessage* is a structure defined in the **messages** package that contains a string message (accessed via *ContentMessage.Message*) and a message type (accessed via *ContentMessage.MessageType*). These messages can be added anywhere that has access to the parameters of a *HandlerFunc*, as they are stored in a session (and, consequently, some or all data is stored in a HTTP cookie).
 
@@ -159,7 +159,7 @@ msgs, getMessagesErr := messages.GetMessages(r, w)
 
 If you need to configure the session store used for *ContentMessage* instances, set a store value for sessions with the name "hs-message-session". Otherwise, the default session store will be used (unless it is not defined, and then none of this *ContentMessage* session storage will work!).
 
-## Form
+## form Package
 
 The *Form* struct implements the *FormComponent* interface and provides a simple way to create new forms, validate form values, and report form errors.
 
@@ -269,7 +269,7 @@ An example of the form template can be seen below:
 {{end}}
 ```
 
-## HTMX Package
+## htmx Package
 
 The **htmx** package contains structs and functions that intend to make it easy to use and manipulate HTMX requests and responses. One example is the *IsHtmxRequest* function. It takes a \*http.Request and will return `true` if the request is an HTMX request.
 
