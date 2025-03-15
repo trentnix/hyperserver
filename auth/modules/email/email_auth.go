@@ -171,7 +171,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	loginForm.Password = r.FormValue("password")
 
 	// validate the login form
-	err := form.ValidateForm(loginForm)
+	err := form.Validate(loginForm)
 	if err != nil {
 		content.HandleFormError(w, r, login, loginForm, "The login form could not be validated")
 		return nil
@@ -253,7 +253,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	registerForm.PasswordMatch = r.FormValue("passwordMatch")
 
 	// validate the register form
-	err := form.ValidateForm(registerForm)
+	err := form.Validate(registerForm)
 	if err != nil {
 		content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated")
 		return false

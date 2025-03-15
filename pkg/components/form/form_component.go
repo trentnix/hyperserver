@@ -52,10 +52,10 @@ const (
 	FormKey contextKey = "form"
 )
 
-// ValidateForm takes the specified form, confirms it implements the FormComponent interface,
+// Validate takes the specified form, confirms it implements the FormComponent interface,
 // and validates it according to any struct-field validation attributes that were provided in
 // the form struct definition
-func ValidateForm(f any) error {
+func Validate(f any) error {
 	validate := NewValidator()
 
 	// Ensure f is a pointer to a struct

@@ -68,7 +68,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	contactForm.Message = r.FormValue("message")
 
 	// validate the ContactForm form
-	err := form.ValidateForm(contactForm)
+	err := form.Validate(contactForm)
 	if err != nil {
 		content.HandleFormError(w, r, contact, contactForm, "The login form could not be validated")
 		return
