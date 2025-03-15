@@ -1,34 +1,29 @@
-# HyperServer Components
+# HyperMedia Components Documentation
 
-HyperServer is a framework to build HyperMedia applications with Go. To help facilitate serving HyperMedia to requestors, a set of components are implemented to abstract away some of the complexity of serving hypertext-based content. The Components that have been implemented are found in the *components* folder and are implemented:
+The HyperMedia Components framework simplifies serving hypertext-based content to clients by abstracting common tasks. The implemented components reside in the **components** folder and include:
 
-- *Content* - *Content* is a view model that renders the HTML templates and accompanying data.
-- *ContentMessage* - A *ContentMessage* is a means of communicating messages to the requestor.
-- *Form* - A *Form* is an interface that defines interactions that configures, manages, and validates forms that are rendered and form data.
-- *htmx.Request* - An *htmx.Request* object stores HTMX-related request attributes.
-- *htmx.Response* - An *htmx.Response* object stores HTMX-related response attributes and provides a way to configure HTMX responses.
+- **Content**: A view model for rendering HTML views.
+- **ContentManager**: Manages reusable templates for rendering pages and components.
+- **ContentMessage**: Manages session-based messaging.
+- **Form**: Handles validation and error management for forms.
+- **htmx.Request**: Stores HTMX-related request attributes.
+- **htmx.Response**: Stores HTMX-related response attributes and configurations.
 
-This document will attempt to dive into each of these components, explain how they can be used, and explain some of the design decisions I made.
+This document provides details on each component, its purpose, and usage.
 
-## content Package
+## Content Component
 
-The *Content* struct is a view model defined in the **content** package to render a webpage or HTMX response. It stores metadata about a web page, such as Site, Title, and URL.
+The `Content` component, found in the **content** package, is a view model responsible for rendering HTML based on provided templates and data.
 
-### Template Paths
+### Template Categories
 
-*Content* stores the paths to the various templates that are used to render a page. These layouts are divided into three categories:
+Templates are categorized into:
 
-- Layouts
-- Contents
-- Components
+- **Layouts**: Serve as scaffolding (headers, footers, and general page structure).
+- **Contents**: Page-specific main content.
+- **Components**: Reusable snippets used in layouts or content.
 
-**Layouts** are intended to store layout template paths that serve as the scaffolding for rendered content. For a web page would traditionally include the header, body, navbar, etc. **Layouts** are ignored in the event that Content is being served via an HTMX reponse, since only a partial page is being returned.
-
-**Contents** stores template paths for the primary content that is being rendered to the requestor.
-
-**Components** stores template paths for common content that might be rendered via a **Layout** or a **Content** template.
-
-To create a *Content* instance and render it to the user, you might do something like this:
+Example usage:
 
 ```go
 homepage := content.NewContent(httpRequest /* *http.Request */)
@@ -36,46 +31,39 @@ homepage.Title = "Home Page"
 homepage.AddLayout("templates/layout.html")
 homepage.AddContent("templates/home-content.html")
 homepage.AddComponent("templates/footer.html")
-
 err := homepage.Render(w, r)
-if err != nil {
-  http.Error(w, "there was an error rendering the home page", http.StatusInternalServerError)
-}
 ```
 
-If there are multiple templates, each *Add* method includes a plural version that can take multiple templates:
+The `Content` component contains plural methods for convenience:
 
 ```go
-homepage := content.NewContent(httpRequest /* *http.Request */)
-homepage.Title = "Home Page"
-homepage.AddLayout("templates/layout.html", "templates/admin-layout.html")
 homepage.AddContents("templates/home-content.html", "templates/admin-content.html")
 homepage.AddComponents("templates/footer.html", "templates/admin-components.html")
-
-err := homepage.Render(w, r)
-if err != nil {
-  http.Error(w, "there was an error rendering the home page", http.StatusInternalServerError)
-}
 ```
 
-In both examples, if the request is an HTMX request, the *Layout* values will actually be ignored.
+*Note*: When serving an HTMX request, layout templates are ignored during rendering.
 
 ### Content.Data
 
-The *Data* member of a *Content* struct can store whatever data you need to render in the templates that are used.
+`Content.Data` stores any data required for rendering within templates.
 
 ### Content Manager
 
-The application creates a singleton instance of a *ContentManager* that manager template paths that can be used across the application. The application's *ContentManager* can be accessed via the *GetContentManager* function in the **content** package. Alternatively, a new *ContentManager* can be created via *NewContentManager* if, for some reason, the application's instance won't cut it.
+The `ContentManager` is a singleton responsible for managing global template paths and application URLs.
 
-The *ContentManager* stores *Layouts*, *Contents*, and *Components* template paths that can be used throughout the application. These can be accessed directly or a *ContentManager* instance can be added to a *Content* instance:
+- Layouts, Contents, Components can be globally managed.
+- Provides default URL paths (HomeURL, AuthURL, ErrorURL) configurable as needed.
+
+The singleton `ContentManager` can be accessed via *content.GetContentManager* or you can create your own *ContentManager* via *content.NewContentManager*.
+
+A `Content` instance must have its *ContentManager* set before rendering to use any configured templates:
 
 ```go
 homepage := content.NewContent(httpRequest /* *http.Request */)
 homepage.ContentManager = content.GetContentManager()
 ```
 
-Alternatively, a *Content* instance can be created with the *ContentManager* already set:
+Alternatively, *content.NewManagedContent* can be used for convenience:
 
 ```go
 homepage := content.NewManagedContent(content.GetContentManager())
@@ -85,85 +73,67 @@ homepage := content.NewManagedContent(content.GetContentManager())
 
 *ContentManager* can also store the application name and a title value to be used, and it also contains an *ErrorHandler** function variable that allows you to override default ErrorHandler behavior.
 
-See below for an example of how to configure a *ContentManager* when initializing a custom module:
+See below for an example configuring `ContentManager`:
 
 ```go
-func (m *SiteModule) Init(s *server.ApplicationServer) error {
-  contentManager := content.GetContentManager()
-  contentManager.AddPageLayout("templates/some-layout.html")
-  contentManager.AddPageComponent("templates/componenents/some-component.html")
+cm := content.GetContentManager()
+cm.AddPageLayout("templates/some-layout.html")
+cm.AddPageComponent("templates/componenents/some-component.html")
 
-  contentManager.HomeURL = homeURL
-  contentManager.AuthURL = authURL
+cm.HomeURL = homeURL
+cm.AuthURL = authURL
 
-  contentManager.ErrorHandler = m.RedirectToError
+cm.AppName = "My Company"
+cm.AppTitle = "My Application"
 
-return nil
+cm.ErrorHandler = m.RedirectToError
 }
 
 func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, message string, e error) {
-  http.Error(w, fmt.Sprintf("%s - %v", message, e), http.StatusInternalServerError)
+  // handle redirection
 }
 ```
 
-In the previous example, the *ContentManager* has a *Layout* and a *Component* added. But the methods used are *AddPageLayout* and *AddPageComponent*. These methods add template paths that use the **PageType**, so they will render if the request is a non-HTMX request.
-
-If a *Component*, for example, needed to be added for use only in HTMX requests, you would do the following:
-
-```go
-contentManager.AddHtmxComponent("templates/componenents/htmx/some-htmx-component.html")
-```
-
-When rendering, *Content* will detect whether the request was an HTMX request or not and use the *ContentManager* templates that match the circumstance. If you need the same template path rendered in both cases, add a template path with both PageType and HtmxType:
+Templates can be selectively added to be rendered with standard responses, HTMX response, or both:
 
 ```go
 contentManager.AddPageComponent("templates/componenents/some-universal-component.html")
 contentManager.AddHtmxComponent("templates/componenents/some-universal-component.html")
 ```
 
-## messages Package
+## ContentMessage Component
 
-A *ContentMessage* is a structure defined in the **messages** package that contains a string message (accessed via *ContentMessage.Message*) and a message type (accessed via *ContentMessage.MessageType*). These messages can be added anywhere that has access to the parameters of a *HandlerFunc*, as they are stored in a session (and, consequently, some or all data is stored in a HTTP cookie).
-
-### ContentMessage Types
-
-There are three types of messages:
+`ContentMessage`, defined in the **messages** package, provides session-based notifications stored via HTTP cookies. There are three types of `ContentMessage`:
 
 - Success
 - Error
-- Default
+- Default (informational)
 
-There are methods to add each kind of message to the session, abstracting away the details of how these types are maintained. To add a success message, simply call *AddSuccessMessage*:
-
-```go
-messages.AddSuccessMessage(w /* http.ResponseWriter */, r /* *http.Request */, "your action was successful")
-```
-
-And you can similarly call *AddErrorMessage* and *AddMessage* for errors and informational messages, respectively.
-
-### Create a New ContentMessage
-
-If you need to create a new *ContentMessage* for some other use, call *NewContentMessage*:
+There are functions available to make adding messages easy:
 
 ```go
-cm := messages.NewContentMessage("something bad happened", messages.MessageTypeError)
+messages.AddSuccessMessage(w, r, "action successful")
+messages.AddErrorMessage(w, r, "error processing action")
+messages.AddMessage(w, r, "this is just some useful information")
 ```
 
-### Retrieving Content Messages
-
-When *ContentMessages* are added to a Session, they can be retrieved by using *GetMessages*. However, retrieving the messages stored in the current session will result in the messages being removed. So a subsequent *GetMessages* call would return an empty *ContentMessage* slice.
+When you fetch messages from the session, they are cleared after retrieval and can't be fetched again. To fetch messages from the session:
 
 ```go
 msgs, getMessagesErr := messages.GetMessages(r, w)
 ```
 
-If you need to configure the session store used for *ContentMessage* instances, set a store value for sessions with the name "hs-message-session". Otherwise, the default session store will be used (unless it is not defined, and then none of this *ContentMessage* session storage will work!).
+To create a new `ContentMessage` without adding it to a session:
+
+```go
+cm := messages.NewContentMessage("something bad happened", messages.MessageTypeError)
+```
 
 ## form Package
 
-The *Form* struct implements the *FormComponent* interface and provides a simple way to create new forms, validate form values, and report form errors.
+The `Form` component, defined in the **form** package, streamlines form validation, error handling, and rendering for custom forms.
 
-See the example of a user registration form below:
+See below for an example of a user registration form:
 
 ```go
 RegisterForm struct {
@@ -174,49 +144,45 @@ RegisterForm struct {
 }
 ```
 
+Embedding `form.Form` ensures your form implements the `form.FormComponent` interface.
+
 ### Rendering a Form
 
-Each field in the form has annotation to specify the validation that should be done on the field. The inclusion of form.Form ensures that the FormComponent interface is satisfied.
-
-To render a form, add a template path for the form and set the *Content.Data* to an instance of the form:
+A `Form` is rendered in a `Content` instance:
 
 ```go
 register := content.NewManagedContent(r)
 register.AddContent("templates/forms/register-form.html")
 register.Data = &RegisterForm{}
-
 err := register.Render(w, r)
-if err != nil {
-  /* deal with the error */
-}
 ```
 
 ### Validate a Form
 
-To validate a form, use the *form.Validate* method. It takes any struct that implements the *FormComponent* interface and uses popular validation package [Validator V10](https://github.com/go-playground/validator):
+To validate a form and render any errors:
 
 ```go
-register := content.NewManagedContent(r)
-register.AddContent("templates/forms/register-form.html")
-registerForm := &RegisterForm{}
-
 r.ParseForm();
-registerForm.Email = r.FormValue("email")
-registerForm.Password = r.FormValue("password")
-registerForm.PasswordMatch = r.FormValue("passwordMatch")
+registerForm := &RegisterForm{
+  Email:         r.FormValue("email"),
+  Password:      r.FormValue("password"),
+  PasswordMatch: r.FormValue("passwordMatch"),
+}
 
-err := form.Validate(registerForm)
-if err != nil {
-    content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated")
-    return
+if err := form.Validate(registerForm); err != nil {
+  register := content.NewManagedContent(r)
+  register.AddContent("templates/forms/register-form.html")
+
+  content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated")
+  return
 }
 ```
 
-*HandleFormError* is a special error handler that will re-render the form with error messages. 
+`content.HandleFormError` is an error handler that will re-render the form with any errors.
 
-### Form HTML Template Example
+### Form HTML Template
 
-An example of the form template can be seen below:
+The form template used in the previous example code can be seen below:
 
 ```html
 {{ with .Data }}
@@ -271,20 +237,27 @@ An example of the form template can be seen below:
 
 ## htmx Package
 
-The **htmx** package contains structs and functions that intend to make it easy to use and manipulate HTMX requests and responses. One example is the *IsHtmxRequest* function. It takes a \*http.Request and will return `true` if the request is an HTMX request.
+The **htmx** package simplifies interactions with HTMX requests and responses.
 
 ### HTMX Request
 
-A *Request* struct is defined in the **htmx** package and contains the various attributes you'd expect on an HTMX request. A *htmx.Request* instance can be retrieved via the *htmx.GetRequest* function and is extracted from the \*http.Request parameter:
+The `htmx.Request` component extracts HTMX request details easily:
 
 ```go
-htmxRequest := htmx.GetRequest(r /* *http.Request */)
+htmxRequest := htmx.GetRequest(r)
+fmt.Printf("trigger: %s", htmxRequest.Trigger)
 ```
-
-Then any HTMX request attributes will be conveniently available.
 
 ### HTMX Reponse
 
-A *Reponse* struct is defined in the **htmx** package and can be instantiated via the *htmx.NewResponse* function. A number of HTMX response fields (that will be used by the client-side HTMX JS library to control rendering) are then available and can be set.
+To create and configure a `htmx.Response`:
 
-For example, the *Response.TriggerAfterSwap* value can be changed to trigger client-side events after the swap step.
+```go
+htmxResp := htmx.NewResponse()
+htmxResp.TriggerAfterSwap = "contentUpdated"
+htmxResp.Apply(w)
+```
+
+---
+
+This documentation aims to provide clarity about the framework's core components, their purposes, and usage patterns, aiding developers in efficiently building HyperMedia applications.
