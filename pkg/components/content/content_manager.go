@@ -28,7 +28,9 @@ type (
 		// ErrorHandler lets the caller access the "error" handler
 		ErrorHandler func(w http.ResponseWriter, r *http.Request, message string, err error)
 
-		AppName  string
+		// name of the application
+		AppName string
+		// default HTML page title
 		AppTitle string
 	}
 )
