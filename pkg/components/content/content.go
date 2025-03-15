@@ -55,6 +55,9 @@ type (
 
 		// Messages that should be rendered
 		Messages []messages.ContentMessage
+
+		// Message that should be written to the console
+		ConsoleMessages []string
 	}
 )
 
