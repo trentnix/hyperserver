@@ -46,7 +46,7 @@ type (
 			Response *htmx.Response
 		}
 
-		// complex data that needs to be rendered on a given page
+		// Data contains the data that should be rendered to any available templates
 		Data any
 
 		// ContentManager might contain layouts, content, and components that are used
@@ -56,8 +56,8 @@ type (
 		// Messages that should be rendered
 		Messages []messages.ContentMessage
 
-		// Message that should be written to the console
-		ConsoleMessages []string
+		// LogMessages should be written to a client log or console
+		LogMessages []string
 	}
 )
 
@@ -124,6 +124,16 @@ func (c *Content) AddComponent(content TemplatePath) {
 // AddComponents adds the contents Templates to the Content's ComponentTemplates
 func (c *Content) AddComponents(contents ...TemplatePath) {
 	c.Components = append(c.Components, contents...)
+}
+
+// AddLogMessage adds the provided string to the Content's LogMessages
+func (c *Content) AddLogMessage(message string) {
+	c.LogMessages = append(c.LogMessages, message)
+}
+
+// AddLogMessages adds the provided string slice to the Content's LogMessages
+func (c *Content) AddLogMessages(messages ...string) {
+	c.LogMessages = append(c.LogMessages, messages...)
 }
 
 // Render parses the layout and content templates and executes them with the specified Content as the

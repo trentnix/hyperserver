@@ -1,7 +1,7 @@
 {{ define "console-messages" }}
-  {{ if gt (len .ConsoleMessages) 0 }}
+  {{ if gt (len .LogMessages) 0 }}
     <script>
-      {{ range .ConsoleMessages }}
+      {{ range .LogMessages }}
         console.log("{{ . }}");
       {{ end }}
     </script>
