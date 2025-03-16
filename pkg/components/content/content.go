@@ -179,11 +179,6 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		w.Header().Set(k, v)
 	}
 
-	// write the response code
-	if c.ResponseStatusCode != 0 {
-		w.WriteHeader(c.ResponseStatusCode)
-	}
-
 	// parse the templates in the order specified
 	tmpl, err := template.ParseFiles(templatesToStrings(templates)...)
 	if err != nil {
@@ -194,6 +189,11 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	err = tmpl.Execute(w, c)
 	if err != nil {
 		return NewErrRenderingTemplates(err)
+	}
+
+	// write the response code
+	if c.ResponseStatusCode != 0 {
+		w.WriteHeader(c.ResponseStatusCode)
 	}
 
 	return nil

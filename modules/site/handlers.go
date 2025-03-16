@@ -89,7 +89,7 @@ func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, mes
 		logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", err))
 	}
 
-	url := errorURL
+	url := content.ErrorDefault
 	contentManager := content.GetContentManager()
 	if contentManager != nil {
 		url = contentManager.ErrorURL
