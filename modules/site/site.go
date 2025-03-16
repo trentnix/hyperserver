@@ -52,9 +52,9 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	contentManager.AddPageComponent(consoleMessageComponentTemplate)
 
 	contentManager.HomeURL = homeURL
-	contentManager.ErrorHandler = m.RedirectToError
-
 	contentManager.AuthURL = authURL
+	contentManager.ErrorURL = errorURL
+	contentManager.ErrorHandler = m.RedirectToError
 
 	return nil
 }
