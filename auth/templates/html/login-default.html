@@ -1,7 +1,4 @@
 {{ define "Content" }}
-<section id="login" class="section"  hx-get="{{ .Data }}" hx-target="#login-form" hx-swap="innerHTML" hx-trigger="load">
-  <div id="login-form" class="container">
-  Loading login form...
-  </div>
+<section id="login" class="section" hx-get="{{ .Data }}" hx-swap="outerHTML" hx-trigger="load">
 </section>
 {{ end}}

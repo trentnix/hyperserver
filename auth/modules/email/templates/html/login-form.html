@@ -1,4 +1,5 @@
 {{ with .Data }}
+<div id="login" class="container">
     <form id="login-form"
           class="auth-email-form"
           hx-post="/auth/login/email"
@@ -33,6 +34,7 @@
             <div>{{ .GetFormMessageHTML }}</div>
         {{ end }}
     </form>
+</div>
 {{ else }}
     <div>Unable to display login details.</div>
 {{ end }}

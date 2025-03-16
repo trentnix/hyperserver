@@ -205,6 +205,14 @@ textarea.input-error {
 }
 
 /* auth */
+.auth-options {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  height: 20vh;
+}
+
 form {
   max-width: 400px;
   margin: 2rem auto;

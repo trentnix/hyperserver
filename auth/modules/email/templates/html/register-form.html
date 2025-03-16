@@ -1,4 +1,5 @@
 {{ with .Data }}
+<div id="register" class="container">
     <form id="register-form"
           class="auth-email-form"
           hx-post="/auth/register/email"
@@ -37,6 +38,7 @@
             <div>{{ .GetFormMessageHTML }}</div>
         {{ end }}
     </form>
+</div>
 {{ else }}
     <div>Unable to display registration details.</div>
 {{ end }}
