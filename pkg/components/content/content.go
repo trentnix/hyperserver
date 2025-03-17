@@ -185,15 +185,14 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		return NewErrParsingTemplates(err)
 	}
 
+	if c.ResponseStatusCode != 0 && c.ResponseStatusCode != 200 {
+		w.WriteHeader(c.ResponseStatusCode)
+	}
+
 	// render the template
 	err = tmpl.Execute(w, c)
 	if err != nil {
 		return NewErrRenderingTemplates(err)
-	}
-
-	// write the response code
-	if c.ResponseStatusCode != 0 {
-		w.WriteHeader(c.ResponseStatusCode)
 	}
 
 	return nil

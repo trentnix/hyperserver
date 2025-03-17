@@ -24,9 +24,13 @@ type (
 		AuthURL string
 		// error URL
 		ErrorURL string
+		// url for 404 errors
+		NotFoundURL string
 
-		// ErrorHandler lets the caller access the "error" handler
-		ErrorHandler func(w http.ResponseWriter, r *http.Request, message string, err error)
+		// HandleError lets the caller access the "error" handler
+		HandleError func(w http.ResponseWriter, r *http.Request, message string, err error)
+		// HandleNotFound
+		HandleNotFound http.HandlerFunc
 
 		// name of the application
 		AppName string
@@ -45,9 +49,10 @@ const (
 	// HtmxType should be used when an HTMX response is required
 	HtmxType = "htmx"
 
-	HomeDefault  = "/"
-	ErrorDefault = "/error"
-	AuthDefault  = "/login"
+	HomeDefault        = "/"
+	ErrorDefault       = "/error"
+	AuthDefault        = "/login"
+	NotFoundURLDefault = "/404"
 )
 
 var (
@@ -73,11 +78,12 @@ func NewContentManager() *ContentManagerService {
 	contentManager.Contents = make(map[string][]TemplatePath)
 	contentManager.Components = make(map[string][]TemplatePath)
 
-	contentManager.ErrorHandler = DefaultErrorHandler
+	contentManager.HandleError = DefaultErrorHandler
 
 	contentManager.HomeURL = HomeDefault
 	contentManager.AuthURL = AuthDefault
 	contentManager.ErrorURL = ErrorDefault
+	contentManager.NotFoundURL = NotFoundURLDefault
 
 	contentManager.AppName = defaultAppName
 	contentManager.AppTitle = defaultAppTitle

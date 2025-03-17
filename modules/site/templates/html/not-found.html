@@ -1,0 +1,15 @@
+{{ block "Content" . }}
+
+<section id="showcase" class="section">
+  <div class="container">
+    <h2>Resource Not Found</h2>
+    {{ if .Data }}
+    <div>
+      {{ .Data }}
+    </div>
+    {{ else }}
+    The resource you requested was not found.
+    {{ end }}
+</section>
+
+{{ end }} <!-- Content -->

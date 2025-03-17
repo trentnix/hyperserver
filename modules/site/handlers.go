@@ -21,6 +21,11 @@ func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
 
 // Home renders the homepage
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != homeURL {
+		content.HandleNotFound(w, r)
+		return
+	}
+
 	welcomeMessage := "Welcome!"
 	hs_user := user.GetUserFromContext(r.Context())
 	if hs_user != nil {
@@ -143,5 +148,19 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	if renderErr != nil {
 		content.HandleError(w, r, "there was an error rendering the home page", renderErr)
 		return
+	}
+}
+
+// NotFound handles the /404 endpoint by displaying the "NotFound" page
+func (m *SiteModule) NotFound(w http.ResponseWriter, r *http.Request) {
+	notFound := content.NewManagedContent(r)
+	notFound.AddContent(notFoundContent)
+	notFound.Data = fmt.Sprintf("The resource you requested was not found: %s", r.URL.Path)
+	notFound.Title = "Resource Not Found"
+	notFound.ResponseStatusCode = http.StatusNotFound
+
+	err := notFound.Render(w, r)
+	if err != nil {
+		content.HandleError(w, r, "there was an error rendering the home page", err)
 	}
 }

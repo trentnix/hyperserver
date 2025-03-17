@@ -27,10 +27,12 @@ const (
 	homeContent                     = "modules/site/templates/html/index.html"
 	loginContent                    = "modules/site/templates/html/login.html"
 	errorContent                    = "modules/site/templates/html/error.html"
+	notFoundContent                 = "modules/site/templates/html/404.html"
 
-	homeURL  = "/"
-	authURL  = "/login"
-	errorURL = "/error"
+	homeURL     = "/"
+	authURL     = "/login"
+	errorURL    = "/error"
+	notFoundURL = "/404"
 )
 
 // init registers an instance of SiteModule with the application handlers. init runs
@@ -54,7 +56,9 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	contentManager.HomeURL = homeURL
 	contentManager.AuthURL = authURL
 	contentManager.ErrorURL = errorURL
-	contentManager.ErrorHandler = m.RedirectToError
+	contentManager.NotFoundURL = notFoundURL
+	contentManager.HandleError = m.RedirectToError
+	contentManager.HandleNotFound = m.NotFound
 
 	return nil
 }

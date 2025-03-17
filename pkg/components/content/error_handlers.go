@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
@@ -41,7 +42,7 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 		return
 	}
 
-	contentManager.ErrorHandler(w, r, message, err)
+	contentManager.HandleError(w, r, message, err)
 }
 
 // HandleFormError is a generic handler to render the specified content with the specified form
@@ -61,6 +62,26 @@ func HandleFormError(w http.ResponseWriter, r *http.Request, c *Content, f form.
 		}
 
 		errMessage := fmt.Sprintf("there was an error rendering the specified form: %v", err)
-		contentManager.ErrorHandler(w, r, errMessage, err)
+		contentManager.HandleError(w, r, errMessage, err)
+	}
+}
+
+// HandleNotFound is a static http.HandlerFunc to deal with 404 errors
+func HandleNotFound(w http.ResponseWriter, r *http.Request) {
+	if r == nil {
+		http.Error(w, fmt.Sprintf("the resource requested ('%s') was not found", r.URL.Path), http.StatusNotFound)
+	}
+
+	contentManager := GetContentManager()
+	if contentManager == nil {
+		http.Error(w, fmt.Sprintf("the resource requested ('%s') was not found", r.URL.Path), http.StatusNotFound)
+	}
+
+	if htmx.IsHtmxRequest(r) {
+		// set a message redirect the user to the 404 handler
+		RedirectToURL(w, r, contentManager.NotFoundURL)
+	} else {
+		contentManager.HandleNotFound(w, r)
+		return
 	}
 }
