@@ -81,3 +81,18 @@ func NewErrResourceNotFound(err error) *ErrRequestNotSet {
 		},
 	}
 }
+
+// ErrHtmxRequestRequired indicates an HTMX request is required
+type ErrHtmxRequestRequired struct {
+	*BaseError
+}
+
+// NewErrResourceNotFound creates an instance of ErrResourceNotFound
+func NewErrHtmxRequestRequired(err error) *ErrHtmxRequestRequired {
+	return &ErrHtmxRequestRequired{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the specified request must be made via HTMX",
+		},
+	}
+}
