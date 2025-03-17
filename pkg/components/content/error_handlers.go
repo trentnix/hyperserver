@@ -9,6 +9,7 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
@@ -50,6 +51,11 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 
 	if htmx.IsHtmxRequest(r) {
 		// set a message redirect the user to the 404 handler
+		errAddMessage := messages.AddErrorMessage(w, r, message)
+		if errAddMessage != nil {
+			logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", errAddMessage))
+		}
+
 		RedirectToURL(w, r, contentManager.ErrorURL)
 	} else {
 		// make sure this won't become an infinite loop where the error handler in the
