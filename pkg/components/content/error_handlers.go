@@ -53,7 +53,7 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 		// set a message redirect the user to the 404 handler
 		errAddMessage := messages.AddErrorMessage(w, r, message)
 		if errAddMessage != nil {
-			logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", errAddMessage))
+			logger.LogRequestError(r, errAddMessage)
 		}
 
 		RedirectToURL(w, r, contentManager.ErrorURL)

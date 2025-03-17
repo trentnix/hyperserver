@@ -3,7 +3,6 @@
 package auth
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
 
@@ -160,7 +159,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	r = user.AddUserToRequestContext(r, hs_user)
 	err := messages.AddSuccessMessage(w, r, "You have been successfully logged in")
 	if err != nil {
-		logger.LogRequestError(r, fmt.Errorf("Could not add the specified message: %w", err))
+		logger.LogRequestError(r, err)
 	}
 
 	homeURL := content.HomeDefault

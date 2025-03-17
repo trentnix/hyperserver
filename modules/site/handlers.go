@@ -62,7 +62,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 	contentMessages, messagesErr := messages.GetMessages(r, w)
 	if messagesErr != nil {
-		logger.LogRequestError(r, fmt.Errorf("there was an error retrieving content messages: %w", messagesErr))
+		logger.LogRequestError(r, messagesErr)
 	}
 
 	var errorMessages []messages.ContentMessage
