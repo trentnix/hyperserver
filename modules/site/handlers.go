@@ -43,7 +43,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Login provides a handler to test login functionality - currently used for testing
+// Login provides a handler to act as a portal to user authentication
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
 	login.Messages, _ = messages.GetMessages(r, w)
@@ -54,6 +54,21 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	err := login.Render(w, r)
 	if err != nil {
 		content.HandleError(w, r, "there was an error rendering the login page", err, http.StatusInternalServerError)
+		return
+	}
+}
+
+// Register provides a handler to act as a portal to user registration
+func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
+	register := content.NewManagedContent(r)
+	register.Messages, _ = messages.GetMessages(r, w)
+	register.Title = "Register"
+
+	register.AddContent(registerContent)
+
+	err := register.Render(w, r)
+	if err != nil {
+		content.HandleError(w, r, "there was an error rendering the register page", err, http.StatusInternalServerError)
 		return
 	}
 }

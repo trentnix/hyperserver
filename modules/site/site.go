@@ -26,11 +26,13 @@ const (
 	consoleMessageComponentTemplate = "modules/site/templates/html/components/console-messages.html"
 	homeContent                     = "modules/site/templates/html/index.html"
 	loginContent                    = "modules/site/templates/html/login.html"
+	registerContent                 = "modules/site/templates/html/register.html"
 	errorContent                    = "modules/site/templates/html/error.html"
 	notFoundContent                 = "modules/site/templates/html/not-found.html"
 
 	homeURL     = "/"
 	authURL     = "/login"
+	registerURL = "/register"
 	errorURL    = "/error"
 	notFoundURL = "/404"
 )
