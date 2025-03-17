@@ -36,3 +36,21 @@ func NewErrLoadingTemplate(err error, t string) *ErrLoadingTemplate {
 		},
 	}
 }
+
+// ErrAuthServiceNotFound indicates the AuthService implementation specified is unavailable
+type ErrAuthServiceNotFound struct {
+	service string
+	*BaseError
+}
+
+// NewErrDatabaseUnavailable creates an instance of ErrDatabaseUnavailable
+func NewErrAuthServiceNotFound(err error, serviceName string) *ErrAuthServiceNotFound {
+	errorMessage := fmt.Sprintf("there was an error loading the specified auth service: %s", serviceName)
+	return &ErrAuthServiceNotFound{
+		service: serviceName,
+		BaseError: &BaseError{
+			Err:     err,
+			Message: errorMessage,
+		},
+	}
+}

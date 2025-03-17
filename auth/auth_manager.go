@@ -125,7 +125,7 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to login.", nil, http.StatusInternalServerError)
+		content.HandleError(w, r, "No authorization service was found. Unable to login.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -142,7 +142,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to login.", nil, http.StatusInternalServerError)
+		content.HandleError(w, r, "No authorization service was found. Unable to login.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -183,7 +183,7 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "Register unavailable: the specified auth service was found.", nil, http.StatusInternalServerError)
+		content.HandleError(w, r, "Register unavailable: the specified auth service was found.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -200,7 +200,7 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "Register unavailable: the specified auth service was found.", nil, http.StatusInternalServerError)
+		content.HandleError(w, r, "Register unavailable: the specified auth service was found.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
