@@ -2,47 +2,66 @@
 package content
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
-// defaultErrorHandler provides a default error handler to use if a module doesn't
-// define its own error handler for the application
-func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, message string, err error) {
+// httpError calls http.Error instead of using a customer error handler
+func httpError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatusCode int) {
 	errMessage := message
 	if err != nil {
 		errMessage = fmt.Sprintf("%s: %v", message, err)
 	}
 
-	logger.LogRequestError(r, err)
-	http.Error(w, errMessage, http.StatusInternalServerError)
-}
-
-// HandleRenderError logs an error that occurs when rendering fails and the error is reported
-// to the client
-func HandleRenderingError(w http.ResponseWriter, r *http.Request, message string, err error) {
-	errMessage := message
-	if err != nil {
-		errMessage = fmt.Sprintf("%s: %v", message, err)
-	}
-
-	DefaultErrorHandler(w, r, errMessage, nil)
+	http.Error(w, errMessage, httpStatusCode)
 }
 
 // HandleError calls the registered error handler if a ContentManager exists. Otherwise, it
 // falls back to use the DefaultErrorHandler.
-func HandleError(w http.ResponseWriter, r *http.Request, message string, err error) {
-	contentManager := GetContentManager()
-	if contentManager == nil {
-		DefaultErrorHandler(w, r, message, err)
+func HandleError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
+	if r == nil {
+		errMessage := fmt.Sprintf("the http request is not set when reporting the following issue: %s", message)
+		httpError(w, r, errMessage, NewErrRequestNotSet(nil), http.StatusInternalServerError)
 		return
 	}
 
-	contentManager.HandleError(w, r, message, err)
+	logger.LogRequestError(r, err)
+
+	var parseErr *ErrParsingTemplates
+	if errors.As(err, &parseErr) {
+		// err is of type *ErrParsingTemplates so calling the default error handler
+		// will result in an endless loop trying to render any potential error pages.
+		// Need to use a standard http error in this case.
+		httpError(w, r, message, err, http.StatusInternalServerError)
+		return
+	}
+
+	contentManager := GetContentManager()
+	if contentManager == nil {
+		http.Error(w, message, http.StatusInternalServerError)
+		return
+	}
+
+	if htmx.IsHtmxRequest(r) {
+		// set a message redirect the user to the 404 handler
+		RedirectToURL(w, r, contentManager.ErrorURL)
+	} else {
+		// make sure this won't become an infinite loop where the error handler in the
+		// content manager was set to this function since they share the same signature
+		if reflect.ValueOf(contentManager.HandleError).Pointer() != reflect.ValueOf(HandleError).Pointer() {
+			contentManager.HandleError(w, r, message, err, httpStatus)
+		} else {
+			http.Error(w, message, http.StatusInternalServerError)
+		}
+
+		return
+	}
 }
 
 // HandleFormError is a generic handler to render the specified content with the specified form
@@ -57,24 +76,30 @@ func HandleFormError(w http.ResponseWriter, r *http.Request, c *Content, f form.
 	if err := c.Render(w, r); err != nil {
 		contentManager := GetContentManager()
 		if contentManager == nil {
-			DefaultErrorHandler(w, r, formErrorMessage, err)
+			httpError(w, r, formErrorMessage, err, http.StatusInternalServerError)
 			return
 		}
 
 		errMessage := fmt.Sprintf("there was an error rendering the specified form: %v", err)
-		contentManager.HandleError(w, r, errMessage, err)
+		logger.LogRequestError(r, fmt.Errorf("%s", errMessage))
+		contentManager.HandleError(w, r, errMessage, err, http.StatusInternalServerError)
 	}
 }
 
 // HandleNotFound is a static http.HandlerFunc to deal with 404 errors
 func HandleNotFound(w http.ResponseWriter, r *http.Request) {
 	if r == nil {
-		http.Error(w, fmt.Sprintf("the resource requested ('%s') was not found", r.URL.Path), http.StatusNotFound)
+		errMessage := "The requested resource was not found"
+		httpError(w, r, errMessage, NewErrRequestNotSet(nil), http.StatusInternalServerError)
+		return
 	}
+
+	errNotFound := fmt.Errorf("the resource requested ('%s') was not found", r.URL.Path)
+	logger.LogRequestError(r, NewErrResourceNotFound(errNotFound))
 
 	contentManager := GetContentManager()
 	if contentManager == nil {
-		http.Error(w, fmt.Sprintf("the resource requested ('%s') was not found", r.URL.Path), http.StatusNotFound)
+		http.Error(w, errNotFound.Error(), http.StatusNotFound)
 	}
 
 	if htmx.IsHtmxRequest(r) {

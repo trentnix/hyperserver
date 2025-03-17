@@ -126,7 +126,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Login form must be rendered via an HTMX request"
-		content.HandleError(w, r, errMessage, nil)
+		content.HandleError(w, r, errMessage, nil, http.StatusBadRequest)
 		return
 	}
 
@@ -135,7 +135,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		content.HandleRenderingError(w, r, "could not render the login form in the email authorization service", err)
+		content.HandleError(w, r, "could not render the login form in the email authorization service", err, http.StatusInternalServerError)
 	}
 }
 
@@ -154,7 +154,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Login action must be submitted via an HTMX request"
-		content.HandleError(w, r, errMessage, nil)
+		content.HandleError(w, r, errMessage, nil, http.StatusBadRequest)
 		return nil
 	}
 
@@ -206,7 +206,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Register form must be rendered via an HTMX request"
-		content.HandleError(w, r, errMessage, nil)
+		content.HandleError(w, r, errMessage, nil, http.StatusBadRequest)
 		return
 	}
 
@@ -215,7 +215,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 
 	err := register.Render(w, r)
 	if err != nil {
-		content.HandleRenderingError(w, r, "could not render the registration form in the email authentication service", err)
+		content.HandleError(w, r, "could not render the registration form in the email authentication service", err, http.StatusInternalServerError)
 	}
 }
 
@@ -234,7 +234,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		// this should be an HTMX request - may need to consider adding support for
 		// a layout template so that this could work even if JavaScript is disabled
 		errMessage := "The Register action must be submitted via an HTMX request"
-		content.HandleError(w, r, errMessage, nil)
+		content.HandleError(w, r, errMessage, nil, http.StatusBadRequest)
 		return false
 	}
 

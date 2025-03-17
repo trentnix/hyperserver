@@ -27,7 +27,7 @@ const (
 	homeContent                     = "modules/site/templates/html/index.html"
 	loginContent                    = "modules/site/templates/html/login.html"
 	errorContent                    = "modules/site/templates/html/error.html"
-	notFoundContent                 = "modules/site/templates/html/404.html"
+	notFoundContent                 = "modules/site/templates/html/not-found.html"
 
 	homeURL     = "/"
 	authURL     = "/login"
@@ -57,7 +57,7 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	contentManager.AuthURL = authURL
 	contentManager.ErrorURL = errorURL
 	contentManager.NotFoundURL = notFoundURL
-	contentManager.HandleError = m.RedirectToError
+	contentManager.HandleError = m.HandleError
 	contentManager.HandleNotFound = m.NotFound
 
 	return nil

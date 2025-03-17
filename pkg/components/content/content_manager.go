@@ -28,7 +28,7 @@ type (
 		NotFoundURL string
 
 		// HandleError lets the caller access the "error" handler
-		HandleError func(w http.ResponseWriter, r *http.Request, message string, err error)
+		HandleError func(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int)
 		// HandleNotFound
 		HandleNotFound http.HandlerFunc
 
@@ -78,8 +78,7 @@ func NewContentManager() *ContentManagerService {
 	contentManager.Contents = make(map[string][]TemplatePath)
 	contentManager.Components = make(map[string][]TemplatePath)
 
-	contentManager.HandleError = DefaultErrorHandler
-
+	contentManager.HandleError = httpError
 	contentManager.HomeURL = HomeDefault
 	contentManager.AuthURL = AuthDefault
 	contentManager.ErrorURL = ErrorDefault

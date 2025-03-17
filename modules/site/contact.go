@@ -41,7 +41,7 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 
 	err := contact.Render(w, r)
 	if err != nil {
-		content.HandleRenderingError(w, r, "could not render the contact form", err)
+		content.HandleError(w, r, "could not render the contact form", err, http.StatusInternalServerError)
 	}
 }
 
@@ -103,6 +103,6 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	err = contact.Render(w, r)
 	if err != nil {
-		content.HandleRenderingError(w, r, "could not render the contact form after successfully adding a contact", err)
+		content.HandleError(w, r, "could not render the contact form after successfully adding a contact", err, http.StatusInternalServerError)
 	}
 }

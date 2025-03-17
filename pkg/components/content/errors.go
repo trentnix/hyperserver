@@ -51,3 +51,33 @@ func NewErrRenderingTemplates(err error) *ErrRenderingTemplates {
 		},
 	}
 }
+
+// ErrRequestNotSet indicates a *http.Request instance is not set
+type ErrRequestNotSet struct {
+	*BaseError
+}
+
+// NewErrRenderingTemplates creates an instance of ErrRequestNotSet
+func NewErrRequestNotSet(err error) *ErrRequestNotSet {
+	return &ErrRequestNotSet{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the *http.Request was not set",
+		},
+	}
+}
+
+// ErrRequestNotSet indicates a *http.Request instance is not set
+type ErrResourceNotFound struct {
+	*BaseError
+}
+
+// NewErrResourceNotFound creates an instance of ErrResourceNotFound
+func NewErrResourceNotFound(err error) *ErrRequestNotSet {
+	return &ErrRequestNotSet{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the specified resource was not found",
+		},
+	}
+}

@@ -39,7 +39,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	err := homepage.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "there was an error rendering the home page", err)
+		content.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
 	}
 }
 
@@ -53,7 +53,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "there was an error rendering the login page", err)
+		content.HandleError(w, r, "there was an error rendering the login page", err, http.StatusInternalServerError)
 		return
 	}
 }
@@ -78,29 +78,19 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 	errorPage.Data = errorMessages
 
 	if err := errorPage.Render(w, r); err != nil {
-		content.HandleRenderingError(w, r, "there was an error rendering the error page", err)
+		content.HandleError(w, r, "there was an error rendering the error page", err, http.StatusInternalServerError)
 	}
 }
 
-// RedirectToError writes the specified error to the messages store and redirects the
+// HandleError writes the specified error to the messages store and redirects the
 // requestor to the error URL
-func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, message string, e error) {
-	if e != nil {
-		logger.LogRequestError(r, fmt.Errorf("%s: %w", message, e))
+func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
+	errAddMessage := messages.AddErrorMessage(w, r, message)
+	if errAddMessage != nil {
+		logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", errAddMessage))
 	}
 
-	err := messages.AddErrorMessage(w, r, message)
-	if err != nil {
-		logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", err))
-	}
-
-	url := content.ErrorDefault
-	contentManager := content.GetContentManager()
-	if contentManager != nil {
-		url = contentManager.ErrorURL
-	}
-
-	content.RedirectToURL(w, r, url)
+	m.Error(w, r)
 }
 
 // SessionExample provides a handler that exercises session code by creating a session to store
@@ -112,13 +102,13 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	// get the "counterSession" session
 	sessionManager := session.GetSessionManager()
 	if sessionManager == nil {
-		content.HandleError(w, r, "there was an error retrieving the session manager", session.NewErrSessionManagerNotFound(nil))
+		content.HandleError(w, r, "there was an error retrieving the session manager", session.NewErrSessionManagerNotFound(nil), http.StatusInternalServerError)
 		return
 	}
 
 	mySession, sessionManagerErr := sessionManager.Get(r, "counterSession")
 	if sessionManagerErr != nil || mySession == nil {
-		content.HandleError(w, r, "there was an error retrieving the session", sessionManagerErr)
+		content.HandleError(w, r, "there was an error retrieving the session", sessionManagerErr, http.StatusInternalServerError)
 		return
 	}
 
@@ -139,14 +129,14 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	mySession.Data[counterKey] = sCounter
 	sessionSaveErr := mySession.Save(r, w)
 	if sessionSaveErr != nil {
-		content.HandleError(w, r, "unable to save the counter session", sessionSaveErr)
+		content.HandleError(w, r, "unable to save the counter session", sessionSaveErr, http.StatusInternalServerError)
 		return
 	}
 
 	// render the result
 	renderErr := page.Render(w, r)
 	if renderErr != nil {
-		content.HandleError(w, r, "there was an error rendering the home page", renderErr)
+		content.HandleError(w, r, "there was an error rendering the home page", renderErr, http.StatusInternalServerError)
 		return
 	}
 }
@@ -161,6 +151,6 @@ func (m *SiteModule) NotFound(w http.ResponseWriter, r *http.Request) {
 
 	err := notFound.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "there was an error rendering the home page", err)
+		content.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
 	}
 }
