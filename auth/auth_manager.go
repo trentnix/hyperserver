@@ -45,6 +45,7 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		mux.Handle("/auth/login", http.HandlerFunc(a.GetLogin))
 		mux.Handle("GET /auth/login/{authType}", http.HandlerFunc(a.GetLoginService))
 		mux.Handle("POST /auth/login/{authType}", http.HandlerFunc(a.Login))
+		mux.Handle("/auth/logout", http.HandlerFunc(a.Logout))
 
 		// register
 		mux.Handle("/auth/register", http.HandlerFunc(a.GetRegister))
@@ -158,6 +159,31 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	r = user.AddUserToRequestContext(r, hs_user)
 	err := messages.AddSuccessMessage(w, r, "You have been successfully logged in")
+	if err != nil {
+		logger.LogRequestError(r, err)
+	}
+
+	homeURL := content.HomeDefault
+	contentManager := content.GetContentManager()
+	if contentManager != nil {
+		homeURL = contentManager.HomeURL
+	}
+
+	content.RedirectToURL(w, r, homeURL)
+}
+
+// Logout logs out any logged-in user
+func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
+	logoutErr := LogoutAuthenticatedUser(r, w)
+	if logoutErr != nil {
+		content.HandleError(w, r, "There was an error trying to log out", logoutErr, http.StatusInternalServerError)
+		return
+	}
+
+	clearedCtx := user.ClearUserFromContext(r.Context())
+	r = r.WithContext(clearedCtx)
+
+	err := messages.AddSuccessMessage(w, r, "You have been successfully logged out")
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}

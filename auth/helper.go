@@ -35,6 +35,29 @@ func SetAuthenticatedUser(r *http.Request, w http.ResponseWriter, u *user.User) 
 	return nil
 }
 
+// LogoutAuthenticatedUser retrieves any active user session and ends the session,
+// terminating any logged-in user's authentication session
+func LogoutAuthenticatedUser(r *http.Request, w http.ResponseWriter) error {
+	sessionManager := session.GetSessionManager()
+	s, err := sessionManager.Get(r, userSessionKey)
+	if err != nil {
+		return err
+	}
+
+	userId, ok := s.Data[userSessionKey]
+	if !ok || userId == "" {
+		s.End(r, w)
+		return nil
+	}
+
+	err = s.End(r, w)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetAuthenticatedUser retrieves the currently authenticated user
 func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
 	// first check the request context
