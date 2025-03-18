@@ -231,6 +231,11 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 
 	(*authService).Register(w, r)
 
+	err := messages.AddSuccessMessage(w, r, "You have been successfully registered")
+	if err != nil {
+		logger.LogRequestError(r, err)
+	}
+
 	authURL := content.AuthDefault
 	contentManager := content.GetContentManager()
 	if contentManager != nil {

@@ -15,7 +15,6 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -296,8 +295,6 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r, register, registerForm, "The specified account could not be created")
 		return false
 	}
-
-	messages.AddSuccessMessage(w, r, "You have been successfully registered")
 
 	return true
 }
