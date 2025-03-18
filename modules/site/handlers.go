@@ -169,3 +169,8 @@ func (m *SiteModule) NotFound(w http.ResponseWriter, r *http.Request) {
 		content.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
 	}
 }
+
+// Logout redirects the "/logout" route to the logout functionality provides by the auth package
+func (m *SiteModule) Logout(w http.ResponseWriter, r *http.Request) {
+	content.RedirectToURL(w, r, "/auth/logout")
+}

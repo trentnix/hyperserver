@@ -35,4 +35,5 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 	mux.Handle(authURL, http.HandlerFunc(m.Login))
 	mux.Handle(registerURL, http.HandlerFunc(m.Register))
 	mux.Handle("/session-example", http.HandlerFunc(m.SessionExample))
+	mux.Handle("/logout", http.HandlerFunc(m.Logout))
 }
