@@ -2,6 +2,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/server"
 
@@ -14,13 +16,22 @@ import (
 // their routes to the
 func SetupAuthentication(s *server.ApplicationServer) error {
 	if s.Config.Auth.Enabled {
-		// initialize and register all handlers
-		for _, a := range auth.GetAuthServices() {
-			if err := a.Init(s); err != nil {
-				return err
-			}
+		authServices := make([]auth.AuthService, len(auth.GetAuthServices()))
+		copy(authServices, auth.GetAuthServices())
 
-			a.Routes(s.Web)
+		// initialize and register all handlers
+		for _, a := range authServices {
+			if err := a.Init(s); err != nil {
+				// the specified service didn't initialize - remove it from the registered auth services
+				auth.RemoveAuthService(a.AuthType())
+			} else {
+				// register any custom routes the initialized auth service handles
+				a.Routes(s.Web)
+			}
+		}
+
+		if len(auth.GetAuthServices()) == 0 {
+			return fmt.Errorf("auth is enabled but no auth services are configured")
 		}
 	}
 

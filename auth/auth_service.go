@@ -5,8 +5,10 @@ package auth
 import (
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -60,6 +62,19 @@ func GetAuthServices() []AuthService {
 	return authServices
 }
 
+func RemoveAuthService(authType string) []AuthService {
+	i := 0
+	for _, service := range authServices {
+		if service.AuthType() != authType {
+			authServices[i] = service
+			i++
+		}
+	}
+	// Slice off the removed elements.
+	authServices = authServices[:i]
+	return authServices
+}
+
 // GetLoadedAuthServices retrieves the AuthService instances that have been registered with the application
 func GetLoadedAuthServices() []AuthService {
 	var loadedAuthServices []AuthService
@@ -70,4 +85,16 @@ func GetLoadedAuthServices() []AuthService {
 	}
 
 	return loadedAuthServices
+}
+
+// GetAuthConfigOptions retrieves the configuration options map for the specified
+// authType
+func GetAuthConfigOptions(c *config.Config, authType string) map[string]string {
+	for configOption, configData := range c.Auth.Services {
+		if strings.EqualFold(configOption, authType) {
+			return configData
+		}
+	}
+
+	return nil
 }

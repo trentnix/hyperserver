@@ -54,3 +54,21 @@ func NewErrAuthServiceNotFound(err error, serviceName string) *ErrAuthServiceNot
 		},
 	}
 }
+
+// ErrAuthServiceDisabled indicates the AuthService implementation specified is disabled
+type ErrAuthServiceDisabled struct {
+	service string
+	*BaseError
+}
+
+// NewErrAuthServiceDisabled creates an instance of ErrAuthServiceDisabled
+func NewErrAuthServiceDisabled(err error, authService string) *ErrAuthServiceDisabled {
+	errorMessage := fmt.Sprintf("the specified auth service is disabled: %s", authService)
+	return &ErrAuthServiceDisabled{
+		service: authService,
+		BaseError: &BaseError{
+			Err:     err,
+			Message: errorMessage,
+		},
+	}
+}

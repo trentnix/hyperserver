@@ -4,13 +4,13 @@ package auth
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"html"
 	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -98,8 +98,14 @@ func init() {
 
 // Init initializes the EmailAuthService instance
 func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
+	configOptions := auth_services.GetAuthConfigOptions(s.Config, AuthTypeEmail)
+	authServiceEnabled := strings.EqualFold(configOptions["enabled"], "true") || configOptions["enabled"] == "1"
+	if !authServiceEnabled {
+		return auth_services.NewErrAuthServiceDisabled(fmt.Errorf("unable to initialize the email auth service"), AuthTypeEmail)
+	}
+
 	if s.Database == nil {
-		return database.NewErrDatabaseUnavailable(errors.New("could not initialize EmailAuthService"))
+		return database.NewErrDatabaseUnavailable(fmt.Errorf("unable to initialize EmailAuthService"))
 	}
 
 	a.db = s.Database
