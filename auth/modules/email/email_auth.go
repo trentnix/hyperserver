@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -33,6 +34,8 @@ type (
 
 		loginButton    template.HTML
 		registerButton template.HTML
+
+		host string
 	}
 
 	// LoginForm defines the fields used when logging in via email/password
@@ -117,6 +120,13 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	a.registerButton, err = util.LoadHTMLFromFile(registerButtonTemplate)
 	if err != nil {
 		return fmt.Errorf("could not find %s", registerButtonTemplate)
+	}
+
+	a.host = a.config.HTTP.Hostname
+
+	if a.config.HTTP.Port != 80 && a.config.HTTP.Port != 0 {
+		port := strconv.Itoa(int(a.config.HTTP.Port))
+		a.host += ":" + port
 	}
 
 	return nil
@@ -426,7 +436,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// send the password reset information to the user
-	resetURL := fmt.Sprintf("%s/auth/reset/email/%s", "localhost:8080", url.PathEscape(token.Token))
+	resetURL := fmt.Sprintf("%s/auth/reset/email/%s", a.host, url.PathEscape(token.Token))
 	// TO DO - send email with URL
 
 	resetRequestForm.Email = ""
