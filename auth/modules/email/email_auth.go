@@ -6,8 +6,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	auth_services "github.com/trentnix/hyperserver/auth"
@@ -48,6 +51,30 @@ type (
 
 		form.Form
 	}
+
+	// resetPasswordRequestForm defines the fields used when requesting to reset a user's password
+	resetPasswordRequestForm struct {
+		Email string `validate:"required,email"`
+
+		form.Form
+	}
+
+	// resetPasswordForm defines the fields used when resetting the password
+	resetPasswordForm struct {
+		Password      string `validate:"required,password"`
+		PasswordMatch string `validate:"required,password,eqfield=Password"`
+		Token         string
+
+		form.Form
+	}
+
+	changePasswordForm struct {
+		OldPassword      string `validate:"required"`
+		NewPassword      string `validate:"required,password,nefield=OldPassword"`
+		NewPasswordMatch string `validate:"required,password,eqfield=NewPassword"`
+
+		form.Form
+	}
 )
 
 const (
@@ -57,6 +84,8 @@ const (
 	emailLoginButtonTemplateName    = "auth/modules/email/templates/html/login-link.html"
 	emailRegisterFormTemplate       = "auth/modules/email/templates/html/register-form.html"
 	emailRegisterButtonTemplateName = "auth/modules/email/templates/html/register-link.html"
+	emailResetRequestFormTemplate   = "auth/modules/email/templates/html/reset-request.html"
+	emailResetPasswordFormTemplate  = "auth/modules/email/templates/html/reset-password.html"
 )
 
 // init registers the AuthHandler handler with the application
@@ -72,6 +101,10 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 
 	a.db = s.Database
 	a.config = s.Config
+
+	if a.config.Auth.JwtKey == "" {
+		return fmt.Errorf("the auth JWT key was not set")
+	}
 
 	var err error
 	loginButtonTemplate := emailLoginButtonTemplateName
@@ -293,6 +326,118 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	err = hs_user.Save(a.db)
 	if err != nil {
 		content.HandleFormError(w, r, register, registerForm, "The specified account could not be created")
+		return false
+	}
+
+	return true
+}
+
+// GetResetRequest serves the password reset request page with the resetPasswordRequestForm form
+func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
+	reset := content.NewManagedContent(r)
+
+	if !reset.IsHtmx() {
+		// this should be an HTMX request - may need to consider adding support for
+		// a layout template so that this could work even if JavaScript is disabled
+		errMessage := "The reset request form must be rendered via an HTMX request"
+		content.HandleError(w, r, errMessage, content.NewErrHtmxRequestRequired(nil), http.StatusBadRequest)
+		return
+	}
+
+	reset.AddContent(content.TemplatePath(emailResetRequestFormTemplate))
+	reset.Data = &resetPasswordRequestForm{}
+
+	err := reset.Render(w, r)
+	if err != nil {
+		content.HandleError(w, r, "could not render the reset request form in the email authentication service", err, http.StatusInternalServerError)
+		return
+	}
+}
+
+// ResetRequest processes a request to reset the password for the email specified in the
+// submitted form. A successful result will notify the user of how to reset their password
+// by creating a reset token. This token will be in a subsequent request to authenticate
+// the reset request.
+func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, resetTokenExpiration time.Duration) bool {
+	genericResetErrMsg := "There was an error trying to reset the specified user's password."
+
+	reset := content.NewManagedContent(r)
+	if !reset.IsHtmx() {
+		// this should be an HTMX request - may need to consider adding support for
+		// a layout template so that this could work even if JavaScript is disabled
+		errMessage := "The Reset Request action must be submitted via an HTMX request"
+		content.HandleError(w, r, errMessage, content.NewErrHtmxRequestRequired(nil), http.StatusBadRequest)
+		return false
+	}
+
+	reset.AddContent(emailResetRequestFormTemplate)
+	resetRequestForm := &resetPasswordRequestForm{}
+
+	// extract login information, confirm the password, and authenticate the user
+	if err := r.ParseForm(); err != nil {
+		logger.LogRequestError(r, fmt.Errorf("there was an error parsing the reset request form data: %w", err))
+		content.HandleFormError(w, r, reset, resetRequestForm, "The reset request form data could not be parsed.")
+		return false
+	}
+
+	resetRequestForm.Email = r.FormValue("email")
+
+	// validate the register form
+	err := form.Validate(resetRequestForm)
+	if err != nil {
+		content.HandleFormError(w, r, reset, resetRequestForm, "The reset password request form could not be validated")
+		return false
+	}
+
+	if resetRequestForm.HasErrors() {
+		// there are validation errors - render the form errors
+		content.HandleFormError(w, r, reset, resetRequestForm, "")
+		return false
+	}
+
+	//  validate user isn't already registered
+	hs_user, err := user.GetUserByEmail(a.db, resetRequestForm.Email)
+	if err != nil && err != sql.ErrNoRows {
+		logger.LogRequestError(r, err)
+		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
+		return false
+	}
+
+	if hs_user == nil {
+		// this user does not exist
+		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
+		return false
+	}
+
+	// the specified user exists - generate a password token and save it to the database
+	token, err := user.NewPasswordResetToken(hs_user, []byte(a.config.Auth.JwtKey), resetTokenExpiration)
+	if err != nil {
+		logger.LogRequestError(r, err)
+		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
+		return false
+	}
+
+	// add hashed token to the database (with user.id and expiration)
+	err = token.Create(a.db)
+	if err != nil {
+		logger.LogRequestError(r, err)
+		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
+		return false
+	}
+
+	// send the password reset information to the user
+	resetURL := fmt.Sprintf("%s/auth/reset/email/%s", "localhost:8080", url.PathEscape(token.Token))
+	// TO DO - send email with URL
+
+	resetRequestForm.Email = ""
+
+	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to reset your password.`, html.EscapeString(resetURL))
+	resetRequestForm.SetFormMessage(successMessage)
+
+	reset.Data = resetRequestForm
+	err = reset.Render(w, r)
+	if err != nil {
+		content.HandleError(w, r, "could not render the reset request form in the email authentication service", err, http.StatusInternalServerError)
 		return false
 	}
 

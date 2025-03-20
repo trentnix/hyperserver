@@ -7,12 +7,10 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
 )
 
@@ -32,14 +30,8 @@ type (
 	contextKey string
 )
 
-var (
-	dbOnce              sync.Once
-	userTableConfigured bool
-)
-
 const (
 	UserContextKey contextKey = "auth-user"
-	userTableName  string     = "user"
 )
 
 func NewUser() *User {
@@ -55,8 +47,8 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 	}
 
 	var hs_user User
-	if !userTableConfigured {
-		err := hs_user.prepareDatabase(db)
+	if !databaseConfigured {
+		err := prepareDatabase(db)
 		if err != nil {
 			return nil, err
 		}
@@ -87,8 +79,8 @@ func GetUserByEmail(db *sqlx.DB, email string) (*User, error) {
 	}
 
 	var user User
-	if !userTableConfigured {
-		err := user.prepareDatabase(db)
+	if !databaseConfigured {
+		err := prepareDatabase(db)
 		if err != nil {
 			return nil, err
 		}
@@ -112,69 +104,6 @@ func GetUserByEmail(db *sqlx.DB, email string) (*User, error) {
 	return &user, nil
 }
 
-// validateDatabase determines whether the sessionsTable exists and, if not, it creates it
-func (user *User) prepareDatabase(db *sqlx.DB) error {
-	if db == nil {
-		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
-	}
-
-	var dbError error
-	dbOnce.Do(func() {
-		tableExists, err := database.TableExists(db.DB, userTableName)
-		if err != nil {
-			dbError = database.NewErrDatabaseConfiguration(err)
-			return
-		}
-
-		if !tableExists {
-			err = user.createUserTable(db)
-			if err != nil {
-				dbError = database.NewErrDatabase(err)
-				return
-			}
-		}
-
-		userTableConfigured = true
-	})
-
-	if dbError != nil {
-		return dbError
-	}
-
-	return nil
-}
-
-// configureDatabase creates the sessionTable according to the specified database vendor
-func (u *User) createUserTable(db *sqlx.DB) error {
-	var createTableSQL string
-
-	// Detect the database type by inspecting the driver
-	driver := db.Driver()
-
-	switch driver.(type) {
-	case *sqlite3.SQLiteDriver:
-		createTableSQL = fmt.Sprintf(`
-			CREATE TABLE %s (
-				id VARCHAR(36) PRIMARY KEY,
-				email VARCHAR(255) NOT NULL UNIQUE,
-				verified BOOLEAN NOT NULL DEFAULT FALSE,
-				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				registration_auth_type VARCHAR(50),
-				password VARCHAR(255)
-			);`, userTableName)
-	default:
-		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
-	}
-
-	_, err := db.Exec(createTableSQL)
-	if err != nil {
-		return database.NewErrDatabase(err)
-	}
-
-	return nil
-}
-
 // Save serializes the specified user to the database. The database is checked
 // to determine if it is configured and then whether a user with the specified email
 // address is already stored in the database. If no user is found, a user record is created.
@@ -184,8 +113,8 @@ func (user *User) Save(db *sqlx.DB) error {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
-	if !userTableConfigured {
-		err := user.prepareDatabase(db)
+	if !databaseConfigured {
+		err := prepareDatabase(db)
 		if err != nil {
 			return err
 		}
@@ -258,8 +187,8 @@ func (user *User) Delete(db *sqlx.DB) error {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
-	if !userTableConfigured {
-		err := user.prepareDatabase(db)
+	if !databaseConfigured {
+		err := prepareDatabase(db)
 		if err != nil {
 			return err
 		}

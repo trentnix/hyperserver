@@ -26,6 +26,15 @@ http:
       cookie: cookieStore
       sqlite: sqliteStore
 
+auth:
+  enabled: "true"
+  jwtKey: <your auth token key goes here>
+  verificationTokenExpiration: "24h"
+  resetTokenExpiration: "1h"
+  services:
+    email:
+      enabled: "false"
+
 database:
   driver: "sqlite3"
   connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"

@@ -5,6 +5,7 @@ package auth
 import (
 	"html/template"
 	"net/http"
+	"time"
 
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -42,6 +43,11 @@ type AuthService interface {
 	GetRegister(http.ResponseWriter, *http.Request)
 	// handles the registration action for the implemented AuthService
 	Register(http.ResponseWriter, *http.Request) bool
+
+	// retrieves the mechanism for a user to request to reset their authorization with the implemented AuthService
+	GetResetRequest(http.ResponseWriter, *http.Request)
+	// handles a request to reset a user's authorization
+	ResetRequest(http.ResponseWriter, *http.Request, time.Duration) bool
 }
 
 // Register used by a Handler to register itself with the application

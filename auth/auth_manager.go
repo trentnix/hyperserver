@@ -5,6 +5,7 @@ package auth
 import (
 	"html/template"
 	"net/http"
+	"time"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
@@ -17,6 +18,9 @@ import (
 type (
 	AuthManager struct {
 		Enabled bool
+
+		VerificationTokenExpiration time.Duration
+		ResetTokenExpiration        time.Duration
 	}
 )
 
@@ -35,6 +39,10 @@ func init() {
 // Init processes the initialization of the AuthManager handler
 func (a *AuthManager) Init(s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
+
+	a.ResetTokenExpiration = s.Config.Auth.ResetTokenExpiration
+	a.VerificationTokenExpiration = s.Config.Auth.VerificationTokenExpiration
+
 	return nil
 }
 
@@ -51,6 +59,10 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		mux.Handle("/auth/register", http.HandlerFunc(a.GetRegister))
 		mux.Handle("GET /auth/register/{authType}", http.HandlerFunc(a.GetRegisterService))
 		mux.Handle("POST /auth/register/{authType}", http.HandlerFunc(a.Register))
+
+		// reset
+		mux.Handle("GET /auth/reset/request/{authType}", http.HandlerFunc(a.GetResetRequest))
+		mux.Handle("POST /auth/reset/request/{authType}", http.HandlerFunc(a.Reset))
 	}
 }
 
@@ -243,6 +255,41 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	content.RedirectToURL(w, r, authURL)
+}
+
+// GetResetRequest renders the reset request page to the user using the specified AuthService
+// implementation
+func (a *AuthManager) GetResetRequest(w http.ResponseWriter, r *http.Request) {
+	authType := r.PathValue("authType")
+	if authType == "" {
+		content.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		return
+	}
+
+	authService := getAuthService(authType)
+	if authService == nil {
+		content.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		return
+	}
+
+	(*authService).GetResetRequest(w, r)
+}
+
+// Reset starts the authentication reset process for the specified AuthService implementation
+func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
+	authType := r.PathValue("authType")
+	if authType == "" {
+		content.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		return
+	}
+
+	authService := getAuthService(authType)
+	if authService == nil {
+		content.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		return
+	}
+
+	(*authService).ResetRequest(w, r, a.ResetTokenExpiration)
 }
 
 // getAuthService returns the authService specified by authType (if it is loaded)
