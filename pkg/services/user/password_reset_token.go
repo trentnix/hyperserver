@@ -10,6 +10,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jmoiron/sqlx"
+	"github.com/trentnix/hyperserver/pkg/database"
 )
 
 type (
@@ -36,7 +37,7 @@ const (
 // GetAuthResetTokenByID retrieves an AuthResetToken for the specified user from the database
 func GetAuthResetTokenByID(db *sqlx.DB, userId string) (*AuthResetToken, error) {
 	if userId == "" {
-		return nil, fmt.Errorf("a user id value must be specified to retrieve a password reset token")
+		return nil, NewErrInvalidResetToken(fmt.Errorf("get token by user: user id in not specified"))
 	}
 
 	var token AuthResetToken
@@ -49,7 +50,7 @@ func GetAuthResetTokenByID(db *sqlx.DB, userId string) (*AuthResetToken, error) 
 
 	err := db.Get(&token, query, userId, resetTokenType)
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving a reset token using user ID:%w", err)
+		return nil, database.NewErrDatabase(fmt.Errorf("error retrieving a reset token by user: %w", err))
 	}
 
 	return &token, nil
@@ -58,7 +59,7 @@ func GetAuthResetTokenByID(db *sqlx.DB, userId string) (*AuthResetToken, error) 
 // GetAuthResetTokenByHash retrieves an AuthResetToken for the specified token value from the database
 func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error) {
 	if token == "" {
-		return nil, fmt.Errorf("a token value must be specified to retrieve a password reset token")
+		return nil, NewErrInvalidResetToken(fmt.Errorf("get token by value: token value in not specified"))
 	}
 
 	var passwordResetToken AuthResetToken
@@ -71,7 +72,7 @@ func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error)
 
 	err := db.Get(&passwordResetToken, query, token)
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving a reset token using the token hash:%w", err)
+		return nil, database.NewErrDatabase(fmt.Errorf("error retrieving a reset token by value: %w", err))
 	}
 
 	return &passwordResetToken, nil
@@ -80,15 +81,15 @@ func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error)
 // Create inserts an AuthRequestToken into the database
 func (token *AuthResetToken) Create(db *sqlx.DB) error {
 	if token.UserId == "" {
-		return fmt.Errorf("a user id value must be specified to create a password reset token")
+		return NewErrInvalidResetToken(fmt.Errorf("create token: user id in not specified"))
 	}
 
 	if token.TokenHash == "" {
-		return fmt.Errorf("a token value must be specified to create a password reset token")
+		return NewErrInvalidResetToken(fmt.Errorf("create token: token value in not specified"))
 	}
 
 	if token.ExpiresAt.IsZero() {
-		return fmt.Errorf("a token must have an expiration date set create a password reset token")
+		return NewErrInvalidResetToken(fmt.Errorf("create token: expiration date in not specified"))
 	}
 
 	query := fmt.Sprintf(`
@@ -103,11 +104,11 @@ func (token *AuthResetToken) Create(db *sqlx.DB) error {
 // Delete removes an AuthResetToken from the database
 func (token *AuthResetToken) Delete(db *sqlx.DB) error {
 	if token.UserId == "" {
-		return fmt.Errorf("a user id value must be specified to delete a password reset token")
+		return NewErrInvalidResetToken(fmt.Errorf("delete token: user id in not specified"))
 	}
 
 	if token.TokenHash == "" {
-		return fmt.Errorf("a token value must be specified to create a password reset token")
+		return NewErrInvalidResetToken(fmt.Errorf("delete token: token value in not specified"))
 	}
 
 	query := fmt.Sprintf(`
@@ -122,7 +123,7 @@ func (token *AuthResetToken) Delete(db *sqlx.DB) error {
 // DeleteAllTokensByUser deletes all of the tokens from the database for the specified user
 func DeleteAllTokensByUser(db *sqlx.DB, userId string) error {
 	if userId == "" {
-		return fmt.Errorf("a user id value must be specified to delete the associated password reset tokens")
+		return NewErrInvalidResetToken(fmt.Errorf("delete all user tokens: user id in not specified"))
 	}
 
 	query := fmt.Sprintf(`
@@ -138,11 +139,11 @@ func DeleteAllTokensByUser(db *sqlx.DB, userId string) error {
 // database as a hashed value, and returns the token to the caller
 func NewPasswordResetToken(hs_user *User, jwtKey []byte, expiration time.Duration) (*AuthResetToken, error) {
 	if hs_user == nil {
-		return nil, NewErrUserNotSpecified(fmt.Errorf("unable to generate a new reset token token"))
+		return nil, NewErrInvalidResetToken(fmt.Errorf("new token creation: user id in not specified"))
 	}
 
 	if expiration <= 0 {
-		return nil, fmt.Errorf("unable to create a new password reset token: the expiration value is invalid")
+		return nil, NewErrInvalidResetToken(fmt.Errorf("new token creation: expiration date in not specified"))
 	}
 
 	// create token - user.id and expiration

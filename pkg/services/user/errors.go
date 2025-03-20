@@ -21,6 +21,7 @@ func NewErrUserNotSpecified(err error) *ErrUserNotSpecified {
 	}
 }
 
+// ErrToken indicates an error creating and managing a token
 type ErrToken struct {
 	*BaseError
 }
@@ -31,6 +32,21 @@ func NewErrToken(err error) *ErrToken {
 		BaseError: &BaseError{
 			Err:     err,
 			Message: "token error",
+		},
+	}
+}
+
+// ErrInvalidResetToken indicates an error creating and managing a reset token
+type ErrInvalidResetToken struct {
+	*BaseError
+}
+
+// NewErrInvalidResetToken creates an instance of ErrInvalidResetToken
+func NewErrInvalidResetToken(err error) *ErrInvalidResetToken {
+	return &ErrInvalidResetToken{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the reset token is invalid",
 		},
 	}
 }
