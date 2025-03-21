@@ -4,6 +4,7 @@ package user
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -175,4 +176,38 @@ func NewPasswordResetToken(hs_user *User, jwtKey []byte, expiration time.Duratio
 
 	// return token
 	return passwordResetToken, nil
+}
+
+// ValidateResetToken confirms whether the provided reset authorization token is valid
+func ValidateResetToken(db *sqlx.DB, tokenString string) (*User, error) {
+	// hash the received token
+	hash := sha256.Sum256([]byte(tokenString))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	// retrieve the token record from the database
+	passwordResetToken, err := GetAuthResetTokenByHash(db, tokenHash)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, NewErrTokenNotFound(err)
+		}
+
+		return nil, err
+	}
+
+	// check if the token is expired
+	if time.Now().After(passwordResetToken.ExpiresAt) {
+		return nil, NewErrTokenExpired(fmt.Errorf("reset token validation failed"))
+	}
+
+	// retrieve the associated user
+	user, err := GetUserByID(db, passwordResetToken.UserId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, NewErrUserNotFound(err)
+		}
+
+		return nil, database.NewErrDatabase(err)
+	}
+
+	return user, nil
 }

@@ -21,6 +21,21 @@ func NewErrUserNotSpecified(err error) *ErrUserNotSpecified {
 	}
 }
 
+// ErrUserNotFound indicates a user.User instance could not be retrieved
+type ErrUserNotFound struct {
+	*BaseError
+}
+
+// NewErrUserNotFound creates an instance of ErrUserNotFound
+func NewErrUserNotFound(err error) *ErrUserNotFound {
+	return &ErrUserNotFound{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "unable to retrieve user account",
+		},
+	}
+}
+
 // ErrToken indicates an error creating and managing a token
 type ErrToken struct {
 	*BaseError
@@ -47,6 +62,36 @@ func NewErrInvalidResetToken(err error) *ErrInvalidResetToken {
 		BaseError: &BaseError{
 			Err:     err,
 			Message: "the reset token is invalid",
+		},
+	}
+}
+
+// ErrTokenNotFound indicates the token could not be retrieved
+type ErrTokenNotFound struct {
+	*BaseError
+}
+
+// NewErrTokenNotFound creates an instance of ErrTokenNotFound
+func NewErrTokenNotFound(err error) *ErrTokenNotFound {
+	return &ErrTokenNotFound{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "token not found",
+		},
+	}
+}
+
+// ErrTokenExpired indicates an error creating and managing a reset token
+type ErrTokenExpired struct {
+	*BaseError
+}
+
+// NewErrTokenExpired creates an instance of ErrTokenExpired
+func NewErrTokenExpired(err error) *ErrTokenExpired {
+	return &ErrTokenExpired{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "token expired",
 		},
 	}
 }

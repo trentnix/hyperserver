@@ -443,6 +443,11 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 
 	// send the password reset information to the user
 	resetURL := fmt.Sprintf("%s/auth/reset/email/%s", a.host, url.PathEscape(token.Token))
+	if r.TLS != nil {
+		resetURL = "https://" + resetURL
+	} else {
+		resetURL = "http://" + resetURL
+	}
 	// TO DO - send email with URL
 
 	resetRequestForm.Email = ""
@@ -458,4 +463,21 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	return true
+}
+
+// GetReset serves the password reset page with the resetPasswordForm form
+func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, token string) {
+	resetForm := &resetPasswordForm{
+		Token: token,
+	}
+
+	reset := content.NewManagedContent(r)
+	reset.AddContent(content.TemplatePath(emailResetPasswordFormTemplate))
+	reset.Data = resetForm
+
+	err := reset.Render(w, r)
+	if err != nil {
+		content.HandleError(w, r, "could not render the reset password form in the email authentication service", err, http.StatusInternalServerError)
+		return
+	}
 }

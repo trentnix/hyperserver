@@ -50,6 +50,10 @@ type AuthService interface {
 	GetResetRequest(http.ResponseWriter, *http.Request)
 	// handles a request to reset a user's authorization
 	ResetRequest(http.ResponseWriter, *http.Request, time.Duration) bool
+	// retrieves the mechanism for a user to reset their authorization with the implemented AuthService
+	GetReset(w http.ResponseWriter, r *http.Request, token string)
+	// handles the reset authorization action for the implemented AuthService
+	// Reset(w http.ResponseWriter, r *http.Request, user *user.User, token string) bool
 }
 
 // Register used by a Handler to register itself with the application

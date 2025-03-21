@@ -3,10 +3,12 @@
 package auth
 
 import (
+	"errors"
 	"html/template"
 	"net/http"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -18,6 +20,8 @@ import (
 type (
 	AuthManager struct {
 		Enabled bool
+
+		db *sqlx.DB
 
 		VerificationTokenExpiration time.Duration
 		ResetTokenExpiration        time.Duration
@@ -39,6 +43,7 @@ func init() {
 // Init processes the initialization of the AuthManager handler
 func (a *AuthManager) Init(s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
+	a.db = s.Database
 
 	a.ResetTokenExpiration = s.Config.Auth.ResetTokenExpiration
 	a.VerificationTokenExpiration = s.Config.Auth.VerificationTokenExpiration
@@ -62,7 +67,9 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 
 		// reset
 		mux.Handle("GET /auth/reset/request/{authType}", http.HandlerFunc(a.GetResetRequest))
-		mux.Handle("POST /auth/reset/request/{authType}", http.HandlerFunc(a.Reset))
+		mux.Handle("POST /auth/reset/request/{authType}", http.HandlerFunc(a.ResetRequest))
+		mux.Handle("GET /auth/reset/{authType}/{token}", http.HandlerFunc(a.GetReset))
+		// mux.Handle("POST /auth/reset/{authType}/{token}", http.HandlerFunc(a.Reset))
 	}
 }
 
@@ -276,7 +283,7 @@ func (a *AuthManager) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reset starts the authentication reset process for the specified AuthService implementation
-func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
+func (a *AuthManager) ResetRequest(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
 		content.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
@@ -290,6 +297,50 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	(*authService).ResetRequest(w, r, a.ResetTokenExpiration)
+}
+
+// Reset starts the authentication reset process for the specified AuthService implementation
+func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
+	authType := r.PathValue("authType")
+	if authType == "" {
+		content.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		return
+	}
+
+	token := r.PathValue("token")
+	if token == "" {
+		content.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		return
+	}
+
+	var errTokenExpired user.ErrTokenExpired
+
+	hs_user, err := user.ValidateResetToken(a.db, token)
+	if err != nil {
+		switch {
+		case errors.As(err, &errTokenExpired):
+			// show the reset request form with a message that the token is expired
+			messages.AddErrorMessage(w, r, "Unable to reset the specified authorization: the reset request has expired")
+			a.GetResetRequest(w, r)
+			return
+		default:
+			content.HandleError(w, r, "Could not reset authorization: invalid token", nil, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if hs_user == nil {
+		content.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
+		return
+	}
+
+	authService := getAuthService(authType)
+	if authService == nil {
+		content.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		return
+	}
+
+	(*authService).GetReset(w, r, token)
 }
 
 // getAuthService returns the authService specified by authType (if it is loaded)
