@@ -391,7 +391,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// send the password reset information to the user
-	resetURL := fmt.Sprintf("%s/auth/reset/email/%s", a.host, url.PathEscape(token.Token))
+	resetURL := fmt.Sprintf("%s/auth/reset/email?token=%s", a.host, url.QueryEscape(token.Token))
 	if r.TLS != nil {
 		resetURL = "https://" + resetURL
 	} else {

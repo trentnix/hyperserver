@@ -4,6 +4,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/google/uuid"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -19,11 +20,13 @@ func LoggerMiddleware(l logger.Logger) func(http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), logger.RequestIDKey, requestId)
 			ctx = logger.Set(ctx, &l)
 
-			// Add request-specific fields if needed
+			sanitizedPath := sanitizeURL(r.URL)
+
+			// add request-specific fields if needed
 			reqLogger := l.With(
 				logger.Field{Key: string(logger.RequestIDKey), Value: requestId},
 				logger.Field{Key: "method", Value: r.Method},
-				logger.Field{Key: "path", Value: r.URL.Path},
+				logger.Field{Key: "path", Value: sanitizedPath},
 			)
 
 			reqLogger.Info("Incoming request")
@@ -39,4 +42,15 @@ func LoggerMiddleware(l logger.Logger) func(http.Handler) http.Handler {
 // identifier for tracing requests through the application
 func getRequestIdentifier() string {
 	return uuid.New().String()
+}
+
+// sanitizeURL takes a URL and removes any token values from the query parameters so
+// that the token value isn't logged
+func sanitizeURL(u *url.URL) string {
+	sanitizedURL := *u
+	query := sanitizedURL.Query()
+	// remove any JWT token
+	query.Del("token")
+	sanitizedURL.RawQuery = query.Encode()
+	return sanitizedURL.String()
 }

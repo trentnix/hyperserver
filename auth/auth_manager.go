@@ -73,8 +73,8 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		// reset
 		mux.Handle("GET /auth/reset/request/{authType}", http.HandlerFunc(a.GetResetRequest))
 		mux.Handle("POST /auth/reset/request/{authType}", http.HandlerFunc(a.ResetRequest))
-		mux.Handle("GET /auth/reset/{authType}/{token}", http.HandlerFunc(a.GetReset))
-		mux.Handle("POST /auth/reset/{authType}/{token}", http.HandlerFunc(a.Reset))
+		mux.Handle("GET /auth/reset/{authType}", http.HandlerFunc(a.GetReset))
+		mux.Handle("POST /auth/reset/{authType}", http.HandlerFunc(a.Reset))
 	}
 }
 
@@ -313,7 +313,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.PathValue("token")
+	token := r.URL.Query().Get("token")
 	if token == "" {
 		content.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
 		return
@@ -357,7 +357,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.PathValue("token")
+	token := r.URL.Query().Get("token")
 	if token == "" {
 		content.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
 		return
