@@ -1,32 +1,34 @@
-{{ with .Data }}
-<div id="reset-request" class="container">
-    <form id="reset-request-form" 
-          class="auth-reset-request-form"
-          hx-post="/auth/reset/request/email" 
-          hx-target="this" 
-          hx-swap="outerHTML" 
-          hx-trigger="submit">
+{{ block "Content" . }}
+    {{ with .Data }}
+    <div id="reset-request" class="container">
+        <form id="reset-request-form" 
+            class="auth-reset-request-form"
+            hx-post="/auth/reset/request/email" 
+            hx-target="this" 
+            hx-swap="outerHTML" 
+            hx-trigger="submit">
 
-        <label for="email">Reset Request</label>
-        <input type="email" id="email" 
-          name="email" 
-          value="{{ .Email }}" 
-          placeholder="Enter your email" 
-          required {{ if .HasFieldErrors "Email" }} class="input-error" {{ end }}>
-        {{template "field-errors" (.GetFieldErrors "Email")}}
-   
-        <button type="submit">Reset</button>
-        
-        {{ if .HasErrors }}
-            <div>{{ .GetFormErrorHTML }}</div>
-        {{ else if .GetFormMessage }}
-            <div>{{ .GetFormMessageHTML }}</div>
-        {{ end }}
-    </form>
-</div>
-{{ else }}
-<div>Unable to display reset details.</div>
-{{ end }}
+            <label for="email">Reset Request</label>
+            <input type="email" id="email" 
+            name="email" 
+            value="{{ .Email }}" 
+            placeholder="Enter your email" 
+            required {{ if .HasFieldErrors "Email" }} class="input-error" {{ end }}>
+            {{template "field-errors" (.GetFieldErrors "Email")}}
+    
+            <button type="submit">Reset</button>
+            
+            {{ if .HasErrors }}
+                <div>{{ .GetFormErrorHTML }}</div>
+            {{ else if .GetFormMessage }}
+                <div>{{ .GetFormMessageHTML }}</div>
+            {{ end }}
+        </form>
+    </div>
+    {{ else }}
+    <div>Unable to display reset details.</div>
+    {{ end }}
+{{ end }} <!-- block "Content" . -->
 
 {{define "field-errors"}}
     {{- range .}}

@@ -169,15 +169,6 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 // GetLogin serves the login form
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
-
-	if !login.IsHtmx() {
-		// this should be an HTMX request - may need to consider adding support for
-		// a layout template so that this could work even if JavaScript is disabled
-		errMessage := "The Login form must be rendered via an HTMX request"
-		content.HandleError(w, r, errMessage, content.NewErrHtmxRequestRequired(nil), http.StatusBadRequest)
-		return
-	}
-
 	login.AddContent(content.TemplatePath(emailLoginFormTemplate))
 	login.Data = &LoginForm{}
 
@@ -198,14 +189,6 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 //	  success -> redirect to the configured home page
 func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.User {
 	login := content.NewManagedContent(r)
-	if !login.IsHtmx() {
-		// this should be an HTMX request - may need to consider adding support for
-		// a layout template so that this could work even if JavaScript is disabled
-		errMessage := "The Login action must be submitted via an HTMX request"
-		content.HandleError(w, r, errMessage, content.NewErrHtmxRequestRequired(nil), http.StatusBadRequest)
-		return nil
-	}
-
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 
@@ -249,15 +232,6 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 // GetRegister serves the register form
 func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	register := content.NewManagedContent(r)
-
-	if !register.IsHtmx() {
-		// this should be an HTMX request - may need to consider adding support for
-		// a layout template so that this could work even if JavaScript is disabled
-		errMessage := "The Register form must be rendered via an HTMX request"
-		content.HandleError(w, r, errMessage, content.NewErrHtmxRequestRequired(nil), http.StatusBadRequest)
-		return
-	}
-
 	register.AddContent(content.TemplatePath(emailRegisterFormTemplate))
 	register.Data = &RegisterForm{}
 
@@ -278,14 +252,6 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 //	  success -> redirect to login
 func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool {
 	register := content.NewManagedContent(r)
-	if !register.IsHtmx() {
-		// this should be an HTMX request - may need to consider adding support for
-		// a layout template so that this could work even if JavaScript is disabled
-		errMessage := "The Register action must be submitted via an HTMX request"
-		content.HandleError(w, r, errMessage, content.NewErrHtmxRequestRequired(nil), http.StatusBadRequest)
-		return false
-	}
-
 	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 
@@ -351,15 +317,6 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 // GetResetRequest serves the password reset request page with the resetPasswordRequestForm form
 func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	reset := content.NewManagedContent(r)
-
-	if !reset.IsHtmx() {
-		// this should be an HTMX request - may need to consider adding support for
-		// a layout template so that this could work even if JavaScript is disabled
-		errMessage := "The reset request form must be rendered via an HTMX request"
-		content.HandleError(w, r, errMessage, content.NewErrHtmxRequestRequired(nil), http.StatusBadRequest)
-		return
-	}
-
 	reset.AddContent(content.TemplatePath(emailResetRequestFormTemplate))
 	reset.Data = &resetPasswordRequestForm{}
 
@@ -378,14 +335,6 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	genericResetErrMsg := "There was an error trying to reset the specified user's password."
 
 	reset := content.NewManagedContent(r)
-	if !reset.IsHtmx() {
-		// this should be an HTMX request - may need to consider adding support for
-		// a layout template so that this could work even if JavaScript is disabled
-		errMessage := "The Reset Request action must be submitted via an HTMX request"
-		content.HandleError(w, r, errMessage, content.NewErrHtmxRequestRequired(nil), http.StatusBadRequest)
-		return false
-	}
-
 	reset.AddContent(emailResetRequestFormTemplate)
 	resetRequestForm := &resetPasswordRequestForm{}
 

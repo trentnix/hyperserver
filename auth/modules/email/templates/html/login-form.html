@@ -1,46 +1,48 @@
-{{ with .Data }}
-<div id="login" class="container">
-    <form id="login-form"
-          class="auth-email-form"
-          hx-post="/auth/login/email"
-          hx-target="this"
-          hx-swap="outerHTML"
-          hx-trigger="submit">
-        
-        <label for="email">Email</label>
-        <input type="email" id="email"
-               name="email"
-               value="{{ .Email }}"
-               required {{ if .HasFieldErrors "Email" }} aria-invalid="true" {{ end }}>
-        {{template "field-errors" (.GetFieldErrors "Email")}}
+{{ block "Content" . }}
+    {{ with .Data }}
+    <div id="login" class="container">
+        <form id="login-form"
+            class="auth-email-form"
+            hx-post="/auth/login/email"
+            hx-target="this"
+            hx-swap="outerHTML"
+            hx-trigger="submit">
+            
+            <label for="email">Email</label>
+            <input type="email" id="email"
+                name="email"
+                value="{{ .Email }}"
+                required {{ if .HasFieldErrors "Email" }} aria-invalid="true" {{ end }}>
+            {{template "field-errors" (.GetFieldErrors "Email")}}
 
-        <label for="password">Password</label>
-        <input type="password" id="password"
-               name="password"
-               value="{{ .Password }}"
-               required
-               {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
-        {{template "field-errors" (.GetFieldErrors "Password")}}
+            <label for="password">Password</label>
+            <input type="password" id="password"
+                name="password"
+                value="{{ .Password }}"
+                required
+                {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
+            {{template "field-errors" (.GetFieldErrors "Password")}}
 
-        <button type="submit">Login</button>
+            <button type="submit">Login</button>
 
-        <div>
-            <a href="/auth/reset/request/email"
-               hx-get="/auth/reset/request/email" 
-               hx-target="#login-form" 
-               hx-swap="outerHTML">Forgot Password?</a>
-        </div>
-        
-        {{ if .HasErrors }}
-            <div>{{ .GetFormErrorHTML }}</div>
-        {{ else if .GetFormMessage }}
-            <div>{{ .GetFormMessageHTML }}</div>
-        {{ end }}
-    </form>
-</div>
-{{ else }}
-    <div>Unable to display login details.</div>
-{{ end }}
+            <div>
+                <a href="/auth/reset/request/email"
+                hx-get="/auth/reset/request/email" 
+                hx-target="#login-form" 
+                hx-swap="outerHTML">Forgot Password?</a>
+            </div>
+            
+            {{ if .HasErrors }}
+                <div>{{ .GetFormErrorHTML }}</div>
+            {{ else if .GetFormMessage }}
+                <div>{{ .GetFormMessageHTML }}</div>
+            {{ end }}
+        </form>
+    </div>
+    {{ else }}
+        <div>Unable to display login details.</div>
+    {{ end }}
+{{ end }} <!-- block "Content" . -->
 
 {{define "field-errors"}}
     {{- range .}}
