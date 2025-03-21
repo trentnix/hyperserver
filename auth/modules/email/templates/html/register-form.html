@@ -1,10 +1,10 @@
 {{ block "Content" . }}
     {{ with .Data }}
-    <div id="register" class="container">
-        <form id="register-form"
+    <div id="register-form" class="container">
+        <form id="registerForm"
             class="auth-email-form"
             hx-post="/auth/register/email"
-            hx-target="this"
+            hx-target="#register-form"
             hx-swap="outerHTML"
             hx-trigger="submit">
             

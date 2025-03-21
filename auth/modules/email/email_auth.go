@@ -430,3 +430,70 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 		return
 	}
 }
+
+func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, resetRequiresNewCredentials bool) bool {
+	reset := content.NewManagedContent(r)
+	reset.AddContent(emailResetPasswordFormTemplate)
+	resetForm := &resetPasswordForm{}
+
+	reset.Data = resetForm
+
+	if u == nil {
+		logger.LogRequestError(r, user.NewErrUserNotSpecified(fmt.Errorf("reset failed")))
+		content.HandleFormError(w, r, reset, resetForm, "Reset failed - the user is not specified")
+		return false
+	}
+
+	// extract login information, confirm the password, and authenticate the user
+	if err := r.ParseForm(); err != nil {
+		logger.LogRequestError(r, fmt.Errorf("there was an error parsing the reset form data: %w", err))
+		content.HandleFormError(w, r, reset, resetForm, "The reset form data could not be parsed.")
+		return false
+	}
+
+	resetForm.Password = r.FormValue("password")
+	resetForm.PasswordMatch = r.FormValue("passwordMatch")
+	resetForm.Token = token
+
+	// validate the register form
+	err := form.Validate(resetForm)
+	if err != nil {
+		content.HandleFormError(w, r, reset, resetForm, "The reset form could not be validated")
+		return false
+	}
+
+	if resetForm.HasErrors() {
+		// there are validation errors - render the form errors
+		content.HandleFormError(w, r, reset, resetForm, "")
+		return false
+	}
+
+	if resetRequiresNewCredentials {
+		if u.Password != "" && password.CheckPasswordHash(resetForm.Password, u.Password) {
+			// the new password is the same as the old, but a new password is required according
+			// to the configuration
+			content.HandleFormError(w, r, reset, resetForm, "The provided password is already in use - a new password is required")
+			return false
+		}
+	}
+
+	genericResetErrMsg := "Unable to reset password"
+
+	hashedPassword, err := password.HashPassword(resetForm.Password)
+	if err != nil {
+		// the password could not be hashed
+		content.HandleFormError(w, r, reset, resetForm, genericResetErrMsg)
+		return false
+	}
+
+	u.Password = hashedPassword
+	err = u.Save(a.db)
+	if err != nil {
+		// the user could not be updated
+		logger.LogRequestError(r, fmt.Errorf("error updating a user's password during reset: %w", err))
+		content.HandleFormError(w, r, reset, resetForm, genericResetErrMsg)
+		return false
+	}
+
+	return true
+}

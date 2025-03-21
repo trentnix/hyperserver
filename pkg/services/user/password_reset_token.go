@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -51,6 +52,10 @@ func GetAuthResetTokenByID(db *sqlx.DB, userId string) (*AuthResetToken, error) 
 
 	err := db.Get(&token, query, userId, resetTokenType)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// No row was found, handle accordingly.
+			return nil, NewErrInvalidResetToken(fmt.Errorf("no reset token found for the given user"))
+		}
 		return nil, database.NewErrDatabase(fmt.Errorf("error retrieving a reset token by user: %w", err))
 	}
 
@@ -73,6 +78,10 @@ func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error)
 
 	err := db.Get(&passwordResetToken, query, token)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// no row was found, handle accordingly.
+			return nil, NewErrInvalidResetToken(fmt.Errorf("no reset token found for the given value"))
+		}
 		return nil, database.NewErrDatabase(fmt.Errorf("error retrieving a reset token by value: %w", err))
 	}
 
@@ -117,8 +126,21 @@ func (token *AuthResetToken) Delete(db *sqlx.DB) error {
         WHERE user_id = ? AND token_hash = ?
     `, userTokenTableName)
 
-	_, err := db.Exec(query, token.UserId, token.TokenHash)
-	return err
+	results, err := db.Exec(query, token.UserId, token.TokenHash)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := results.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("error deleting the specified token from the database: no rows affected")
+	}
+
+	return nil
 }
 
 // DeleteAllTokensByUser deletes all of the tokens from the database for the specified user

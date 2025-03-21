@@ -57,6 +57,7 @@ type (
 		JwtKey                      string
 		VerificationTokenExpiration time.Duration
 		ResetTokenExpiration        time.Duration
+		ResetRequiresNewCredentials bool
 		Services                    map[string]map[string]string `mapstructure:"services"`
 	}
 

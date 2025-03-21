@@ -49,11 +49,11 @@ type AuthService interface {
 	// retrieves the mechanism for a user to request to reset their authorization with the implemented AuthService
 	GetResetRequest(http.ResponseWriter, *http.Request)
 	// handles a request to reset a user's authorization
-	ResetRequest(http.ResponseWriter, *http.Request, time.Duration) bool
+	ResetRequest(w http.ResponseWriter, r *http.Request, resetTokenExpiration time.Duration) bool
 	// retrieves the mechanism for a user to reset their authorization with the implemented AuthService
 	GetReset(w http.ResponseWriter, r *http.Request, token string)
 	// handles the reset authorization action for the implemented AuthService
-	// Reset(w http.ResponseWriter, r *http.Request, user *user.User, token string) bool
+	Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, resetRequiresNewCredentials bool) bool
 }
 
 // Register used by a Handler to register itself with the application
