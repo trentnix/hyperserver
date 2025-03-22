@@ -406,7 +406,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	resetRequestForm.Email = ""
 
 	// send the password reset information to the user
-	resetURL := a.host + getResetPath(token.Token)
+	resetURL := a.host + addTokenParameterToPath(emailResetRequestPath, token.Token)
 	if r.TLS != nil {
 		resetURL = "https://" + resetURL
 	} else {
@@ -435,7 +435,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	}
 
 	resetForm := &ResetPasswordForm{}
-	resetForm.ActionUrl = getResetPath(token)
+	resetForm.ActionUrl = addTokenParameterToPath(emailResetPath, token)
 
 	reset := content.NewManagedContent(r)
 	reset.AddContent(content.TemplatePath(emailResetPasswordFormTemplate))
@@ -470,7 +470,7 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 
 	resetForm.Password = r.FormValue("password")
 	resetForm.PasswordMatch = r.FormValue("passwordMatch")
-	resetForm.ActionUrl = getResetPath(token)
+	resetForm.ActionUrl = addTokenParameterToPath(emailResetPath, token)
 
 	// validate the register form
 	err := form.Validate(resetForm)
@@ -515,9 +515,9 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	return true
 }
 
-// getResetPath returns the URL used to post a reset password using the EmailAuthService
+// addTokenParameterToPath returns the URL used to post a reset password using the EmailAuthService
 // implementation of AuthService
-func getResetPath(token string) string {
-	resetURL := fmt.Sprintf("%s?token=%s", emailResetPath, url.QueryEscape(token))
+func addTokenParameterToPath(path string, token string) string {
+	resetURL := fmt.Sprintf("%s?token=%s", path, url.QueryEscape(token))
 	return html.EscapeString(resetURL)
 }
