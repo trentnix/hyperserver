@@ -66,6 +66,21 @@ func NewErrInvalidResetToken(err error) *ErrInvalidResetToken {
 	}
 }
 
+// ErrTokenNotSpecified indicates the token was not specified
+type ErrTokenNotSpecified struct {
+	*BaseError
+}
+
+// NewErrTokenNotSpecified creates an instance of ErrTokenNotSpecified
+func NewErrTokenNotSpecified(err error) *ErrTokenNotSpecified {
+	return &ErrTokenNotSpecified{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "token not specified",
+		},
+	}
+}
+
 // ErrTokenNotFound indicates the token could not be retrieved
 type ErrTokenNotFound struct {
 	*BaseError

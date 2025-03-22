@@ -15,6 +15,8 @@ type Form struct {
 	formMessage string
 	formError   string
 	fieldErrors map[string][]string
+
+	ActionUrl string
 }
 
 // IsValidated specifies whether the form has been validated (but not whether any errors were found)

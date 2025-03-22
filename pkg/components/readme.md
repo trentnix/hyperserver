@@ -230,7 +230,7 @@ The form template used in the previous example code can be seen below:
 
 {{define "field-errors"}}
     {{- range .}}
-        <span class="field-error">{{.}}</p>
+        <span class="field-error">{{.}}</span>
     {{- end}}
 {{end}}
 ```
