@@ -55,22 +55,22 @@ type (
 		form.Form
 	}
 
-	// resetPasswordRequestForm defines the fields used when requesting to reset a user's password
-	resetPasswordRequestForm struct {
+	// ResetPasswordRequestForm defines the fields used when requesting to reset a user's password
+	ResetPasswordRequestForm struct {
 		Email string `validate:"required,email"`
 
 		form.Form
 	}
 
-	// resetPasswordForm defines the fields used when resetting the password
-	resetPasswordForm struct {
+	// ResetPasswordForm defines the fields used when resetting the password
+	ResetPasswordForm struct {
 		Password      string `validate:"required,password"`
 		PasswordMatch string `validate:"required,password,eqfield=Password"`
 
 		form.Form
 	}
 
-	changePasswordForm struct {
+	ChangePasswordForm struct {
 		OldPassword      string `validate:"required"`
 		NewPassword      string `validate:"required,password,nefield=OldPassword"`
 		NewPasswordMatch string `validate:"required,password,eqfield=NewPassword"`
@@ -88,6 +88,11 @@ const (
 	emailRegisterButtonTemplateName = "auth/modules/email/templates/html/register-link.html"
 	emailResetRequestFormTemplate   = "auth/modules/email/templates/html/reset-request.html"
 	emailResetPasswordFormTemplate  = "auth/modules/email/templates/html/reset-password.html"
+
+	emailLoginPath        = "/auth/login/email"
+	emailRegisterPath     = "/auth/register/email"
+	emailResetRequestPath = "/auth/reset/request/email"
+	emailResetPath        = "/auth/reset/email"
 )
 
 // init registers the AuthHandler handler with the application
@@ -169,7 +174,9 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
 	login.AddContent(content.TemplatePath(emailLoginFormTemplate))
-	login.Data = &LoginForm{}
+	loginForm := &LoginForm{}
+	loginForm.ActionUrl = emailLoginPath
+	login.Data = loginForm
 
 	err := login.Render(w, r)
 	if err != nil {
@@ -232,7 +239,9 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	register := content.NewManagedContent(r)
 	register.AddContent(content.TemplatePath(emailRegisterFormTemplate))
-	register.Data = &RegisterForm{}
+	registerForm := &RegisterForm{}
+	registerForm.ActionUrl = emailRegisterPath
+	register.Data = registerForm
 
 	err := register.Render(w, r)
 	if err != nil {
@@ -253,6 +262,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	register := content.NewManagedContent(r)
 	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
+	registerForm.ActionUrl = emailRegisterPath
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
@@ -317,7 +327,10 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	reset := content.NewManagedContent(r)
 	reset.AddContent(content.TemplatePath(emailResetRequestFormTemplate))
-	reset.Data = &resetPasswordRequestForm{}
+
+	resetRequestForm := &ResetPasswordRequestForm{}
+	resetRequestForm.ActionUrl = emailResetRequestPath
+	reset.Data = resetRequestForm
 
 	err := reset.Render(w, r)
 	if err != nil {
@@ -335,7 +348,8 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 
 	reset := content.NewManagedContent(r)
 	reset.AddContent(emailResetRequestFormTemplate)
-	resetRequestForm := &resetPasswordRequestForm{}
+	resetRequestForm := &ResetPasswordRequestForm{}
+	resetRequestForm.ActionUrl = emailResetPath
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
@@ -402,6 +416,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to reset your password.`, resetURL)
 	resetRequestForm.SetFormMessage(successMessage)
 
+	resetRequestForm.ActionUrl = emailResetRequestPath
 	reset.Data = resetRequestForm
 	err = reset.Render(w, r)
 	if err != nil {
@@ -419,7 +434,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 		return
 	}
 
-	resetForm := &resetPasswordForm{}
+	resetForm := &ResetPasswordForm{}
 	resetForm.ActionUrl = getResetPath(token)
 
 	reset := content.NewManagedContent(r)
@@ -437,7 +452,7 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	reset := content.NewManagedContent(r)
 	reset.AddContent(emailResetPasswordFormTemplate)
 
-	resetForm := &resetPasswordForm{}
+	resetForm := &ResetPasswordForm{}
 	reset.Data = resetForm
 
 	if u == nil {
@@ -503,6 +518,6 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 // getResetPath returns the URL used to post a reset password using the EmailAuthService
 // implementation of AuthService
 func getResetPath(token string) string {
-	resetURL := fmt.Sprintf("/auth/reset/email?token=%s", url.QueryEscape(token))
+	resetURL := fmt.Sprintf("%s?token=%s", emailResetPath, url.QueryEscape(token))
 	return html.EscapeString(resetURL)
 }

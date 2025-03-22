@@ -3,7 +3,7 @@
     <div id="reset-request-form" class="container">
         <form id="resetRequestForm" 
             class="auth-reset-request-form"
-            hx-post="/auth/reset/request/email" 
+            hx-post="{{ .ActionUrl }}" 
             hx-target="#reset-request-form" 
             hx-swap="outerHTML" 
             hx-trigger="submit">

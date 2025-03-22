@@ -3,7 +3,7 @@
     <div id="register-form" class="container">
         <form id="registerForm"
             class="auth-email-form"
-            hx-post="/auth/register/email"
+            hx-post="{{ .ActionUrl }}"
             hx-target="#register-form"
             hx-swap="outerHTML"
             hx-trigger="submit">
