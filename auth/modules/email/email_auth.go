@@ -406,7 +406,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	resetRequestForm.Email = ""
 
 	// send the password reset information to the user
-	resetURL := a.host + addTokenParameterToPath(emailResetRequestPath, token.Token)
+	resetURL := a.host + addTokenParameterToPath(emailResetPath, token.Token)
 	if r.TLS != nil {
 		resetURL = "https://" + resetURL
 	} else {
@@ -518,6 +518,13 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 // addTokenParameterToPath returns the URL used to post a reset password using the EmailAuthService
 // implementation of AuthService
 func addTokenParameterToPath(path string, token string) string {
-	resetURL := fmt.Sprintf("%s?token=%s", path, url.QueryEscape(token))
-	return html.EscapeString(resetURL)
+	u, err := url.Parse(path)
+	if err != nil {
+		return ""
+	}
+
+	q := u.Query()
+	q.Set("token", token)
+	u.RawQuery = q.Encode()
+	return html.EscapeString(u.String())
 }
