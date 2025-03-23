@@ -5,7 +5,6 @@ package form
 import (
 	"fmt"
 	"html/template"
-	"net/http"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -136,23 +135,4 @@ func (f *Form) GetFormMessageHTML() template.HTML {
 // GetFormErrorHTML returns the HTML version of formError
 func (f *Form) GetFormErrorHTML() template.HTML {
 	return template.HTML(f.formError)
-}
-
-// ParseAndValidate combines the parsing, binding, and validation of the
-// specified form into a single call
-func ParseAndValidate(r *http.Request, f FormComponent) (string, error) {
-	if err := r.ParseForm(); err != nil {
-		return "Unable to parse form data", err
-	}
-
-	if err := f.Bind(r); err != nil {
-		return "Unable to save form data", err
-	}
-
-	// Validate the form using the package-level function.
-	if err := Validate(f); err != nil {
-		return "Unable to validate form data", err
-	}
-
-	return "", nil
 }

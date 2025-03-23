@@ -128,3 +128,22 @@ func GetFormFromContext(ctx context.Context) (any, error) {
 
 	return f, nil
 }
+
+// ParseAndValidate combines the parsing, binding, and validation of the
+// specified form into a single call
+func ParseAndValidate(r *http.Request, f FormComponent) (string, error) {
+	if err := r.ParseForm(); err != nil {
+		return "Unable to parse form data", err
+	}
+
+	if err := f.Bind(r); err != nil {
+		return "Unable to save form data", err
+	}
+
+	// Validate the form using the package-level function.
+	if err := Validate(f); err != nil {
+		return "Unable to validate form data", err
+	}
+
+	return "", nil
+}
