@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"net/http"
 	"reflect"
 )
 
@@ -42,6 +43,9 @@ type (
 		GetFormMessageHTML() template.HTML
 		// returns the HTML version of GetFormError
 		GetFormErrorHTML() template.HTML
+
+		// Bind allows a form to populate its fields from an http.Request
+		Bind(*http.Request) error
 	}
 
 	contextKey string

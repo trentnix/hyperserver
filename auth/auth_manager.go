@@ -170,18 +170,18 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hs_user := (*authService).Login(w, r)
-	if hs_user == nil {
+	u := (*authService).Login(w, r)
+	if u == nil {
 		return
 	}
 
-	setAuthenticatedUserErr := SetAuthenticatedUser(r, w, hs_user)
+	setAuthenticatedUserErr := SetAuthenticatedUser(r, w, u)
 	if setAuthenticatedUserErr != nil {
 		content.HandleError(w, r, "There was an internal error when trying to login", setAuthenticatedUserErr, http.StatusInternalServerError)
 		return
 	}
 
-	r = user.AddUserToRequestContext(r, hs_user)
+	r = user.AddUserToRequestContext(r, u)
 	err := messages.AddSuccessMessage(w, r, "You have been successfully logged in")
 	if err != nil {
 		logger.LogRequestError(r, err)
@@ -196,7 +196,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	content.RedirectToURL(w, r, homeURL)
 }
 
-// Logout logs out any logged-in user
+// Logout ends a session for any logged-in user
 func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 	logoutErr := LogoutAuthenticatedUser(r, w)
 	if logoutErr != nil {

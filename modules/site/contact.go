@@ -25,6 +25,14 @@ const (
 	contactFormTemplate = "modules/site/templates/html/contact-form.html"
 )
 
+// Bind populates the RegisterForm fields from the request.
+func (cf *ContactForm) Bind(r *http.Request) error {
+	cf.Name = r.FormValue("name")
+	cf.Email = r.FormValue("email")
+	cf.Message = r.FormValue("message")
+	return nil
+}
+
 // GetContact retrieves an empty contact form
 func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 	contact := content.NewManagedContent(r)

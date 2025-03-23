@@ -19,6 +19,21 @@ func (e *BaseError) Unwrap() error {
 	return e.Err
 }
 
+// ErrEmailAuthServiceInit indicates an error configuring an instance of EmailAuthService
+type ErrEmailAuthServiceInit struct {
+	*BaseError
+}
+
+// NewErrEmailAuthServiceInit creates an instance of ErrEmailAuthServiceInit
+func NewErrEmailAuthServiceInit(err error) *ErrEmailAuthServiceInit {
+	return &ErrEmailAuthServiceInit{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "unable to initialize the email authorization service",
+		},
+	}
+}
+
 // ErrDatabaseUnavailable indicates the database is unavailable
 type ErrLoadingTemplate struct {
 	template string
@@ -48,24 +63,6 @@ func NewErrAuthServiceNotFound(err error, serviceName string) *ErrAuthServiceNot
 	errorMessage := fmt.Sprintf("there was an error loading the specified auth service: %s", serviceName)
 	return &ErrAuthServiceNotFound{
 		service: serviceName,
-		BaseError: &BaseError{
-			Err:     err,
-			Message: errorMessage,
-		},
-	}
-}
-
-// ErrAuthServiceDisabled indicates the AuthService implementation specified is disabled
-type ErrAuthServiceDisabled struct {
-	service string
-	*BaseError
-}
-
-// NewErrAuthServiceDisabled creates an instance of ErrAuthServiceDisabled
-func NewErrAuthServiceDisabled(err error, authService string) *ErrAuthServiceDisabled {
-	errorMessage := fmt.Sprintf("the specified auth service is disabled: %s", authService)
-	return &ErrAuthServiceDisabled{
-		service: authService,
 		BaseError: &BaseError{
 			Err:     err,
 			Message: errorMessage,

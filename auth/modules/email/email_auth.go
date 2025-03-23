@@ -4,6 +4,7 @@ package auth
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
@@ -19,7 +20,6 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
@@ -69,14 +69,42 @@ type (
 		form.Form
 	}
 
-	ChangePasswordForm struct {
-		OldPassword      string `validate:"required"`
-		NewPassword      string `validate:"required,password,nefield=OldPassword"`
-		NewPasswordMatch string `validate:"required,password,eqfield=NewPassword"`
+	// ChangePasswordForm struct {
+	// 	OldPassword      string `validate:"required"`
+	// 	NewPassword      string `validate:"required,password,nefield=OldPassword"`
+	// 	NewPasswordMatch string `validate:"required,password,eqfield=NewPassword"`
 
-		form.Form
-	}
+	// 	form.Form
+	// }
 )
+
+// Bind populates the LoginForm fields from the request.
+func (lf *LoginForm) Bind(r *http.Request) error {
+	lf.Email = r.FormValue("email")
+	lf.Password = r.FormValue("password")
+	return nil
+}
+
+// Bind populates the RegisterForm fields from the request.
+func (rf *RegisterForm) Bind(r *http.Request) error {
+	rf.Email = r.FormValue("email")
+	rf.Password = r.FormValue("password")
+	rf.PasswordMatch = r.FormValue("passwordMatch")
+	return nil
+}
+
+// Bind populates the LoginForm fields from the request.
+func (rprf *ResetPasswordRequestForm) Bind(r *http.Request) error {
+	rprf.Email = r.FormValue("email")
+	return nil
+}
+
+// Bind populates the RegisterForm fields from the request.
+func (rpf *ResetPasswordForm) Bind(r *http.Request) error {
+	rpf.Password = r.FormValue("password")
+	rpf.PasswordMatch = r.FormValue("passwordMatch")
+	return nil
+}
 
 const (
 	AuthTypeEmail = "email"
@@ -104,31 +132,31 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	configOptions := auth_services.GetAuthConfigOptions(s.Config, AuthTypeEmail)
 	authServiceEnabled := strings.EqualFold(configOptions["enabled"], "true") || configOptions["enabled"] == "1"
 	if !authServiceEnabled {
-		return auth_services.NewErrAuthServiceDisabled(fmt.Errorf("unable to initialize the email auth service"), AuthTypeEmail)
+		return auth_services.NewErrEmailAuthServiceInit(errors.New("the email auth service is not enabled"))
 	}
 
 	if s.Database == nil {
-		return database.NewErrDatabaseUnavailable(fmt.Errorf("unable to initialize EmailAuthService"))
+		return auth_services.NewErrEmailAuthServiceInit(errors.New("the database service is not available"))
 	}
 
 	a.db = s.Database
 	a.config = s.Config
 
 	if a.config.Auth.JwtKey == "" {
-		return fmt.Errorf("the auth JWT key was not set")
+		return auth_services.NewErrEmailAuthServiceInit(errors.New("the auth JWT key is not configured"))
 	}
 
 	var err error
 	loginButtonTemplate := emailLoginButtonTemplateName
 	a.loginButton, err = util.LoadHTMLFromFile(loginButtonTemplate)
 	if err != nil {
-		return fmt.Errorf("could not find %s", loginButtonTemplate)
+		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", loginButtonTemplate))
 	}
 
 	registerButtonTemplate := emailRegisterButtonTemplateName
 	a.registerButton, err = util.LoadHTMLFromFile(registerButtonTemplate)
 	if err != nil {
-		return fmt.Errorf("could not find %s", registerButtonTemplate)
+		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", registerButtonTemplate))
 	}
 
 	a.host = a.config.HTTP.Hostname
@@ -180,7 +208,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	err := login.Render(w, r)
 	if err != nil {
 		content.HandleError(w, r,
-			"could not render the login form in the email authorization service",
+			"Unable to display the email authorization service login form",
 			err,
 			http.StatusInternalServerError)
 	}
@@ -200,29 +228,13 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 
-	// extract login information, confirm the password, and authenticate the user
-	if err := r.ParseForm(); err != nil {
-		content.HandleFormError(w, r, login, loginForm, "The login form data could not be parsed.", err)
-		return nil
-	}
-
-	loginForm.Email = r.FormValue("email")
-	loginForm.Password = r.FormValue("password")
-
-	// validate the login form
-	err := form.Validate(loginForm)
+	err := parseAndValidate(w, r, login, loginForm)
 	if err != nil {
-		content.HandleFormError(w, r, login, loginForm, "The login form could not be validated", err)
+		// error handling was done in parseAndValidate
 		return nil
 	}
 
-	if loginForm.HasErrors() {
-		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, login, loginForm, "", nil)
-		return nil
-	}
-
-	// authenticate the u
+	// authenticate the user
 	u, err := user.GetUserByEmail(a.db, loginForm.Email)
 	if err != nil && err != sql.ErrNoRows {
 		content.HandleFormError(w, r,
@@ -234,7 +246,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	}
 
 	if u == nil || u.Password == "" || !password.CheckPasswordHash(loginForm.Password, u.Password) {
-		content.HandleFormError(w, r, login, loginForm, "The provided login credentials are invalid", nil)
+		content.HandleFormError(w, r, login, loginForm, "Invalid login/password", nil)
 		return nil
 	}
 
@@ -252,7 +264,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	err := register.Render(w, r)
 	if err != nil {
 		content.HandleError(w, r,
-			"could not render the registration form in the email authentication service",
+			"Unable to display the email authorization service registration form",
 			err,
 			http.StatusInternalServerError)
 	}
@@ -273,34 +285,9 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
-	// extract login information, confirm the password, and authenticate the user
-	if err := r.ParseForm(); err != nil {
-		content.HandleFormError(w, r,
-			register,
-			registerForm,
-			"The registration form data could not be parsed.",
-			err)
-		return false
-	}
-
-	registerForm.Email = r.FormValue("email")
-	registerForm.Password = r.FormValue("password")
-	registerForm.PasswordMatch = r.FormValue("passwordMatch")
-
-	// validate the register form
-	err := form.Validate(registerForm)
+	err := parseAndValidate(w, r, register, registerForm)
 	if err != nil {
-		content.HandleFormError(w, r,
-			register,
-			registerForm,
-			"The registration form could not be validated",
-			err)
-		return false
-	}
-
-	if registerForm.HasErrors() {
-		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, register, registerForm, "", nil)
+		// error handling was done in parseAndValidate
 		return false
 	}
 
@@ -310,7 +297,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"The user specified could not be retrieved from the database",
+			"There was an error retrieving the specified user",
 			err)
 		return false
 	}
@@ -320,7 +307,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"A user is already registered to the specified email address.",
+			"The specified user is already registered",
 			nil)
 		return false
 	}
@@ -331,7 +318,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"The specified account could not be created",
+			"There was an error creating a user account",
 			err)
 		return false
 	}
@@ -347,7 +334,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"The specified account could not be created",
+			"There was an error creating a user account",
 			err)
 		return false
 	}
@@ -367,7 +354,7 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 	err := reset.Render(w, r)
 	if err != nil {
 		content.HandleError(w, r,
-			"could not render the reset request form in the email authentication service",
+			"Unable to display the email authorization service password reset request form",
 			err,
 			http.StatusInternalServerError)
 		return
@@ -379,41 +366,17 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 // by creating a reset token. This token will be in a subsequent request to authenticate
 // the reset request.
 func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, resetTokenExpiration time.Duration) bool {
-	genericResetErrMsg := "There was an error trying to reset the specified user's password."
+	// use a generic error for security reasons
+	genericResetErrMsg := "There was an error trying to reset your password"
 
 	reset := content.NewManagedContent(r)
 	reset.AddContent(emailResetRequestFormTemplate)
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetPath
 
-	// extract login information, confirm the password, and authenticate the user
-	if err := r.ParseForm(); err != nil {
-		content.HandleFormError(
-			w,
-			r,
-			reset,
-			resetRequestForm,
-			"The reset request form data could not be parsed.",
-			err)
-		return false
-	}
-
-	resetRequestForm.Email = r.FormValue("email")
-
-	// validate the register form
-	err := form.Validate(resetRequestForm)
+	err := parseAndValidate(w, r, reset, resetRequestForm)
 	if err != nil {
-		content.HandleFormError(w, r,
-			reset,
-			resetRequestForm,
-			"The reset password request form could not be validated",
-			err)
-		return false
-	}
-
-	if resetRequestForm.HasErrors() {
-		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, reset, resetRequestForm, "", nil)
+		// error handling was done in parseAndValidate
 		return false
 	}
 
@@ -451,8 +414,8 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	path := addTokenParameterToPath(emailResetPath, token.Token)
 	if path == "" {
 		content.HandleError(w, r,
-			"could not render the reset request form in the email authentication service",
-			form.NewErrActionNotSpecified(nil, resetRequestForm),
+			genericResetErrMsg,
+			form.NewErrActionNotSpecified(fmt.Errorf("error creating the reset path"), resetRequestForm),
 			http.StatusInternalServerError)
 		return false
 	}
@@ -471,7 +434,12 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	reset.Data = resetRequestForm
 	err = reset.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "could not render the reset request form in the email authentication service", err, http.StatusInternalServerError)
+		content.HandleError(
+			w,
+			r,
+			"Unable to display the email authorization service reset request form",
+			err,
+			http.StatusInternalServerError)
 		return false
 	}
 
@@ -480,9 +448,11 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 
 // GetReset serves the password reset page with the resetPasswordForm form
 func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, token string) {
+	genericResetErrMsg := "Unable to display the email authorization service password reset form"
+
 	if token == "" {
 		content.HandleError(w, r,
-			"could not render the reset password form in the email authentication service",
+			genericResetErrMsg,
 			user.NewErrTokenNotSpecified(nil),
 			http.StatusInternalServerError)
 		return
@@ -492,7 +462,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	resetForm.ActionUrl = addTokenParameterToPath(emailResetPath, token)
 	if resetForm.ActionUrl == "" {
 		content.HandleError(w, r,
-			"could not render the reset password form in the email authentication service",
+			genericResetErrMsg,
 			form.NewErrActionNotSpecified(nil, resetForm),
 			http.StatusInternalServerError)
 		return
@@ -505,14 +475,21 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	err := reset.Render(w, r)
 	if err != nil {
 		content.HandleError(w, r,
-			"could not render the reset password form in the email authentication service",
+			genericResetErrMsg,
 			err,
 			http.StatusInternalServerError)
 		return
 	}
 }
 
-func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, resetRequiresNewCredentials bool) bool {
+// Reset processes a password reset request
+func (a *EmailAuthService) Reset(
+	w http.ResponseWriter,
+	r *http.Request,
+	u *user.User,
+	token string,
+	resetRequiresNewCredentials bool,
+) bool {
 	reset := content.NewManagedContent(r)
 	reset.AddContent(emailResetPasswordFormTemplate)
 
@@ -525,38 +502,23 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 			r,
 			reset,
 			resetForm,
-			"Reset failed - the user is not specified",
+			"Unable to reset your password due to an internal error",
 			user.NewErrUserNotSpecified(fmt.Errorf("reset failed")))
 		return false
 	}
 
-	// extract login information, confirm the password, and authenticate the user
-	if err := r.ParseForm(); err != nil {
-		content.HandleFormError(w, r, reset, resetForm, "The reset form data could not be parsed.", err)
+	err := parseAndValidate(w, r, reset, resetForm)
+	if err != nil {
+		// error handling was done in parseAndValidate
 		return false
 	}
 
-	resetForm.Password = r.FormValue("password")
-	resetForm.PasswordMatch = r.FormValue("passwordMatch")
 	resetForm.ActionUrl = addTokenParameterToPath(emailResetPath, token)
 	if resetForm.ActionUrl == "" {
 		content.HandleError(w, r,
-			"could not render the reset password form in the email authentication service",
+			"Unable to display the email authorization service reset request form",
 			form.NewErrActionNotSpecified(nil, resetForm),
 			http.StatusInternalServerError)
-		return false
-	}
-
-	// validate the register form
-	err := form.Validate(resetForm)
-	if err != nil {
-		content.HandleFormError(w, r, reset, resetForm, "The reset form could not be validated", err)
-		return false
-	}
-
-	if resetForm.HasErrors() {
-		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, reset, resetForm, "", nil)
 		return false
 	}
 
@@ -567,7 +529,7 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 			content.HandleFormError(w, r,
 				reset,
 				resetForm,
-				"The provided password is already in use - a new password is required",
+				"The provided password has been recently used. For security reasons, a new password is required.",
 				nil)
 			return false
 		}
@@ -586,8 +548,13 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	err = u.Save(a.db)
 	if err != nil {
 		// the user could not be updated
-		passwordErr := fmt.Errorf("error updating a user's password during reset: %w", err)
-		content.HandleFormError(w, r, reset, resetForm, genericResetErrMsg, passwordErr)
+		content.HandleFormError(
+			w,
+			r,
+			reset,
+			resetForm,
+			genericResetErrMsg,
+			fmt.Errorf("error updating a user's password during reset: %w", err))
 		return false
 	}
 
@@ -605,4 +572,32 @@ func addTokenParameterToPath(path string, token string) string {
 	q.Set("token", token)
 	u.RawQuery = q.Encode()
 	return html.EscapeString(u.String())
+}
+
+// parseAndValidate is a helper function that consolidates parsing and validating a form.
+// It expects the form to implement the HasErrors() method (typically via embedding form.Form).
+func parseAndValidate(w http.ResponseWriter, r *http.Request, c *content.Content, f form.FormComponent) error {
+	if err := r.ParseForm(); err != nil {
+		content.HandleFormError(w, r, c, f, "Unable to parse form data", err)
+		return err
+	}
+
+	if err := f.Bind(r); err != nil {
+		content.HandleFormError(w, r, c, f, "Unable to save form data", err)
+		return err
+	}
+
+	// Validate the form using the package-level function.
+	if err := form.Validate(f); err != nil {
+		content.HandleFormError(w, r, c, f, "Unable to validate form data", err)
+		return err
+	}
+
+	// If there are any validation errors, handle them and return an error.
+	if f.HasErrors() {
+		content.HandleFormError(w, r, c, f, "", nil)
+		return fmt.Errorf("form validation errors present")
+	}
+
+	return nil
 }
