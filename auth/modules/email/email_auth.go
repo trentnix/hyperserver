@@ -382,7 +382,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if hs_user == nil {
-		// this user does not exist
+		// the specified user does not exist
 		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
 		return false
 	}

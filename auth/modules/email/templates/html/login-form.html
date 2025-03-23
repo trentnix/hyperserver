@@ -1,10 +1,10 @@
 {{ block "Content" . }}
     {{ with .Data }}
-    <div id="login-form" class="container">
-        <form id="loginForm"
+    <div id="login" class="container">
+        <form id="login-form"
             class="auth-email-form"
             hx-post="{{ .ActionUrl }}"
-            hx-target="#login-form"
+            hx-target="closest div"
             hx-swap="outerHTML"
             hx-trigger="submit">
             

@@ -1,10 +1,10 @@
 {{ block "Content" . }}
     {{ with .Data }}
-    <div id="reset-request-form" class="container">
-        <form id="resetRequestForm" 
+    <div id="reset-request" class="container">
+        <form id="reset-request-form" 
             class="auth-reset-request-form"
             hx-post="{{ .ActionUrl }}" 
-            hx-target="#reset-request-form" 
+            hx-target="closest div" 
             hx-swap="outerHTML" 
             hx-trigger="submit">
 
