@@ -228,9 +228,15 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 
-	err := parseAndValidate(w, r, login, loginForm)
+	errMessage, err := form.ParseAndValidate(r, loginForm)
 	if err != nil {
-		// error handling was done in parseAndValidate
+		content.HandleFormError(w, r, login, loginForm, errMessage, err)
+		return nil
+	}
+
+	// If there are any validation errors, handle them and return an error.
+	if loginForm.HasErrors() {
+		content.HandleFormError(w, r, login, loginForm, "", nil)
 		return nil
 	}
 
@@ -285,9 +291,15 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
-	err := parseAndValidate(w, r, register, registerForm)
+	errMessage, err := form.ParseAndValidate(r, registerForm)
 	if err != nil {
-		// error handling was done in parseAndValidate
+		content.HandleFormError(w, r, register, registerForm, errMessage, err)
+		return false
+	}
+
+	// If there are any validation errors, handle them and return an error.
+	if registerForm.HasErrors() {
+		content.HandleFormError(w, r, register, registerForm, "", nil)
 		return false
 	}
 
@@ -374,9 +386,15 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetPath
 
-	err := parseAndValidate(w, r, reset, resetRequestForm)
+	errMessage, err := form.ParseAndValidate(r, resetRequestForm)
 	if err != nil {
-		// error handling was done in parseAndValidate
+		content.HandleFormError(w, r, reset, resetRequestForm, errMessage, err)
+		return false
+	}
+
+	// If there are any validation errors, handle them and return an error.
+	if resetRequestForm.HasErrors() {
+		content.HandleFormError(w, r, reset, resetRequestForm, "", nil)
 		return false
 	}
 
@@ -507,9 +525,15 @@ func (a *EmailAuthService) Reset(
 		return false
 	}
 
-	err := parseAndValidate(w, r, reset, resetForm)
+	errMessage, err := form.ParseAndValidate(r, resetForm)
 	if err != nil {
-		// error handling was done in parseAndValidate
+		content.HandleFormError(w, r, reset, resetForm, errMessage, err)
+		return false
+	}
+
+	// If there are any validation errors, handle them and return an error.
+	if resetForm.HasErrors() {
+		content.HandleFormError(w, r, reset, resetForm, "", nil)
 		return false
 	}
 
@@ -572,32 +596,4 @@ func addTokenParameterToPath(path string, token string) string {
 	q.Set("token", token)
 	u.RawQuery = q.Encode()
 	return html.EscapeString(u.String())
-}
-
-// parseAndValidate is a helper function that consolidates parsing and validating a form.
-// It expects the form to implement the HasErrors() method (typically via embedding form.Form).
-func parseAndValidate(w http.ResponseWriter, r *http.Request, c *content.Content, f form.FormComponent) error {
-	if err := r.ParseForm(); err != nil {
-		content.HandleFormError(w, r, c, f, "Unable to parse form data", err)
-		return err
-	}
-
-	if err := f.Bind(r); err != nil {
-		content.HandleFormError(w, r, c, f, "Unable to save form data", err)
-		return err
-	}
-
-	// Validate the form using the package-level function.
-	if err := form.Validate(f); err != nil {
-		content.HandleFormError(w, r, c, f, "Unable to validate form data", err)
-		return err
-	}
-
-	// If there are any validation errors, handle them and return an error.
-	if f.HasErrors() {
-		content.HandleFormError(w, r, c, f, "", nil)
-		return fmt.Errorf("form validation errors present")
-	}
-
-	return nil
 }
