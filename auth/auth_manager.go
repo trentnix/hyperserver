@@ -321,7 +321,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 
 	var errTokenExpired user.ErrTokenExpired
 
-	hs_user, err := user.ValidateResetToken(a.db, token)
+	u, err := user.ValidateResetToken(a.db, token)
 	if err != nil {
 		switch {
 		case errors.As(err, &errTokenExpired):
@@ -335,7 +335,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if hs_user == nil {
+	if u == nil {
 		content.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
 		return
 	}
@@ -365,7 +365,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 
 	var errTokenExpired user.ErrTokenExpired
 
-	hs_user, err := user.ValidateResetToken(a.db, token)
+	u, err := user.ValidateResetToken(a.db, token)
 	if err != nil {
 		switch {
 		case errors.As(err, &errTokenExpired):
@@ -383,7 +383,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if hs_user == nil {
+	if u == nil {
 		content.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
 		return
 	}
@@ -394,10 +394,10 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resetSuccessful := (*authService).Reset(w, r, hs_user, token, a.ResetRequiresNewCredentials)
+	resetSuccessful := (*authService).Reset(w, r, u, token, a.ResetRequiresNewCredentials)
 	if resetSuccessful {
 		// delete user reset token
-		resetToken, tokenErr := user.GetAuthResetTokenByID(a.db, hs_user.ID)
+		resetToken, tokenErr := user.GetAuthResetTokenByID(a.db, u.ID)
 		if tokenErr != nil {
 			logger.LogRequestError(r, user.NewErrTokenNotFound(tokenErr))
 		}
