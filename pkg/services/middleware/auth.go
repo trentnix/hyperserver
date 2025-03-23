@@ -17,13 +17,13 @@ import (
 func LoadAuthenticatedUser(db *sqlx.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			hs_user, err := auth_services.GetAuthenticatedUser(r, db)
+			u, err := auth_services.GetAuthenticatedUser(r, db)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				logger.LogRequestError(r, fmt.Errorf("unable to retrieve the authenticated user from the request: %w", err))
 			}
 
-			if hs_user != nil {
-				r = user.AddUserToRequestContext(r, hs_user)
+			if u != nil {
+				r = user.AddUserToRequestContext(r, u)
 			}
 
 			next.ServeHTTP(w, r)

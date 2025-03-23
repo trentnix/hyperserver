@@ -160,8 +160,8 @@ func DeleteAllTokensByUser(db *sqlx.DB, userId string) error {
 
 // NewPasswordResetToken creates a password reset authorization token, stores it in the
 // database as a hashed value, and returns the token to the caller
-func NewPasswordResetToken(hs_user *User, jwtKey []byte, expiration time.Duration) (*AuthResetToken, error) {
-	if hs_user == nil {
+func NewPasswordResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthResetToken, error) {
+	if u == nil {
 		return nil, NewErrInvalidResetToken(fmt.Errorf("new token creation: user id in not specified"))
 	}
 
@@ -173,7 +173,7 @@ func NewPasswordResetToken(hs_user *User, jwtKey []byte, expiration time.Duratio
 	expirationTime := time.Now().Add(expiration)
 
 	claims := &VerificationClaims{
-		Id: hs_user.ID,
+		Id: u.ID,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
@@ -190,7 +190,7 @@ func NewPasswordResetToken(hs_user *User, jwtKey []byte, expiration time.Duratio
 	resetTokenHash := hex.EncodeToString(hash[:])
 
 	passwordResetToken := &AuthResetToken{
-		UserId:    hs_user.ID,
+		UserId:    u.ID,
 		TokenHash: resetTokenHash,
 		Token:     resetToken,
 		ExpiresAt: expirationTime,

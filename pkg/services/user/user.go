@@ -46,7 +46,7 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
-	var hs_user User
+	var u User
 	if !databaseConfigured {
 		err := prepareDatabase(db)
 		if err != nil {
@@ -64,12 +64,12 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
         WHERE id = ?
     `, userTableName)
 
-	err := db.Get(&hs_user, query, id)
+	err := db.Get(&u, query, id)
 	if err != nil {
 		return nil, err
 	}
 
-	return &hs_user, nil
+	return &u, nil
 }
 
 // GetUserByEmail retrieves the user with the specified users.email value

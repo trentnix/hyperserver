@@ -61,9 +61,9 @@ func LogoutAuthenticatedUser(r *http.Request, w http.ResponseWriter) error {
 // GetAuthenticatedUser retrieves the currently authenticated user
 func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
 	// first check the request context
-	hs_user := user.GetUserFromContext(r.Context())
-	if hs_user != nil {
-		return hs_user, nil
+	u := user.GetUserFromContext(r.Context())
+	if u != nil {
+		return u, nil
 	}
 
 	// check the session

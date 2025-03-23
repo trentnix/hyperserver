@@ -27,9 +27,9 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	welcomeMessage := "Welcome!"
-	hs_user := user.GetUserFromContext(r.Context())
-	if hs_user != nil {
-		welcomeMessage = "Welcome " + hs_user.Email + "!"
+	u := user.GetUserFromContext(r.Context())
+	if u != nil {
+		welcomeMessage = "Welcome " + u.Email + "!"
 	}
 
 	homepage := content.NewManagedContent(r)
