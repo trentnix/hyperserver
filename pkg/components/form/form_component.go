@@ -123,7 +123,7 @@ func GetFormFromContext(ctx context.Context) (any, error) {
 
 	// Check if f implements FormComponent
 	if _, ok := f.(FormComponent); !ok {
-		return nil, NewErrFormComponentInterfaceNotImplemented(fmt.Errorf("the struct stored in the request context does not implement FormComponent"))
+		return nil, NewErrFormComponentInterfaceNotImplemented(fmt.Errorf("The object stored in the request context does not implement FormComponent"))
 	}
 
 	return f, nil
