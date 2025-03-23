@@ -583,8 +583,7 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	return true
 }
 
-// addTokenParameterToPath returns the URL used to post a reset password using the EmailAuthService
-// implementation of AuthService
+// addTokenParameterToPath adds (or replaces) a "token" parameter with the specified token value
 func addTokenParameterToPath(path string, token string) string {
 	u, err := url.Parse(path)
 	if err != nil {
