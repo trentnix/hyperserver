@@ -2,7 +2,6 @@
 package module_site
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/modules/site/models"
@@ -70,13 +69,19 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	// validate the ContactForm form
 	err := form.Validate(contactForm)
 	if err != nil {
-		content.HandleFormError(w, r, contact, contactForm, "The login form could not be validated")
+		content.HandleFormError(
+			w,
+			r,
+			contact,
+			contactForm,
+			"The login form could not be validated",
+			err)
 		return
 	}
 
 	if contactForm.HasErrors() {
 		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, contact, contactForm, "")
+		content.HandleFormError(w, r, contact, contactForm, "", nil)
 		return
 	}
 
@@ -89,7 +94,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	err = cs.Create(m.Database)
 	if err != nil {
-		content.HandleFormError(w, r, contact, contactForm, fmt.Sprintf("There was an error creating the specified contact message: %v", err.Error()))
+		content.HandleFormError(w, r, contact, contactForm, "Unable to save your message", err)
 		return
 	}
 

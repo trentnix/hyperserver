@@ -71,10 +71,22 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 }
 
 // HandleFormError is a generic handler to render the specified content with the specified form
-// to display the specified error
-func HandleFormError(w http.ResponseWriter, r *http.Request, c *Content, f form.FormComponent, formErrorMessage string) {
+// to display the specified error. If an error is specified, it will be logged.
+func HandleFormError(
+	w http.ResponseWriter,
+	r *http.Request,
+	c *Content,
+	f form.FormComponent,
+	formErrorMessage string,
+	e error,
+) {
 	if formErrorMessage != "" {
 		f.SetFormError(formErrorMessage)
+	}
+
+	if e != nil {
+		formType := reflect.TypeOf(f)
+		logger.LogRequestError(r, fmt.Errorf("form (%s) error: %s: %w", formType, formErrorMessage, e))
 	}
 
 	c.Data = f

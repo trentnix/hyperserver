@@ -203,7 +203,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
-		content.HandleFormError(w, r, login, loginForm, "The login form data could not be parsed.")
+		content.HandleFormError(w, r, login, loginForm, "The login form data could not be parsed.", err)
 		return nil
 	}
 
@@ -213,13 +213,13 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	// validate the login form
 	err := form.Validate(loginForm)
 	if err != nil {
-		content.HandleFormError(w, r, login, loginForm, "The login form could not be validated")
+		content.HandleFormError(w, r, login, loginForm, "The login form could not be validated", err)
 		return nil
 	}
 
 	if loginForm.HasErrors() {
 		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, login, loginForm, "")
+		content.HandleFormError(w, r, login, loginForm, "", nil)
 		return nil
 	}
 
@@ -229,15 +229,13 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		content.HandleFormError(w, r,
 			login,
 			loginForm,
-			"The user specified could not be retrieved from the database")
+			"The user specified could not be retrieved from the database",
+			err)
 		return nil
 	}
 
 	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(loginForm.Password, hs_user.Password) {
-		content.HandleFormError(w, r,
-			login,
-			loginForm,
-			"The provided login credentials are invalid")
+		content.HandleFormError(w, r, login, loginForm, "The provided login credentials are invalid", nil)
 		return nil
 	}
 
@@ -282,7 +280,8 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"The registration form data could not be parsed.")
+			"The registration form data could not be parsed.",
+			err)
 		return false
 	}
 
@@ -296,13 +295,14 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"The registration form could not be validated")
+			"The registration form could not be validated",
+			err)
 		return false
 	}
 
 	if registerForm.HasErrors() {
 		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, register, registerForm, "")
+		content.HandleFormError(w, r, register, registerForm, "", nil)
 		return false
 	}
 
@@ -312,7 +312,8 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"The user specified could not be retrieved from the database")
+			"The user specified could not be retrieved from the database",
+			err)
 		return false
 	}
 
@@ -321,7 +322,8 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"A user is already registered to the specified email address.")
+			"A user is already registered to the specified email address.",
+			nil)
 		return false
 	}
 
@@ -331,7 +333,8 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"The specified account could not be created")
+			"The specified account could not be created",
+			err)
 		return false
 	}
 
@@ -346,7 +349,8 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
-			"The specified account could not be created")
+			"The specified account could not be created",
+			err)
 		return false
 	}
 
@@ -386,8 +390,13 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
-		logger.LogRequestError(r, fmt.Errorf("there was an error parsing the reset request form data: %w", err))
-		content.HandleFormError(w, r, reset, resetRequestForm, "The reset request form data could not be parsed.")
+		content.HandleFormError(
+			w,
+			r,
+			reset,
+			resetRequestForm,
+			"The reset request form data could not be parsed.",
+			err)
 		return false
 	}
 
@@ -399,43 +408,42 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		content.HandleFormError(w, r,
 			reset,
 			resetRequestForm,
-			"The reset password request form could not be validated")
+			"The reset password request form could not be validated",
+			err)
 		return false
 	}
 
 	if resetRequestForm.HasErrors() {
 		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, reset, resetRequestForm, "")
+		content.HandleFormError(w, r, reset, resetRequestForm, "", nil)
 		return false
 	}
 
 	//  validate user isn't already registered
 	hs_user, err := user.GetUserByEmail(a.db, resetRequestForm.Email)
 	if err != nil && err != sql.ErrNoRows {
-		logger.LogRequestError(r, err)
-		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
+		// error getting the user
+		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
 		return false
 	}
 
 	if hs_user == nil {
 		// the specified user does not exist
-		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
+		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, nil)
 		return false
 	}
 
 	// the specified user exists - generate a password token and save it to the database
 	token, err := user.NewPasswordResetToken(hs_user, []byte(a.config.Auth.JwtKey), resetTokenExpiration)
 	if err != nil {
-		logger.LogRequestError(r, err)
-		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
+		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
 		return false
 	}
 
 	// add hashed token to the database (with user.id and expiration)
 	err = token.Create(a.db)
 	if err != nil {
-		logger.LogRequestError(r, err)
-		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg)
+		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
 		return false
 	}
 
@@ -514,15 +522,19 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	reset.Data = resetForm
 
 	if u == nil {
-		logger.LogRequestError(r, user.NewErrUserNotSpecified(fmt.Errorf("reset failed")))
-		content.HandleFormError(w, r, reset, resetForm, "Reset failed - the user is not specified")
+		content.HandleFormError(
+			w,
+			r,
+			reset,
+			resetForm,
+			"Reset failed - the user is not specified",
+			user.NewErrUserNotSpecified(fmt.Errorf("reset failed")))
 		return false
 	}
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
-		logger.LogRequestError(r, fmt.Errorf("there was an error parsing the reset form data: %w", err))
-		content.HandleFormError(w, r, reset, resetForm, "The reset form data could not be parsed.")
+		content.HandleFormError(w, r, reset, resetForm, "The reset form data could not be parsed.", err)
 		return false
 	}
 
@@ -540,13 +552,13 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	// validate the register form
 	err := form.Validate(resetForm)
 	if err != nil {
-		content.HandleFormError(w, r, reset, resetForm, "The reset form could not be validated")
+		content.HandleFormError(w, r, reset, resetForm, "The reset form could not be validated", err)
 		return false
 	}
 
 	if resetForm.HasErrors() {
 		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, reset, resetForm, "")
+		content.HandleFormError(w, r, reset, resetForm, "", nil)
 		return false
 	}
 
@@ -557,7 +569,8 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 			content.HandleFormError(w, r,
 				reset,
 				resetForm,
-				"The provided password is already in use - a new password is required")
+				"The provided password is already in use - a new password is required",
+				nil)
 			return false
 		}
 	}
@@ -567,7 +580,7 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	hashedPassword, err := password.HashPassword(resetForm.Password)
 	if err != nil {
 		// the password could not be hashed
-		content.HandleFormError(w, r, reset, resetForm, genericResetErrMsg)
+		content.HandleFormError(w, r, reset, resetForm, genericResetErrMsg, err)
 		return false
 	}
 
@@ -575,8 +588,8 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	err = u.Save(a.db)
 	if err != nil {
 		// the user could not be updated
-		logger.LogRequestError(r, fmt.Errorf("error updating a user's password during reset: %w", err))
-		content.HandleFormError(w, r, reset, resetForm, genericResetErrMsg)
+		passwordErr := fmt.Errorf("error updating a user's password during reset: %w", err)
+		content.HandleFormError(w, r, reset, resetForm, genericResetErrMsg, passwordErr)
 		return false
 	}
 

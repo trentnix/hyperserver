@@ -173,12 +173,12 @@ if err := form.Validate(registerForm); err != nil {
   register := content.NewManagedContent(r)
   register.AddContent("templates/forms/register-form.html")
 
-  content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated")
+  content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated", err)
   return
 }
 ```
 
-`content.HandleFormError` is an error handler that will re-render the form with any errors.
+`content.HandleFormError` is an error handler that will re-render the form with any errors. If an error instance is specified, the error will be logged.
 
 ### Form HTML Template
 
