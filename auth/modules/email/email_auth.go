@@ -21,7 +21,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
-	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -164,8 +163,8 @@ func (a *EmailAuthService) GetLoginButton() template.HTML {
 	return a.loginButton
 }
 
-// GetLoginButton returns the template.HTML object representing the way to start the login process
-// for email authorization
+// GetRegisterButton returns the template.HTML object representing the way to start the
+// registration process for email authorization
 func (a *EmailAuthService) GetRegisterButton() template.HTML {
 	return a.registerButton
 }
@@ -187,7 +186,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Login handles a login request, valides the input, confirms the password matches the
+// Login handles a login request, validates the input, confirms the password matches the
 // password stored in the database, and handles the user response.
 //
 // The logic flow is as follows:
@@ -223,8 +222,8 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		return nil
 	}
 
-	// authenticate the hs_user
-	hs_user, err := user.GetUserByEmail(a.db, loginForm.Email)
+	// authenticate the u
+	u, err := user.GetUserByEmail(a.db, loginForm.Email)
 	if err != nil && err != sql.ErrNoRows {
 		content.HandleFormError(w, r,
 			login,
@@ -234,12 +233,12 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		return nil
 	}
 
-	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(loginForm.Password, hs_user.Password) {
+	if u == nil || u.Password == "" || !password.CheckPasswordHash(loginForm.Password, u.Password) {
 		content.HandleFormError(w, r, login, loginForm, "The provided login credentials are invalid", nil)
 		return nil
 	}
 
-	return hs_user
+	return u
 }
 
 // GetRegister serves the register form
@@ -276,7 +275,6 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
-		logger.LogRequestError(r, fmt.Errorf("there was an error parsing the login form data: %w", err))
 		content.HandleFormError(w, r,
 			register,
 			registerForm,
@@ -307,7 +305,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	}
 
 	//  validate user isn't already registered
-	hs_user, err := user.GetUserByEmail(a.db, registerForm.Email)
+	u, err := user.GetUserByEmail(a.db, registerForm.Email)
 	if err != nil && err != sql.ErrNoRows {
 		content.HandleFormError(w, r,
 			register,
@@ -317,7 +315,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	if hs_user != nil {
+	if u != nil {
 		// this user already exists
 		content.HandleFormError(w, r,
 			register,
@@ -338,13 +336,13 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	hs_user = &user.User{
+	u = &user.User{
 		Email:                registerForm.Email,
 		Password:             hashedPassword,
 		RegistrationAuthType: AuthTypeEmail,
 	}
 
-	err = hs_user.Save(a.db)
+	err = u.Save(a.db)
 	if err != nil {
 		content.HandleFormError(w, r,
 			register,
@@ -420,21 +418,21 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	//  validate user isn't already registered
-	hs_user, err := user.GetUserByEmail(a.db, resetRequestForm.Email)
+	u, err := user.GetUserByEmail(a.db, resetRequestForm.Email)
 	if err != nil && err != sql.ErrNoRows {
 		// error getting the user
 		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
 		return false
 	}
 
-	if hs_user == nil {
+	if u == nil {
 		// the specified user does not exist
 		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, nil)
 		return false
 	}
 
 	// the specified user exists - generate a password token and save it to the database
-	token, err := user.NewPasswordResetToken(hs_user, []byte(a.config.Auth.JwtKey), resetTokenExpiration)
+	token, err := user.NewPasswordResetToken(u, []byte(a.config.Auth.JwtKey), resetTokenExpiration)
 	if err != nil {
 		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
 		return false
