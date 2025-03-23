@@ -180,7 +180,10 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "could not render the login form in the email authorization service", err, http.StatusInternalServerError)
+		content.HandleError(w, r,
+			"could not render the login form in the email authorization service",
+			err,
+			http.StatusInternalServerError)
 	}
 }
 
@@ -223,12 +226,18 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	// authenticate the hs_user
 	hs_user, err := user.GetUserByEmail(a.db, loginForm.Email)
 	if err != nil && err != sql.ErrNoRows {
-		content.HandleFormError(w, r, login, loginForm, "The user specified could not be retrieved from the database")
+		content.HandleFormError(w, r,
+			login,
+			loginForm,
+			"The user specified could not be retrieved from the database")
 		return nil
 	}
 
 	if hs_user == nil || hs_user.Password == "" || !password.CheckPasswordHash(loginForm.Password, hs_user.Password) {
-		content.HandleFormError(w, r, login, loginForm, "The provided login credentials are invalid")
+		content.HandleFormError(w, r,
+			login,
+			loginForm,
+			"The provided login credentials are invalid")
 		return nil
 	}
 
@@ -245,7 +254,10 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 
 	err := register.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "could not render the registration form in the email authentication service", err, http.StatusInternalServerError)
+		content.HandleError(w, r,
+			"could not render the registration form in the email authentication service",
+			err,
+			http.StatusInternalServerError)
 	}
 }
 
@@ -267,7 +279,10 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	// extract login information, confirm the password, and authenticate the user
 	if err := r.ParseForm(); err != nil {
 		logger.LogRequestError(r, fmt.Errorf("there was an error parsing the login form data: %w", err))
-		content.HandleFormError(w, r, register, registerForm, "The registration form data could not be parsed.")
+		content.HandleFormError(w, r,
+			register,
+			registerForm,
+			"The registration form data could not be parsed.")
 		return false
 	}
 
@@ -278,7 +293,10 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	// validate the register form
 	err := form.Validate(registerForm)
 	if err != nil {
-		content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated")
+		content.HandleFormError(w, r,
+			register,
+			registerForm,
+			"The registration form could not be validated")
 		return false
 	}
 
@@ -291,20 +309,29 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	//  validate user isn't already registered
 	hs_user, err := user.GetUserByEmail(a.db, registerForm.Email)
 	if err != nil && err != sql.ErrNoRows {
-		content.HandleFormError(w, r, register, registerForm, "The user specified could not be retrieved from the database")
+		content.HandleFormError(w, r,
+			register,
+			registerForm,
+			"The user specified could not be retrieved from the database")
 		return false
 	}
 
 	if hs_user != nil {
 		// this user already exists
-		content.HandleFormError(w, r, register, registerForm, "A user is already registered to the specified email address.")
+		content.HandleFormError(w, r,
+			register,
+			registerForm,
+			"A user is already registered to the specified email address.")
 		return false
 	}
 
 	hashedPassword, err := password.HashPassword(registerForm.Password)
 	if err != nil {
 		// the password could not be hashed
-		content.HandleFormError(w, r, register, registerForm, "The specified account could not be created")
+		content.HandleFormError(w, r,
+			register,
+			registerForm,
+			"The specified account could not be created")
 		return false
 	}
 
@@ -316,7 +343,10 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 
 	err = hs_user.Save(a.db)
 	if err != nil {
-		content.HandleFormError(w, r, register, registerForm, "The specified account could not be created")
+		content.HandleFormError(w, r,
+			register,
+			registerForm,
+			"The specified account could not be created")
 		return false
 	}
 
@@ -334,7 +364,10 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 
 	err := reset.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "could not render the reset request form in the email authentication service", err, http.StatusInternalServerError)
+		content.HandleError(w, r,
+			"could not render the reset request form in the email authentication service",
+			err,
+			http.StatusInternalServerError)
 		return
 	}
 }
@@ -363,7 +396,10 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	// validate the register form
 	err := form.Validate(resetRequestForm)
 	if err != nil {
-		content.HandleFormError(w, r, reset, resetRequestForm, "The reset password request form could not be validated")
+		content.HandleFormError(w, r,
+			reset,
+			resetRequestForm,
+			"The reset password request form could not be validated")
 		return false
 	}
 
@@ -406,7 +442,16 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	resetRequestForm.Email = ""
 
 	// send the password reset information to the user
-	resetURL := a.host + addTokenParameterToPath(emailResetPath, token.Token)
+	path := addTokenParameterToPath(emailResetPath, token.Token)
+	if path == "" {
+		content.HandleError(w, r,
+			"could not render the reset request form in the email authentication service",
+			form.NewErrActionNotSpecified(nil, resetRequestForm),
+			http.StatusInternalServerError)
+		return false
+	}
+
+	resetURL := a.host + path
 	if r.TLS != nil {
 		resetURL = "https://" + resetURL
 	} else {
@@ -430,12 +475,22 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 // GetReset serves the password reset page with the resetPasswordForm form
 func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, token string) {
 	if token == "" {
-		content.HandleError(w, r, "could not render the reset password form in the email authentication service", user.NewErrTokenNotSpecified(nil), http.StatusInternalServerError)
+		content.HandleError(w, r,
+			"could not render the reset password form in the email authentication service",
+			user.NewErrTokenNotSpecified(nil),
+			http.StatusInternalServerError)
 		return
 	}
 
 	resetForm := &ResetPasswordForm{}
 	resetForm.ActionUrl = addTokenParameterToPath(emailResetPath, token)
+	if resetForm.ActionUrl == "" {
+		content.HandleError(w, r,
+			"could not render the reset password form in the email authentication service",
+			form.NewErrActionNotSpecified(nil, resetForm),
+			http.StatusInternalServerError)
+		return
+	}
 
 	reset := content.NewManagedContent(r)
 	reset.AddContent(content.TemplatePath(emailResetPasswordFormTemplate))
@@ -443,7 +498,10 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 
 	err := reset.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "could not render the reset password form in the email authentication service", err, http.StatusInternalServerError)
+		content.HandleError(w, r,
+			"could not render the reset password form in the email authentication service",
+			err,
+			http.StatusInternalServerError)
 		return
 	}
 }
@@ -471,6 +529,13 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 	resetForm.Password = r.FormValue("password")
 	resetForm.PasswordMatch = r.FormValue("passwordMatch")
 	resetForm.ActionUrl = addTokenParameterToPath(emailResetPath, token)
+	if resetForm.ActionUrl == "" {
+		content.HandleError(w, r,
+			"could not render the reset password form in the email authentication service",
+			form.NewErrActionNotSpecified(nil, resetForm),
+			http.StatusInternalServerError)
+		return false
+	}
 
 	// validate the register form
 	err := form.Validate(resetForm)
@@ -489,7 +554,10 @@ func (a *EmailAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user
 		if u.Password != "" && password.CheckPasswordHash(resetForm.Password, u.Password) {
 			// the new password is the same as the old, but a new password is required according
 			// to the configuration
-			content.HandleFormError(w, r, reset, resetForm, "The provided password is already in use - a new password is required")
+			content.HandleFormError(w, r,
+				reset,
+				resetForm,
+				"The provided password is already in use - a new password is required")
 			return false
 		}
 	}
