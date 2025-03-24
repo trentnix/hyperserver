@@ -67,13 +67,13 @@ type (
 		form.Form
 	}
 
-	// ChangePasswordForm struct {
-	// 	OldPassword      string `validate:"required"`
-	// 	NewPassword      string `validate:"required,password,nefield=OldPassword"`
-	// 	NewPasswordMatch string `validate:"required,password,eqfield=NewPassword"`
+	ChangePasswordForm struct {
+		OldPassword      string `validate:"required"`
+		NewPassword      string `validate:"required,password,nefield=OldPassword"`
+		NewPasswordMatch string `validate:"required,password,eqfield=NewPassword"`
 
-	// 	form.Form
-	// }
+		form.Form
+	}
 )
 
 // Bind populates the LoginForm fields from the request.
@@ -104,6 +104,14 @@ func (rpf *ResetPasswordForm) Bind(r *http.Request) error {
 	return nil
 }
 
+// Bind populates the ChangePasswordForm fields from the request
+func (cpf *ChangePasswordForm) Bind(r *http.Request) error {
+	cpf.OldPassword = r.FormValue("oldPassword")
+	cpf.NewPassword = r.FormValue("newPassword")
+	cpf.NewPasswordMatch = r.FormValue("newPasswordMatch")
+	return nil
+}
+
 const (
 	AuthTypeEmail = "email"
 
@@ -113,11 +121,13 @@ const (
 	emailRegisterButtonTemplateName = "auth/modules/email/templates/html/register-link.html"
 	emailResetRequestFormTemplate   = "auth/modules/email/templates/html/reset-request.html"
 	emailResetPasswordFormTemplate  = "auth/modules/email/templates/html/reset-password.html"
+	emailChangePasswordFormTemplate = "auth/modules/email/templates/html/change-password.html"
 
 	emailLoginPath        = "/auth/login/email"
 	emailRegisterPath     = "/auth/register/email"
 	emailResetRequestPath = "/auth/reset/request/email"
 	emailResetPath        = "/auth/reset/email"
+	emailChangePath       = "/auth/change/email"
 )
 
 // init registers the AuthHandler handler with the application
@@ -377,7 +387,7 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 // submitted form. A successful result will notify the user of how to reset their password
 // by creating a reset token. This token will be in a subsequent request to authenticate
 // the reset request.
-func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, resetTokenExpiration time.Duration) bool {
+func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool {
 	// use a generic error for security reasons
 	genericResetErrMsg := "There was an error trying to reset your password"
 
@@ -413,7 +423,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// the specified user exists - generate a password token and save it to the database
-	token, err := user.NewPasswordResetToken(u, []byte(a.config.Auth.JwtKey), resetTokenExpiration)
+	token, err := user.NewPasswordResetToken(u, []byte(a.config.Auth.JwtKey), tokenExpiration)
 	if err != nil {
 		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
 		return false
@@ -459,13 +469,10 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 
 // GetReset serves the password reset page with the resetPasswordForm form
 func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, token string) {
-	genericResetErrMsg := "Unable to display the email authorization service password reset form"
+	resetErrMsg := "Unable to display the email authorization service password reset form"
 
 	if token == "" {
-		content.HandleError(w, r,
-			genericResetErrMsg,
-			user.NewErrTokenNotSpecified(nil),
-			http.StatusInternalServerError)
+		content.HandleError(w, r, resetErrMsg, user.NewErrTokenNotSpecified(nil), http.StatusInternalServerError)
 		return
 	}
 
@@ -475,7 +482,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	actionUrl, buildUrlErr := util.BuildUrl(r, a.host, a.port, emailResetPath, params)
 	if buildUrlErr != nil {
 		content.HandleError(w, r,
-			genericResetErrMsg,
+			resetErrMsg,
 			form.NewErrActionNotSpecified(nil, resetForm),
 			http.StatusInternalServerError)
 		return
@@ -489,10 +496,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 
 	err := reset.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r,
-			genericResetErrMsg,
-			err,
-			http.StatusInternalServerError)
+		content.HandleError(w, r, resetErrMsg, err, http.StatusInternalServerError)
 		return
 	}
 }
@@ -583,4 +587,22 @@ func (a *EmailAuthService) Reset(
 	}
 
 	return true
+}
+
+// GetChange serves the password change page with the changePasswordForm form
+func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
+	changeErrMsg := "Unable to display the email authorization service password change form"
+
+	changeForm := &ChangePasswordForm{}
+	changeForm.ActionUrl = emailChangePath
+
+	change := content.NewManagedContent(r)
+	change.AddContent(content.TemplatePath(emailChangePasswordFormTemplate))
+	change.Data = changeForm
+
+	err := change.Render(w, r)
+	if err != nil {
+		content.HandleError(w, r, changeErrMsg, err, http.StatusInternalServerError)
+		return
+	}
 }

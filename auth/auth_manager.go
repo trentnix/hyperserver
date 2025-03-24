@@ -75,6 +75,9 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		mux.Handle("POST /auth/reset/request/{authType}", http.HandlerFunc(a.ResetRequest))
 		mux.Handle("GET /auth/reset/{authType}", http.HandlerFunc(a.GetReset))
 		mux.Handle("POST /auth/reset/{authType}", http.HandlerFunc(a.Reset))
+
+		// change
+		mux.Handle("GET /auth/change/{authType}", http.HandlerFunc(a.GetChange))
 	}
 }
 
@@ -435,4 +438,30 @@ func getAuthService(authType string) *AuthService {
 	}
 
 	return nil
+}
+
+// GetChange starts the authentication change process for the specified AuthService implementation.
+// This should only be available to authenticated users.
+func (a *AuthManager) GetChange(w http.ResponseWriter, r *http.Request) {
+	// the user must be authenticated
+	//   TO DO: this probably should be handled in middleware
+	u := user.GetUserFromContext(r.Context())
+	if u == nil {
+		content.HandleError(w, r, "You must be logged in to change your password.", nil, http.StatusInternalServerError)
+		return
+	}
+
+	authType := r.PathValue("authType")
+	if authType == "" {
+		content.HandleError(w, r, "No authorization service was specified. Unable to modify authentication.", nil, http.StatusInternalServerError)
+		return
+	}
+
+	authService := getAuthService(authType)
+	if authService == nil {
+		content.HandleError(w, r, "No authorization service was found. Unable to change authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		return
+	}
+
+	(*authService).GetChange(w, r)
 }

@@ -49,11 +49,14 @@ type AuthService interface {
 	// retrieves the mechanism for a user to request to reset their authorization with the implemented AuthService
 	GetResetRequest(http.ResponseWriter, *http.Request)
 	// handles a request to reset a user's authorization
-	ResetRequest(w http.ResponseWriter, r *http.Request, resetTokenExpiration time.Duration) bool
+	ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool
 	// retrieves the mechanism for a user to reset their authorization with the implemented AuthService
 	GetReset(w http.ResponseWriter, r *http.Request, token string)
 	// handles the reset authorization action for the implemented AuthService
-	Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, resetRequiresNewCredentials bool) bool
+	Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNewCredentials bool) bool
+
+	// retrieves the mechanism for a user to change their auth
+	GetChange(w http.ResponseWriter, r *http.Request)
 }
 
 // Register used by a Handler to register itself with the application
@@ -66,6 +69,9 @@ func GetAuthServices() []AuthService {
 	return authServices
 }
 
+// RemoveAuthService removes any AuthService implementations from the registered
+// AuthServices that matches the specified authType. This is to deal with
+// situations where the AuthService could not be initialized or is disabled.
 func RemoveAuthService(authType string) []AuthService {
 	i := 0
 	for _, service := range authServices {
