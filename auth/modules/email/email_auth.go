@@ -349,6 +349,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		Email:                registerForm.Email,
 		Password:             hashedPassword,
 		RegistrationAuthType: AuthTypeEmail,
+		VerificationRequired: a.config.Auth.RegisterRequiresVerification,
 	}
 
 	err = u.Save(a.db)

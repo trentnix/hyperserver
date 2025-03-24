@@ -21,6 +21,7 @@ type (
 		ID                   string    `db:"id"`
 		Email                string    `db:"email"`
 		Verified             bool      `db:"verified"`
+		VerificationRequired bool      `db:"verification_required"`
 		CreatedAt            time.Time `db:"created_at"`
 		UpdatedAt            time.Time `db:"updated_at"`
 		RegistrationAuthType string    `db:"registration_auth_type"`
@@ -33,12 +34,6 @@ type (
 const (
 	UserContextKey contextKey = "auth-user"
 )
-
-func NewUser() *User {
-	return &User{
-		Verified: false,
-	}
-}
 
 // GetUserByID retrieves the user with the specified users.id value
 func GetUserByID(db *sqlx.DB, id string) (*User, error) {
@@ -59,7 +54,7 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 	}
 
 	query := fmt.Sprintf(`
-        SELECT id, email, verified, created_at, updated_at, registration_auth_type, password
+        SELECT id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password
         FROM %s
         WHERE id = ?
     `, userTableName)
@@ -91,7 +86,7 @@ func GetUserByEmail(db *sqlx.DB, email string) (*User, error) {
 	}
 
 	query := fmt.Sprintf(`
-        SELECT id, email, verified, created_at, updated_at, registration_auth_type, password
+        SELECT id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password
         FROM %s
         WHERE email = ?
     `, userTableName)
@@ -148,8 +143,8 @@ func (user *User) create(db *sqlx.DB) error {
 	user.UpdatedAt = time.Now()
 
 	query := fmt.Sprintf(`
-        INSERT INTO %s (id, email, verified, created_at, updated_at, registration_auth_type, password)
-        VALUES (:id, :email, :verified, :created_at, :updated_at, :registration_auth_type, :password)
+        INSERT INTO %s (id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password)
+        VALUES (:id, :email, :verified, :verification_required, :created_at, :updated_at, :registration_auth_type, :password)
     `, userTableName)
 
 	_, err := db.NamedExec(query, user)
@@ -170,6 +165,7 @@ func (user *User) update(db *sqlx.DB) error {
         UPDATE %s
         SET email = :email,
             verified = :verified,
+			verification_required = :verification_required,
             updated_at = :updated_at,
             registration_auth_type = :registration_auth_type,
             password = :password

@@ -53,12 +53,13 @@ type (
 	}
 
 	AuthConfig struct {
-		Enabled                     bool
-		JwtKey                      string
-		VerificationTokenExpiration time.Duration
-		ResetTokenExpiration        time.Duration
-		ResetRequiresNewCredentials bool
-		Services                    map[string]map[string]string `mapstructure:"services"`
+		Enabled                      bool
+		JwtKey                       string
+		VerificationTokenExpiration  time.Duration
+		ResetTokenExpiration         time.Duration
+		ResetRequiresNewCredentials  bool
+		RegisterRequiresVerification bool
+		Services                     map[string]map[string]string `mapstructure:"services"`
 	}
 
 	// DatabaseConfig stores the database configuration

@@ -31,7 +31,7 @@ func NewErrUserNotFound(err error) *ErrUserNotFound {
 	return &ErrUserNotFound{
 		BaseError: &BaseError{
 			Err:     err,
-			Message: "unable to retrieve user account",
+			Message: "unable to retrieve the specified user account",
 		},
 	}
 }

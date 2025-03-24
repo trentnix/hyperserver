@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 
@@ -83,10 +84,14 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
 	}
 
 	// get the user's information from the database
-	user, userRetrievalErr := user.GetUserByID(db, userId)
+	u_db, userRetrievalErr := user.GetUserByID(db, userId)
 	if userRetrievalErr != nil {
+		if errors.Is(userRetrievalErr, sql.ErrNoRows) {
+			return nil, user.NewErrUserNotFound(userRetrievalErr)
+		}
+
 		return nil, userRetrievalErr
 	}
 
-	return user, nil
+	return u_db, nil
 }
