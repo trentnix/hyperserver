@@ -20,10 +20,8 @@ func LoadAuthenticatedUser(db *sqlx.DB) func(http.Handler) http.Handler {
 			u, err := auth_services.GetAuthenticatedUser(r, db)
 
 			var notFoundErr *user.ErrUserNotFound
-			if err != nil && !errors.As(err, notFoundErr) {
-				// user.ErrUserNotFound means the user wasn't found, so if we are here
-				// then there was an error trying to retrieve the user, not that
-				// the retrieval turned out empty
+			if err != nil && !errors.As(err, &notFoundErr) {
+				// log the error encountered when trying to retrieve the user
 				logger.LogRequestError(r, fmt.Errorf("unable to load the authenticated user: %w", err))
 			}
 
@@ -73,6 +71,34 @@ func RequireAuthentication(db *sqlx.DB) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireAnonymous determines whether the user is authenticated and, if so, denies access
+func RequireAnonymous(db *sqlx.DB) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u, err := getAuthenticatedUser(r, db)
+			if err != nil {
+				// don't allow access
+				content.HandleError(w, r,
+					"Unable to authenticate your account",
+					err,
+					http.StatusForbidden)
+				return
+			}
+
+			if u != nil {
+				// don't allow access
+				content.HandleError(w, r,
+					"The requested resource is not available to authenticated users",
+					nil,
+					http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // getAuthenticatedUser retrieves the current user from the request context and, if it's not there, it
 // tries to retrieve the user from the session. If no user is found, nil is returned.
 func getAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
@@ -80,12 +106,17 @@ func getAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
 
 	u := user.GetUserFromContext(ctx)
 	if u == nil {
-		user, err := auth_services.GetAuthenticatedUser(r, db)
+		u, err := auth_services.GetAuthenticatedUser(r, db)
 		if err != nil {
+			var notFoundErr *user.ErrUserNotFound
+			if !errors.As(err, &notFoundErr) {
+				// log the error encountered when trying to retrieve the user
+				logger.LogRequestError(r, fmt.Errorf("unable to load the authenticated user: %w", err))
+			}
 			return nil, err
 		}
 
-		return user, nil
+		return u, nil
 	}
 
 	return u, nil
