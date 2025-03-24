@@ -116,6 +116,7 @@ type ErrTokenExpirationNotSpecified struct {
 	*BaseError
 }
 
+// NewErrTokenExpiratioNotSpecified creates an instance of ErrTokenExpirationNotSpecified
 func NewErrTokenExpirationNotSpecified(err error) *ErrTokenExpirationNotSpecified {
 	return &ErrTokenExpirationNotSpecified{
 		BaseError: &BaseError{
