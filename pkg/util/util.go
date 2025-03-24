@@ -2,8 +2,12 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 )
 
@@ -39,4 +43,42 @@ func LoadHTMLFromFile(filePath string) (template.HTML, error) {
 	}
 
 	return template.HTML(htmlBytes), nil
+}
+
+// BuildUrl builds a URL from the consistuent parts provided in the parameter list
+func BuildUrl(r *http.Request, host string, port string, path string, params map[string]string) (*url.URL, error) {
+	if host == "" {
+		return nil, errors.New("host cannot be empty")
+	}
+	if r == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+
+	scheme := "http"
+	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+		scheme = forwardedProto
+	} else if r.TLS != nil {
+		scheme = "https"
+	}
+
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+
+	hostPort := net.JoinHostPort(host, port)
+
+	u := &url.URL{
+		Scheme: scheme,
+		Host:   hostPort,
+		Path:   path,
+	}
+
+	// Add query parameters
+	q := u.Query()
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+
+	return u, nil
 }

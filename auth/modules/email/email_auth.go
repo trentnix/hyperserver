@@ -6,10 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"html"
 	"html/template"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -34,7 +32,7 @@ type (
 		loginButton    template.HTML
 		registerButton template.HTML
 
-		host string
+		host, port string
 	}
 
 	// LoginForm defines the fields used when logging in via email/password
@@ -159,11 +157,13 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", registerButtonTemplate))
 	}
 
-	a.host = a.config.HTTP.Hostname
+	if a.host = s.Config.HTTP.Hostname; a.host == "" {
+		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("application hostname not configured"))
+	}
 
-	if a.config.HTTP.Port != 80 && a.config.HTTP.Port != 0 {
-		port := strconv.Itoa(int(a.config.HTTP.Port))
-		a.host += ":" + port
+	if a.port = strconv.Itoa(int(s.Config.HTTP.Port)); a.port == "0" {
+		// validating against 0 because the "zero" (unset) value for Port is 0
+		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("application port not configured"))
 	}
 
 	return nil
@@ -428,9 +428,9 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 
 	resetRequestForm.Email = ""
 
-	// send the password reset information to the user
-	path := addTokenParameterToPath(emailResetPath, token.Token)
-	if path == "" {
+	params := map[string]string{"token": token.Token}
+	resetUrl, err := util.BuildUrl(r, a.host, a.port, emailResetPath, params)
+	if err != nil {
 		content.HandleError(w, r,
 			genericResetErrMsg,
 			form.NewErrActionNotSpecified(fmt.Errorf("error creating the reset path"), resetRequestForm),
@@ -438,14 +438,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 
-	resetURL := a.host + path
-	if r.TLS != nil {
-		resetURL = "https://" + resetURL
-	} else {
-		resetURL = "http://" + resetURL
-	}
-
-	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to reset your password.`, resetURL)
+	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to reset your password.`, resetUrl.String())
 	resetRequestForm.SetFormMessage(successMessage)
 
 	resetRequestForm.ActionUrl = emailResetRequestPath
@@ -477,14 +470,18 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	}
 
 	resetForm := &ResetPasswordForm{}
-	resetForm.ActionUrl = addTokenParameterToPath(emailResetPath, token)
-	if resetForm.ActionUrl == "" {
+
+	params := map[string]string{"token": token}
+	actionUrl, buildUrlErr := util.BuildUrl(r, a.host, a.port, emailResetPath, params)
+	if buildUrlErr != nil {
 		content.HandleError(w, r,
 			genericResetErrMsg,
 			form.NewErrActionNotSpecified(nil, resetForm),
 			http.StatusInternalServerError)
 		return
 	}
+
+	resetForm.ActionUrl = actionUrl.String()
 
 	reset := content.NewManagedContent(r)
 	reset.AddContent(content.TemplatePath(emailResetPasswordFormTemplate))
@@ -537,14 +534,17 @@ func (a *EmailAuthService) Reset(
 		return false
 	}
 
-	resetForm.ActionUrl = addTokenParameterToPath(emailResetPath, token)
-	if resetForm.ActionUrl == "" {
+	params := map[string]string{"token": token}
+	actionUrl, buildUrlErr := util.BuildUrl(r, a.host, a.port, emailResetPath, params)
+	if buildUrlErr != nil {
 		content.HandleError(w, r,
 			"Unable to display the email authorization service reset request form",
-			form.NewErrActionNotSpecified(nil, resetForm),
+			form.NewErrActionNotSpecified(buildUrlErr, resetForm),
 			http.StatusInternalServerError)
 		return false
 	}
+
+	resetForm.ActionUrl = actionUrl.String()
 
 	if resetRequiresNewCredentials {
 		if u.Password != "" && password.CheckPasswordHash(resetForm.Password, u.Password) {
@@ -583,17 +583,4 @@ func (a *EmailAuthService) Reset(
 	}
 
 	return true
-}
-
-// addTokenParameterToPath adds (or replaces) a "token" parameter with the specified token value
-func addTokenParameterToPath(path string, token string) string {
-	u, err := url.Parse(path)
-	if err != nil {
-		return ""
-	}
-
-	q := u.Query()
-	q.Set("token", token)
-	u.RawQuery = q.Encode()
-	return html.EscapeString(u.String())
 }
