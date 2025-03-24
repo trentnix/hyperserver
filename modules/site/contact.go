@@ -39,11 +39,11 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 
 	if !contact.IsHtmx() {
 		// we need to load the form in a page - load the page that will host the form
-		contact.AddLayout(content.TemplatePath(contactPageTemplate))
+		contact.AddLayout(contactPageTemplate)
 		contact.Title = "Contact Us"
 	}
 
-	contact.AddContent(content.TemplatePath(contactFormTemplate))
+	contact.AddContent(contactFormTemplate)
 	contact.Data = &ContactForm{}
 
 	err := contact.Render(w, r)
@@ -62,11 +62,11 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	contact := content.NewManagedContent(r)
 	if !contact.IsHtmx() {
 		// we need to load the form in a page - load the page that will host the form
-		contact.AddLayout(content.TemplatePath(contactPageTemplate))
+		contact.AddLayout(contactPageTemplate)
 		contact.Title = "Contact Us"
 	}
 
-	contact.AddContent(content.TemplatePath(contactFormTemplate))
+	contact.AddContent(contactFormTemplate)
 
 	// process a contact submission
 	contactForm := &ContactForm{}

@@ -57,6 +57,8 @@ type AuthService interface {
 
 	// retrieves the mechanism for a user to change their auth
 	GetChange(w http.ResponseWriter, r *http.Request)
+	// handles the change auth action
+	Change(w http.ResponseWriter, r *http.Request, u *user.User) bool
 }
 
 // Register used by a Handler to register itself with the application

@@ -210,7 +210,7 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 // GetLogin serves the login form
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r)
-	login.AddContent(content.TemplatePath(emailLoginFormTemplate))
+	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
 	login.Data = loginForm
@@ -244,7 +244,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		return nil
 	}
 
-	// If there are any validation errors, handle them and return an error.
+	// if there are any validation errors, handle them and return an error.
 	if loginForm.HasErrors() {
 		content.HandleFormError(w, r, login, loginForm, "", nil)
 		return nil
@@ -272,7 +272,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 // GetRegister serves the register form
 func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	register := content.NewManagedContent(r)
-	register.AddContent(content.TemplatePath(emailRegisterFormTemplate))
+	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 	register.Data = registerForm
@@ -307,7 +307,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	// If there are any validation errors, handle them and return an error.
+	// if there are any validation errors, handle them and return an error.
 	if registerForm.HasErrors() {
 		content.HandleFormError(w, r, register, registerForm, "", nil)
 		return false
@@ -367,7 +367,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 // GetResetRequest serves the password reset request page with the resetPasswordRequestForm form
 func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	reset := content.NewManagedContent(r)
-	reset.AddContent(content.TemplatePath(emailResetRequestFormTemplate))
+	reset.AddContent(emailResetRequestFormTemplate)
 
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
@@ -402,7 +402,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 
-	// If there are any validation errors, handle them and return an error.
+	// if there are any validation errors, handle them and return an error.
 	if resetRequestForm.HasErrors() {
 		content.HandleFormError(w, r, reset, resetRequestForm, "", nil)
 		return false
@@ -491,7 +491,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	resetForm.ActionUrl = actionUrl.String()
 
 	reset := content.NewManagedContent(r)
-	reset.AddContent(content.TemplatePath(emailResetPasswordFormTemplate))
+	reset.AddContent(emailResetPasswordFormTemplate)
 	reset.Data = resetForm
 
 	err := reset.Render(w, r)
@@ -532,7 +532,7 @@ func (a *EmailAuthService) Reset(
 		return false
 	}
 
-	// If there are any validation errors, handle them and return an error.
+	// if there are any validation errors, handle them and return an error.
 	if resetForm.HasErrors() {
 		content.HandleFormError(w, r, reset, resetForm, "", nil)
 		return false
@@ -597,7 +597,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 	changeForm.ActionUrl = emailChangePath
 
 	change := content.NewManagedContent(r)
-	change.AddContent(content.TemplatePath(emailChangePasswordFormTemplate))
+	change.AddContent(emailChangePasswordFormTemplate)
 	change.Data = changeForm
 
 	err := change.Render(w, r)
@@ -605,4 +605,96 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 		content.HandleError(w, r, changeErrMsg, err, http.StatusInternalServerError)
 		return
 	}
+}
+
+// Change authenticates the specified user and, if authentication succeeds and a new
+// password meets the password complexity criteria, changes the user's password to a new value.
+func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *user.User) bool {
+	changeErrMsg := "unable to change your password"
+
+	change := content.NewManagedContent(r)
+	change.AddContent(emailChangePasswordFormTemplate)
+
+	changeForm := &ChangePasswordForm{}
+	change.Data = changeForm
+
+	if u == nil {
+		content.HandleFormError(
+			w,
+			r,
+			change,
+			changeForm,
+			"Unable to change your password due to an internal error",
+			user.NewErrUserNotSpecified(fmt.Errorf("change failed")))
+		return false
+	}
+
+	errMessage, err := form.ParseAndValidate(r, changeForm)
+	if err != nil {
+		content.HandleFormError(w, r, change, changeForm, errMessage, err)
+		return false
+	}
+
+	// if there are any validation errors, handle them and return an error.
+	if changeForm.HasErrors() {
+		content.HandleFormError(w, r, change, changeForm, "", nil)
+		return false
+	}
+
+	if u.Password != "" && !password.CheckPasswordHash(changeForm.OldPassword, u.Password) {
+		// the old password isn't correct - it is needed to change to a new password
+		content.HandleFormError(
+			w,
+			r,
+			change,
+			changeForm,
+			"The provided password is incorrect",
+			nil)
+		return false
+	}
+
+	hashedPassword, err := password.HashPassword(changeForm.NewPassword)
+	if err != nil {
+		// the password could not be hashed
+		content.HandleFormError(
+			w,
+			r,
+			change,
+			changeForm,
+			changeErrMsg,
+			fmt.Errorf("Unable to hash the NewPassword value"))
+		return false
+	}
+
+	u.Password = hashedPassword
+	err = u.Save(a.db)
+	if err != nil {
+		// the user could not be updated
+		content.HandleFormError(
+			w,
+			r,
+			change,
+			changeForm,
+			changeErrMsg,
+			fmt.Errorf("Unable to save the updated password: %w", err))
+		return false
+	}
+
+	changeForm.OldPassword = ""
+	changeForm.NewPassword = ""
+	changeForm.NewPasswordMatch = ""
+	changeForm.SetFormMessage("Your password has been changed.")
+
+	err = change.Render(w, r)
+	if err != nil {
+		content.HandleError(
+			w,
+			r,
+			"The password was updated, but there was an error displaying the change form.",
+			err,
+			http.StatusInternalServerError)
+		return false
+	}
+
+	return true
 }
