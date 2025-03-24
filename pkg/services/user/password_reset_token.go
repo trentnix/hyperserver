@@ -19,7 +19,10 @@ type (
 	// AuthResetToken defines the data that will be serialized to the database to
 	// manage a reset token
 	AuthResetToken struct {
-		UserId    string `db:"user_id"`
+		UserId string `db:"user_id"`
+		// A token hash is used because the hash is stored in the database. That ensures
+		// that if the database is compromised, the tokens themselves won't be
+		// compromised. It's similar to storing a password hash.
 		TokenHash string `db:"token_hash"`
 		Token     string
 		ExpiresAt time.Time `db:"expires_at"`
@@ -36,10 +39,10 @@ const (
 	resetTokenType = "auth-reset"
 )
 
-// GetAuthResetTokenByID retrieves an AuthResetToken for the specified user from the database
-func GetAuthResetTokenByID(db *sqlx.DB, userId string) (*AuthResetToken, error) {
+// GetAuthResetTokenByUser retrieves an AuthResetToken for the specified user from the database
+func GetAuthResetTokenByUser(db *sqlx.DB, userId string) (*AuthResetToken, error) {
 	if userId == "" {
-		return nil, NewErrInvalidResetToken(fmt.Errorf("get token by user: user id in not specified"))
+		return nil, NewErrUserNotSpecified(fmt.Errorf("get token by user"))
 	}
 
 	var token AuthResetToken
@@ -54,9 +57,9 @@ func GetAuthResetTokenByID(db *sqlx.DB, userId string) (*AuthResetToken, error) 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// No row was found, handle accordingly.
-			return nil, NewErrInvalidResetToken(fmt.Errorf("no reset token found for the given user"))
+			return nil, NewErrTokenNotFound(fmt.Errorf("get token by user: %s", userId))
 		}
-		return nil, database.NewErrDatabase(fmt.Errorf("error retrieving a reset token by user: %w", err))
+		return nil, database.NewErrDatabase(fmt.Errorf("get token by user: %s: %w", userId, err))
 	}
 
 	return &token, nil
@@ -65,7 +68,7 @@ func GetAuthResetTokenByID(db *sqlx.DB, userId string) (*AuthResetToken, error) 
 // GetAuthResetTokenByHash retrieves an AuthResetToken for the specified token value from the database
 func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error) {
 	if token == "" {
-		return nil, NewErrInvalidResetToken(fmt.Errorf("get token by value: token value in not specified"))
+		return nil, NewErrTokenNotSpecified(fmt.Errorf("get token by value"))
 	}
 
 	var passwordResetToken AuthResetToken
@@ -73,16 +76,16 @@ func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error)
 	query := fmt.Sprintf(`
         SELECT user_id, token_hash, expires_at
         FROM %s
-        WHERE token_hash = ?
+        WHERE token_hash = ? AND token_type = ?
     `, userTokenTableName)
 
-	err := db.Get(&passwordResetToken, query, token)
+	err := db.Get(&passwordResetToken, query, token, resetTokenType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// no row was found, handle accordingly.
-			return nil, NewErrInvalidResetToken(fmt.Errorf("no reset token found for the given value"))
+			return nil, NewErrTokenNotFound(fmt.Errorf("get token by value"))
 		}
-		return nil, database.NewErrDatabase(fmt.Errorf("error retrieving a reset token by value: %w", err))
+		return nil, database.NewErrDatabase(fmt.Errorf("get token by value: %w", err))
 	}
 
 	return &passwordResetToken, nil
@@ -90,16 +93,17 @@ func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error)
 
 // Create inserts an AuthRequestToken into the database
 func (token *AuthResetToken) Create(db *sqlx.DB) error {
+	errCreateToken := errors.New("error creating a new token in the database")
 	if token.UserId == "" {
-		return NewErrInvalidResetToken(fmt.Errorf("create token: user id in not specified"))
+		return NewErrUserNotSpecified(errCreateToken)
 	}
 
 	if token.TokenHash == "" {
-		return NewErrInvalidResetToken(fmt.Errorf("create token: token value in not specified"))
+		return NewErrTokenNotSpecified(errCreateToken)
 	}
 
 	if token.ExpiresAt.IsZero() {
-		return NewErrInvalidResetToken(fmt.Errorf("create token: expiration date in not specified"))
+		return NewErrTokenExpirationNotSpecified(errCreateToken)
 	}
 
 	query := fmt.Sprintf(`
@@ -113,12 +117,13 @@ func (token *AuthResetToken) Create(db *sqlx.DB) error {
 
 // Delete removes an AuthResetToken from the database
 func (token *AuthResetToken) Delete(db *sqlx.DB) error {
+	errDeleteToken := errors.New("error deleting an existing token")
 	if token.UserId == "" {
-		return NewErrInvalidResetToken(fmt.Errorf("delete token: user id in not specified"))
+		return NewErrUserNotSpecified(errDeleteToken)
 	}
 
 	if token.TokenHash == "" {
-		return NewErrInvalidResetToken(fmt.Errorf("delete token: token value in not specified"))
+		return NewErrTokenNotSpecified(errDeleteToken)
 	}
 
 	query := fmt.Sprintf(`
@@ -137,7 +142,7 @@ func (token *AuthResetToken) Delete(db *sqlx.DB) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("error deleting the specified token from the database: no rows affected")
+		return NewErrTokenNotFound(errDeleteToken)
 	}
 
 	return nil
@@ -146,7 +151,7 @@ func (token *AuthResetToken) Delete(db *sqlx.DB) error {
 // DeleteAllTokensByUser deletes all of the tokens from the database for the specified user
 func DeleteAllTokensByUser(db *sqlx.DB, userId string) error {
 	if userId == "" {
-		return NewErrInvalidResetToken(fmt.Errorf("delete all user tokens: user id in not specified"))
+		return NewErrUserNotSpecified(errors.New("error deleting all user tokens"))
 	}
 
 	query := fmt.Sprintf(`
@@ -161,12 +166,13 @@ func DeleteAllTokensByUser(db *sqlx.DB, userId string) error {
 // NewPasswordResetToken creates a password reset authorization token, stores it in the
 // database as a hashed value, and returns the token to the caller
 func NewPasswordResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthResetToken, error) {
+	errNewResetToken := errors.New("error creating a new reset token instance")
 	if u == nil {
-		return nil, NewErrInvalidResetToken(fmt.Errorf("new token creation: user id in not specified"))
+		return nil, NewErrUserNotSpecified(errNewResetToken)
 	}
 
 	if expiration <= 0 {
-		return nil, NewErrInvalidResetToken(fmt.Errorf("new token creation: expiration date in not specified"))
+		return nil, NewErrTokenExpirationNotSpecified(errNewResetToken)
 	}
 
 	// create token - user.id and expiration
@@ -202,6 +208,11 @@ func NewPasswordResetToken(u *User, jwtKey []byte, expiration time.Duration) (*A
 
 // ValidateResetToken confirms whether the provided reset authorization token is valid
 func ValidateResetToken(db *sqlx.DB, tokenString string) (*User, error) {
+	errValidateReset := errors.New("error validating the specified reset token")
+	if tokenString == "" {
+		return nil, NewErrTokenNotSpecified(errValidateReset)
+	}
+
 	// hash the received token
 	hash := sha256.Sum256([]byte(tokenString))
 	tokenHash := hex.EncodeToString(hash[:])
@@ -209,7 +220,7 @@ func ValidateResetToken(db *sqlx.DB, tokenString string) (*User, error) {
 	// retrieve the token record from the database
 	passwordResetToken, err := GetAuthResetTokenByHash(db, tokenHash)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, NewErrTokenNotFound(err)
 		}
 
@@ -218,13 +229,13 @@ func ValidateResetToken(db *sqlx.DB, tokenString string) (*User, error) {
 
 	// check if the token is expired
 	if time.Now().After(passwordResetToken.ExpiresAt) {
-		return nil, NewErrTokenExpired(fmt.Errorf("reset token validation failed"))
+		return nil, NewErrTokenExpired(errValidateReset)
 	}
 
 	// retrieve the associated user
 	user, err := GetUserByID(db, passwordResetToken.UserId)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, NewErrUserNotFound(err)
 		}
 

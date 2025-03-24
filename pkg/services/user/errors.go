@@ -110,3 +110,17 @@ func NewErrTokenExpired(err error) *ErrTokenExpired {
 		},
 	}
 }
+
+// ErrTokenExpirationNotSpecified indicates no expiration value has been provided
+type ErrTokenExpirationNotSpecified struct {
+	*BaseError
+}
+
+func NewErrTokenExpirationNotSpecified(err error) *ErrTokenExpirationNotSpecified {
+	return &ErrTokenExpirationNotSpecified{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "token expiration not set",
+		},
+	}
+}

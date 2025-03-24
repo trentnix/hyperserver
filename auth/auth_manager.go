@@ -397,7 +397,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 	resetSuccessful := (*authService).Reset(w, r, u, token, a.ResetRequiresNewCredentials)
 	if resetSuccessful {
 		// delete user reset token
-		resetToken, tokenErr := user.GetAuthResetTokenByID(a.db, u.ID)
+		resetToken, tokenErr := user.GetAuthResetTokenByUser(a.db, u.ID)
 		if tokenErr != nil {
 			logger.LogRequestError(r, user.NewErrTokenNotFound(tokenErr))
 		}
