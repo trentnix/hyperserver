@@ -276,7 +276,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Register handles a registration request, valides the input, creates a new user account, sends
+// Register handles a registration request, validates the input, creates a new user account, sends
 // verification instructions (as configured), and handles the user response.
 //
 // The registration flow (TO DO) is as follows:
@@ -503,7 +503,7 @@ func (a *EmailAuthService) Reset(
 	r *http.Request,
 	u *user.User,
 	token string,
-	resetRequiresNewCredentials bool,
+	requireNewCredentials bool,
 ) bool {
 	reset := content.NewManagedContent(r)
 	reset.AddContent(emailResetPasswordFormTemplate)
@@ -546,7 +546,7 @@ func (a *EmailAuthService) Reset(
 
 	resetForm.ActionUrl = actionUrl.String()
 
-	if resetRequiresNewCredentials {
+	if requireNewCredentials {
 		if u.Password != "" && password.CheckPasswordHash(resetForm.Password, u.Password) {
 			// the new password is the same as the old, but a new password is required according
 			// to the configuration
