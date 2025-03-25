@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
-	auth_services "github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -17,7 +16,7 @@ import (
 func LoadAuthenticatedUser(db *sqlx.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			u, err := auth_services.GetAuthenticatedUser(r, db)
+			u, err := user.GetAuthenticatedUser(r, db)
 
 			var notFoundErr *user.ErrUserNotFound
 			if err != nil && !errors.As(err, &notFoundErr) {
@@ -51,7 +50,7 @@ func RequireAuthentication(db *sqlx.DB) func(http.Handler) http.Handler {
 			if u == nil {
 				// don't allow access
 				content.HandleError(w, r,
-					"You must be logged-in to access the requested resource",
+					"The requested resource is only available to authenticated users",
 					nil,
 					http.StatusForbidden)
 				return
@@ -106,7 +105,7 @@ func getAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
 
 	u := user.GetUserFromContext(ctx)
 	if u == nil {
-		u, err := auth_services.GetAuthenticatedUser(r, db)
+		u, err := user.GetAuthenticatedUser(r, db)
 		if err != nil {
 			var notFoundErr *user.ErrUserNotFound
 			if !errors.As(err, &notFoundErr) {

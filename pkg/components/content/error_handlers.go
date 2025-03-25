@@ -14,13 +14,14 @@ import (
 )
 
 // httpError calls http.Error instead of using a customer error handler
-func httpError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatusCode int) {
+func httpError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
 	errMessage := message
 	if err != nil {
 		errMessage = fmt.Sprintf("%s: %v", message, err)
+		logger.LogRequestError(r, fmt.Errorf("%s (%d): %w", message, err, httpStatus))
 	}
 
-	http.Error(w, errMessage, httpStatusCode)
+	http.Error(w, errMessage, httpStatus)
 }
 
 // HandleError calls the registered error handler if a ContentManager exists. Otherwise, it
@@ -32,7 +33,9 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 		return
 	}
 
-	logger.LogRequestError(r, err)
+	if err != nil {
+		logger.LogRequestError(r, fmt.Errorf("%s (%d): %w", message, err, httpStatus))
+	}
 
 	var parseErr *ErrParsingTemplates
 	if errors.As(err, &parseErr) {

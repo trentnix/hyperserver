@@ -77,6 +77,7 @@ func createUserTable(db *sqlx.DB) error {
 				id VARCHAR(36) PRIMARY KEY,
 				email VARCHAR(255) NOT NULL UNIQUE,
 				verified BOOLEAN NOT NULL DEFAULT FALSE,
+				verification_required BOOLEAN NOT NULL DEFAULT FALSE,
 				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				registration_auth_type VARCHAR(50),

@@ -15,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -60,25 +61,25 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 func (a *AuthManager) Routes(mux *http.ServeMux) {
 	if a.Enabled {
 		// login / logout
-		mux.Handle("/auth/login", http.HandlerFunc(a.GetLogin))
-		mux.Handle("GET /auth/login/{authType}", http.HandlerFunc(a.GetLoginService))
-		mux.Handle("POST /auth/login/{authType}", http.HandlerFunc(a.Login))
+		mux.Handle("/auth/login", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetLogin)))
+		mux.Handle("GET /auth/login/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetLoginService)))
+		mux.Handle("POST /auth/login/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Login)))
 		mux.Handle("/auth/logout", http.HandlerFunc(a.Logout))
 
 		// register
-		mux.Handle("/auth/register", http.HandlerFunc(a.GetRegister))
-		mux.Handle("GET /auth/register/{authType}", http.HandlerFunc(a.GetRegisterService))
-		mux.Handle("POST /auth/register/{authType}", http.HandlerFunc(a.Register))
+		mux.Handle("/auth/register", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetRegister)))
+		mux.Handle("GET /auth/register/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetRegisterService)))
+		mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Register)))
 
 		// reset
-		mux.Handle("GET /auth/reset/request/{authType}", http.HandlerFunc(a.GetResetRequest))
-		mux.Handle("POST /auth/reset/request/{authType}", http.HandlerFunc(a.ResetRequest))
-		mux.Handle("GET /auth/reset/{authType}", http.HandlerFunc(a.GetReset))
-		mux.Handle("POST /auth/reset/{authType}", http.HandlerFunc(a.Reset))
+		mux.Handle("GET /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetResetRequest)))
+		mux.Handle("POST /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.ResetRequest)))
+		mux.Handle("GET /auth/reset/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetReset)))
+		mux.Handle("POST /auth/reset/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Reset)))
 
 		// change
-		mux.Handle("GET /auth/change/{authType}", http.HandlerFunc(a.GetChange))
-		mux.Handle("POST /auth/change/{authType}", http.HandlerFunc(a.Change))
+		mux.Handle("GET /auth/change/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetChange)))
+		mux.Handle("POST /auth/change/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.Change)))
 	}
 }
 
@@ -179,7 +180,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setAuthenticatedUserErr := SetAuthenticatedUser(r, w, u)
+	setAuthenticatedUserErr := user.SetAuthenticatedUser(r, w, u)
 	if setAuthenticatedUserErr != nil {
 		content.HandleError(w, r, "There was an internal error when trying to login", setAuthenticatedUserErr, http.StatusInternalServerError)
 		return
@@ -202,7 +203,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout ends a session for any logged-in user
 func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
-	logoutErr := LogoutAuthenticatedUser(r, w)
+	logoutErr := user.LogoutAuthenticatedUser(r, w)
 	if logoutErr != nil {
 		content.HandleError(w, r, "There was an error trying to log out", logoutErr, http.StatusInternalServerError)
 		return
@@ -444,14 +445,6 @@ func getAuthService(authType string) *AuthService {
 // GetChange starts the authentication change process for the specified AuthService implementation.
 // This should only be available to authenticated users.
 func (a *AuthManager) GetChange(w http.ResponseWriter, r *http.Request) {
-	// the user must be authenticated
-	//   TO DO: this probably should be handled in middleware
-	u := user.GetUserFromContext(r.Context())
-	if u == nil {
-		content.HandleError(w, r, "You must be logged in to change your password.", nil, http.StatusInternalServerError)
-		return
-	}
-
 	authType := r.PathValue("authType")
 	if authType == "" {
 		content.HandleError(w, r, "No authorization service was specified. Unable to modify authentication.", nil, http.StatusInternalServerError)
