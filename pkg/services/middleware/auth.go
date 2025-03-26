@@ -56,7 +56,7 @@ func RequireAuthentication(db *sqlx.DB) func(http.Handler) http.Handler {
 				return
 			}
 
-			if u.VerificationRequired && !u.Verified {
+			if u.NeedsVerification() {
 				// don't allow access
 				content.HandleError(w, r,
 					"Your account must be verified before accessing the requested resource",

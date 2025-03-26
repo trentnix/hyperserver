@@ -203,6 +203,16 @@ func (user *User) Delete(db *sqlx.DB) error {
 	return err
 }
 
+// NeedsVerification determines whether the specified user is not verified and needs to be
+// verified to access resources available to authenticated, verified users
+func (user *User) NeedsVerification() bool {
+	if !user.VerificationRequired || user.Verified {
+		return false
+	}
+
+	return true
+}
+
 // AddUserToRequestContext adds the specified user to the provided request
 func AddUserToRequestContext(r *http.Request, user *User) *http.Request {
 	ctx := r.Context()
