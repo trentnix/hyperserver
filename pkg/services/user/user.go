@@ -213,6 +213,12 @@ func (user *User) NeedsVerification() bool {
 	return true
 }
 
+// SetVerified sets the specified user's verification flag. The user will still need to be
+// saved to serialize the change to the data store.
+func (user *User) SetVerified() {
+	user.Verified = true
+}
+
 // AddUserToRequestContext adds the specified user to the provided request
 func AddUserToRequestContext(r *http.Request, user *User) *http.Request {
 	ctx := r.Context()
