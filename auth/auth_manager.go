@@ -71,13 +71,17 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		mux.Handle("GET /auth/register/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetRegisterService)))
 		mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Register)))
 
-		// reset
+		// validate a registered user
+		mux.Handle("POST /auth/verify", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Verify)))
+		mux.Handle("GET /auth/verify", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.SendVerificationRequest)))
+
+		// reset credentials
 		mux.Handle("GET /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetResetRequest)))
 		mux.Handle("POST /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.ResetRequest)))
 		mux.Handle("GET /auth/reset/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetReset)))
 		mux.Handle("POST /auth/reset/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Reset)))
 
-		// change
+		// change change credentials
 		mux.Handle("GET /auth/change/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetChange)))
 		mux.Handle("POST /auth/change/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.Change)))
 	}
@@ -481,4 +485,11 @@ func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 	}
 
 	(*authService).Change(w, r, u)
+}
+
+func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Request) {
+}
+
+// Verify processes an attempt to verify a registered account
+func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 }
