@@ -125,3 +125,33 @@ func NewErrTokenExpirationNotSpecified(err error) *ErrTokenExpirationNotSpecifie
 		},
 	}
 }
+
+// ErrSendVerification indicates there was an error sending a verification request
+type ErrSendVerification struct {
+	*BaseError
+}
+
+// NewErrSendVerification creates an instance of ErrSendVerification
+func NewErrSendVerification(err error) *ErrSendVerification {
+	return &ErrSendVerification{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "verification error",
+		},
+	}
+}
+
+// ErrJwtKeyNotSet indicates no JWT key was set
+type ErrJwtKeyNotSet struct {
+	*BaseError
+}
+
+// NewErrJwtKeyNotSet creates an instance of ErrJwtKeyNotSet
+func NewErrJwtKeyNotSet(err error) *ErrJwtKeyNotSet {
+	return &ErrJwtKeyNotSet{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "JWT key is not set",
+		},
+	}
+}

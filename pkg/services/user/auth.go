@@ -3,8 +3,11 @@ package user
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
@@ -93,4 +96,32 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
 	}
 
 	return u_db, nil
+}
+
+// GetVerificationToken retrieves a new verification token for the specified user
+func NewVerificationToken(userId string, jwtKey []byte, expiration time.Duration) (string, error) {
+	if len(jwtKey) == 0 {
+		return "", NewErrJwtKeyNotSet(fmt.Errorf("unable to send verification token"))
+	}
+
+	if userId == "" {
+		return "", NewErrUserNotSpecified(fmt.Errorf("a user must be specified to know the verification destination"))
+	}
+
+	expirationTime := time.Now().Add(expiration)
+	claims := &VerificationClaims{
+		Id: userId,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+
+	// Create and sign the token with the specified algorithm and claims
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	verificationToken, err := token.SignedString(jwtKey)
+	if err != nil {
+		return "", NewErrToken(err)
+	}
+
+	return verificationToken, nil
 }

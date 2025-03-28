@@ -4,6 +4,7 @@ package content
 
 import (
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/trentnix/hyperserver/config"
@@ -36,6 +37,11 @@ type (
 		AppName string
 		// default HTML page title
 		AppTitle string
+
+		// host name
+		Host string
+		// port the application handlers are listening on
+		Port string
 	}
 )
 
@@ -53,6 +59,9 @@ const (
 	ErrorDefault       = "/error"
 	AuthDefault        = "/login"
 	NotFoundURLDefault = "/404"
+
+	defaultHost = "localhost"
+	defaultPort = "80"
 )
 
 var (
@@ -73,27 +82,38 @@ func GetContentManager() *ContentManagerService {
 
 // NewContentManager returns a (non-Singleton) instance of a ContentManagerService
 func NewContentManager() *ContentManagerService {
-	contentManager := ContentManagerService{}
-	contentManager.Layouts = make(map[string][]TemplatePath)
-	contentManager.Contents = make(map[string][]TemplatePath)
-	contentManager.Components = make(map[string][]TemplatePath)
+	cm := ContentManagerService{}
+	cm.Layouts = make(map[string][]TemplatePath)
+	cm.Contents = make(map[string][]TemplatePath)
+	cm.Components = make(map[string][]TemplatePath)
 
-	contentManager.HandleError = httpError
-	contentManager.HomeURL = HomeDefault
-	contentManager.AuthURL = AuthDefault
-	contentManager.ErrorURL = ErrorDefault
-	contentManager.NotFoundURL = NotFoundURLDefault
+	cm.HandleError = httpError
+	cm.HomeURL = HomeDefault
+	cm.AuthURL = AuthDefault
+	cm.ErrorURL = ErrorDefault
+	cm.NotFoundURL = NotFoundURLDefault
 
-	contentManager.AppName = defaultAppName
-	contentManager.AppTitle = defaultAppTitle
+	cm.AppName = defaultAppName
+	cm.AppTitle = defaultAppTitle
 
-	return &contentManager
+	cm.Host = defaultHost
+	cm.Port = defaultPort
+
+	return &cm
 }
 
+// Configure does any configuration on the ContentServiceManager that was loaded from
+// the application configuration
 func (c *ContentManagerService) Configure(cfg *config.Config) {
 	if cfg.App.Name != "" {
 		contentManager.AppName = cfg.App.Name
 	}
+
+	if cfg.HTTP.Hostname != "" {
+		contentManager.Host = cfg.HTTP.Hostname
+	}
+
+	c.Port = strconv.Itoa(int(cfg.HTTP.Port))
 }
 
 // RegisterLayouts overwrites the layout templates stored in the specified content manager service

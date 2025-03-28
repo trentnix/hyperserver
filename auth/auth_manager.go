@@ -4,6 +4,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 type (
@@ -25,10 +27,12 @@ type (
 
 		db *sqlx.DB
 
-		VerificationTokenExpiration time.Duration
-		ResetTokenExpiration        time.Duration
+		verificationJwtKey          string
+		verificationTokenExpiration time.Duration
+		verificationEndpoint        string
+		resetTokenExpiration        time.Duration
 
-		ResetRequiresNewCredentials bool
+		resetRequiresNewCredentials bool
 	}
 )
 
@@ -37,6 +41,8 @@ const (
 	authRegisterSelectionTemplate = "auth/templates/html/register.html"
 	authLoginDefaultTemplate      = "auth/templates/html/login-default.html"
 	authRegisterDefaultTemplate   = "auth/templates/html/register-default.html"
+
+	defaultVerificationEndpoint = "/auth/verify"
 )
 
 // init registers the AuthManager handler with the application
@@ -49,10 +55,13 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
 	a.db = s.Database
 
-	a.ResetTokenExpiration = s.Config.Auth.ResetTokenExpiration
-	a.VerificationTokenExpiration = s.Config.Auth.VerificationTokenExpiration
+	a.verificationJwtKey = s.Config.Auth.JwtKey
+	a.resetTokenExpiration = s.Config.Auth.ResetTokenExpiration
+	a.verificationTokenExpiration = s.Config.Auth.VerificationTokenExpiration
 
-	a.ResetRequiresNewCredentials = s.Config.Auth.ResetRequiresNewCredentials
+	a.resetRequiresNewCredentials = s.Config.Auth.ResetRequiresNewCredentials
+
+	a.verificationEndpoint = defaultVerificationEndpoint
 
 	return nil
 }
@@ -72,8 +81,8 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Register)))
 
 		// validate a registered user
-		mux.Handle("POST /auth/verify", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Verify)))
-		mux.Handle("GET /auth/verify", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.SendVerificationRequest)))
+		mux.Handle("/auth/verify", http.HandlerFunc(a.Verify))
+		mux.Handle("/auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
 
 		// reset credentials
 		mux.Handle("GET /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetResetRequest)))
@@ -310,7 +319,7 @@ func (a *AuthManager) ResetRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).ResetRequest(w, r, a.ResetTokenExpiration)
+	(*authService).ResetRequest(w, r, a.resetTokenExpiration)
 }
 
 // GetReset starts the authentication reset process for the specified AuthService implementation.
@@ -403,7 +412,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resetSuccessful := (*authService).Reset(w, r, u, token, a.ResetRequiresNewCredentials)
+	resetSuccessful := (*authService).Reset(w, r, u, token, a.resetRequiresNewCredentials)
 	if resetSuccessful {
 		// delete user reset token
 		resetToken, tokenErr := user.GetAuthResetTokenByUser(a.db, u.ID)
@@ -488,6 +497,65 @@ func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Request) {
+	errSendVerificationRequest := errors.New("unable to send the user verification request")
+
+	if a.verificationJwtKey == "" {
+		// no verification key is set
+		content.HandleError(w, r, "No JWT key specified", user.NewErrJwtKeyNotSet(fmt.Errorf("unable to process send verification request")), http.StatusUnauthorized)
+		return
+	}
+
+	// retrieve the authenticated user
+	authUser, err := user.GetAuthenticatedUser(r, a.db)
+	if err != nil || authUser == nil {
+		// if no user is authenticated, deny access
+		content.HandleError(w, r, "Authentication required", user.NewErrUserNotFound(errSendVerificationRequest), http.StatusUnauthorized)
+		return
+	}
+
+	homeURL := content.GetContentManager().HomeURL
+
+	if authUser.Verified {
+		// the user is authenticated and verified, redirect to main
+		err := messages.AddSuccessMessage(w, r, "This user has already been verified.")
+		if err != nil {
+			logger.LogRequestError(r, err)
+		}
+
+		content.RedirectToURL(w, r, homeURL)
+		return
+	}
+
+	verificationToken, err := user.NewVerificationToken(authUser.ID, []byte(a.verificationJwtKey), a.resetTokenExpiration)
+	if err != nil {
+		// there was an error sending verification instructions
+		content.HandleError(w, r, "Unable to send the registration verification", user.NewErrSendVerification(err), http.StatusInternalServerError)
+		return
+	}
+
+	host := content.GetContentManager().Host
+	port := content.GetContentManager().Port
+
+	// TO DO - this should be rendered as a page instead of as a message. In the future, it will be sent
+	// via email or some other means.
+
+	params := map[string]string{"token": verificationToken}
+	validationUrl, err := util.BuildUrl(r, host, port, a.verificationEndpoint, params)
+	if err != nil {
+		content.HandleError(w, r,
+			"Unable to get your user verification instructions",
+			fmt.Errorf("unable to build a verification url: %w", err),
+			http.StatusInternalServerError)
+		return
+	}
+
+	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to verify your user account.`, validationUrl.String())
+	err = messages.AddSuccessMessage(w, r, successMessage)
+	if err != nil {
+		logger.LogRequestError(r, err)
+	}
+
+	content.RedirectToURL(w, r, homeURL)
 }
 
 // Verify processes an attempt to verify a registered account

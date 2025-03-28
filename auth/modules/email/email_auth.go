@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -167,11 +166,11 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", registerButtonTemplate))
 	}
 
-	if a.host = s.Config.HTTP.Hostname; a.host == "" {
+	if a.host = content.GetContentManager().Host; a.host == "" {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("application hostname not configured"))
 	}
 
-	if a.port = strconv.Itoa(int(s.Config.HTTP.Port)); a.port == "0" {
+	if a.port = content.GetContentManager().Port; a.port == "0" {
 		// validating against 0 because the "zero" (unset) value for Port is 0
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("application port not configured"))
 	}
@@ -424,7 +423,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// the specified user exists - generate a password token and save it to the database
-	token, err := user.NewPasswordResetToken(u, []byte(a.config.Auth.JwtKey), tokenExpiration)
+	token, err := user.NewAuthResetToken(u, []byte(a.config.Auth.JwtKey), tokenExpiration)
 	if err != nil {
 		content.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
 		return false

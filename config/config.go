@@ -55,6 +55,7 @@ type (
 	AuthConfig struct {
 		Enabled                      bool
 		JwtKey                       string
+		VerificationEndpoint         string
 		VerificationTokenExpiration  time.Duration
 		ResetTokenExpiration         time.Duration
 		ResetRequiresNewCredentials  bool
