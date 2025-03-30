@@ -41,6 +41,7 @@ const (
 	authRegisterSelectionTemplate = "auth/templates/html/register.html"
 	authLoginDefaultTemplate      = "auth/templates/html/login-default.html"
 	authRegisterDefaultTemplate   = "auth/templates/html/register-default.html"
+	messageTemplate               = "auth/templates/html/message.html"
 
 	defaultVerificationEndpoint = "/auth/verify"
 )
@@ -550,14 +551,22 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 	}
 
 	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to verify your user account.`, validationUrl.String())
-	err = messages.AddSuccessMessage(w, r, successMessage)
-	if err != nil {
-		logger.LogRequestError(r, err)
-	}
-
-	content.RedirectToURL(w, r, homeURL)
+	displayMessagePage(w, r, successMessage)
 }
 
 // Verify processes an attempt to verify a registered account
 func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
+}
+
+func displayMessagePage(w http.ResponseWriter, r *http.Request, message string) {
+	messagePage := content.NewManagedContent(r)
+	messagePage.AddContent(messageTemplate)
+	messagePage.Data = template.HTML(message)
+	err := messagePage.Render(w, r)
+	if err != nil {
+		content.HandleError(w, r,
+			fmt.Sprintf("Unable to display the following message: %s", message),
+			err,
+			http.StatusInternalServerError)
+	}
 }
