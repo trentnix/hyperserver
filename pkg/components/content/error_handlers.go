@@ -18,7 +18,7 @@ func httpError(w http.ResponseWriter, r *http.Request, message string, err error
 	errMessage := message
 	if err != nil {
 		errMessage = fmt.Sprintf("%s: %v", message, err)
-		logger.LogRequestError(r, fmt.Errorf("%s (%d): %w", message, err, httpStatus))
+		logger.LogRequestError(r, fmt.Errorf("%s (%d): %w", message, httpStatus, err))
 	}
 
 	http.Error(w, errMessage, httpStatus)
@@ -34,7 +34,7 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 	}
 
 	if err != nil {
-		logger.LogRequestError(r, fmt.Errorf("%s (%d): %w", message, err, httpStatus))
+		logger.LogRequestError(r, fmt.Errorf("%s (%d): %w", message, httpStatus, err))
 	}
 
 	var parseErr *ErrParsingTemplates
@@ -48,12 +48,12 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 
 	contentManager := GetContentManager()
 	if contentManager == nil {
-		http.Error(w, message, http.StatusInternalServerError)
+		httpError(w, r, message, NewErrContentManagerUnavailable(fmt.Errorf("no content manager available when handling an error")), http.StatusInternalServerError)
 		return
 	}
 
 	if htmx.IsHtmxRequest(r) {
-		// set a message redirect the user to the 404 handler
+		// redirect the user to the error handler
 		errAddMessage := messages.AddErrorMessage(w, r, message)
 		if errAddMessage != nil {
 			logger.LogRequestError(r, errAddMessage)
