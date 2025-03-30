@@ -498,6 +498,8 @@ func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 	(*authService).Change(w, r, u)
 }
 
+// SendVerificationRequest processes a user verification request by sending verification
+// instructions to the user
 func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Request) {
 	errSendVerificationRequest := errors.New("unable to send the user verification request")
 
@@ -557,5 +559,73 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 
 // Verify processes an attempt to verify a registered account
 func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
-	content.HandleMessage(w, r, "(not yet implemented)")
+	verificationToken := r.URL.Query().Get("token")
+	if verificationToken == "" {
+		content.HandleError(
+			w,
+			r,
+			"No verification token specified. Unable to verify the user.",
+			nil,
+			http.StatusInternalServerError)
+		return
+	}
+
+	contentManager := content.GetContentManager()
+	if contentManager == nil {
+		content.HandleError(
+			w,
+			r,
+			"The content manager is not configured or is not available.",
+			content.NewErrContentManagerUnavailable(fmt.Errorf("unable to verify the specified user token")),
+			http.StatusBadRequest)
+	}
+
+	verificationErrMsg := "Verification failed: unable to verify your user account."
+
+	verifiedUser, err := user.Verify(a.db, verificationToken, []byte(a.verificationJwtKey))
+	if err != nil {
+		content.HandleError(
+			w,
+			r,
+			verificationErrMsg,
+			fmt.Errorf("error retrieving the user from the verification token: %w", err),
+			http.StatusBadRequest)
+		return
+	}
+
+	if verifiedUser == nil {
+		content.HandleError(
+			w,
+			r,
+			verificationErrMsg,
+			fmt.Errorf("unable to retrieve the user from the verification token: %w", err),
+			http.StatusBadRequest)
+		return
+	}
+
+	authenticatedUser, _ := user.GetAuthenticatedUser(r, a.db)
+	if authenticatedUser != nil {
+		// a user is currently authenticated - redirect to Home with a custom message
+		authenticatedUserMessage := "Your account was verified successfully."
+		if authenticatedUser.Email != verifiedUser.Email {
+			authenticatedUserMessage = "The account was verified successfully, but is not currently logged in. Logout and login with the newly verified account for access."
+		}
+
+		err = messages.AddSuccessMessage(w, r, authenticatedUserMessage)
+		if err != nil {
+			logger.LogRequestError(r, err)
+		}
+
+		content.RedirectToURL(w, r, contentManager.HomeURL)
+
+		return
+	}
+
+	// no user is authenticated - redirect the requestor to the login page
+	err = messages.AddSuccessMessage(w, r, "Your account was verified successfully. Please login to access the site.")
+	if err != nil {
+		logger.LogRequestError(r, err)
+	}
+
+	content.RedirectToURL(w, r, contentManager.HomeURL)
 }

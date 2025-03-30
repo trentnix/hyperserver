@@ -3,9 +3,12 @@
 package user
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/jmoiron/sqlx"
+	"github.com/trentnix/hyperserver/pkg/database"
 )
 
 type (
@@ -62,4 +65,43 @@ func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) 
 // ValidateVerificationToken confirms whether the provided reset authorization token is valid
 func ValidateVerificationToken(db *sqlx.DB, tokenString string) (*User, error) {
 	return validateToken(db, tokenString, verificationTokenType)
+}
+
+// Verify handles a verification request by extracting and processing the provided token and
+// navigating the user accordingly
+func Verify(db *sqlx.DB, verificationToken string, jwtKey []byte) (*User, error) {
+	// Parse the token with the specified claims and signing method
+	claims := &VerificationClaims{}
+	token, err := jwt.ParseWithClaims(verificationToken, claims, func(token *jwt.Token) (interface{}, error) {
+		// Verify the signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, NewErrToken(fmt.Errorf("unexpected signing method: %v", token.Header["alg"]))
+		}
+
+		return jwtKey, nil
+	})
+	// If there's an error, or the token is invalid, return false
+	if err != nil {
+		return nil, NewErrToken(fmt.Errorf("could not parse the JWT: %w", err))
+	}
+
+	if !token.Valid {
+		return nil, NewErrToken(fmt.Errorf("the verification token could not be parsed."))
+	}
+
+	userAccount, err := GetUserByID(db, claims.Id)
+	if err != nil {
+		return nil, NewErrUserNotFound(err)
+	}
+
+	alreadyVerified := userAccount.Verified
+	if !alreadyVerified {
+		userAccount.Verified = true
+		err := userAccount.Save(db)
+		if err != nil {
+			return nil, database.NewErrDatabase(fmt.Errorf("error updating the specified user in the database: %w", err))
+		}
+	}
+
+	return userAccount, nil
 }
