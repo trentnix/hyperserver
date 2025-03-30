@@ -23,11 +23,15 @@ type (
 		HomeURL string
 		// url of the default authentication portal page - used for redirects
 		AuthURL string
+		// message URL
+		MessageURL string
 		// error URL
 		ErrorURL string
 		// url for 404 errors
 		NotFoundURL string
 
+		// HandleMessage lets the caller respond with the specified message
+		HandleMessage func(w http.ResponseWriter, r *http.Request, message string)
 		// HandleError lets the caller access the "error" handler
 		HandleError func(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int)
 		// HandleNotFound
@@ -55,10 +59,7 @@ const (
 	// HtmxType should be used when an HTMX response is required
 	HtmxType = "htmx"
 
-	HomeDefault        = "/"
-	ErrorDefault       = "/error"
-	AuthDefault        = "/login"
-	NotFoundURLDefault = "/404"
+	HomeDefault = "/"
 
 	defaultHost = "localhost"
 	defaultPort = "80"
@@ -87,11 +88,9 @@ func NewContentManager() *ContentManagerService {
 	cm.Contents = make(map[string][]TemplatePath)
 	cm.Components = make(map[string][]TemplatePath)
 
+	cm.HandleMessage = httpMessage
 	cm.HandleError = httpError
 	cm.HomeURL = HomeDefault
-	cm.AuthURL = AuthDefault
-	cm.ErrorURL = ErrorDefault
-	cm.NotFoundURL = NotFoundURLDefault
 
 	cm.AppName = defaultAppName
 	cm.AppTitle = defaultAppTitle

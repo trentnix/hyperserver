@@ -52,7 +52,7 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 		return
 	}
 
-	if htmx.IsHtmxRequest(r) {
+	if htmx.IsHtmxRequest(r) && contentManager.ErrorURL != "" {
 		// redirect the user to the error handler
 		errAddMessage := messages.AddErrorMessage(w, r, message)
 		if errAddMessage != nil {
@@ -123,7 +123,7 @@ func HandleNotFound(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errNotFound.Error(), http.StatusNotFound)
 	}
 
-	if htmx.IsHtmxRequest(r) {
+	if htmx.IsHtmxRequest(r) && contentManager.NotFoundURL != "" {
 		// set a message redirect the user to the 404 handler
 		RedirectToURL(w, r, contentManager.NotFoundURL)
 	} else {

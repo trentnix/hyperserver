@@ -96,3 +96,19 @@ func NewErrHtmxRequestRequired(err error) *ErrHtmxRequestRequired {
 		},
 	}
 }
+
+// ErrContentManagerUnavailable indicates the content manager is not set or is
+// not available
+type ErrContentManagerUnavailable struct {
+	*BaseError
+}
+
+// NewErrContentManagerUnavailable creates an instance of ErrContentManagerUnavailable
+func NewErrContentManagerUnavailable(err error) *ErrContentManagerUnavailable {
+	return &ErrContentManagerUnavailable{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "the content manager is not available",
+		},
+	}
+}

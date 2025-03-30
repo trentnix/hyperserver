@@ -2,6 +2,7 @@ package module_site
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -106,6 +107,24 @@ func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message
 	}
 
 	m.Error(w, r)
+}
+
+// HandleMessage writes the specified message to the message page
+func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "(no message)"
+	}
+
+	messagePage := content.NewManagedContent(r)
+	messagePage.AddContent(messageContent)
+	messagePage.Data = template.HTML(message)
+	err := messagePage.Render(w, r)
+	if err != nil {
+		content.HandleError(w, r,
+			fmt.Sprintf("Unable to display the following message: %s", message),
+			err,
+			http.StatusInternalServerError)
+	}
 }
 
 // SessionExample provides a handler that exercises session code by creating a session to store

@@ -44,6 +44,7 @@ const (
 	messageTemplate               = "auth/templates/html/message.html"
 
 	defaultVerificationEndpoint = "/auth/verify"
+	authEndpoint                = "auth/login"
 )
 
 // init registers the AuthManager handler with the application
@@ -71,7 +72,7 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 func (a *AuthManager) Routes(mux *http.ServeMux) {
 	if a.Enabled {
 		// login / logout
-		mux.Handle("/auth/login", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetLogin)))
+		mux.Handle(authEndpoint, middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetLogin)))
 		mux.Handle("GET /auth/login/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetLoginService)))
 		mux.Handle("POST /auth/login/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Login)))
 		mux.Handle("/auth/logout", http.HandlerFunc(a.Logout))
@@ -279,7 +280,7 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, err)
 	}
 
-	authURL := content.AuthDefault
+	authURL := authEndpoint
 	contentManager := content.GetContentManager()
 	if contentManager != nil {
 		authURL = contentManager.AuthURL
@@ -434,7 +435,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 			logger.LogRequestError(r, err)
 		}
 
-		authURL := content.AuthDefault
+		authURL := authEndpoint
 		contentManager := content.GetContentManager()
 		if contentManager != nil {
 			authURL = contentManager.AuthURL
@@ -551,22 +552,10 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 	}
 
 	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to verify your user account.`, validationUrl.String())
-	displayMessagePage(w, r, successMessage)
+	content.HandleMessage(w, r, successMessage)
 }
 
 // Verify processes an attempt to verify a registered account
 func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
-}
-
-func displayMessagePage(w http.ResponseWriter, r *http.Request, message string) {
-	messagePage := content.NewManagedContent(r)
-	messagePage.AddContent(messageTemplate)
-	messagePage.Data = template.HTML(message)
-	err := messagePage.Render(w, r)
-	if err != nil {
-		content.HandleError(w, r,
-			fmt.Sprintf("Unable to display the following message: %s", message),
-			err,
-			http.StatusInternalServerError)
-	}
+	content.HandleMessage(w, r, "(not yet implemented)")
 }
