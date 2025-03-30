@@ -90,6 +90,7 @@ func NewContentManager() *ContentManagerService {
 
 	cm.HandleMessage = httpMessage
 	cm.HandleError = httpError
+	cm.HandleNotFound = httpNotFound
 	cm.HomeURL = HomeDefault
 
 	cm.AppName = defaultAppName

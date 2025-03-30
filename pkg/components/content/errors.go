@@ -2,6 +2,8 @@
 package content
 
 import (
+	"fmt"
+
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
@@ -109,6 +111,25 @@ func NewErrContentManagerUnavailable(err error) *ErrContentManagerUnavailable {
 		BaseError: &BaseError{
 			Err:     err,
 			Message: "the content manager is not available",
+		},
+	}
+}
+
+// ErrHandlerReferencesSelf indicates the content manager's handler value is the current function,
+// which will result in an infinite loop
+type ErrHandlerReferencesSelf struct {
+	Handler string
+	*BaseError
+}
+
+// NewErrHandlerReferencesSelf creates an instance of ErrHandlerReferencesSelf
+func NewErrHandlerReferencesSelf(err error, handler string) *ErrHandlerReferencesSelf {
+	errMessage := fmt.Sprintf("the specified handler '%s' is also the content manager handler", handler)
+	return &ErrHandlerReferencesSelf{
+		Handler: handler,
+		BaseError: &BaseError{
+			Err:     err,
+			Message: errMessage,
 		},
 	}
 }

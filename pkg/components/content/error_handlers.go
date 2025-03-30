@@ -66,7 +66,7 @@ func HandleError(w http.ResponseWriter, r *http.Request, message string, err err
 		if reflect.ValueOf(contentManager.HandleError).Pointer() != reflect.ValueOf(HandleError).Pointer() {
 			contentManager.HandleError(w, r, message, err, httpStatus)
 		} else {
-			http.Error(w, message, http.StatusInternalServerError)
+			httpError(w, r, message, NewErrHandlerReferencesSelf(nil, "HandleError"), http.StatusInternalServerError)
 		}
 
 		return
@@ -104,30 +104,5 @@ func HandleFormError(
 		errMessage := fmt.Sprintf("there was an error rendering the specified form: %v", err)
 		logger.LogRequestError(r, fmt.Errorf("%s", errMessage))
 		contentManager.HandleError(w, r, errMessage, err, http.StatusInternalServerError)
-	}
-}
-
-// HandleNotFound is a static http.HandlerFunc to deal with 404 errors
-func HandleNotFound(w http.ResponseWriter, r *http.Request) {
-	if r == nil {
-		errMessage := "The requested resource was not found"
-		httpError(w, r, errMessage, NewErrRequestNotSet(nil), http.StatusInternalServerError)
-		return
-	}
-
-	errNotFound := fmt.Errorf("the resource requested ('%s') was not found", r.URL.Path)
-	logger.LogRequestError(r, NewErrResourceNotFound(errNotFound))
-
-	contentManager := GetContentManager()
-	if contentManager == nil {
-		http.Error(w, errNotFound.Error(), http.StatusNotFound)
-	}
-
-	if htmx.IsHtmxRequest(r) && contentManager.NotFoundURL != "" {
-		// set a message redirect the user to the 404 handler
-		RedirectToURL(w, r, contentManager.NotFoundURL)
-	} else {
-		contentManager.HandleNotFound(w, r)
-		return
 	}
 }
