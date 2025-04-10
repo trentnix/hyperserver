@@ -8,9 +8,12 @@ import (
 	"sync"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/components/types"
 )
 
 type (
+	TemplatePath = types.TemplatePath
+
 	ContentManagerService struct {
 		// Layouts templates will host content and components
 		Layouts map[string][]TemplatePath
