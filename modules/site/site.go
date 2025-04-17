@@ -1,11 +1,11 @@
-// site.go defines the site module
+// site.go defines and initializes the site module
 package module_site
 
 import (
 	"github.com/jmoiron/sqlx"
-	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
+	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -16,6 +16,7 @@ type (
 		Database *sqlx.DB
 
 		sessionManager *session.SessionManager
+		contentManager *content_services.ContentManagerService
 	}
 )
 
@@ -51,18 +52,18 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.Database = s.Database
 	m.sessionManager = session.GetSessionManager()
 
-	contentManager := content.GetContentManager()
-	contentManager.AddPageLayout(pageLayoutTemplate)
-	contentManager.AddPageComponent(messageComponentTemplate)
-	contentManager.AddPageComponent(consoleMessageComponentTemplate)
+	m.contentManager = s.ContentManager
+	m.contentManager.AddPageLayout(pageLayoutTemplate)
+	m.contentManager.AddPageComponent(messageComponentTemplate)
+	m.contentManager.AddPageComponent(consoleMessageComponentTemplate)
 
-	contentManager.HomeURL = homeURL
-	contentManager.AuthURL = authURL
-	contentManager.ErrorURL = errorURL
-	contentManager.NotFoundURL = notFoundURL
-	contentManager.HandleMessage = m.HandleMessage
-	contentManager.HandleError = m.HandleError
-	contentManager.HandleNotFound = m.NotFound
+	m.contentManager.HomeURL = homeURL
+	m.contentManager.AuthURL = authURL
+	m.contentManager.ErrorURL = errorURL
+	m.contentManager.NotFoundURL = notFoundURL
+	m.contentManager.HandleMessage = m.HandleMessage
+	m.contentManager.HandleError = m.HandleError
+	m.contentManager.HandleNotFound = m.NotFound
 
 	return nil
 }

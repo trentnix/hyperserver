@@ -9,10 +9,14 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
+	"github.com/trentnix/hyperserver/pkg/components/types"
+	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
 // Page defines the various fields that describe a particular site page
 type (
+	TemplatePath = types.TemplatePath
+
 	Content struct {
 		// Site name
 		Site string
@@ -51,7 +55,7 @@ type (
 
 		// ContentManager might contain layouts, content, and components that are used
 		// across the application and need to be combined when the Content is rendered
-		ContentManager *ContentManagerService
+		ContentManager *content_services.ContentManagerService
 
 		// Messages that should be rendered
 		Messages []messages.ContentMessage
@@ -64,8 +68,8 @@ type (
 // NewContent extracts Content data from the provided request
 func NewContent(r *http.Request) *Content {
 	c := Content{}
-	c.Site = defaultAppName
-	c.Title = defaultAppTitle
+	c.Site = content_services.DefaultAppName
+	c.Title = content_services.DefaultAppTitle
 	c.ResponseStatusCode = http.StatusOK
 
 	if r != nil {
@@ -84,7 +88,7 @@ func NewContent(r *http.Request) *Content {
 // the Content's ContentManagerService
 func NewManagedContent(r *http.Request) *Content {
 	c := NewContent(r)
-	c.ContentManager = GetContentManager()
+	c.ContentManager = content_services.GetContentManager()
 	c.Site = c.ContentManager.AppName
 	c.Title = c.ContentManager.AppTitle
 
@@ -142,10 +146,10 @@ func (c *Content) AddLogMessages(messages ...string) {
 func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	var managerLayouts, managerContents, managerComponents []TemplatePath
 	if c.ContentManager != nil {
-		contentType := PageType
+		contentType := content_services.PageType
 		if c.IsHtmx() {
 			// partial page
-			contentType = HtmxType
+			contentType = content_services.HtmxType
 		}
 
 		// load the templates from the ContentManagerService *before* any templates that might be

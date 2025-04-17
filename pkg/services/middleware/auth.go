@@ -7,15 +7,21 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/database"
+	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // LoadAuthenticatedUser extracts the authenticated user and adds it to the context
 func LoadAuthenticatedUser(db *sqlx.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if db == nil {
+				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
+			}
+
 			u, err := user.GetAuthenticatedUser(r, db)
 
 			var notFoundErr *user.ErrUserNotFound
@@ -34,13 +40,21 @@ func LoadAuthenticatedUser(db *sqlx.DB) func(http.Handler) http.Handler {
 }
 
 // RequireAuthentication determines whether the user is authenticated and, if not, denies access
-func RequireAuthentication(db *sqlx.DB) func(http.Handler) http.Handler {
+func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if db == nil {
+				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
+			}
+
+			if cm == nil {
+				util.HttpError(w, r, "content manager not specified", errors.New("content manager not specified"), http.StatusInternalServerError)
+			}
+
 			u, err := getAuthenticatedUser(r, db)
 			if err != nil {
 				// don't allow access
-				content.HandleError(w, r,
+				cm.HandleError(w, r,
 					"Unable to authenticate your account",
 					err,
 					http.StatusForbidden)
@@ -49,7 +63,7 @@ func RequireAuthentication(db *sqlx.DB) func(http.Handler) http.Handler {
 
 			if u == nil {
 				// don't allow access
-				content.HandleError(w, r,
+				cm.HandleError(w, r,
 					"The requested resource is only available to authenticated users",
 					nil,
 					http.StatusForbidden)
@@ -58,7 +72,7 @@ func RequireAuthentication(db *sqlx.DB) func(http.Handler) http.Handler {
 
 			if u.NeedsVerification() {
 				// don't allow access
-				content.HandleError(w, r,
+				cm.HandleError(w, r,
 					"Your account must be verified before accessing the requested resource",
 					nil,
 					http.StatusForbidden)
@@ -71,13 +85,21 @@ func RequireAuthentication(db *sqlx.DB) func(http.Handler) http.Handler {
 }
 
 // RequireAnonymous determines whether the user is authenticated and, if so, denies access
-func RequireAnonymous(db *sqlx.DB) func(http.Handler) http.Handler {
+func RequireAnonymous(db *sqlx.DB, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if db == nil {
+				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
+			}
+
+			if cm == nil {
+				util.HttpError(w, r, "content manager not specified", errors.New("content manager not specified"), http.StatusInternalServerError)
+			}
+
 			u, err := getAuthenticatedUser(r, db)
 			if err != nil {
 				// don't allow access
-				content.HandleError(w, r,
+				cm.HandleError(w, r,
 					"Unable to authenticate your account",
 					err,
 					http.StatusForbidden)
@@ -86,7 +108,7 @@ func RequireAnonymous(db *sqlx.DB) func(http.Handler) http.Handler {
 
 			if u != nil {
 				// don't allow access
-				content.HandleError(w, r,
+				cm.HandleError(w, r,
 					"The requested resource is not available to authenticated users",
 					nil,
 					http.StatusForbidden)

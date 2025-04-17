@@ -1,3 +1,4 @@
+// handlers.go defines handlers for the Site module
 package module_site
 
 import (
@@ -12,6 +13,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // ServeFavicon serves the favicon resource to a requestor
@@ -23,7 +25,7 @@ func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
 // Home renders the homepage
 func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != homeURL {
-		content.HandleNotFound(w, r)
+		m.contentManager.HandleNotFound(w, r)
 		return
 	}
 
@@ -40,7 +42,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	err := homepage.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
 	}
 }
 
@@ -54,7 +56,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "there was an error rendering the login page", err, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "there was an error rendering the login page", err, http.StatusInternalServerError)
 		return
 	}
 }
@@ -69,7 +71,7 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 
 	err := register.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "there was an error rendering the register page", err, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "there was an error rendering the register page", err, http.StatusInternalServerError)
 		return
 	}
 }
@@ -94,7 +96,7 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 	errorPage.Data = errorMessages
 
 	if err := errorPage.Render(w, r); err != nil {
-		content.HandleError(w, r, "there was an error rendering the error page", err, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "there was an error rendering the error page", err, http.StatusInternalServerError)
 	}
 }
 
@@ -120,7 +122,7 @@ func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, messa
 	messagePage.Data = template.HTML(message)
 	err := messagePage.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r,
+		m.contentManager.HandleError(w, r,
 			fmt.Sprintf("Unable to display the following message: %s", message),
 			err,
 			http.StatusInternalServerError)
@@ -136,13 +138,13 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	// get the "counterSession" session
 	sessionManager := session.GetSessionManager()
 	if sessionManager == nil {
-		content.HandleError(w, r, "there was an error retrieving the session manager", session.NewErrSessionManagerNotFound(nil), http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "there was an error retrieving the session manager", session.NewErrSessionManagerNotFound(nil), http.StatusInternalServerError)
 		return
 	}
 
 	mySession, sessionManagerErr := sessionManager.Get(r, "counterSession")
 	if sessionManagerErr != nil || mySession == nil {
-		content.HandleError(w, r, "there was an error retrieving the session", sessionManagerErr, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "there was an error retrieving the session", sessionManagerErr, http.StatusInternalServerError)
 		return
 	}
 
@@ -163,14 +165,14 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	mySession.Data[counterKey] = sCounter
 	sessionSaveErr := mySession.Save(r, w)
 	if sessionSaveErr != nil {
-		content.HandleError(w, r, "unable to save the counter session", sessionSaveErr, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "unable to save the counter session", sessionSaveErr, http.StatusInternalServerError)
 		return
 	}
 
 	// render the result
 	renderErr := page.Render(w, r)
 	if renderErr != nil {
-		content.HandleError(w, r, "there was an error rendering the home page", renderErr, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "there was an error rendering the home page", renderErr, http.StatusInternalServerError)
 		return
 	}
 }
@@ -185,11 +187,11 @@ func (m *SiteModule) NotFound(w http.ResponseWriter, r *http.Request) {
 
 	err := notFound.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
 	}
 }
 
 // Logout redirects the "/logout" route to the logout functionality provides by the auth package
 func (m *SiteModule) Logout(w http.ResponseWriter, r *http.Request) {
-	content.RedirectToURL(w, r, "/auth/logout")
+	util.RedirectToURL(w, r, "/auth/logout")
 }

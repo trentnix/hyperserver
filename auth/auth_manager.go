@@ -15,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
+	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -25,7 +26,8 @@ type (
 	AuthManager struct {
 		Enabled bool
 
-		db *sqlx.DB
+		db             *sqlx.DB
+		contentManager *content_services.ContentManagerService
 
 		verificationJwtKey          string
 		verificationTokenExpiration time.Duration
@@ -57,6 +59,12 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
 	a.db = s.Database
 
+	if s.ContentManager == nil {
+		return errors.New("Content Manager not configured")
+	}
+
+	a.contentManager = s.ContentManager
+
 	a.verificationJwtKey = s.Config.Auth.JwtKey
 	a.resetTokenExpiration = s.Config.Auth.ResetTokenExpiration
 	a.verificationTokenExpiration = s.Config.Auth.VerificationTokenExpiration
@@ -72,29 +80,29 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 func (a *AuthManager) Routes(mux *http.ServeMux) {
 	if a.Enabled {
 		// login / logout
-		mux.Handle(authEndpoint, middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetLogin)))
-		mux.Handle("GET /auth/login/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetLoginService)))
-		mux.Handle("POST /auth/login/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Login)))
+		mux.Handle(authEndpoint, middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetLogin)))
+		mux.Handle("GET /auth/login/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetLoginService)))
+		mux.Handle("POST /auth/login/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Login)))
 		mux.Handle("/auth/logout", http.HandlerFunc(a.Logout))
 
 		// register
-		mux.Handle("/auth/register", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetRegister)))
-		mux.Handle("GET /auth/register/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.GetRegisterService)))
-		mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Register)))
+		mux.Handle("/auth/register", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegister)))
+		mux.Handle("GET /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegisterService)))
+		mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Register)))
 
 		// validate a registered user
 		mux.Handle("/auth/verify", http.HandlerFunc(a.Verify))
 		mux.Handle("/auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
 
 		// reset credentials
-		mux.Handle("GET /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetResetRequest)))
-		mux.Handle("POST /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.ResetRequest)))
-		mux.Handle("GET /auth/reset/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetReset)))
-		mux.Handle("POST /auth/reset/{authType}", middleware.RequireAnonymous(a.db)(http.HandlerFunc(a.Reset)))
+		mux.Handle("GET /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.GetResetRequest)))
+		mux.Handle("POST /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.ResetRequest)))
+		mux.Handle("GET /auth/reset/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.GetReset)))
+		mux.Handle("POST /auth/reset/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Reset)))
 
 		// change change credentials
-		mux.Handle("GET /auth/change/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.GetChange)))
-		mux.Handle("POST /auth/change/{authType}", middleware.RequireAuthentication(a.db)(http.HandlerFunc(a.Change)))
+		mux.Handle("GET /auth/change/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.GetChange)))
+		mux.Handle("POST /auth/change/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.Change)))
 	}
 }
 
@@ -121,7 +129,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.Render(w, r); err != nil {
-		content.HandleError(w, r, "could not render the login page", err, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "could not render the login page", err, http.StatusInternalServerError)
 	}
 }
 
@@ -148,7 +156,7 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.Render(w, r); err != nil {
-		content.HandleError(w, r, "could not render the registration page", err, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "could not render the registration page", err, http.StatusInternalServerError)
 	}
 }
 
@@ -163,13 +171,13 @@ func (a *AuthManager) GetLoginService(w http.ResponseWriter, r *http.Request) {
 // the specified service's login entry point
 func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Request, authType string) {
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to login.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to login.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to login.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to login.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -180,13 +188,13 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to login.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to login.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to login.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to login.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -197,7 +205,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	setAuthenticatedUserErr := user.SetAuthenticatedUser(r, w, u)
 	if setAuthenticatedUserErr != nil {
-		content.HandleError(w, r, "There was an internal error when trying to login", setAuthenticatedUserErr, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "There was an internal error when trying to login", setAuthenticatedUserErr, http.StatusInternalServerError)
 		return
 	}
 
@@ -207,20 +215,14 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, err)
 	}
 
-	homeURL := content.HomeDefault
-	contentManager := content.GetContentManager()
-	if contentManager != nil {
-		homeURL = contentManager.HomeURL
-	}
-
-	content.RedirectToURL(w, r, homeURL)
+	util.RedirectToURL(w, r, a.contentManager.HomeURL)
 }
 
 // Logout ends a session for any logged-in user
 func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 	logoutErr := user.LogoutAuthenticatedUser(r, w)
 	if logoutErr != nil {
-		content.HandleError(w, r, "There was an error trying to log out", logoutErr, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "There was an error trying to log out", logoutErr, http.StatusInternalServerError)
 		return
 	}
 
@@ -232,13 +234,7 @@ func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, err)
 	}
 
-	homeURL := content.HomeDefault
-	contentManager := content.GetContentManager()
-	if contentManager != nil {
-		homeURL = contentManager.HomeURL
-	}
-
-	content.RedirectToURL(w, r, homeURL)
+	util.RedirectToURL(w, r, a.contentManager.HomeURL)
 }
 
 // GetRegisterService retrieves the first step of registration process for the given
@@ -246,13 +242,13 @@ func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to register.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to register.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "Register unavailable: the specified auth service was found.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "Register unavailable: the specified auth service was found.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -263,13 +259,13 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to register.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to register.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "Register unavailable: the specified auth service was found.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "Register unavailable: the specified auth service was found.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -280,13 +276,7 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, err)
 	}
 
-	authURL := authEndpoint
-	contentManager := content.GetContentManager()
-	if contentManager != nil {
-		authURL = contentManager.AuthURL
-	}
-
-	content.RedirectToURL(w, r, authURL)
+	util.RedirectToURL(w, r, a.contentManager.AuthURL)
 }
 
 // GetResetRequest renders the reset request page to the user using the specified AuthService
@@ -294,13 +284,13 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -311,13 +301,13 @@ func (a *AuthManager) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) ResetRequest(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -329,13 +319,13 @@ func (a *AuthManager) ResetRequest(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		content.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
 		return
 	}
 
@@ -350,19 +340,19 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 			a.GetResetRequest(w, r)
 			return
 		default:
-			content.HandleError(w, r, "Could not reset authorization: invalid token", nil, http.StatusInternalServerError)
+			a.contentManager.HandleError(w, r, "Could not reset authorization: invalid token", nil, http.StatusInternalServerError)
 			return
 		}
 	}
 
 	if u == nil {
-		content.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -373,13 +363,13 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		content.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
 		return
 	}
 
@@ -398,19 +388,19 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 			a.GetResetRequest(w, r)
 			return
 		default:
-			content.HandleError(w, r, "Could not reset authorization: invalid token", nil, http.StatusInternalServerError)
+			a.contentManager.HandleError(w, r, "Could not reset authorization: invalid token", nil, http.StatusInternalServerError)
 			return
 		}
 	}
 
 	if u == nil {
-		content.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -435,13 +425,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 			logger.LogRequestError(r, err)
 		}
 
-		authURL := authEndpoint
-		contentManager := content.GetContentManager()
-		if contentManager != nil {
-			authURL = contentManager.AuthURL
-		}
-
-		content.RedirectToURL(w, r, authURL)
+		util.RedirectToURL(w, r, a.contentManager.AuthURL)
 	}
 }
 
@@ -462,13 +446,13 @@ func getAuthService(authType string) *AuthService {
 func (a *AuthManager) GetChange(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to modify authentication.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to modify authentication.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to change authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to change authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
@@ -479,19 +463,19 @@ func (a *AuthManager) GetChange(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
-		content.HandleError(w, r, "No authorization service was specified. Unable to modify authentication.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to modify authentication.", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService := getAuthService(authType)
 	if authService == nil {
-		content.HandleError(w, r, "No authorization service was found. Unable to change authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to change authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
 		return
 	}
 
 	u := user.GetUserFromContext(r.Context())
 	if u == nil {
-		content.HandleError(w, r, "You must be logged in to change your password.", nil, http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "You must be logged in to change your password.", nil, http.StatusInternalServerError)
 		return
 	}
 
@@ -505,7 +489,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 
 	if a.verificationJwtKey == "" {
 		// no verification key is set
-		content.HandleError(w, r, "No JWT key specified", user.NewErrJwtKeyNotSet(fmt.Errorf("unable to process send verification request")), http.StatusUnauthorized)
+		a.contentManager.HandleError(w, r, "No JWT key specified", user.NewErrJwtKeyNotSet(fmt.Errorf("unable to process send verification request")), http.StatusUnauthorized)
 		return
 	}
 
@@ -513,11 +497,9 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 	authUser, err := user.GetAuthenticatedUser(r, a.db)
 	if err != nil || authUser == nil {
 		// if no user is authenticated, deny access
-		content.HandleError(w, r, "Authentication required", user.NewErrUserNotFound(errSendVerificationRequest), http.StatusUnauthorized)
+		a.contentManager.HandleError(w, r, "Authentication required", user.NewErrUserNotFound(errSendVerificationRequest), http.StatusUnauthorized)
 		return
 	}
-
-	homeURL := content.GetContentManager().HomeURL
 
 	if authUser.Verified {
 		// the user is authenticated and verified, redirect to main
@@ -526,19 +508,19 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 			logger.LogRequestError(r, err)
 		}
 
-		content.RedirectToURL(w, r, homeURL)
+		util.RedirectToURL(w, r, a.contentManager.HomeURL)
 		return
 	}
 
 	verificationToken, err := user.NewVerificationToken(authUser.ID, []byte(a.verificationJwtKey), a.resetTokenExpiration)
 	if err != nil {
 		// there was an error sending verification instructions
-		content.HandleError(w, r, "Unable to send the registration verification", user.NewErrSendVerification(err), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "Unable to send the registration verification", user.NewErrSendVerification(err), http.StatusInternalServerError)
 		return
 	}
 
-	host := content.GetContentManager().Host
-	port := content.GetContentManager().Port
+	host := a.contentManager.Host
+	port := a.contentManager.Port
 
 	// TO DO - this should be rendered as a page instead of as a message. In the future, it will be sent
 	// via email or some other means.
@@ -546,7 +528,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 	params := map[string]string{"token": verificationToken}
 	validationUrl, err := util.BuildUrl(r, host, port, a.verificationEndpoint, params)
 	if err != nil {
-		content.HandleError(w, r,
+		a.contentManager.HandleError(w, r,
 			"Unable to get your user verification instructions",
 			fmt.Errorf("unable to build a verification url: %w", err),
 			http.StatusInternalServerError)
@@ -554,14 +536,14 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 	}
 
 	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to verify your user account.`, validationUrl.String())
-	content.HandleMessage(w, r, successMessage)
+	a.contentManager.HandleMessage(w, r, successMessage)
 }
 
 // Verify processes an attempt to verify a registered account
 func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 	verificationToken := r.URL.Query().Get("token")
 	if verificationToken == "" {
-		content.HandleError(
+		a.contentManager.HandleError(
 			w,
 			r,
 			"No verification token specified. Unable to verify the user.",
@@ -570,21 +552,11 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentManager := content.GetContentManager()
-	if contentManager == nil {
-		content.HandleError(
-			w,
-			r,
-			"The content manager is not configured or is not available.",
-			content.NewErrContentManagerUnavailable(fmt.Errorf("unable to verify the specified user token")),
-			http.StatusBadRequest)
-	}
-
 	verificationErrMsg := "Verification failed: unable to verify your user account."
 
 	verifiedUser, err := user.Verify(a.db, verificationToken, []byte(a.verificationJwtKey))
 	if err != nil {
-		content.HandleError(
+		a.contentManager.HandleError(
 			w,
 			r,
 			verificationErrMsg,
@@ -594,7 +566,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if verifiedUser == nil {
-		content.HandleError(
+		a.contentManager.HandleError(
 			w,
 			r,
 			verificationErrMsg,
@@ -616,7 +588,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 			logger.LogRequestError(r, err)
 		}
 
-		content.RedirectToURL(w, r, contentManager.HomeURL)
+		util.RedirectToURL(w, r, a.contentManager.HomeURL)
 
 		return
 	}
@@ -627,5 +599,5 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, err)
 	}
 
-	content.RedirectToURL(w, r, contentManager.HomeURL)
+	util.RedirectToURL(w, r, a.contentManager.HomeURL)
 }

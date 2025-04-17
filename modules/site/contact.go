@@ -48,7 +48,7 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 
 	err := contact.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "could not render the contact form", err, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "could not render the contact form", err, http.StatusInternalServerError)
 	}
 }
 
@@ -77,7 +77,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	// validate the ContactForm form
 	err := form.Validate(contactForm)
 	if err != nil {
-		content.HandleFormError(
+		form.HandleFormError(
 			w,
 			r,
 			contact,
@@ -89,7 +89,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	if contactForm.HasErrors() {
 		// there are validation errors - render the form errors
-		content.HandleFormError(w, r, contact, contactForm, "", nil)
+		form.HandleFormError(w, r, contact, contactForm, "", nil)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	err = cs.Create(m.Database)
 	if err != nil {
-		content.HandleFormError(w, r, contact, contactForm, "Unable to save your message", err)
+		form.HandleFormError(w, r, contact, contactForm, "Unable to save your message", err)
 		return
 	}
 
@@ -116,6 +116,6 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	err = contact.Render(w, r)
 	if err != nil {
-		content.HandleError(w, r, "could not render the contact form after successfully adding a contact", err, http.StatusInternalServerError)
+		m.contentManager.HandleError(w, r, "could not render the contact form after successfully adding a contact", err, http.StatusInternalServerError)
 	}
 }

@@ -8,18 +8,20 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/database"
+	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 type (
 	// ApplicationServer is the application container that contains various services and
 	// utilities that will be shared and used by the application
 	ApplicationServer struct {
-		Config   *config.Config
-		Database *sqlx.DB
-		Web      *http.ServeMux
+		Config         *config.Config
+		Database       *sqlx.DB
+		Web            *http.ServeMux
+		ContentManager *content_services.ContentManagerService
 	}
 )
 
@@ -75,6 +77,11 @@ func (s *ApplicationServer) initSessionManager() {
 // initContentManager loads the configuration data in the singleton ContentManager that
 // is used throughout the application
 func (s *ApplicationServer) initContentManager() {
-	contentManager := content.GetContentManager()
+	contentManager := content_services.GetContentManager()
+	contentManager.HandleMessage = util.HttpMessage
+	contentManager.HandleError = util.HttpError
+	contentManager.HandleNotFound = util.HttpNotFound
+
 	contentManager.Configure(s.Config)
+	s.ContentManager = contentManager
 }

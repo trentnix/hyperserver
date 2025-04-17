@@ -1,4 +1,4 @@
-// content-manager.go contains the definition of the ContentManagerService, which manages templates
+// content_manager.go contains the definition of the ContentManagerService, which manages templates
 // used to render data to the requestor
 package content
 
@@ -53,14 +53,13 @@ type (
 )
 
 const (
-	// default page title and title prefix
-	defaultAppName  = "HyperServer"
-	defaultAppTitle = "HyperServer"
-
 	// PageType should be used when an entire page is rendered
 	PageType = "page"
 	// HtmxType should be used when an HTMX response is required
 	HtmxType = "htmx"
+
+	DefaultAppName  = "HyperServer"
+	DefaultAppTitle = "HyperServer"
 
 	HomeDefault = "/"
 
@@ -91,13 +90,10 @@ func NewContentManager() *ContentManagerService {
 	cm.Contents = make(map[string][]TemplatePath)
 	cm.Components = make(map[string][]TemplatePath)
 
-	cm.HandleMessage = httpMessage
-	cm.HandleError = httpError
-	cm.HandleNotFound = httpNotFound
 	cm.HomeURL = HomeDefault
 
-	cm.AppName = defaultAppName
-	cm.AppTitle = defaultAppTitle
+	cm.AppName = DefaultAppName
+	cm.AppTitle = DefaultAppTitle
 
 	cm.Host = defaultHost
 	cm.Port = defaultPort
