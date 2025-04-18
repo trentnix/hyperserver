@@ -110,7 +110,7 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 // to the application. If there is only a single authentication option, the user is
 // sent directly to the login page of that authentication service.
 func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
-	c := content.NewManagedContent(r)
+	c := content.NewManagedContent(r, a.contentManager)
 
 	var loginHTML []template.HTML
 
@@ -137,7 +137,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 // with the application. If there is only a single authentication option, the user is
 // sent directly to the registration page of that authentication service.
 func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
-	c := content.NewManagedContent(r)
+	c := content.NewManagedContent(r, a.contentManager)
 
 	var loginHTML []template.HTML
 

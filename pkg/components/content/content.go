@@ -86,9 +86,13 @@ func NewContent(r *http.Request) *Content {
 
 // NewManagedContent extracts Content data from the provided request and also sets
 // the Content's ContentManagerService
-func NewManagedContent(r *http.Request) *Content {
+func NewManagedContent(r *http.Request, cm *content_services.ContentManagerService) *Content {
+	if cm == nil {
+		return nil
+	}
+
 	c := NewContent(r)
-	c.ContentManager = content_services.GetContentManager()
+	c.ContentManager = cm
 	c.Site = c.ContentManager.AppName
 	c.Title = c.ContentManager.AppTitle
 

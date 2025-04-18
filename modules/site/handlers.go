@@ -35,7 +35,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 		welcomeMessage = "Welcome " + u.Email + "!"
 	}
 
-	homepage := content.NewManagedContent(r)
+	homepage := content.NewManagedContent(r, m.contentManager)
 	homepage.AddContent(homeContent)
 	homepage.Messages, _ = messages.GetMessages(r, w)
 	homepage.Title = welcomeMessage
@@ -48,7 +48,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 // Login provides a handler to act as a portal to user authentication
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
-	login := content.NewManagedContent(r)
+	login := content.NewManagedContent(r, m.contentManager)
 	login.Messages, _ = messages.GetMessages(r, w)
 	login.Title = "Login"
 
@@ -63,7 +63,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 // Register provides a handler to act as a portal to user registration
 func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
-	register := content.NewManagedContent(r)
+	register := content.NewManagedContent(r, m.contentManager)
 	register.Messages, _ = messages.GetMessages(r, w)
 	register.Title = "Register"
 
@@ -90,7 +90,7 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	errorPage := content.NewManagedContent(r)
+	errorPage := content.NewManagedContent(r, m.contentManager)
 	errorPage.Title = "Error"
 	errorPage.AddContent(errorContent)
 	errorPage.Data = errorMessages
@@ -117,7 +117,7 @@ func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, messa
 		message = "(no message)"
 	}
 
-	messagePage := content.NewManagedContent(r)
+	messagePage := content.NewManagedContent(r, m.contentManager)
 	messagePage.AddContent(messageContent)
 	messagePage.Data = template.HTML(message)
 	err := messagePage.Render(w, r)
@@ -154,7 +154,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 		counter = 1
 	}
 
-	page := content.NewManagedContent(r)
+	page := content.NewManagedContent(r, m.contentManager)
 	page.AddContent(homeContent)
 	page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
@@ -179,7 +179,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 
 // NotFound handles the /404 endpoint by displaying the "NotFound" page
 func (m *SiteModule) NotFound(w http.ResponseWriter, r *http.Request) {
-	notFound := content.NewManagedContent(r)
+	notFound := content.NewManagedContent(r, m.contentManager)
 	notFound.AddContent(notFoundContent)
 	notFound.Data = fmt.Sprintf("The resource you requested was not found: %s", r.URL.Path)
 	notFound.Title = "Resource Not Found"

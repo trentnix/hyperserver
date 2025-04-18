@@ -5,7 +5,6 @@ package content
 import (
 	"net/http"
 	"strconv"
-	"sync"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/types"
@@ -67,22 +66,6 @@ const (
 	defaultPort = "80"
 )
 
-var (
-	// singleton instance of a ContentManagerService
-	contentManager *ContentManagerService
-	// used to manage the singleton
-	once sync.Once
-)
-
-// GetContentManager returns the global ContentManagerService singleton
-func GetContentManager() *ContentManagerService {
-	once.Do(func() {
-		contentManager = NewContentManager()
-	})
-
-	return contentManager
-}
-
 // NewContentManager returns a (non-Singleton) instance of a ContentManagerService
 func NewContentManager() *ContentManagerService {
 	cm := ContentManagerService{}
@@ -105,11 +88,11 @@ func NewContentManager() *ContentManagerService {
 // the application configuration
 func (c *ContentManagerService) Configure(cfg *config.Config) {
 	if cfg.App.Name != "" {
-		contentManager.AppName = cfg.App.Name
+		c.AppName = cfg.App.Name
 	}
 
 	if cfg.HTTP.Hostname != "" {
-		contentManager.Host = cfg.HTTP.Hostname
+		c.Host = cfg.HTTP.Hostname
 	}
 
 	c.Port = strconv.Itoa(int(cfg.HTTP.Port))

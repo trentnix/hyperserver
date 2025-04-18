@@ -210,7 +210,7 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 
 // GetLogin serves the login form
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
-	login := content.NewManagedContent(r)
+	login := content.NewManagedContent(r, a.contentManager)
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
@@ -235,7 +235,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 //	  authentication failed -> back to login form with authentication failure displayed
 //	  success -> redirect to the configured home page
 func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.User {
-	login := content.NewManagedContent(r)
+	login := content.NewManagedContent(r, a.contentManager)
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 
@@ -272,7 +272,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 
 // GetRegister serves the register form
 func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
-	register := content.NewManagedContent(r)
+	register := content.NewManagedContent(r, a.contentManager)
 	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
@@ -297,7 +297,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 //	  user already exists -> back to register page
 //	  success -> redirect to login
 func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool {
-	register := content.NewManagedContent(r)
+	register := content.NewManagedContent(r, a.contentManager)
 	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
@@ -368,7 +368,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 
 // GetResetRequest serves the password reset request page with the resetPasswordRequestForm form
 func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
-	reset := content.NewManagedContent(r)
+	reset := content.NewManagedContent(r, a.contentManager)
 	reset.AddContent(emailResetRequestFormTemplate)
 
 	resetRequestForm := &ResetPasswordRequestForm{}
@@ -393,7 +393,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	// use a generic error for security reasons
 	genericResetErrMsg := "There was an error trying to reset your password"
 
-	reset := content.NewManagedContent(r)
+	reset := content.NewManagedContent(r, a.contentManager)
 	reset.AddContent(emailResetRequestFormTemplate)
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetPath
@@ -492,7 +492,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 
 	resetForm.ActionUrl = actionUrl.String()
 
-	reset := content.NewManagedContent(r)
+	reset := content.NewManagedContent(r, a.contentManager)
 	reset.AddContent(emailResetPasswordFormTemplate)
 	reset.Data = resetForm
 
@@ -511,7 +511,7 @@ func (a *EmailAuthService) Reset(
 	token string,
 	requireNewCredentials bool,
 ) bool {
-	reset := content.NewManagedContent(r)
+	reset := content.NewManagedContent(r, a.contentManager)
 	reset.AddContent(emailResetPasswordFormTemplate)
 
 	resetForm := &ResetPasswordForm{}
@@ -598,7 +598,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 	changeForm := &ChangePasswordForm{}
 	changeForm.ActionUrl = emailChangePath
 
-	change := content.NewManagedContent(r)
+	change := content.NewManagedContent(r, a.contentManager)
 	change.AddContent(emailChangePasswordFormTemplate)
 	change.Data = changeForm
 
@@ -614,7 +614,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *user.User) bool {
 	changeErrMsg := "unable to change your password"
 
-	change := content.NewManagedContent(r)
+	change := content.NewManagedContent(r, a.contentManager)
 	change.AddContent(emailChangePasswordFormTemplate)
 
 	changeForm := &ChangePasswordForm{}

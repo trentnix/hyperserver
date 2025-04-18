@@ -57,7 +57,7 @@ func InitializeSessionManager(c *config.Config) *SessionManager {
 	return sessionManager
 }
 
-// GetContentManager returns the global SessionManager service if it exists
+// GetSessionManager returns the global SessionManager service if it exists
 func GetSessionManager() *SessionManager {
 	return sessionManager
 }

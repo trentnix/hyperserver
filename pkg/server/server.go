@@ -77,7 +77,7 @@ func (s *ApplicationServer) initSessionManager() {
 // initContentManager loads the configuration data in the singleton ContentManager that
 // is used throughout the application
 func (s *ApplicationServer) initContentManager() {
-	contentManager := content_services.GetContentManager()
+	contentManager := content_services.NewContentManager()
 	contentManager.HandleMessage = util.HttpMessage
 	contentManager.HandleError = util.HttpError
 	contentManager.HandleNotFound = util.HttpNotFound
