@@ -3,7 +3,7 @@
 The HyperMedia Components framework simplifies serving hypertext-based content to clients by abstracting common tasks. The implemented components reside in the **components** folder and include:
 
 - **Content**: A view model for rendering HTML views.
-- **ContentManager**: Manages reusable templates for rendering pages and components.
+- **ContentManagerService**: Manages reusable templates for rendering pages and components.
 - **ContentMessage**: Manages session-based messaging.
 - **Form**: Handles validation and error management for forms.
 - **htmx.Request**: Stores HTMX-related request attributes.
@@ -47,7 +47,7 @@ homepage.AddComponents("templates/footer.html", "templates/admin-components.html
 
 `Content.Data` stores any data required for rendering within templates.
 
-### Content Manager
+### Content Manager Service
 
 The `ContentManagerService` is a service managing global template paths and application URLs.
 
@@ -80,11 +80,11 @@ cm := content_services.NewContentManager()
 homepage := content.NewManagedContent(r /* *http.Request */, cm)
 ```
 
-*ContentManagerService* also stores URLs for commonly used paths such as the home page (*HomeURL*), login page (*AuthURL*), and error page (*ErrorURL*). These values can be changed from the defaults by your module and then the application can use your custom URLs for redirection. Methods for replacing the template paths in a *ContentManager* or adding to the existing paths are available.
+*ContentManagerService* also stores URLs for commonly used paths such as the home page (*HomeURL*), login page (*AuthURL*), and error page (*ErrorURL*). These values can be changed from the defaults by your module and then the application can use your custom URLs for redirection. Methods for replacing the template paths in a *ContentManagerService* or adding to the existing paths are available.
 
 *ContentManagerService* can also store the application name and a title value to be used, and it also contains an *ErrorHandler** function variable that allows you to override default ErrorHandler behavior.
 
-See below for an example configuring `ContentManager`:
+See below for an example configuring a ContentManagerService` instance:
 
 ```go
 import content_services "github.com/trentnix/hyperserver/pkg/services/content"
