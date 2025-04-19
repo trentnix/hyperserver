@@ -49,34 +49,49 @@ homepage.AddComponents("templates/footer.html", "templates/admin-components.html
 
 ### Content Manager
 
-The `ContentManager` is a singleton responsible for managing global template paths and application URLs.
+The `ContentManagerService` is a service managing global template paths and application URLs.
 
 - Layouts, Contents, Components can be globally managed.
 - Provides default URL paths (HomeURL, AuthURL, ErrorURL) configurable as needed.
 
-The singleton `ContentManager` can be accessed via *content.GetContentManager* or you can create your own *ContentManager* via *content.NewContentManager*.
+The ApplicationServer structure has a `ContentManagerService` named `ContentManager` or you can create your own *ContentManager* via *content.NewContentManager*.
 
-A `Content` instance must have its *ContentManager* set before rendering to use any configured templates:
+A `Content` instance must have its *ContentManagerService* set before rendering to use any configured templates:
 
 ```go
+import (
+  "github.com/trentnix/hyperserver/pkg/components/content"
+  content_services "github.com/trentnix/hyperserver/pkg/services/content"
+)
+
+/* ... */
+
 homepage := content.NewContent(httpRequest /* *http.Request */)
-homepage.ContentManager = content.GetContentManager()
+homepage.ContentManager = content_services.NewContentManager()
 ```
 
 Alternatively, *content.NewManagedContent* can be used for convenience:
 
 ```go
-homepage := content.NewManagedContent(content.GetContentManager())
+cm := content_services.NewContentManager()
+
+/* set up the ContentManagerService */
+
+homepage := content.NewManagedContent(r /* *http.Request */, cm)
 ```
 
-*ContentManager* also stores URLs for commonly used paths such as the home page (*HomeURL*), login page (*AuthURL*), and error page (*ErrorURL*). These values can be changed from the defaults by your module and then the application can use your custom URLs for redirection. Methods for replacing the template paths in a *ContentManager* or adding to the existing paths are available.
+*ContentManagerService* also stores URLs for commonly used paths such as the home page (*HomeURL*), login page (*AuthURL*), and error page (*ErrorURL*). These values can be changed from the defaults by your module and then the application can use your custom URLs for redirection. Methods for replacing the template paths in a *ContentManager* or adding to the existing paths are available.
 
-*ContentManager* can also store the application name and a title value to be used, and it also contains an *ErrorHandler** function variable that allows you to override default ErrorHandler behavior.
+*ContentManagerService* can also store the application name and a title value to be used, and it also contains an *ErrorHandler** function variable that allows you to override default ErrorHandler behavior.
 
 See below for an example configuring `ContentManager`:
 
 ```go
-cm := content.GetContentManager()
+import content_services "github.com/trentnix/hyperserver/pkg/services/content"
+
+/* ... */
+
+cm := content_services.NewContentManager()
 cm.AddPageLayout("templates/some-layout.html")
 cm.AddPageComponent("templates/componenents/some-component.html")
 
