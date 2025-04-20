@@ -2,7 +2,7 @@
 
 Session management has been designed with the goal of being easy to use, extend, and understand. The design and implementation will look familiar if you've seen the source code of [gorilla/sessions](https://www.github.com/gorilla/sessions). It served as both inspiration and reference.
 
-Why didn't I just use `gorilla/sessions`? The short answer: I was tired of relying heavily on external libraries. Modern software often seems like a patchwork of libraries welded together. While there are benefits to this approach, it often makes projects harder to understand and maintain. It introduces complexity, increases binary size, and expands the dependency tree. I believed a simpler implementation was possible.
+Why didn't I just use `gorilla/sessions`? Basically, I had a moment where I was tired of relying heavily on external libraries. Modern software often seems less like a cogent, coherent solution and more like a patchwork of libraries welded together. While there are benefits to this approach, it often makes projects harder to understand and maintain. It drags along dead bytes servicing unused features and unnecessary functionality. It introduces complexity, increases binary size, and expands the dependency tree. I believed a simpler implementation was possible.
 
 This doesn't make my approach is superior. `gorilla/sessions` is more flexible, likely more secure, and generally excellent. Feel free to use it if that's what you prefer.
 
@@ -47,16 +47,12 @@ The **types** subsection maps session names to specific session storage implemen
 
 The `default` key specifies which session storage is used when no explicit mapping exists. In the provided example, sessions not explicitly mapped (e.g., `user`) default to `SQLiteStore`.
 
-## Session Management
-
-To create and manage a **Session**, you need an instance of the **SessionManager**, accessible via `ApplicationServer.Session`.
-
 ### Retrieving a Session
 
-To retrieve a session, use the `Get` method:
+To retrieve a session, use the `Get` method from the `session` package:
 
 ```go
-sessionManager.Get(r, "session-name-goes-here")
+s, err := session.Get(r, "session-name-goes-here")
 ```
 
 `Get` accepts two parameters: an `*http.Request` and a string representing the session's name. If the session exists, it returns a pointer to the existing session; otherwise, it returns a pointer to a new, empty session.
@@ -64,13 +60,13 @@ sessionManager.Get(r, "session-name-goes-here")
 Session data is stored as strings in the `Session.Data` map:
 
 ```go
-session.Data["title"] = "This is the title"
+s.Data["title"] = "This is the title"
 ```
 
 Retrieve session data using the same map:
 
 ```go
-title = session.Data["title"]
+title = s.Data["title"]
 ```
 
 Currently, only strings can be stored in sessions. To store complex data types, consider serializing them to JSON strings first.
@@ -79,10 +75,10 @@ If this limitation is a problem for you, consider using [gorilla/session](https:
 
 ### Create a New Session
 
-To explicitly create a new session (which overwrites any existing session with the same name upon saving), use the `New` method:
+To explicitly create a new session (which overwrites any existing session with the same name upon saving), use the `New` method in the `session` package:
 
 ```go
-sessionManager.New(r, "session-name-goes-here")
+s, err := session.New(r, "session-name-goes-here")
 ```
 
 ### Saving a Session
@@ -90,21 +86,21 @@ sessionManager.New(r, "session-name-goes-here")
 Persist a session across requests by saving it:
 
 ```go
-err := session.Save(r, w)
+err := s.Save(r, w)
 ```
 
-`Save` takes an `*http.Request` and a `http.ResponseWriter`, enabling session persistence via cookies encoded as JWTs. This adds a layer of security but does not ensure absolute security.
+`Save` takes an `*http.Request` and a `http.ResponseWriter`, enabling session persistence via cookies encoded as JWTs. Encoding sessions as JWTs adds a layer of security but does not ensure absolute security.
 
-Depending on your storage mechanism, cookies might be the primary storage method. Be cautious with sensitive data; verify your session implementation doesn't store sensitive information directly in cookies.
+Depending on your storage options, cookies might be the primary storage method for session data. Be cautious with sensitive data, as it is generally considered insecure to store sensitive information directly in browser cookies even if it is encrypted.
 
-You can inspect the `Session.store` property to determine the storage mechanism used, if needed.
+You can inspect the `Session.store` property to determine which storage mechanism is being used for any given Session.
 
 ### Ending a Session
 
 To terminate an active session and expire the associated cookie, use the `End` method:
 
 ```go
-err := session.End(r, w)
+err := s.End(r, w)
 ```
 
 End requires an `*http.Request` and `http.ResponseWriter` to update the browser cookie.
@@ -118,7 +114,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
     const counterKey = "counter"
 
     // retrieve session
-    mySession, _ := session.GetSessionManager().Get(r, "counterSession")
+    mySession, _ := session.Get(r, "counterSession")
 
     // extract the counter value
     counter, _ := strconv.Atoi(mySession.Data[counterKey])

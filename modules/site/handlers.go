@@ -135,14 +135,7 @@ func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, messa
 func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	const counterKey = "counter"
 
-	// get the "counterSession" session
-	sessionManager := session.GetSessionManager()
-	if sessionManager == nil {
-		m.contentManager.HandleError(w, r, "there was an error retrieving the session manager", session.NewErrSessionManagerNotFound(nil), http.StatusInternalServerError)
-		return
-	}
-
-	mySession, sessionManagerErr := sessionManager.Get(r, "counterSession")
+	mySession, sessionManagerErr := session.Get(r, "counterSession")
 	if sessionManagerErr != nil || mySession == nil {
 		m.contentManager.HandleError(w, r, "there was an error retrieving the session", sessionManagerErr, http.StatusInternalServerError)
 		return

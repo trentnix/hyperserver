@@ -4,10 +4,10 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -32,39 +32,24 @@ const (
 	defaultStore = "default"
 )
 
-var (
-	// singleton instance of a SessionManager service
-	sessionManager *SessionManager
-	// used to manage the singleton
-	once sync.Once
-)
-
-// InitializeSessionManager creates a new instance of the global SessionManager and
-func InitializeSessionManager(c *config.Config) *SessionManager {
-	if sessionManager != nil {
-		return sessionManager
-	}
-
-	once.Do(func() {
-		// set the application's SessionManager instance
-		sessionManager = &SessionManager{
-			config: c,
-			Stores: c.HTTP.Session.Stores,
-			Types:  c.HTTP.Session.Types,
-		}
-	})
-
-	return sessionManager
+// GetSessionManager returns the SessionManager saved to the request context
+func GetSessionManager(r *http.Request) *SessionManager {
+	return getSessionManagerFromContext(r.Context())
 }
 
-// GetSessionManager returns the global SessionManager service if it exists
-func GetSessionManager() *SessionManager {
+func NewSessionManager(c *config.Config) *SessionManager {
+	sessionManager := &SessionManager{
+		config: c,
+		Stores: c.HTTP.Session.Stores,
+		Types:  c.HTTP.Session.Types,
+	}
+
 	return sessionManager
 }
 
 // Get returns any current sessions specified in the request with the specified name.
 // If a session is not found, a new session will be returned.
-func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
+func Get(r *http.Request, name string) (*Session, error) {
 	var session *Session
 
 	session = getCachedSession(r, name)
@@ -72,7 +57,12 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 		return session, nil
 	}
 
-	store, err := m.getStore(name)
+	sm := GetSessionManager(r)
+	if sm == nil {
+		return nil, NewErrSessionManagerNotFound(nil)
+	}
+
+	store, err := sm.getStore(name)
 	if err != nil {
 		return nil, NewErrSessionStoreNotFound(err)
 	}
@@ -81,7 +71,7 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 	session, _ = store.Get(r, name)
 	if session == nil {
 		// if the request doesn't have a session, return a new session
-		session, err = m.New(r, name)
+		session, err = New(r, name)
 		if err != nil || session == nil {
 			return nil, NewErrSessionCouldNotBeCreated(err)
 		}
@@ -98,8 +88,13 @@ func (m *SessionManager) Get(r *http.Request, name string) (*Session, error) {
 
 // New returns a new Session instance irrespective of whether one already exists with the
 // specified name. If there is an existing session with the same name, it is ignored.
-func (m *SessionManager) New(r *http.Request, name string) (*Session, error) {
-	store, err := m.getStore(name)
+func New(r *http.Request, name string) (*Session, error) {
+	sm := GetSessionManager(r)
+	if sm == nil {
+		return nil, NewErrSessionManagerNotFound(nil)
+	}
+
+	store, err := sm.getStore(name)
 	if err != nil {
 		return nil, err
 	}
@@ -150,4 +145,25 @@ func (m *SessionManager) getStore(sessionName string) (SessionStore, error) {
 	}
 
 	return store, nil
+}
+
+// AddSessionManagerToRequestContext adds a SessionManager instance to the specified request context
+func AddSessionManagerToRequestContext(r *http.Request, s *SessionManager) *http.Request {
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, SessionContextKey, s)
+	return r.WithContext(ctx)
+}
+
+// getSessionManagerFromContext retrieves a SessionManager instance from the specified context
+func getSessionManagerFromContext(ctx context.Context) *SessionManager {
+	if ctx == nil {
+		return nil
+	}
+
+	s, ok := ctx.Value(SessionContextKey).(*SessionManager)
+	if !ok || s == nil {
+		return nil
+	}
+
+	return s
 }

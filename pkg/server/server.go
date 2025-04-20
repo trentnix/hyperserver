@@ -22,6 +22,7 @@ type (
 		Database       *sqlx.DB
 		Web            *http.ServeMux
 		ContentManager *content_services.ContentManagerService
+		SessionManager *session.SessionManager
 	}
 )
 
@@ -71,7 +72,7 @@ func (s *ApplicationServer) initWeb() {
 
 // initSessionManager initializes the session manager with the provided configuration
 func (s *ApplicationServer) initSessionManager() {
-	session.InitializeSessionManager(s.Config)
+	s.SessionManager = session.NewSessionManager(s.Config)
 }
 
 // initContentManager loads the configuration data in the singleton ContentManager that

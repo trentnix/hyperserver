@@ -52,7 +52,7 @@ func main() {
 
 	mux := middleware.ChainMiddleware(s.Web,
 		middleware.LoggerMiddleware(l),
-		middleware.LoadAuthenticatedUser(s.Database),
+		middleware.LoadSessionManagement(s.Database, s.SessionManager),
 	)
 
 	port := strconv.Itoa(int(s.Config.HTTP.Port))

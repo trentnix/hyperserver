@@ -1,4 +1,3 @@
-// auth.go defines middleware related to authorization
 package middleware
 
 import (
@@ -13,31 +12,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
-
-// LoadAuthenticatedUser extracts the authenticated user and adds it to the context
-func LoadAuthenticatedUser(db *sqlx.DB) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if db == nil {
-				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
-			}
-
-			u, err := user.GetAuthenticatedUser(r, db)
-
-			var notFoundErr *user.ErrUserNotFound
-			if err != nil && !errors.As(err, &notFoundErr) {
-				// log the error encountered when trying to retrieve the user
-				logger.LogRequestError(r, fmt.Errorf("unable to load the authenticated user: %w", err))
-			}
-
-			if u != nil {
-				r = user.AddUserToRequestContext(r, u)
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
 
 // RequireAuthentication determines whether the user is authenticated and, if not, denies access
 func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {

@@ -23,8 +23,7 @@ func SetAuthenticatedUser(r *http.Request, w http.ResponseWriter, u *User) error
 		return errors.New("The specified user is not specified. The user's ID must be set.")
 	}
 
-	sessionManager := session.GetSessionManager()
-	s, err := sessionManager.Get(r, userSessionKey)
+	s, err := session.Get(r, userSessionKey)
 	if err != nil {
 		return err
 	}
@@ -41,8 +40,7 @@ func SetAuthenticatedUser(r *http.Request, w http.ResponseWriter, u *User) error
 // LogoutAuthenticatedUser retrieves any active user session and ends the session,
 // terminating any logged-in user's authentication session
 func LogoutAuthenticatedUser(r *http.Request, w http.ResponseWriter) error {
-	sessionManager := session.GetSessionManager()
-	s, err := sessionManager.Get(r, userSessionKey)
+	s, err := session.Get(r, userSessionKey)
 	if err != nil {
 		return err
 	}
@@ -69,13 +67,7 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
 		return u, nil
 	}
 
-	// check the session
-	sessionManager := session.GetSessionManager()
-	if sessionManager == nil {
-		return nil, session.NewErrSessionManagerNotFound(nil)
-	}
-
-	s, err := sessionManager.Get(r, userSessionKey)
+	s, err := session.Get(r, userSessionKey)
 	if err != nil {
 		return nil, err
 	}

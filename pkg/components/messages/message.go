@@ -75,8 +75,7 @@ func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string) e
 // a session. The messages (and the session they are contained in) are then deleted,
 // meaning that this function is not idempotent.
 func GetMessages(r *http.Request, w http.ResponseWriter) ([]ContentMessage, error) {
-	sessionManager := session.GetSessionManager()
-	s, err := sessionManager.Get(r, messageSessionKey.String())
+	s, err := session.Get(r, messageSessionKey.String())
 	if err != nil {
 		return nil, NewErrRetrievingContentMessages(err)
 	}
@@ -97,8 +96,7 @@ func GetMessages(r *http.Request, w http.ResponseWriter) ([]ContentMessage, erro
 // addMessage serializes the specified message to a session used explicitly for storing
 // content messages that can be accessed by handlers
 func addMessage(w http.ResponseWriter, r *http.Request, c ContentMessage) error {
-	sessionManager := session.GetSessionManager()
-	s, err := sessionManager.Get(r, messageSessionKey.String())
+	s, err := session.Get(r, messageSessionKey.String())
 	if err != nil {
 		return NewErrRetrievingContentMessages(err)
 	}
