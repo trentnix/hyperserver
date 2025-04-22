@@ -18,6 +18,7 @@ import (
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -215,7 +216,34 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, err)
 	}
 
-	util.RedirectToURL(w, r, a.contentManager.HomeURL)
+	// retrieve any session where a redirect URL might be stored
+	// get a session for redirect values
+	s, err := session.Get(r, content_services.RedirectSession)
+	if err != nil {
+		// couldn't get a session, log the error
+		logger.LogRequestError(r, err)
+	}
+
+	redirectURL := ""
+	if !s.IsNew {
+		redirectURL = s.Data["redirect"]
+	}
+
+	if redirectURL == "" {
+		redirectURL = a.contentManager.HomeURL
+	}
+
+	// validate the URL
+	uriErr := util.IsValidUri(redirectURL, false)
+	if uriErr != nil {
+		// redirect URL is invalid, log the error and use the content manager's home URL
+		logger.LogRequestError(r, err)
+	}
+
+	// clear the session, it is no longer valid
+	s.End(w, r)
+
+	util.RedirectToURL(w, r, redirectURL)
 }
 
 // Logout ends a session for any logged-in user

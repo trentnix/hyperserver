@@ -38,7 +38,7 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 
 			if u == nil {
 				// create a session for redirect values
-				s, err := session.New(r, "auth-redirect")
+				s, err := session.New(r, content_services.RedirectSession)
 				if err != nil {
 					// couldn't do a redirect so just don't allow access
 					cm.HandleError(w, r,
@@ -49,17 +49,8 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 				}
 
 				redirectURL := r.RequestURI
-				uriErr := util.IsValidUri(redirectURL, false)
-				if uriErr != nil {
-					// couldn't do a redirect so just don't allow access
-					cm.HandleError(w, r,
-						"The requested resource is only available to authenticated users",
-						uriErr,
-						http.StatusForbidden)
-					return
-				}
-
 				s.Data["redirect"] = redirectURL
+
 				sessionErr := s.Save(w, r)
 				if sessionErr == nil {
 					logger.LogRequestError(r, sessionErr)

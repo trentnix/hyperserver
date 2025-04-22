@@ -64,6 +64,8 @@ const (
 
 	defaultHost = "localhost"
 	defaultPort = "80"
+
+	RedirectSession = "auth-redirect"
 )
 
 // NewContentManager returns a (non-Singleton) instance of a ContentManagerService
