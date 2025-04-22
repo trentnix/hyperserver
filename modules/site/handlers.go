@@ -37,7 +37,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	homepage := content.NewManagedContent(r, m.contentManager)
 	homepage.AddContent(homeContent)
-	homepage.Messages, _ = messages.GetMessages(r, w)
+	homepage.Messages, _ = messages.GetMessages(w, r)
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -49,7 +49,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 // Login provides a handler to act as a portal to user authentication
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r, m.contentManager)
-	login.Messages, _ = messages.GetMessages(r, w)
+	login.Messages, _ = messages.GetMessages(w, r)
 	login.Title = "Login"
 
 	login.AddContent(loginContent)
@@ -64,7 +64,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 // Register provides a handler to act as a portal to user registration
 func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 	register := content.NewManagedContent(r, m.contentManager)
-	register.Messages, _ = messages.GetMessages(r, w)
+	register.Messages, _ = messages.GetMessages(w, r)
 	register.Title = "Register"
 
 	register.AddContent(registerContent)
@@ -78,7 +78,7 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 
 // Error is the handler for the /error endpoint
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	contentMessages, messagesErr := messages.GetMessages(r, w)
+	contentMessages, messagesErr := messages.GetMessages(w, r)
 	if messagesErr != nil {
 		logger.LogRequestError(r, messagesErr)
 	}
@@ -156,7 +156,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 
 	// save the updated counter value in the session
 	mySession.Data[counterKey] = sCounter
-	sessionSaveErr := mySession.Save(r, w)
+	sessionSaveErr := mySession.Save(w, r)
 	if sessionSaveErr != nil {
 		m.contentManager.HandleError(w, r, "unable to save the counter session", sessionSaveErr, http.StatusInternalServerError)
 		return

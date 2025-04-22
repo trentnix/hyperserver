@@ -82,3 +82,19 @@ func BuildUrl(r *http.Request, host string, port string, path string, params map
 
 	return u, nil
 }
+
+// IsValidUri validates that the specified URI has a valid value
+func IsValidUri(uri string, requireSchemeAndHost bool) error {
+	u, err := url.ParseRequestURI(uri)
+	if err != nil {
+		return NewErrInvalidUri(err, uri)
+	}
+
+	if requireSchemeAndHost {
+		if u.Scheme == "" || u.Host == "" {
+			return NewErrInvalidUri(errors.New("the scheme value or host value is empty"), uri)
+		}
+	}
+
+	return nil
+}

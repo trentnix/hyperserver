@@ -19,11 +19,11 @@ func (m *mockSessionStore) New(r *http.Request, name string) (*Session, error) {
 	return nil, nil
 }
 
-func (m *mockSessionStore) Save(r *http.Request, w http.ResponseWriter, session *Session) error {
+func (m *mockSessionStore) Save(w http.ResponseWriter, r *http.Request, session *Session) error {
 	return nil
 }
 
-func (m *mockSessionStore) End(r *http.Request, w http.ResponseWriter, session *Session) error {
+func (m *mockSessionStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
 	return nil
 }
 

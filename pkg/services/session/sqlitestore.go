@@ -144,7 +144,7 @@ func (s *SQLiteStore) New(r *http.Request, name string) (*Session, error) {
 
 // Save serializes specified Session to the database and saves the session identifier
 // to an HTTP cookie
-func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Session) error {
+func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Session) error {
 	if s.db == nil {
 		return ErrDatabaseNotConfigured
 	}
@@ -197,7 +197,7 @@ func (s *SQLiteStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 }
 
 // End terminates the specified session
-func (s *SQLiteStore) End(r *http.Request, w http.ResponseWriter, session *Session) error {
+func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     session.Name,
 		Value:    "",

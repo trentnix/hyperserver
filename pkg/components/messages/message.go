@@ -74,7 +74,7 @@ func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string) e
 // GetMessages returns the slice of ContentMessage instances that have been saved to
 // a session. The messages (and the session they are contained in) are then deleted,
 // meaning that this function is not idempotent.
-func GetMessages(r *http.Request, w http.ResponseWriter) ([]ContentMessage, error) {
+func GetMessages(w http.ResponseWriter, r *http.Request) ([]ContentMessage, error) {
 	s, err := session.Get(r, messageSessionKey.String())
 	if err != nil {
 		return nil, NewErrRetrievingContentMessages(err)
@@ -88,7 +88,7 @@ func GetMessages(r *http.Request, w http.ResponseWriter) ([]ContentMessage, erro
 		return nil, NewErrConvertingContentMessagesData(convertErr)
 	}
 
-	deleteMessagesErr := s.End(r, w)
+	deleteMessagesErr := s.End(w, r)
 
 	return contentMessages, deleteMessagesErr
 }
@@ -116,7 +116,7 @@ func addMessage(w http.ResponseWriter, r *http.Request, c ContentMessage) error 
 	}
 
 	s.Data[string(messageSessionKey)] = msgData
-	err = s.Save(r, w)
+	err = s.Save(w, r)
 	if err != nil {
 		return NewErrSavingContentMessages(err)
 	}

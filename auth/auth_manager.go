@@ -203,7 +203,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setAuthenticatedUserErr := user.SetAuthenticatedUser(r, w, u)
+	setAuthenticatedUserErr := user.SetAuthenticatedUser(w, r, u)
 	if setAuthenticatedUserErr != nil {
 		a.contentManager.HandleError(w, r, "There was an internal error when trying to login", setAuthenticatedUserErr, http.StatusInternalServerError)
 		return
@@ -220,7 +220,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout ends a session for any logged-in user
 func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
-	logoutErr := user.LogoutAuthenticatedUser(r, w)
+	logoutErr := user.LogoutAuthenticatedUser(w, r)
 	if logoutErr != nil {
 		a.contentManager.HandleError(w, r, "There was an error trying to log out", logoutErr, http.StatusInternalServerError)
 		return

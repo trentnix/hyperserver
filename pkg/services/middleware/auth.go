@@ -9,6 +9,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -36,11 +37,37 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 			}
 
 			if u == nil {
-				// don't allow access
-				cm.HandleError(w, r,
-					"The requested resource is only available to authenticated users",
-					nil,
-					http.StatusForbidden)
+				// create a session for redirect values
+				s, err := session.New(r, "auth-redirect")
+				if err != nil {
+					// couldn't do a redirect so just don't allow access
+					cm.HandleError(w, r,
+						"The requested resource is only available to authenticated users",
+						err,
+						http.StatusForbidden)
+					return
+				}
+
+				redirectURL := r.RequestURI
+				uriErr := util.IsValidUri(redirectURL, false)
+				if uriErr != nil {
+					// couldn't do a redirect so just don't allow access
+					cm.HandleError(w, r,
+						"The requested resource is only available to authenticated users",
+						uriErr,
+						http.StatusForbidden)
+					return
+				}
+
+				s.Data["redirect"] = redirectURL
+				sessionErr := s.Save(w, r)
+				if sessionErr == nil {
+					logger.LogRequestError(r, sessionErr)
+				}
+
+				// redirect to login
+				util.RedirectToURL(w, r, cm.AuthURL)
+
 				return
 			}
 

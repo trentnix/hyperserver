@@ -106,7 +106,7 @@ func (c *CookieStore) New(r *http.Request, name string) (*Session, error) {
 }
 
 // Save saves the specified Session to a token that can be added to a cookie
-func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, session *Session) error {
+func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Session) error {
 	if len(c.JwtKey) == 0 {
 		return NewErrSessionKeyInvalid(fmt.Errorf("the JWT key is not set"))
 	}
@@ -155,7 +155,7 @@ func (c *CookieStore) Save(r *http.Request, w http.ResponseWriter, session *Sess
 
 // End terminates the specified session by setting the corresponding session cookie
 // to expired
-func (c *CookieStore) End(r *http.Request, w http.ResponseWriter, session *Session) error {
+func (c *CookieStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     session.Name,
 		Value:    "",

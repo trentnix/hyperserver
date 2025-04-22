@@ -121,7 +121,7 @@ func TestSQLiteStore_Get_ValidCookie(t *testing.T) {
 
 	// Save the session which writes the cookie.
 	w := httptest.NewRecorder()
-	if err := store.Save(reqForSave, w, newSession); err != nil {
+	if err := store.Save(w, reqForSave, newSession); err != nil {
 		t.Fatalf("failed to save session: %v", err)
 	}
 
@@ -169,7 +169,7 @@ func TestSQLiteStore_End_NonTLS(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Call End
-	if err := store.End(req, w, session); err != nil {
+	if err := store.End(w, req, session); err != nil {
 		t.Fatalf("End returned an unexpected error: %v", err)
 	}
 
@@ -210,7 +210,7 @@ func TestSQLiteStore_End_TLS(t *testing.T) {
 	req.TLS = &tls.ConnectionState{}
 	w := httptest.NewRecorder()
 
-	if err := store.End(req, w, session); err != nil {
+	if err := store.End(w, req, session); err != nil {
 		t.Fatalf("End returned an unexpected error: %v", err)
 	}
 
@@ -283,7 +283,7 @@ func TestSQLiteStore_Save_NewSession(t *testing.T) {
 	session.Data["username"] = "testUser"
 
 	// Call Save.
-	err = store.Save(req, w, session)
+	err = store.Save(w, req, session)
 	if err != nil {
 		t.Fatalf("Save returned an error: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestSQLiteStore_Save_ExistingSession(t *testing.T) {
 		t.Fatalf("failed to create session: %v", err)
 	}
 	session.Data["foo"] = "bar"
-	if err := store.Save(req, w, session); err != nil {
+	if err := store.Save(w, req, session); err != nil {
 		t.Fatalf("initial Save returned error: %v", err)
 	}
 
@@ -347,7 +347,7 @@ func TestSQLiteStore_Save_ExistingSession(t *testing.T) {
 	w = httptest.NewRecorder() // Reset the ResponseRecorder.
 
 	// Save the updated session.
-	if err := store.Save(req, w, session); err != nil {
+	if err := store.Save(w, req, session); err != nil {
 		t.Fatalf("Save for existing session returned error: %v", err)
 	}
 
@@ -375,7 +375,7 @@ func TestSQLiteStore_Save_NotConfigured(t *testing.T) {
 		t.Fatalf("failed to create session: %v", err)
 	}
 
-	err = store.Save(req, w, session)
+	err = store.Save(w, req, session)
 	if err == nil {
 		t.Fatal("expected an error when store is not configured, got nil")
 	}

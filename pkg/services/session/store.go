@@ -14,8 +14,8 @@ type (
 	SessionStore interface {
 		Get(r *http.Request, name string) (*Session, error)
 		New(r *http.Request, name string) (*Session, error)
-		Save(r *http.Request, w http.ResponseWriter, session *Session) error
-		End(r *http.Request, w http.ResponseWriter, session *Session) error
+		Save(w http.ResponseWriter, r *http.Request, session *Session) error
+		End(w http.ResponseWriter, r *http.Request, session *Session) error
 		IsEnabled() bool
 	}
 )

@@ -18,7 +18,7 @@ const (
 
 // SetAuthenticatedUser creates a user session for the specified user to indicate that
 // the user is authenticated
-func SetAuthenticatedUser(r *http.Request, w http.ResponseWriter, u *User) error {
+func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error {
 	if u == nil || u.ID == "" {
 		return errors.New("The specified user is not specified. The user's ID must be set.")
 	}
@@ -29,7 +29,7 @@ func SetAuthenticatedUser(r *http.Request, w http.ResponseWriter, u *User) error
 	}
 
 	s.Data[userSessionKey] = u.ID
-	sessionSaveErr := s.Save(r, w)
+	sessionSaveErr := s.Save(w, r)
 	if sessionSaveErr != nil {
 		return sessionSaveErr
 	}
@@ -39,7 +39,7 @@ func SetAuthenticatedUser(r *http.Request, w http.ResponseWriter, u *User) error
 
 // LogoutAuthenticatedUser retrieves any active user session and ends the session,
 // terminating any logged-in user's authentication session
-func LogoutAuthenticatedUser(r *http.Request, w http.ResponseWriter) error {
+func LogoutAuthenticatedUser(w http.ResponseWriter, r *http.Request) error {
 	s, err := session.Get(r, userSessionKey)
 	if err != nil {
 		return err
@@ -47,11 +47,11 @@ func LogoutAuthenticatedUser(r *http.Request, w http.ResponseWriter) error {
 
 	userId, ok := s.Data[userSessionKey]
 	if !ok || userId == "" {
-		s.End(r, w)
+		s.End(w, r)
 		return nil
 	}
 
-	err = s.End(r, w)
+	err = s.End(w, r)
 	if err != nil {
 		return err
 	}
