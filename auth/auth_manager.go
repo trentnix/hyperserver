@@ -218,7 +218,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	// retrieve any session where a redirect URL might be stored
 	// get a session for redirect values
-	s, err := session.Get(r, content_services.RedirectSession)
+	s, err := session.Get(r, session.Redirect)
 	if err != nil {
 		// couldn't get a session, log the error
 		logger.LogRequestError(r, err)
@@ -226,7 +226,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	redirectURL := ""
 	if !s.IsNew {
-		redirectURL = s.Data["redirect"]
+		redirectURL = s.Data[session.RedirectURL]
 	}
 
 	if redirectURL == "" {
