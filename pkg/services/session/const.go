@@ -1,6 +1,7 @@
 package session
 
 const (
-	Redirect    = "auth-redirect"
-	RedirectURL = "redirect-url"
+	AuthSession = "auth-session"
+	RedirectURL = "auth-session-redirect-url"
+	AuthMessage = "auth-session-message"
 )

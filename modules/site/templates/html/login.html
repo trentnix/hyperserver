@@ -1,4 +1,14 @@
 {{ block "Content" . }}
+{{ if gt (len .Data) 0 }}
+<div class="container" style="text-align: center;">
+  {{ range .Data }}
+    <div class="{{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
+      {{ .Message }}
+    </div>
+  {{ end }}
+  <div>Please login to continue</div>
+</div>
+{{ end }}
 <section id="login" class="section"  hx-get="/auth/login/email" hx-swap="outerHTML" hx-trigger="load">
 </section>
 {{ end }}
