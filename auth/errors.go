@@ -1,23 +1,13 @@
 // errors.go defines the custom errors used by the auth pkg
 package auth
 
-import "fmt"
+import (
+	"fmt"
 
-// BaseError provides common error functionality
-type BaseError struct {
-	Err     error
-	Message string
-}
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
+)
 
-// Error implements the error interface for BaseError
-func (e *BaseError) Error() string {
-	return e.Message
-}
-
-// Unwrap allows unwrapping the underlying error
-func (e *BaseError) Unwrap() error {
-	return e.Err
-}
+type BaseError = hs_errors.BaseError
 
 // ErrEmailAuthServiceInit indicates an error configuring an instance of EmailAuthService
 type ErrEmailAuthServiceInit struct {
@@ -63,6 +53,22 @@ func NewErrAuthServiceNotFound(err error, serviceName string) *ErrAuthServiceNot
 	errorMessage := fmt.Sprintf("there was an error loading the specified auth service: %s", serviceName)
 	return &ErrAuthServiceNotFound{
 		service: serviceName,
+		BaseError: &BaseError{
+			Err:     err,
+			Message: errorMessage,
+		},
+	}
+}
+
+// ErrUserRegistration indicates an error during the user registration process
+type ErrUserRegistration struct {
+	*BaseError
+}
+
+// NewErrUserRegistration creates an instance of ErrUserRegistration
+func NewErrUserRegistration(username string, err error) *ErrUserRegistration {
+	errorMessage := fmt.Sprintf("there was an error trying to register the specified user '%s'", username)
+	return &ErrUserRegistration{
 		BaseError: &BaseError{
 			Err:     err,
 			Message: errorMessage,

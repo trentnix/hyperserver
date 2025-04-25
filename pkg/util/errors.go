@@ -1,23 +1,13 @@
 // errors.go defines the custom errors used by the util package
 package util
 
-import "fmt"
+import (
+	"fmt"
 
-// BaseError provides common error functionality
-type BaseError struct {
-	Err     error
-	Message string
-}
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
+)
 
-// Error implements the error interface for BaseError
-func (e *BaseError) Error() string {
-	return e.Message
-}
-
-// Unwrap allows unwrapping the underlying error
-func (e *BaseError) Unwrap() error {
-	return e.Err
-}
+type BaseError = hs_errors.BaseError
 
 // ErrFailedToSetWorkingDirectory indicates the working directory could not be set
 type ErrFailedToSetWorkingDirectory struct {
