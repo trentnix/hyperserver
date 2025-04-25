@@ -257,7 +257,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, err)
 	}
 
-	// clear the session, it is no longer valid
+	// clear the redirect session, it is no longer valid
 	s.End(w, r)
 
 	util.RedirectToURL(w, r, redirectURL)
