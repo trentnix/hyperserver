@@ -98,9 +98,9 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		mux.Handle("/auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
 
 		// reset credentials
-		mux.Handle("GET /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.GetResetRequest)))
-		mux.Handle("POST /auth/reset/request/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.ResetRequest)))
-		mux.Handle("GET /auth/reset/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.GetReset)))
+		mux.Handle("GET /auth/reset/request/{authType}", http.HandlerFunc(a.GetResetRequest))
+		mux.Handle("POST /auth/reset/request/{authType}", http.HandlerFunc(a.ResetRequest))
+		mux.Handle("GET /auth/reset/{authType}", http.HandlerFunc(a.GetReset))
 		mux.Handle("POST /auth/reset/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Reset)))
 
 		// change change credentials
