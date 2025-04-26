@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"html/template"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
@@ -322,6 +324,45 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	util.RedirectToURL(w, r, a.contentManager.AuthURL)
+}
+
+// ProcessRegistration handles the registration process for the specified user
+func ProcessRegistration(db *sqlx.DB, uname string, pw string, authType string, verificationRequired bool) (error, string) {
+	//  validate user isn't already registered
+	u, err := user.GetUserByEmail(db, uname)
+	if err != nil && err != sql.ErrNoRows {
+		registrationErr := NewErrUserRegistration(uname, err)
+		return registrationErr, "There was an error retrieving the specified user"
+	}
+
+	if u != nil {
+		registrationErr := NewErrUserRegistration(uname, err)
+		return registrationErr, "The specified user is already registered"
+	}
+
+	if pw != "" {
+		pw, err = password.HashPassword(pw)
+		if err != nil {
+			// the password could not be hashed
+			registrationErr := NewErrUserRegistration(uname, err)
+			return registrationErr, "There was an error creating a user account"
+		}
+	}
+
+	u = &user.User{
+		Email:                uname,
+		Password:             pw,
+		RegistrationAuthType: authType,
+		VerificationRequired: verificationRequired,
+	}
+
+	err = u.Save(db)
+	if err != nil {
+		registrationErr := NewErrUserRegistration(uname, err)
+		return registrationErr, "There was an error creating a user account"
+	}
+
+	return nil, ""
 }
 
 // GetResetRequest renders the reset request page to the user using the specified AuthService

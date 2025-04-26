@@ -314,52 +314,9 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	//  validate user isn't already registered
-	u, err := user.GetUserByEmail(a.db, registerForm.Email)
-	if err != nil && err != sql.ErrNoRows {
-		form.HandleFormError(w, r,
-			register,
-			registerForm,
-			"There was an error retrieving the specified user",
-			err)
-		return false
-	}
-
-	if u != nil {
-		// this user already exists
-		form.HandleFormError(w, r,
-			register,
-			registerForm,
-			"The specified user is already registered",
-			nil)
-		return false
-	}
-
-	hashedPassword, err := password.HashPassword(registerForm.Password)
-	if err != nil {
-		// the password could not be hashed
-		form.HandleFormError(w, r,
-			register,
-			registerForm,
-			"There was an error creating a user account",
-			err)
-		return false
-	}
-
-	u = &user.User{
-		Email:                registerForm.Email,
-		Password:             hashedPassword,
-		RegistrationAuthType: AuthTypeEmail,
-		VerificationRequired: a.config.Auth.RegisterRequiresVerification,
-	}
-
-	err = u.Save(a.db)
-	if err != nil {
-		form.HandleFormError(w, r,
-			register,
-			registerForm,
-			"There was an error creating a user account",
-			err)
+	registrationErr, userMessage := auth_services.ProcessRegistration(a.db, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
+	if registrationErr != nil {
+		form.HandleFormError(w, r, register, registerForm, userMessage, registrationErr)
 		return false
 	}
 
