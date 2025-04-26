@@ -8,6 +8,10 @@
             hx-swap="outerHTML" 
             hx-trigger="submit">
 
+            {{ if .GetFormMessage }}
+                <div>{{ .GetFormMessageHTML }}</div>
+            {{ end }}
+
             <label for="email">Reset Request</label>
             <input type="email" id="email" 
             name="email" 
@@ -20,8 +24,6 @@
             
             {{ if .HasErrors }}
                 <div>{{ .GetFormErrorHTML }}</div>
-            {{ else if .GetFormMessage }}
-                <div>{{ .GetFormMessageHTML }}</div>
             {{ end }}
         </form>
     </div>

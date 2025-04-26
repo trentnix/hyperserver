@@ -49,7 +49,6 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 // Login provides a handler to act as a portal to user authentication
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r, m.contentManager)
-	login.Data, _ = messages.GetMessages(w, r)
 	login.Title = "Login"
 
 	login.AddContent(loginContent)
