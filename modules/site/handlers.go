@@ -37,7 +37,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	homepage := content.NewManagedContent(r, m.contentManager)
 	homepage.AddContent(homeContent)
-	homepage.Messages, _ = messages.GetMessages(w, r)
+	homepage.Messages, _ = messages.GetContentMessages(w, r)
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -63,7 +63,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 // Register provides a handler to act as a portal to user registration
 func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 	register := content.NewManagedContent(r, m.contentManager)
-	register.Messages, _ = messages.GetMessages(w, r)
+	register.Messages, _ = messages.GetContentMessages(w, r)
 	register.Title = "Register"
 
 	register.AddContent(registerContent)
@@ -77,7 +77,7 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 
 // Error is the handler for the /error endpoint
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	contentMessages, messagesErr := messages.GetMessages(w, r)
+	contentMessages, messagesErr := messages.GetContentMessages(w, r)
 	if messagesErr != nil {
 		logger.LogRequestError(r, messagesErr)
 	}

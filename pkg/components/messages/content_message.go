@@ -7,8 +7,7 @@ import (
 
 type (
 	ContentMessage struct {
-		Message     string `json:"message"`
-		MessageType string `json:"messageType"`
+		SessionMessage
 	}
 )
 
@@ -26,23 +25,25 @@ func (m MessageType) String() string {
 
 // IsDefault returns true if the specified ContentMessage is a default message
 func (c *ContentMessage) IsDefault() bool {
-	return c.MessageType == MessageTypeDefault.String()
+	return c.Type == MessageTypeDefault.String()
 }
 
 // IsSuccess returns true if the specified ContentMessage is a success message
 func (c *ContentMessage) IsSuccess() bool {
-	return c.MessageType == MessageTypeSuccess.String()
+	return c.Type == MessageTypeSuccess.String()
 }
 
 // IsError returns true if the specified ContentMessage is an error message
 func (c *ContentMessage) IsError() bool {
-	return c.MessageType == MessageTypeError.String()
+	return c.Type == MessageTypeError.String()
 }
 
 func NewContentMessage(message string, messageType MessageType) ContentMessage {
 	return ContentMessage{
-		Message:     message,
-		MessageType: messageType.String(),
+		SessionMessage: SessionMessage{
+			Message: message,
+			Type:    messageType.String(),
+		},
 	}
 }
 
@@ -61,10 +62,10 @@ func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string) e
 	return addContentMessage(w, r, NewContentMessage(message, MessageTypeSuccess))
 }
 
-// GetMessages returns the slice of ContentMessage instances that have been saved to
+// GetContentMessages returns the slice of ContentMessage instances that have been saved to
 // a session. The messages (and the session they are contained in) are then deleted,
 // meaning that this function is not idempotent.
-func GetMessages(w http.ResponseWriter, r *http.Request) ([]ContentMessage, error) {
+func GetContentMessages(w http.ResponseWriter, r *http.Request) ([]ContentMessage, error) {
 	msgs, err := getMessages(w, r, categoryContentMessage)
 	if err != nil {
 		return nil, err
@@ -82,5 +83,5 @@ func GetMessages(w http.ResponseWriter, r *http.Request) ([]ContentMessage, erro
 // addContentMessage serializes the specified message to a session used explicitly for storing
 // content messages that can be accessed by handlers
 func addContentMessage(w http.ResponseWriter, r *http.Request, c ContentMessage) error {
-	return addMessage(w, r, c.Message, c.MessageType, categoryContentMessage)
+	return addMessage(w, r, c.Message, c.Type, categoryContentMessage)
 }

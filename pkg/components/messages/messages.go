@@ -12,7 +12,7 @@ import (
 )
 
 type (
-	Message struct {
+	SessionMessage struct {
 		Message string `json:"message"`
 		Type    string `json:"messageType"`
 	}
@@ -30,8 +30,8 @@ func (s SessionKey) String() string {
 }
 
 // newMessage creates a new instance of a Message
-func newMessage(message string, messageType string) Message {
-	return Message{
+func newMessage(message string, messageType string) SessionMessage {
+	return SessionMessage{
 		Message: message,
 		Type:    messageType,
 	}
@@ -70,7 +70,7 @@ func addMessage(w http.ResponseWriter, r *http.Request, message string, messageT
 
 // getMessages retrieves (and removes) the Messages from the specified category from the
 // Messages session.
-func getMessages(w http.ResponseWriter, r *http.Request, category string) ([]Message, error) {
+func getMessages(w http.ResponseWriter, r *http.Request, category string) ([]SessionMessage, error) {
 	s, err := session.Get(r, messagesSession.String())
 	if err != nil {
 		return nil, NewErrRetrievingContentMessages(err)
@@ -97,7 +97,7 @@ func getMessages(w http.ResponseWriter, r *http.Request, category string) ([]Mes
 }
 
 // messagesToJSON takes a slice of ContentMessage and returns a JSON string.
-func messagesToJSON(messages []Message) (string, error) {
+func messagesToJSON(messages []SessionMessage) (string, error) {
 	if messages == nil {
 		return "", nil
 	}
@@ -110,8 +110,8 @@ func messagesToJSON(messages []Message) (string, error) {
 }
 
 // messagesFromJSON takes a JSON string and returns a slice of ContentMessage.
-func messagesFromJSON(jsonString string) ([]Message, error) {
-	var messages []Message
+func messagesFromJSON(jsonString string) ([]SessionMessage, error) {
+	var messages []SessionMessage
 	if jsonString == "" {
 		return messages, nil
 	}
