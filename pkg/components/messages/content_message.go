@@ -40,6 +40,7 @@ func (c *ContentMessage) IsError() bool {
 	return c.Type == MessageTypeError.String()
 }
 
+// NewContentMessage creates a new instance of a ContentMessage struct
 func NewContentMessage(message string, messageType MessageType) ContentMessage {
 	return ContentMessage{
 		SessionMessage: SessionMessage{

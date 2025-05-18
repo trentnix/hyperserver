@@ -1,3 +1,4 @@
+// notifications.go defines a Notification and related methods
 package messages
 
 import "net/http"
@@ -21,14 +22,17 @@ func (n NotificationType) String() string {
 	return string(n)
 }
 
+// IsSuccess returns true if the specified Notification is a success message
 func (n *Notification) IsSuccess() bool {
 	return n.Type == NotificationTypeSuccess.String()
 }
 
+// IsError returns true if the specified Notification is an error message
 func (n *Notification) IsError() bool {
 	return n.Type == NotificationTypeError.String()
 }
 
+// NewNotification creates a new instance of a Notification struct
 func NewNotification(message string, notificationType NotificationType) Notification {
 	return Notification{
 		SessionMessage: SessionMessage{

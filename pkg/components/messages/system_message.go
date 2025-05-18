@@ -1,4 +1,4 @@
-// message.go defines a ContentMessage and related methods
+// system_message.go defines a SystemMessage and related methods
 package messages
 
 import (
@@ -52,6 +52,7 @@ func (c *SystemMessage) IsError() bool {
 	return c.Type == SystemMessageTypeError.String()
 }
 
+// NewSystemMessage creates a new instance of a SystemMessage struct
 func NewSystemMessage(message string, messageType SystemMessageType) SystemMessage {
 	return SystemMessage{
 		SessionMessage: SessionMessage{
