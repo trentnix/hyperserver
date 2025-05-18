@@ -23,7 +23,7 @@ type (
 const (
 	module                          = "module_site"
 	pageLayoutTemplate              = "modules/site/templates/html/layouts/site.html"
-	messageComponentTemplate        = "modules/site/templates/html/components/content-messages.html"
+	messageComponentTemplate        = "modules/site/templates/html/components/notifications.html"
 	consoleMessageComponentTemplate = "modules/site/templates/html/components/console-messages.html"
 	homeContent                     = "modules/site/templates/html/index.html"
 	loginContent                    = "modules/site/templates/html/login.html"

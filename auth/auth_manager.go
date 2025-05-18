@@ -187,7 +187,7 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 	}
 
 	if loginMessage != "" {
-		messages.AddErrorMessage(w, r, loginMessage)
+		messages.AddErrorNotification(w, r, loginMessage)
 	}
 
 	if authType == "" {
@@ -230,7 +230,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r = user.AddUserToRequestContext(r, u)
-	err := messages.AddSuccessMessage(w, r, "You have been successfully logged in")
+	err := messages.AddSuccessNotification(w, r, "You have been successfully logged in")
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}
@@ -276,7 +276,7 @@ func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 	clearedCtx := user.ClearUserFromContext(r.Context())
 	r = r.WithContext(clearedCtx)
 
-	err := messages.AddSuccessMessage(w, r, "You have been successfully logged out")
+	err := messages.AddSuccessNotification(w, r, "You have been successfully logged out")
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}
@@ -318,7 +318,7 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 
 	(*authService).Register(w, r)
 
-	err := messages.AddSuccessMessage(w, r, "You have been successfully registered")
+	err := messages.AddSuccessNotification(w, r, "You have been successfully registered")
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}
@@ -422,7 +422,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.As(err, &errTokenExpired):
 			// show the reset request form with a message that the token is expired
-			messages.AddErrorMessage(w, r, "Unable to reset the specified authorization: the reset request has expired")
+			messages.AddErrorNotification(w, r, "Unable to reset the specified authorization: the reset request has expired")
 			a.GetResetRequest(w, r)
 			return
 		default:
@@ -466,7 +466,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.As(err, &errTokenExpired):
 			// show the reset request form with a message that the token is expired
-			addMessageErr := messages.AddErrorMessage(w, r, "Unable to reset the specified authorization: the reset request has expired")
+			addMessageErr := messages.AddErrorNotification(w, r, "Unable to reset the specified authorization: the reset request has expired")
 			if addMessageErr != nil {
 				logger.LogRequestError(r, addMessageErr)
 			}
@@ -506,7 +506,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// redirect the user to the auth page
-		err := messages.AddSuccessMessage(w, r, "Your password has been updated. Login to access the site.")
+		err := messages.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site.")
 		if err != nil {
 			logger.LogRequestError(r, err)
 		}
@@ -589,7 +589,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 
 	if authUser.Verified {
 		// the user is authenticated and verified, redirect to main
-		err := messages.AddSuccessMessage(w, r, "This user has already been verified.")
+		err := messages.AddSuccessNotification(w, r, "This user has already been verified.")
 		if err != nil {
 			logger.LogRequestError(r, err)
 		}
@@ -669,7 +669,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 			authenticatedUserMessage = "The account was verified successfully, but is not currently logged in. Logout and login with the newly verified account for access."
 		}
 
-		err = messages.AddSuccessMessage(w, r, authenticatedUserMessage)
+		err = messages.AddSuccessNotification(w, r, authenticatedUserMessage)
 		if err != nil {
 			logger.LogRequestError(r, err)
 		}
@@ -680,7 +680,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// no user is authenticated - redirect the requestor to the login page
-	err = messages.AddSuccessMessage(w, r, "Your account was verified successfully. Please login to access the site.")
+	err = messages.AddSuccessNotification(w, r, "Your account was verified successfully. Please login to access the site.")
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}

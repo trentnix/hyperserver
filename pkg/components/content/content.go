@@ -57,8 +57,14 @@ type (
 		// across the application and need to be combined when the Content is rendered
 		ContentManager *content_services.ContentManagerService
 
-		// Messages that should be rendered
+		// Messages that should be written/rendered
 		Messages []messages.ContentMessage
+
+		// Notifications that should be written/rendered
+		Notifications []messages.Notification
+
+		// System messages that should be written/rendered
+		SystemMessages []messages.SystemMessage
 
 		// LogMessages should be written to a client log or console
 		LogMessages []string

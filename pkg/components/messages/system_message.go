@@ -62,7 +62,7 @@ func NewSystemMessage(message string, messageType SystemMessageType) SystemMessa
 	}
 }
 
-// AddErrorMessage adds an error ContentMessage to a session
+// AddSystemErrorMessage adds an error SystemMessage to a session
 func AddSystemErrorMessage(w http.ResponseWriter, r *http.Request, message string) error {
 	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeError))
 }

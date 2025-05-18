@@ -37,7 +37,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	homepage := content.NewManagedContent(r, m.contentManager)
 	homepage.AddContent(homeContent)
-	homepage.Messages, _ = messages.GetContentMessages(w, r)
+	homepage.Notifications, _ = messages.GetNotifications(w, r)
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -63,7 +63,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 // Register provides a handler to act as a portal to user registration
 func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 	register := content.NewManagedContent(r, m.contentManager)
-	register.Messages, _ = messages.GetContentMessages(w, r)
+	register.Notifications, _ = messages.GetNotifications(w, r)
 	register.Title = "Register"
 
 	register.AddContent(registerContent)
@@ -76,16 +76,17 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Error is the handler for the /error endpoint
+// TODO: update
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	contentMessages, messagesErr := messages.GetContentMessages(w, r)
+	notifications, messagesErr := messages.GetNotifications(w, r)
 	if messagesErr != nil {
 		logger.LogRequestError(r, messagesErr)
 	}
 
-	var errorMessages []messages.ContentMessage
-	for _, c := range contentMessages {
-		if c.IsError() {
-			errorMessages = append(errorMessages, c)
+	var errorMessages []messages.Notification
+	for _, n := range notifications {
+		if n.IsError() {
+			errorMessages = append(errorMessages, n)
 		}
 	}
 
@@ -102,7 +103,7 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 // HandleError writes the specified error to the messages store and redirects the
 // requestor to the error URL
 func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
-	errAddMessage := messages.AddErrorMessage(w, r, message)
+	errAddMessage := messages.AddErrorNotification(w, r, message)
 	if errAddMessage != nil {
 		logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", errAddMessage))
 	}

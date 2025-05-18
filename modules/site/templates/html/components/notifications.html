@@ -1,8 +1,8 @@
-{{ define "content-messages" }}
+{{ define "notifications" }}
 
-{{ if gt (len .Messages) 0 }}
+{{ if gt (len .Notifications) 0 }}
 <div class="toaster-container">
-  {{ range .Messages }}
+  {{ range .Notifications }}
     <div class="toaster{{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
       {{ .Message }}
     </div>
