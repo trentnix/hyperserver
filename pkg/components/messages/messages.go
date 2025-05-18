@@ -17,8 +17,7 @@ type (
 		Type    string `json:"messageType"`
 	}
 
-	SessionKey  string
-	MessageType string
+	SessionKey string
 )
 
 const (

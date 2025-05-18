@@ -9,6 +9,8 @@ type (
 	ContentMessage struct {
 		SessionMessage
 	}
+
+	MessageType string
 )
 
 const (
@@ -16,7 +18,7 @@ const (
 	MessageTypeSuccess MessageType = "success"
 	MessageTypeError   MessageType = "error"
 
-	categoryContentMessage string = "hs-category-content-message"
+	categoryContentMessage string = "hs-message-category-content-message"
 )
 
 func (m MessageType) String() string {
