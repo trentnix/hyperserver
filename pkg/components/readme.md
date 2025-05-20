@@ -116,32 +116,100 @@ contentManager.AddPageComponent("templates/componenents/some-universal-component
 contentManager.AddHtmxComponent("templates/componenents/some-universal-component.html")
 ```
 
-## ContentMessage Component
+## Messages
 
-`ContentMessage`, defined in the **messages** package, provides session-based notifications stored via HTTP cookies. There are three types of `ContentMessage`:
+Each Content instance has three different message types:
+
+- Notifications
+- ContentMessage
+- SystemMessage
+
+The **messages** package defines each message type, with methods that allow messages of each type to be stored and retrieved.
+
+### ContentMessage Component
+
+`ContentMessage`, defined in the **messages** package, provides session-stored messages earmarked for rendering inside of content. There are three types of `ContentMessage`:
 
 - Success
 - Error
 - Default (informational)
 
-There are functions available to make adding messages easy:
+There are functions available to make adding content messages easy:
 
 ```go
-messages.AddSuccessMessage(w, r, "action successful")
-messages.AddErrorMessage(w, r, "error processing action")
-messages.AddMessage(w, r, "this is just some useful information")
+messages.AddSuccessMessage(w, r, "processing complete")
+messages.AddErrorMessage(w, r, "try a different login mechanism")
+messages.AddMessage(w, r, "processing took 2 minutes and 15 seconds")
 ```
 
-When you fetch messages from the session, they are cleared after retrieval and can't be fetched again. To fetch messages from the session:
+When you fetch messages from the session, they are cleared after retrieval and can't be fetched again. To fetch content messages from the session:
 
 ```go
-msgs, getMessagesErr := messages.GetMessages(r, w)
+msgs, getMessagesErr := messages.GetContentMessages(r, w)
 ```
 
 To create a new `ContentMessage` without adding it to a session:
 
 ```go
-cm := messages.NewContentMessage("something bad happened", messages.MessageTypeError)
+cm := messages.NewContentMessage("you have a new update", messages.MessageTypeError)
+```
+
+### Notifications
+
+A `Notification`, defined in the **messages** package, provides session-stored messages earmarked for notifying a user of the success or failure of some action. There are two types of `Notification` messages:
+
+- Success
+- Error
+
+There are functions available to make adding notifications easy:
+
+```go
+messages.AddSuccessNotification(w, r, "logout successful")
+messages.AddErrorNotification(w, r, "unable to access the specified resource")
+```
+
+Like content messages, when you fetch notifications from the session they are cleared after retrieval and can't be fetched again. To fetch notifications from the session:
+
+```go
+msgs, getMessagesErr := messages.GetNotifications(r, w)
+```
+
+To create a new `Notification` without adding it to a session:
+
+```go
+cm := messages.NewNotification("something bad happened", messages.NotificationTypeError)
+```
+
+### System Messages
+
+A `SystemMessage`, defined in the **messages** package, provides session-stored messages earmarked for logging or console messages (if the requestor is a browser). There are several types of `SystemMessage` messages:
+
+- Debug
+- Log
+- Info
+- Warning
+- Error
+
+There are functions available to make adding `SystemMessage` instances easy:
+
+```go
+messages.AddSystemDebugMessage(w, r, "entered the function")
+messages.AddSystemLogMessage(w, r, "processed callback")
+messages.AddSystemInfoMessage(w, r, "database is version 2.7")
+messages.AddSystemWarningMessage(w, r, "callback processing exceed 200ms")
+messages.AddSystemErrorMessage(w, r, "call to server failed")
+```
+
+Like content messages and notifications, when you fetch system messages from the session they are cleared after retrieval and can't be fetched again. To fetch system messages from the session:
+
+```go
+msgs, getMessagesErr := messages.GetSystemMessages(r, w)
+```
+
+To create a new `SystemMessage` without adding it to a session:
+
+```go
+cm := messages.NewSystemMessage("something bad happened", messages.SystemMessageTypeError)
 ```
 
 ## form Package

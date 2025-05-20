@@ -50,6 +50,7 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.AppName = s.Config.App.Name
 
 	m.Database = s.Database
+	m.sessionManager = s.SessionManager
 	m.contentManager = s.ContentManager
 	m.contentManager.AddPageLayout(pageLayoutTemplate)
 	m.contentManager.AddPageComponent(messageComponentTemplate)
