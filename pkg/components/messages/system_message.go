@@ -62,6 +62,26 @@ func NewSystemMessage(message string, messageType SystemMessageType) SystemMessa
 	}
 }
 
+// AddSystemDebugMessage adds a debug SystemMessage to a session
+func AddSystemDebugMessage(w http.ResponseWriter, r *http.Request, message string) error {
+	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeDebug))
+}
+
+// AddSystemLogMessage adds a log SystemMessage to a session
+func AddSystemLogMessage(w http.ResponseWriter, r *http.Request, message string) error {
+	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeLog))
+}
+
+// AddSystemInfoMessage adds an info SystemMessage to a session
+func AddSystemInfoMessage(w http.ResponseWriter, r *http.Request, message string) error {
+	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeInfo))
+}
+
+// AddSystemWarningMessage adds an info SystemMessage to a session
+func AddSystemWarningMessage(w http.ResponseWriter, r *http.Request, message string) error {
+	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeWarning))
+}
+
 // AddSystemErrorMessage adds an error SystemMessage to a session
 func AddSystemErrorMessage(w http.ResponseWriter, r *http.Request, message string) error {
 	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeError))
