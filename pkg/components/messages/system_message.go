@@ -2,6 +2,8 @@
 package messages
 
 import (
+	"fmt"
+	"html/template"
 	"net/http"
 )
 
@@ -19,7 +21,7 @@ const (
 	SystemMessageTypeDebug   SystemMessageType = "debug"
 	SystemMessageTypeLog     SystemMessageType = "log"
 	SystemMessageTypeInfo    SystemMessageType = "info"
-	SystemMessageTypeWarning SystemMessageType = "warning"
+	SystemMessageTypeWarning SystemMessageType = "warn"
 	SystemMessageTypeError   SystemMessageType = "error"
 )
 
@@ -50,6 +52,10 @@ func (c *SystemMessage) IsWarning() bool {
 // IsError returns true if the specified SystemMessage is an error message
 func (c *SystemMessage) IsError() bool {
 	return c.Type == SystemMessageTypeError.String()
+}
+
+func (c *SystemMessage) ConsoleOutput() template.JS {
+	return template.JS(fmt.Sprintf(`console.%s(%q);`, c.Type, c.Message))
 }
 
 // NewSystemMessage creates a new instance of a SystemMessage struct

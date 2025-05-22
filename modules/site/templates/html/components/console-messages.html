@@ -1,8 +1,8 @@
 {{ define "console-messages" }}
-  {{ if gt (len .SystemMessages) 0 }}
+  {{ if .SystemMessages }}
     <script>
       {{ range .SystemMessages }}
-        console.log("{{ . }}");
+        {{ .ConsoleOutput }}
       {{ end }}
     </script>
   {{ end }}
