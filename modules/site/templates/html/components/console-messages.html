@@ -2,7 +2,7 @@
   {{ if .SystemMessages }}
     <script>
       {{ range .SystemMessages }}
-        {{ .ConsoleOutput }}
+        {{ .ConsoleMessage }}
       {{ end }}
     </script>
   {{ end }}

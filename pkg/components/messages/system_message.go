@@ -54,8 +54,23 @@ func (c *SystemMessage) IsError() bool {
 	return c.Type == SystemMessageTypeError.String()
 }
 
-func (c *SystemMessage) ConsoleOutput() template.JS {
-	return template.JS(fmt.Sprintf(`console.%s(%q);`, c.Type, c.Message))
+func (c *SystemMessage) ConsoleMessage() template.JS {
+	var msgType string
+	switch SystemMessageType(c.Type) {
+	case SystemMessageTypeDebug:
+		msgType = "debug"
+	case SystemMessageTypeLog:
+		msgType = "log"
+	case SystemMessageTypeInfo:
+		msgType = "info"
+	case SystemMessageTypeWarning:
+		msgType = "warn"
+	case SystemMessageTypeError:
+		msgType = "error"
+	default:
+		msgType = "debug"
+	}
+	return template.JS(fmt.Sprintf(`console.%s(%q);`, msgType, c.Message))
 }
 
 // NewSystemMessage creates a new instance of a SystemMessage struct
