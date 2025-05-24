@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
-	"strconv"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
@@ -141,21 +140,15 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// get the existing counter value from the session data
-	counter, atoiError := strconv.Atoi(mySession.Data[counterKey])
-	if atoiError != nil {
-		counter = 1
-	}
+	counter, _ := mySession.Data[counterKey].(int)
+	counter++ // add this visit
 
 	page := content.NewManagedContent(r, m.contentManager)
 	page.AddContent(homeContent)
 	page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
-	// increment the counter and convert the value to a string
-	sCounter := fmt.Sprintf("%d", counter+1)
-
 	// save the updated counter value in the session
-	mySession.Data[counterKey] = sCounter
+	mySession.Data[counterKey] = counter
 	sessionSaveErr := mySession.Save(w, r)
 	if sessionSaveErr != nil {
 		m.contentManager.HandleError(w, r, "unable to save the counter session", sessionSaveErr, http.StatusInternalServerError)

@@ -14,7 +14,7 @@ type (
 		// identifies a unique session
 		ID string `json:"id"`
 		// values that can be stored in a session
-		Data map[string]string `json:"data"`
+		Value string `json:"data"`
 		// stanard JWT claims embedded
 		jwt.StandardClaims
 	}

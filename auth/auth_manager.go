@@ -183,7 +183,7 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 
 	loginMessage := ""
 	if !s.IsNew {
-		loginMessage = s.Data[session.AuthMessage]
+		loginMessage, _ = s.Data[session.AuthMessage].(string)
 	}
 
 	if loginMessage != "" {
@@ -245,7 +245,13 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	redirectURL := ""
 	if !s.IsNew {
-		redirectURL = s.Data[session.RedirectURL]
+		msg, ok := s.Data[session.RedirectURL]
+		if ok {
+			sMessage, ok := msg.(string)
+			if ok {
+				redirectURL = sMessage
+			}
+		}
 	}
 
 	if redirectURL == "" {

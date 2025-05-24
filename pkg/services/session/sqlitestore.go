@@ -3,7 +3,6 @@
 package session
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -302,23 +301,9 @@ func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Se
 	}
 
 	if dbSession.Session != "" {
-		sessionData, dataError := convertJsonToData(dbSession.Session)
-		if dataError != nil {
-			// the JSON text blob that was stored could not be serialized to a map[string]string
-			return nil, dataError
-		}
-
 		// create a new session and serialize the session data
-		existingSession := &Session{
-			ID:        dbSession.ID,
-			Name:      name,
-			IsNew:     false,
-			ExpiresAt: dbSession.Expires_at,
-			Data:      sessionData,
-			Store:     s,
-		}
-
-		return existingSession, nil
+		existingSession, loadErr := loadSession(dbSession.ID, name, dbSession.Expires_at, s, dbSession.Session)
+		return existingSession, loadErr
 	}
 
 	return nil, nil
@@ -330,14 +315,14 @@ func (s *SQLiteStore) save(session *Session) error {
 		return database.NewErrDatabaseUnavailable(nil)
 	}
 
-	jsonData, err := convertDataToJson(session.Data)
+	valueData, err := session.EncodedData()
 	if err != nil {
 		return err
 	}
 
 	dbSession := &SQLiteSession{
 		ID:         session.ID,
-		Session:    jsonData,
+		Session:    valueData,
 		Expires_at: session.ExpiresAt,
 	}
 
@@ -411,32 +396,4 @@ func (s *SQLiteStore) delete(session *SQLiteSession) error {
 	_, err := s.db.Exec(query, session.ID)
 
 	return err
-}
-
-// convertDataToJson takes a map[string]string and converts it to JSON
-func convertDataToJson(data map[string]string) (string, error) {
-	// serialize to JSON
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		return "", err
-	}
-
-	// convert to string
-	jsonString := string(jsonBytes)
-
-	return jsonString, nil
-}
-
-// convertJsonToData takes a string of json values and converts them to a map[string]string
-func convertJsonToData(jsonString string) (map[string]string, error) {
-	var data map[string]string
-
-	// unmarshal the JSON into the map
-	err := json.Unmarshal([]byte(jsonString), &data)
-	if err != nil {
-		fmt.Println("Error decoding JSON:", err)
-		return nil, err
-	}
-
-	return data, nil
 }

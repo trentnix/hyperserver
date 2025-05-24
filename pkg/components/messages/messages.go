@@ -5,6 +5,7 @@
 package messages
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"net/http"
 
@@ -23,6 +24,10 @@ type (
 const (
 	messagesSession SessionKey = "hs-message-session"
 )
+
+func init() {
+	gob.Register([]SessionMessage{}) // needed for securecookie/gob encoding
+}
 
 func (s SessionKey) String() string {
 	return string(s)
@@ -44,20 +49,11 @@ func addMessage(w http.ResponseWriter, r *http.Request, message string, messageT
 		return NewErrRetrievingContentMessages(err)
 	}
 
-	msgData := s.Data[category]
-	msgs, convertErr := messagesFromJSON(msgData)
-	if convertErr != nil {
-		return NewErrConvertingContentMessagesData(convertErr)
-	}
-
 	m := newMessage(message, messageType)
-	msgs = append(msgs, m)
 
-	msgData, convertErr = messagesToJSON(msgs)
-	if convertErr != nil {
-		return NewErrConvertingContentMessagesData(convertErr)
-	}
-	s.Data[category] = msgData
+	msgs, _ := s.Data[category].([]SessionMessage)
+	msgs = append(msgs, m)
+	s.Data[category] = msgs
 
 	err = s.Save(w, r)
 	if err != nil {
@@ -75,24 +71,15 @@ func getMessages(w http.ResponseWriter, r *http.Request, category string) ([]Ses
 		return nil, NewErrRetrievingContentMessages(err)
 	}
 
-	sContentMessages := s.Data[category]
-
-	var convertErr error
-	contentMessages, convertErr := messagesFromJSON(sContentMessages)
-	if convertErr != nil {
-		return nil, NewErrConvertingContentMessagesData(convertErr)
-	}
-
+	contentMessages, _ := s.Data[category].([]SessionMessage)
 	delete(s.Data, category)
 
+	var deleteMessagesErr error
 	if len(s.Data) == 0 {
-		deleteMessagesErr := s.End(w, r)
-		if deleteMessagesErr != nil {
-			return contentMessages, deleteMessagesErr
-		}
+		deleteMessagesErr = s.End(w, r)
 	}
 
-	return contentMessages, nil
+	return contentMessages, deleteMessagesErr
 }
 
 // messagesToJSON takes a slice of ContentMessage and returns a JSON string.

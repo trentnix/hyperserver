@@ -72,8 +72,8 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
 		return nil, err
 	}
 
-	userId := s.Data[userSessionKey]
-	if userId == "" {
+	userId, ok := s.Data[userSessionKey].(string)
+	if !ok {
 		return nil, nil
 	}
 

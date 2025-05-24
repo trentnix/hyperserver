@@ -2,7 +2,10 @@
 package session
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/gob"
 	"errors"
 	"net/http"
 	"time"
@@ -14,7 +17,7 @@ type (
 	// Session is used to manage a user or usage session
 	Session struct {
 		ID        string
-		Data      map[string]string
+		Data      map[string]any
 		Name      string
 		Store     SessionStore
 		IsNew     bool
@@ -28,9 +31,9 @@ const (
 	SessionContextKey contextKey = "auth-user"
 )
 
-// newSession returns a new Session instance with the specified session name
-// serialized to the specified session store. newSession is intended for use
-// only within the session package by a session store implementation.
+// newSession returns a new Session instance with the specified session name serialized
+// to the specified session store. newSession is intended for use only within the
+// session package by a session store implementation.
 func newSession(s SessionStore, name string) *Session {
 	sessionID := uuid.New().String()
 	session := Session{
@@ -40,8 +43,33 @@ func newSession(s SessionStore, name string) *Session {
 		IsNew: true,
 	}
 
-	session.Data = make(map[string]string)
+	session.Data = make(map[string]any)
 	return &session
+}
+
+// loadSession takes existing session data and creates a Session instance with the provided
+// values
+func loadSession(id string, name string, expiration time.Time, s SessionStore, value string) (*Session, error) {
+	session := Session{
+		ID:        id,
+		Name:      name,
+		ExpiresAt: expiration,
+		Store:     s,
+		IsNew:     false,
+	}
+
+	byteValue, base64DecodeErr := base64.URLEncoding.DecodeString(value)
+	if base64DecodeErr != nil {
+		return nil, base64DecodeErr
+	}
+
+	var sessionData map[string]any
+	if err := gob.NewDecoder(bytes.NewReader(byteValue)).Decode(&sessionData); err != nil {
+		return nil, err
+	}
+
+	session.Data = sessionData
+	return &session, nil
 }
 
 // Save saves the specified session to its corresponding store and writes the
@@ -62,6 +90,16 @@ func (s *Session) End(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return s.Store.End(w, r, s)
+}
+
+// EncodedValue returns a string value that encodes the data stored in Session's Data map
+func (s *Session) EncodedData() (string, error) {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(s.Data); err != nil {
+		return "", err
+	}
+
+	return base64.URLEncoding.EncodeToString(buf.Bytes()), nil
 }
 
 // getCachedSession retrieves the cached session from the request's context.

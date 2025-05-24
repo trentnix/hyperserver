@@ -82,18 +82,9 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 	}
 
 	// the session exists - overwrite the ID with the session data that was extracted from the cookie
-	sessionData := claimsData.Data
-	if sessionData == nil {
-		sessionData = make(map[string]string)
-	}
-
-	existingSession := &Session{
-		ID:        claimsData.ID,
-		Name:      name,
-		IsNew:     false,
-		ExpiresAt: claimsData.ExpiresAtTime(),
-		Data:      sessionData,
-		Store:     c,
+	existingSession, loadErr := loadSession(claimsData.ID, name, claimsData.ExpiresAtTime(), c, claimsData.Value)
+	if loadErr != nil {
+		return newSession(c, name), loadErr
 	}
 
 	return existingSession, nil
@@ -121,9 +112,14 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 		tokenExpiration = session.ExpiresAt
 	}
 
+	sessionValue, err := session.EncodedData()
+	if err != nil {
+		return err
+	}
+
 	claims := &SessionClaims{
-		ID:   session.ID,
-		Data: session.Data,
+		ID:    session.ID,
+		Value: sessionValue,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: tokenExpiration.UTC().Unix(),
 			IssuedAt:  time.Now().UTC().Unix(),
