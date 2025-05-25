@@ -173,21 +173,15 @@ func (a *AuthManager) GetLoginService(w http.ResponseWriter, r *http.Request) {
 // GetSpecificLoginService retrieves the specified AuthService and redirects the requestor to
 // the specified service's login entry point
 func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Request, authType string) {
-	// retrieve any session where a redirect URL might be stored
-	// get a session for redirect values
-	s, err := session.Get(r, session.AuthSession)
-	if err != nil {
-		// couldn't get a session, log the error
-		logger.LogRequestError(r, err)
-	}
-
-	loginMessage := ""
-	if !s.IsNew {
-		loginMessage, _ = s.Data[session.AuthMessage].(string)
-	}
-
-	if loginMessage != "" {
-		messages.AddErrorNotification(w, r, loginMessage)
+	authMessages, _ := messages.GetContentMessages(w, r)
+	// turn any content messages into notification messages
+	for _, msg := range authMessages {
+		if msg.IsError() {
+			messages.AddErrorNotification(w, r, msg.Message)
+		}
+		if msg.IsSuccess() {
+			messages.AddSuccessNotification(w, r, msg.Message)
+		}
 	}
 
 	if authType == "" {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -50,7 +51,7 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 
 				redirectURL := r.RequestURI
 				s.Data[session.RedirectURL] = redirectURL
-				s.Data[session.AuthMessage] = "The requested resource is only available to authenticated users."
+				messages.AddErrorMessage(w, r, "The requested resource is only available to authenticated users.")
 
 				sessionErr := s.Save(w, r)
 				if sessionErr == nil {
