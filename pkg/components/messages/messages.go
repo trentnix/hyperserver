@@ -6,7 +6,6 @@ package messages
 
 import (
 	"encoding/gob"
-	"encoding/json"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -80,31 +79,4 @@ func getMessages(w http.ResponseWriter, r *http.Request, category string) ([]Ses
 	}
 
 	return contentMessages, deleteMessagesErr
-}
-
-// messagesToJSON takes a slice of ContentMessage and returns a JSON string.
-func messagesToJSON(messages []SessionMessage) (string, error) {
-	if messages == nil {
-		return "", nil
-	}
-
-	data, err := json.Marshal(messages)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// messagesFromJSON takes a JSON string and returns a slice of ContentMessage.
-func messagesFromJSON(jsonString string) ([]SessionMessage, error) {
-	var messages []SessionMessage
-	if jsonString == "" {
-		return messages, nil
-	}
-
-	err := json.Unmarshal([]byte(jsonString), &messages)
-	if err != nil {
-		return nil, err
-	}
-	return messages, nil
 }
