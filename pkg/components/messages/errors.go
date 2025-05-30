@@ -58,3 +58,16 @@ func NewErrDeletingContentMessages(err error) *ErrDeletingContentMessages {
 		},
 	}
 }
+
+type ErrMessageCategoryNotSpecified struct {
+	*BaseError
+}
+
+func NewErrMessageCategoryNotSpecified(err error) *ErrMessageCategoryNotSpecified {
+	return &ErrMessageCategoryNotSpecified{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "a message category is required",
+		},
+	}
+}

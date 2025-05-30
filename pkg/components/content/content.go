@@ -58,7 +58,7 @@ type (
 		ContentManager *content_services.ContentManagerService
 
 		// Messages that should be written/rendered
-		Messages []messages.ContentMessage
+		Messages []messages.Message
 
 		// Notifications that should be written/rendered
 		Notifications []messages.Notification
