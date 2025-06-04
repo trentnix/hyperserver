@@ -18,6 +18,8 @@ const (
 	MessageTypeSuccess MessageType = "success"
 	MessageTypeError   MessageType = "error"
 
+	// value appended to flash message categories to mitigate the potential over overlap with
+	// session names that might be used in the code
 	sessionFlashMessagePrefix string = "hs-message-category-flash-message"
 
 	// built-in flash message categories
