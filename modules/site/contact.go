@@ -87,7 +87,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if contactForm.HasErrors() {
+	if contactForm.HasErrorMessages() {
 		// there are validation errors - render the form errors
 		form.HandleFormError(w, r, contact, contactForm, "", nil)
 		return
@@ -109,7 +109,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	contactForm.Name = r.FormValue("")
 	contactForm.Email = r.FormValue("")
 	contactForm.Message = r.FormValue("")
-	contactForm.SetFormMessage("Your message has been submitted.")
+	contactForm.AddSuccessMessage("Your message has been submitted.")
 
 	// render the success response
 	contact.Data = contactForm

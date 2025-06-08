@@ -16,6 +16,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -214,6 +215,10 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
+
+	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	loginForm.SetMessages(authMessages)
+
 	login.Data = loginForm
 
 	err := login.Render(w, r)
@@ -246,7 +251,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if loginForm.HasErrors() {
+	if loginForm.HasErrorMessages() {
 		form.HandleFormError(w, r, login, loginForm, "", nil)
 		return nil
 	}
@@ -276,6 +281,10 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
+
+	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	registerForm.SetMessages(authMessages)
+
 	register.Data = registerForm
 
 	err := register.Render(w, r)
@@ -309,7 +318,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if registerForm.HasErrors() {
+	if registerForm.HasErrorMessages() {
 		form.HandleFormError(w, r, register, registerForm, "", nil)
 		return false
 	}
@@ -330,6 +339,10 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
+
+	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	resetRequestForm.SetMessages(authMessages)
+
 	reset.Data = resetRequestForm
 
 	err := reset.Render(w, r)
@@ -362,7 +375,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if resetRequestForm.HasErrors() {
+	if resetRequestForm.HasErrorMessages() {
 		form.HandleFormError(w, r, reset, resetRequestForm, "", nil)
 		return false
 	}
@@ -408,7 +421,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to reset your password.`, resetUrl.String())
-	resetRequestForm.SetFormMessage(successMessage)
+	resetRequestForm.AddSuccessMessage(successMessage)
 
 	resetRequestForm.ActionUrl = emailResetRequestPath
 	reset.Data = resetRequestForm
@@ -451,6 +464,10 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.AddContent(emailResetPasswordFormTemplate)
+
+	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	resetForm.SetMessages(authMessages)
+
 	reset.Data = resetForm
 
 	err := reset.Render(w, r)
@@ -492,7 +509,7 @@ func (a *EmailAuthService) Reset(
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if resetForm.HasErrors() {
+	if resetForm.HasErrorMessages() {
 		form.HandleFormError(w, r, reset, resetForm, "", nil)
 		return false
 	}
@@ -557,6 +574,10 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 
 	change := content.NewManagedContent(r, a.contentManager)
 	change.AddContent(emailChangePasswordFormTemplate)
+
+	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	changeForm.SetMessages(authMessages)
+
 	change.Data = changeForm
 
 	err := change.Render(w, r)
@@ -595,7 +616,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if changeForm.HasErrors() {
+	if changeForm.HasErrorMessages() {
 		form.HandleFormError(w, r, change, changeForm, "", nil)
 		return false
 	}
@@ -642,7 +663,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	changeForm.OldPassword = ""
 	changeForm.NewPassword = ""
 	changeForm.NewPasswordMatch = ""
-	changeForm.SetFormMessage("Your password has been changed.")
+	changeForm.AddSuccessMessage("Your password has been changed.")
 
 	err = change.Render(w, r)
 	if err != nil {

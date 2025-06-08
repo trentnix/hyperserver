@@ -301,10 +301,10 @@ The form template used in the previous example code can be seen below:
 
         <button type="submit">Register</button>
         
-        {{ if .HasErrors }}
-            <div>{{ .GetFormErrorHTML }}</div>
-        {{ else if .GetFormMessage }}
-            <div>{{ .GetFormMessageHTML }}</div>
+        {{ if .HasErrorMessages }}
+            <div class="form-messages">{{ .GetErrorMessagesHTML }}</div>
+        {{ else if .HasInfoMessages }}
+            <div class="form-messages">{{ .GetInfoMessagesHTML }}</div>
         {{ end }}
     </form>
 {{ else }}

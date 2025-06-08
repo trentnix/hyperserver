@@ -4,9 +4,10 @@ package form
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"net/http"
 	"reflect"
+
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 )
 
 type (
@@ -26,23 +27,23 @@ type (
 		// determines whether a specific field has errors
 		HasFieldErrors(string) bool
 
-		// gets a form-level error message
-		GetFormError() string
-		// sets a form-level error message
-		SetFormError(string)
+		// gets form-level success messages
+		GetSuccessMessages() []messages.Message
+		// gets form-level error messages
+		GetErrorMessages() []messages.Message
+		// gets form-level informational messages
+		GetInfoMessages() []messages.Message
+		// determines whether the form has error messages
+		HasErrorMessages() bool
 
-		// determines whether the form has errors
-		HasErrors() bool
-
-		// gets a form-level notification (success) message
-		GetFormMessage() string
-		// sets a form-level notifcation (success) message
-		SetFormMessage(string)
-
-		// returns the HTML version of GetFormMessage
-		GetFormMessageHTML() template.HTML
-		// returns the HTML version of GetFormError
-		GetFormErrorHTML() template.HTML
+		// sets a form-level non-error messages
+		SetMessages([]messages.Message)
+		// adds an error message
+		AddErrorMessage(string)
+		// adds a success message
+		AddSuccessMessage(string)
+		// adds an informational message
+		AddMessage(string)
 
 		// Bind allows a form to populate its fields from an http.Request
 		Bind(*http.Request) error

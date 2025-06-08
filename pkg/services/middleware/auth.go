@@ -51,7 +51,7 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 
 				redirectURL := r.RequestURI
 				s.Data[session.RedirectURL] = redirectURL
-				messages.AddErrorMessage(w, r, "The requested resource is only available to authenticated users.", messages.AuthMessages)
+				messages.AddMessage(w, r, "The requested resource is only available to authenticated users.", messages.AuthMessages)
 
 				sessionErr := s.Save(w, r)
 				if sessionErr == nil {

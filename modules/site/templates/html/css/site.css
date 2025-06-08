@@ -204,6 +204,12 @@ textarea.input-error {
   font-size: .9em;
 }
 
+.form-messages ul {
+  list-style-type: none;
+  padding-left: 0;
+  margin: 0;
+}
+
 /* auth */
 .auth-options {
   display: flex;

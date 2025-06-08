@@ -7,13 +7,13 @@ import (
 	"html/template"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 )
 
 // Form is an implementation of the FormComponent interface
 type Form struct {
 	isValidated bool
-	formMessage string
-	formError   string
+	messages    []messages.Message
 	fieldErrors map[string][]string
 
 	ActionUrl string
@@ -94,45 +94,110 @@ func (f *Form) HasFieldErrors(field string) bool {
 	return len(f.GetFieldErrors(field)) > 0
 }
 
+// HasErrorMessages returns true if the form has form-level error messages
+func (f *Form) HasErrorMessages() bool {
+	return len(f.GetErrorMessages()) > 0
+}
+
+// HasSuccessMessages returns true if the form has form-level success messages
+func (f *Form) HasSuccessMessages() bool {
+	return len(f.GetSuccessMessages()) > 0
+}
+
+// HasInfoMessages returns true if the form has form-level notifications
+func (f *Form) HasInfoMessages() bool {
+	return len(f.GetInfoMessages()) > 0
+}
+
 // GetFormError gets a form-level error message
-func (f *Form) GetFormError() string {
-	return f.formError
+func (f *Form) GetErrorMessages() []messages.Message {
+	return f.getMessages(messages.MessageTypeError)
 }
 
-// SetFormError sets a form-level error message
-func (f *Form) SetFormError(e string) {
-	f.formError = e
+// GetSuccessMessage returns a form message to display
+func (f *Form) GetSuccessMessages() []messages.Message {
+	return f.getMessages(messages.MessageTypeSuccess)
 }
 
-// HasErrors returns true if the form has field-level or form-level errors
-func (f *Form) HasErrors() bool {
-	if len(f.fieldErrors) > 0 {
-		return true
+// GetInfoMessages returns a form message to display
+func (f *Form) GetInfoMessages() []messages.Message {
+	return f.getMessages(messages.MessageTypeDefault)
+}
+
+// getMessages retrieves just the messages from Form.messages that match the
+// specified type
+func (f *Form) getMessages(msgType messages.MessageType) []messages.Message {
+	var msgs []messages.Message
+	for _, m := range f.messages {
+		if m.Type == string(msgType) {
+			msgs = append(msgs, m)
+		}
 	}
 
-	if len(f.formError) > 0 {
-		return true
+	return msgs
+}
+
+// AddErrorMessage adds messages.Message instance with an error type to the Form
+func (f *Form) AddErrorMessage(msg string) {
+	f.addMessage(msg, messages.MessageTypeError)
+}
+
+// AddSuccessMessage adds messages.Message instance with a success type to the Form
+func (f *Form) AddSuccessMessage(msg string) {
+	f.addMessage(msg, messages.MessageTypeSuccess)
+}
+
+// AddMessage adds messages.Message instance with a default (non-error, non-success)
+// type to the Form
+func (f *Form) AddMessage(msg string) {
+	f.addMessage(msg, messages.MessageTypeDefault)
+}
+
+// addMessage handles appending a message to the Form.messages slice
+func (f *Form) addMessage(msg string, msgType messages.MessageType) {
+	f.messages = append(f.messages, messages.NewMessage(msg, msgType))
+}
+
+// SetMessages takes a slice of messages.Message values and splits them into
+// Form.Errors and Form.Messages
+func (f *Form) SetMessages(formMessages []messages.Message) {
+	f.messages = formMessages
+}
+
+// GetErrorMessagesHTML returns an HTML result for just error messages
+func (f *Form) GetErrorMessagesHTML() template.HTML {
+	return f.getMessagesHTML(messages.MessageTypeError)
+}
+
+// GetSuccessMessagesHTML returns an HTML result for just success messages
+func (f *Form) GetSuccessMessagesHTML() template.HTML {
+	return f.getMessagesHTML(messages.MessageTypeSuccess)
+}
+
+// GetInfoMessagesHTML returns an HTML result for just informational messages
+func (f *Form) GetInfoMessagesHTML() template.HTML {
+	return f.getMessagesHTML(messages.MessageTypeDefault)
+}
+
+// getMessagesHTML retrieves a slice of messages from Form.messages that
+// match the specified type
+func (f *Form) getMessagesHTML(msgType messages.MessageType) template.HTML {
+	var msgs []messages.Message
+	switch msgType {
+	case messages.MessageTypeError:
+		msgs = f.GetErrorMessages()
+	case messages.MessageTypeSuccess:
+		msgs = f.GetSuccessMessages()
+	default:
+		msgs = f.GetInfoMessages()
 	}
 
-	return false
-}
+	var htmlMessages string
+	htmlMessages = "<ul>"
+	for _, m := range msgs {
+		htmlMessages += fmt.Sprintf("<li>%s</li>", m.Message)
+	}
+	htmlMessages += "</ul>"
 
-// GetMessage returns a form message to display
-func (f *Form) GetFormMessage() string {
-	return f.formMessage
-}
-
-// SetMessage sets a form message that can be displayed
-func (f *Form) SetFormMessage(message string) {
-	f.formMessage = message
-}
-
-// GetFormMessageHTML returns the HTML version of formMessage
-func (f *Form) GetFormMessageHTML() template.HTML {
-	return template.HTML(f.formMessage)
-}
-
-// GetFormErrorHTML returns the HTML version of formError
-func (f *Form) GetFormErrorHTML() template.HTML {
-	return template.HTML(f.formError)
+	return template.HTML(htmlMessages)
 }

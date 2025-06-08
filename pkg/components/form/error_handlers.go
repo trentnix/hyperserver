@@ -22,7 +22,7 @@ func HandleFormError(
 	e error,
 ) {
 	if formErrorMessage != "" {
-		f.SetFormError(formErrorMessage)
+		f.AddErrorMessage(formErrorMessage)
 	}
 
 	if e != nil {

@@ -21,10 +21,10 @@
             </div>   
             <button id="contactButton" type="submit">Submit</button>
             <div class="form-message">
-                {{ if .HasErrors }}
-                <span class="error">{{ .GetFormErrorHTML }}</span>
+                {{ if .HasErrorMessages }}
+                <span class="error">{{ .GetErrorMessagesHTML }}</span>
                 {{else if .GetFormMessage}}
-                <span class="success">{{ .GetFormMessageHTML }}</span>
+                <span class="success">{{ .GetInfoMessagesHTML }}</span>
                 {{end}}
             </div>
         </form>
