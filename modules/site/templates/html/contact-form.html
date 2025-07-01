@@ -20,13 +20,9 @@
                 {{template "field-errors" (.GetFieldErrors "Message")}}
             </div>   
             <button id="contactButton" type="submit">Submit</button>
-            <div class="form-message">
-                {{ if .HasErrorMessages }}
-                <span class="error">{{ .GetErrorMessagesHTML }}</span>
-                {{else if .GetFormMessage}}
-                <span class="success">{{ .GetInfoMessagesHTML }}</span>
-                {{end}}
-            </div>
+            {{ if .HasErrorMessages }}
+                <div class="form-messages">{{ .GetErrorMessagesHTML }}</div>
+            {{ end }}
         </form>
         {{ else }}
         <div>Unable to display the contact form.</div>
