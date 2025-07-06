@@ -243,6 +243,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	login := content.NewManagedContent(r, a.contentManager)
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
+	loginForm.ActionUrl = emailLoginPath
 
 	errMessage, err := form.ParseAndValidate(r, loginForm)
 	if err != nil {

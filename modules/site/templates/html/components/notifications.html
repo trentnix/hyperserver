@@ -1,13 +1,11 @@
 {{ define "notifications" }}
 
-{{ if gt (len .Notifications) 0 }}
-<div class="toaster-container">
+<div id="user-notifications" class="toaster-container">
   {{ range .Notifications }}
     <div class="toaster{{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
       {{ .Message }}
     </div>
   {{ end }}
 </div>
-{{ end }}
 
 {{ end }}

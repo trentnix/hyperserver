@@ -1,0 +1,11 @@
+{{ block "Content" . }}
+    Loading content.
+{{ end }}
+
+<div id="user-notifications" class="toaster-container" hx-swap-oob="true">
+    {{ range .Notifications }}
+    <div class="toaster{{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
+      {{ .Message }}
+    </div>
+  {{ end }}
+</div>
