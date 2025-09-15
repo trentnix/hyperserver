@@ -53,7 +53,7 @@ type (
 		// Data contains the data that should be rendered to any available templates
 		Data any
 
-		// ContentManager might contain layouts, content, and components that are used
+		// ContentManager contains layouts, content, and components that may be used
 		// across the application and need to be combined when the Content is rendered
 		ContentManager *content_services.ContentManagerService
 
@@ -167,6 +167,12 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		managerLayouts = c.ContentManager.Layouts[contentType]
 		managerContents = c.ContentManager.Contents[contentType]
 		managerComponents = c.ContentManager.Components[contentType]
+
+		// render notifications
+		if c.ContentManager.RenderNotifications {
+			notifications, _ := messages.GetNotifications(w, r)
+			c.Notifications = append(c.Notifications, notifications...)
+		}
 	}
 
 	// merge them into local slices so we don't mutate c.*

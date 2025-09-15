@@ -48,6 +48,9 @@ type (
 		Host string
 		// port the application handlers are listening on
 		Port string
+
+		// specifies whether notifications should be rendered when rendering content
+		RenderNotifications bool
 	}
 )
 
@@ -81,6 +84,9 @@ func NewContentManager() *ContentManagerService {
 	cm.Host = defaultHost
 	cm.Port = defaultPort
 
+	// default value
+	cm.RenderNotifications = false
+
 	return &cm
 }
 
@@ -96,6 +102,8 @@ func (c *ContentManagerService) Configure(cfg *config.Config) {
 	}
 
 	c.Port = strconv.Itoa(int(cfg.HTTP.Port))
+
+	c.RenderNotifications = cfg.App.RenderNotifications
 }
 
 // RegisterLayouts overwrites the layout templates stored in the specified content manager service

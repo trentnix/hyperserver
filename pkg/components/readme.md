@@ -1,13 +1,14 @@
 # HyperMedia Components Documentation
 
-The HyperMedia Components framework simplifies serving hypertext-based content to clients by abstracting common tasks. The implemented components reside in the **components** folder and include:
+HyperServer implements hyperMedia components to simplify serving hypertext-based content to requestors. The implemented components reside in the **components** folder and include:
 
-- **Content**: A view model for rendering HTML views.
-- **ContentManagerService**: Manages reusable templates for rendering pages and components.
-- **ContentMessage**: Manages session-based messaging.
-- **Form**: Handles validation and error management for forms.
-- **htmx.Request**: Stores HTMX-related request attributes.
-- **htmx.Response**: Stores HTMX-related response attributes and configurations.
+- **Content**: A view model for rendering and delivering HTML payloads.
+- **ContentManagerService**: Component used to manage reusable templates for rendering pages and components.
+- **SessionMessage**: A message that is serialized to a session.
+- **Notification**: A message that is 
+- **Form**: Validates, renders, and manages errors for HTML forms.
+- **htmx.Request**: Models HTMX-related request attributes.
+- **htmx.Response**: Models HTMX-related response attributes and configurations.
 
 This document provides details on each component, its purpose, and usage.
 

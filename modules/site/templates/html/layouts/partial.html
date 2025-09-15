@@ -2,7 +2,7 @@
     Loading content.
 {{ end }}
 
-<div id="user-notifications" class="toaster-container" hx-swap-oob="true">
+<div id="user-notifications" class="toaster-container" hx-swap-oob="beforeend">
     {{ range .Notifications }}
     <div class="toaster{{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
       {{ .Message }}

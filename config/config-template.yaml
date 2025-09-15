@@ -43,3 +43,4 @@ database:
 app:
   name: "HyperServer"
   workingDirectory: "D:/source/hyperserver"
+  renderNotifications: "true"

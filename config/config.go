@@ -72,8 +72,9 @@ type (
 
 	// AppConfig stores application configuration
 	AppConfig struct {
-		Name             string
-		WorkingDirectory string
+		Name                string
+		WorkingDirectory    string
+		RenderNotifications bool
 	}
 )
 
