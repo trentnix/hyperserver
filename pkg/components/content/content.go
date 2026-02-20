@@ -3,9 +3,11 @@
 package content
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"net/http"
+	"path/filepath"
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
@@ -23,6 +25,9 @@ type (
 
 		// Title of the content, if any
 		Title string
+
+		// PartialName is the named template fragment to render from the layout.
+		PartialName string
 
 		// URL of the displayed content - optional
 		URL string
@@ -76,6 +81,7 @@ func NewContent(r *http.Request) *Content {
 	c := Content{}
 	c.Site = content_services.DefaultAppName
 	c.Title = content_services.DefaultAppTitle
+	c.PartialName = ""
 	c.ResponseStatusCode = http.StatusOK
 
 	if r != nil {
@@ -199,8 +205,36 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		w.Header().Set(k, v)
 	}
 
+	templatePaths := templatesToStrings(templates)
+	rootTemplateName := filepath.Base(templatePaths[0])
+
+	var tmpl *template.Template
+	funcMap := template.FuncMap{
+		"renderPartial": func(name string, data any) (template.HTML, error) {
+			if name == "" {
+				return "", fmt.Errorf("partial template name was not specified")
+			}
+
+			if tmpl == nil {
+				return "", fmt.Errorf("template parser was not initialized")
+			}
+
+			if tmpl.Lookup(name) == nil {
+				return "", fmt.Errorf("partial template not found: %s", name)
+			}
+
+			var out bytes.Buffer
+			err := tmpl.ExecuteTemplate(&out, name, data)
+			if err != nil {
+				return "", err
+			}
+
+			return template.HTML(out.String()), nil
+		},
+	}
+
 	// parse the templates in the order specified
-	tmpl, err := template.ParseFiles(templatesToStrings(templates)...)
+	tmpl, err := template.New(rootTemplateName).Funcs(funcMap).ParseFiles(templatePaths...)
 	if err != nil {
 		return NewErrParsingTemplates(err)
 	}
@@ -210,7 +244,7 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// render the template
-	err = tmpl.Execute(w, c)
+	err = tmpl.ExecuteTemplate(w, rootTemplateName, c)
 	if err != nil {
 		return NewErrRenderingTemplates(err)
 	}

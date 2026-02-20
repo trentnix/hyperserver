@@ -1,6 +1,4 @@
-{{ block "Content" . }}
-    Loading content.
-{{ end }}
+{{ renderPartial .PartialName . }}
 
 <div id="user-notifications" class="toaster-container" hx-swap-oob="beforeend">
     {{ range .Notifications }}

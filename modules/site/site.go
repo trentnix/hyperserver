@@ -21,17 +21,26 @@ type (
 )
 
 const (
-	module                          = "module_site"
-	pageLayoutTemplate              = "modules/site/templates/html/layouts/site.html"
-	partialLayoutTemplate           = "modules/site/templates/html/layouts/partial.html"
-	messageComponentTemplate        = "modules/site/templates/html/components/notifications.html"
-	consoleMessageComponentTemplate = "modules/site/templates/html/components/console-messages.html"
-	homeContent                     = "modules/site/templates/html/index.html"
-	loginContent                    = "modules/site/templates/html/login.html"
-	registerContent                 = "modules/site/templates/html/register.html"
-	errorContent                    = "modules/site/templates/html/error.html"
-	messageContent                  = "modules/site/templates/html/message.html"
-	notFoundContent                 = "modules/site/templates/html/not-found.html"
+	module                           = "module_site"
+	pageLayoutTemplate               = "modules/site/templates/html/layouts/site.html"
+	partialLayoutTemplate            = "modules/site/templates/html/layouts/partial.html"
+	navComponentTemplate             = "modules/site/templates/html/components/nav.html"
+	notificationsComponentTemplate   = "modules/site/templates/html/components/notifications.html"
+	consoleMessagesComponentTemplate = "modules/site/templates/html/components/console-messages.html"
+	homePageTemplate                 = "modules/site/templates/html/pages/home.html"
+	loginPageTemplate                = "modules/site/templates/html/pages/login.html"
+	registerPageTemplate             = "modules/site/templates/html/pages/register.html"
+	errorPageTemplate                = "modules/site/templates/html/pages/error.html"
+	messagePageTemplate              = "modules/site/templates/html/pages/message.html"
+	notFoundPageTemplate             = "modules/site/templates/html/pages/not-found.html"
+	homePagePartialName              = "site.page.home"
+	loginPagePartialName             = "site.page.login"
+	registerPagePartialName          = "site.page.register"
+	errorPagePartialName             = "site.page.error"
+	messagePagePartialName           = "site.page.message"
+	notFoundPagePartialName          = "site.page.not_found"
+	contactPagePartialName           = "site.page.contact"
+	contactFormPartialName           = "site.partial.contact.form"
 
 	homeURL     = "/"
 	authURL     = "/login"
@@ -55,8 +64,9 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.contentManager = s.ContentManager
 	m.contentManager.AddPageLayout(pageLayoutTemplate)
 	m.contentManager.AddHtmxLayout(partialLayoutTemplate)
-	m.contentManager.AddPageComponent(messageComponentTemplate)
-	m.contentManager.AddPageComponent(consoleMessageComponentTemplate)
+	m.contentManager.AddPageComponent(navComponentTemplate)
+	m.contentManager.AddPageComponent(notificationsComponentTemplate)
+	m.contentManager.AddPageComponent(consoleMessagesComponentTemplate)
 
 	m.contentManager.HomeURL = homeURL
 	m.contentManager.AuthURL = authURL

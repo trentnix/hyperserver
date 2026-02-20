@@ -116,13 +116,18 @@ func (cpf *ChangePasswordForm) Bind(r *http.Request) error {
 const (
 	AuthTypeEmail = "email"
 
-	emailLoginFormTemplate          = "auth/modules/email/templates/html/login-form.html"
-	emailLoginButtonTemplateName    = "auth/modules/email/templates/html/login-link.html"
-	emailRegisterFormTemplate       = "auth/modules/email/templates/html/register-form.html"
-	emailRegisterButtonTemplateName = "auth/modules/email/templates/html/register-link.html"
-	emailResetRequestFormTemplate   = "auth/modules/email/templates/html/reset-request.html"
-	emailResetPasswordFormTemplate  = "auth/modules/email/templates/html/reset-password.html"
-	emailChangePasswordFormTemplate = "auth/modules/email/templates/html/change-password.html"
+	emailLoginFormTemplate          = "auth/modules/email/templates/html/partials/login-form.html"
+	emailLoginButtonTemplateName    = "auth/modules/email/templates/html/partials/login-link.html"
+	emailRegisterFormTemplate       = "auth/modules/email/templates/html/partials/register-form.html"
+	emailRegisterButtonTemplateName = "auth/modules/email/templates/html/partials/register-link.html"
+	emailResetRequestFormTemplate   = "auth/modules/email/templates/html/partials/reset-request.html"
+	emailResetPasswordFormTemplate  = "auth/modules/email/templates/html/partials/reset-password.html"
+	emailChangePasswordFormTemplate = "auth/modules/email/templates/html/partials/change-password.html"
+	emailLoginFormPartial           = "auth.partial.email.login.form"
+	emailRegisterFormPartial        = "auth.partial.email.register.form"
+	emailResetRequestFormPartial    = "auth.partial.email.reset.request.form"
+	emailResetPasswordFormPartial   = "auth.partial.email.reset.password.form"
+	emailChangePasswordFormPartial  = "auth.partial.email.change.password.form"
 
 	emailLoginPath        = "/auth/login/email"
 	emailRegisterPath     = "/auth/register/email"
@@ -212,6 +217,7 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 // GetLogin serves the login form
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r, a.contentManager)
+	login.PartialName = emailLoginFormPartial
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
@@ -241,6 +247,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 //	  success -> redirect to the configured home page
 func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.User {
 	login := content.NewManagedContent(r, a.contentManager)
+	login.PartialName = emailLoginFormPartial
 	login.AddContent(emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
@@ -279,6 +286,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 // GetRegister serves the register form
 func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	register := content.NewManagedContent(r, a.contentManager)
+	register.PartialName = emailRegisterFormPartial
 	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
@@ -308,6 +316,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 //	  success -> redirect to login
 func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool {
 	register := content.NewManagedContent(r, a.contentManager)
+	register.PartialName = emailRegisterFormPartial
 	register.AddContent(emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
@@ -336,6 +345,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 // GetResetRequest serves the password reset request page with the resetPasswordRequestForm form
 func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	reset := content.NewManagedContent(r, a.contentManager)
+	reset.PartialName = emailResetRequestFormPartial
 	reset.AddContent(emailResetRequestFormTemplate)
 
 	resetRequestForm := &ResetPasswordRequestForm{}
@@ -365,6 +375,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	genericResetErrMsg := "There was an error trying to reset your password"
 
 	reset := content.NewManagedContent(r, a.contentManager)
+	reset.PartialName = emailResetRequestFormPartial
 	reset.AddContent(emailResetRequestFormTemplate)
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetPath
@@ -464,6 +475,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	resetForm.ActionUrl = actionUrl.String()
 
 	reset := content.NewManagedContent(r, a.contentManager)
+	reset.PartialName = emailResetPasswordFormPartial
 	reset.AddContent(emailResetPasswordFormTemplate)
 
 	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
@@ -487,6 +499,7 @@ func (a *EmailAuthService) Reset(
 	requireNewCredentials bool,
 ) bool {
 	reset := content.NewManagedContent(r, a.contentManager)
+	reset.PartialName = emailResetPasswordFormPartial
 	reset.AddContent(emailResetPasswordFormTemplate)
 
 	resetForm := &ResetPasswordForm{}
@@ -574,6 +587,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 	changeForm.ActionUrl = emailChangePath
 
 	change := content.NewManagedContent(r, a.contentManager)
+	change.PartialName = emailChangePasswordFormPartial
 	change.AddContent(emailChangePasswordFormTemplate)
 
 	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
@@ -594,6 +608,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	changeErrMsg := "unable to change your password"
 
 	change := content.NewManagedContent(r, a.contentManager)
+	change.PartialName = emailChangePasswordFormPartial
 	change.AddContent(emailChangePasswordFormTemplate)
 
 	changeForm := &ChangePasswordForm{}

@@ -1,4 +1,4 @@
-{{ block "Content" . }}
+{{ define "auth.partial.email.login.form" }}
     {{ with .Data }}
     <div id="login" class="container">
         <form id="login-form"
@@ -15,14 +15,14 @@
             {{ if .HasSuccessMessages }}
                 <div class="form-messages">{{ .GetSuccessMessagesHTML }}</div>
             {{ end }}
-            
+
             <label for="email">Email</label>
             <input type="email" id="email"
                 name="email"
                 autocomplete="username"
                 value="{{ .Email }}"
                 required {{ if .HasFieldErrors "Email" }} aria-invalid="true" {{ end }}>
-            {{template "field-errors" (.GetFieldErrors "Email")}}
+            {{ template "auth.partial.email.login.form.field_errors" (.GetFieldErrors "Email") }}
 
             <label for="password">Password</label>
             <input type="password" id="password"
@@ -30,17 +30,17 @@
                 value="{{ .Password }}"
                 required
                 {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
-            {{template "field-errors" (.GetFieldErrors "Password")}}
+            {{ template "auth.partial.email.login.form.field_errors" (.GetFieldErrors "Password") }}
 
             <button type="submit">Login</button>
 
             <div>
                 <a href="/auth/reset/request/email"
-                hx-get="/auth/reset/request/email" 
-                hx-target="#login-form" 
+                hx-get="/auth/reset/request/email"
+                hx-target="#login-form"
                 hx-swap="outerHTML">Forgot Password?</a>
             </div>
-            
+
             {{ if .HasErrorMessages }}
                 <div class="form-messages">{{ .GetErrorMessagesHTML }}</div>
             {{ end }}
@@ -49,10 +49,10 @@
     {{ else }}
         <div>Unable to display login details.</div>
     {{ end }}
-{{ end }} <!-- block "Content" . -->
+{{ end }}
 
-{{define "field-errors"}}
-    {{- range .}}
-        <span class="field-error">{{.}}</span>
-    {{- end}}
-{{end}}
+{{ define "auth.partial.email.login.form.field_errors" }}
+    {{- range . }}
+        <span class="field-error">{{ . }}</span>
+    {{- end }}
+{{ end }}

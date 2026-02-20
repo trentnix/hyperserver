@@ -42,11 +42,15 @@ type (
 )
 
 const (
-	authLoginSelectionTemplate    = "auth/templates/html/login.html"
-	authRegisterSelectionTemplate = "auth/templates/html/register.html"
-	authLoginDefaultTemplate      = "auth/templates/html/login-default.html"
-	authRegisterDefaultTemplate   = "auth/templates/html/register-default.html"
-	messageTemplate               = "auth/templates/html/message.html"
+	authLoginSelectionTemplate    = "auth/templates/html/pages/login-selection.html"
+	authRegisterSelectionTemplate = "auth/templates/html/pages/register-selection.html"
+	authLoginDefaultTemplate      = "auth/templates/html/pages/login-default.html"
+	authRegisterDefaultTemplate   = "auth/templates/html/pages/register-default.html"
+	messageTemplate               = "auth/templates/html/pages/message.html"
+	authLoginSelectionPartial     = "auth.page.login.selection"
+	authRegisterSelectionPartial  = "auth.page.register.selection"
+	authLoginDefaultPartial       = "auth.page.login.default"
+	authRegisterDefaultPartial    = "auth.page.register.default"
 
 	defaultVerificationEndpoint = "/auth/verify"
 	authEndpoint                = "auth/login"
@@ -120,9 +124,11 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	authServices := GetLoadedAuthServices()
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
+		c.PartialName = authLoginDefaultPartial
 		c.AddContent(authLoginDefaultTemplate)
 		c.Data = "/auth/login/" + authServices[0].AuthType()
 	} else {
+		c.PartialName = authLoginSelectionPartial
 		for _, service := range authServices {
 			loginHTML = append(loginHTML, service.GetLoginButton())
 		}
@@ -147,9 +153,11 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	authServices := GetLoadedAuthServices()
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
+		c.PartialName = authRegisterDefaultPartial
 		c.AddContent(authRegisterDefaultTemplate)
 		c.Data = "/auth/register/" + authServices[0].AuthType()
 	} else {
+		c.PartialName = authRegisterSelectionPartial
 		for _, service := range authServices {
 			loginHTML = append(loginHTML, service.GetRegisterButton())
 		}

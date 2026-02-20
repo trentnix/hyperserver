@@ -1,4 +1,4 @@
-{{ block "Contact" . }}
+{{ define "site.partial.contact.form" }}
 <section id="contact" class="section">
     <div class="container">
         {{ with .Data }}
@@ -7,18 +7,18 @@
             <div class="form-group">
                 <label for="name">Name</label>
                 <input id="name" type="text" name="name" autocomplete="name" value="{{ .Name }}" required {{ if .HasFieldErrors "Name" }} class="input-error" {{ end }}>
-                {{template "field-errors" (.GetFieldErrors "Name")}}
+                {{ template "site.partial.contact.form.field_errors" (.GetFieldErrors "Name") }}
             </div>
             <div class="form-group">
                 <label for="name">Email</label>
                 <input type="email" id="email" name="email" value="{{ .Email }}" required {{ if .HasFieldErrors "Email" }} class="input-error" {{ end }}>
-                {{template "field-errors" (.GetFieldErrors "Email")}}
+                {{ template "site.partial.contact.form.field_errors" (.GetFieldErrors "Email") }}
             </div>
             <div class="form-group">
                 <label for="message">Message</label>
                 <textarea name="message" id="message" cols="30" rows="10" {{ if .HasFieldErrors "Message" }} class="input-error" {{ end }}>{{ .Message }}</textarea>
-                {{template "field-errors" (.GetFieldErrors "Message")}}
-            </div>   
+                {{ template "site.partial.contact.form.field_errors" (.GetFieldErrors "Message") }}
+            </div>
             <button id="contactButton" type="submit">Submit</button>
             {{ if .HasErrorMessages }}
                 <div class="form-messages">{{ .GetErrorMessagesHTML }}</div>
@@ -31,8 +31,8 @@
 </section>
 {{ end }}
 
-{{define "field-errors"}}
-    {{- range .}}
-        <span class="field-error">{{.}}</span>
-    {{- end}}
-{{end}}
+{{ define "site.partial.contact.form.field_errors" }}
+    {{- range . }}
+        <span class="field-error">{{ . }}</span>
+    {{- end }}
+{{ end }}

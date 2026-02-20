@@ -1,19 +1,19 @@
-{{ block "page.content" . }}
+{{ define "site.page.home" }}
 
 <section id="showcase" class="section">
   <div class="container">
     <h2>{{ .Title }}</h2>
     <p>
-        HyperServer is a back-end framework built in <a href="https://go.dev">Go</a> that can be used to build hypermedia-based applications with a particular focus on HTMX. 
-        It's also intended to be usable for non-HTML-based hypermedia including HyperView, but I'm just working 
+        HyperServer is a back-end framework built in <a href="https://go.dev">Go</a> that can be used to build hypermedia-based applications with a particular focus on HTMX.
+        It's also intended to be usable for non-HTML-based hypermedia including HyperView, but I'm just working
         on the basics at the moment.
     </p>
     <p>
         <img src="/img/hyperserver.png" alt="HyperServer graphic of a hyper gopher - consider it a mascot for the project" />
     </p>
     <p>
-        The source code for HyperServer can be found at <a href="https://github.com/trentnix/hyperserver">Github</a>. Use it as you wish, 
-        just please let me know if you build anything with it, have any constructive criticisms, or have any ideas 
+        The source code for HyperServer can be found at <a href="https://github.com/trentnix/hyperserver">Github</a>. Use it as you wish,
+        just please let me know if you build anything with it, have any constructive criticisms, or have any ideas
         about how it can be made better.
     </p>
   </div>
@@ -23,8 +23,8 @@
 <div class="container">
     <h3><span>About Me</span></h3>
     <p>
-        HyperServer is a project by Trent Nix, a technologist and developer that lives in a blissfully 
-        boring part of the high plains of the United States. My personal site can be found at 
+        HyperServer is a project by Trent Nix, a technologist and developer that lives in a blissfully
+        boring part of the high plains of the United States. My personal site can be found at
         <a href="https://www.trentnix.com/">trentnix.com</a>.
     </p>
     <p>
@@ -37,12 +37,14 @@
 </div>
 </section>
 
-{{ block "Contact" . }}
-<section id="contact" class="section"  hx-get="/contact" hx-target="this" hx-swap="outerHTML" hx-trigger="load">
+{{ template "site.partial.contact.placeholder" . }}
+
+{{ end }}
+
+{{ define "site.partial.contact.placeholder" }}
+<section id="contact" class="section" hx-get="/contact" hx-target="this" hx-swap="outerHTML" hx-trigger="load">
     <div class="container">
     Loading contact form...
     </div>
 </section>
 {{ end }}
-
-{{ end }} <!-- Content -->

@@ -21,8 +21,8 @@ type (
 )
 
 const (
-	contactPageTemplate = "modules/site/templates/html/contact.html"
-	contactFormTemplate = "modules/site/templates/html/contact-form.html"
+	contactPageTemplate = "modules/site/templates/html/pages/contact.html"
+	contactFormTemplate = "modules/site/templates/html/partials/contact-form.html"
 )
 
 // Bind populates the RegisterForm fields from the request.
@@ -38,12 +38,13 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 	contact := content.NewManagedContent(r, m.contentManager)
 
 	if !contact.IsHtmx() {
-		// we need to load the form in a page - load the page that will host the form
-		contact.AddLayout(contactPageTemplate)
+		contact.PartialName = contactPagePartialName
 		contact.Title = "Contact Us"
+		contact.AddContents(contactPageTemplate, contactFormTemplate)
+	} else {
+		contact.PartialName = contactFormPartialName
+		contact.AddContent(contactFormTemplate)
 	}
-
-	contact.AddContent(contactFormTemplate)
 	contact.Data = &ContactForm{}
 
 	err := contact.Render(w, r)
@@ -61,12 +62,13 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 
 	contact := content.NewManagedContent(r, m.contentManager)
 	if !contact.IsHtmx() {
-		// we need to load the form in a page - load the page that will host the form
-		contact.AddLayout(contactPageTemplate)
+		contact.PartialName = contactPagePartialName
 		contact.Title = "Contact Us"
+		contact.AddContents(contactPageTemplate, contactFormTemplate)
+	} else {
+		contact.PartialName = contactFormPartialName
+		contact.AddContent(contactFormTemplate)
 	}
-
-	contact.AddContent(contactFormTemplate)
 
 	// process a contact submission
 	contactForm := &ContactForm{}
