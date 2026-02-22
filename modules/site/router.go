@@ -30,6 +30,7 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 	// contact
 	mux.Handle("GET /contact", http.HandlerFunc(m.GetContact))
 	mux.Handle("POST /contact", http.HandlerFunc(m.Contact))
+	mux.Handle("GET /test-email", http.HandlerFunc(m.TestEmail))
 
 	// for testing - changes to come
 	mux.Handle(authURL, http.HandlerFunc(m.Login))

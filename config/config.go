@@ -29,6 +29,7 @@ type (
 		Database DatabaseConfig
 		App      AppConfig
 		Auth     AuthConfig
+		Mail     MailConfig
 	}
 
 	// HTTPConfig stores HTTP configuration
@@ -75,6 +76,15 @@ type (
 		Name                string
 		WorkingDirectory    string
 		RenderNotifications bool
+	}
+
+	// MailConfig stores the mail configuration.
+	MailConfig struct {
+		Hostname    string
+		Port        uint16
+		User        string
+		Password    string
+		FromAddress string
 	}
 )
 

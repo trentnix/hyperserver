@@ -10,6 +10,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -23,6 +24,7 @@ type (
 		Web            *http.ServeMux
 		ContentManager *content_services.ContentManagerService
 		SessionManager *session.SessionManager
+		Mail           *messaging.MailClient
 	}
 )
 
@@ -36,6 +38,7 @@ func NewApplicationServer() *ApplicationServer {
 	s.initWeb()
 	s.initSessionManager()
 	s.initContentManager()
+	s.initMail()
 
 	return s
 }
@@ -85,4 +88,13 @@ func (s *ApplicationServer) initContentManager() {
 
 	contentManager.Configure(s.Config)
 	s.ContentManager = contentManager
+}
+
+// initMail initialize the mail client.
+func (s *ApplicationServer) initMail() {
+	var err error
+	s.Mail, err = messaging.NewMailClient(s.Config)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create mail client: %v", err))
+	}
 }

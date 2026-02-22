@@ -35,6 +35,13 @@ auth:
     email:
       enabled: "false"
 
+mail:
+  hostname: "smtp.resend.com"
+  port: 587
+  user: "resend"
+  password: <your resend API key goes here>
+  fromAddress: "no-reply@yourdomain.com"
+
 database:
   driver: "sqlite3"
   connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"

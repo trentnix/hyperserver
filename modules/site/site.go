@@ -6,6 +6,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -17,6 +18,7 @@ type (
 
 		sessionManager *session.SessionManager
 		contentManager *content_services.ContentManagerService
+		mailClient     *messaging.MailClient
 	}
 )
 
@@ -62,6 +64,7 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.Database = s.Database
 	m.sessionManager = s.SessionManager
 	m.contentManager = s.ContentManager
+	m.mailClient = s.Mail
 	m.contentManager.AddPageLayout(pageLayoutTemplate)
 	m.contentManager.AddHtmxLayout(partialLayoutTemplate)
 	m.contentManager.AddPageComponent(navComponentTemplate)
