@@ -19,6 +19,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -29,6 +30,7 @@ type (
 		db             *sqlx.DB
 		config         *config.Config
 		contentManager *content_services.ContentManagerService
+		mailClient     *messaging.MailClient
 
 		loginButton    template.HTML
 		registerButton template.HTML
@@ -131,6 +133,7 @@ const (
 
 	emailLoginPath        = "/auth/login/email"
 	emailRegisterPath     = "/auth/register/email"
+	emailVerifyPath       = "/auth/verify"
 	emailResetRequestPath = "/auth/reset/request/email"
 	emailResetPath        = "/auth/reset/email"
 	emailChangePath       = "/auth/change/email"
@@ -156,6 +159,7 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	a.db = s.Database
 	a.config = s.Config
 	a.contentManager = s.ContentManager
+	a.mailClient = s.Mail
 
 	if a.config.Auth.JwtKey == "" {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the auth JWT key is not configured"))
@@ -339,7 +343,64 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
+	if a.config.Auth.RegisterRequiresVerification {
+		createdUser, err := user.GetUserByEmail(a.db, registerForm.Email)
+		if err != nil || createdUser == nil {
+			form.HandleFormError(w, r, register, registerForm, "Your account was created, but verification email delivery failed. Please login and request a new verification email.", err)
+			return false
+		}
+
+		err = a.sendRegistrationVerificationEmail(r, createdUser)
+		if err != nil {
+			form.HandleFormError(w, r, register, registerForm, "Your account was created, but verification email delivery failed. Please login and request a new verification email.", err)
+			return false
+		}
+	}
+
 	return true
+}
+
+func (a *EmailAuthService) sendRegistrationVerificationEmail(r *http.Request, u *user.User) error {
+	if a.mailClient == nil {
+		return errors.New("mail client not configured")
+	}
+
+	if u == nil || u.ID == "" {
+		return errors.New("user not specified for verification email")
+	}
+
+	verificationEndpoint := a.config.Auth.VerificationEndpoint
+	if verificationEndpoint == "" {
+		verificationEndpoint = emailVerifyPath
+	}
+
+	tokenExpiration := a.config.Auth.VerificationTokenExpiration
+	if tokenExpiration <= 0 {
+		tokenExpiration = 24 * time.Hour
+	}
+
+	verificationToken, err := user.NewVerificationToken(u.ID, []byte(a.config.Auth.JwtKey), tokenExpiration)
+	if err != nil {
+		return err
+	}
+
+	params := map[string]string{"token": verificationToken}
+	verificationURL, err := util.BuildUrl(r, a.host, a.port, verificationEndpoint, params)
+	if err != nil {
+		return err
+	}
+
+	body := fmt.Sprintf(
+		`<p>Welcome to %s.</p><p><a href="%s">Click here</a> to verify your account.</p>`,
+		a.config.App.Name,
+		verificationURL.String(),
+	)
+
+	return a.mailClient.Compose().
+		To(u.Email).
+		Subject("Verify your account").
+		Body(body).
+		Send(r.Context())
 }
 
 // GetResetRequest serves the password reset request page with the resetPasswordRequestForm form

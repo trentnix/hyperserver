@@ -37,7 +37,8 @@ type (
 		verificationEndpoint        string
 		resetTokenExpiration        time.Duration
 
-		resetRequiresNewCredentials bool
+		resetRequiresNewCredentials  bool
+		registerRequiresVerification bool
 	}
 )
 
@@ -77,8 +78,12 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 	a.verificationTokenExpiration = s.Config.Auth.VerificationTokenExpiration
 
 	a.resetRequiresNewCredentials = s.Config.Auth.ResetRequiresNewCredentials
+	a.registerRequiresVerification = s.Config.Auth.RegisterRequiresVerification
 
-	a.verificationEndpoint = defaultVerificationEndpoint
+	a.verificationEndpoint = s.Config.Auth.VerificationEndpoint
+	if a.verificationEndpoint == "" {
+		a.verificationEndpoint = defaultVerificationEndpoint
+	}
 
 	return nil
 }
@@ -313,9 +318,17 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).Register(w, r)
+	registrationSuccessful := (*authService).Register(w, r)
+	if !registrationSuccessful {
+		return
+	}
 
-	err := messages.AddSuccessNotification(w, r, "You have been successfully registered")
+	successMessage := "You have been successfully registered"
+	if a.registerRequiresVerification {
+		successMessage = "You have been successfully registered. Check your email for verification instructions."
+	}
+
+	err := messages.AddSuccessNotification(w, r, successMessage)
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}
@@ -595,7 +608,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	verificationToken, err := user.NewVerificationToken(authUser.ID, []byte(a.verificationJwtKey), a.resetTokenExpiration)
+	verificationToken, err := user.NewVerificationToken(authUser.ID, []byte(a.verificationJwtKey), a.verificationTokenExpiration)
 	if err != nil {
 		// there was an error sending verification instructions
 		a.contentManager.HandleError(w, r, "Unable to send the registration verification", user.NewErrSendVerification(err), http.StatusInternalServerError)
@@ -604,9 +617,6 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 
 	host := a.contentManager.Host
 	port := a.contentManager.Port
-
-	// TO DO - this should be rendered as a page instead of as a message. In the future, it will be sent
-	// via email or some other means.
 
 	params := map[string]string{"token": verificationToken}
 	validationUrl, err := util.BuildUrl(r, host, port, a.verificationEndpoint, params)
