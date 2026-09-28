@@ -35,3 +35,9 @@ config.yaml
 
 # executable
 web
+
+# Repository-local temporary files
+/tmp/
+
+# Local implementation guidance
+/production-readiness-checklist.md
