@@ -36,6 +36,8 @@ auth:
       enabled: "false"
 
 mail:
+  # If hostname, user, or password is empty, or port is zero, SMTP is unavailable.
+  # Startup still succeeds, but requests to send mail return an error.
   hostname: "smtp.resend.com"
   port: 587
   user: "resend"

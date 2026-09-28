@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/trentnix/hyperserver/config"
 )
 
 type senderFunc func(context.Context, MailMessage) error
@@ -77,5 +79,59 @@ func TestMailClientRequiresDependencies(t *testing.T) {
 	}
 	if _, err := NewMailClientWithSender("from@example.invalid", nil); err == nil {
 		t.Fatal("accepted nil sender")
+	}
+}
+
+func TestSMTPUnavailable(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		omit func(*config.MailConfig)
+	}{
+		{"all settings", func(c *config.MailConfig) { *c = config.MailConfig{FromAddress: c.FromAddress} }},
+		{"hostname", func(c *config.MailConfig) { c.Hostname = "" }},
+		{"port", func(c *config.MailConfig) { c.Port = 0 }},
+		{"user", func(c *config.MailConfig) { c.User = "" }},
+		{"password", func(c *config.MailConfig) { c.Password = "" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{Mail: config.MailConfig{
+				Hostname: "smtp.example.invalid", Port: 587,
+				User: "test-user", Password: "test-password", FromAddress: "from@example.invalid",
+			}}
+			tc.omit(&cfg.Mail)
+			client, err := NewMailClient(cfg)
+			if err != nil {
+				t.Fatalf("unconfigured mail must not prevent client construction: %v", err)
+			}
+			err = client.Compose().To("to@example.invalid").Subject("Test").Body("Hello").Send(context.Background())
+			if !errors.Is(err, ErrMailUnavailable) {
+				t.Fatalf("Send error = %v, want ErrMailUnavailable", err)
+			}
+		})
+	}
+}
+
+func TestMailClientReportsSenderOutcome(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"accepted", nil},
+		{"unavailable", ErrMailUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			client, err := NewMailClientWithSender("from@example.invalid", senderFunc(func(context.Context, MailMessage) error {
+				calls++
+				return tc.err
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = client.Compose().To("to@example.invalid").Body("Hello").Send(context.Background())
+			if !errors.Is(err, tc.err) || calls != 1 {
+				t.Fatalf("Send = %v, calls = %d, want %v and one call", err, calls, tc.err)
+			}
+		})
 	}
 }

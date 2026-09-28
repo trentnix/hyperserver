@@ -15,6 +15,9 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
+// ErrMailUnavailable means the sender is not configured to accept mail.
+var ErrMailUnavailable = errors.New("mail delivery is unavailable")
+
 type (
 	// MailClient composes messages and passes them to a sender.
 	MailClient struct {
@@ -30,8 +33,11 @@ type (
 		Body    string
 	}
 
-	// MailSender delivers a message. Implementations can use SMTP or another service.
+	// MailSender submits messages through SMTP or another delivery service.
 	MailSender interface {
+		// Send returns nil only when the service accepts the message for delivery.
+		// Disabled or unavailable delivery must return an error. Acceptance does
+		// not guarantee delivery to the recipient's inbox.
 		Send(context.Context, MailMessage) error
 	}
 
@@ -49,7 +55,8 @@ type (
 	}
 )
 
-// NewMailClient creates a new MailClient.
+// NewMailClient creates an SMTP client. Incomplete SMTP settings do not prevent
+// construction, but sending a valid message returns ErrMailUnavailable.
 func NewMailClient(cfg *config.Config) (*MailClient, error) {
 	if cfg == nil {
 		return nil, errors.New("mail configuration is required")
@@ -73,12 +80,11 @@ func (m *MailClient) Compose() *mail {
 	}
 }
 
-// skipSend determines if mail sending should be skipped.
-func (m *smtpSender) skipSend() bool {
-	return m.config.Hostname == "" ||
-		m.config.Port == 0 ||
-		m.config.User == "" ||
-		m.config.Password == ""
+func (m *smtpSender) configured() bool {
+	return m.config.Hostname != "" &&
+		m.config.Port != 0 &&
+		m.config.User != "" &&
+		m.config.Password != ""
 }
 
 // send attempts to send the email.
@@ -98,14 +104,8 @@ func (m *MailClient) send(email *mail, ctx context.Context) error {
 }
 
 func (m *smtpSender) Send(ctx context.Context, email MailMessage) error {
-	// Check if mail sending should be skipped.
-	if m.skipSend() {
-		if ctxLogger := logger.Get(ctx); ctxLogger != nil {
-			(*ctxLogger).Info("Skipped sending email", logger.Field{Key: "to", Value: email.To})
-		} else {
-			log.Printf("Skipped sending email to=%s", email.To)
-		}
-		return nil
+	if !m.configured() {
+		return ErrMailUnavailable
 	}
 
 	cfg := m.config

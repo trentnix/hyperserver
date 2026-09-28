@@ -234,16 +234,53 @@ func TestHTTPRegistration(t *testing.T) {
 
 func TestHTTPRegistrationMailFailure(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
-		h.mail.err = errors.New("test sender unavailable")
-		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
-		if w.Header().Get("HX-Redirect") != "" || !strings.Contains(w.Body.String(), "Your account was created, but verification email delivery failed.") {
-			t.Fatalf("delivery failure not reported: status %d, headers %v, body %s", w.Code, w.Header(), w.Body.String())
+		for i, tc := range []struct {
+			name string
+			err  error
+		}{
+			{"delivery failure", errors.New("test delivery failed")},
+			{"unavailable", messaging.ErrMailUnavailable},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				h.mail.err = tc.err
+				form := registrationForm()
+				form.Set("email", fmt.Sprintf("mail-failure-%d@example.invalid", i))
+				w := h.request(http.MethodPost, "/auth/register/email", form, true)
+				assertFormRejected(t, w, "Your account was created, but verification email delivery failed.")
+				if len(h.mail.attempts) != i+1 {
+					t.Fatalf("mail attempts = %d, want %d", len(h.mail.attempts), i+1)
+				}
+				u, err := user.GetUserByEmail(h.app.Database, form.Get("email"))
+				if err != nil {
+					t.Fatalf("account should remain available after delivery failure: %v", err)
+				}
+				if u.Verified || !u.VerificationRequired {
+					t.Error("delivery failure changed the account's verification requirements")
+				}
+				w = h.request(http.MethodGet, "/login", nil, false)
+				if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "You have been successfully registered.") {
+					t.Error("delivery failure produced a success notification or broke the next request")
+				}
+			})
 		}
-		if len(h.mail.attempts) != 1 {
-			t.Fatalf("mail attempts = %d, want 1", len(h.mail.attempts))
+	})
+}
+
+func TestHTTPTestEmailDeliveryOutcome(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		path := "/test-email?to=person@example.invalid"
+		h.mail.err = messaging.ErrMailUnavailable
+		w := h.request(http.MethodPost, path, nil, true)
+		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "failed to send test email") || strings.Contains(w.Body.String(), "test email sent to") {
+			t.Fatalf("unavailable mail response: status %d, body %s", w.Code, w.Body.String())
 		}
-		if _, err := user.GetUserByEmail(h.app.Database, "person@example.invalid"); err != nil {
-			t.Fatalf("account should remain available after delivery failure: %v", err)
+		h.mail.err = nil
+		w = h.request(http.MethodPost, path, nil, true)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "test email sent to person@example.invalid") {
+			t.Fatalf("accepted mail response: status %d, body %s", w.Code, w.Body.String())
+		}
+		if len(h.mail.attempts) != 2 {
+			t.Fatalf("mail attempts = %d, want 2", len(h.mail.attempts))
 		}
 	})
 }
