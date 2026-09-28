@@ -51,6 +51,9 @@ func (s *ApplicationServer) Shutdown() error {
 // initConfig initializes the config.Config instance in the ApplicationServer
 func (s *ApplicationServer) initConfig() {
 	cfg, err := config.GetConfig()
+	if err == nil {
+		err = session.ValidateConfig(&cfg)
+	}
 	if err != nil {
 		panic(fmt.Sprintf("there was an error loading the hyperserver configuration: %v", err))
 	}

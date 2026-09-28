@@ -15,6 +15,9 @@ import (
 // SetupAuthentication initializes any registered authentication services and adds
 // their routes to the
 func SetupAuthentication(s *server.ApplicationServer) error {
+	if err := auth.ValidateConfig(s.Config); err != nil {
+		return err
+	}
 	if s.Config.Auth.Enabled {
 		authServices := make([]auth.AuthService, len(auth.GetAuthServices()))
 		copy(authServices, auth.GetAuthServices())
