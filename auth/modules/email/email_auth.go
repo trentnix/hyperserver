@@ -263,7 +263,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if loginForm.HasErrorMessages() {
+	if loginForm.HasErrors() {
 		form.HandleFormError(w, r, login, loginForm, "", nil)
 		return nil
 	}
@@ -332,7 +332,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if registerForm.HasErrorMessages() {
+	if registerForm.HasErrors() {
 		form.HandleFormError(w, r, register, registerForm, "", nil)
 		return false
 	}
@@ -439,7 +439,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	reset.PartialName = emailResetRequestFormPartial
 	reset.AddContent(emailResetRequestFormTemplate)
 	resetRequestForm := &ResetPasswordRequestForm{}
-	resetRequestForm.ActionUrl = emailResetPath
+	resetRequestForm.ActionUrl = emailResetRequestPath
 
 	errMessage, err := form.ParseAndValidate(r, resetRequestForm)
 	if err != nil {
@@ -448,7 +448,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if resetRequestForm.HasErrorMessages() {
+	if resetRequestForm.HasErrors() {
 		form.HandleFormError(w, r, reset, resetRequestForm, "", nil)
 		return false
 	}
@@ -577,18 +577,6 @@ func (a *EmailAuthService) Reset(
 		return false
 	}
 
-	errMessage, err := form.ParseAndValidate(r, resetForm)
-	if err != nil {
-		form.HandleFormError(w, r, reset, resetForm, errMessage, err)
-		return false
-	}
-
-	// if there are any validation errors, handle them and return an error.
-	if resetForm.HasErrorMessages() {
-		form.HandleFormError(w, r, reset, resetForm, "", nil)
-		return false
-	}
-
 	params := map[string]string{"token": token}
 	actionUrl, buildUrlErr := util.BuildUrl(r, a.host, a.port, emailResetPath, params)
 	if buildUrlErr != nil {
@@ -600,6 +588,18 @@ func (a *EmailAuthService) Reset(
 	}
 
 	resetForm.ActionUrl = actionUrl.String()
+
+	errMessage, err := form.ParseAndValidate(r, resetForm)
+	if err != nil {
+		form.HandleFormError(w, r, reset, resetForm, errMessage, err)
+		return false
+	}
+
+	// if there are any validation errors, handle them and return an error.
+	if resetForm.HasErrors() {
+		form.HandleFormError(w, r, reset, resetForm, "", nil)
+		return false
+	}
 
 	if requireNewCredentials {
 		if u.Password != "" && password.CheckPasswordHash(resetForm.Password, u.Password) {
@@ -674,6 +674,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 
 	changeForm := &ChangePasswordForm{}
 	change.Data = changeForm
+	changeForm.ActionUrl = emailChangePath
 
 	if u == nil {
 		form.HandleFormError(
@@ -693,7 +694,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	}
 
 	// if there are any validation errors, handle them and return an error.
-	if changeForm.HasErrorMessages() {
+	if changeForm.HasErrors() {
 		form.HandleFormError(w, r, change, changeForm, "", nil)
 		return false
 	}

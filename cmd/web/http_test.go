@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -244,19 +245,215 @@ func TestHTTPRegistrationMailFailure(t *testing.T) {
 }
 
 func TestHTTPRegistrationRejectsInvalidForm(t *testing.T) {
-	t.Skip("Known defect: registration ignores field validation errors. Enable this regression test when the validation fix is implemented.")
 	runHTTPScenario(t, func(h *httpHarness) {
-		form := registrationForm()
-		form.Set("passwordMatch", "DifferentPassword1!")
-		w := h.request(http.MethodPost, "/auth/register/email", form, true)
-		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "" || !strings.Contains(w.Body.String(), "input-error") {
-			t.Fatalf("invalid form response: status %d, headers %v, body %s", w.Code, w.Header(), w.Body.String())
+		// Initialize the schema so row counts detect writes to either table.
+		if _, err := user.GetUserByEmail(h.app.Database, "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("expected an empty database, got %v", err)
 		}
-		if len(h.mail.attempts) != 0 {
-			t.Fatalf("invalid registration attempted mail delivery: %+v", h.mail.attempts)
+		for _, htmx := range []bool{false, true} {
+			for _, tc := range []struct {
+				name, email, password, confirmation, message string
+			}{
+				{"mismatch", "person@example.invalid", "TestPassword1!", "DifferentPassword1!", "Passwords do not match."},
+				{"weak password", "person@example.invalid", "short", "short", "Password values must contain at least 8 characters"},
+				{"invalid email", "not-an-email", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
+				{"missing email", "", "TestPassword1!", "TestPassword1!", "This field is required."},
+				{"missing password", "person@example.invalid", "", "", "This field is required."},
+				{"missing confirmation", "person@example.invalid", "TestPassword1!", "", "This field is required."},
+			} {
+				t.Run(fmt.Sprintf("%s/htmx=%v", tc.name, htmx), func(t *testing.T) {
+					form := url.Values{"email": {tc.email}, "password": {tc.password}, "passwordMatch": {tc.confirmation}}
+					w := h.request(http.MethodPost, "/auth/register/email", form, htmx)
+					assertFormRejected(t, w, tc.message)
+					h.assertRowCount(t, "user", 0)
+					h.assertRowCount(t, "usertoken", 0)
+					if len(h.mail.attempts) != 0 {
+						t.Fatal("invalid registration attempted mail delivery")
+					}
+				})
+			}
 		}
-		if _, err := user.GetUserByEmail(h.app.Database, form.Get("email")); !errors.Is(err, sql.ErrNoRows) {
-			t.Fatalf("invalid registration created an account or lookup failed: %v", err)
+	})
+}
+
+func assertFormRejected(t *testing.T, w *httptest.ResponseRecorder, message string) {
+	t.Helper()
+	if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "" || !strings.Contains(w.Body.String(), message) {
+		t.Fatalf("expected field error %q: status %d, redirect %q, body %s", message, w.Code, w.Header().Get("HX-Redirect"), w.Body.String())
+	}
+}
+
+func (h *httpHarness) assertRowCount(t *testing.T, table string, want int) {
+	t.Helper()
+	var count int
+	if err := h.app.Database.Get(&count, "SELECT COUNT(*) FROM "+table); err != nil {
+		t.Fatal(err)
+	}
+	if count != want {
+		t.Errorf("%s row count = %d, want %d", table, count, want)
+	}
+}
+
+func (h *httpHarness) seedUser(t *testing.T, email string) *user.User {
+	t.Helper()
+	hash, err := password.HashPassword("TestPassword1!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &user.User{Email: email, Password: hash, Verified: true, RegistrationAuthType: "email"}
+	if err := u.Save(h.app.Database); err != nil {
+		t.Fatal(err)
+	}
+	u, err = user.GetUserByEmail(h.app.Database, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
+}
+
+func (h *httpHarness) assertUserUnchanged(t *testing.T, original *user.User) {
+	t.Helper()
+	got, err := user.GetUserByID(h.app.Database, original.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *got != *original {
+		t.Error("invalid form changed the stored user")
+	}
+	if len(h.mail.attempts) != 0 {
+		t.Error("invalid form attempted mail delivery")
+	}
+}
+
+func TestHTTPLoginAndResetRequestRejectInvalidEmail(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		// A legacy account with an invalid address proves validation stops both
+		// authentication and reset-token creation before using the stored account.
+		u := h.seedUser(t, "not-an-email")
+		for _, path := range []string{"/auth/login/email", "/auth/reset/request/email"} {
+			t.Run(path, func(t *testing.T) {
+				w := h.request(http.MethodPost, path, url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+				assertFormRejected(t, w, "Enter a valid email address.")
+				if !strings.Contains(w.Body.String(), `hx-post="`+path+`"`) {
+					t.Error("validation response does not preserve the form submission URL")
+				}
+				h.assertUserUnchanged(t, u)
+				h.assertRowCount(t, "usertoken", 0)
+			})
+		}
+		w := h.request(http.MethodGet, "/auth/change/email", nil, true)
+		if w.Header().Get("HX-Redirect") != "/login" {
+			t.Error("invalid login granted access to an authenticated route")
+		}
+	})
+}
+
+func TestHTTPResetRejectsInvalidPassword(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		u := h.seedUser(t, "person@example.invalid")
+		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := token.Create(h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		path := "/auth/reset/email?token=" + url.QueryEscape(token.Token)
+		for _, tc := range []struct{ password, confirmation, message string }{
+			{"NewPassword1!", "DifferentPassword1!", "Passwords do not match."},
+			{"short", "short", "Password values must contain at least 8 characters"},
+			{"", "", "This field is required."},
+		} {
+			t.Run(tc.message, func(t *testing.T) {
+				w := h.request(http.MethodPost, path, url.Values{"password": {tc.password}, "passwordMatch": {tc.confirmation}}, true)
+				assertFormRejected(t, w, tc.message)
+				if !strings.Contains(w.Body.String(), path) {
+					t.Error("validation response lost the reset URL and token")
+				}
+				h.assertUserUnchanged(t, u)
+				if _, err := user.GetAuthResetTokenByHash(h.app.Database, token.TokenHash); err != nil {
+					t.Fatalf("invalid form consumed the reset token: %v", err)
+				}
+			})
+		}
+		w := h.request(http.MethodPost, path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, true)
+		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/login" {
+			t.Fatal("corrected reset form did not succeed")
+		}
+		updated, err := user.GetUserByID(h.app.Database, u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !password.CheckPasswordHash("NewPassword1!", updated.Password) {
+			t.Error("corrected reset form did not update the password")
+		}
+		h.assertRowCount(t, "usertoken", 0)
+	})
+}
+
+func TestHTTPChangeRejectsInvalidPassword(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		u := h.seedUser(t, "person@example.invalid")
+		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
+			t.Fatal("could not log in the test user")
+		}
+		for _, tc := range []struct{ old, password, confirmation, message string }{
+			{"TestPassword1!", "NewPassword1!", "DifferentPassword1!", "Passwords do not match."},
+			{"TestPassword1!", "short", "short", "Password values must contain at least 8 characters"},
+			{"TestPassword1!", "TestPassword1!", "TestPassword1!", "New passwords must be different from the previous password."},
+			{"", "NewPassword1!", "NewPassword1!", "This field is required."},
+		} {
+			t.Run(tc.message, func(t *testing.T) {
+				form := url.Values{"oldPassword": {tc.old}, "newPassword": {tc.password}, "newPasswordMatch": {tc.confirmation}}
+				w := h.request(http.MethodPost, "/auth/change/email", form, true)
+				assertFormRejected(t, w, tc.message)
+				if !strings.Contains(w.Body.String(), `hx-post="/auth/change/email"`) {
+					t.Error("validation response lost the change-password URL")
+				}
+				h.assertUserUnchanged(t, u)
+			})
+		}
+		form := url.Values{"oldPassword": {"TestPassword1!"}, "newPassword": {"NewPassword1!"}, "newPasswordMatch": {"NewPassword1!"}}
+		w = h.request(http.MethodPost, "/auth/change/email", form, true)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Your password has been changed.") {
+			t.Fatal("corrected password-change form did not succeed")
+		}
+		updated, err := user.GetUserByID(h.app.Database, u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !password.CheckPasswordHash("NewPassword1!", updated.Password) {
+			t.Error("corrected password-change form did not update the password")
+		}
+	})
+}
+
+func TestHTTPContactRejectsInvalidForm(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		if err := database.RunMigrations(h.app.Database.DB, "modules/site/database/migrations"); err != nil {
+			t.Fatal(err)
+		}
+		for _, htmx := range []bool{false, true} {
+			for _, tc := range []struct{ field, value, message string }{
+				{"name", "", "This field is required."},
+				{"message", "", "This field is required."},
+				{"email", "not-an-email", "Enter a valid email address."},
+			} {
+				t.Run(fmt.Sprintf("%s/htmx=%v", tc.field, htmx), func(t *testing.T) {
+					form := url.Values{"name": {"Test person"}, "email": {"person@example.invalid"}, "message": {"Test message"}}
+					form.Set(tc.field, tc.value)
+					w := h.request(http.MethodPost, "/contact", form, htmx)
+					assertFormRejected(t, w, tc.message)
+					if strings.Contains(w.Body.String(), "Your message has been submitted.") {
+						t.Error("invalid contact form reported success")
+					}
+					h.assertRowCount(t, "hyperserver_contact_submission", 0)
+					if len(h.mail.attempts) != 0 {
+						t.Error("invalid contact form attempted mail delivery")
+					}
+				})
+			}
 		}
 	})
 }

@@ -89,7 +89,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if contactForm.HasErrorMessages() {
+	if contactForm.HasErrors() {
 		// there are validation errors - render the form errors
 		form.HandleFormError(w, r, contact, contactForm, "", nil)
 		return

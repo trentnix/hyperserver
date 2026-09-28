@@ -35,6 +35,8 @@ type (
 		GetInfoMessages() []messages.Message
 		// determines whether the form has error messages
 		HasErrorMessages() bool
+		// determines whether field or form-level errors prevent submission
+		HasErrors() bool
 
 		// sets a form-level non-error messages
 		SetMessages([]messages.Message)

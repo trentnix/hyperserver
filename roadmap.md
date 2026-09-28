@@ -8,17 +8,20 @@ This document defines the intended architecture and implementation order. Planne
 
 ### Current implementation
 
-Source review on September 27, 2026, at commit `b34a9aa` confirmed these gaps. The review did not rerun tests, benchmarks, or a complete security audit.
+Snapshot updated September 28, 2026. Phase 0 is complete. Phase 1 is in progress.
 
-| Area | Evidence | Required change |
+[CI](.github/workflows/ci.yml) runs tests, vet, and full-suite race checks and passed at commit `7a26e27`. The subsequent form-validation changes passed those checks locally but have not yet run in CI. These checks do not establish production readiness or replace a security audit. Performance remains unmeasured.
+
+| Area | Current state | Remaining work |
 | --- | --- | --- |
 | Startup and modules | [Server construction](pkg/server/server.go) initializes database, sessions, and mail unconditionally. The [handler registry](pkg/handlers/handlers.go) stores instances globally. | Activate required services and create module instances per application. |
 | Shutdown and TLS | [Startup](cmd/web/main.go) calls `ListenAndServe` regardless of TLS configuration. `ApplicationServer.Shutdown` is empty. | Implement explicit TLS/proxy configuration, shutdown, and resource cleanup. |
-| Configuration and middleware | The [template](config/config-template.yaml) uses `http.session.key`, while [configuration](config/config.go) expects `JwtKey`. [Auth middleware](pkg/services/middleware/auth.go) has missing error returns and a reversed save-error condition. | Correct the defects and add regression tests. |
+| Configuration and middleware | The [template](config/config-template.yaml) now uses `http.session.jwtKey`. Startup validates signing keys, lifetimes, and provider selections, with [regression tests](cmd/web/startup_test.go). [Auth middleware](pkg/services/middleware/auth.go) still has missing error returns and a reversed save-error condition. | Fix middleware error paths and test rejection behavior. |
+| Form validation | [Email-auth](auth/modules/email/email_auth.go) and [contact](modules/site/contact.go) handlers reject field and form-level errors. [HTTP tests](cmd/web/http_test.go) check rejected input and unchanged stored data. | Make account creation insert-only and test competing registrations. |
 | Recovery and verification | [Password-reset requests](auth/modules/email/email_auth.go) return a reset link to the requester. [Verification resend](auth/auth_manager.go) returns a verification link directly. Reset-token deletion follows the password update. | Deliver tokens to the account's email address and consume them atomically with the protected change. |
-| Mail and sessions | [Mail](pkg/services/messaging/mail.go) can skip delivery and return success. [SQLite logout](pkg/services/session/sqlitestore.go) only expires the browser cookie. | Report delivery outcomes accurately and revoke stored sessions. |
-| Exposure and redirects | [Site routes](modules/site/router.go) expose `GET /test-email`. [Redirects](pkg/util/redirect.go) interpolate URLs into HTML and JavaScript. | Exclude diagnostics from production and use safe redirect handling. |
-| Rendering and tests | [Rendering](pkg/components/content/content.go) parses templates on each render. The three existing test files are all in [sessions](pkg/services/session). | Reuse parsed templates and add tests for other critical paths. |
+| Mail and sessions | [Mail](pkg/services/messaging/mail.go) has an injectable sender, but SMTP can still skip delivery and return success. [SQLite logout](pkg/services/session/sqlitestore.go) only expires the browser cookie. | Report delivery outcomes accurately, bound SMTP operations, and rotate and revoke sessions. |
+| Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. The development [site module](modules/site/router.go) owns diagnostic routes and requires POST for mail, logout, and session changes. [Redirects](pkg/util/redirect.go) still interpolate URLs into HTML and JavaScript. | Keep development modules out of production applications. Fix redirects and remaining auth route methods. Add CSRF protection and request limits. |
+| Rendering and tests | The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. Coverage now includes startup, configuration, auth, forms, mail, and sessions. [Rendering](pkg/components/content/content.go) still parses templates on each render. | Add coverage for the remaining security blockers and reuse parsed templates. |
 
 ## Design principles
 
@@ -180,13 +183,13 @@ Benchmark rendering, middleware, sessions, and representative requests with late
 
 The phases define implementation order. Security fixes can interrupt any phase. Keep basic CI active from Phase 1 and use the reference application to validate changes throughout.
 
-### Phase 0: Record decisions
+### Phase 0: Record decisions (complete)
 
-Keep this roadmap as the project direction. Track concrete choices and unresolved contracts in [architecture decisions](docs/decisions/readme.md). Mark APIs as experimental without duplicating the roadmap in separate vision documents.
+The roadmap defines the core and replaceable service boundaries. Public APIs are marked experimental. [Architecture decisions](docs/decisions/readme.md) record module-registration ownership and list unresolved contracts. Continue recording decisions as implementation resolves those contracts.
 
 Exit when contributors can identify the core, service contracts, and unresolved API decisions.
 
-### Phase 1: Correctness and security
+### Phase 1: Correctness and security (in progress)
 
 - Keep development modules out of production applications, fix middleware error paths, and validate configuration, including the session signing-key mapping.
 - Replace interpolated redirects, enforce intended route methods, and add CSRF protection, request limits, safe cookies, security headers, and a documented CSP.

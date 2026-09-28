@@ -99,6 +99,19 @@ func (f *Form) HasErrorMessages() bool {
 	return len(f.GetErrorMessages()) > 0
 }
 
+// HasErrors reports whether field errors or form-level errors prevent submission.
+func (f *Form) HasErrors() bool {
+	if f.HasErrorMessages() {
+		return true
+	}
+	for _, errors := range f.fieldErrors {
+		if len(errors) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // HasSuccessMessages returns true if the form has form-level success messages
 func (f *Form) HasSuccessMessages() bool {
 	return len(f.GetSuccessMessages()) > 0
