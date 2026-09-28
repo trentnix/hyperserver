@@ -52,7 +52,7 @@ Use method-qualified route patterns for state-changing handlers.
 
 Use `html/template` and escape rendered values by default. Restrict `template.HTML` to reviewed trust boundaries. Reuse parsed templates rather than parsing them on each request.
 
-Do not register development or diagnostic handlers in production configuration.
+Keep diagnostic and sample routes in development modules. Production applications must not load those modules. Do not add an application-wide development flag to control their routes.
 
 Report service failures accurately. Do not return success when a required operation was skipped or failed.
 

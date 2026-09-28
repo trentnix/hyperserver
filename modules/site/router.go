@@ -30,11 +30,12 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 	// contact
 	mux.Handle("GET /contact", http.HandlerFunc(m.GetContact))
 	mux.Handle("POST /contact", http.HandlerFunc(m.Contact))
-	mux.Handle("GET /test-email", http.HandlerFunc(m.TestEmail))
 
-	// for testing - changes to come
-	mux.Handle(authURL, http.HandlerFunc(m.Login))
-	mux.Handle(registerURL, http.HandlerFunc(m.Register))
-	mux.Handle("/session-example", http.HandlerFunc(m.SessionExample))
-	mux.Handle("/logout", http.HandlerFunc(m.Logout))
+	// These routes exercise framework features in the local development application.
+	// Production applications must not load this module.
+	mux.Handle("POST /test-email", http.HandlerFunc(m.TestEmail))
+	mux.Handle("GET "+authURL, http.HandlerFunc(m.Login))
+	mux.Handle("GET "+registerURL, http.HandlerFunc(m.Register))
+	mux.Handle("POST /session-example", http.HandlerFunc(m.SessionExample))
+	mux.Handle("POST /logout", http.HandlerFunc(m.Logout))
 }

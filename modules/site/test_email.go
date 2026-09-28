@@ -14,7 +14,8 @@ const (
 )
 
 // TestEmail sends a test email using SMTP settings from config.yaml.
-// Example: /test-email?to=user@example.com&subject=Hi&body=<p>Hello</p>
+// The site module registers this handler as POST /test-email.
+// Example: curl -X POST 'http://127.0.0.1:8080/test-email?to=user@example.com'
 func (m *SiteModule) TestEmail(w http.ResponseWriter, r *http.Request) {
 	to := strings.TrimSpace(r.URL.Query().Get("to"))
 	if to == "" {

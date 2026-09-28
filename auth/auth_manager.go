@@ -54,7 +54,7 @@ const (
 	authRegisterDefaultPartial    = "auth.page.register.default"
 
 	defaultVerificationEndpoint = "/auth/verify"
-	authEndpoint                = "auth/login"
+	authEndpoint                = "/auth/login"
 )
 
 // init registers the AuthManager handler with the application

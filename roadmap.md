@@ -89,7 +89,7 @@ Form binding and input validation are transport helpers. Business validation bel
 
 The code using a cache decides what to cache, how long it can remain valid, and when to refresh or remove it. The cache implementation stores those copies, enforces expiration and size limits, and handles concurrent access. Callers decide how to recover from cache failures. The original data remains the source of truth.
 
-The included site serves as the reference application and integration test bed. Diagnostic endpoints belong to explicit development mode and must never register in production mode.
+The included site module exercises framework features in the local development application. It owns its diagnostic and sample routes. Production applications must not load development modules. Route inclusion follows module selection, not an application-wide development flag.
 
 ### Responsibility boundaries
 
@@ -188,7 +188,7 @@ Exit when contributors can identify the core, service contracts, and unresolved 
 
 ### Phase 1: Correctness and security
 
-- Disable diagnostic routes in production, fix middleware error paths, and validate configuration, including the session signing-key mapping.
+- Keep development modules out of production applications, fix middleware error paths, and validate configuration, including the session signing-key mapping.
 - Replace interpolated redirects, enforce intended route methods, and add CSRF protection, request limits, safe cookies, security headers, and a documented CSP.
 - Define TLS termination and trusted-proxy behavior. Add rate limits and generic account-recovery responses.
 - Replace `dgrijalva/jwt-go`, whose upstream repository is archived. Validate the exact signing algorithm for JWT consumers. [Upstream archive](https://github.com/dgrijalva/jwt-go)

@@ -10,7 +10,7 @@ Known security and correctness issues remain in authentication, account recovery
 
 The reference application accepts only loopback listen addresses. An empty hostname or `localhost` binds to `127.0.0.1`. IPv6 loopback (`::1`) is also supported. This restriction applies to `cmd/web`, not the framework, and does not prevent exposure through a tunnel or reverse proxy.
 
-High performance is a design goal, not an established benchmark result. Current tests focus on sessions and do not establish application-wide correctness or security.
+High performance is a design goal, not an established benchmark result. Test coverage remains limited and does not establish application-wide correctness or security.
 
 ![Hyper Gopher](hypergo.png)
 
@@ -39,6 +39,22 @@ The [architecture decisions](docs/decisions/readme.md) record concrete choices a
 ## Exploring the code
 
 Start with [cmd/web](cmd/web) for application composition, [modules/site](modules/site) for the reference application, and [pkg](pkg) for framework components and services. The [configuration template](config/config-template.yaml) describes the current settings but is not a production configuration.
+
+### Development routes
+
+The local development application imports the [site module](modules/site) in [cmd/web/site_modules.go](cmd/web/site_modules.go). That module registers the diagnostic and sample routes below. Production applications must not import it. HyperServer does not use an application-wide development flag to control module routes.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/test-email` | Send a test email using the configured mail provider. |
+| POST | `/session-example` | Increment and display a session visit counter. |
+| GET | `/login` | Display the sample email-login page. |
+| GET | `/register` | Display the sample email-registration page. |
+| POST | `/logout` | Redirect to the auth logout handler. |
+
+The `/auth/...` routes remain controlled by `auth.enabled`. The reference application remains loopback-only. Omitting the site module does not resolve the framework's outstanding security issues.
+
+### Checks
 
 From the repository root, run the existing checks with:
 
