@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -71,13 +72,16 @@ func runHTTPScenario(t *testing.T, scenario func(*httpHarness)) {
 	}
 }
 
-// Requests and mail delivery are synchronous in this harness.
+// Record delivery attempts safely when a scenario submits concurrent requests.
 type fakeMailSender struct {
+	mu       sync.Mutex
 	attempts []messaging.MailMessage
 	err      error
 }
 
 func (f *fakeMailSender) Send(_ context.Context, message messaging.MailMessage) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.attempts = append(f.attempts, message)
 	return f.err
 }
@@ -244,6 +248,109 @@ func TestHTTPRegistrationMailFailure(t *testing.T) {
 	})
 }
 
+func TestHTTPConcurrentRegistration(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		// Queue SQLite writes on one connection so this tests uniqueness, not
+		// lock-timeout behavior. Schema initialization starts from an empty DB.
+		h.app.Database.SetMaxOpenConns(1)
+		passwords := []string{"FirstPassword1!", "SecondPassword2!"}
+		for attempt := 0; attempt < 5; attempt++ {
+			email := fmt.Sprintf("race-%d@example.invalid", attempt)
+			responses := make([]*httptest.ResponseRecorder, len(passwords))
+			start := make(chan struct{})
+			var requests sync.WaitGroup
+			for i, pw := range passwords {
+				requests.Add(1)
+				go func() {
+					defer requests.Done()
+					form := url.Values{"email": {email}, "password": {pw}, "passwordMatch": {pw}}
+					r := httptest.NewRequest(http.MethodPost, "/auth/register/email", strings.NewReader(form.Encode()))
+					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					r.Header.Set("HX-Request", "true")
+					w := httptest.NewRecorder()
+					<-start
+					h.handler.ServeHTTP(w, r)
+					responses[i] = w
+				}()
+			}
+			close(start)
+			requests.Wait()
+
+			winner, successes, duplicates := -1, 0, 0
+			for i, w := range responses {
+				if w.Code != http.StatusOK {
+					t.Fatalf("registration status = %d, want 200", w.Code)
+				}
+				switch {
+				case w.Header().Get("HX-Redirect") == "/login":
+					winner = i
+					successes++
+				case strings.Contains(w.Body.String(), "The specified user is already registered"):
+					duplicates++
+				default:
+					t.Fatalf("unexpected registration response: %s", w.Body.String())
+				}
+			}
+			if successes != 1 || duplicates != 1 {
+				t.Fatalf("concurrent registrations: successes=%d, duplicates=%d, want one of each", successes, duplicates)
+			}
+			u, err := user.GetUserByEmail(h.app.Database, email)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !password.CheckPasswordHash(passwords[winner], u.Password) || password.CheckPasswordHash(passwords[1-winner], u.Password) {
+				t.Fatal("losing registration overwrote the winning password")
+			}
+			if len(h.mail.attempts) != attempt+1 {
+				t.Fatalf("mail attempts = %d, want %d", len(h.mail.attempts), attempt+1)
+			}
+			h.assertRowCount(t, "user", attempt+1)
+		}
+	})
+}
+
+func TestHTTPRegistrationRejectsExistingAccount(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		u := h.seedUser(t, "person@example.invalid")
+		form := registrationForm()
+		form.Set("password", "DifferentPassword1!")
+		form.Set("passwordMatch", "DifferentPassword1!")
+		w := h.request(http.MethodPost, "/auth/register/email", form, true)
+		assertFormRejected(t, w, "The specified user is already registered")
+		h.assertUserUnchanged(t, u)
+		h.assertRowCount(t, "user", 1)
+	})
+}
+
+func TestHTTPVerificationUpdatesExistingAccount(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		if w.Header().Get("HX-Redirect") != "/login" {
+			t.Fatal("could not register the test account")
+		}
+		u, err := user.GetUserByEmail(h.app.Database, registrationForm().Get("email"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, err := user.NewVerificationToken(u.ID, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w = h.request(http.MethodGet, "/auth/verify?token="+url.QueryEscape(token), nil, true)
+		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
+			t.Fatal("verification did not succeed")
+		}
+		updated, err := user.GetUserByID(h.app.Database, u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !updated.Verified || updated.Password != u.Password || !updated.CreatedAt.Equal(u.CreatedAt) {
+			t.Fatal("verification did not preserve the existing account")
+		}
+		h.assertRowCount(t, "user", 1)
+	})
+}
+
 func TestHTTPRegistrationRejectsInvalidForm(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		// Initialize the schema so row counts detect writes to either table.
@@ -301,7 +408,7 @@ func (h *httpHarness) seedUser(t *testing.T, email string) *user.User {
 		t.Fatal(err)
 	}
 	u := &user.User{Email: email, Password: hash, Verified: true, RegistrationAuthType: "email"}
-	if err := u.Save(h.app.Database); err != nil {
+	if err := u.Create(context.Background(), h.app.Database); err != nil {
 		t.Fatal(err)
 	}
 	u, err = user.GetUserByEmail(h.app.Database, email)

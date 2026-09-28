@@ -3,6 +3,7 @@
 package user
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -69,7 +70,7 @@ func ValidateVerificationToken(db *sqlx.DB, tokenString string) (*User, error) {
 
 // Verify handles a verification request by extracting and processing the provided token, updating
 // the user to verified, and returning the newly verified user
-func Verify(db *sqlx.DB, verificationToken string, jwtKey []byte) (*User, error) {
+func Verify(ctx context.Context, db *sqlx.DB, verificationToken string, jwtKey []byte) (*User, error) {
 	// Parse the token with the specified claims and signing method
 	claims := &VerificationClaims{}
 	token, err := jwt.ParseWithClaims(verificationToken, claims, func(token *jwt.Token) (interface{}, error) {
@@ -97,7 +98,7 @@ func Verify(db *sqlx.DB, verificationToken string, jwtKey []byte) (*User, error)
 	alreadyVerified := userAccount.Verified
 	if !alreadyVerified {
 		userAccount.Verified = true
-		err := userAccount.Save(db)
+		err := userAccount.Update(ctx, db)
 		if err != nil {
 			return nil, database.NewErrDatabase(fmt.Errorf("error updating the specified user in the database: %w", err))
 		}

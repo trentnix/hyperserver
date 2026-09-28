@@ -42,11 +42,8 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 	}
 
 	var u User
-	if !databaseConfigured {
-		err := prepareDatabase(db)
-		if err != nil {
-			return nil, err
-		}
+	if err := prepareDatabase(db); err != nil {
+		return nil, err
 	}
 
 	if id == "" {
@@ -74,11 +71,8 @@ func GetUserByEmail(db *sqlx.DB, email string) (*User, error) {
 	}
 
 	var user User
-	if !databaseConfigured {
-		err := prepareDatabase(db)
-		if err != nil {
-			return nil, err
-		}
+	if err := prepareDatabase(db); err != nil {
+		return nil, err
 	}
 
 	if email == "" {
@@ -99,67 +93,63 @@ func GetUserByEmail(db *sqlx.DB, email string) (*User, error) {
 	return &user, nil
 }
 
-// Save serializes the specified user to the database. The database is checked
-// to determine if it is configured and then whether a user with the specified email
-// address is already stored in the database. If no user is found, a user record is created.
-// If the user is found, the existing user record is updated.
-func (user *User) Save(db *sqlx.DB) error {
-	if db == nil {
-		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
+// Create inserts a new account. An existing email returns ErrRecordAlreadyExists
+// from the database package. The receiver is unchanged if insertion fails.
+func (user *User) Create(ctx context.Context, db *sqlx.DB) error {
+	if user == nil {
+		return NewErrUserNotSpecified(nil)
 	}
-
-	if !databaseConfigured {
-		err := prepareDatabase(db)
-		if err != nil {
-			return err
-		}
+	if user.ID != "" {
+		return fmt.Errorf("a new user must not already have an id")
 	}
-
-	dbUser, err := GetUserByEmail(db, user.Email)
-	if err != sql.ErrNoRows && err != nil {
-		// there was an error trying to retrieve the user
+	if user.Email == "" {
+		return fmt.Errorf("a user email must be specified to create a user")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := prepareDatabase(db); err != nil {
 		return err
 	}
 
-	if dbUser == nil {
-		// the user isn't found in the database - create it
-		return user.create(db)
-	}
-
-	if user.ID == "" {
-		user.ID = dbUser.ID
-	}
-
-	// the user record exists, so update it
-	return user.update(db)
-}
-
-// create creates a new users table entry for the specified user.  Inputs aren't
-// checked and the database configuration isn't validated since this is a non-exported
-// method.
-func (user *User) create(db *sqlx.DB) error {
-	user.ID = uuid.New().String()
-	user.CreatedAt = time.Now()
-	user.UpdatedAt = time.Now()
+	created := *user
+	created.ID = uuid.New().String()
+	created.CreatedAt = time.Now()
+	created.UpdatedAt = created.CreatedAt
 
 	query := fmt.Sprintf(`
         INSERT INTO %s (id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password)
         VALUES (:id, :email, :verified, :verification_required, :created_at, :updated_at, :registration_auth_type, :password)
     `, userTableName)
 
-	_, err := db.NamedExec(query, user)
-
-	return err
+	if _, err := db.NamedExecContext(ctx, query, &created); err != nil {
+		return database.TranslateError(db.DB, err)
+	}
+	*user = created
+	return nil
 }
 
-// update updates the specified user in the users table. Inputs aren't checked and the
-// database configuration isn't validated since this is a non-exported method.
-func (user *User) update(db *sqlx.DB) error {
+// Update changes an existing account by ID. It never inserts an account and
+// returns ErrUserNotFound if the ID no longer exists.
+func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
+	if user == nil {
+		return NewErrUserNotSpecified(nil)
+	}
 	if user.ID == "" {
 		return fmt.Errorf("a user.id value must be specified to update a user record")
 	}
+	if user.Email == "" {
+		return fmt.Errorf("a user email must be specified to update a user")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := prepareDatabase(db); err != nil {
+		return err
+	}
 
-	user.UpdatedAt = time.Now()
+	updated := *user
+	updated.UpdatedAt = time.Now()
 
 	query := fmt.Sprintf(`
         UPDATE %s
@@ -172,9 +162,19 @@ func (user *User) update(db *sqlx.DB) error {
         WHERE id = :id
     `, userTableName)
 
-	_, err := db.NamedExec(query, user)
-
-	return err
+	result, err := db.NamedExecContext(ctx, query, &updated)
+	if err != nil {
+		return database.TranslateError(db.DB, err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return NewErrUserNotFound(sql.ErrNoRows)
+	}
+	user.UpdatedAt = updated.UpdatedAt
+	return nil
 }
 
 // Delete deletes the specified user from the users table
@@ -183,11 +183,8 @@ func (user *User) Delete(db *sqlx.DB) error {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
-	if !databaseConfigured {
-		err := prepareDatabase(db)
-		if err != nil {
-			return err
-		}
+	if err := prepareDatabase(db); err != nil {
+		return err
 	}
 
 	if user.ID == "" {

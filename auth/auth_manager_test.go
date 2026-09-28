@@ -1,9 +1,13 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/trentnix/hyperserver/pkg/database"
 )
 
 func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
@@ -16,6 +20,23 @@ func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 		if pattern != "/auth/login" {
 			t.Errorf("host %s: pattern = %q, want /auth/login", host, pattern)
 		}
+	}
+}
+
+func TestRegistrationReportsDatabaseFailure(t *testing.T) {
+	err, message := ProcessRegistration(context.Background(), nil, "person@example.invalid", "", "email", true)
+	var unavailable *database.ErrDatabaseUnavailable
+	if !errors.As(err, &unavailable) || message != "There was an error creating a user account" {
+		t.Fatalf("database failure = (%v, %q), want database unavailable and creation failure", err, message)
+	}
+}
+
+func TestRegistrationHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err, message := ProcessRegistration(ctx, nil, "person@example.invalid", "TestPassword1!", "email", true)
+	if !errors.Is(err, context.Canceled) || message != "There was an error creating a user account" {
+		t.Fatalf("canceled registration = (%v, %q)", err, message)
 	}
 }
 

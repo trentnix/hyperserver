@@ -40,7 +40,7 @@ type ErrInvalidData struct {
 	*BaseError
 }
 
-// ErrRecordAlreadyExists indicates the contact already exists
+// ErrRecordAlreadyExists indicates a record violates a uniqueness constraint.
 type ErrRecordAlreadyExists struct {
 	*BaseError
 }
@@ -104,12 +104,12 @@ func NewErrInvalidData(err error) *ErrInvalidData {
 	}
 }
 
-// NewErrContactAlreadyExists creates an instance of ErrContactAlreadyExists
+// NewErrRecordAlreadyExists wraps a uniqueness constraint error.
 func NewErrRecordAlreadyExists(err error) *ErrRecordAlreadyExists {
 	return &ErrRecordAlreadyExists{
 		BaseError: &BaseError{
 			Err:     err,
-			Message: "the contact already exists",
+			Message: "the record already exists",
 		},
 	}
 }

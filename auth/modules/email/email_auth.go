@@ -337,7 +337,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	registrationErr, userMessage := auth_services.ProcessRegistration(a.db, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
+	registrationErr, userMessage := auth_services.ProcessRegistration(r.Context(), a.db, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
 	if registrationErr != nil {
 		form.HandleFormError(w, r, register, registerForm, userMessage, registrationErr)
 		return false
@@ -624,7 +624,7 @@ func (a *EmailAuthService) Reset(
 	}
 
 	u.Password = hashedPassword
-	err = u.Save(a.db)
+	err = u.Update(r.Context(), a.db)
 	if err != nil {
 		// the user could not be updated
 		form.HandleFormError(
@@ -725,7 +725,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	}
 
 	u.Password = hashedPassword
-	err = u.Save(a.db)
+	err = u.Update(r.Context(), a.db)
 	if err != nil {
 		// the user could not be updated
 		form.HandleFormError(

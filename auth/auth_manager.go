@@ -3,7 +3,7 @@
 package auth
 
 import (
-	"database/sql"
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -337,19 +337,12 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // ProcessRegistration handles the registration process for the specified user
-func ProcessRegistration(db *sqlx.DB, uname string, pw string, authType string, verificationRequired bool) (error, string) {
-	//  validate user isn't already registered
-	u, err := user.GetUserByEmail(db, uname)
-	if err != nil && err != sql.ErrNoRows {
-		registrationErr := NewErrUserRegistration(uname, err)
-		return registrationErr, "There was an error retrieving the specified user"
+func ProcessRegistration(ctx context.Context, db *sqlx.DB, uname string, pw string, authType string, verificationRequired bool) (error, string) {
+	if err := ctx.Err(); err != nil {
+		return NewErrUserRegistration(uname, err), "There was an error creating a user account"
 	}
 
-	if u != nil {
-		registrationErr := NewErrUserRegistration(uname, err)
-		return registrationErr, "The specified user is already registered"
-	}
-
+	var err error
 	if pw != "" {
 		pw, err = password.HashPassword(pw)
 		if err != nil {
@@ -359,16 +352,21 @@ func ProcessRegistration(db *sqlx.DB, uname string, pw string, authType string, 
 		}
 	}
 
-	u = &user.User{
+	u := &user.User{
 		Email:                uname,
 		Password:             pw,
 		RegistrationAuthType: authType,
 		VerificationRequired: verificationRequired,
 	}
 
-	err = u.Save(db)
+	// The unique email constraint decides which competing registration succeeds.
+	err = u.Create(ctx, db)
 	if err != nil {
 		registrationErr := NewErrUserRegistration(uname, err)
+		var duplicate *database.ErrRecordAlreadyExists
+		if errors.As(err, &duplicate) {
+			return registrationErr, "The specified user is already registered"
+		}
 		return registrationErr, "There was an error creating a user account"
 	}
 
@@ -647,7 +645,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 
 	verificationErrMsg := "Verification failed: unable to verify your user account."
 
-	verifiedUser, err := user.Verify(a.db, verificationToken, []byte(a.verificationJwtKey))
+	verifiedUser, err := user.Verify(r.Context(), a.db, verificationToken, []byte(a.verificationJwtKey))
 	if err != nil {
 		a.contentManager.HandleError(
 			w,
