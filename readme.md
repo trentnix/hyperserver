@@ -61,8 +61,12 @@ From the repository root, run the existing checks with:
 ```sh
 go test ./...
 go vet ./...
-go test -race ./pkg/services/session
+go test -race ./...
 ```
+
+The [CI workflow](.github/workflows/ci.yml) runs these checks on pushes and pull requests using the Go version in `go.mod`. Test runs bypass cached results and have a five-minute timeout. SQLite tests and the race detector require CGO and a C compiler.
+
+Before fixing a defect, add a regression test and confirm it fails. The HTTP tests include a skipped regression for registration accepting mismatched password confirmation. Enable that test when fixing validation. A passing CI run does not mean the known security issues are resolved.
 
 See [AGENTS.md](AGENTS.md) for repository working agreements and verification guidance.
 
