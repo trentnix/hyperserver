@@ -16,13 +16,27 @@ import (
 )
 
 type (
-	// MailClient provides a client for sending email
-	// This is purposely not completed because there are many different methods and services
-	// for sending email, many of which are very different. Choose what works best for you
-	// and populate the methods below. For now, emails will just be logged.
+	// MailClient composes messages and passes them to a sender.
 	MailClient struct {
-		// config stores application configuration.
-		config *config.Config
+		from   string
+		sender MailSender
+	}
+
+	// MailMessage contains the addresses, subject, and HTML body of an email.
+	MailMessage struct {
+		From    string
+		To      string
+		Subject string
+		Body    string
+	}
+
+	// MailSender delivers a message. Implementations can use SMTP or another service.
+	MailSender interface {
+		Send(context.Context, MailMessage) error
+	}
+
+	smtpSender struct {
+		config config.MailConfig
 	}
 
 	// mail represents an email to be sent.
@@ -37,26 +51,34 @@ type (
 
 // NewMailClient creates a new MailClient.
 func NewMailClient(cfg *config.Config) (*MailClient, error) {
-	return &MailClient{
-		config: cfg,
-	}, nil
+	if cfg == nil {
+		return nil, errors.New("mail configuration is required")
+	}
+	return NewMailClientWithSender(cfg.Mail.FromAddress, &smtpSender{config: cfg.Mail})
+}
+
+// NewMailClientWithSender uses the supplied sender without an SMTP fallback.
+func NewMailClientWithSender(from string, sender MailSender) (*MailClient, error) {
+	if sender == nil {
+		return nil, errors.New("mail sender is required")
+	}
+	return &MailClient{from: from, sender: sender}, nil
 }
 
 // Compose creates a new email.
 func (m *MailClient) Compose() *mail {
 	return &mail{
 		client: m,
-		from:   m.config.Mail.FromAddress,
+		from:   m.from,
 	}
 }
 
 // skipSend determines if mail sending should be skipped.
-func (m *MailClient) skipSend() bool {
-	return m.config == nil ||
-		m.config.Mail.Hostname == "" ||
-		m.config.Mail.Port == 0 ||
-		m.config.Mail.User == "" ||
-		m.config.Mail.Password == ""
+func (m *smtpSender) skipSend() bool {
+	return m.config.Hostname == "" ||
+		m.config.Port == 0 ||
+		m.config.User == "" ||
+		m.config.Password == ""
 }
 
 // send attempts to send the email.
@@ -70,28 +92,34 @@ func (m *MailClient) send(email *mail, ctx context.Context) error {
 		return errors.New("email cannot be sent without a body to render")
 	}
 
+	return m.sender.Send(ctx, MailMessage{
+		From: email.from, To: email.to, Subject: email.subject, Body: email.body,
+	})
+}
+
+func (m *smtpSender) Send(ctx context.Context, email MailMessage) error {
 	// Check if mail sending should be skipped.
 	if m.skipSend() {
 		if ctxLogger := logger.Get(ctx); ctxLogger != nil {
-			(*ctxLogger).Info("Skipped sending email", logger.Field{Key: "to", Value: email.to})
+			(*ctxLogger).Info("Skipped sending email", logger.Field{Key: "to", Value: email.To})
 		} else {
-			log.Printf("Skipped sending email to=%s", email.to)
+			log.Printf("Skipped sending email to=%s", email.To)
 		}
 		return nil
 	}
 
-	cfg := m.config.Mail
+	cfg := m.config
 	hostPort := net.JoinHostPort(cfg.Hostname, strconv.Itoa(int(cfg.Port)))
 	auth := smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Hostname)
 
 	headers := []string{
-		fmt.Sprintf("From: %s", email.from),
-		fmt.Sprintf("To: %s", email.to),
-		fmt.Sprintf("Subject: %s", email.subject),
+		fmt.Sprintf("From: %s", email.From),
+		fmt.Sprintf("To: %s", email.To),
+		fmt.Sprintf("Subject: %s", email.Subject),
 		"MIME-Version: 1.0",
 		`Content-Type: text/html; charset="UTF-8"`,
 	}
-	msg := strings.Join(headers, "\r\n") + "\r\n\r\n" + email.body
+	msg := strings.Join(headers, "\r\n") + "\r\n\r\n" + email.Body
 
 	var err error
 	switch cfg.Port {
@@ -114,10 +142,10 @@ func (m *MailClient) send(email *mail, ctx context.Context) error {
 		if authErr := client.Auth(auth); authErr != nil {
 			return authErr
 		}
-		if mailErr := client.Mail(email.from); mailErr != nil {
+		if mailErr := client.Mail(email.From); mailErr != nil {
 			return mailErr
 		}
-		if rcptErr := client.Rcpt(email.to); rcptErr != nil {
+		if rcptErr := client.Rcpt(email.To); rcptErr != nil {
 			return rcptErr
 		}
 
@@ -134,7 +162,7 @@ func (m *MailClient) send(email *mail, ctx context.Context) error {
 		}
 		err = client.Quit()
 	default:
-		err = smtp.SendMail(hostPort, auth, email.from, []string{email.to}, []byte(msg))
+		err = smtp.SendMail(hostPort, auth, email.From, []string{email.To}, []byte(msg))
 	}
 
 	if err != nil {
@@ -142,9 +170,9 @@ func (m *MailClient) send(email *mail, ctx context.Context) error {
 	}
 
 	if ctxLogger := logger.Get(ctx); ctxLogger != nil {
-		(*ctxLogger).Info("Sent email", logger.Field{Key: "to", Value: email.to})
+		(*ctxLogger).Info("Sent email", logger.Field{Key: "to", Value: email.To})
 	} else {
-		log.Printf("Sent email to=%s", email.to)
+		log.Printf("Sent email to=%s", email.To)
 	}
 
 	return nil
