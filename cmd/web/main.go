@@ -5,17 +5,15 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/util"
-)
-
-const (
-	defaultPort = "80"
 )
 
 // main starts the application server, configures the routes, etc.
@@ -26,6 +24,11 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
+
+	address, err := referenceListenAddress(s.Config.HTTP.Hostname, s.Config.HTTP.Port)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// if the working directory is configured, set the working directory
 	if s.Config.App.WorkingDirectory != "" {
@@ -55,13 +58,6 @@ func main() {
 		middleware.LoadSessionManagement(s.Database, s.SessionManager),
 	)
 
-	port := strconv.Itoa(int(s.Config.HTTP.Port))
-	if port == "" {
-		port = defaultPort
-	}
-
-	address := fmt.Sprintf("%s:%s", s.Config.HTTP.Hostname, port)
-
 	server := &http.Server{
 		Addr:         address,
 		Handler:      mux,
@@ -78,4 +74,20 @@ func main() {
 			log.Fatalf("server error: %v", err)
 		}
 	}
+}
+
+// referenceListenAddress keeps the development application on loopback interfaces.
+// This restriction does not apply to applications built with the framework.
+func referenceListenAddress(hostname string, port uint16) (string, error) {
+	host := strings.TrimSpace(hostname)
+	if host == "" || strings.EqualFold(host, "localhost") {
+		host = "127.0.0.1"
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return "", fmt.Errorf("reference application must listen on a loopback address, got %q", hostname)
+	}
+
+	return net.JoinHostPort(ip.String(), strconv.Itoa(int(port))), nil
 }

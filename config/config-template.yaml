@@ -1,5 +1,5 @@
 http:
-  hostname: "localhost"
+  hostname: "127.0.0.1"
   port: 8080
   readTimeout: "5s"
   writeTimeout: "10s"

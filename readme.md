@@ -8,6 +8,8 @@ HyperServer is in early development and is not production-ready. The repository 
 
 Known security and correctness issues remain in authentication, account recovery, sessions, and request handling. Startup validation, shutdown, and deployment safeguards are incomplete. Do not expose the example application to the public internet or use it with real accounts or sensitive data.
 
+The reference application accepts only loopback listen addresses. An empty hostname or `localhost` binds to `127.0.0.1`. IPv6 loopback (`::1`) is also supported. This restriction applies to `cmd/web`, not the framework, and does not prevent exposure through a tunnel or reverse proxy.
+
 High performance is a design goal, not an established benchmark result. Current tests focus on sessions and do not establish application-wide correctness or security.
 
 ![Hyper Gopher](hypergo.png)
