@@ -9,7 +9,7 @@ http:
     certificate: ""
     key: ""
   session:
-    key: <your JWT encryption key goes here>
+    jwtKey: <your JWT encryption key goes here>
     tokenAge: "24h"
     cookieAge: "24h"
     stores:
