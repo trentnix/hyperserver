@@ -182,7 +182,7 @@ The phases define implementation order. Security fixes can interrupt any phase. 
 
 ### Phase 0: Record decisions
 
-Keep this roadmap as the project direction. Add short architectural decision records when module, service, rendering, or storage contracts require a concrete choice. Mark APIs as experimental without duplicating the roadmap in separate vision documents.
+Keep this roadmap as the project direction. Track concrete choices and unresolved contracts in [architecture decisions](docs/decisions/readme.md). Mark APIs as experimental without duplicating the roadmap in separate vision documents.
 
 Exit when contributors can identify the core, service contracts, and unresolved API decisions.
 
