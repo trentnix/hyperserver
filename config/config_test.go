@@ -87,6 +87,31 @@ func TestEnvironmentProviderOptions(t *testing.T) {
 	}
 }
 
+func TestMailTimeoutConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml, override string
+		want                 time.Duration
+		wantErr              bool
+	}{
+		{name: "omitted", yaml: "{}"},
+		{name: "file", yaml: "mail:\n  timeout: 12s\n", want: 12 * time.Second},
+		{name: "environment override", yaml: "mail:\n  timeout: 12s\n", override: "2s", want: 2 * time.Second},
+		{name: "environment only", yaml: "{}", override: "3s", want: 3 * time.Second},
+		{name: "malformed", yaml: "mail:\n  timeout: tomorrow\n", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanConfigEnvironment(t)
+			if tc.override != "" {
+				t.Setenv("HYPERSERVER_MAIL_TIMEOUT", tc.override)
+			}
+			cfg, err := loadTestConfig(t, tc.yaml)
+			if (err != nil) != tc.wantErr || cfg.Mail.Timeout != tc.want {
+				t.Fatalf("timeout=%v, error=%v, want %v, error=%v", cfg.Mail.Timeout, err, tc.want, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestConfigLoadsDoNotShareState(t *testing.T) {
 	cleanConfigEnvironment(t)
 	if _, err := loadTestConfig(t, "app:\n  name: first\n"); err != nil {

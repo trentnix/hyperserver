@@ -86,6 +86,7 @@ type (
 		User        string
 		Password    string
 		FromAddress string
+		Timeout     time.Duration // Total SMTP operation limit. Zero uses 30 seconds.
 	}
 )
 

@@ -2,6 +2,7 @@
 package auth
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -27,10 +28,11 @@ import (
 // EmailAuthService implements the AuthService interface
 type (
 	EmailAuthService struct {
-		db             *sqlx.DB
-		config         *config.Config
-		contentManager *content_services.ContentManagerService
-		mailClient     *messaging.MailClient
+		db                *sqlx.DB
+		config            *config.Config
+		contentManager    *content_services.ContentManagerService
+		mailClient        *messaging.MailClient
+		verificationEmail *template.Template
 
 		loginButton    template.HTML
 		registerButton template.HTML
@@ -125,6 +127,7 @@ const (
 	emailResetRequestFormTemplate   = "auth/modules/email/templates/html/partials/reset-request.html"
 	emailResetPasswordFormTemplate  = "auth/modules/email/templates/html/partials/reset-password.html"
 	emailChangePasswordFormTemplate = "auth/modules/email/templates/html/partials/change-password.html"
+	emailVerificationTemplate       = "auth/modules/email/templates/email/verification.html"
 	emailLoginFormPartial           = "auth.partial.email.login.form"
 	emailRegisterFormPartial        = "auth.partial.email.register.form"
 	emailResetRequestFormPartial    = "auth.partial.email.reset.request.form"
@@ -166,6 +169,11 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	}
 
 	var err error
+	a.verificationEmail, err = template.ParseFiles(emailVerificationTemplate)
+	if err != nil {
+		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("load verification email template %s: %w", emailVerificationTemplate, err))
+	}
+
 	loginButtonTemplate := emailLoginButtonTemplateName
 	a.loginButton, err = util.LoadHTMLFromFile(loginButtonTemplate)
 	if err != nil {
@@ -390,16 +398,17 @@ func (a *EmailAuthService) sendRegistrationVerificationEmail(r *http.Request, u 
 		return err
 	}
 
-	body := fmt.Sprintf(
-		`<p>Welcome to %s.</p><p><a href="%s">Click here</a> to verify your account.</p>`,
-		a.config.App.Name,
-		verificationURL.String(),
-	)
+	var body bytes.Buffer
+	if err := a.verificationEmail.Execute(&body, struct{ Name, URL string }{
+		Name: a.config.App.Name, URL: verificationURL.String(),
+	}); err != nil {
+		return err
+	}
 
 	return a.mailClient.Compose().
 		To(u.Email).
 		Subject("Verify your account").
-		Body(body).
+		Body(body.String()).
 		Send(r.Context())
 }
 

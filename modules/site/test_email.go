@@ -2,6 +2,7 @@ package module_site
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 
@@ -15,6 +16,7 @@ const (
 
 // TestEmail sends a test email using SMTP settings from config.yaml.
 // The site module registers this handler as POST /test-email.
+// The optional body query parameter is plain text, not HTML.
 // Example: curl -X POST 'http://127.0.0.1:8080/test-email?to=user@example.com'
 func (m *SiteModule) TestEmail(w http.ResponseWriter, r *http.Request) {
 	to := strings.TrimSpace(r.URL.Query().Get("to"))
@@ -36,6 +38,8 @@ func (m *SiteModule) TestEmail(w http.ResponseWriter, r *http.Request) {
 	body := r.URL.Query().Get("body")
 	if strings.TrimSpace(body) == "" {
 		body = defaultTestEmailBody
+	} else {
+		body = template.HTMLEscapeString(body)
 	}
 
 	err := m.mailClient.Compose().

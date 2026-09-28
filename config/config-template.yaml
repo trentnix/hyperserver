@@ -1,55 +1,114 @@
+# Override fields with HYPERSERVER_ environment variables, using underscores
+# between nested keys. For example: HYPERSERVER_MAIL_PASSWORD.
+# Replace secret placeholders before enabling the services that require them.
+
+# HTTP listener and session settings for the reference application.
 http:
+  # Listen address. The reference application accepts only loopback addresses.
   hostname: "127.0.0.1"
+  # TCP port for incoming HTTP requests.
   port: 8080
+  # Maximum time to read a request, including its body. Zero disables the limit.
   readTimeout: "5s"
+  # Maximum time to write a response. Zero disables the limit.
   writeTimeout: "10s"
+  # Maximum wait for another request on a keep-alive connection.
+  # Zero uses readTimeout.
   idleTimeout: "2m"
+  # These TLS fields are not wired into cmd/web. It currently serves HTTP only.
   tls:
+    # Intended HTTPS switch. Setting true does not currently enable HTTPS.
     enabled: false
+    # Intended path to a PEM certificate file. Currently unused.
     certificate: ""
+    # Intended path to the matching PEM private key. Currently unused.
     key: ""
+  # Shared session settings and mappings from session names to storage providers.
   session:
+    # Secret used to sign session JWTs. Signing does not encrypt their contents.
     jwtKey: <your JWT encryption key goes here>
+    # Lifetime of a new session token. Must be at least 1s when sessions are used.
     tokenAge: "24h"
+    # Browser cookie lifetime, set on each save. Must be at least 1s.
     cookieAge: "24h"
+    # Configure the providers selected under types below.
     stores:
+      # Store session data in a signed browser cookie, not on the server.
       cookieStore:
+        # Allow session names to select this provider.
         enabled: "true"
+      # Store session data in SQLite and its identifier in a signed cookie.
       sqliteStore:
+        # Allow session names to select this provider.
         enabled: "true"
+        # SQLite connection for sessions, separate from database.connection.
         connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
+        # Table for stored sessions. Created if it does not exist.
         sessionTable: "session"
+    # Map session names to enabled providers. Names without a mapping use default.
     types:
+      # Fallback provider for session names not listed here.
       default: sqliteStore
+      # Provider for sessions named "visit".
       visit: sqliteStore
+      # Provider for sessions named "user".
       user: sqliteStore
+      # Provider for sessions named "cookie".
       cookie: cookieStore
+      # Provider for sessions named "sqlite".
       sqlite: sqliteStore
 
+# Authentication services and account-token settings.
 auth:
+  # Enable authentication routes. At least one imported service must be enabled.
   enabled: "true"
+  # Secret used to sign account verification and password-reset tokens.
+  # Use a different secret from http.session.jwtKey.
   jwtKey: <your auth token key goes here>
+  # Verification token lifetime. Must be at least 1s when auth is enabled.
   verificationTokenExpiration: "24h"
+  # Password-reset token lifetime. Must be at least 1s when auth is enabled.
   resetTokenExpiration: "1h"
+  # Options for authentication providers imported by the application.
   services:
+    # Email/password login, registration, and password management.
     email:
+      # Enable this provider. With auth.enabled true, leaving all providers off fails startup.
       enabled: "false"
 
+# Outbound SMTP delivery settings.
 mail:
   # If hostname, user, or password is empty, or port is zero, SMTP is unavailable.
   # Startup still succeeds, but requests to send mail return an error.
+  # SMTP server hostname, also used to verify its TLS certificate.
   hostname: "smtp.resend.com"
+  # Ports 465 and 2465 use TLS immediately. Other ports use STARTTLS if offered.
   port: 587
+  # SMTP authentication username supplied by the mail provider.
   user: "resend"
+  # SMTP password or provider API key. Prefer an environment override.
   password: <your resend API key goes here>
+  # Default sender address. Must be one mailbox, with an optional display name.
   fromAddress: "no-reply@yourdomain.com"
+  # Total SMTP time, including connection, TLS, authentication, and delivery.
+  # Zero or omitted uses 30s. An earlier request deadline takes precedence.
+  timeout: 30s
 
+# Application database settings. The current reference application uses SQLite.
 database:
+  # Registered SQL driver name. The reference application imports sqlite3.
   driver: "sqlite3"
+  # Database file and driver options. Relative paths use the process working directory.
   connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
+  # Unused by the current application and test harness. Tests supply their own connections.
   testConnection: ":memory:?_journal=WAL&_timeout=5000&_fk=true"
 
+# Reference application identity and rendering settings.
 app:
+  # Application name used in page content and verification emails.
   name: "HyperServer"
+  # Change to this directory after server construction, before loading handlers.
+  # Use the repository path on your machine, or leave empty to keep the current directory.
   workingDirectory: "D:/source/hyperserver"
+  # Include stored session notifications when rendering managed content.
   renderNotifications: "true"

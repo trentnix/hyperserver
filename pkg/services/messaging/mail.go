@@ -3,13 +3,18 @@ package messaging
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log"
+	"mime"
 	"net"
+	mailaddr "net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -17,6 +22,8 @@ import (
 
 // ErrMailUnavailable means the sender is not configured to accept mail.
 var ErrMailUnavailable = errors.New("mail delivery is unavailable")
+
+const defaultMailTimeout = 30 * time.Second
 
 type (
 	// MailClient composes messages and passes them to a sender.
@@ -26,6 +33,8 @@ type (
 	}
 
 	// MailMessage contains the addresses, subject, and HTML body of an email.
+	// From and To each contain one mailbox, with an optional display name.
+	// Body must contain trusted HTML with dynamic values already escaped.
 	MailMessage struct {
 		From    string
 		To      string
@@ -38,11 +47,15 @@ type (
 		// Send returns nil only when the service accepts the message for delivery.
 		// Disabled or unavailable delivery must return an error. Acceptance does
 		// not guarantee delivery to the recipient's inbox.
+		// Implementations must honor context cancellation. An error can occur
+		// after acceptance, so callers must not assume retrying is safe.
 		Send(context.Context, MailMessage) error
 	}
 
 	smtpSender struct {
-		config config.MailConfig
+		config      config.MailConfig
+		dialContext func(context.Context, string, string) (net.Conn, error)
+		rootCAs     *x509.CertPool // Nil uses system roots. Tests can trust a local peer.
 	}
 
 	// mail represents an email to be sent.
@@ -61,7 +74,16 @@ func NewMailClient(cfg *config.Config) (*MailClient, error) {
 	if cfg == nil {
 		return nil, errors.New("mail configuration is required")
 	}
-	return NewMailClientWithSender(cfg.Mail.FromAddress, &smtpSender{config: cfg.Mail})
+	mailConfig := cfg.Mail
+	if mailConfig.Timeout < 0 {
+		return nil, errors.New("mail timeout must not be negative")
+	}
+	if mailConfig.Timeout == 0 {
+		mailConfig.Timeout = defaultMailTimeout
+	}
+	return NewMailClientWithSender(mailConfig.FromAddress, &smtpSender{
+		config: mailConfig, dialContext: (&net.Dialer{}).DialContext,
+	})
 }
 
 // NewMailClientWithSender uses the supplied sender without an SMTP fallback.
@@ -98,74 +120,150 @@ func (m *MailClient) send(email *mail, ctx context.Context) error {
 		return errors.New("email cannot be sent without a body to render")
 	}
 
-	return m.sender.Send(ctx, MailMessage{
+	message := MailMessage{
 		From: email.from, To: email.to, Subject: email.subject, Body: email.body,
+	}
+	if _, _, err := message.validateHeaders(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return m.sender.Send(ctx, message)
+}
+
+func safeHeader(value string) bool {
+	return utf8.ValidString(value) && !strings.ContainsFunc(value, func(r rune) bool {
+		return r < 32 || r == 127
 	})
 }
 
-func (m *smtpSender) Send(ctx context.Context, email MailMessage) error {
+func (m MailMessage) validateHeaders() (*mailaddr.Address, *mailaddr.Address, error) {
+	for _, header := range []struct{ name, value string }{
+		{"from", m.From}, {"to", m.To}, {"subject", m.Subject},
+	} {
+		if !safeHeader(header.value) {
+			return nil, nil, fmt.Errorf("email %s contains invalid header characters", header.name)
+		}
+	}
+	from, err := mailaddr.ParseAddress(m.From)
+	if err != nil || !safeHeader(from.Name) || !safeHeader(from.Address) {
+		return nil, nil, errors.New("email from must contain one valid address")
+	}
+	to, err := mailaddr.ParseAddress(m.To)
+	if err != nil || !safeHeader(to.Name) || !safeHeader(to.Address) {
+		return nil, nil, errors.New("email to must contain one valid address")
+	}
+	return from, to, nil
+}
+
+func smtpMailbox(address *mailaddr.Address) string {
+	// Format without the display name to restore any required local-part quoting.
+	// net/smtp adds its own angle brackets around the resulting mailbox.
+	formatted := (&mailaddr.Address{Address: address.Address}).String()
+	return strings.TrimSuffix(strings.TrimPrefix(formatted, "<"), ">")
+}
+
+func (m *smtpSender) Send(ctx context.Context, email MailMessage) (err error) {
 	if !m.configured() {
 		return ErrMailUnavailable
 	}
+	from, to, err := email.validateHeaders()
+	if err != nil {
+		return err
+	}
 
 	cfg := m.config
+	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
+	defer cancel()
+	deadline, _ := ctx.Deadline()
+	// Socket deadlines can fire just before the context timer. Report the same
+	// context error in either case so callers can recognize interrupted sends.
+	defer func() {
+		if err == nil {
+			return
+		}
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return
+		}
+		var networkError net.Error
+		if errors.As(err, &networkError) && networkError.Timeout() && !time.Now().Before(deadline) {
+			err = context.DeadlineExceeded
+		}
+	}()
+
 	hostPort := net.JoinHostPort(cfg.Hostname, strconv.Itoa(int(cfg.Port)))
-	auth := smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Hostname)
+	conn, err := m.dialContext(ctx, "tcp", hostPort)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
+	if err := conn.SetDeadline(deadline); err != nil {
+		return err
+	}
+
+	tlsConfig := &tls.Config{ServerName: cfg.Hostname, MinVersion: tls.VersionTLS12, RootCAs: m.rootCAs}
+	var smtpConn net.Conn = conn
+	implicitTLS := cfg.Port == 465 || cfg.Port == 2465
+	if implicitTLS {
+		tlsConn := tls.Client(conn, tlsConfig)
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			return err
+		}
+		smtpConn = tlsConn
+	}
+	client, err := smtp.NewClient(smtpConn, cfg.Hostname)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if err := client.Hello("localhost"); err != nil {
+		return err
+	}
+	if !implicitTLS {
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			if err := client.StartTLS(tlsConfig); err != nil {
+				return err
+			}
+		}
+	}
+	if ok, _ := client.Extension("AUTH"); !ok {
+		return errors.New("smtp: server doesn't support AUTH")
+	}
+	if err := client.Auth(smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Hostname)); err != nil {
+		return err
+	}
+	if err := client.Mail(smtpMailbox(from)); err != nil {
+		return err
+	}
+	if err := client.Rcpt(smtpMailbox(to)); err != nil {
+		return err
+	}
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
 
 	headers := []string{
-		fmt.Sprintf("From: %s", email.From),
-		fmt.Sprintf("To: %s", email.To),
-		fmt.Sprintf("Subject: %s", email.Subject),
+		"From: " + from.String(),
+		"To: " + to.String(),
+		"Subject: " + mime.QEncoding.Encode("UTF-8", email.Subject),
 		"MIME-Version: 1.0",
 		`Content-Type: text/html; charset="UTF-8"`,
 	}
 	msg := strings.Join(headers, "\r\n") + "\r\n\r\n" + email.Body
 
-	var err error
-	switch cfg.Port {
-	case 465, 2465:
-		tlsConn, dialErr := tls.Dial("tcp", hostPort, &tls.Config{
-			ServerName: cfg.Hostname,
-			MinVersion: tls.VersionTLS12,
-		})
-		if dialErr != nil {
-			return dialErr
-		}
-		defer tlsConn.Close()
-
-		client, clientErr := smtp.NewClient(tlsConn, cfg.Hostname)
-		if clientErr != nil {
-			return clientErr
-		}
-		defer client.Close()
-
-		if authErr := client.Auth(auth); authErr != nil {
-			return authErr
-		}
-		if mailErr := client.Mail(email.From); mailErr != nil {
-			return mailErr
-		}
-		if rcptErr := client.Rcpt(email.To); rcptErr != nil {
-			return rcptErr
-		}
-
-		writer, dataErr := client.Data()
-		if dataErr != nil {
-			return dataErr
-		}
-		if _, writeErr := writer.Write([]byte(msg)); writeErr != nil {
-			_ = writer.Close()
-			return writeErr
-		}
-		if closeErr := writer.Close(); closeErr != nil {
-			return closeErr
-		}
-		err = client.Quit()
-	default:
-		err = smtp.SendMail(hostPort, auth, email.From, []string{email.To}, []byte(msg))
+	if _, err := writer.Write([]byte(msg)); err != nil {
+		return err
 	}
-
-	if err != nil {
+	if err := writer.Close(); err != nil {
+		return err
+	}
+	// A later error does not prove the message was rejected. Do not retry here.
+	if err := client.Quit(); err != nil {
 		return err
 	}
 
@@ -196,7 +294,7 @@ func (m *mail) Subject(subject string) *mail {
 	return m
 }
 
-// Body sets the body of the email.
+// Body sets trusted HTML. Callers must escape dynamic values with html/template.
 func (m *mail) Body(body string) *mail {
 	m.body = body
 	return m

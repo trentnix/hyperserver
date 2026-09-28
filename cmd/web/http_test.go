@@ -285,6 +285,32 @@ func TestHTTPTestEmailDeliveryOutcome(t *testing.T) {
 	})
 }
 
+func TestHTTPMailEscapesDynamicHTML(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		input := `<img src=x onerror="alert(1)"> & test`
+		h.app.Config.App.Name = input
+		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		if w.Header().Get("HX-Redirect") != "/login" || len(h.mail.attempts) != 1 {
+			t.Fatal("registration failed")
+		}
+		body := h.mail.attempts[0].Body
+		if strings.Contains(body, "<img") || !strings.Contains(body, "&lt;img") || !strings.Contains(body, "&amp; test") {
+			t.Errorf("application name was not escaped: %s", body)
+		}
+		if !strings.Contains(body, `<a href="http://127.0.0.1:8080/auth/verify?token=`) {
+			t.Error("verification link did not remain usable")
+		}
+		w = h.request(http.MethodPost, "/test-email?to=person@example.invalid&body="+url.QueryEscape(input), nil, true)
+		if w.Code != http.StatusOK || len(h.mail.attempts) != 2 {
+			t.Fatal("test email failed")
+		}
+		body = h.mail.attempts[1].Body
+		if strings.Contains(body, "<img") || !strings.Contains(body, "&lt;img") {
+			t.Errorf("custom test-email text was not escaped: %s", body)
+		}
+	})
+}
+
 func TestHTTPConcurrentRegistration(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		// Queue SQLite writes on one connection so this tests uniqueness, not

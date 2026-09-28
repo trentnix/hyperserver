@@ -10,7 +10,7 @@ This document defines the intended architecture and implementation order. Planne
 
 Snapshot updated September 28, 2026. Phase 0 is complete. Phase 1 is in progress.
 
-[CI](.github/workflows/ci.yml) runs tests, vet, and full-suite race checks and passed at commit `7a26e27`. The latest mail-outcome changes passed these checks locally and await CI verification. These checks do not establish production readiness or replace a security audit. Performance remains unmeasured.
+[CI](.github/workflows/ci.yml) runs tests, vet, and full-suite race checks. These checks do not establish production readiness or replace a security audit. Performance remains unmeasured.
 
 | Area | Current state | Remaining work |
 | --- | --- | --- |
@@ -19,7 +19,7 @@ Snapshot updated September 28, 2026. Phase 0 is complete. Phase 1 is in progress
 | Configuration and middleware | The [template](config/config-template.yaml) now uses `http.session.jwtKey`. Startup validates signing keys, lifetimes, and provider selections, with [regression tests](cmd/web/startup_test.go). [Auth middleware](pkg/services/middleware/auth.go) still has missing error returns and a reversed save-error condition. | Fix middleware error paths and test rejection behavior. |
 | Forms and account writes | [Email-auth](auth/modules/email/email_auth.go) and [contact](modules/site/contact.go) handlers reject invalid forms. [User creation](pkg/services/user/user.go) is insert-only, and updates require an existing ID. [HTTP tests](cmd/web/http_test.go) cover competing registrations without password overwrites. | Complete the recovery and session safeguards below. |
 | Recovery and verification | [Password-reset requests](auth/modules/email/email_auth.go) return a reset link to the requester. [Verification resend](auth/auth_manager.go) returns a verification link directly. Reset-token deletion follows the password update. | Deliver tokens to the account's email address and consume them atomically with the protected change. |
-| Mail and sessions | [Mail](pkg/services/messaging/mail.go) has an injectable sender and returns `ErrMailUnavailable` when SMTP settings are incomplete. [SQLite logout](pkg/services/session/sqlitestore.go) only expires the browser cookie. | Bound SMTP operations, validate mail headers and HTML, and rotate and revoke sessions. |
+| Mail and sessions | [Mail](pkg/services/messaging/mail.go) has an injectable sender, reports unavailable delivery, bounds SMTP operations, honors cancellation, and validates headers. Verification email and diagnostic email escape dynamic HTML values. [SQLite logout](pkg/services/session/sqlitestore.go) only expires the browser cookie. | Rotate and revoke sessions. |
 | Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. The development [site module](modules/site/router.go) owns diagnostic routes and requires POST for mail, logout, and session changes. [Redirects](pkg/util/redirect.go) still interpolate URLs into HTML and JavaScript. | Keep development modules out of production applications. Fix redirects and remaining auth route methods. Add CSRF protection and request limits. |
 | Rendering and tests | The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. Coverage now includes startup, configuration, auth, forms, mail, and sessions. [Rendering](pkg/components/content/content.go) still parses templates on each render. | Add coverage for the remaining security blockers and reuse parsed templates. |
 
