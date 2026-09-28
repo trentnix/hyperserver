@@ -20,6 +20,15 @@
                 {{ template "site.partial.contact.form.field_errors" (.GetFieldErrors "Message") }}
             </div>
             <button id="contactButton" type="submit">Submit</button>
+            {{ if .HasSuccessMessages }}
+                <div class="form-messages success" role="status">
+                    <ul>
+                        {{ range .GetSuccessMessages }}
+                            <li>{{ .Message }}</li>
+                        {{ end }}
+                    </ul>
+                </div>
+            {{ end }}
             {{ if .HasErrorMessages }}
                 <div class="form-messages">{{ .GetErrorMessagesHTML }}</div>
             {{ end }}
