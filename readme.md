@@ -8,7 +8,7 @@ HyperServer is in early development and is not production-ready. The repository 
 
 Known security and correctness issues remain in authentication, account recovery, sessions, and request handling. Startup validation, shutdown, and deployment safeguards are incomplete. Do not expose the example application to the public internet or use it with real accounts or sensitive data.
 
-The reference application accepts only loopback listen addresses. An empty hostname or `localhost` binds to `127.0.0.1`. IPv6 loopback (`::1`) is also supported. This restriction applies to `cmd/web`, not the framework, and does not prevent exposure through a tunnel or reverse proxy.
+The reference application accepts only loopback listen addresses. An empty `http.listenHost` or `localhost` binds to `127.0.0.1`. IPv6 loopback (`::1`) is also supported. This restriction applies to `cmd/web`, not the framework, and does not prevent exposure through a tunnel or reverse proxy.
 
 High performance is a design goal, not an established benchmark result. Test coverage remains limited and does not establish application-wide correctness or security.
 
@@ -66,13 +66,22 @@ Reset requests and verification resend email links to the account's stored addre
 
 ### Public links and the server address
 
-`http.hostname` serves two roles: the listener uses it, and link generation uses it as a fallback. `http.publicOrigin` overrides the address used for public links without changing where the server listens. For example, a proxy can expose `https://example.com` while HyperServer listens on `127.0.0.1:8080`.
+`http.listenHost` and `http.port` specify where the server accepts connections. `http.publicOrigin` specifies the address people use to reach it, but only needs to be set when that address differs from the listener. For example:
 
-Set `http.publicOrigin` to `https://example.com` in that deployment. Use `HYPERSERVER_HTTP_PUBLICORIGIN` for an environment override. Paths, credentials, queries, and fragments are not allowed. This setting does not configure TLS listeners, cookie security, or trusted proxies.
+```yaml
+http:
+  listenHost: "127.0.0.1"
+  port: 8080
+  publicOrigin: "" # Direct access at http://127.0.0.1:8080.
+```
 
-For direct connections, `publicOrigin` can be left empty. Absolute links then use `http.hostname`, `http.port`, and the incoming connection's TLS state. Request host and forwarding headers do not control those links.
+If a reverse proxy exposes that listener at `https://example.com`, set `http.publicOrigin` to `https://example.com`. The listener stays on `127.0.0.1:8080`. Use `HYPERSERVER_HTTP_PUBLICORIGIN` for an environment override. Paths, credentials, queries, and fragments are not allowed. This setting does not configure TLS listeners, cookie security, or trusted proxies.
+
+For direct connections, leave `publicOrigin` empty. Absolute links then use `http.listenHost`, `http.port`, and the incoming connection's TLS state. An omitted or blank `listenHost` defaults to `127.0.0.1`. Request host and forwarding headers do not control those links. Framework applications that listen on wildcard addresses such as `0.0.0.0` or `::` must set `publicOrigin` before building absolute links.
 
 Use `util.BuildPublicURL(r, cfg.HTTP, path, params)` for absolute links, including account emails. Without a public origin, the helper requires a nonzero `http.port`. Other modules can use it without depending on email or authentication. Reset forms use relative actions and stay on the current origin.
+
+Rename existing `http.hostname` settings to `http.listenHost` and `HYPERSERVER_HTTP_HOSTNAME` to `HYPERSERVER_HTTP_LISTENHOST`. The loader rejects the old names instead of silently ignoring them. The Go field is now `HTTPConfig.ListenHost`. The `mail.hostname` SMTP setting is unchanged.
 
 Recovery response timing and atomic single-use token redemption remain outstanding. The reference application is not ready for public exposure.
 

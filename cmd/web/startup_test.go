@@ -28,7 +28,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := s.Database.Ping(); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := referenceListenAddress(s.Config.HTTP.Hostname, s.Config.HTTP.Port); err != nil {
+		if _, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Chdir(s.Config.App.WorkingDirectory); err != nil {
@@ -59,7 +59,7 @@ func TestStartupHelperProcess(t *testing.T) {
 }
 
 const startupTestConfig = `http:
-  hostname: "127.0.0.1"
+  listenHost: "127.0.0.1"
   port: 8080
   session:
     jwtKey: "ssssssssssssssssssssssssssssssss"

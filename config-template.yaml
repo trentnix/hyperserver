@@ -4,14 +4,15 @@
 
 # HTTP addresses, listener settings, and sessions.
 http:
-  # Existing host setting: used by the listener and as a fallback for absolute links.
+  # Host or unbracketed IP address to listen on. Empty defaults to 127.0.0.1.
   # The reference application's listener accepts only loopback addresses.
-  hostname: "127.0.0.1"
+  listenHost: "127.0.0.1"
   # TCP port for incoming HTTP requests.
   port: 8080
   # Public HTTP(S) address for absolute links, for example https://example.com.
   # Optional for direct connections. Set this when the public address differs from the listener.
-  # Leave empty to use hostname, port, and the incoming connection's TLS state.
+  # Leave empty to use listenHost, port, and the incoming connection's TLS state.
+  # Wildcard listeners (0.0.0.0 or ::) require a publicOrigin to build absolute links.
   # Forwarded headers are ignored. Paths, credentials, queries, and fragments are rejected.
   publicOrigin: ""
   # Maximum time to read a request, including its body. Zero disables the limit.

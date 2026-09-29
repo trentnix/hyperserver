@@ -18,7 +18,7 @@ func setupSQLiteStore(t *testing.T) *SQLiteStore {
 	// Create a sample config that matches your config struct.
 	c := &config.Config{
 		HTTP: config.HTTPConfig{
-			Hostname:     "localhost",
+			ListenHost:   "localhost",
 			Port:         8081,
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 10 * time.Second,

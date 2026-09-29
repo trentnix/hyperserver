@@ -65,9 +65,12 @@ func BuildPublicURL(r *http.Request, cfg config.HTTPConfig, path string, params 
 			return nil, errors.New("request cannot be nil")
 		}
 
-		host := cfg.Hostname
+		host := strings.TrimSpace(cfg.ListenHost)
 		if host == "" {
-			host = "localhost"
+			host = "127.0.0.1"
+		}
+		if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+			return nil, errors.New("http.publicOrigin is required to build a link when http.listenHost is a wildcard address")
 		}
 		scheme := "http"
 		if r.TLS != nil {

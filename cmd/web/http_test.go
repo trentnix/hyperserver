@@ -149,7 +149,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	cfg := &config.Config{
 		App:      config.AppConfig{Name: "HTTP test application", WorkingDirectory: root, RenderNotifications: true},
 		Database: config.DatabaseConfig{Driver: "sqlite3", Connection: filepath.Join(t.TempDir(), "application.db")},
-		HTTP:     config.HTTPConfig{Hostname: "127.0.0.1", Port: 8080},
+		HTTP:     config.HTTPConfig{ListenHost: "127.0.0.1", Port: 8080},
 		Auth: config.AuthConfig{
 			Enabled: true, JwtKey: "http-test-only-auth-signing-key",
 			RegistrationEnabled:          true,

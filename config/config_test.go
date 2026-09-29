@@ -111,6 +111,65 @@ func TestPublicOriginConfiguration(t *testing.T) {
 	}
 }
 
+func TestHTTPListenConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml string
+		env        map[string]string
+		wantHost   string
+		wantPort   uint16
+		wantOrigin string
+	}{
+		{name: "default", yaml: "{}", wantHost: "127.0.0.1"},
+		{name: "file", yaml: "http:\n  listenHost: localhost\n  port: 8081\n", wantHost: "localhost", wantPort: 8081},
+		{name: "environment only", yaml: "{}", env: map[string]string{"HYPERSERVER_HTTP_LISTENHOST": "::1", "HYPERSERVER_HTTP_PORT": "8082"}, wantHost: "::1", wantPort: 8082},
+		{name: "environment override", yaml: "http:\n  listenHost: localhost\n  port: 8081\n", env: map[string]string{"HYPERSERVER_HTTP_LISTENHOST": "127.0.0.2", "HYPERSERVER_HTTP_PORT": "8082"}, wantHost: "127.0.0.2", wantPort: 8082},
+		{name: "empty override", yaml: "http:\n  listenHost: localhost\n", env: map[string]string{"HYPERSERVER_HTTP_LISTENHOST": ""}},
+		{name: "independent public origin", yaml: "http:\n  listenHost: 127.0.0.1\n  port: 8080\n  publicOrigin: https://example.com\n", wantHost: "127.0.0.1", wantPort: 8080, wantOrigin: "https://example.com"},
+		{name: "mail hostname unchanged", yaml: "mail:\n  hostname: smtp.example.invalid\n", wantHost: "127.0.0.1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanConfigEnvironment(t)
+			for key, value := range tc.env {
+				t.Setenv(key, value)
+			}
+			cfg, err := loadTestConfig(t, tc.yaml)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.HTTP.ListenHost != tc.wantHost || cfg.HTTP.Port != tc.wantPort || cfg.HTTP.PublicOrigin != tc.wantOrigin {
+				t.Fatalf("listenHost=%q, port=%d, publicOrigin=%q", cfg.HTTP.ListenHost, cfg.HTTP.Port, cfg.HTTP.PublicOrigin)
+			}
+			if tc.name == "mail hostname unchanged" && cfg.Mail.Hostname != "smtp.example.invalid" {
+				t.Fatal("HTTP setting rename changed the SMTP host")
+			}
+		})
+	}
+}
+
+func TestLegacyHTTPHostnameRejected(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml string
+		env        map[string]string
+	}{
+		{name: "file", yaml: "http:\n  hostname: 127.0.0.1\n"},
+		{name: "empty file value", yaml: "http:\n  hostname: ''\n"},
+		{name: "both names", yaml: "http:\n  hostname: localhost\n  listenHost: 127.0.0.1\n"},
+		{name: "environment", yaml: "{}", env: map[string]string{"HYPERSERVER_HTTP_HOSTNAME": "localhost"}},
+		{name: "empty environment", yaml: "{}", env: map[string]string{"HYPERSERVER_HTTP_HOSTNAME": ""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanConfigEnvironment(t)
+			for key, value := range tc.env {
+				t.Setenv(key, value)
+			}
+			_, err := loadTestConfig(t, tc.yaml)
+			if err == nil || !strings.Contains(err.Error(), "http.listenHost") || !strings.Contains(err.Error(), "HYPERSERVER_HTTP_LISTENHOST") {
+				t.Fatalf("error = %v, want instructions for renaming the listener setting", err)
+			}
+		})
+	}
+}
+
 func TestRegistrationConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name, yaml, override string

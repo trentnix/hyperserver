@@ -48,7 +48,7 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 			log.SetOutput(&logs)
 			sender := new(verificationTestAuthService)
 			authServices = []AuthService{sender}
-			manager := &AuthManager{httpConfig: config.HTTPConfig{Hostname: "localhost", Port: 8080}, contentManager: &content_services.ContentManagerService{
+			manager := &AuthManager{httpConfig: config.HTTPConfig{ListenHost: "localhost", Port: 8080}, contentManager: &content_services.ContentManagerService{
 				HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
 					if err != nil {
 						t.Errorf("internal error reached renderer: %v", err)

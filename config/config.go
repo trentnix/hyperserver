@@ -16,6 +16,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -35,8 +36,8 @@ type (
 
 	// HTTPConfig stores HTTP configuration
 	HTTPConfig struct {
-		PublicOrigin string
-		Hostname     string
+		PublicOrigin string // Optional override for absolute links, independent of the listener.
+		ListenHost   string // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
 		Port         uint16
 		ReadTimeout  time.Duration
 		WriteTimeout time.Duration
@@ -112,6 +113,7 @@ func readConfig(v *viper.Viper) (Config, error) {
 	v.AutomaticEnv()
 	v.AllowEmptyEnv(true)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.SetDefault("http.listenHost", "127.0.0.1")
 
 	// Binding environment keys makes omitted YAML fields visible to Unmarshal,
 	// including provider options. Empty overrides must not revive file secrets.
@@ -127,6 +129,9 @@ func readConfig(v *viper.Viper) (Config, error) {
 
 	if err := v.ReadInConfig(); err != nil {
 		return c, err
+	}
+	if v.InConfig("http.hostname") || v.IsSet("http.hostname") {
+		return c, errors.New("http.hostname was renamed to http.listenHost. Rename HYPERSERVER_HTTP_HOSTNAME to HYPERSERVER_HTTP_LISTENHOST for environment configuration")
 	}
 	if err := v.Unmarshal(&c); err != nil {
 		return c, err

@@ -25,7 +25,7 @@ func main() {
 		}
 	}()
 
-	address, err := referenceListenAddress(s.Config.HTTP.Hostname, s.Config.HTTP.Port)
+	address, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -78,15 +78,15 @@ func main() {
 
 // referenceListenAddress keeps the development application on loopback interfaces.
 // This restriction does not apply to applications built with the framework.
-func referenceListenAddress(hostname string, port uint16) (string, error) {
-	host := strings.TrimSpace(hostname)
+func referenceListenAddress(listenHost string, port uint16) (string, error) {
+	host := strings.TrimSpace(listenHost)
 	if host == "" || strings.EqualFold(host, "localhost") {
 		host = "127.0.0.1"
 	}
 
 	ip := net.ParseIP(host)
 	if ip == nil || !ip.IsLoopback() {
-		return "", fmt.Errorf("reference application must listen on a loopback address, got %q", hostname)
+		return "", fmt.Errorf("reference application must listen on a loopback address, got %q", listenHost)
 	}
 
 	return net.JoinHostPort(ip.String(), strconv.Itoa(int(port))), nil

@@ -3,13 +3,14 @@ package util
 import (
 	"crypto/tls"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
 )
 
 func TestBuildPublicURLUsesConfiguredOrigin(t *testing.T) {
-	cfg := config.HTTPConfig{Hostname: "127.0.0.1", Port: 8080, PublicOrigin: "https://example.com/"}
+	cfg := config.HTTPConfig{ListenHost: "127.0.0.1", Port: 8080, PublicOrigin: "https://example.com/"}
 	r := httptest.NewRequest("GET", "http://attacker.example/", nil)
 	r.Header.Set("X-Forwarded-Proto", "https://attacker.example/?leak=")
 	for _, path := range []string{"/auth/verify", "/auth/reset/email", "/callbacks/complete"} {
@@ -24,7 +25,7 @@ func TestBuildPublicURLUsesConfiguredOrigin(t *testing.T) {
 }
 
 func TestBuildPublicURLRejectsInvalidOrigin(t *testing.T) {
-	cfg := config.HTTPConfig{Hostname: "localhost", Port: 8080, PublicOrigin: "https://example.com/path"}
+	cfg := config.HTTPConfig{ListenHost: "localhost", Port: 8080, PublicOrigin: "https://example.com/path"}
 	if _, err := BuildPublicURL(httptest.NewRequest("GET", "/", nil), cfg, "/reset", nil); err == nil {
 		t.Fatal("invalid public origin fell back to listener settings")
 	}
@@ -49,7 +50,7 @@ func TestBuildPublicURLFallbackIgnoresForwardedHeaders(t *testing.T) {
 				r.TLS = &tls.ConnectionState{}
 				wantScheme = "https"
 			}
-			cfg := config.HTTPConfig{Hostname: "trusted.example", Port: 8080}
+			cfg := config.HTTPConfig{ListenHost: "trusted.example", Port: 8080}
 			link, err := BuildPublicURL(r, cfg, "/reset", map[string]string{"token": "a+b&c"})
 			if err != nil {
 				t.Fatal(err)
@@ -73,11 +74,13 @@ func TestBuildPublicURLFallbackAddresses(t *testing.T) {
 		{"https://localhost/", "::1", 443, "https://[::1]/reset"},
 		{"https://localhost/", "::1", 8443, "https://[::1]:8443/reset"},
 		{"http://localhost/", "localhost", 8080, "http://localhost:8080/reset"},
-		{"http://localhost/", "", 8080, "http://localhost:8080/reset"},
+		{"http://localhost/", "", 8080, "http://127.0.0.1:8080/reset"},
+		{"http://localhost/", " \t", 8080, "http://127.0.0.1:8080/reset"},
+		{"http://localhost/", " 127.0.0.1 ", 8080, "http://127.0.0.1:8080/reset"},
 		{"http://localhost/", "localhost", 443, "http://localhost:443/reset"},
 		{"https://localhost/", "localhost", 80, "https://localhost:80/reset"},
 	} {
-		cfg := config.HTTPConfig{Hostname: tc.host, Port: tc.port}
+		cfg := config.HTTPConfig{ListenHost: tc.host, Port: tc.port}
 		link, err := BuildPublicURL(httptest.NewRequest("GET", tc.target, nil), cfg, "/reset", nil)
 		if err != nil || link.String() != tc.want {
 			t.Errorf("link = %v, err = %v, want %s", link, err, tc.want)
@@ -86,14 +89,14 @@ func TestBuildPublicURLFallbackAddresses(t *testing.T) {
 }
 
 func TestBuildPublicURLFallbackRequiresRequest(t *testing.T) {
-	cfg := config.HTTPConfig{Hostname: "localhost", Port: 80}
+	cfg := config.HTTPConfig{ListenHost: "localhost", Port: 80}
 	if _, err := BuildPublicURL(nil, cfg, "/reset", nil); err == nil {
 		t.Error("accepted a missing request")
 	}
 }
 
 func TestBuildPublicURLFallbackRequiresPort(t *testing.T) {
-	cfg := config.HTTPConfig{Hostname: "localhost"}
+	cfg := config.HTTPConfig{ListenHost: "localhost"}
 	// A port-zero listener is valid, but it cannot supply an absolute link's port.
 	if err := (config.Config{HTTP: cfg}).Validate(); err != nil {
 		t.Fatal(err)
@@ -106,5 +109,25 @@ func TestBuildPublicURLFallbackRequiresPort(t *testing.T) {
 	link, err := BuildPublicURL(r, cfg, "/reset", nil)
 	if err != nil || link.String() != "https://example.com/reset" {
 		t.Fatalf("configured origin with port-zero listener: link = %v, error = %v", link, err)
+	}
+}
+
+func TestBuildPublicURLWildcardListenerRequiresPublicOrigin(t *testing.T) {
+	for _, host := range []string{"0.0.0.0", "::", "::ffff:0.0.0.0"} {
+		t.Run(host, func(t *testing.T) {
+			cfg := config.HTTPConfig{ListenHost: host, Port: 8080}
+			if err := (config.Config{HTTP: cfg}).Validate(); err != nil {
+				t.Fatalf("wildcard listeners must remain valid framework configuration: %v", err)
+			}
+			r := httptest.NewRequest("GET", "http://untrusted.example/", nil)
+			if link, err := BuildPublicURL(r, cfg, "/reset", nil); err == nil || link != nil || !strings.Contains(err.Error(), "http.publicOrigin") {
+				t.Fatalf("wildcard fallback: link = %v, error = %v", link, err)
+			}
+			cfg.PublicOrigin = "https://example.com"
+			link, err := BuildPublicURL(r, cfg, "/reset", nil)
+			if err != nil || link.String() != "https://example.com/reset" {
+				t.Fatalf("configured origin: link = %v, error = %v", link, err)
+			}
+		})
 	}
 }
