@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -74,16 +75,51 @@ func runHTTPScenario(t *testing.T, scenario func(*httpHarness)) {
 
 // Record delivery attempts safely when a scenario submits concurrent requests.
 type fakeMailSender struct {
-	mu       sync.Mutex
-	attempts []messaging.MailMessage
-	err      error
+	mu                 sync.Mutex
+	attempts           []messaging.MailMessage
+	err                error
+	includeBodyInError bool
 }
 
 func (f *fakeMailSender) Send(_ context.Context, message messaging.MailMessage) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.attempts = append(f.attempts, message)
-	return f.err
+	err, includeBody := f.err, f.includeBodyInError
+	f.mu.Unlock()
+	if includeBody {
+		return fmt.Errorf("delivery failed for body: %s", message.Body)
+	}
+	return err
+}
+
+type capturedLogs struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+type testLogger struct {
+	logs   *capturedLogs
+	fields []logger.Field
+}
+
+func (l *testLogger) record(message string, fields ...logger.Field) {
+	l.logs.mu.Lock()
+	defer l.logs.mu.Unlock()
+	l.logs.lines = append(l.logs.lines, fmt.Sprint(message, l.fields, fields))
+}
+
+func (l *testLogger) Debug(message string, fields ...logger.Field) { l.record(message, fields...) }
+func (l *testLogger) Info(message string, fields ...logger.Field)  { l.record(message, fields...) }
+func (l *testLogger) Warn(message string, fields ...logger.Field)  { l.record(message, fields...) }
+func (l *testLogger) Error(message string, fields ...logger.Field) { l.record(message, fields...) }
+func (l *testLogger) With(fields ...logger.Field) logger.Logger {
+	return &testLogger{logs: l.logs, fields: append(append([]logger.Field(nil), l.fields...), fields...)}
+}
+
+func (l *capturedLogs) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return strings.Join(l.lines, "\n")
 }
 
 type httpHarness struct {
@@ -91,6 +127,7 @@ type httpHarness struct {
 	handler http.Handler
 	mail    *fakeMailSender
 	cookies http.CookieJar
+	logs    *capturedLogs
 }
 
 func newHTTPHarness(t *testing.T) *httpHarness {
@@ -160,16 +197,14 @@ func newHTTPHarness(t *testing.T) *httpHarness {
 	if err := SetupAuthentication(app); err != nil {
 		t.Fatal(err)
 	}
-	l, err := logger.NewZapLogger()
-	if err != nil {
-		t.Fatal(err)
-	}
+	logs := &capturedLogs{}
+	l := &testLogger{logs: logs}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return &httpHarness{
-		app: app, mail: mail, cookies: jar,
+		app: app, mail: mail, cookies: jar, logs: logs,
 		handler: middleware.ChainMiddleware(app.Web, middleware.LoggerMiddleware(l), middleware.LoadSessionManagement(db, app.SessionManager)),
 	}
 }
@@ -178,6 +213,9 @@ func newHTTPHarness(t *testing.T) *httpHarness {
 // response before deciding which request comes next.
 func (h *httpHarness) request(method, path string, form url.Values, htmx bool) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "http://127.0.0.1:8080"+path, strings.NewReader(form.Encode()))
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	r = r.WithContext(ctx)
 	if form != nil {
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
@@ -193,6 +231,12 @@ func (h *httpHarness) request(method, path string, form url.Values, htmx bool) *
 	h.cookies.SetCookies(r.URL, response.Cookies())
 	response.Body.Close()
 	return w
+}
+
+func (f *fakeMailSender) snapshot() []messaging.MailMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]messaging.MailMessage(nil), f.attempts...)
 }
 
 func registrationForm() url.Values {
@@ -218,10 +262,10 @@ func TestHTTPRegistration(t *testing.T) {
 		if u.Verified || !u.VerificationRequired || u.Password == "" || u.Password == "TestPassword1!" {
 			t.Fatalf("unexpected persisted account state: verified=%v, verification required=%v, password stored correctly=%v", u.Verified, u.VerificationRequired, u.Password != "" && u.Password != "TestPassword1!")
 		}
-		if len(h.mail.attempts) != 1 {
-			t.Fatalf("mail attempts = %d, want 1", len(h.mail.attempts))
+		if len(h.mail.snapshot()) != 1 {
+			t.Fatalf("mail attempts = %d, want 1", len(h.mail.snapshot()))
 		}
-		message := h.mail.attempts[0]
+		message := h.mail.snapshot()[0]
 		if message.To != u.Email || message.From != "test@example.invalid" || message.Subject != "Verify your account" || !strings.Contains(message.Body, "/auth/verify?token=") {
 			t.Fatalf("unexpected verification email: %+v", message)
 		}
@@ -247,8 +291,8 @@ func TestHTTPRegistrationMailFailure(t *testing.T) {
 				form.Set("email", fmt.Sprintf("mail-failure-%d@example.invalid", i))
 				w := h.request(http.MethodPost, "/auth/register/email", form, true)
 				assertFormRejected(t, w, "Your account was created, but verification email delivery failed.")
-				if len(h.mail.attempts) != i+1 {
-					t.Fatalf("mail attempts = %d, want %d", len(h.mail.attempts), i+1)
+				if len(h.mail.snapshot()) != i+1 {
+					t.Fatalf("mail attempts = %d, want %d", len(h.mail.snapshot()), i+1)
 				}
 				u, err := user.GetUserByEmail(h.app.Database, form.Get("email"))
 				if err != nil {
@@ -279,8 +323,8 @@ func TestHTTPTestEmailDeliveryOutcome(t *testing.T) {
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "test email sent to person@example.invalid") {
 			t.Fatalf("accepted mail response: status %d, body %s", w.Code, w.Body.String())
 		}
-		if len(h.mail.attempts) != 2 {
-			t.Fatalf("mail attempts = %d, want 2", len(h.mail.attempts))
+		if len(h.mail.snapshot()) != 2 {
+			t.Fatalf("mail attempts = %d, want 2", len(h.mail.snapshot()))
 		}
 	})
 }
@@ -290,10 +334,10 @@ func TestHTTPMailEscapesDynamicHTML(t *testing.T) {
 		input := `<img src=x onerror="alert(1)"> & test`
 		h.app.Config.App.Name = input
 		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
-		if w.Header().Get("HX-Redirect") != "/login" || len(h.mail.attempts) != 1 {
+		if w.Header().Get("HX-Redirect") != "/login" || len(h.mail.snapshot()) != 1 {
 			t.Fatal("registration failed")
 		}
-		body := h.mail.attempts[0].Body
+		body := h.mail.snapshot()[0].Body
 		if strings.Contains(body, "<img") || !strings.Contains(body, "&lt;img") || !strings.Contains(body, "&amp; test") {
 			t.Errorf("application name was not escaped: %s", body)
 		}
@@ -301,10 +345,10 @@ func TestHTTPMailEscapesDynamicHTML(t *testing.T) {
 			t.Error("verification link did not remain usable")
 		}
 		w = h.request(http.MethodPost, "/test-email?to=person@example.invalid&body="+url.QueryEscape(input), nil, true)
-		if w.Code != http.StatusOK || len(h.mail.attempts) != 2 {
+		if w.Code != http.StatusOK || len(h.mail.snapshot()) != 2 {
 			t.Fatal("test email failed")
 		}
-		body = h.mail.attempts[1].Body
+		body = h.mail.snapshot()[1].Body
 		if strings.Contains(body, "<img") || !strings.Contains(body, "&lt;img") {
 			t.Errorf("custom test-email text was not escaped: %s", body)
 		}
@@ -364,8 +408,8 @@ func TestHTTPConcurrentRegistration(t *testing.T) {
 			if !password.CheckPasswordHash(passwords[winner], u.Password) || password.CheckPasswordHash(passwords[1-winner], u.Password) {
 				t.Fatal("losing registration overwrote the winning password")
 			}
-			if len(h.mail.attempts) != attempt+1 {
-				t.Fatalf("mail attempts = %d, want %d", len(h.mail.attempts), attempt+1)
+			if len(h.mail.snapshot()) != attempt+1 {
+				t.Fatalf("mail attempts = %d, want %d", len(h.mail.snapshot()), attempt+1)
 			}
 			h.assertRowCount(t, "user", attempt+1)
 		}
@@ -414,6 +458,239 @@ func TestHTTPVerificationUpdatesExistingAccount(t *testing.T) {
 	})
 }
 
+func mailLink(t *testing.T, message messaging.MailMessage, path string) *url.URL {
+	t.Helper()
+	match := regexp.MustCompile(`href="([^"]+)"`).FindStringSubmatch(message.Body)
+	if len(match) != 2 {
+		t.Fatal("email has no link")
+	}
+	link, err := url.Parse(html.UnescapeString(match[1]))
+	if err != nil || link.Host != "127.0.0.1:8080" || link.Path != path || link.Query().Get("token") == "" {
+		t.Fatal("email has an invalid account link")
+	}
+	return link
+}
+
+func (h *httpHarness) assertNoTokenExposure(t *testing.T, w *httptest.ResponseRecorder, token string) {
+	t.Helper()
+	response := w.Body.String() + fmt.Sprint(w.Header())
+	if strings.Contains(response, "token=") || (token != "" && strings.Contains(response, token)) {
+		t.Error("response exposed an account token")
+	}
+	if token != "" && strings.Contains(h.logs.String(), token) {
+		t.Error("logs exposed an account token")
+	}
+}
+
+func TestHTTPResetRequestEmailsInstructions(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		h.app.Config.App.Name = `<img src=x> & test`
+		var nativeAction, nativeUserID string
+		for i, htmx := range []bool{false, true} {
+			u := h.seedUser(t, fmt.Sprintf("reset%d@example.invalid", i))
+			form := url.Values{"email": {u.Email}, "to": {"attacker@example.invalid"}}
+			w := h.request(http.MethodPost, "/auth/reset/request/email", form, htmx)
+
+			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Password reset request received.") {
+				t.Error("reset request did not return a generic acknowledgment")
+			}
+			if len(h.mail.snapshot()) != i+1 {
+				t.Fatal("reset instructions were not emailed")
+			}
+			message := h.mail.snapshot()[i]
+			if message.To != u.Email || message.Subject != "Reset your password" || strings.Contains(message.Body, "<img") || !strings.Contains(message.Body, "&lt;img") {
+				t.Error("reset email used the wrong recipient, subject, or escaping")
+			}
+			link := mailLink(t, message, "/auth/reset/email")
+			token := link.Query().Get("token")
+			h.assertNoTokenExposure(t, w, token)
+			unknown := h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {"unknown@example.invalid"}}, htmx)
+			if unknown.Code != w.Code || unknown.Body.String() != w.Body.String() || len(h.mail.snapshot()) != i+1 {
+				t.Error("unknown account changed the acknowledgment or caused mail delivery")
+			}
+			resetUser, err := user.ValidateResetToken(h.app.Database, token)
+			if err != nil || resetUser.ID != u.ID {
+				t.Fatal("emailed reset token does not belong to the account")
+			}
+			// Following the emailed link must not put its token in request logs.
+			reset := h.request(http.MethodGet, link.RequestURI(), nil, htmx)
+			if reset.Code != http.StatusOK || !strings.Contains(reset.Body.String(), "reset-password-form") {
+				t.Error("emailed reset link did not open the reset form")
+			}
+			if !htmx {
+				formTag := regexp.MustCompile(`<form id="reset-password-form"[^>]*>`).FindString(reset.Body.String())
+				action := regexp.MustCompile(`\saction="([^"]+)"`).FindStringSubmatch(formTag)
+				if !strings.Contains(formTag, `method="post"`) || len(action) != 2 {
+					t.Fatal("reset form must submit passwords by POST without JavaScript")
+				}
+				actionURL, err := url.Parse(html.UnescapeString(action[1]))
+				if err != nil || actionURL.Query().Get("token") != token {
+					t.Fatal("reset form action lost the token")
+				}
+				nativeAction, nativeUserID = actionURL.RequestURI(), u.ID
+			}
+			if strings.Contains(h.logs.String(), token) {
+				t.Error("following the reset link exposed its token in logs")
+			}
+		}
+		h.request(http.MethodPost, nativeAction, url.Values{
+			"password": {"ReplacementPassword1!"}, "passwordMatch": {"ReplacementPassword1!"},
+		}, false)
+		stored, err := user.GetUserByID(h.app.Database, nativeUserID)
+		if err != nil || !password.CheckPasswordHash("ReplacementPassword1!", stored.Password) {
+			t.Fatal("ordinary reset form submission did not update the password")
+		}
+	})
+}
+
+func TestHTTPVerificationResendEmailsInstructions(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		u := h.seedUser(t, "verify@example.invalid")
+		u.Verified, u.VerificationRequired = false, true
+		if err := u.Update(context.Background(), h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		if w.Header().Get("HX-Redirect") != "/" {
+			t.Fatal("login failed")
+		}
+		for i, htmx := range []bool{false, true} {
+			w := h.request(http.MethodPost, "/auth/request/verify", url.Values{"email": {"attacker@example.invalid"}}, htmx)
+			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "check your email") {
+				t.Error("verification request did not return an acknowledgment")
+			}
+			if len(h.mail.snapshot()) != i+1 {
+				t.Fatal("verification instructions were not emailed")
+			}
+			message := h.mail.snapshot()[i]
+			if message.To != u.Email || message.Subject != "Verify your account" {
+				t.Error("verification email used the wrong recipient or subject")
+			}
+			link := mailLink(t, message, "/auth/verify")
+			h.assertNoTokenExposure(t, w, link.Query().Get("token"))
+		}
+		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
+		w = h.request(http.MethodGet, link.RequestURI(), nil, true)
+		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
+		verified, err := user.GetUserByID(h.app.Database, u.ID)
+		if err != nil || !verified.Verified {
+			t.Fatal("emailed link did not verify the account")
+		}
+	})
+}
+
+func TestHTTPResetMailFailureAcknowledgment(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		for _, htmx := range []bool{false, true} {
+			for i, tc := range []struct {
+				name        string
+				err         error
+				includeBody bool
+			}{
+				{name: "disabled delivery", err: messaging.ErrMailUnavailable},
+				{name: "timeout", err: context.DeadlineExceeded},
+				{name: "error includes message body", includeBody: true},
+			} {
+				t.Run(fmt.Sprintf("%s/htmx=%t", tc.name, htmx), func(t *testing.T) {
+					u := h.seedUser(t, fmt.Sprintf("failure-%d-%t@example.invalid", i, htmx))
+					h.mail.err, h.mail.includeBodyInError = tc.err, tc.includeBody
+					before := len(h.mail.snapshot())
+					w := h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {u.Email}}, htmx)
+					if len(h.mail.snapshot()) != before+1 {
+						t.Fatal("reset delivery was not attempted")
+					}
+					unknown := h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {"unknown@example.invalid"}}, htmx)
+					if w.Code != http.StatusOK || unknown.Code != w.Code || unknown.Body.String() != w.Body.String() {
+						t.Fatal("mail failure changed the acknowledgment")
+					}
+					link := mailLink(t, h.mail.snapshot()[before], "/auth/reset/email")
+					h.assertNoTokenExposure(t, w, link.Query().Get("token"))
+					if !strings.Contains(h.logs.String(), "password reset instructions could not be sent") {
+						t.Fatal("delivery failure was not logged")
+					}
+					stored, err := user.GetUserByID(h.app.Database, u.ID)
+					if err != nil || *stored != *u {
+						t.Fatal("failed reset request changed the account")
+					}
+				})
+			}
+		}
+	})
+}
+
+func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		// The reference renderer currently returns 200 for error pages. Check the
+		// status supplied by auth separately without changing the renderer here.
+		var errorStatus int
+		renderError := h.app.ContentManager.HandleError
+		h.app.ContentManager.HandleError = func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
+			errorStatus = status
+			renderError(w, r, message, err, status)
+		}
+		w := h.request(http.MethodPost, "/auth/request/verify", nil, true)
+		if errorStatus != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "Authentication required") || len(h.mail.snapshot()) != 0 {
+			t.Fatal("anonymous resend was not denied")
+		}
+		u := h.seedUser(t, "resend@example.invalid")
+		u.Verified, u.VerificationRequired = false, true
+		if err := u.Update(context.Background(), h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		if w.Header().Get("HX-Redirect") != "/" {
+			t.Fatal("login failed")
+		}
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			w = h.request(method, "/auth/request/verify", nil, true)
+			if (w.Code != http.StatusMethodNotAllowed && w.Code != http.StatusNotFound) || len(h.mail.snapshot()) != 0 {
+				t.Error("non-POST resend was not rejected without delivery")
+			}
+		}
+		for _, htmx := range []bool{false, true} {
+			for _, tc := range []struct {
+				err         error
+				includeBody bool
+			}{
+				{messaging.ErrMailUnavailable, false}, {context.DeadlineExceeded, false}, {nil, true},
+			} {
+				h.mail.err, h.mail.includeBodyInError = tc.err, tc.includeBody
+				before := len(h.mail.snapshot())
+				w = h.request(http.MethodPost, "/auth/request/verify", nil, htmx)
+				if errorStatus != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "Unable to send verification instructions.") || len(h.mail.snapshot()) != before+1 {
+					t.Fatal("verification delivery failure was not reported")
+				}
+				link := mailLink(t, h.mail.snapshot()[before], "/auth/verify")
+				h.assertNoTokenExposure(t, w, link.Query().Get("token"))
+				if !strings.Contains(h.logs.String(), "verification email delivery failed") {
+					t.Error("verification failure was not logged")
+				}
+			}
+		}
+		stored, err := user.GetUserByID(h.app.Database, u.ID)
+		if err != nil || stored.Verified {
+			t.Fatal("resend failure verified the account")
+		}
+		before := len(h.mail.snapshot())
+		u.Verified = true
+		if err := u.Update(context.Background(), h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		w = h.request(http.MethodPost, "/auth/request/verify", nil, true)
+		if w.Code != http.StatusOK || len(h.mail.snapshot()) != before {
+			t.Error("verified account caused another email")
+		}
+		u.Verified, u.RegistrationAuthType = false, "missing-provider"
+		if err := u.Update(context.Background(), h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		w = h.request(http.MethodPost, "/auth/request/verify", nil, true)
+		if errorStatus != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "Unable to send verification instructions.") || len(h.mail.snapshot()) != before {
+			t.Error("missing verification provider was not handled")
+		}
+	})
+}
+
 func TestHTTPRegistrationRejectsInvalidForm(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		// Initialize the schema so row counts detect writes to either table.
@@ -437,7 +714,7 @@ func TestHTTPRegistrationRejectsInvalidForm(t *testing.T) {
 					assertFormRejected(t, w, tc.message)
 					h.assertRowCount(t, "user", 0)
 					h.assertRowCount(t, "usertoken", 0)
-					if len(h.mail.attempts) != 0 {
+					if len(h.mail.snapshot()) != 0 {
 						t.Fatal("invalid registration attempted mail delivery")
 					}
 				})
@@ -490,7 +767,7 @@ func (h *httpHarness) assertUserUnchanged(t *testing.T, original *user.User) {
 	if *got != *original {
 		t.Error("invalid form changed the stored user")
 	}
-	if len(h.mail.attempts) != 0 {
+	if len(h.mail.snapshot()) != 0 {
 		t.Error("invalid form attempted mail delivery")
 	}
 }
@@ -619,7 +896,7 @@ func TestHTTPContactRejectsInvalidForm(t *testing.T) {
 						t.Error("invalid contact form reported success")
 					}
 					h.assertRowCount(t, "hyperserver_contact_submission", 0)
-					if len(h.mail.attempts) != 0 {
+					if len(h.mail.snapshot()) != 0 {
 						t.Error("invalid contact form attempted mail delivery")
 					}
 				})
@@ -647,8 +924,8 @@ func TestHTTPContact(t *testing.T) {
 				t.Fatalf("saved contact submissions = %d, want %d", count, i+1)
 			}
 		}
-		if len(h.mail.attempts) != 0 {
-			t.Fatalf("contact storage unexpectedly sent mail: %+v", h.mail.attempts)
+		if len(h.mail.snapshot()) != 0 {
+			t.Fatalf("contact storage unexpectedly sent mail: %+v", h.mail.snapshot())
 		}
 	})
 }

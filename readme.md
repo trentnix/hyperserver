@@ -54,6 +54,12 @@ The local development application imports the [site module](modules/site) in [cm
 
 The `/auth/...` routes remain controlled by `auth.enabled`. The reference application remains loopback-only. Omitting the site module does not resolve the framework's outstanding security issues.
 
+### Account email delivery
+
+Reset requests and verification resend email links to the account's stored address. Their HTTP acknowledgments do not include usable links or tokens. Delivery runs during the request using the configured SMTP timeout. Reset acknowledgments confirm receipt of the request, not successful delivery. Delivery failures are logged without including tokens or email bodies.
+
+Trusted public-origin configuration, recovery response timing, and atomic single-use token redemption remain outstanding. The reference application is not ready for public exposure.
+
 ### Checks
 
 From the repository root, run the existing checks with:

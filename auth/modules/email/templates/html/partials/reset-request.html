@@ -3,6 +3,8 @@
     <div id="reset-request" class="container">
         <form id="reset-request-form"
             class="auth-reset-request-form"
+            method="post"
+            action="{{ .ActionUrl }}"
             hx-post="{{ .ActionUrl }}"
             hx-target="closest div"
             hx-swap="outerHTML"

@@ -1,14 +1,86 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/database"
+	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+type verificationTestAuthService struct {
+	AuthService
+	calls int
+}
+
+func (*verificationTestAuthService) AuthType() string { return "test-verification" }
+func (*verificationTestAuthService) IsLoaded() bool   { return true }
+func (s *verificationTestAuthService) SendVerificationEmail(context.Context, *user.User, url.URL) error {
+	s.calls++
+	return errors.New("provider error containing secret-token")
+}
+
+func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
+	previousServices, previousLogOutput := authServices, log.Writer()
+	t.Cleanup(func() {
+		authServices = previousServices
+		log.SetOutput(previousLogOutput)
+	})
+	for _, tc := range []struct {
+		name, provider, wantLog string
+		wantStatus, wantCalls   int
+	}{
+		{"lookup failure", "", "verification account lookup failed", http.StatusInternalServerError, 0},
+		{"missing provider", "missing", "verification email provider is unavailable", http.StatusServiceUnavailable, 0},
+		{"delivery failure", "test-verification", "verification email delivery failed", http.StatusServiceUnavailable, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			log.SetOutput(&logs)
+			sender := new(verificationTestAuthService)
+			authServices = []AuthService{sender}
+			manager := &AuthManager{contentManager: &content_services.ContentManagerService{
+				Host: "localhost", Port: "8080",
+				HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
+					if err != nil {
+						t.Errorf("internal error reached renderer: %v", err)
+					}
+					http.Error(w, message, status)
+				},
+			}}
+			r := httptest.NewRequest(http.MethodPost, "/auth/request/verify", nil)
+			if tc.provider != "" {
+				r = user.AddUserToRequestContext(r, &user.User{
+					ID: "test-user", Email: "stored@example.invalid",
+					VerificationRequired: true, RegistrationAuthType: tc.provider,
+				})
+			}
+			w := httptest.NewRecorder()
+			manager.SendVerificationRequest(w, r)
+
+			if w.Code != tc.wantStatus || !strings.Contains(w.Body.String(), "Unable to send verification instructions.") {
+				t.Fatalf("response = %d %q, want verification failure with status %d", w.Code, w.Body.String(), tc.wantStatus)
+			}
+			if sender.calls != tc.wantCalls {
+				t.Errorf("delivery calls = %d, want %d", sender.calls, tc.wantCalls)
+			}
+			if !strings.Contains(logs.String(), tc.wantLog) {
+				t.Errorf("logs = %q, want %q", logs.String(), tc.wantLog)
+			}
+			if strings.Contains(w.Body.String()+logs.String(), "secret-token") {
+				t.Error("provider error leaked into the response or logs")
+			}
+		})
+	}
+}
 
 func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 	mux := http.NewServeMux()
@@ -20,6 +92,33 @@ func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 		if pattern != "/auth/login" {
 			t.Errorf("host %s: pattern = %q, want /auth/login", host, pattern)
 		}
+	}
+}
+
+func TestVerificationRouteMethods(t *testing.T) {
+	mux := http.NewServeMux()
+	manager := &AuthManager{Enabled: true}
+	manager.Routes(mux)
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions} {
+		t.Run(method, func(t *testing.T) {
+			r := httptest.NewRequest(method, "/auth/verify?token=test-token", nil)
+			_, pattern := mux.Handler(r)
+			// Go's GET patterns also match HEAD.
+			if method == http.MethodGet || method == http.MethodHead {
+				if pattern != "GET /auth/verify" {
+					t.Errorf("pattern = %q, want GET /auth/verify", pattern)
+				}
+				return
+			}
+			if pattern != "" {
+				t.Fatalf("unexpected verification handler for %s: %q", method, pattern)
+			}
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, r)
+			if w.Code != http.StatusMethodNotAllowed {
+				t.Errorf("status = %d, want 405", w.Code)
+			}
+		})
 	}
 }
 

@@ -42,6 +42,10 @@ Add abstractions and infrastructure for demonstrated needs. Follow the roadmap's
 
 ## Implementation
 
+Use blank lines to separate logical phases within a function, not every statement or call. Keep an operation and its error check together. Group closely related operations, such as creating a token and building its URL. Add space when the responsibility changes, such as moving from rendering to persistence and delivery.
+
+Keep short expressions on one line. Split long call chains across lines when the steps become easier to scan. Do not add blank lines merely because an `if` block ends.
+
 Do not add package-global mutable runtime state. Limit shared registration state to the module catalog.
 
 Return errors from initialization. Do not introduce new startup panics. Clean up partially acquired resources and close initialized modules in reverse dependency order. During shutdown, drain HTTP requests before closing services.

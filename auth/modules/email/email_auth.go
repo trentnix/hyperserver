@@ -3,11 +3,14 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -20,6 +23,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
@@ -33,6 +37,7 @@ type (
 		contentManager    *content_services.ContentManagerService
 		mailClient        *messaging.MailClient
 		verificationEmail *template.Template
+		resetEmail        *template.Template
 
 		loginButton    template.HTML
 		registerButton template.HTML
@@ -128,6 +133,7 @@ const (
 	emailResetPasswordFormTemplate  = "auth/modules/email/templates/html/partials/reset-password.html"
 	emailChangePasswordFormTemplate = "auth/modules/email/templates/html/partials/change-password.html"
 	emailVerificationTemplate       = "auth/modules/email/templates/email/verification.html"
+	emailResetTemplate              = "auth/modules/email/templates/email/reset.html"
 	emailLoginFormPartial           = "auth.partial.email.login.form"
 	emailRegisterFormPartial        = "auth.partial.email.register.form"
 	emailResetRequestFormPartial    = "auth.partial.email.reset.request.form"
@@ -172,6 +178,10 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	a.verificationEmail, err = template.ParseFiles(emailVerificationTemplate)
 	if err != nil {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("load verification email template %s: %w", emailVerificationTemplate, err))
+	}
+	a.resetEmail, err = template.ParseFiles(emailResetTemplate)
+	if err != nil {
+		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("load reset email template %s: %w", emailResetTemplate, err))
 	}
 
 	loginButtonTemplate := emailLoginButtonTemplateName
@@ -358,9 +368,12 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 			return false
 		}
 
-		err = a.sendRegistrationVerificationEmail(r, createdUser)
+		origin, err := util.BuildUrl(r, a.host, a.port, "", nil)
+		if err == nil {
+			err = a.SendVerificationEmail(r.Context(), createdUser, *origin)
+		}
 		if err != nil {
-			form.HandleFormError(w, r, register, registerForm, "Your account was created, but verification email delivery failed. Please login and request a new verification email.", err)
+			form.HandleFormError(w, r, register, registerForm, "Your account was created, but verification email delivery failed. Please login and request a new verification email.", errors.New("verification email delivery failed"))
 			return false
 		}
 	}
@@ -368,9 +381,10 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	return true
 }
 
-func (a *EmailAuthService) sendRegistrationVerificationEmail(r *http.Request, u *user.User) error {
+// SendVerificationEmail serves both registration and authenticated resend requests.
+func (a *EmailAuthService) SendVerificationEmail(ctx context.Context, u *user.User, origin url.URL) error {
 	if a.mailClient == nil {
-		return errors.New("mail client not configured")
+		return messaging.ErrMailUnavailable
 	}
 
 	if u == nil || u.ID == "" {
@@ -392,24 +406,58 @@ func (a *EmailAuthService) sendRegistrationVerificationEmail(r *http.Request, u 
 		return err
 	}
 
-	params := map[string]string{"token": verificationToken}
-	verificationURL, err := util.BuildUrl(r, a.host, a.port, verificationEndpoint, params)
-	if err != nil {
-		return err
-	}
+	verificationURL := url.URL{Scheme: origin.Scheme, Host: origin.Host, Path: verificationEndpoint}
+	verificationURL.RawQuery = url.Values{"token": {verificationToken}}.Encode()
 
-	var body bytes.Buffer
-	if err := a.verificationEmail.Execute(&body, struct{ Name, URL string }{
-		Name: a.config.App.Name, URL: verificationURL.String(),
-	}); err != nil {
+	body, err := a.renderAccountEmail(a.verificationEmail, verificationURL.String())
+	if err != nil {
 		return err
 	}
 
 	return a.mailClient.Compose().
 		To(u.Email).
 		Subject("Verify your account").
-		Body(body.String()).
-		Send(r.Context())
+		Body(body).
+		Send(ctx)
+}
+
+func (a *EmailAuthService) renderAccountEmail(t *template.Template, link string) (string, error) {
+	var body bytes.Buffer
+	if err := t.Execute(&body, struct{ Name, URL string }{
+		Name: a.config.App.Name, URL: link,
+	}); err != nil {
+		return "", err
+	}
+
+	return body.String(), nil
+}
+
+func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, expiration time.Duration, link url.URL) error {
+	if a.mailClient == nil {
+		return messaging.ErrMailUnavailable
+	}
+
+	token, err := user.NewAuthResetToken(u, []byte(a.config.Auth.JwtKey), expiration)
+	if err != nil {
+		return err
+	}
+	query := link.Query()
+	query.Set("token", token.Token)
+	link.RawQuery = query.Encode()
+
+	body, err := a.renderAccountEmail(a.resetEmail, link.String())
+	if err != nil {
+		return err
+	}
+
+	if err := token.Create(a.db); err != nil {
+		return err
+	}
+	return a.mailClient.Compose().
+		To(u.Email).
+		Subject("Reset your password").
+		Body(body).
+		Send(ctx)
 }
 
 // GetResetRequest serves the password reset request page with the resetPasswordRequestForm form
@@ -436,17 +484,13 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// ResetRequest processes a request to reset the password for the email specified in the
-// submitted form. A successful result will notify the user of how to reset their password
-// by creating a reset token. This token will be in a subsequent request to authenticate
-// the reset request.
+// ResetRequest uses the same acknowledgment for eligible, unknown, and failed requests.
+// The acknowledgment confirms receipt of the request, not delivery of an email.
 func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool {
-	// use a generic error for security reasons
-	genericResetErrMsg := "There was an error trying to reset your password"
-
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetRequestFormPartial
 	reset.AddContent(emailResetRequestFormTemplate)
+
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
 
@@ -462,50 +506,29 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 
-	//  validate user isn't already registered
 	u, err := user.GetUserByEmail(a.db, resetRequestForm.Email)
-	if err != nil && err != sql.ErrNoRows {
-		// error getting the user
-		form.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
-		return false
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
 	}
-
-	if u == nil {
-		// the specified user does not exist
-		form.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, nil)
-		return false
+	if err == nil && u != nil && u.RegistrationAuthType == AuthTypeEmail {
+		var link *url.URL
+		link, err = util.BuildUrl(r, a.host, a.port, emailResetPath, nil)
+		if err == nil {
+			err = a.sendResetEmail(r.Context(), u, tokenExpiration, *link)
+		}
 	}
-
-	// the specified user exists - generate a password token and save it to the database
-	token, err := user.NewAuthResetToken(u, []byte(a.config.Auth.JwtKey), tokenExpiration)
+	delivered := err == nil && u != nil && u.RegistrationAuthType == AuthTypeEmail
 	if err != nil {
-		form.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
-		return false
-	}
-
-	// add hashed token to the database (with user.id and expiration)
-	err = token.Create(a.db)
-	if err != nil {
-		form.HandleFormError(w, r, reset, resetRequestForm, genericResetErrMsg, err)
-		return false
+		// Provider errors can contain the token or email body. Log only the failure.
+		if l := logger.Get(r.Context()); l != nil {
+			(*l).Error("password reset instructions could not be sent")
+		} else {
+			log.Print("password reset instructions could not be sent")
+		}
 	}
 
 	resetRequestForm.Email = ""
-
-	params := map[string]string{"token": token.Token}
-	resetUrl, err := util.BuildUrl(r, a.host, a.port, emailResetPath, params)
-	if err != nil {
-		a.contentManager.HandleError(w, r,
-			genericResetErrMsg,
-			form.NewErrActionNotSpecified(fmt.Errorf("error creating the reset path"), resetRequestForm),
-			http.StatusInternalServerError)
-		return false
-	}
-
-	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to reset your password.`, resetUrl.String())
-	resetRequestForm.AddSuccessMessage(successMessage)
-
-	resetRequestForm.ActionUrl = emailResetRequestPath
+	resetRequestForm.AddMessage("Password reset request received. If the account is eligible, check your email for instructions. If no email arrives, try again later.")
 	reset.Data = resetRequestForm
 	err = reset.Render(w, r)
 	if err != nil {
@@ -518,7 +541,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 
-	return true
+	return delivered
 }
 
 // GetReset serves the password reset page with the resetPasswordForm form

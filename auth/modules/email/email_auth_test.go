@@ -13,12 +13,14 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/content"
 )
 
-func TestInitRequiresVerificationEmailTemplate(t *testing.T) {
+func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 	for _, tc := range []struct {
-		name, template string
+		name, path, template string
 	}{
-		{name: "missing"},
-		{name: "invalid", template: "{{if}}"},
+		{name: "missing verification", path: emailVerificationTemplate},
+		{name: "invalid verification", path: emailVerificationTemplate, template: "{{if}}"},
+		{name: "missing reset", path: emailResetTemplate},
+		{name: "invalid reset", path: emailResetTemplate, template: "{{if}}"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			originalDirectory, err := os.Getwd()
@@ -38,9 +40,13 @@ func TestInitRequiresVerificationEmailTemplate(t *testing.T) {
 			files := map[string]string{
 				emailLoginButtonTemplateName:    "Login",
 				emailRegisterButtonTemplateName: "Register",
+				emailVerificationTemplate:       "Verify {{.Name}}: {{.URL}}",
+				emailResetTemplate:              "Reset {{.Name}}: {{.URL}}",
 			}
 			if tc.template != "" {
-				files[emailVerificationTemplate] = tc.template
+				files[tc.path] = tc.template
+			} else {
+				delete(files, tc.path)
 			}
 			for path, body := range files {
 				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -63,8 +69,9 @@ func TestInitRequiresVerificationEmailTemplate(t *testing.T) {
 			service := &EmailAuthService{}
 			initErr := service.Init(app)
 			cause := errors.Unwrap(initErr)
-			if cause == nil || !strings.Contains(cause.Error(), "verification.html") {
-				t.Fatalf("Init error = %v, cause = %v, want verification template failure", initErr, cause)
+			want := filepath.Base(tc.path)
+			if cause == nil || !strings.Contains(cause.Error(), want) {
+				t.Fatalf("Init error = %v, cause = %v, want %s failure", initErr, cause, want)
 			}
 		})
 	}

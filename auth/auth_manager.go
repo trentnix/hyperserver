@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"time"
 
@@ -32,10 +33,8 @@ type (
 		db             *sqlx.DB
 		contentManager *content_services.ContentManagerService
 
-		verificationJwtKey          string
-		verificationTokenExpiration time.Duration
-		verificationEndpoint        string
-		resetTokenExpiration        time.Duration
+		verificationJwtKey   string
+		resetTokenExpiration time.Duration
 
 		resetRequiresNewCredentials  bool
 		registerRequiresVerification bool
@@ -53,8 +52,7 @@ const (
 	authLoginDefaultPartial       = "auth.page.login.default"
 	authRegisterDefaultPartial    = "auth.page.register.default"
 
-	defaultVerificationEndpoint = "/auth/verify"
-	authEndpoint                = "/auth/login"
+	authEndpoint = "/auth/login"
 )
 
 // init registers the AuthManager handler with the application
@@ -75,15 +73,9 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 
 	a.verificationJwtKey = s.Config.Auth.JwtKey
 	a.resetTokenExpiration = s.Config.Auth.ResetTokenExpiration
-	a.verificationTokenExpiration = s.Config.Auth.VerificationTokenExpiration
 
 	a.resetRequiresNewCredentials = s.Config.Auth.ResetRequiresNewCredentials
 	a.registerRequiresVerification = s.Config.Auth.RegisterRequiresVerification
-
-	a.verificationEndpoint = s.Config.Auth.VerificationEndpoint
-	if a.verificationEndpoint == "" {
-		a.verificationEndpoint = defaultVerificationEndpoint
-	}
 
 	return nil
 }
@@ -103,8 +95,8 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Register)))
 
 		// validate a registered user
-		mux.Handle("/auth/verify", http.HandlerFunc(a.Verify))
-		mux.Handle("/auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
+		mux.Handle("GET /auth/verify", http.HandlerFunc(a.Verify))
+		mux.Handle("POST /auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
 
 		// reset credentials
 		mux.Handle("GET /auth/reset/request/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetResetRequest)))
@@ -579,55 +571,48 @@ func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 // SendVerificationRequest processes a user verification request by sending verification
 // instructions to the user
 func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Request) {
-	errSendVerificationRequest := errors.New("unable to send the user verification request")
-
-	if a.verificationJwtKey == "" {
-		// no verification key is set
-		a.contentManager.HandleError(w, r, "No JWT key specified", user.NewErrJwtKeyNotSet(fmt.Errorf("unable to process send verification request")), http.StatusUnauthorized)
-		return
-	}
-
-	// retrieve the authenticated user
 	authUser, err := user.GetAuthenticatedUser(r, a.db)
-	if err != nil || authUser == nil {
-		// if no user is authenticated, deny access
-		a.contentManager.HandleError(w, r, "Authentication required", user.NewErrUserNotFound(errSendVerificationRequest), http.StatusUnauthorized)
+	if err != nil {
+		logVerificationFailure(r, "verification account lookup failed")
+		a.contentManager.HandleError(w, r, "Unable to send verification instructions. Please try again later.", nil, http.StatusInternalServerError)
+		return
+	}
+	if authUser == nil {
+		a.contentManager.HandleError(w, r, "Authentication required", nil, http.StatusUnauthorized)
 		return
 	}
 
-	if authUser.Verified {
-		// the user is authenticated and verified, redirect to main
-		err := messages.AddSuccessNotification(w, r, "This user has already been verified.")
-		if err != nil {
-			logger.LogRequestError(r, err)
+	if authUser.NeedsVerification() {
+		authService := getAuthService(authUser.RegistrationAuthType)
+		var sender VerificationEmailSender
+		if authService != nil {
+			sender, _ = (*authService).(VerificationEmailSender)
 		}
-
-		util.RedirectToURL(w, r, a.contentManager.HomeURL)
-		return
+		if sender == nil {
+			logVerificationFailure(r, "verification email provider is unavailable")
+			a.contentManager.HandleError(w, r, "Unable to send verification instructions. Please try again later.", nil, http.StatusServiceUnavailable)
+			return
+		}
+		origin, err := util.BuildUrl(r, a.contentManager.Host, a.contentManager.Port, "", nil)
+		if err == nil {
+			err = sender.SendVerificationEmail(r.Context(), authUser, *origin)
+		}
+		if err != nil {
+			// Provider errors can include tokens or message bodies. Do not expose them.
+			logVerificationFailure(r, "verification email delivery failed")
+			a.contentManager.HandleError(w, r, "Unable to send verification instructions. Please try again later.", nil, http.StatusServiceUnavailable)
+			return
+		}
 	}
+	a.contentManager.HandleMessage(w, r, "If your account needs verification, check your email for instructions.")
+}
 
-	verificationToken, err := user.NewVerificationToken(authUser.ID, []byte(a.verificationJwtKey), a.verificationTokenExpiration)
-	if err != nil {
-		// there was an error sending verification instructions
-		a.contentManager.HandleError(w, r, "Unable to send the registration verification", user.NewErrSendVerification(err), http.StatusInternalServerError)
-		return
+func logVerificationFailure(r *http.Request, message string) {
+	if logger.Get(r.Context()) != nil {
+		logger.LogRequestError(r, errors.New(message))
+	} else {
+		log.Print(message)
 	}
-
-	host := a.contentManager.Host
-	port := a.contentManager.Port
-
-	params := map[string]string{"token": verificationToken}
-	validationUrl, err := util.BuildUrl(r, host, port, a.verificationEndpoint, params)
-	if err != nil {
-		a.contentManager.HandleError(w, r,
-			"Unable to get your user verification instructions",
-			fmt.Errorf("unable to build a verification url: %w", err),
-			http.StatusInternalServerError)
-		return
-	}
-
-	successMessage := fmt.Sprintf(`<a href="%s">Click here</a> to verify your user account.`, validationUrl.String())
-	a.contentManager.HandleMessage(w, r, successMessage)
 }
 
 // Verify processes an attempt to verify a registered account

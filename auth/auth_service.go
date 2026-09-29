@@ -3,8 +3,10 @@
 package auth
 
 import (
+	"context"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -16,6 +18,13 @@ import (
 // authServices is the array of AuthService instances that is used when an AuthService
 // implementation self-registers via init()
 var authServices []AuthService
+
+// VerificationEmailSender is an optional capability of an authentication provider.
+// SendVerificationEmail sends instructions to the account's stored email address.
+// origin supplies the scheme and host for the verification link.
+type VerificationEmailSender interface {
+	SendVerificationEmail(context.Context, *user.User, url.URL) error
+}
 
 // AuthService defines an interface for an authorization service that can be implemented
 // and used in the application
