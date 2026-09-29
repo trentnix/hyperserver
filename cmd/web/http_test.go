@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -36,7 +37,7 @@ import (
 // initialization currently use package globals. Each scenario owns its database,
 // configuration, mail fake, and browser cookies. No network listener is started.
 // Remove process isolation when those runtime globals become application-owned.
-func runHTTPScenario(t *testing.T, scenario func(*httpHarness)) {
+func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
 	if os.Getenv("HS_HTTP_TEST_CASE") == t.Name() {
 		// These overrides would fail if the harness accidentally loaded runtime
@@ -44,7 +45,7 @@ func runHTTPScenario(t *testing.T, scenario func(*httpHarness)) {
 		t.Setenv("HYPERSERVER_DATABASE_CONNECTION", filepath.Join(t.TempDir(), "missing", "developer.db"))
 		t.Setenv("HYPERSERVER_AUTH_JWTKEY", "")
 		t.Setenv("HYPERSERVER_HTTP_SESSION_JWTKEY", "")
-		scenario(newHTTPHarness(t))
+		scenario(newHTTPHarness(t, configure...))
 		if !t.Failed() {
 			fmt.Println("HTTP scenario passed")
 		}
@@ -130,7 +131,7 @@ type httpHarness struct {
 	logs    *capturedLogs
 }
 
-func newHTTPHarness(t *testing.T) *httpHarness {
+func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -160,6 +161,9 @@ func newHTTPHarness(t *testing.T) *httpHarness {
 	cfg.HTTP.Session.CookieAge = time.Hour
 	cfg.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}}
 	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
+	for _, change := range configure {
+		change(cfg)
+	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -479,6 +483,65 @@ func (h *httpHarness) assertNoTokenExposure(t *testing.T, w *httptest.ResponseRe
 	}
 	if token != "" && strings.Contains(h.logs.String(), token) {
 		t.Error("logs exposed an account token")
+	}
+}
+
+func TestHTTPAccountLinkOrigins(t *testing.T) {
+	for _, tc := range []struct {
+		name, origin, wantScheme, wantHost string
+		secure                             bool
+		port                               uint16
+	}{
+		{name: "direct HTTP", port: 80, wantScheme: "http", wantHost: "127.0.0.1"},
+		{name: "direct HTTPS", secure: true, port: 443, wantScheme: "https", wantHost: "127.0.0.1"},
+		{name: "HTTPS proxy", origin: "https://accounts.example", port: 8080, wantScheme: "https", wantHost: "accounts.example"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runHTTPScenario(t, func(h *httpHarness) {
+				next := h.handler
+				h.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					r.Host = "attacker.example"
+					r.Header.Set("X-Forwarded-Proto", "https://attacker.example/?leak=")
+					r.Header.Set("X-Forwarded-Host", "attacker.example")
+					r.Header.Set("Forwarded", "host=attacker.example;proto=http")
+					if tc.secure {
+						r.TLS = &tls.ConnectionState{}
+					}
+					next.ServeHTTP(w, r)
+				})
+				checkLink := func(index int, path string) *url.URL {
+					t.Helper()
+					messages := h.mail.snapshot()
+					if len(messages) != index+1 {
+						t.Fatalf("mail attempts = %d, want %d", len(messages), index+1)
+					}
+					match := regexp.MustCompile(`href="([^"]+)"`).FindStringSubmatch(messages[index].Body)
+					if len(match) != 2 {
+						t.Fatal("email has no link")
+					}
+					link, err := url.Parse(html.UnescapeString(match[1]))
+					if err != nil || link.Scheme != tc.wantScheme || link.Host != tc.wantHost || link.Path != path || link.Query().Get("token") == "" {
+						t.Fatalf("unexpected account link %v, error %v", link, err)
+					}
+					return link
+				}
+
+				h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+				checkLink(0, "/auth/verify")
+				h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {"person@example.invalid"}}, false)
+				resetLink := checkLink(1, "/auth/reset/email")
+				w := h.request(http.MethodGet, resetLink.RequestURI(), nil, false)
+				if !strings.Contains(w.Body.String(), `action="`+html.EscapeString(resetLink.String())+`"`) {
+					t.Error("reset form action did not preserve the account link's origin and token")
+				}
+				h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
+				h.request(http.MethodPost, "/auth/request/verify", nil, true)
+				checkLink(2, "/auth/verify")
+			}, func(cfg *config.Config) {
+				cfg.HTTP.Port = tc.port
+				cfg.HTTP.PublicOrigin = tc.origin
+			})
+		})
 	}
 }
 

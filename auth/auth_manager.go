@@ -13,6 +13,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/auth/password"
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
@@ -31,6 +32,7 @@ type (
 		Enabled bool
 
 		db             *sqlx.DB
+		httpConfig     config.HTTPConfig
 		contentManager *content_services.ContentManagerService
 
 		verificationJwtKey   string
@@ -64,6 +66,7 @@ func init() {
 func (a *AuthManager) Init(s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
 	a.db = s.Database
+	a.httpConfig = s.Config.HTTP
 
 	if s.ContentManager == nil {
 		return errors.New("Content Manager not configured")
@@ -593,7 +596,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 			a.contentManager.HandleError(w, r, "Unable to send verification instructions. Please try again later.", nil, http.StatusServiceUnavailable)
 			return
 		}
-		origin, err := util.BuildUrl(r, a.contentManager.Host, a.contentManager.Port, "", nil)
+		origin, err := util.BuildPublicURL(r, a.httpConfig, "", nil)
 		if err == nil {
 			err = sender.SendVerificationEmail(r.Context(), authUser, *origin)
 		}

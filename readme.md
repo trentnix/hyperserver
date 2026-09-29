@@ -38,7 +38,7 @@ The [architecture decisions](docs/decisions/readme.md) record concrete choices a
 
 ## Exploring the code
 
-Start with [cmd/web](cmd/web) for application composition, [modules/site](modules/site) for the reference application, and [pkg](pkg) for framework components and services. The [configuration template](config/config-template.yaml) describes the current settings but is not a production configuration.
+Start with [cmd/web](cmd/web) for application composition, [modules/site](modules/site) for the reference application, and [pkg](pkg) for framework components and services. The [configuration template](config-template.yaml) describes the current settings but is not a production configuration.
 
 ### Development routes
 
@@ -58,7 +58,17 @@ The `/auth/...` routes remain controlled by `auth.enabled`. The reference applic
 
 Reset requests and verification resend email links to the account's stored address. Their HTTP acknowledgments do not include usable links or tokens. Delivery runs during the request using the configured SMTP timeout. Reset acknowledgments confirm receipt of the request, not successful delivery. Delivery failures are logged without including tokens or email bodies.
 
-Trusted public-origin configuration, recovery response timing, and atomic single-use token redemption remain outstanding. The reference application is not ready for public exposure.
+### Public links and the server address
+
+`http.hostname` serves two roles: the listener uses it, and link generation uses it as a fallback. `http.publicOrigin` overrides the address used for public links without changing where the server listens. For example, a proxy can expose `https://example.com` while HyperServer listens on `127.0.0.1:8080`.
+
+Set `http.publicOrigin` to `https://example.com` in that deployment. Use `HYPERSERVER_HTTP_PUBLICORIGIN` for an environment override. Paths, credentials, queries, and fragments are not allowed. This setting does not configure TLS listeners, cookie security, or trusted proxies.
+
+For direct connections, `publicOrigin` can be left empty. Absolute links then use `http.hostname`, `http.port`, and the incoming connection's TLS state. Request host and forwarding headers do not control those links.
+
+Use `util.BuildPublicURL(r, cfg.HTTP, path, params)` for absolute links. Account emails and reset-form actions use this shared helper. Other modules can use it without depending on email or authentication. Relative links need no public origin.
+
+Recovery response timing and atomic single-use token redemption remain outstanding. The reference application is not ready for public exposure.
 
 ### Checks
 

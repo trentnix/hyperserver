@@ -21,7 +21,8 @@ var authServices []AuthService
 
 // VerificationEmailSender is an optional capability of an authentication provider.
 // SendVerificationEmail sends instructions to the account's stored email address.
-// origin supplies the scheme and host for the verification link.
+// origin supplies the scheme and host from application settings and connection
+// metadata, not request headers. Callers resolve the application's public origin.
 type VerificationEmailSender interface {
 	SendVerificationEmail(context.Context, *user.User, url.URL) error
 }

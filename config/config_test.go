@@ -87,6 +87,30 @@ func TestEnvironmentProviderOptions(t *testing.T) {
 	}
 }
 
+func TestPublicOriginConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml, override, want string
+	}{
+		{name: "file", yaml: "http:\n  publicOrigin: https://file.example\n", want: "https://file.example"},
+		{name: "environment only", yaml: "{}", override: "https://env.example", want: "https://env.example"},
+		{name: "environment override", yaml: "http:\n  publicOrigin: https://file.example\n", override: "https://env.example", want: "https://env.example"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanConfigEnvironment(t)
+			if tc.override != "" {
+				t.Setenv("HYPERSERVER_HTTP_PUBLICORIGIN", tc.override)
+			}
+			cfg, err := loadTestConfig(t, tc.yaml)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.HTTP.PublicOrigin; got != tc.want {
+				t.Fatalf("publicOrigin = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestMailTimeoutConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name, yaml, override string
@@ -215,7 +239,7 @@ func TestSharedConfigValidation(t *testing.T) {
 
 func TestTemplateSessionSigningKey(t *testing.T) {
 	cleanConfigEnvironment(t)
-	template, err := os.ReadFile("config-template.yaml")
+	template, err := os.ReadFile("../config-template.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

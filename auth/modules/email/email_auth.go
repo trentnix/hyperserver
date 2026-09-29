@@ -41,8 +41,6 @@ type (
 
 		loginButton    template.HTML
 		registerButton template.HTML
-
-		host, port string
 	}
 
 	// LoginForm defines the fields used when logging in via email/password
@@ -196,11 +194,7 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", registerButtonTemplate))
 	}
 
-	if a.host = s.ContentManager.Host; a.host == "" {
-		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("application hostname not configured"))
-	}
-
-	if a.port = s.ContentManager.Port; a.port == "0" {
+	if a.config.HTTP.PublicOrigin == "" && a.config.HTTP.Port == 0 {
 		// validating against 0 because the "zero" (unset) value for Port is 0
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("application port not configured"))
 	}
@@ -368,7 +362,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 			return false
 		}
 
-		origin, err := util.BuildUrl(r, a.host, a.port, "", nil)
+		origin, err := util.BuildPublicURL(r, a.config.HTTP, "", nil)
 		if err == nil {
 			err = a.SendVerificationEmail(r.Context(), createdUser, *origin)
 		}
@@ -512,7 +506,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 	if err == nil && u != nil && u.RegistrationAuthType == AuthTypeEmail {
 		var link *url.URL
-		link, err = util.BuildUrl(r, a.host, a.port, emailResetPath, nil)
+		link, err = util.BuildPublicURL(r, a.config.HTTP, emailResetPath, nil)
 		if err == nil {
 			err = a.sendResetEmail(r.Context(), u, tokenExpiration, *link)
 		}
@@ -556,7 +550,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	resetForm := &ResetPasswordForm{}
 
 	params := map[string]string{"token": token}
-	actionUrl, buildUrlErr := util.BuildUrl(r, a.host, a.port, emailResetPath, params)
+	actionUrl, buildUrlErr := util.BuildPublicURL(r, a.config.HTTP, emailResetPath, params)
 	if buildUrlErr != nil {
 		a.contentManager.HandleError(w, r,
 			resetErrMsg,
@@ -610,7 +604,7 @@ func (a *EmailAuthService) Reset(
 	}
 
 	params := map[string]string{"token": token}
-	actionUrl, buildUrlErr := util.BuildUrl(r, a.host, a.port, emailResetPath, params)
+	actionUrl, buildUrlErr := util.BuildPublicURL(r, a.config.HTTP, emailResetPath, params)
 	if buildUrlErr != nil {
 		a.contentManager.HandleError(w, r,
 			"Unable to display the email authorization service reset request form",

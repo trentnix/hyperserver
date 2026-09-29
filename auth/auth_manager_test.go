@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -47,7 +48,7 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 			log.SetOutput(&logs)
 			sender := new(verificationTestAuthService)
 			authServices = []AuthService{sender}
-			manager := &AuthManager{contentManager: &content_services.ContentManagerService{
+			manager := &AuthManager{httpConfig: config.HTTPConfig{Hostname: "localhost", Port: 8080}, contentManager: &content_services.ContentManagerService{
 				Host: "localhost", Port: "8080",
 				HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
 					if err != nil {

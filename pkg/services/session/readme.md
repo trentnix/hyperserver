@@ -8,7 +8,7 @@ This doesn't make my approach is superior. `gorilla/sessions` is more flexible, 
 
 ## Configuring Session Management and Session Storage
 
-To configure session management, refer to the `config-template.yaml` file in the `/config` folder or review the snippet below:
+To configure session management, refer to [config-template.yaml](../../../config-template.yaml) at the repository root or review the snippet below:
 
 ```yaml
 session:

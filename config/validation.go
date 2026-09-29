@@ -8,6 +8,9 @@ import (
 
 // Validate checks shared settings. Provider packages validate their own options.
 func (c Config) Validate() error {
+	if _, err := ParsePublicOrigin(c.HTTP.PublicOrigin); err != nil {
+		return err
+	}
 	if c.Auth.Enabled {
 		if err := ValidateSigningKey("auth.jwtKey", c.Auth.JwtKey); err != nil {
 			return err
