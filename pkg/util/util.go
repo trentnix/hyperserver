@@ -58,6 +58,9 @@ func BuildPublicURL(r *http.Request, cfg config.HTTPConfig, path string, params 
 		return nil, err
 	}
 	if origin == nil {
+		if cfg.Port == 0 {
+			return nil, errors.New("http.port must be nonzero to build a link without http.publicOrigin")
+		}
 		if r == nil {
 			return nil, errors.New("request cannot be nil")
 		}

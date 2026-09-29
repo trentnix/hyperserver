@@ -91,3 +91,20 @@ func TestBuildPublicURLFallbackRequiresRequest(t *testing.T) {
 		t.Error("accepted a missing request")
 	}
 }
+
+func TestBuildPublicURLFallbackRequiresPort(t *testing.T) {
+	cfg := config.HTTPConfig{Hostname: "localhost"}
+	// A port-zero listener is valid, but it cannot supply an absolute link's port.
+	if err := (config.Config{HTTP: cfg}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("GET", "http://localhost:8080/", nil)
+	if link, err := BuildPublicURL(r, cfg, "/reset", nil); err == nil || link != nil {
+		t.Fatalf("missing port: link = %v, error = %v", link, err)
+	}
+	cfg.PublicOrigin = "https://example.com"
+	link, err := BuildPublicURL(r, cfg, "/reset", nil)
+	if err != nil || link.String() != "https://example.com/reset" {
+		t.Fatalf("configured origin with port-zero listener: link = %v, error = %v", link, err)
+	}
+}

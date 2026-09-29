@@ -194,11 +194,6 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", registerButtonTemplate))
 	}
 
-	if a.config.HTTP.PublicOrigin == "" && a.config.HTTP.Port == 0 {
-		// validating against 0 because the "zero" (unset) value for Port is 0
-		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("application port not configured"))
-	}
-
 	return nil
 }
 
@@ -548,18 +543,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	}
 
 	resetForm := &ResetPasswordForm{}
-
-	params := map[string]string{"token": token}
-	actionUrl, buildUrlErr := util.BuildPublicURL(r, a.config.HTTP, emailResetPath, params)
-	if buildUrlErr != nil {
-		a.contentManager.HandleError(w, r,
-			resetErrMsg,
-			form.NewErrActionNotSpecified(nil, resetForm),
-			http.StatusInternalServerError)
-		return
-	}
-
-	resetForm.ActionUrl = actionUrl.String()
+	resetForm.ActionUrl = emailResetPath + "?" + url.Values{"token": {token}}.Encode()
 
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetPasswordFormPartial
@@ -603,17 +587,7 @@ func (a *EmailAuthService) Reset(
 		return false
 	}
 
-	params := map[string]string{"token": token}
-	actionUrl, buildUrlErr := util.BuildPublicURL(r, a.config.HTTP, emailResetPath, params)
-	if buildUrlErr != nil {
-		a.contentManager.HandleError(w, r,
-			"Unable to display the email authorization service reset request form",
-			form.NewErrActionNotSpecified(buildUrlErr, resetForm),
-			http.StatusInternalServerError)
-		return false
-	}
-
-	resetForm.ActionUrl = actionUrl.String()
+	resetForm.ActionUrl = emailResetPath + "?" + url.Values{"token": {token}}.Encode()
 
 	errMessage, err := form.ParseAndValidate(r, resetForm)
 	if err != nil {

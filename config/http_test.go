@@ -6,7 +6,7 @@ import (
 )
 
 func TestPublicOriginValidation(t *testing.T) {
-	for _, value := range []string{"https://accounts.example", "http://localhost:8080/", "https://[::1]:8443", ""} {
+	for _, value := range []string{"https://accounts.example", "http://localhost:8080/", "https://[::1]:8443", "https://[::1]", "https://[2001:db8::1]:443", ""} {
 		if err := (Config{HTTP: HTTPConfig{PublicOrigin: value}}).Validate(); err != nil {
 			t.Errorf("valid origin %q rejected: %v", value, err)
 		}
@@ -19,6 +19,22 @@ func TestPublicOriginValidation(t *testing.T) {
 		}
 		if err != nil && strings.Contains(err.Error(), "secret") {
 			t.Error("validation error disclosed configured credentials")
+		}
+	}
+}
+
+func TestPublicOriginRejectsMalformedHosts(t *testing.T) {
+	for _, value := range []string{
+		"https://example.com:80:90",
+		"https://::1",
+		"https://2001:db8::1",
+		"https://2001:db8::1:443",
+		"https://[not-an-ip]",
+		"https://[127.0.0.1]",
+		"https://[::1]:80:90",
+	} {
+		if err := (Config{HTTP: HTTPConfig{PublicOrigin: value}}).Validate(); err == nil {
+			t.Errorf("malformed origin %q accepted", value)
 		}
 	}
 }

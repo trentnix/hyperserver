@@ -530,9 +530,24 @@ func TestHTTPAccountLinkOrigins(t *testing.T) {
 				checkLink(0, "/auth/verify")
 				h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {"person@example.invalid"}}, false)
 				resetLink := checkLink(1, "/auth/reset/email")
-				w := h.request(http.MethodGet, resetLink.RequestURI(), nil, false)
-				if !strings.Contains(w.Body.String(), `action="`+html.EscapeString(resetLink.String())+`"`) {
-					t.Error("reset form action did not preserve the account link's origin and token")
+				checkResetAction := func(w *httptest.ResponseRecorder) {
+					t.Helper()
+					for _, attribute := range []string{"action", "hx-post"} {
+						if !strings.Contains(w.Body.String(), attribute+`="`+html.EscapeString(resetLink.RequestURI())+`"`) {
+							t.Errorf("%s must use a relative reset URL with the token", attribute)
+						}
+					}
+				}
+				for _, htmx := range []bool{false, true} {
+					w := h.request(http.MethodGet, resetLink.RequestURI(), nil, htmx)
+					checkResetAction(w)
+					w = h.request(http.MethodPost, resetLink.RequestURI(), url.Values{
+						"password": {"NewPassword1!"}, "passwordMatch": {"DifferentPassword1!"},
+					}, htmx)
+					if !strings.Contains(w.Body.String(), "Passwords do not match.") {
+						t.Fatal("invalid reset did not redisplay the form")
+					}
+					checkResetAction(w)
 				}
 				h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 				h.request(http.MethodPost, "/auth/request/verify", nil, true)

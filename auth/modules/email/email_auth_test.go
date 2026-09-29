@@ -64,7 +64,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 				}},
 				// Init requires a database reference but does not access it.
 				Database:       &sqlx.DB{},
-				ContentManager: &content.ContentManagerService{Host: "localhost", Port: "8080"},
+				ContentManager: &content.ContentManagerService{},
 			}
 			service := &EmailAuthService{}
 			initErr := service.Init(app)

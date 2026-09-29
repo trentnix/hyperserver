@@ -1,12 +1,7 @@
 // errors.go defines custom errors for the form package
 package form
 
-import (
-	"fmt"
-	"reflect"
-
-	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
-)
+import hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 
 type BaseError = hs_errors.BaseError
 
@@ -37,22 +32,6 @@ func NewErrFormComponentInterfaceNotImplemented(err error) *ErrFormComponentInte
 		BaseError: &BaseError{
 			Err:     err,
 			Message: "the specified form does not implement the FormComponent interface",
-		},
-	}
-}
-
-// ErrActionNotSpecified indicates the Form's ActionUrl is empty and should be set
-type ErrActionNotSpecified struct {
-	*BaseError
-}
-
-// NewErrActionNotSpecified creates an instance of ErrActionNotSpecified
-func NewErrActionNotSpecified(err error, f FormComponent) *ErrActionNotSpecified {
-	errorMessage := fmt.Sprintf("the actionUrl for the %s form is not set", reflect.TypeOf(f))
-	return &ErrActionNotSpecified{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: errorMessage,
 		},
 	}
 }

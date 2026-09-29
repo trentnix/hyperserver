@@ -66,7 +66,7 @@ Set `http.publicOrigin` to `https://example.com` in that deployment. Use `HYPERS
 
 For direct connections, `publicOrigin` can be left empty. Absolute links then use `http.hostname`, `http.port`, and the incoming connection's TLS state. Request host and forwarding headers do not control those links.
 
-Use `util.BuildPublicURL(r, cfg.HTTP, path, params)` for absolute links. Account emails and reset-form actions use this shared helper. Other modules can use it without depending on email or authentication. Relative links need no public origin.
+Use `util.BuildPublicURL(r, cfg.HTTP, path, params)` for absolute links, including account emails. Without a public origin, the helper requires a nonzero `http.port`. Other modules can use it without depending on email or authentication. Reset forms use relative actions and stay on the current origin.
 
 Recovery response timing and atomic single-use token redemption remain outstanding. The reference application is not ready for public exposure.
 

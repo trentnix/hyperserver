@@ -4,7 +4,6 @@ package content
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/types"
@@ -44,11 +43,6 @@ type (
 		// default HTML page title
 		AppTitle string
 
-		// host name
-		Host string
-		// port the application handlers are listening on
-		Port string
-
 		// specifies whether notifications should be rendered when rendering content
 		RenderNotifications bool
 	}
@@ -64,9 +58,6 @@ const (
 	DefaultAppTitle = "HyperServer"
 
 	HomeDefault = "/"
-
-	defaultHost = "localhost"
-	defaultPort = "80"
 )
 
 // NewContentManager returns a (non-Singleton) instance of a ContentManagerService
@@ -81,9 +72,6 @@ func NewContentManager() *ContentManagerService {
 	cm.AppName = DefaultAppName
 	cm.AppTitle = DefaultAppTitle
 
-	cm.Host = defaultHost
-	cm.Port = defaultPort
-
 	// default value
 	cm.RenderNotifications = false
 
@@ -96,12 +84,6 @@ func (c *ContentManagerService) Configure(cfg *config.Config) {
 	if cfg.App.Name != "" {
 		c.AppName = cfg.App.Name
 	}
-
-	if cfg.HTTP.Hostname != "" {
-		c.Host = cfg.HTTP.Hostname
-	}
-
-	c.Port = strconv.Itoa(int(cfg.HTTP.Port))
 
 	c.RenderNotifications = cfg.App.RenderNotifications
 }
