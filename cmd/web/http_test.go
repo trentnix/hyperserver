@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -124,6 +123,7 @@ func (l *capturedLogs) String() string {
 }
 
 type httpHarness struct {
+	baseURL string
 	app     *server.ApplicationServer
 	handler http.Handler
 	mail    *fakeMailSender
@@ -151,6 +151,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 		HTTP:     config.HTTPConfig{Hostname: "127.0.0.1", Port: 8080},
 		Auth: config.AuthConfig{
 			Enabled: true, JwtKey: "http-test-only-auth-signing-key",
+			RegistrationEnabled:          true,
 			RegisterRequiresVerification: true,
 			VerificationTokenExpiration:  time.Hour, ResetTokenExpiration: time.Hour,
 			Services: map[string]map[string]string{"email": {"enabled": "true"}},
@@ -208,7 +209,8 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 		t.Fatal(err)
 	}
 	return &httpHarness{
-		app: app, mail: mail, cookies: jar, logs: logs,
+		baseURL: "http://127.0.0.1:8080",
+		app:     app, mail: mail, cookies: jar, logs: logs,
 		handler: middleware.ChainMiddleware(app.Web, middleware.LoggerMiddleware(l), middleware.LoadSessionManagement(db, app.SessionManager)),
 	}
 }
@@ -216,7 +218,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 // request preserves cookies without following redirects. Tests inspect the
 // response before deciding which request comes next.
 func (h *httpHarness) request(method, path string, form url.Values, htmx bool) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(method, "http://127.0.0.1:8080"+path, strings.NewReader(form.Encode()))
+	r := httptest.NewRequest(method, h.baseURL+path, strings.NewReader(form.Encode()))
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	r = r.WithContext(ctx)
@@ -235,6 +237,37 @@ func (h *httpHarness) request(method, path string, form url.Values, htmx bool) *
 	h.cookies.SetCookies(r.URL, response.Cookies())
 	response.Body.Close()
 	return w
+}
+
+func TestHTTPHarnessSecureCookies(t *testing.T) {
+	for _, scheme := range []string{"http", "https"} {
+		t.Run(scheme, func(t *testing.T) {
+			jar, err := cookiejar.New(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			h := &httpHarness{baseURL: scheme + "://test.example", cookies: jar}
+			h.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Scheme != scheme || (r.TLS != nil) != (scheme == "https") {
+					t.Error("request URL and TLS state do not match the test origin")
+				}
+				if r.URL.Path == "/set" {
+					http.SetCookie(w, &http.Cookie{Name: "session", Value: "test", Path: "/", Secure: true})
+					return
+				}
+				cookie, err := r.Cookie("session")
+				if scheme == "https" {
+					if err != nil || cookie.Value != "test" {
+						t.Error("HTTPS request lost the secure session cookie")
+					}
+				} else if !errors.Is(err, http.ErrNoCookie) {
+					t.Error("HTTP request sent a secure session cookie")
+				}
+			})
+			h.request(http.MethodGet, "/set", nil, false)
+			h.request(http.MethodGet, "/check", nil, false)
+		})
+	}
 }
 
 func (f *fakeMailSender) snapshot() []messaging.MailMessage {
@@ -277,6 +310,99 @@ func TestHTTPRegistration(t *testing.T) {
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "You have been successfully registered.") {
 			t.Fatalf("registration notification missing from next request: status %d, body %s", w.Code, w.Body.String())
 		}
+	})
+}
+
+func TestHTTPRegistrationDisabled(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		u := h.seedUser(t, "existing@example.invalid")
+		u.Verified, u.VerificationRequired = false, true
+		if err := u.Update(context.Background(), h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		u, err := user.GetUserByID(h.app.Database, u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, htmx := range []bool{false, true} {
+			for _, path := range []string{"/register", "/auth/register", "/auth/register/email"} {
+				for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost} {
+					w := h.request(method, path, registrationForm(), htmx)
+					if w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), `id="register-form"`) {
+						t.Errorf("disabled registration %s %s: status %d", method, path, w.Code)
+					}
+				}
+			}
+			for _, path := range []string{"/", "/login", "/auth/login", "/auth/login/email"} {
+				w := h.request(http.MethodGet, path, nil, htmx)
+				if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "/auth/register") || strings.Contains(w.Body.String(), `href="/register"`) {
+					t.Errorf("page %s failed or offered disabled registration", path)
+				}
+			}
+		}
+		h.assertRowCount(t, "user", 1)
+		h.assertUserUnchanged(t, u)
+
+		h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {u.Email}}, true)
+		if len(h.mail.snapshot()) != 1 {
+			t.Fatal("disabling registration broke password recovery")
+		}
+		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		if w.Header().Get("HX-Redirect") != "/" {
+			t.Fatal("disabling registration broke login")
+		}
+		h.request(http.MethodPost, "/auth/request/verify", nil, true)
+		if len(h.mail.snapshot()) != 2 {
+			t.Fatal("disabling registration broke verification resend")
+		}
+	}, func(cfg *config.Config) { cfg.Auth.RegistrationEnabled = false })
+}
+
+func TestHTTPRegistrationWithoutVerification(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		h.mail.err = messaging.ErrMailUnavailable
+		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		if w.Header().Get("HX-Redirect") != "/login" {
+			t.Fatal("registration without verification failed")
+		}
+		u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
+		if err != nil || u.NeedsVerification() || len(h.mail.snapshot()) != 0 {
+			t.Fatal("optional verification blocked the account or attempted delivery")
+		}
+		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		if w.Header().Get("HX-Redirect") != "/" {
+			t.Fatal("new account could not log in without verification")
+		}
+	}, func(cfg *config.Config) { cfg.Auth.RegisterRequiresVerification = false })
+}
+
+func TestHTTPRegistrationCanRecoverFromMailFailure(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		h.mail.err = errors.New("delivery temporarily unavailable")
+		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		assertFormRejected(t, w, "Your account was created, but verification email delivery failed.")
+		if len(h.mail.snapshot()) != 1 {
+			t.Fatal("registration did not attempt delivery")
+		}
+		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
+		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
+		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
+		if w.Header().Get("HX-Redirect") != "/" {
+			t.Fatal("pending account could not log in to request verification")
+		}
+		h.mail.err = nil
+		w = h.request(http.MethodPost, "/auth/request/verify", nil, true)
+		if len(h.mail.snapshot()) != 2 {
+			t.Fatal("verification resend did not deliver instructions")
+		}
+		link = mailLink(t, h.mail.snapshot()[1], "/auth/verify")
+		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
+		h.request(http.MethodGet, link.RequestURI(), nil, false)
+		u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
+		if err != nil || !u.Verified {
+			t.Fatal("account did not recover after successful resend")
+		}
+		h.assertRowCount(t, "user", 1)
 	})
 }
 
@@ -498,15 +624,15 @@ func TestHTTPAccountLinkOrigins(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
+				if tc.secure {
+					h.baseURL = "https://127.0.0.1"
+				}
 				next := h.handler
 				h.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					r.Host = "attacker.example"
 					r.Header.Set("X-Forwarded-Proto", "https://attacker.example/?leak=")
 					r.Header.Set("X-Forwarded-Host", "attacker.example")
 					r.Header.Set("Forwarded", "host=attacker.example;proto=http")
-					if tc.secure {
-						r.TLS = &tls.ConnectionState{}
-					}
 					next.ServeHTTP(w, r)
 				})
 				checkLink := func(index int, path string) *url.URL {

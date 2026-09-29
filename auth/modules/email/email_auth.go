@@ -222,6 +222,9 @@ func (a *EmailAuthService) GetLoginButton() template.HTML {
 // GetRegisterButton returns the template.HTML object representing the way to start the
 // registration process for email authorization
 func (a *EmailAuthService) GetRegisterButton() template.HTML {
+	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
+		return ""
+	}
 	return a.registerButton
 }
 
@@ -296,6 +299,11 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 
 // GetRegister serves the register form
 func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
+	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
+		http.NotFound(w, r)
+		return
+	}
+
 	register := content.NewManagedContent(r, a.contentManager)
 	register.PartialName = emailRegisterFormPartial
 	register.AddContent(emailRegisterFormTemplate)
@@ -326,6 +334,11 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 //	  user already exists -> back to register page
 //	  success -> redirect to login
 func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool {
+	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
+		http.NotFound(w, r)
+		return false
+	}
+
 	register := content.NewManagedContent(r, a.contentManager)
 	register.PartialName = emailRegisterFormPartial
 	register.AddContent(emailRegisterFormTemplate)
@@ -368,6 +381,11 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	}
 
 	return true
+}
+
+// ValidateVerification checks delivery configuration without attempting delivery.
+func (a *EmailAuthService) ValidateVerification() error {
+	return a.mailClient.ValidateConfig()
 }
 
 // SendVerificationEmail serves both registration and authenticated resend requests.

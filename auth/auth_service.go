@@ -19,6 +19,13 @@ import (
 // implementation self-registers via init()
 var authServices []AuthService
 
+// VerificationConfigValidator checks a provider's verification mechanism without I/O.
+// Providers must implement it when registration requires verification. Validation
+// runs after Init and must not send instructions or contact the delivery service.
+type VerificationConfigValidator interface {
+	ValidateVerification() error
+}
+
 // VerificationEmailSender is an optional capability of an authentication provider.
 // SendVerificationEmail sends instructions to the account's stored email address.
 // origin supplies the scheme and host from application settings and connection

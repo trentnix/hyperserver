@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,28 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 )
+
+func TestDisabledRegistration(t *testing.T) {
+	for _, cfg := range []config.AuthConfig{
+		{Enabled: true, RegistrationEnabled: false},
+		{Enabled: false, RegistrationEnabled: true},
+	} {
+		service := &EmailAuthService{config: &config.Config{Auth: cfg}, registerButton: "registration link"}
+		if service.GetRegisterButton() != "" {
+			t.Error("disabled registration returned a link")
+		}
+		r := httptest.NewRequest(http.MethodPost, "/auth/register/email", nil)
+		w := httptest.NewRecorder()
+		service.GetRegister(w, r)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("registration form returned %d, want 404", w.Code)
+		}
+		w = httptest.NewRecorder()
+		if service.Register(w, r) || w.Code != http.StatusNotFound {
+			t.Errorf("registration submission returned %d, want 404", w.Code)
+		}
+	}
+}
 
 func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 	for _, tc := range []struct {

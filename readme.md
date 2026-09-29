@@ -38,6 +38,8 @@ The [architecture decisions](docs/decisions/readme.md) record concrete choices a
 
 ## Exploring the code
 
+Use Go 1.27.1, the version declared in `go.mod`. CI reads that file, and local Go commands select the required toolchain when `GOTOOLCHAIN=auto` is enabled. Keep the project and CI on the same version when upgrading Go.
+
 Start with [cmd/web](cmd/web) for application composition, [modules/site](modules/site) for the reference application, and [pkg](pkg) for framework components and services. The [configuration template](config-template.yaml) describes the current settings but is not a production configuration.
 
 ### Development routes
@@ -52,9 +54,13 @@ The local development application imports the [site module](modules/site) in [cm
 | GET | `/register` | Display the sample email-registration page. |
 | POST | `/logout` | Redirect to the auth logout handler. |
 
-The `/auth/...` routes remain controlled by `auth.enabled`. The reference application remains loopback-only. Omitting the site module does not resolve the framework's outstanding security issues.
+The `/auth/...` routes remain controlled by `auth.enabled`. Registration also requires `auth.registrationEnabled`. The reference application remains loopback-only. Omitting the site module does not resolve the framework's outstanding security issues.
 
 ### Account email delivery
+
+Registration is disabled by default. Set `auth.registrationEnabled: true` to allow new accounts, or use `HYPERSERVER_AUTH_REGISTRATIONENABLED=true`. When registration is disabled, registration pages and submissions return 404. Existing-account login, password recovery, and verification resend remain available when authentication is enabled.
+
+If `auth.registerRequiresVerification` is also true, each enabled authentication provider must implement `auth.VerificationConfigValidator`. Startup checks the verification mechanism after provider initialization without contacting the delivery service. The email provider checks the configured mail client, including its sender address and SMTP settings. Applications can supply a configured replacement mail sender instead. Invalid configuration stops startup. A later delivery failure leaves the account pending verification so the user can log in and request another email.
 
 Reset requests and verification resend email links to the account's stored address. Their HTTP acknowledgments do not include usable links or tokens. Delivery runs during the request using the configured SMTP timeout. Reset acknowledgments confirm receipt of the request, not successful delivery. Delivery failures are logged without including tokens or email bodies.
 

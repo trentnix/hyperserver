@@ -39,6 +39,7 @@ type (
 		resetTokenExpiration time.Duration
 
 		resetRequiresNewCredentials  bool
+		registrationEnabled          bool
 		registerRequiresVerification bool
 	}
 )
@@ -78,6 +79,7 @@ func (a *AuthManager) Init(s *server.ApplicationServer) error {
 	a.resetTokenExpiration = s.Config.Auth.ResetTokenExpiration
 
 	a.resetRequiresNewCredentials = s.Config.Auth.ResetRequiresNewCredentials
+	a.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
 	a.registerRequiresVerification = s.Config.Auth.RegisterRequiresVerification
 
 	return nil
@@ -93,9 +95,11 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		mux.Handle("/auth/logout", http.HandlerFunc(a.Logout))
 
 		// register
-		mux.Handle("/auth/register", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegister)))
-		mux.Handle("GET /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegisterService)))
-		mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Register)))
+		if a.registrationEnabled {
+			mux.Handle("GET /auth/register", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegister)))
+			mux.Handle("GET /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegisterService)))
+			mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Register)))
+		}
 
 		// validate a registered user
 		mux.Handle("GET /auth/verify", http.HandlerFunc(a.Verify))
@@ -146,6 +150,11 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 // with the application. If there is only a single authentication option, the user is
 // sent directly to the registration page of that authentication service.
 func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
+	if !a.registrationEnabled {
+		http.NotFound(w, r)
+		return
+	}
+
 	c := content.NewManagedContent(r, a.contentManager)
 
 	var loginHTML []template.HTML
@@ -284,6 +293,11 @@ func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 // GetRegisterService retrieves the first step of registration process for the given
 // AuthService (specified by authType)
 func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request) {
+	if !a.registrationEnabled {
+		http.NotFound(w, r)
+		return
+	}
+
 	authType := r.PathValue("authType")
 	if authType == "" {
 		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to register.", nil, http.StatusInternalServerError)
@@ -301,6 +315,11 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 
 // Register starts the registration process for the given AuthService (specified by authType)
 func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
+	if !a.registrationEnabled {
+		http.NotFound(w, r)
+		return
+	}
+
 	authType := r.PathValue("authType")
 	if authType == "" {
 		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to register.", nil, http.StatusInternalServerError)

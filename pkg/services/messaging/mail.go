@@ -87,11 +87,28 @@ func NewMailClient(cfg *config.Config) (*MailClient, error) {
 }
 
 // NewMailClientWithSender uses the supplied sender without an SMTP fallback.
+// The caller must supply a configured sender. Senders can implement ValidateConfig()
+// error for additional local checks. Validation must not contact external services.
 func NewMailClientWithSender(from string, sender MailSender) (*MailClient, error) {
 	if sender == nil {
 		return nil, errors.New("mail sender is required")
 	}
 	return &MailClient{from: from, sender: sender}, nil
+}
+
+// ValidateConfig checks whether delivery is configured, not whether a remote
+// service is reachable. Optional mail clients can remain unconfigured.
+func (m *MailClient) ValidateConfig() error {
+	if m == nil || m.sender == nil {
+		return ErrMailUnavailable
+	}
+	if _, err := parseMailAddress("from", m.from); err != nil {
+		return err
+	}
+	if validator, ok := m.sender.(interface{ ValidateConfig() error }); ok {
+		return validator.ValidateConfig()
+	}
+	return nil
 }
 
 // Compose creates a new email.
@@ -102,11 +119,11 @@ func (m *MailClient) Compose() *mail {
 	}
 }
 
-func (m *smtpSender) configured() bool {
-	return m.config.Hostname != "" &&
-		m.config.Port != 0 &&
-		m.config.User != "" &&
-		m.config.Password != ""
+func (m *smtpSender) ValidateConfig() error {
+	if m.config.Hostname == "" || m.config.Port == 0 || m.config.User == "" || m.config.Password == "" {
+		return ErrMailUnavailable
+	}
+	return nil
 }
 
 // send attempts to send the email.
@@ -139,22 +156,29 @@ func safeHeader(value string) bool {
 }
 
 func (m MailMessage) validateHeaders() (*mailaddr.Address, *mailaddr.Address, error) {
-	for _, header := range []struct{ name, value string }{
-		{"from", m.From}, {"to", m.To}, {"subject", m.Subject},
-	} {
-		if !safeHeader(header.value) {
-			return nil, nil, fmt.Errorf("email %s contains invalid header characters", header.name)
-		}
+	if !safeHeader(m.Subject) {
+		return nil, nil, errors.New("email subject contains invalid header characters")
 	}
-	from, err := mailaddr.ParseAddress(m.From)
-	if err != nil || !safeHeader(from.Name) || !safeHeader(from.Address) {
-		return nil, nil, errors.New("email from must contain one valid address")
+	from, err := parseMailAddress("from", m.From)
+	if err != nil {
+		return nil, nil, err
 	}
-	to, err := mailaddr.ParseAddress(m.To)
-	if err != nil || !safeHeader(to.Name) || !safeHeader(to.Address) {
-		return nil, nil, errors.New("email to must contain one valid address")
+	to, err := parseMailAddress("to", m.To)
+	if err != nil {
+		return nil, nil, err
 	}
 	return from, to, nil
+}
+
+func parseMailAddress(field, value string) (*mailaddr.Address, error) {
+	if !safeHeader(value) {
+		return nil, fmt.Errorf("email %s contains invalid header characters", field)
+	}
+	address, err := mailaddr.ParseAddress(value)
+	if err != nil || !safeHeader(address.Name) || !safeHeader(address.Address) {
+		return nil, fmt.Errorf("email %s must contain one valid address", field)
+	}
+	return address, nil
 }
 
 func smtpMailbox(address *mailaddr.Address) string {
@@ -165,8 +189,8 @@ func smtpMailbox(address *mailaddr.Address) string {
 }
 
 func (m *smtpSender) Send(ctx context.Context, email MailMessage) (err error) {
-	if !m.configured() {
-		return ErrMailUnavailable
+	if err := m.ValidateConfig(); err != nil {
+		return err
 	}
 	from, to, err := email.validateHeaders()
 	if err != nil {

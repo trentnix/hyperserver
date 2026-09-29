@@ -16,9 +16,10 @@ type (
 		AppName  string
 		Database *sqlx.DB
 
-		sessionManager *session.SessionManager
-		contentManager *content_services.ContentManagerService
-		mailClient     *messaging.MailClient
+		sessionManager      *session.SessionManager
+		contentManager      *content_services.ContentManagerService
+		mailClient          *messaging.MailClient
+		registrationEnabled bool
 	}
 )
 
@@ -65,6 +66,7 @@ func (m *SiteModule) Init(s *server.ApplicationServer) error {
 	m.sessionManager = s.SessionManager
 	m.contentManager = s.ContentManager
 	m.mailClient = s.Mail
+	m.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
 	m.contentManager.AddPageLayout(pageLayoutTemplate)
 	m.contentManager.AddHtmxLayout(partialLayoutTemplate)
 	m.contentManager.AddPageComponent(navComponentTemplate)

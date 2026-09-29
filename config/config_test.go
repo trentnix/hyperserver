@@ -111,6 +111,37 @@ func TestPublicOriginConfiguration(t *testing.T) {
 	}
 }
 
+func TestRegistrationConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml, override string
+		want, wantError      bool
+	}{
+		{name: "omitted disables registration", yaml: "{}"},
+		{name: "enabled in file", yaml: "auth:\n  registrationEnabled: true", want: true},
+		{name: "enabled by environment", yaml: "{}", override: "true", want: true},
+		{name: "disabled by environment", yaml: "auth:\n  registrationEnabled: true", override: "false"},
+		{name: "invalid file value", yaml: "auth:\n  registrationEnabled: perhaps", wantError: true},
+		{name: "invalid environment value", yaml: "{}", override: "perhaps", wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanConfigEnvironment(t)
+			if tc.override != "" {
+				t.Setenv("HYPERSERVER_AUTH_REGISTRATIONENABLED", tc.override)
+			}
+			cfg, err := loadTestConfig(t, tc.yaml)
+			if tc.wantError {
+				if err == nil || !strings.Contains(strings.ToLower(err.Error()), "registrationenabled") {
+					t.Fatalf("error = %v, want registrationEnabled error", err)
+				}
+				return
+			}
+			if err != nil || cfg.Auth.RegistrationEnabled != tc.want {
+				t.Fatalf("registrationEnabled = %t, error = %v", cfg.Auth.RegistrationEnabled, err)
+			}
+		})
+	}
+}
+
 func TestMailTimeoutConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name, yaml, override string

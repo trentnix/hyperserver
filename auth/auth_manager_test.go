@@ -95,6 +95,17 @@ func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 	}
 }
 
+func TestDisabledRegistrationHandlers(t *testing.T) {
+	manager := &AuthManager{Enabled: true}
+	for _, handler := range []http.HandlerFunc{manager.GetRegister, manager.GetRegisterService, manager.Register} {
+		w := httptest.NewRecorder()
+		handler(w, httptest.NewRequest(http.MethodPost, "/auth/register/email", nil))
+		if w.Code != http.StatusNotFound {
+			t.Errorf("disabled registration returned %d, want 404", w.Code)
+		}
+	}
+}
+
 func TestVerificationRouteMethods(t *testing.T) {
 	mux := http.NewServeMux()
 	manager := &AuthManager{Enabled: true}

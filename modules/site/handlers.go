@@ -62,6 +62,11 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 // Register provides a handler to act as a portal to user registration
 func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
+	if !m.registrationEnabled {
+		http.NotFound(w, r)
+		return
+	}
+
 	register := content.NewManagedContent(r, m.contentManager)
 	register.PartialName = registerPagePartialName
 	register.Title = "Register"

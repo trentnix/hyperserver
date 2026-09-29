@@ -41,8 +41,11 @@ func TestStartupHelperProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, pattern := s.Web.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil))
-		if pattern != "/auth/login" {
+		if s.Config.Auth.Enabled && pattern != "/auth/login" {
 			t.Fatalf("login pattern = %q, want /auth/login", pattern)
+		}
+		if !s.Config.Auth.Enabled && pattern == "/auth/login" {
+			t.Fatal("disabled authentication registered a login route")
 		}
 		w := httptest.NewRecorder()
 		s.Web.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -69,6 +72,7 @@ const startupTestConfig = `http:
       default: cookieStore
 auth:
   enabled: true
+  registrationEnabled: true
   jwtKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   verificationTokenExpiration: 24h
   resetTokenExpiration: 1h
@@ -175,6 +179,53 @@ func TestStartupRejectsInvalidConfiguration(t *testing.T) {
 			// The constructor still uses its existing panic path for configuration errors.
 			if strings.Contains(string(output), "Starting server at") {
 				t.Fatalf("startup attempted to listen: %s", output)
+			}
+		})
+	}
+}
+
+func TestStartupRegistrationVerificationDelivery(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, registration, verification string
+		mail                             bool
+		override                         string
+		want                             string
+	}{
+		{name: "required delivery missing", registration: "true", verification: "true", want: "auth.registerRequiresVerification"},
+		{name: "registration disabled", registration: "false", verification: "true"},
+		{name: "verification optional", registration: "true", verification: "false"},
+		{name: "both disabled", registration: "false", verification: "false"},
+		{name: "authentication disabled", registration: "true", verification: "true", override: "HYPERSERVER_AUTH_ENABLED=false"},
+		{name: "configured delivery without network", registration: "true", verification: "true", mail: true},
+		{name: "missing SMTP host", registration: "true", verification: "true", mail: true, override: "HYPERSERVER_MAIL_HOSTNAME=", want: "auth.registerRequiresVerification"},
+		{name: "missing SMTP port", registration: "true", verification: "true", mail: true, override: "HYPERSERVER_MAIL_PORT=0", want: "auth.registerRequiresVerification"},
+		{name: "missing SMTP user", registration: "true", verification: "true", mail: true, override: "HYPERSERVER_MAIL_USER=", want: "auth.registerRequiresVerification"},
+		{name: "missing SMTP password", registration: "true", verification: "true", mail: true, override: "HYPERSERVER_MAIL_PASSWORD=", want: "auth.registerRequiresVerification"},
+		{name: "invalid sender", registration: "true", verification: "true", mail: true, override: "HYPERSERVER_MAIL_FROMADDRESS=not-an-address", want: "auth.registerRequiresVerification"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
+			if tc.mail {
+				yaml += "mail:\n  hostname: smtp.example.invalid\n  port: 587\n  user: test\n  password: test\n  fromAddress: test@example.invalid\n"
+			}
+			overrides := []string{
+				"HYPERSERVER_AUTH_REGISTRATIONENABLED=" + tc.registration,
+				"HYPERSERVER_AUTH_REGISTERREQUIRESVERIFICATION=" + tc.verification,
+			}
+			if tc.override != "" {
+				overrides = append(overrides, tc.override)
+			}
+			output, err := runStartupProcess(t, yaml, "initialize", overrides...)
+			if tc.want != "" {
+				if err == nil || !strings.Contains(string(output), tc.want) {
+					t.Fatalf("startup error = %v, output = %s, want %q", err, output, tc.want)
+				}
+			} else if err != nil || !strings.Contains(string(output), "startup initialization passed") {
+				t.Fatalf("startup failed: %v\n%s", err, output)
 			}
 		})
 	}

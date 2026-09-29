@@ -13,7 +13,7 @@ import (
 func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 	t.Helper()
 	s := &server.ApplicationServer{
-		Config:         &config.Config{},
+		Config:         &config.Config{Auth: config.AuthConfig{Enabled: true, RegistrationEnabled: true}},
 		ContentManager: content_services.NewContentManager(),
 	}
 	m := new(SiteModule)

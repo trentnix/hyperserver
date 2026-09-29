@@ -57,6 +57,7 @@ type (
 
 	AuthConfig struct {
 		Enabled                      bool
+		RegistrationEnabled          bool
 		JwtKey                       string
 		VerificationEndpoint         string
 		VerificationTokenExpiration  time.Duration

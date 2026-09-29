@@ -68,6 +68,11 @@ http:
 auth:
   # Enable authentication routes. At least one imported service must be enabled.
   enabled: "true"
+  # Allow new accounts to register. Defaults to false. Login and recovery remain available.
+  registrationEnabled: false
+  # Require verification for new accounts. Defaults to false.
+  # When registration is enabled, verification requires configured delivery at startup.
+  registerRequiresVerification: false
   # Secret used to sign account verification and password-reset tokens.
   # Use a different secret from http.session.jwtKey.
   jwtKey: <your auth token key goes here>
@@ -85,7 +90,8 @@ auth:
 # Outbound SMTP delivery settings.
 mail:
   # If hostname, user, or password is empty, or port is zero, SMTP is unavailable.
-  # Startup still succeeds, but requests to send mail return an error.
+  # This is allowed unless enabled registration requires verification.
+  # Requests to send mail while SMTP is unavailable return an error.
   # SMTP server hostname, also used to verify its TLS certificate.
   hostname: "smtp.resend.com"
   # Ports 465 and 2465 use TLS immediately. Other ports use STARTTLS if offered.

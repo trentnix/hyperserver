@@ -35,7 +35,9 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 	// Production applications must not load this module.
 	mux.Handle("POST /test-email", http.HandlerFunc(m.TestEmail))
 	mux.Handle("GET "+authURL, http.HandlerFunc(m.Login))
-	mux.Handle("GET "+registerURL, http.HandlerFunc(m.Register))
+	if m.registrationEnabled {
+		mux.Handle("GET "+registerURL, http.HandlerFunc(m.Register))
+	}
 	mux.Handle("POST /session-example", http.HandlerFunc(m.SessionExample))
 	mux.Handle("POST /logout", http.HandlerFunc(m.Logout))
 }
