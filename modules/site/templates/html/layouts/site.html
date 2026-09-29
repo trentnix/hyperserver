@@ -6,6 +6,14 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Display forbidden responses, including disabled registration, in the HTMX target. -->
+    <meta name="htmx-config" content='{"responseHandling": [
+      {"code":"204","swap":false},
+      {"code":"[23]..","swap":true},
+      {"code":"403","swap":true,"error":true},
+      {"code":"[45]..","swap":false,"error":true},
+      {"code":"...","swap":false}
+    ]}' />
     <link rel="stylesheet" href="/css/site.css" />
     <script src="https://unpkg.com/htmx.org@2.0.1"
       integrity="sha384-QWGpdj554B4ETpJJC9z+ZHJcA/i59TyjxEPXiiUgN2WmTyV5OEZWCD6gQhgkdpB/"

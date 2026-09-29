@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -328,8 +329,11 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 			for _, path := range []string{"/register", "/auth/register", "/auth/register/email"} {
 				for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost} {
 					w := h.request(method, path, registrationForm(), htmx)
-					if w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), `id="register-form"`) {
+					if w.Code != http.StatusForbidden || strings.Contains(w.Body.String(), `id="register-form"`) {
 						t.Errorf("disabled registration %s %s: status %d", method, path, w.Code)
+					}
+					if method != http.MethodHead && strings.TrimSpace(w.Body.String()) != "Registration is not available." {
+						t.Errorf("disabled registration %s %s did not explain the restriction", method, path)
 					}
 				}
 			}
@@ -351,11 +355,66 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 		if w.Header().Get("HX-Redirect") != "/" {
 			t.Fatal("disabling registration broke login")
 		}
+		for _, htmx := range []bool{false, true} {
+			for _, path := range []string{"/register", "/auth/register", "/auth/register/email"} {
+				w := h.request(http.MethodPost, path, registrationForm(), htmx)
+				if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
+					t.Errorf("authenticated request to %s did not explain disabled registration", path)
+				}
+			}
+		}
+		h.assertRowCount(t, "user", 1)
 		h.request(http.MethodPost, "/auth/request/verify", nil, true)
 		if len(h.mail.snapshot()) != 2 {
 			t.Fatal("disabling registration broke verification resend")
 		}
 	}, func(cfg *config.Config) { cfg.Auth.RegistrationEnabled = false })
+}
+
+func TestHTTPForbiddenResponseHandling(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		w := h.request(http.MethodGet, "/", nil, false)
+		match := regexp.MustCompile(`(?s)<meta name="htmx-config" content='([^']+)'`).FindStringSubmatch(w.Body.String())
+		if w.Code != http.StatusOK || len(match) != 2 {
+			t.Fatal("page is missing HTMX response handling configuration")
+		}
+		var cfg struct {
+			ResponseHandling []struct {
+				Code  string
+				Swap  bool
+				Error bool
+			}
+		}
+		if err := json.Unmarshal([]byte(html.UnescapeString(match[1])), &cfg); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			status string
+			swap   bool
+			error  bool
+		}{
+			{"200", true, false},
+			{"204", false, false},
+			{"403", true, true},
+			{"404", false, true},
+			{"422", false, true},
+			{"500", false, true},
+		} {
+			matched := false
+			for _, rule := range cfg.ResponseHandling {
+				if regexp.MustCompile(rule.Code).MatchString(tc.status) {
+					matched = true
+					if rule.Swap != tc.swap || rule.Error != tc.error {
+						t.Errorf("status %s: swap=%v error=%v, want swap=%v error=%v", tc.status, rule.Swap, rule.Error, tc.swap, tc.error)
+					}
+					break
+				}
+			}
+			if !matched {
+				t.Errorf("no response handling rule for status %s", tc.status)
+			}
+		}
+	})
 }
 
 func TestHTTPRegistrationWithoutVerification(t *testing.T) {

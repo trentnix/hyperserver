@@ -27,12 +27,12 @@ func TestDisabledRegistration(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, "/auth/register/email", nil)
 		w := httptest.NewRecorder()
 		service.GetRegister(w, r)
-		if w.Code != http.StatusNotFound {
-			t.Errorf("registration form returned %d, want 404", w.Code)
+		if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
+			t.Errorf("registration form returned %d %q, want 403 and an explanation", w.Code, w.Body.String())
 		}
 		w = httptest.NewRecorder()
-		if service.Register(w, r) || w.Code != http.StatusNotFound {
-			t.Errorf("registration submission returned %d, want 404", w.Code)
+		if service.Register(w, r) || w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
+			t.Errorf("registration submission returned %d %q, want 403 and an explanation", w.Code, w.Body.String())
 		}
 	}
 }

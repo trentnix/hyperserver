@@ -99,6 +99,9 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 			mux.Handle("GET /auth/register", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegister)))
 			mux.Handle("GET /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegisterService)))
 			mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Register)))
+		} else {
+			mux.HandleFunc("/auth/register", RegistrationUnavailable)
+			mux.HandleFunc("/auth/register/{authType}", RegistrationUnavailable)
 		}
 
 		// validate a registered user
@@ -151,7 +154,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 // sent directly to the registration page of that authentication service.
 func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	if !a.registrationEnabled {
-		http.NotFound(w, r)
+		RegistrationUnavailable(w, r)
 		return
 	}
 
@@ -294,7 +297,7 @@ func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 // AuthService (specified by authType)
 func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request) {
 	if !a.registrationEnabled {
-		http.NotFound(w, r)
+		RegistrationUnavailable(w, r)
 		return
 	}
 
@@ -316,7 +319,7 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 // Register starts the registration process for the given AuthService (specified by authType)
 func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 	if !a.registrationEnabled {
-		http.NotFound(w, r)
+		RegistrationUnavailable(w, r)
 		return
 	}
 

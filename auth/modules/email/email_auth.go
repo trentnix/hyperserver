@@ -300,7 +300,7 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 // GetRegister serves the register form
 func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
-		http.NotFound(w, r)
+		auth_services.RegistrationUnavailable(w, r)
 		return
 	}
 
@@ -335,7 +335,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 //	  success -> redirect to login
 func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool {
 	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
-		http.NotFound(w, r)
+		auth_services.RegistrationUnavailable(w, r)
 		return false
 	}
 

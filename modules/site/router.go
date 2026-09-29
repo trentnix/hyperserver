@@ -4,6 +4,8 @@ package module_site
 import (
 	"net/http"
 	"path/filepath"
+
+	"github.com/trentnix/hyperserver/auth"
 )
 
 // Routes registers routes with the provided router and, along with Init, satisfies
@@ -37,6 +39,8 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 	mux.Handle("GET "+authURL, http.HandlerFunc(m.Login))
 	if m.registrationEnabled {
 		mux.Handle("GET "+registerURL, http.HandlerFunc(m.Register))
+	} else {
+		mux.HandleFunc(registerURL, auth.RegistrationUnavailable)
 	}
 	mux.Handle("POST /session-example", http.HandlerFunc(m.SessionExample))
 	mux.Handle("POST /logout", http.HandlerFunc(m.Logout))

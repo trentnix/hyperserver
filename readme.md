@@ -58,7 +58,7 @@ The `/auth/...` routes remain controlled by `auth.enabled`. Registration also re
 
 ### Account email delivery
 
-Registration is disabled by default. Set `auth.registrationEnabled: true` to allow new accounts, or use `HYPERSERVER_AUTH_REGISTRATIONENABLED=true`. When registration is disabled, registration pages and submissions return 404. Existing-account login, password recovery, and verification resend remain available when authentication is enabled.
+Registration is disabled by default. Set `auth.registrationEnabled: true` to allow new accounts, or use `HYPERSERVER_AUTH_REGISTRATIONENABLED=true`. When registration is disabled, registration links are hidden. Registration pages and submissions return HTTP 403 with “Registration is not available.” The reference layout configures HTMX to display 403 responses in the request's target. Existing-account login, password recovery, and verification resend remain available when authentication is enabled.
 
 If `auth.registerRequiresVerification` is also true, each enabled authentication provider must implement `auth.VerificationConfigValidator`. Startup checks the verification mechanism after provider initialization without contacting the delivery service. The email provider checks the configured mail client, including its sender address and SMTP settings. Applications can supply a configured replacement mail sender instead. Invalid configuration stops startup. A later delivery failure leaves the account pending verification so the user can log in and request another email.
 

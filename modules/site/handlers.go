@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -63,7 +64,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 // Register provides a handler to act as a portal to user registration
 func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 	if !m.registrationEnabled {
-		http.NotFound(w, r)
+		auth.RegistrationUnavailable(w, r)
 		return
 	}
 
