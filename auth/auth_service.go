@@ -65,7 +65,9 @@ type AuthService interface {
 
 	// retrieves the mechanism for a user to request to reset their authorization with the implemented AuthService
 	GetResetRequest(http.ResponseWriter, *http.Request)
-	// handles a request to reset a user's authorization
+	// ResetRequest must give valid submissions the same HTTP acknowledgment for
+	// known, unknown, and ineligible accounts, including storage or delivery failures.
+	// The returned result is internal and must not change that acknowledgment.
 	ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool
 	// retrieves the mechanism for a user to reset their authorization with the implemented AuthService
 	GetReset(w http.ResponseWriter, r *http.Request, token string)

@@ -493,6 +493,7 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 
 // ResetRequest uses the same acknowledgment for eligible, unknown, and failed requests.
 // The acknowledgment confirms receipt of the request, not delivery of an email.
+// Delivery is synchronous, so response timing can still reveal account eligibility.
 func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool {
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetRequestFormPartial

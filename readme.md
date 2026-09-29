@@ -64,6 +64,10 @@ If `auth.registerRequiresVerification` is also true, each enabled authentication
 
 Reset requests and verification resend email links to the account's stored address. Their HTTP acknowledgments do not include usable links or tokens. Delivery runs during the request using the configured SMTP timeout. Reset acknowledgments confirm receipt of the request, not successful delivery. Delivery failures are logged without including tokens or email bodies.
 
+For valid reset-request submissions, known, unknown, and ineligible accounts receive the same status, body, and headers apart from random request tracing IDs. Storage and delivery failures use that acknowledgment too. Tests cover ordinary and HTMX requests.
+
+Response timing can still reveal account eligibility. Eligible accounts wait for token storage and mail delivery. Unknown accounts and accounts registered through another provider skip that work. The SMTP timeout bounds delivery time but does not equalize response times. Background processing and timing safeguards remain separate follow-up work.
+
 ### Public links and the server address
 
 `http.listenHost` and `http.port` specify where the server accepts connections. `http.publicOrigin` specifies the address people use to reach it, but only needs to be set when that address differs from the listener. For example:
