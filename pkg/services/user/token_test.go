@@ -1,0 +1,197 @@
+package user
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/dgrijalva/jwt-go"
+)
+
+func TestTokenPurposeStorage(t *testing.T) {
+	for _, purpose := range []string{resetTokenType, verificationTokenType} {
+		t.Run(purpose, func(t *testing.T) {
+			db := userTestDB(t)
+			u := &User{Email: "person@example.invalid"}
+			if err := u.Create(context.Background(), db); err != nil {
+				t.Fatal(err)
+			}
+			key := []byte("test-signing-key")
+			var token AuthToken
+			if purpose == resetTokenType {
+				reset, err := NewAuthResetToken(u, key, time.Hour)
+				if err != nil {
+					t.Fatal(err)
+				}
+				token = reset.AuthToken
+			} else {
+				verification, err := NewAuthVerificationToken(u, key, time.Hour)
+				if err != nil {
+					t.Fatal(err)
+				}
+				token = verification.AuthToken
+			}
+			if token.Type != purpose {
+				t.Errorf("token type = %q, want %q", token.Type, purpose)
+			}
+			claims := jwt.MapClaims{}
+			if _, err := jwt.ParseWithClaims(token.Token, claims, func(*jwt.Token) (interface{}, error) { return key, nil }); err != nil {
+				t.Fatal(err)
+			}
+			if claims["purpose"] != purpose {
+				t.Errorf("signed purpose = %v, want %q", claims["purpose"], purpose)
+			}
+			if err := token.Create(db); err != nil {
+				t.Fatal(err)
+			}
+			byHash, err := getTokenByHash(db, token.TokenHash, purpose)
+			if err != nil || byHash.Type != purpose {
+				t.Fatalf("stored token lookup by hash failed: %v", err)
+			}
+			byUser, err := getTokenByUser(db, u.ID, purpose)
+			if err != nil || byUser.Type != purpose {
+				t.Fatalf("stored token lookup by user failed: %v", err)
+			}
+		})
+	}
+}
+
+func TestTokensCannotSubstituteForEachOther(t *testing.T) {
+	db := userTestDB(t)
+	u := &User{Email: "person@example.invalid", Password: "unchanged", VerificationRequired: true}
+	if err := u.Create(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	key := []byte("test-signing-key")
+	reset, err := NewAuthResetToken(u, key, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reset.Create(db); err != nil {
+		t.Fatal(err)
+	}
+	verification, err := NewAuthVerificationToken(u, key, 2*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verification.Create(db); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Verify(context.Background(), db, reset.Token, key); err == nil || got != nil {
+		t.Error("reset token verified the account")
+	}
+	if got, err := ValidateResetToken(db, verification.Token, key); err == nil || got != nil {
+		t.Error("verification token authorized a password reset")
+	}
+	if got, err := ValidateVerificationToken(db, reset.Token, key); err == nil || got != nil {
+		t.Error("reset token passed stored verification-token validation")
+	}
+	stored, err := GetUserByID(db, u.ID)
+	if err != nil || stored.Verified || stored.Password != u.Password {
+		t.Fatal("wrong-purpose token changed the account")
+	}
+	if got, err := ValidateResetToken(db, reset.Token, key); err != nil || got.ID != u.ID {
+		t.Fatalf("valid reset token rejected: %v", err)
+	}
+	if got, err := ValidateVerificationToken(db, verification.Token, key); err != nil || got.ID != u.ID {
+		t.Fatalf("valid stored verification token rejected: %v", err)
+	}
+	if got, err := Verify(context.Background(), db, verification.Token, key); err != nil || !got.Verified {
+		t.Fatalf("valid verification token rejected: %v", err)
+	}
+}
+
+func TestSignedTokenValidation(t *testing.T) {
+	for _, purpose := range []string{resetTokenType, verificationTokenType} {
+		for _, failure := range []string{"missing purpose", "unknown purpose", "wrong purpose", "missing user", "missing expiry", "expired", "wrong key", "empty key", "wrong algorithm", "malformed"} {
+			t.Run(purpose+"/"+failure, func(t *testing.T) {
+				claims := jwt.MapClaims{"Id": "test-user", "purpose": purpose, "exp": time.Now().Add(time.Hour).Unix()}
+				key := []byte("test-signing-key")
+				method := jwt.SigningMethodHS256
+				switch failure {
+				case "missing purpose":
+					delete(claims, "purpose")
+				case "unknown purpose":
+					claims["purpose"] = "session"
+				case "wrong purpose":
+					claims["purpose"] = resetTokenType
+					if purpose == resetTokenType {
+						claims["purpose"] = verificationTokenType
+					}
+				case "missing user":
+					delete(claims, "Id")
+				case "missing expiry":
+					delete(claims, "exp")
+				case "expired":
+					claims["exp"] = time.Now().Add(-time.Hour).Unix()
+				case "wrong algorithm":
+					method = jwt.SigningMethodHS512
+				}
+				raw, err := jwt.NewWithClaims(method, claims).SignedString(key)
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch failure {
+				case "wrong key":
+					key = []byte("another-key")
+				case "empty key":
+					key = nil
+				case "malformed":
+					raw = "not-a-token"
+				}
+				if _, err := parseAuthToken(raw, key, purpose); err == nil {
+					t.Fatal("invalid token accepted")
+				} else if failure == "expired" {
+					var expired *ErrTokenExpired
+					if !errors.As(err, &expired) {
+						t.Fatalf("error = %v, want ErrTokenExpired", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestLegacyStoredResetTokenRejected(t *testing.T) {
+	db := userTestDB(t)
+	u := &User{Email: "person@example.invalid"}
+	if err := u.Create(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	key := []byte("test-signing-key")
+	expires := time.Now().Add(time.Hour)
+	claims := jwt.MapClaims{"Id": u.ID, "exp": expires.Unix()}
+	raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256([]byte(raw))
+	token := AuthToken{UserId: u.ID, TokenHash: hex.EncodeToString(hash[:]), ExpiresAt: expires, Type: resetTokenType}
+	if err := token.Create(db); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ValidateResetToken(db, raw, key); err == nil || got != nil {
+		t.Fatal("stored legacy token without a purpose was accepted")
+	}
+	if got, err := Verify(context.Background(), db, raw, key); err == nil || got != nil {
+		t.Fatal("legacy token without a purpose verified the account")
+	}
+}
+
+func TestTokenRejectsUnsupportedPurpose(t *testing.T) {
+	for _, purpose := range []string{"", "session"} {
+		t.Run(purpose, func(t *testing.T) {
+			if _, err := newAuthToken("test-user", []byte("test-key"), time.Hour, purpose); err == nil {
+				t.Fatal("created a token with an unsupported purpose")
+			}
+			token := AuthToken{UserId: "test-user", TokenHash: "test-hash", ExpiresAt: time.Now().Add(time.Hour), Type: purpose}
+			// Invalid purposes must be rejected before accessing storage.
+			if err := token.Create(nil); err == nil {
+				t.Fatal("stored a token with an unsupported purpose")
+			}
+		})
+	}
+}

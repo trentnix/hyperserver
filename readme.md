@@ -4,13 +4,13 @@ HyperServer is an experimental Go framework for server-rendered web applications
 
 ## Project status
 
-HyperServer is in early development and is not production-ready. The repository is intended for exploration, local experiments, and discussion as the framework takes shape. All exported Go APIs and configuration formats are experimental throughout `v0.x`. Breaking changes are allowed when real usage demonstrates a better contract. There is no backward-compatibility guarantee during this phase.
+HyperServer is in early development and is not production-ready. Public APIs and configuration can change without backward compatibility during `v0.x`.
 
-Known security and correctness issues remain in authentication, account recovery, sessions, and request handling. Startup validation, shutdown, and deployment safeguards are incomplete. Do not expose the example application to the public internet or use it with real accounts or sensitive data.
+Known security and correctness issues remain in authentication, recovery, sessions, request handling, and application lifecycle. Do not expose the reference application to the public internet or use it with real accounts or sensitive data.
 
-The reference application accepts only loopback listen addresses. An empty `http.listenHost` or `localhost` binds to `127.0.0.1`. IPv6 loopback (`::1`) is also supported. This restriction applies to `cmd/web`, not the framework, and does not prevent exposure through a tunnel or reverse proxy.
+The reference application is loopback-only, but a tunnel or reverse proxy can still expose it. This restriction applies to `cmd/web`, not the framework.
 
-High performance is a design goal, not an established benchmark result. Test coverage remains limited and does not establish application-wide correctness or security.
+High performance is a design goal, not an established benchmark result. Passing tests do not establish production readiness.
 
 ![Hyper Gopher](hypergo.png)
 
@@ -21,73 +21,44 @@ High performance is a design goal, not an established benchmark result. Test cov
 - Experimental email/password authentication, account verification and recovery, cookie and SQLite session stores, SMTP mail, and request logging.
 - SQLite-backed persistence used by the reference application and framework services.
 
-These implementations are a starting point. Services are not yet consistently optional or independently replaceable, and module instances still share process-wide state.
+Services are not yet consistently optional or independently replaceable, and module instances still share process-wide state.
 
 ## Direction
 
-- Keep Go's `net/http` model and standard middleware available.
-- Prefer the standard library and a small dependency set, even when that means fewer features. Use maintained security implementations rather than custom cryptography.
-- Keep rendering and HTMX response handling in the core. Make authentication, sessions, persistence, caching, and mail replaceable services that activate only when needed.
-- Preserve self-registering modules while giving each application explicit initialization, dependency resolution, and shutdown.
-- Make storage and serialization independently replaceable through contracts based on consumer needs, not a universal database API.
-- Support ordinary navigation and form submissions where applications need them. Applications can also depend on HTMX.
+Keep the core focused on rendering and HTMX, with replaceable services and self-registering modules. Preserve Go's `net/http` model, prefer the standard library, and keep dependencies small. Use maintained security implementations rather than custom cryptography. Storage and serialization must be independently replaceable. Applications can use ordinary forms or depend on HTMX.
 
-The [roadmap](roadmap.md) describes the intended architecture and implementation order. Security and correctness fixes come first, followed by lifecycle work, shared response handling, storage contracts, measured performance work, and deployment validation.
-
-The [architecture decisions](docs/decisions/readme.md) record concrete choices and list unresolved contracts. Accepted decisions describe direction, not necessarily implemented capabilities.
+The [roadmap](roadmap.md) and [architecture decisions](docs/decisions/readme.md) describe intended capabilities and priorities. Security and correctness fixes come first.
 
 ## Exploring the code
 
-Use Go 1.27.1, the version declared in `go.mod`. CI reads that file, and local Go commands select the required toolchain when `GOTOOLCHAIN=auto` is enabled. Keep the project and CI on the same version when upgrading Go.
+Use the Go version declared in [go.mod](go.mod), which also controls CI. SQLite tests and the race detector require CGO and a C compiler.
 
-Start with [cmd/web](cmd/web) for application composition, [modules/site](modules/site) for the reference application, and [pkg](pkg) for framework components and services. The [configuration template](config-template.yaml) describes the current settings but is not a production configuration.
+Start with [cmd/web](cmd/web) for application composition, [modules/site](modules/site) for the reference application, and [pkg](pkg) for framework components and services.
 
-### Development routes
+The development [site module owns the diagnostic and sample routes](modules/site/router.go). Production applications must not import it. Omitting it does not resolve the framework's outstanding security issues.
 
-The local development application imports the [site module](modules/site) in [cmd/web/site_modules.go](cmd/web/site_modules.go). That module registers the diagnostic and sample routes below. Production applications must not import it. HyperServer does not use an application-wide development flag to control module routes.
+Use [config-template.yaml](config-template.yaml) as the starting point for a local `config.yaml`, not a production configuration.
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| POST | `/test-email` | Send a test email using the configured mail provider. |
-| POST | `/session-example` | Increment and display a session visit counter. |
-| GET | `/login` | Display the sample email-login page. |
-| GET | `/register` | Display the sample email-registration page. |
-| POST | `/logout` | Redirect to the auth logout handler. |
+### Registration and email
 
-The `/auth/...` routes remain controlled by `auth.enabled`. Registration also requires `auth.registrationEnabled`. The reference application remains loopback-only. Omitting the site module does not resolve the framework's outstanding security issues.
+With `auth.enabled`, set `auth.registrationEnabled: true` to allow new accounts. Registration is disabled by default. Disabled registration hides its links and returns HTTP 403, without disabling existing-account login or recovery.
 
-### Account email delivery
+If registration requires verification, startup must find configured delivery. A later delivery failure leaves the account pending verification so the user can log in and request another email.
 
-Registration is disabled by default. Set `auth.registrationEnabled: true` to allow new accounts, or use `HYPERSERVER_AUTH_REGISTRATIONENABLED=true`. When registration is disabled, registration links are hidden. Registration pages and submissions return HTTP 403 with “Registration is not available.” The reference layout configures HTMX to display 403 responses in the request's target. Existing-account login, password recovery, and verification resend remain available when authentication is enabled.
-
-If `auth.registerRequiresVerification` is also true, each enabled authentication provider must implement `auth.VerificationConfigValidator`. Startup checks the verification mechanism after provider initialization without contacting the delivery service. The email provider checks the configured mail client, including its sender address and SMTP settings. Applications can supply a configured replacement mail sender instead. Invalid configuration stops startup. A later delivery failure leaves the account pending verification so the user can log in and request another email.
-
-Reset requests and verification resend email links to the account's stored address. Their HTTP acknowledgments do not include usable links or tokens. Delivery runs during the request using the configured SMTP timeout. Reset acknowledgments confirm receipt of the request, not successful delivery. Delivery failures are logged without including tokens or email bodies.
-
-For valid reset-request submissions, known, unknown, and ineligible accounts receive the same status, body, and headers apart from random request tracing IDs. Storage and delivery failures use that acknowledgment too. Tests cover ordinary and HTMX requests.
-
-Response timing can still reveal account eligibility. Eligible accounts wait for token storage and mail delivery. Unknown accounts and accounts registered through another provider skip that work. The SMTP timeout bounds delivery time but does not equalize response times. Background processing and timing safeguards remain separate follow-up work.
+Recovery links go to the account's stored email address, never in the HTTP acknowledgment. Reset acknowledgments are generic, but synchronous delivery can still reveal account eligibility through response timing. Verification links remain reusable until expiry, and reset consumption is not yet atomic.
 
 ### Public links and the server address
 
-`http.listenHost` and `http.port` specify where the server accepts connections. `http.publicOrigin` specifies the address people use to reach it, but only needs to be set when that address differs from the listener. For example:
+`http.listenHost` and `http.port` select the listening address. Set `http.publicOrigin` when public links need a different address, such as behind a reverse proxy:
 
 ```yaml
 http:
   listenHost: "127.0.0.1"
   port: 8080
-  publicOrigin: "" # Direct access at http://127.0.0.1:8080.
+  publicOrigin: "https://example.com"
 ```
 
-If a reverse proxy exposes that listener at `https://example.com`, set `http.publicOrigin` to `https://example.com`. The listener stays on `127.0.0.1:8080`. Use `HYPERSERVER_HTTP_PUBLICORIGIN` for an environment override. Paths, credentials, queries, and fragments are not allowed. This setting does not configure TLS listeners, cookie security, or trusted proxies.
-
-For direct connections, leave `publicOrigin` empty. Absolute links then use `http.listenHost`, `http.port`, and the incoming connection's TLS state. An omitted or blank `listenHost` defaults to `127.0.0.1`. Request host and forwarding headers do not control those links. Framework applications that listen on wildcard addresses such as `0.0.0.0` or `::` must set `publicOrigin` before building absolute links.
-
-Use `util.BuildPublicURL(r, cfg.HTTP, path, params)` for absolute links, including account emails. Without a public origin, the helper requires a nonzero `http.port`. Other modules can use it without depending on email or authentication. Reset forms use relative actions and stay on the current origin.
-
-Rename existing `http.hostname` settings to `http.listenHost` and `HYPERSERVER_HTTP_HOSTNAME` to `HYPERSERVER_HTTP_LISTENHOST`. The loader rejects the old names instead of silently ignoring them. The Go field is now `HTTPConfig.ListenHost`. The `mail.hostname` SMTP setting is unchanged.
-
-Recovery response timing and atomic single-use token redemption remain outstanding. The reference application is not ready for public exposure.
+For direct connections, leave `publicOrigin` empty. Links then use the listener settings and connection's TLS state, not request host or forwarding headers. Wildcard listeners require an explicit public origin for links. This setting does not configure TLS, cookie security, or trusted proxies. See the configuration template for defaults and validation rules.
 
 ### Checks
 
@@ -99,14 +70,10 @@ go vet ./...
 go test -race ./...
 ```
 
-The [CI workflow](.github/workflows/ci.yml) runs these checks on pushes and pull requests using the Go version in `go.mod`. Test runs bypass cached results and have a five-minute timeout. SQLite tests and the race detector require CGO and a C compiler.
-
-Before fixing a defect, add a regression test and confirm it fails. The HTTP tests cover invalid form submissions and check that rejected input does not create accounts, change passwords, consume reset tokens, save contact messages, or send mail. A passing CI run does not mean the known security issues are resolved.
-
-See [AGENTS.md](AGENTS.md) for repository working agreements and verification guidance.
+The [CI workflow](.github/workflows/ci.yml) runs these checks on pushes and pull requests. See [AGENTS.md](AGENTS.md) for working agreements and regression-test guidance.
 
 ## Feedback
 
-Feedback on the design, code, and developer experience is welcome, especially concrete examples of applications HyperServer should support. Email me at trentnix at gmail.com.
+Feedback on the design, code, and developer experience is welcome. Email me at trentnix at gmail.com.
 
 Send security reports privately to the same address. Do not include credentials, personal data, or exploit details in public issues.

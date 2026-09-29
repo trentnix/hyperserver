@@ -773,7 +773,7 @@ func TestHTTPResetRequestEmailsInstructions(t *testing.T) {
 			if len(h.mail.snapshot()) != i+1 {
 				t.Error("unknown account caused mail delivery")
 			}
-			resetUser, err := user.ValidateResetToken(h.app.Database, token)
+			resetUser, err := user.ValidateResetToken(h.app.Database, token, []byte(h.app.Config.Auth.JwtKey))
 			if err != nil || resetUser.ID != u.ID {
 				t.Fatal("emailed reset token does not belong to the account")
 			}
@@ -1156,6 +1156,73 @@ func TestHTTPLoginAndResetRequestRejectInvalidEmail(t *testing.T) {
 		w := h.request(http.MethodGet, "/auth/change/email", nil, true)
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Error("invalid login granted access to an authenticated route")
+		}
+	})
+}
+
+func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		u := h.seedUser(t, "person@example.invalid")
+		u.Verified, u.VerificationRequired = false, true
+		if err := u.Update(context.Background(), h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		u, err := user.GetUserByID(h.app.Database, u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key := []byte(h.app.Config.Auth.JwtKey)
+		reset, err := user.NewAuthResetToken(u, key, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := reset.Create(h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		verification, err := user.NewVerificationToken(u.ID, key, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, htmx := range []bool{false, true} {
+			for _, tc := range []struct{ method, path, message string }{
+				{http.MethodGet, "/auth/verify?token=" + url.QueryEscape(reset.Token), "Verification failed"},
+				{http.MethodGet, "/auth/reset/email?token=" + url.QueryEscape(verification), "invalid token"},
+				{http.MethodPost, "/auth/reset/email?token=" + url.QueryEscape(verification), "invalid token"},
+			} {
+				w := h.request(tc.method, tc.path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, htmx)
+				if !strings.Contains(w.Body.String(), tc.message) || strings.Contains(w.Body.String(), `id="reset-password-form"`) || w.Header().Get("HX-Redirect") != "" {
+					t.Fatal("wrong-purpose token did not produce a rejection")
+				}
+				h.assertUserUnchanged(t, u)
+				h.assertRowCount(t, "usertoken", 1)
+				h.assertNoTokenExposure(t, w, reset.Token)
+				h.assertNoTokenExposure(t, w, verification)
+			}
+		}
+	})
+}
+
+func TestHTTPExpiredResetTokenRedisplaysRequest(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		u := h.seedUser(t, "person@example.invalid")
+		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		token.ExpiresAt = time.Now().Add(-time.Hour)
+		if err := token.Create(h.app.Database); err != nil {
+			t.Fatal(err)
+		}
+		for _, htmx := range []bool{false, true} {
+			for _, method := range []string{http.MethodGet, http.MethodPost} {
+				w := h.request(method, "/auth/reset/email?token="+url.QueryEscape(token.Token), url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, htmx)
+				if !strings.Contains(w.Body.String(), `id="reset-request-form"`) || !strings.Contains(w.Body.String(), "expired") {
+					t.Fatal("expired reset did not offer a new reset request")
+				}
+				h.assertNoTokenExposure(t, w, token.Token)
+				h.assertUserUnchanged(t, u)
+				h.assertRowCount(t, "usertoken", 1)
+			}
 		}
 	})
 }

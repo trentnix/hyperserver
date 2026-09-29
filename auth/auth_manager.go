@@ -440,9 +440,9 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var errTokenExpired user.ErrTokenExpired
+	var errTokenExpired *user.ErrTokenExpired
 
-	u, err := user.ValidateResetToken(a.db, token)
+	u, err := user.ValidateResetToken(a.db, token, []byte(a.verificationJwtKey))
 	if err != nil {
 		switch {
 		case errors.As(err, &errTokenExpired):
@@ -484,9 +484,9 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var errTokenExpired user.ErrTokenExpired
+	var errTokenExpired *user.ErrTokenExpired
 
-	u, err := user.ValidateResetToken(a.db, token)
+	u, err := user.ValidateResetToken(a.db, token, []byte(a.verificationJwtKey))
 	if err != nil {
 		switch {
 		case errors.As(err, &errTokenExpired):

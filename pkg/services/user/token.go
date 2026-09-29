@@ -42,11 +42,14 @@ func (token *AuthToken) Create(db *sqlx.DB) error {
 	if token.ExpiresAt.IsZero() {
 		return NewErrTokenExpirationNotSpecified(errCreateToken)
 	}
+	if token.Type != resetTokenType && token.Type != verificationTokenType {
+		return NewErrToken(errors.New("invalid token purpose"))
+	}
 
 	query := fmt.Sprintf(`
         INSERT INTO %s (user_id, token_hash, expires_at, token_type)
-        VALUES (:user_id, :token_hash, :expires_at, '%s')
-    `, userTokenTableName, resetTokenType)
+        VALUES (:user_id, :token_hash, :expires_at, :token_type)
+    `, userTokenTableName)
 
 	_, err := db.NamedExec(query, token)
 	return err
@@ -110,7 +113,7 @@ func getTokenByUser(db *sqlx.DB, userId string, tokenType string) (*AuthToken, e
 	var token AuthToken
 
 	query := fmt.Sprintf(`
-        SELECT user_id, token_hash, expires_at
+        SELECT user_id, token_hash, expires_at, token_type
         FROM %s
         WHERE user_id = ? AND token_type = ?
     `, userTokenTableName)
@@ -137,7 +140,7 @@ func getTokenByHash(db *sqlx.DB, token string, tokenType string) (*AuthToken, er
 	var passwordResetToken AuthToken
 
 	query := fmt.Sprintf(`
-        SELECT user_id, token_hash, expires_at
+        SELECT user_id, token_hash, expires_at, token_type
         FROM %s
         WHERE token_hash = ? AND token_type = ?
     `, userTokenTableName)
@@ -163,12 +166,19 @@ func newAuthToken(userId string, jwtKey []byte, expiration time.Duration, tokenT
 	if expiration <= 0 {
 		return nil, NewErrTokenExpirationNotSpecified(errNewToken)
 	}
+	if len(jwtKey) == 0 {
+		return nil, NewErrJwtKeyNotSet(errNewToken)
+	}
+	if tokenType != resetTokenType && tokenType != verificationTokenType {
+		return nil, NewErrToken(errors.New("invalid token purpose"))
+	}
 
 	// create token - user.id and expiration
 	expirationTime := time.Now().Add(expiration)
 
 	claims := &VerificationClaims{
-		Id: userId,
+		Id:      userId,
+		Purpose: tokenType,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
@@ -195,10 +205,41 @@ func newAuthToken(userId string, jwtKey []byte, expiration time.Duration, tokenT
 	return authToken, nil
 }
 
-func validateToken(db *sqlx.DB, tokenString string, tokenType string) (*User, error) {
+// parseAuthToken checks the signature and purpose before a token can authorize an action.
+func parseAuthToken(tokenString string, jwtKey []byte, purpose string) (*VerificationClaims, error) {
+	if len(jwtKey) == 0 {
+		return nil, NewErrJwtKeyNotSet(errors.New("a signing key is required to validate a token"))
+	}
+
+	claims := &VerificationClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected token signing method")
+		}
+		return jwtKey, nil
+	})
+	if err != nil {
+		var validationErr *jwt.ValidationError
+		if errors.As(err, &validationErr) && validationErr.Errors == jwt.ValidationErrorExpired {
+			return nil, NewErrTokenExpired(err)
+		}
+		return nil, NewErrToken(errors.New("invalid signed token"))
+	}
+
+	if !token.Valid || claims.Id == "" || claims.Purpose != purpose || claims.ExpiresAt == 0 {
+		return nil, NewErrToken(errors.New("invalid token claims"))
+	}
+	return claims, nil
+}
+
+func validateToken(db *sqlx.DB, tokenString string, jwtKey []byte, tokenType string) (*User, error) {
 	errValidateReset := errors.New("error validating the specified reset token")
 	if tokenString == "" {
 		return nil, NewErrTokenNotSpecified(errValidateReset)
+	}
+	claims, err := parseAuthToken(tokenString, jwtKey, tokenType)
+	if err != nil {
+		return nil, err
 	}
 
 	// hash the received token
@@ -213,6 +254,9 @@ func validateToken(db *sqlx.DB, tokenString string, tokenType string) (*User, er
 		}
 
 		return nil, err
+	}
+	if claims.Id != passwordResetToken.UserId {
+		return nil, NewErrToken(errors.New("token does not belong to the stored account"))
 	}
 
 	// check if the token is expired

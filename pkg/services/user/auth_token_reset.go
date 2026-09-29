@@ -15,9 +15,10 @@ type (
 		AuthToken
 	}
 
-	// Claims contains the data that is serialized to and from a JWT
+	// VerificationClaims contains the signed account identity, purpose, and expiry.
 	VerificationClaims struct {
-		Id string
+		Id      string
+		Purpose string `json:"purpose"`
 		jwt.StandardClaims
 	}
 )
@@ -54,10 +55,9 @@ func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error)
 	return authVerificationToken, nil
 }
 
-// NewAuthResetToken creates a reset authorization token, stores it in the database as
-// a hashed value, and returns the token to the caller
+// NewAuthResetToken creates a reset token and its hash. Call Create to store it.
 func NewAuthResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthResetToken, error) {
-	authToken, err := newAuthToken(u.ID, jwtKey, expiration, verificationTokenType)
+	authToken, err := newAuthToken(u.ID, jwtKey, expiration, resetTokenType)
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +66,6 @@ func NewAuthResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthR
 }
 
 // ValidateResetToken confirms whether the provided reset authorization token is valid
-func ValidateResetToken(db *sqlx.DB, tokenString string) (*User, error) {
-	return validateToken(db, tokenString, resetTokenType)
+func ValidateResetToken(db *sqlx.DB, tokenString string, jwtKey []byte) (*User, error) {
+	return validateToken(db, tokenString, jwtKey, resetTokenType)
 }
