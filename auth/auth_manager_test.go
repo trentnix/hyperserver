@@ -121,6 +121,12 @@ func TestVerificationRouteMethods(t *testing.T) {
 				}
 				return
 			}
+			if method == http.MethodPost {
+				if pattern != "POST /auth/verify" {
+					t.Errorf("pattern = %q, want POST /auth/verify", pattern)
+				}
+				return
+			}
 			if pattern != "" {
 				t.Fatalf("unexpected verification handler for %s: %q", method, pattern)
 			}
@@ -128,6 +134,30 @@ func TestVerificationRouteMethods(t *testing.T) {
 			mux.ServeHTTP(w, r)
 			if w.Code != http.StatusMethodNotAllowed {
 				t.Errorf("status = %d, want 405", w.Code)
+			}
+		})
+	}
+}
+
+func TestVerificationRejectsMissingOrMalformedForm(t *testing.T) {
+	manager := &AuthManager{contentManager: &content_services.ContentManagerService{
+		HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
+			http.Error(w, message, status)
+		},
+	}}
+	for _, tc := range []struct {
+		name, body, message string
+	}{
+		{"missing", "", "No verification token specified"},
+		{"malformed", "token=%zz", "Unable to read the verification form"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/auth/verify?token=query-token", strings.NewReader(tc.body))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			w := httptest.NewRecorder()
+			manager.Verify(w, r)
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), tc.message) {
+				t.Fatalf("invalid form returned %d %q", w.Code, w.Body.String())
 			}
 		})
 	}

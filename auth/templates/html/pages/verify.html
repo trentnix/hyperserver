@@ -1,0 +1,10 @@
+{{ define "auth.page.verify" }}
+<div id="verify-account" class="container">
+    <h1>Verify your email address</h1>
+    <p>Confirm to verify the email address associated with this link.</p>
+    <form method="post" action="/auth/verify" hx-post="/auth/verify" hx-target="closest div" hx-swap="outerHTML">
+        <input type="hidden" name="token" value="{{ .Data }}">
+        <button type="submit">Verify email address</button>
+    </form>
+</div>
+{{ end }}

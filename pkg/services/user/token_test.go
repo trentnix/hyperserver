@@ -238,13 +238,22 @@ func TestLegacyStoredResetTokenRejected(t *testing.T) {
 func TestTokenRejectsUnsupportedPurpose(t *testing.T) {
 	for _, purpose := range []string{"", "session"} {
 		t.Run(purpose, func(t *testing.T) {
+			db := userTestDB(t)
+			u := &User{Email: "person@example.invalid"}
+			if err := u.Create(context.Background(), db); err != nil {
+				t.Fatal(err)
+			}
 			if _, err := newAuthToken(&User{ID: "test-user"}, []byte("test-key"), time.Hour, purpose); err == nil {
 				t.Fatal("created a token with an unsupported purpose")
 			}
-			token := AuthToken{UserId: "test-user", TokenHash: "test-hash", ExpiresAt: time.Now().Add(time.Hour), Type: purpose}
-			// Invalid purposes must be rejected before accessing storage.
-			if err := token.Create(nil); err == nil {
-				t.Fatal("stored a token with an unsupported purpose")
+			token := AuthToken{UserId: u.ID, TokenHash: "test-hash", ExpiresAt: time.Now().Add(time.Hour), Type: purpose}
+			var invalid *ErrToken
+			if err := token.Create(db); !errors.As(err, &invalid) || invalid.Unwrap() == nil || invalid.Unwrap().Error() != "invalid token purpose" {
+				t.Fatalf("unsupported purpose error = %v, want invalid token purpose", err)
+			}
+			var count int
+			if err := db.Get(&count, `SELECT COUNT(*) FROM usertoken`); err != nil || count != 0 {
+				t.Fatalf("unsupported purpose inserted a token: count=%d, error=%v", count, err)
 			}
 		})
 	}

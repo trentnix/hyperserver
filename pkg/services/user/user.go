@@ -133,7 +133,8 @@ func (user *User) Create(ctx context.Context, db *sqlx.DB) error {
 }
 
 // Update changes an existing account by ID. It never inserts an account and
-// returns ErrUserNotFound if the ID no longer exists.
+// returns ErrUserNotFound if the ID no longer exists. Changing the email address
+// revokes stored verification tokens in the same transaction.
 func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 	if user == nil {
 		return NewErrUserNotSpecified(nil)
@@ -154,6 +155,22 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 	updated := *user
 	updated.UpdatedAt = time.Now()
 
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Revoke before updating so the comparison uses the stored email address.
+	// Starting with a write also avoids upgrading a SQLite read transaction.
+	_, err = tx.ExecContext(ctx, `DELETE FROM `+userTokenTableName+`
+		WHERE user_id = ? AND token_type = ?
+		AND EXISTS (SELECT 1 FROM `+userTableName+` WHERE id = ? AND email <> ?)`,
+		user.ID, verificationTokenType, user.ID, user.Email)
+	if err != nil {
+		return err
+	}
+
 	query := fmt.Sprintf(`
         UPDATE %s
         SET email = :email,
@@ -165,7 +182,7 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
         WHERE id = :id
     `, userTableName)
 
-	result, err := db.NamedExecContext(ctx, query, &updated)
+	result, err := tx.NamedExecContext(ctx, query, &updated)
 	if err != nil {
 		return database.TranslateError(db.DB, err)
 	}
@@ -175,6 +192,9 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 	}
 	if count == 0 {
 		return NewErrUserNotFound(sql.ErrNoRows)
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	user.UpdatedAt = updated.UpdatedAt
 	return nil

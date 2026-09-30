@@ -457,7 +457,7 @@ func TestHTTPRegistrationCanRecoverFromMailFailure(t *testing.T) {
 		}
 		link = mailLink(t, h.mail.snapshot()[1], "/auth/verify")
 		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
-		h.request(http.MethodGet, link.RequestURI(), nil, false)
+		h.request(http.MethodPost, "/auth/verify", link.Query(), false)
 		u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
 		if err != nil || !u.Verified {
 			t.Fatal("account did not recover after successful resend")
@@ -630,7 +630,7 @@ func TestHTTPVerificationUpdatesExistingAccount(t *testing.T) {
 			t.Fatal(err)
 		}
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
-		w = h.request(http.MethodGet, link.RequestURI(), nil, true)
+		w = h.request(http.MethodPost, "/auth/verify", link.Query(), true)
 		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 			t.Fatal("verification did not succeed")
 		}
@@ -832,7 +832,7 @@ func TestHTTPVerificationResendEmailsInstructions(t *testing.T) {
 			h.assertNoTokenExposure(t, w, link.Query().Get("token"))
 		}
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
-		w = h.request(http.MethodGet, link.RequestURI(), nil, true)
+		w = h.request(http.MethodPost, "/auth/verify", link.Query(), true)
 		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
 		verified, err := user.GetUserByID(h.app.Database, u.ID)
 		if err != nil || !verified.Verified {
@@ -1182,11 +1182,15 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 		}
 		for _, htmx := range []bool{false, true} {
 			for _, tc := range []struct{ method, path, message string }{
-				{http.MethodGet, "/auth/verify?token=" + url.QueryEscape(reset.Token), "Verification failed"},
+				{http.MethodPost, "/auth/verify", "Verification failed"},
 				{http.MethodGet, "/auth/reset/email?token=" + url.QueryEscape(verification.Token), "invalid token"},
 				{http.MethodPost, "/auth/reset/email?token=" + url.QueryEscape(verification.Token), "invalid token"},
 			} {
-				w := h.request(tc.method, tc.path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, htmx)
+				form := url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}
+				if tc.path == "/auth/verify" {
+					form.Set("token", reset.Token)
+				}
+				w := h.request(tc.method, tc.path, form, htmx)
 				if !strings.Contains(w.Body.String(), tc.message) || strings.Contains(w.Body.String(), `id="reset-password-form"`) || w.Header().Get("HX-Redirect") != "" {
 					t.Fatal("wrong-purpose token did not produce a rejection")
 				}

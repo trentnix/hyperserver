@@ -53,6 +53,7 @@ const (
 	authRegisterSelectionTemplate = "auth/templates/html/pages/register-selection.html"
 	authLoginDefaultTemplate      = "auth/templates/html/pages/login-default.html"
 	authRegisterDefaultTemplate   = "auth/templates/html/pages/register-default.html"
+	authVerifyTemplate            = "auth/templates/html/pages/verify.html"
 	messageTemplate               = "auth/templates/html/pages/message.html"
 	authLoginSelectionPartial     = "auth.page.login.selection"
 	authRegisterSelectionPartial  = "auth.page.register.selection"
@@ -109,7 +110,8 @@ func (a *AuthManager) Routes(mux *http.ServeMux) {
 		}
 
 		// validate a registered user
-		mux.Handle("GET /auth/verify", http.HandlerFunc(a.Verify))
+		mux.Handle("GET /auth/verify", http.HandlerFunc(a.GetVerify))
+		mux.Handle("POST /auth/verify", http.HandlerFunc(a.Verify))
 		mux.Handle("POST /auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
 
 		// reset credentials
@@ -634,16 +636,36 @@ func logVerificationFailure(r *http.Request, message string) {
 	}
 }
 
-// Verify processes an attempt to verify a registered account
-func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
+// GetVerify displays a confirmation form without consuming the verification token.
+func (a *AuthManager) GetVerify(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	verificationToken := r.URL.Query().Get("token")
 	if verificationToken == "" {
-		a.contentManager.HandleError(
-			w,
-			r,
-			"No verification token specified. Unable to verify the user.",
-			nil,
-			http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No verification token specified. Unable to verify the user.", nil, http.StatusBadRequest)
+		return
+	}
+
+	c := content.NewManagedContent(r, a.contentManager)
+	c.PartialName = "auth.page.verify"
+	c.AddContent(authVerifyTemplate)
+	c.Data = verificationToken
+	if err := c.Render(w, r); err != nil {
+		a.contentManager.HandleError(w, r, "Unable to display the verification form.", err, http.StatusInternalServerError)
+	}
+}
+
+// Verify consumes the submitted token and verifies the account's email address.
+func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	if err := r.ParseForm(); err != nil {
+		a.contentManager.HandleError(w, r, "Unable to read the verification form.", nil, http.StatusBadRequest)
+		return
+	}
+	verificationToken := r.PostForm.Get("token")
+	if verificationToken == "" {
+		a.contentManager.HandleError(w, r, "No verification token specified. Unable to verify the user.", nil, http.StatusBadRequest)
 		return
 	}
 

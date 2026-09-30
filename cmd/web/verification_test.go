@@ -22,17 +22,74 @@ func TestHTTPVerificationSingleUseAndResend(t *testing.T) {
 			t.Fatal("resend reused the first token")
 		}
 		for i, link := range []*url.URL{second, first} {
-			w := h.request(http.MethodGet, link.RequestURI(), nil, true)
-			if w.Header().Get("HX-Redirect") != "/" {
+			w := h.request(http.MethodPost, "/auth/verify", link.Query(), i == 0)
+			if (i == 0 && w.Header().Get("HX-Redirect") != "/") || (i == 1 && !strings.Contains(w.Body.String(), `<meta http-equiv="refresh" content="0; url=/">`)) {
 				t.Fatal("delivered verification link was rejected")
 			}
 			h.assertRowCount(t, "usertoken", 1-i)
 			for _, htmx := range []bool{false, true} {
-				w = h.request(http.MethodGet, link.RequestURI(), nil, htmx)
+				w = h.request(http.MethodPost, "/auth/verify", link.Query(), htmx)
 				if !strings.Contains(w.Body.String(), "Verification failed") || w.Header().Get("HX-Redirect") != "" {
 					t.Fatal("replayed link was not rejected")
 				}
 				h.assertNoTokenExposure(t, w, link.Query().Get("token"))
+			}
+		}
+	})
+}
+
+func TestHTTPVerificationRequiresConfirmation(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
+		before, err := user.GetUserByEmail(h.app.Database, registrationForm().Get("email"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, htmx := range []bool{false, true} {
+			for _, method := range []string{http.MethodHead, http.MethodGet} {
+				w := h.request(method, link.RequestURI(), nil, htmx)
+				if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
+					t.Fatalf("%s did not display confirmation: status=%d", method, w.Code)
+				}
+				if w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Referrer-Policy") != "no-referrer" {
+					t.Fatal("confirmation response did not protect the token from caching or referrer disclosure")
+				}
+				if method == http.MethodGet {
+					for _, field := range []string{`method="post"`, `action="/auth/verify"`, `hx-post="/auth/verify"`, `name="token" value="` + link.Query().Get("token") + `"`} {
+						if !strings.Contains(w.Body.String(), field) {
+							t.Fatalf("confirmation form is missing %s", field)
+						}
+					}
+				}
+				stored, err := user.GetUserByID(h.app.Database, before.ID)
+				if err != nil || *stored != *before {
+					t.Fatalf("%s changed the account: %v", method, err)
+				}
+				h.assertRowCount(t, "usertoken", 1)
+			}
+			// A POST must submit the token in its body, not merely visit the emailed URL.
+			w := h.request(http.MethodPost, link.RequestURI(), nil, htmx)
+			if !strings.Contains(w.Body.String(), "No verification token specified") {
+				t.Fatal("query-only POST was accepted")
+			}
+			h.assertRowCount(t, "usertoken", 1)
+		}
+		w := h.request(http.MethodPost, "/auth/verify", link.Query(), true)
+		if w.Header().Get("HX-Redirect") != "/" {
+			t.Fatal("confirmation did not verify the account")
+		}
+		h.assertRowCount(t, "usertoken", 0)
+	})
+}
+
+func TestHTTPVerificationConfirmationEscapesToken(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		const token = `"><script>alert(1)</script>`
+		for _, htmx := range []bool{false, true} {
+			w := h.request(http.MethodGet, "/auth/verify?token="+url.QueryEscape(token), nil, htmx)
+			if w.Code != http.StatusOK || strings.Contains(w.Body.String(), token) || !strings.Contains(w.Body.String(), `value="&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"`) {
+				t.Fatal("confirmation did not escape the token")
 			}
 		}
 	})
@@ -74,7 +131,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 					}
 					link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 					for _, htmx := range []bool{false, true} {
-						w := h.request(http.MethodGet, link.RequestURI(), nil, htmx)
+						w := h.request(http.MethodPost, "/auth/verify", link.Query(), htmx)
 						if !strings.Contains(w.Body.String(), "Verification failed") || w.Header().Get("HX-Redirect") != "" {
 							t.Fatal("storage failure returned verification success")
 						}
@@ -93,7 +150,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 					}
 				}
 				link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
-				w := h.request(http.MethodGet, link.RequestURI(), nil, true)
+				w := h.request(http.MethodPost, "/auth/verify", link.Query(), true)
 				if w.Header().Get("HX-Redirect") != "/" {
 					t.Fatal("verification did not recover after storage failure")
 				}
@@ -116,7 +173,7 @@ func TestHTTPVerificationRejectsPreviousEmailAddress(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, htmx := range []bool{false, true} {
-			w := h.request(http.MethodGet, oldLink.RequestURI(), nil, htmx)
+			w := h.request(http.MethodPost, "/auth/verify", oldLink.Query(), htmx)
 			if !strings.Contains(w.Body.String(), "Verification failed") || w.Header().Get("HX-Redirect") != "" {
 				t.Fatal("old address link verified the new address")
 			}
@@ -132,7 +189,7 @@ func TestHTTPVerificationRejectsPreviousEmailAddress(t *testing.T) {
 			t.Fatal("resend used the old address")
 		}
 		newLink := mailLink(t, message, "/auth/verify")
-		if w := h.request(http.MethodGet, newLink.RequestURI(), nil, true); w.Header().Get("HX-Redirect") != "/" {
+		if w := h.request(http.MethodPost, "/auth/verify", newLink.Query(), true); w.Header().Get("HX-Redirect") != "/" {
 			t.Fatal("new address link failed")
 		}
 	})
@@ -148,7 +205,7 @@ func TestHTTPVerificationFailedResendPreservesDeliveredLink(t *testing.T) {
 		if !strings.Contains(w.Body.String(), "Unable to send verification instructions") {
 			t.Fatal("failed resend was not reported")
 		}
-		w = h.request(http.MethodGet, link.RequestURI(), nil, true)
+		w = h.request(http.MethodPost, "/auth/verify", link.Query(), true)
 		if w.Header().Get("HX-Redirect") != "/" {
 			t.Fatal("failed resend invalidated the delivered link")
 		}

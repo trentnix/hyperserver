@@ -101,8 +101,8 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 					`CREATE TRIGGER fail_verify AFTER UPDATE ON user BEGIN INSERT INTO verification_failure VALUES ('missing'); END`,
 				}
 			case "email changed":
-				u.Email = "changed@example.invalid"
-				if err := u.Update(ctx, db); err != nil {
+				// Bypass Update's revocation to test the signed email check itself.
+				if _, err := db.Exec(`UPDATE user SET email = ? WHERE id = ?`, "changed@example.invalid", u.ID); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := ValidateVerificationToken(db, token.Token, key); err == nil {
@@ -208,5 +208,130 @@ func TestVerifyConcurrentRedemption(t *testing.T) {
 	stored, err := GetUserByID(db, u.ID)
 	if successes != 1 || err != nil || !stored.Verified {
 		t.Fatalf("concurrent verification: successes=%d, lookup error=%v", successes, err)
+	}
+}
+
+func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
+	db, u, first, key := verificationFixture(t)
+	second, err := NewAuthVerificationToken(u, key, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Create(db); err != nil {
+		t.Fatal(err)
+	}
+	reset, err := NewAuthResetToken(u, key, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reset.Create(db); err != nil {
+		t.Fatal(err)
+	}
+	other := &User{Email: "other@example.invalid"}
+	if err := other.Create(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	otherToken, err := NewAuthVerificationToken(other, key, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := otherToken.Create(db); err != nil {
+		t.Fatal(err)
+	}
+
+	// Updating unrelated fields must preserve both outstanding verification links.
+	u.Password = "new hash"
+	if err := u.Update(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []*AuthVerificationToken{first, second} {
+		if _, err := ValidateVerificationToken(db, token.Token, key); err != nil {
+			t.Fatalf("unchanged email invalidated verification: %v", err)
+		}
+	}
+
+	originalEmail := u.Email
+	for _, email := range []string{"changed@example.invalid", originalEmail} {
+		u.Email = email
+		if err := u.Update(context.Background(), db); err != nil {
+			t.Fatal(err)
+		}
+		for _, token := range []*AuthVerificationToken{first, second} {
+			var missing *ErrTokenNotFound
+			if _, err := Verify(context.Background(), db, token.Token, key); !errors.As(err, &missing) {
+				t.Fatalf("old link at %s: got %v, want revoked token", email, err)
+			}
+		}
+	}
+	if _, err := GetAuthResetTokenByHash(db, reset.TokenHash); err != nil {
+		t.Fatalf("email change revoked a reset token: %v", err)
+	}
+	if _, err := ValidateVerificationToken(db, otherToken.Token, key); err != nil {
+		t.Fatalf("email change revoked another account's token: %v", err)
+	}
+	stored, err := GetUserByID(db, u.ID)
+	if err != nil || stored.Verified {
+		t.Fatalf("revoked link verified the account: %v", err)
+	}
+	newToken, err := NewAuthVerificationToken(u, key, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := newToken.Create(db); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Verify(context.Background(), db, newToken.Token, key); err != nil {
+		t.Fatalf("fresh link was rejected: %v", err)
+	}
+}
+
+func TestEmailChangeRevocationRollsBack(t *testing.T) {
+	for _, failure := range []string{"delete", "update", "commit", "email conflict"} {
+		t.Run(failure, func(t *testing.T) {
+			db, u, token, key := verificationFixture(t)
+			before, err := GetUserByID(db, u.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var statements []string
+			switch failure {
+			case "delete":
+				statements = []string{`CREATE TRIGGER fail_email_change BEFORE DELETE ON usertoken BEGIN SELECT RAISE(ABORT, 'failed deletion'); END`}
+			case "update":
+				statements = []string{`CREATE TRIGGER fail_email_change BEFORE UPDATE ON user BEGIN SELECT RAISE(ABORT, 'failed update'); END`}
+			case "commit":
+				statements = []string{
+					`PRAGMA foreign_keys = ON`,
+					`CREATE TABLE email_change_failure (user_id TEXT REFERENCES user(id) DEFERRABLE INITIALLY DEFERRED)`,
+					`CREATE TRIGGER fail_email_change AFTER UPDATE ON user BEGIN INSERT INTO email_change_failure VALUES ('missing'); END`,
+				}
+			case "email conflict":
+				other := &User{Email: "changed@example.invalid"}
+				if err := other.Create(context.Background(), db); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, statement := range statements {
+				if _, err := db.Exec(statement); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			u.Email = "changed@example.invalid"
+			attempt := *u
+			if err := u.Update(context.Background(), db); err == nil {
+				t.Fatal("email change succeeded despite storage failure")
+			}
+			if *u != attempt {
+				t.Fatal("failed email change mutated the receiver")
+			}
+			stored, err := GetUserByID(db, u.ID)
+			if err != nil || *stored != *before {
+				t.Fatalf("failed email change mutated the account: %v", err)
+			}
+			if _, err := ValidateVerificationToken(db, token.Token, key); err != nil {
+				t.Fatalf("failed email change revoked the verification link: %v", err)
+			}
+		})
 	}
 }
