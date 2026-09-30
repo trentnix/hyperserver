@@ -68,8 +68,9 @@ type AuthService interface {
 	ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool
 	// GetReset renders the reset form after AuthManager validates token.
 	GetReset(w http.ResponseWriter, r *http.Request, token string)
-	// Reset updates credentials for an account whose token AuthManager has validated.
-	// It reports whether the operation succeeded. Token consumption is handled separately.
+	// Reset must revalidate and consume the exact token atomically with the credential
+	// change. AuthManager's earlier validation does not prevent concurrent reuse.
+	// Return true only after both changes commit.
 	Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNewCredentials bool) bool
 
 	// GetChange renders the credential-change form for the authenticated account.

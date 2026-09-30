@@ -580,7 +580,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	}
 }
 
-// Reset processes a password reset request
+// Reset validates the password form and atomically redeems the reset token.
 func (a *EmailAuthService) Reset(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -642,8 +642,7 @@ func (a *EmailAuthService) Reset(
 		return false
 	}
 
-	u.Password = hashedPassword
-	err = u.Update(r.Context(), a.db)
+	err = u.ResetPassword(r.Context(), a.db, token, []byte(a.config.Auth.JwtKey), hashedPassword)
 	if err != nil {
 		// the user could not be updated
 		form.HandleFormError(

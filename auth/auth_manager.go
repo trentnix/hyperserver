@@ -477,7 +477,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 	(*authService).GetReset(w, r, token)
 }
 
-// Reset starts the authentication reset process for the specified AuthService implementation
+// Reset delegates token redemption and redirects only after the provider commits.
 func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
@@ -524,19 +524,6 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 
 	resetSuccessful := (*authService).Reset(w, r, u, token, a.resetRequiresNewCredentials)
 	if resetSuccessful {
-		// delete user reset token
-		resetToken, tokenErr := user.GetAuthResetTokenByUser(a.db, u.ID)
-		if tokenErr != nil {
-			logger.LogRequestError(r, user.NewErrTokenNotFound(tokenErr))
-		}
-
-		tokenErr = resetToken.Delete(a.db)
-		if tokenErr != nil {
-			// couldn't delete the token - log it
-			// this is a security risk as the token could be reused to change the password again
-			logger.LogRequestError(r, database.NewErrDatabase(tokenErr))
-		}
-
 		// redirect the user to the auth page
 		err := messages.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site.")
 		if err != nil {
