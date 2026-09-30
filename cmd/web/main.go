@@ -1,5 +1,6 @@
-// main.go defines the entry point for the hyperserver application, creating an instance of the
-// ApplicationServer, setting up the router, setting up necessary services, etc.
+// Command web runs HyperServer's loopback-only development application.
+// It imports the sample site and email authentication provider. It is not suitable
+// for public deployment.
 package main
 
 import (

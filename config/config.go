@@ -1,18 +1,8 @@
-// config.go defines the application configuration object, which is loaded from config.yaml using viper
-//
-// All configuration values can be overridden by environment variables. The name of the variable is
-// determined by the set prefix and the name of the configuration field in config/config.yaml.
-//
-// In config/config.go, the prefix is set as hyperserver via viper.SetEnvPrefix("hyperserver"). Nested fields require
-// an underscore between levels. For example:
-//
-//	 http:
-//	   port: 1234
-//
-//	can be overridden by setting an environment variable with the name HYPERSERVER_HTTP_PORT.
-//
-// It is good practice to override values that need to be secure with an environment variable that
-// is loaded securely.
+// Package config loads and validates HyperServer configuration.
+// GetConfig searches for config.yaml in the working directory and nearby config
+// directories. HYPERSERVER_ environment variables override file values, with
+// underscores separating nested keys, for example HYPERSERVER_HTTP_PORT.
+// Provider packages validate their own configuration.
 package config
 
 import (
@@ -36,17 +26,19 @@ type (
 
 	// HTTPConfig stores HTTP configuration
 	HTTPConfig struct {
-		PublicOrigin string // Optional override for absolute links, independent of the listener.
-		ListenHost   string // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
-		Port         uint16
-		ReadTimeout  time.Duration
-		WriteTimeout time.Duration
-		IdleTimeout  time.Duration
-		TLS          struct {
+		PublicOrigin string        // Optional override for absolute links, independent of the listener.
+		ListenHost   string        // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
+		Port         uint16        // Listener port. Zero requests an ephemeral port but cannot supply fallback links.
+		ReadTimeout  time.Duration // Maximum time to read a request, including its body.
+		WriteTimeout time.Duration // Maximum time to write a response.
+		IdleTimeout  time.Duration // Maximum wait for another request on a keep-alive connection.
+		// TLS holds listener TLS settings. The reference command currently ignores them.
+		TLS struct {
 			Enabled     bool
 			Certificate string
 			Key         string
 		}
+		// Session contains signing settings, provider options, and named-store selections.
 		Session struct {
 			JwtKey    string
 			TokenAge  time.Duration
@@ -56,15 +48,16 @@ type (
 		}
 	}
 
+	// AuthConfig selects authentication providers, registration policy, and account-token settings.
 	AuthConfig struct {
-		Enabled                      bool
-		RegistrationEnabled          bool
-		JwtKey                       string
+		Enabled                      bool   // Enables authentication routes and provider initialization.
+		RegistrationEnabled          bool   // Allows new accounts. Defaults to false without disabling existing-account recovery.
+		JwtKey                       string // Signs account tokens. Must differ from the session signing key.
 		VerificationEndpoint         string
 		VerificationTokenExpiration  time.Duration
 		ResetTokenExpiration         time.Duration
 		ResetRequiresNewCredentials  bool
-		RegisterRequiresVerification bool
+		RegisterRequiresVerification bool                         // Requires configured verification delivery when registration is enabled.
 		Services                     map[string]map[string]string `mapstructure:"services"`
 	}
 
@@ -93,7 +86,9 @@ type (
 	}
 )
 
-// GetConfig loads and reads the application configuration file
+// GetConfig loads config.yaml, applies environment overrides, and validates shared settings.
+// It searches ., config, ../config, and ../../config in that order. Provider-specific
+// validation must run separately. A missing or invalid file returns an error.
 func GetConfig() (Config, error) {
 	v := viper.New()
 

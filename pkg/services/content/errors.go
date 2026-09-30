@@ -1,4 +1,3 @@
-// errors.go defines custom errors in the content package
 package content
 
 import (
@@ -7,6 +6,7 @@ import (
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
+// BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 
 // ErrRequestNotSet indicates a *http.Request instance is not set
@@ -14,7 +14,7 @@ type ErrRequestNotSet struct {
 	*BaseError
 }
 
-// NewErrRenderingTemplates creates an instance of ErrRequestNotSet
+// NewErrRequestNotSet returns an ErrRequestNotSet wrapping err.
 func NewErrRequestNotSet(err error) *ErrRequestNotSet {
 	return &ErrRequestNotSet{
 		BaseError: &BaseError{
@@ -24,12 +24,13 @@ func NewErrRequestNotSet(err error) *ErrRequestNotSet {
 	}
 }
 
-// ErrRequestNotSet indicates a *http.Request instance is not set
+// ErrResourceNotFound indicates that a requested resource is unavailable.
 type ErrResourceNotFound struct {
 	*BaseError
 }
 
-// NewErrResourceNotFound creates an instance of ErrResourceNotFound
+// NewErrResourceNotFound wraps err with a resource-not-found message.
+// Despite its name, it currently returns ErrRequestNotSet, not ErrResourceNotFound.
 func NewErrResourceNotFound(err error) *ErrRequestNotSet {
 	return &ErrRequestNotSet{
 		BaseError: &BaseError{
@@ -44,7 +45,7 @@ type ErrHtmxRequestRequired struct {
 	*BaseError
 }
 
-// NewErrResourceNotFound creates an instance of ErrResourceNotFound
+// NewErrHtmxRequestRequired returns an ErrHtmxRequestRequired wrapping err.
 func NewErrHtmxRequestRequired(err error) *ErrHtmxRequestRequired {
 	return &ErrHtmxRequestRequired{
 		BaseError: &BaseError{
@@ -60,7 +61,7 @@ type ErrContentManagerUnavailable struct {
 	*BaseError
 }
 
-// NewErrContentManagerUnavailable creates an instance of ErrContentManagerUnavailable
+// NewErrContentManagerUnavailable returns an ErrContentManagerUnavailable wrapping err.
 func NewErrContentManagerUnavailable(err error) *ErrContentManagerUnavailable {
 	return &ErrContentManagerUnavailable{
 		BaseError: &BaseError{
@@ -77,7 +78,7 @@ type ErrHandlerReferencesSelf struct {
 	*BaseError
 }
 
-// NewErrHandlerReferencesSelf creates an instance of ErrHandlerReferencesSelf
+// NewErrHandlerReferencesSelf returns an ErrHandlerReferencesSelf wrapping err.
 func NewErrHandlerReferencesSelf(err error, handler string) *ErrHandlerReferencesSelf {
 	errMessage := fmt.Sprintf("the specified handler '%s' is also the content manager handler", handler)
 	return &ErrHandlerReferencesSelf{

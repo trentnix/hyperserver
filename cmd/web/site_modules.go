@@ -1,4 +1,3 @@
-// site_modules.go selects modules for the local development application.
 package main
 
 import (

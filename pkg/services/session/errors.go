@@ -1,18 +1,18 @@
-// errors.go defines custom errors in the content package
 package session
 
 import (
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
+// BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 
-// ErrSessionStoreNotFound a session store could not be found
+// ErrSessionManagerNotFound indicates that the request has no session manager.
 type ErrSessionManagerNotFound struct {
 	*BaseError
 }
 
-// NewErrSessionManagerNotFound creates an instance of ErrSessionManagerNotFound
+// NewErrSessionManagerNotFound returns an ErrSessionManagerNotFound wrapping err.
 func NewErrSessionManagerNotFound(err error) *ErrSessionManagerNotFound {
 	return &ErrSessionManagerNotFound{
 		BaseError: &BaseError{
@@ -27,7 +27,7 @@ type ErrSessionStoreNotFound struct {
 	*BaseError
 }
 
-// NewErrStoreNotFound creates an instance of ErrSessionStoreNotFound
+// NewErrSessionStoreNotFound returns an ErrSessionStoreNotFound wrapping err.
 func NewErrSessionStoreNotFound(err error) *ErrSessionStoreNotFound {
 	return &ErrSessionStoreNotFound{
 		BaseError: &BaseError{
@@ -42,7 +42,7 @@ type ErrStoreDisabled struct {
 	*BaseError
 }
 
-// NewErrStoreDisabled creates an instance of ErrStoreDisabled
+// NewErrStoreDisabled returns an ErrStoreDisabled wrapping err.
 func NewErrStoreDisabled(err error) *ErrStoreDisabled {
 	return &ErrStoreDisabled{
 		BaseError: &BaseError{
@@ -57,7 +57,7 @@ type ErrSessionInvalid struct {
 	*BaseError
 }
 
-// NewErrSessionInvalid creates an instance of ErrSessionInvalid
+// NewErrSessionInvalid returns an ErrSessionInvalid wrapping err.
 func NewErrSessionInvalid(err error) *ErrSessionInvalid {
 	return &ErrSessionInvalid{
 		BaseError: &BaseError{
@@ -73,7 +73,7 @@ type ErrSessionCouldNotBeCreated struct {
 	*BaseError
 }
 
-// NewErrSessionCouldNotBeCreated creates an instance of ErrSessionCouldNotBeCreated
+// NewErrSessionCouldNotBeCreated returns an ErrSessionCouldNotBeCreated wrapping err.
 func NewErrSessionCouldNotBeCreated(err error) *ErrSessionCouldNotBeCreated {
 	return &ErrSessionCouldNotBeCreated{
 		BaseError: &BaseError{
@@ -88,7 +88,7 @@ type ErrSessionKeyInvalid struct {
 	*BaseError
 }
 
-// NewErrSessionKeyInvalid creates an instance of ErrSessionKeyInvalid
+// NewErrSessionKeyInvalid returns an ErrSessionKeyInvalid wrapping err.
 func NewErrSessionKeyInvalid(err error) *ErrSessionKeyInvalid {
 	return &ErrSessionKeyInvalid{
 		BaseError: &BaseError{
@@ -103,7 +103,7 @@ type ErrInvalidToken struct {
 	*BaseError
 }
 
-// NewErrInvalidToken creates an instance of ErrInvalidToken
+// NewErrInvalidToken returns an ErrInvalidToken wrapping err.
 func NewErrInvalidToken(err error) *ErrInvalidToken {
 	return &ErrInvalidToken{
 		BaseError: &BaseError{
@@ -118,7 +118,7 @@ type ErrTokenKeyNotSet struct {
 	*BaseError
 }
 
-// NewErrTokenKeyNotSet creates an instance of ErrTokenKeyNotSet
+// NewErrTokenKeyNotSet returns an ErrTokenKeyNotSet wrapping err.
 func NewErrTokenKeyNotSet(err error) *ErrTokenKeyNotSet {
 	return &ErrTokenKeyNotSet{
 		BaseError: &BaseError{
@@ -133,7 +133,7 @@ type ErrCookieLifetimeNotSet struct {
 	*BaseError
 }
 
-// NewErrCookieLifetimeNotSet creates an instance of ErrCookieLifetimeNotSet
+// NewErrCookieLifetimeNotSet returns an ErrCookieLifetimeNotSet wrapping err.
 func NewErrCookieLifetimeNotSet(err error) *ErrCookieLifetimeNotSet {
 	return &ErrCookieLifetimeNotSet{
 		BaseError: &BaseError{
@@ -143,12 +143,12 @@ func NewErrCookieLifetimeNotSet(err error) *ErrCookieLifetimeNotSet {
 	}
 }
 
-// ErrTokenLifetimeNotSet is used when the JWT key is not set
+// ErrTokenLifetimeNotSet indicates that a session token lifetime is missing.
 type ErrTokenLifetimeNotSet struct {
 	*BaseError
 }
 
-// NewErrTokenLifetimeNotSet creates an instance of ErrTokenLifetimeNotSet
+// NewErrTokenLifetimeNotSet returns an ErrTokenLifetimeNotSet wrapping err.
 func NewErrTokenLifetimeNotSet(err error) *ErrTokenLifetimeNotSet {
 	return &ErrTokenLifetimeNotSet{
 		BaseError: &BaseError{
@@ -163,7 +163,7 @@ type ErrRequestNotSpecified struct {
 	*BaseError
 }
 
-// NewErrRequestNotSpecified creates an instance of ErrRequestNotSpecified
+// NewErrRequestNotSpecified returns an ErrRequestNotSpecified wrapping err.
 func NewErrRequestNotSpecified(err error) *ErrRequestNotSpecified {
 	return &ErrRequestNotSpecified{
 		BaseError: &BaseError{

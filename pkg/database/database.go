@@ -1,4 +1,5 @@
-// database.go handles the setup and configuration for database usage in the application
+// Package database opens SQL connection pools and provides SQLite schema helpers.
+// It uses sqlx and golang-migrate. Setup does not create tables or verify connectivity.
 package database
 
 import (
@@ -13,7 +14,8 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-// Setup initializes the database, creating tables and seeding data if necessary
+// Setup opens a sqlx connection pool for driver and connection.
+// It does not ping the database, create tables, or seed data. The caller owns the pool.
 func Setup(driver string, connection string) (*sqlx.DB, error) {
 	// Open the database using sqlx
 	db, err := sqlx.Open(driver, connection)
@@ -24,6 +26,8 @@ func Setup(driver string, connection string) (*sqlx.DB, error) {
 	return db, nil
 }
 
+// RunMigrations applies pending SQLite migrations from modules/site/database/migrations.
+// The migrationsLocation argument is currently ignored. No pending migrations is not an error.
 func RunMigrations(db *sql.DB, migrationsLocation string) error {
 	// Use the underlying *sql.DB for migration
 	sqlDriver, err := migrationDriver.WithInstance(db, &migrationDriver.Config{})
@@ -47,7 +51,8 @@ func RunMigrations(db *sql.DB, migrationsLocation string) error {
 	return nil
 }
 
-// TableExists determines whether the table specified by tableName exists
+// TableExists reports whether a table exists in a SQLite database.
+// Other database drivers return ErrDatabaseNotSupported.
 func TableExists(db *sql.DB, tableName string) (bool, error) {
 	var query string
 	var args []interface{}

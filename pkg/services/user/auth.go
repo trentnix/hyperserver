@@ -14,8 +14,8 @@ const (
 	userSessionKey string = "auth-user-session"
 )
 
-// SetAuthenticatedUser creates a user session for the specified user to indicate that
-// the user is authenticated
+// SetAuthenticatedUser saves the account ID in the current user session.
+// It does not rotate the session ID. Session management must be attached to r.
 func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error {
 	if u == nil || u.ID == "" {
 		return errors.New("The specified user is not specified. The user's ID must be set.")
@@ -35,8 +35,9 @@ func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error
 	return nil
 }
 
-// LogoutAuthenticatedUser retrieves any active user session and ends the session,
-// terminating any logged-in user's authentication session
+// LogoutAuthenticatedUser delegates logout to the user session's End method.
+// It does not clear a User already attached to the request context. Revocation
+// of captured cookies depends on the store and is not provided by the current stores.
 func LogoutAuthenticatedUser(w http.ResponseWriter, r *http.Request) error {
 	s, err := session.Get(r, userSessionKey)
 	if err != nil {

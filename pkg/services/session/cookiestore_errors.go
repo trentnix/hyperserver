@@ -1,4 +1,3 @@
-// errors.go defines custom errors in the content package
 package session
 
 // ErrCookieStoreNotCreated indicates a cookie-based session store could not be created
@@ -6,7 +5,7 @@ type ErrCookieStoreNotCreated struct {
 	*BaseError
 }
 
-// NewErrCookieStoreNotCreated creates an instance of ErrCookieStoreNotCreated
+// NewErrCookieStoreNotCreated returns an ErrCookieStoreNotCreated wrapping err.
 func NewErrCookieStoreNotCreated(err error) *ErrCookieStoreNotCreated {
 	return &ErrCookieStoreNotCreated{
 		BaseError: &BaseError{

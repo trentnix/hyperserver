@@ -1,5 +1,3 @@
-// sqlitestore.go defines an implementation of the SessionStore interface that
-// stores session data in SQLite
 package session
 
 import (
@@ -18,8 +16,10 @@ import (
 )
 
 type (
+	// SQLiteStore persists session data in SQLite and signs session IDs in cookies.
+	// Database initialization currently uses a process-wide connection pool.
 	SQLiteStore struct {
-		// key to encode the session data into a JWT
+		// JwtKey signs the session-ID cookie. It does not encrypt its contents.
 		JwtKey []byte
 		// lifetime of the JWT
 		TokenLifetime time.Duration
@@ -35,6 +35,7 @@ type (
 		enabled bool
 	}
 
+	// SQLiteSession is the database representation of an encoded session.
 	SQLiteSession struct {
 		ID         string    `db:"id"`
 		Session    string    `db:"session"`
@@ -48,8 +49,10 @@ var (
 	dbSQLiteSessionStore *sqlx.DB
 	dbOnce               sync.Once
 
+	// ErrSQLiteStoreNotConfigured indicates that SQLite session settings are missing.
 	ErrSQLiteStoreNotConfigured = errors.New("the sqliteStore is not configured")
-	ErrDatabaseNotConfigured    = errors.New("the session database is not configured")
+	// ErrDatabaseNotConfigured indicates that the session store has no database connection.
+	ErrDatabaseNotConfigured = errors.New("the session database is not configured")
 )
 
 const (
@@ -57,10 +60,8 @@ const (
 	sqliteStoreName = "SQLiteStore"
 )
 
-// NewSQLiteStore configures the database that will be used to store session data and
-// creates a new instance of SQLiteStore that can be used to store and retrieve session
-// data. If the SQL database is not configured correctly or setup fails, an error is
-// returned.
+// NewSQLiteStore validates cookie settings and prepares the SQLite store.
+// The first initialized store supplies the process-wide pool reused by later stores.
 func NewSQLiteStore(c *config.Config) (*SQLiteStore, error) {
 	configErr := checkStoreCookieConfig(c)
 	if configErr != nil {
@@ -86,7 +87,9 @@ func NewSQLiteStore(c *config.Config) (*SQLiteStore, error) {
 	return sqliteStore, nil
 }
 
-// Get retrieves any session information from the request Cookie and,
+// Get loads the session identified by the signed request cookie.
+// A missing cookie returns a new session. Invalid cookies can return a new session
+// with an error. Database failures return an error. Stored expiry is not checked.
 func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 	if s.db == nil {
 		return nil, ErrDatabaseNotConfigured
@@ -195,7 +198,8 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	return nil
 }
 
-// End terminates the specified session
+// End expires the browser cookie. It does not delete or expire the SQLite row,
+// so a captured cookie is not revoked by this method.
 func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     session.Name,
@@ -210,7 +214,7 @@ func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *Sessi
 	return nil
 }
 
-// IsEnabled informs the called whether the specified CookieStore is enabled and can be used
+// IsEnabled reports whether this SQLite store is enabled in configuration.
 func (s *SQLiteStore) IsEnabled() bool {
 	return s.enabled
 }

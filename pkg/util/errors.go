@@ -1,4 +1,3 @@
-// errors.go defines the custom errors used by the util package
 package util
 
 import (
@@ -7,6 +6,7 @@ import (
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
+// BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 
 // ErrFailedToSetWorkingDirectory indicates the working directory could not be set
@@ -14,7 +14,7 @@ type ErrFailedToSetWorkingDirectory struct {
 	*BaseError
 }
 
-// NewErrFailedToSetWorkingDirectory creates an instance of ErrFailedToSetWorkingDirectory
+// NewErrFailedToSetWorkingDirectory returns an ErrFailedToSetWorkingDirectory wrapping err.
 func NewErrFailedToSetWorkingDirectory(err error) *ErrFailedToSetWorkingDirectory {
 	return &ErrFailedToSetWorkingDirectory{
 		BaseError: &BaseError{
@@ -29,7 +29,7 @@ type ErrWorkingDirectoryNotSpecified struct {
 	*BaseError
 }
 
-// NewErrWorkingDirectoryNotSpecified creates an instance of ErrWorkingDirectoryNotSpecified
+// NewErrWorkingDirectoryNotSpecified returns an ErrWorkingDirectoryNotSpecified wrapping err.
 func NewErrWorkingDirectoryNotSpecified(err error) *ErrWorkingDirectoryNotSpecified {
 	return &ErrWorkingDirectoryNotSpecified{
 		BaseError: &BaseError{
@@ -44,7 +44,7 @@ type ErrFailedToGetWorkingDirectory struct {
 	*BaseError
 }
 
-// NewErrFailedToSetWorkingDirectory creates an instance of ErrFailedToSetWorkingDirectory
+// NewErrFailedToGetWorkingDirectory returns an ErrFailedToGetWorkingDirectory wrapping err.
 func NewErrFailedToGetWorkingDirectory(err error) *ErrFailedToGetWorkingDirectory {
 	return &ErrFailedToGetWorkingDirectory{
 		BaseError: &BaseError{
@@ -54,13 +54,13 @@ func NewErrFailedToGetWorkingDirectory(err error) *ErrFailedToGetWorkingDirector
 	}
 }
 
-// ErrDatabaseUnavailable indicates the database is unavailable
+// ErrLoadingTemplate reports a failure loading a template file.
 type ErrLoadingTemplate struct {
 	template string
 	*BaseError
 }
 
-// NewErrDatabaseUnavailable creates an instance of ErrDatabaseUnavailable
+// NewErrLoadingTemplate returns an ErrLoadingTemplate wrapping err.
 func NewErrLoadingTemplate(err error, t string) *ErrLoadingTemplate {
 	errorMessage := fmt.Sprintf("there was an error loading the specified template: %s", t)
 	return &ErrLoadingTemplate{
@@ -78,7 +78,7 @@ type ErrInvalidUri struct {
 	*BaseError
 }
 
-// NewErrInvalidUri creates an instance of ErrInvalidUri
+// NewErrInvalidUri returns an ErrInvalidUri wrapping err.
 func NewErrInvalidUri(err error, uri string) *ErrInvalidUri {
 	errorMessage := fmt.Sprintf("the provided URI is invalid: '%s'", uri)
 	return &ErrInvalidUri{

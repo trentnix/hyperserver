@@ -1,5 +1,6 @@
-// server.go defines the ApplicationServer structure and its constituents. The ApplicationServer structure
-// stands as the central object used to orchestrate the hypermedia server.
+// Package server assembles configuration, storage, routing, and shared services.
+// The current constructor initializes services unconditionally and panics on setup
+// errors. It does not start an HTTP listener or initialize registered modules.
 package server
 
 import (
@@ -28,8 +29,9 @@ type (
 	}
 )
 
-// NewApplicationServer creates an instance of an ApplicationServer and does all
-// necessary setup
+// NewApplicationServer loads configuration and creates the database pool, router,
+// content manager, session manager, and mail client. It panics on initialization
+// errors. The caller must initialize modules, serve HTTP, and close owned resources.
 func NewApplicationServer() *ApplicationServer {
 	s := new(ApplicationServer)
 
@@ -43,7 +45,7 @@ func NewApplicationServer() *ApplicationServer {
 	return s
 }
 
-// Shutdown handles any necessary shutdown so the server can shut down gracefully
+// Shutdown currently returns nil without closing resources or draining requests.
 func (s *ApplicationServer) Shutdown() error {
 	return nil
 }

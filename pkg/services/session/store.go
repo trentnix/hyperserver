@@ -1,5 +1,3 @@
-// store.go provides a definition for the SessionStore interface and the errors that an
-// implementation of the SessionStore interface might use
 package session
 
 import (
@@ -10,12 +8,20 @@ import (
 	"github.com/trentnix/hyperserver/config"
 )
 
+// SessionStore loads, creates, saves, and ends named sessions.
+// Callers must check each provider's revocation and persistence guarantees.
 type (
 	SessionStore interface {
+		// Get reads a session, returning a new one when none exists.
+		// Some providers return a new session alongside a decoding error.
 		Get(r *http.Request, name string) (*Session, error)
+		// New creates an unsaved session with a new ID.
 		New(r *http.Request, name string) (*Session, error)
+		// Save persists a session and writes its cookie before the response body.
 		Save(w http.ResponseWriter, r *http.Request, session *Session) error
+		// End ends a session according to the provider's revocation guarantees.
 		End(w http.ResponseWriter, r *http.Request, session *Session) error
+		// IsEnabled reports whether the store is enabled in configuration.
 		IsEnabled() bool
 	}
 )

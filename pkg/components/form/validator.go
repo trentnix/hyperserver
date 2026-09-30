@@ -1,4 +1,3 @@
-// validator.go defines a validator that can be used to validate form values
 package form
 
 import (
@@ -16,7 +15,8 @@ type Validator struct {
 	validator *validator.Validate
 }
 
-// NewValidator creats a new Validator
+// NewValidator registers the password validation rule and returns a validator.
+// It returns nil if registration fails.
 func NewValidator() *Validator {
 	validate := validator.New()
 

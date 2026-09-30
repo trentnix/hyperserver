@@ -1,6 +1,7 @@
-// session.go wraps session management so that whether a JWT or server-managed session is used is
-// abstracted from the caller. Currently, the implementation uses a JWT but this could be abstracted
-// so that the SessionManager uses a single interface irrespective of how a session is managed.
+// Package session manages named sessions through cookie and SQLite stores.
+// Attach a SessionManager to each request before calling Get or New. Session data
+// is gob-encoded, and cookie payloads are signed, not encrypted. SQLite store setup
+// currently shares process-wide state, and End does not revoke stored sessions.
 package session
 
 import (
@@ -18,9 +19,10 @@ type (
 	SessionManager struct {
 		config *config.Config
 
-		// Stores is a map of sessoin names to the type of store it should use
+		// Stores maps provider names to their configuration options.
 		Stores map[string]map[string]string
-		Types  map[string]string
+		// Types maps session names to provider names, with "default" as the fallback.
+		Types map[string]string
 	}
 
 	ctxKey int
@@ -37,6 +39,8 @@ func GetSessionManager(r *http.Request) *SessionManager {
 	return getSessionManagerFromContext(r.Context())
 }
 
+// NewSessionManager retains the session configuration and store mappings from c.
+// It does not validate configuration or open a store.
 func NewSessionManager(c *config.Config) *SessionManager {
 	sessionManager := &SessionManager{
 		config: c,
@@ -47,8 +51,9 @@ func NewSessionManager(c *config.Config) *SessionManager {
 	return sessionManager
 }
 
-// Get returns any current sessions specified in the request with the specified name.
-// If a session is not found, a new session will be returned.
+// Get returns a request-cached or stored session, or creates a new one.
+// A SessionManager must be attached to r. Store-load errors are currently discarded,
+// so a new session does not reliably distinguish missing data from failed storage.
 func Get(r *http.Request, name string) (*Session, error) {
 	var session *Session
 
@@ -86,8 +91,8 @@ func Get(r *http.Request, name string) (*Session, error) {
 	return session, nil
 }
 
-// New returns a new Session instance irrespective of whether one already exists with the
-// specified name. If there is an existing session with the same name, it is ignored.
+// New creates and caches an unsaved session with a new ID.
+// It replaces the request-local session of the same name but does not revoke the old one.
 func New(r *http.Request, name string) (*Session, error) {
 	sm := GetSessionManager(r)
 	if sm == nil {

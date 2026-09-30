@@ -19,7 +19,7 @@ var (
 	databaseConfigured bool
 )
 
-// validateDatabase determines whether the sessionsTable exists and, if not, it creates it
+// prepareDatabase creates the account and token tables once per process.
 func prepareDatabase(db *sqlx.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))

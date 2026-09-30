@@ -1,5 +1,3 @@
-// auth_service.go defines the AuthService interface that can be used to implement
-// an authorization service
 package auth
 
 import (
@@ -34,58 +32,60 @@ type VerificationEmailSender interface {
 	SendVerificationEmail(context.Context, *user.User, url.URL) error
 }
 
-// AuthService defines an interface for an authorization service that can be implemented
-// and used in the application
+// AuthService provides the HTTP steps for authentication and account management.
+// Providers write form errors themselves and return operation results to AuthManager.
 type AuthService interface {
-	// defines the custom routes a particular AuthService implementation will handle
+	// Routes binds any provider-specific routes after initialization.
 	Routes(*http.ServeMux)
-	// sets up the AuthService implementation
+	// Init configures the provider using application-owned services.
 	Init(*server.ApplicationServer) error
-	// determines whether the AuthService in question is configured correctly
+	// IsLoaded reports whether the provider is available for selection.
 	IsLoaded() bool
-	// returns the auth type
+	// AuthType returns the provider's route and configuration identifier.
 	AuthType() string
 
-	// returns a template.HTML object so that the AuthService can render a button to access the
-	// login capabilities of the AuthService in question
+	// GetLoginButton returns trusted HTML linking to the provider's login form.
 	GetLoginButton() template.HTML
-	// returns a template.HTML object so that the AuthService can render a button to access the
-	// login capabilities of the AuthService in question
+	// GetRegisterButton returns trusted HTML linking to registration, or an empty value when unavailable.
 	GetRegisterButton() template.HTML
 
-	// handles the login request for the implemented AuthService
+	// GetLogin renders the provider's login form.
 	GetLogin(http.ResponseWriter, *http.Request)
-	// handles the login action for the implemented AuthService
+	// Login authenticates submitted credentials and returns the account, or nil on failure.
 	Login(http.ResponseWriter, *http.Request) *user.User
 
-	// handles the registration request for the implemented AuthService
+	// GetRegister renders the provider's registration form.
 	GetRegister(http.ResponseWriter, *http.Request)
-	// handles the registration action for the implemented AuthService
+	// Register processes registration and reports whether the handler can continue with success.
+	// A false result does not guarantee that no account was created.
 	Register(http.ResponseWriter, *http.Request) bool
 
-	// retrieves the mechanism for a user to request to reset their authorization with the implemented AuthService
+	// GetResetRequest renders the recovery-request form.
 	GetResetRequest(http.ResponseWriter, *http.Request)
 	// ResetRequest must give valid submissions the same HTTP acknowledgment for
 	// known, unknown, and ineligible accounts, including storage or delivery failures.
 	// The returned result is internal and must not change that acknowledgment.
 	ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool
-	// retrieves the mechanism for a user to reset their authorization with the implemented AuthService
+	// GetReset renders the reset form after AuthManager validates token.
 	GetReset(w http.ResponseWriter, r *http.Request, token string)
-	// handles the reset authorization action for the implemented AuthService
+	// Reset updates credentials for an account whose token AuthManager has validated.
+	// It reports whether the operation succeeded. Token consumption is handled separately.
 	Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNewCredentials bool) bool
 
-	// retrieves the mechanism for a user to change their auth
+	// GetChange renders the credential-change form for the authenticated account.
 	GetChange(w http.ResponseWriter, r *http.Request)
-	// handles the change auth action
+	// Change checks existing credentials and applies their replacement.
 	Change(w http.ResponseWriter, r *http.Request, u *user.User) bool
 }
 
-// Register used by a Handler to register itself with the application
+// Register appends a shared provider instance to the process-wide registry.
+// It does not initialize the provider. Call it during startup, not concurrently with requests.
 func Register(a AuthService) {
 	authServices = append(authServices, a)
 }
 
-// GetAuthServices retrieves the AuthService instances that have been registered with the application
+// GetAuthServices returns the registry's backing slice, not a copy.
+// Callers must not modify it while the application is running.
 func GetAuthServices() []AuthService {
 	return authServices
 }
@@ -106,7 +106,7 @@ func RemoveAuthService(authType string) []AuthService {
 	return authServices
 }
 
-// GetLoadedAuthServices retrieves the AuthService instances that have been registered with the application
+// GetLoadedAuthServices returns registered providers whose IsLoaded method reports true.
 func GetLoadedAuthServices() []AuthService {
 	var loadedAuthServices []AuthService
 	for _, s := range authServices {

@@ -1,5 +1,6 @@
-// handlers.go defines the Handler interface and also provides functions for registering a
-// Handler instance as well as getting all of the registered Handler instances
+// Package handlers holds the process-wide registry of application modules.
+// Modules typically call Register during package initialization. Registration does
+// not initialize a module or bind its routes, and the registry stores shared instances.
 package handlers
 
 import (
@@ -15,17 +16,21 @@ type (
 	// Handler defines an interface that can be used to add routes and handlers to
 	// a HyperServer application
 	Handler interface {
+		// Routes binds the initialized module's HTTP routes.
 		Routes(*http.ServeMux)
+		// Init prepares the module using the application's shared services.
 		Init(*server.ApplicationServer) error
 	}
 )
 
-// Register used by a Handler to register itself with the application
+// Register appends a shared module instance to the process-wide registry.
+// Call it during startup, before reading the registry or serving requests.
 func Register(h Handler) {
 	handlers = append(handlers, h)
 }
 
-// GetHandlers retrieves the handlers that have been registered with the application
+// GetHandlers returns the registry's backing slice, not a copy.
+// Callers must not modify it while the application is running.
 func GetHandlers() []Handler {
 	return handlers
 }

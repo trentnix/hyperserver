@@ -1,5 +1,7 @@
-// form.go defines the FormComponent interface and provides an implementation of the interface that
-// can be used by structures that represent form data in the application.
+// Package form binds HTTP input and records field and form-level validation errors.
+// Embed Form in an application form and implement FormComponent.Bind. After
+// ParseAndValidate returns without an error, check HasErrors before changing data.
+// The HTML message helpers do not escape message strings.
 package form
 
 import (
@@ -122,17 +124,17 @@ func (f *Form) HasInfoMessages() bool {
 	return len(f.GetInfoMessages()) > 0
 }
 
-// GetFormError gets a form-level error message
+// GetErrorMessages returns the form-level error messages, excluding field errors.
 func (f *Form) GetErrorMessages() []messages.Message {
 	return f.getMessages(messages.MessageTypeError)
 }
 
-// GetSuccessMessage returns a form message to display
+// GetSuccessMessages returns the form-level success messages.
 func (f *Form) GetSuccessMessages() []messages.Message {
 	return f.getMessages(messages.MessageTypeSuccess)
 }
 
-// GetInfoMessages returns a form message to display
+// GetInfoMessages returns the form-level informational messages.
 func (f *Form) GetInfoMessages() []messages.Message {
 	return f.getMessages(messages.MessageTypeDefault)
 }
@@ -171,23 +173,25 @@ func (f *Form) addMessage(msg string, msgType messages.MessageType) {
 	f.messages = append(f.messages, messages.NewMessage(msg, msgType))
 }
 
-// SetMessages takes a slice of messages.Message values and splits them into
-// Form.Errors and Form.Messages
+// SetMessages replaces all form-level messages with formMessages.
 func (f *Form) SetMessages(formMessages []messages.Message) {
 	f.messages = formMessages
 }
 
-// GetErrorMessagesHTML returns an HTML result for just error messages
+// GetErrorMessagesHTML renders error messages as an HTML list without escaping.
+// Message strings must be trusted HTML.
 func (f *Form) GetErrorMessagesHTML() template.HTML {
 	return f.getMessagesHTML(messages.MessageTypeError)
 }
 
-// GetSuccessMessagesHTML returns an HTML result for just success messages
+// GetSuccessMessagesHTML renders success messages as an HTML list without escaping.
+// Message strings must be trusted HTML.
 func (f *Form) GetSuccessMessagesHTML() template.HTML {
 	return f.getMessagesHTML(messages.MessageTypeSuccess)
 }
 
-// GetInfoMessagesHTML returns an HTML result for just informational messages
+// GetInfoMessagesHTML renders informational messages as an HTML list without escaping.
+// Message strings must be trusted HTML.
 func (f *Form) GetInfoMessagesHTML() template.HTML {
 	return f.getMessagesHTML(messages.MessageTypeDefault)
 }

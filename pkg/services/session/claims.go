@@ -1,4 +1,3 @@
-// claims.go defines the SessionClaims struct that is serialized to a JWT
 package session
 
 import (
@@ -15,7 +14,7 @@ type (
 		ID string `json:"id"`
 		// values that can be stored in a session
 		Value string `json:"data"`
-		// stanard JWT claims embedded
+		// StandardClaims carries signed lifetime metadata.
 		jwt.StandardClaims
 	}
 )
@@ -25,8 +24,7 @@ func (c *SessionClaims) ExpiresAtTime() time.Time {
 	return time.Unix(c.ExpiresAt, 0)
 }
 
-// parseJWT parses the specified token into a SessionClaims instance to extract
-// session data
+// parseSessionJWT validates a signed session token and extracts its claims.
 func parseSessionJWT(tokenString string, jwtKey []byte) (*SessionClaims, error) {
 	if tokenString == "" {
 		return nil, NewErrInvalidToken(fmt.Errorf("the token string is empty"))

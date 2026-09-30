@@ -4,6 +4,7 @@ import (
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
+// BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 
 // ErrUserNotSpecified indicates a user.User instance was required but was not set
@@ -11,7 +12,7 @@ type ErrUserNotSpecified struct {
 	*BaseError
 }
 
-// NewErrUserNotSpecified creates an instance of ErrUserNotSpecified
+// NewErrUserNotSpecified returns an ErrUserNotSpecified wrapping err.
 func NewErrUserNotSpecified(err error) *ErrUserNotSpecified {
 	return &ErrUserNotSpecified{
 		BaseError: &BaseError{
@@ -26,7 +27,7 @@ type ErrUserNotFound struct {
 	*BaseError
 }
 
-// NewErrUserNotFound creates an instance of ErrUserNotFound
+// NewErrUserNotFound returns an ErrUserNotFound wrapping err.
 func NewErrUserNotFound(err error) *ErrUserNotFound {
 	return &ErrUserNotFound{
 		BaseError: &BaseError{
@@ -41,7 +42,7 @@ type ErrToken struct {
 	*BaseError
 }
 
-// NewErrToken creates an instance of ErrDatabase
+// NewErrToken returns an ErrToken wrapping err.
 func NewErrToken(err error) *ErrToken {
 	return &ErrToken{
 		BaseError: &BaseError{
@@ -56,7 +57,7 @@ type ErrInvalidResetToken struct {
 	*BaseError
 }
 
-// NewErrInvalidResetToken creates an instance of ErrInvalidResetToken
+// NewErrInvalidResetToken returns an ErrInvalidResetToken wrapping err.
 func NewErrInvalidResetToken(err error) *ErrInvalidResetToken {
 	return &ErrInvalidResetToken{
 		BaseError: &BaseError{
@@ -71,7 +72,7 @@ type ErrTokenNotSpecified struct {
 	*BaseError
 }
 
-// NewErrTokenNotSpecified creates an instance of ErrTokenNotSpecified
+// NewErrTokenNotSpecified returns an ErrTokenNotSpecified wrapping err.
 func NewErrTokenNotSpecified(err error) *ErrTokenNotSpecified {
 	return &ErrTokenNotSpecified{
 		BaseError: &BaseError{
@@ -86,7 +87,7 @@ type ErrTokenNotFound struct {
 	*BaseError
 }
 
-// NewErrTokenNotFound creates an instance of ErrTokenNotFound
+// NewErrTokenNotFound returns an ErrTokenNotFound wrapping err.
 func NewErrTokenNotFound(err error) *ErrTokenNotFound {
 	return &ErrTokenNotFound{
 		BaseError: &BaseError{
@@ -96,12 +97,12 @@ func NewErrTokenNotFound(err error) *ErrTokenNotFound {
 	}
 }
 
-// ErrTokenExpired indicates an error creating and managing a reset token
+// ErrTokenExpired indicates that an account token has expired.
 type ErrTokenExpired struct {
 	*BaseError
 }
 
-// NewErrTokenExpired creates an instance of ErrTokenExpired
+// NewErrTokenExpired returns an ErrTokenExpired wrapping err.
 func NewErrTokenExpired(err error) *ErrTokenExpired {
 	return &ErrTokenExpired{
 		BaseError: &BaseError{
@@ -116,7 +117,7 @@ type ErrTokenExpirationNotSpecified struct {
 	*BaseError
 }
 
-// NewErrTokenExpiratioNotSpecified creates an instance of ErrTokenExpirationNotSpecified
+// NewErrTokenExpirationNotSpecified returns an ErrTokenExpirationNotSpecified wrapping err.
 func NewErrTokenExpirationNotSpecified(err error) *ErrTokenExpirationNotSpecified {
 	return &ErrTokenExpirationNotSpecified{
 		BaseError: &BaseError{
@@ -131,7 +132,7 @@ type ErrSendVerification struct {
 	*BaseError
 }
 
-// NewErrSendVerification creates an instance of ErrSendVerification
+// NewErrSendVerification returns an ErrSendVerification wrapping err.
 func NewErrSendVerification(err error) *ErrSendVerification {
 	return &ErrSendVerification{
 		BaseError: &BaseError{
@@ -146,7 +147,7 @@ type ErrJwtKeyNotSet struct {
 	*BaseError
 }
 
-// NewErrJwtKeyNotSet creates an instance of ErrJwtKeyNotSet
+// NewErrJwtKeyNotSet returns an ErrJwtKeyNotSet wrapping err.
 func NewErrJwtKeyNotSet(err error) *ErrJwtKeyNotSet {
 	return &ErrJwtKeyNotSet{
 		BaseError: &BaseError{

@@ -1,4 +1,3 @@
-// contact.go handles interactions with the contact form on the site
 package module_site
 
 import (
@@ -9,7 +8,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 )
 
-// contactForm defines the fields used when logging in via email/password
+// ContactForm binds the development site's contact submission fields.
 type (
 	ContactForm struct {
 		Name    string `validate:"required"`

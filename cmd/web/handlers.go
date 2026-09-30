@@ -1,4 +1,3 @@
-// handlers.go initializes registered handlers
 package main
 
 import (

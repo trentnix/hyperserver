@@ -1,5 +1,7 @@
-// auth_manager.go defines the AuthManager struct and methods that will be used
-// to handle general auth by calling specifically configured auth implementations
+// Package auth coordinates authentication providers and their HTTP handlers.
+// Providers and the AuthManager register shared instances during package initialization.
+// Applications must initialize providers before serving requests. The registry is
+// process-wide, not isolated per application.
 package auth
 
 import (
@@ -27,6 +29,8 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
+// AuthManager routes authentication requests to registered providers.
+// Init must run before Routes. The default registered instance is shared across applications.
 type (
 	AuthManager struct {
 		Enabled bool
@@ -353,7 +357,9 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 	util.RedirectToURL(w, r, a.contentManager.AuthURL)
 }
 
-// ProcessRegistration handles the registration process for the specified user
+// ProcessRegistration hashes credentials and inserts a new account.
+// It does not update an existing account or send verification mail. The returned
+// message is suitable for the registration form when an error occurs.
 func ProcessRegistration(ctx context.Context, db *sqlx.DB, uname string, pw string, authType string, verificationRequired bool) (error, string) {
 	if err := ctx.Err(); err != nil {
 		return NewErrUserRegistration(uname, err), "There was an error creating a user account"
@@ -408,7 +414,8 @@ func (a *AuthManager) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	(*authService).GetResetRequest(w, r)
 }
 
-// Reset starts the authentication reset process for the specified AuthService implementation
+// ResetRequest delegates a recovery request to the selected authentication provider.
+// The provider writes the acknowledgment. Its delivery result does not change the response.
 func (a *AuthManager) ResetRequest(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {

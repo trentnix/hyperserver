@@ -13,14 +13,14 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 )
 
+// AuthToken holds an account token and its storage metadata.
+// Create persists the hash, account ID, purpose, and expiry, but not the raw Token.
 type (
 	// AuthToken defines the data that will be serialized to the database to
 	// manage a reset token
 	AuthToken struct {
 		UserId string `db:"user_id"`
-		// A token hash is used because the hash is stored in the database. That ensures
-		// that if the database is compromised, the tokens themselves won't be
-		// compromised. It's similar to storing a password hash.
+		// TokenHash is the SHA-256 hash stored instead of the raw token.
 		TokenHash string `db:"token_hash"`
 		Token     string
 		ExpiresAt time.Time `db:"expires_at"`
@@ -28,7 +28,8 @@ type (
 	}
 )
 
-// Create inserts an AuthRequestToken into the database
+// Create inserts the token's hash, account ID, expiry, and purpose.
+// The account schema must already exist. It does not start a transaction with an account change.
 func (token *AuthToken) Create(db *sqlx.DB) error {
 	errCreateToken := errors.New("error creating a new token in the database")
 	if token.UserId == "" {
@@ -55,7 +56,8 @@ func (token *AuthToken) Create(db *sqlx.DB) error {
 	return err
 }
 
-// Delete removes an AuthResetToken from the database
+// Delete removes the record matching UserId and TokenHash.
+// It returns ErrTokenNotFound if no row was deleted.
 func (token *AuthToken) Delete(db *sqlx.DB) error {
 	errDeleteToken := errors.New("error deleting an existing token")
 	if token.UserId == "" {

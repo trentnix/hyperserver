@@ -1,5 +1,6 @@
-// htmx.go defines the htmx.Request and htmx.Response structures that will be
-// used for managing site content when an HTMX interaction is necessary
+// Package htmx provides HTMX request and response header helpers.
+// This package duplicates pkg/components/htmx. The rendering components currently
+// use pkg/components/htmx.
 package htmx
 
 import (
@@ -7,34 +8,34 @@ import (
 )
 
 const (
-	// indicates that the request is via an element using hx-boost
+	// HeaderBoosted names the request header indicating an hx-boost request.
 	HeaderBoosted = "HX-Boosted"
-	// “true” if the request is for history restoration after a miss in the local history cache
+	// HeaderHistoryRestoreRequest names the request header for an HTMX history-cache miss.
 	HeaderHistoryRestoreRequest = "HX-History-Restore-Request"
-	// the user response to an hx-prompt
+	// HeaderPrompt names the request header containing an hx-prompt answer.
 	HeaderPrompt = "HX-Prompt"
-	// always “true”
+	// HeaderRequest names the header whose value is true for HTMX requests.
 	HeaderRequest = "HX-Request"
-	// the id of the target element if it exists
+	// HeaderTarget names the request header containing the target element ID.
 	HeaderTarget = "HX-Target"
-	// the id of the triggered element if it exists
+	// HeaderTrigger names the request header for the triggering element and the response header for client events.
 	HeaderTrigger = "HX-Trigger"
-	// the name of the triggered element if it exists
+	// HeaderTriggerName names the request header containing the triggering element's name.
 	HeaderTriggerName = "HX-Trigger-Name"
 )
 
 const (
-	// pushes a new url into the history stack
+	// HeaderPushURL names the response header that pushes a URL into browser history.
 	HeaderPushURL = "HX-Push-Url"
-	// can be used to do a client-side redirect to a new location
+	// HeaderRedirect names the response header that requests a full browser redirect.
 	HeaderRedirect = "HX-Redirect"
-	// replaces the current URL in the location bar
+	// HeaderReplaceURL names the response header that replaces the current history URL.
 	HeaderReplaceURL = "HX-Replace-Url"
-	// if set to “true” the client-side will do a full refresh of the page
+	// HeaderRefresh names the response header that requests a full-page refresh.
 	HeaderRefresh = "HX-Refresh"
-	// allows you to trigger client-side events after the settle step
+	// HeaderTriggerAfterSettle names the response header for events after HTMX settles.
 	HeaderTriggerAfterSettle = "HX-Trigger-After-Settle"
-	// allows you to trigger client-side events after the swap step
+	// HeaderTriggerAfterSwap names the response header for events after an HTMX swap.
 	HeaderTriggerAfterSwap = "HX-Trigger-After-Swap"
 )
 
@@ -62,6 +63,7 @@ type (
 	}
 )
 
+// NewResponse returns empty HTMX response metadata.
 func NewResponse() *Response {
 	return &Response{}
 }
@@ -104,7 +106,7 @@ func (r Response) Apply(w http.ResponseWriter) {
 	}
 }
 
-// IsHTMXRequest checks if the given HTTP request is an HTMX request.
+// IsHtmxRequest reports whether HX-Request is true.
 func IsHtmxRequest(r *http.Request) bool {
 	return r.Header.Get(HeaderRequest) == "true"
 }

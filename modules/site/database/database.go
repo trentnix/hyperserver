@@ -1,5 +1,4 @@
-// db_helper.go provides helpers for the current module to interact with the
-// specified database
+// Package database prepares the development site's SQLite schema.
 package database
 
 import (
@@ -10,6 +9,7 @@ import (
 )
 
 const (
+	// MigrationsDirectory is the development site's file-based migration source.
 	MigrationsDirectory = "file://modules/site/database/migrations"
 )
 

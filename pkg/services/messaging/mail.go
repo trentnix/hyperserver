@@ -1,3 +1,6 @@
+// Package messaging composes HTML email and sends it through a replaceable MailSender.
+// The SMTP sender bounds delivery time and honors context cancellation. Successful
+// Send means the service accepted the message, not that it reached the inbox.
 package messaging
 
 import (
@@ -111,7 +114,9 @@ func (m *MailClient) ValidateConfig() error {
 	return nil
 }
 
-// Compose creates a new email.
+// Compose starts a message using the configured sender address.
+// Set To, Subject, and Body on the result, then call Send(ctx). Body must contain
+// trusted HTML with dynamic values escaped by the caller.
 func (m *MailClient) Compose() *mail {
 	return &mail{
 		client: m,
@@ -119,6 +124,7 @@ func (m *MailClient) Compose() *mail {
 	}
 }
 
+// ValidateConfig checks required SMTP settings without opening a connection.
 func (m *smtpSender) ValidateConfig() error {
 	if m.config.Hostname == "" || m.config.Port == 0 || m.config.User == "" || m.config.Password == "" {
 		return ErrMailUnavailable
@@ -188,6 +194,8 @@ func smtpMailbox(address *mailaddr.Address) string {
 	return strings.TrimSuffix(strings.TrimPrefix(formatted, "<"), ">")
 }
 
+// Send submits one message over SMTP within the configured timeout.
+// It closes the connection when ctx is canceled.
 func (m *smtpSender) Send(ctx context.Context, email MailMessage) (err error) {
 	if err := m.ValidateConfig(); err != nil {
 		return err
@@ -324,7 +332,8 @@ func (m *mail) Body(body string) *mail {
 	return m
 }
 
-// Send attempts to send the email.
+// Send validates the message and submits it through the configured MailSender.
+// A nil error means accepted for delivery, not confirmed delivery to the inbox.
 func (m *mail) Send(ctx context.Context) error {
 	return m.client.send(m, ctx)
 }

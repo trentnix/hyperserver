@@ -1,4 +1,7 @@
-// email_auth.go is a email/password authorization implementation of the AuthService interface
+// Package auth implements the email/password authentication provider.
+// Importing this package registers an EmailAuthService with the parent auth package.
+// The provider uses the application's database, content manager, and mail client.
+// Template paths currently require the repository root as the working directory.
 package auth
 
 import (
@@ -29,8 +32,8 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// EmailAuthService implements the AuthService interface
 type (
+	// EmailAuthService implements email/password authentication using shared application services.
 	EmailAuthService struct {
 		db                *sqlx.DB
 		config            *config.Config
@@ -51,7 +54,7 @@ type (
 		form.Form
 	}
 
-	// registerForm defines the fields used when registering a new user in via email/password
+	// RegisterForm binds an email address and matching passwords for account creation.
 	RegisterForm struct {
 		Email         string `validate:"required,email"`
 		Password      string `validate:"required,password"`
@@ -75,6 +78,7 @@ type (
 		form.Form
 	}
 
+	// ChangePasswordForm binds the current password and matching replacement passwords.
 	ChangePasswordForm struct {
 		OldPassword      string `validate:"required"`
 		NewPassword      string `validate:"required,password,nefield=OldPassword"`
@@ -84,14 +88,14 @@ type (
 	}
 )
 
-// Bind populates the LoginForm fields from the request.
+// Bind populates the login email address and password from r.
 func (lf *LoginForm) Bind(r *http.Request) error {
 	lf.Email = r.FormValue("email")
 	lf.Password = r.FormValue("password")
 	return nil
 }
 
-// Bind populates the RegisterForm fields from the request.
+// Bind populates the registration email, password, and confirmation from r.
 func (rf *RegisterForm) Bind(r *http.Request) error {
 	rf.Email = r.FormValue("email")
 	rf.Password = r.FormValue("password")
@@ -99,13 +103,13 @@ func (rf *RegisterForm) Bind(r *http.Request) error {
 	return nil
 }
 
-// Bind populates the LoginForm fields from the request.
+// Bind populates the reset-request email address from r.
 func (rprf *ResetPasswordRequestForm) Bind(r *http.Request) error {
 	rprf.Email = r.FormValue("email")
 	return nil
 }
 
-// Bind populates the RegisterForm fields from the request.
+// Bind populates the replacement password and confirmation from r.
 func (rpf *ResetPasswordForm) Bind(r *http.Request) error {
 	rpf.Password = r.FormValue("password")
 	rpf.PasswordMatch = r.FormValue("passwordMatch")
@@ -121,6 +125,7 @@ func (cpf *ChangePasswordForm) Bind(r *http.Request) error {
 }
 
 const (
+	// AuthTypeEmail identifies the email/password provider in routes and configuration.
 	AuthTypeEmail = "email"
 
 	emailLoginFormTemplate          = "auth/modules/email/templates/html/partials/login-form.html"
@@ -203,7 +208,8 @@ func (a *EmailAuthService) Routes(mux *http.ServeMux) {
 	// none needed for EmailAuthService
 }
 
-// IsValid checks the configuration to ensure the EmailAuthService instance is configured correctly
+// IsLoaded currently always returns true. It does not verify initialization,
+// configuration, or dependency availability.
 func (a *EmailAuthService) IsLoaded() bool {
 	return true
 }
@@ -324,15 +330,9 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Register handles a registration request, validates the input, creates a new user account, sends
-// verification instructions (as configured), and handles the user response.
-//
-// The registration flow (TO DO) is as follows:
-//
-//	Register page
-//	  error -> back to register page
-//	  user already exists -> back to register page
-//	  success -> redirect to login
+// Register validates input, creates an account, and sends verification instructions
+// when required. It writes form errors and returns false on failure. Delivery failure
+// can occur after the account has been created, leaving it available for verification resend.
 func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool {
 	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
 		auth_services.RegistrationUnavailable(w, r)

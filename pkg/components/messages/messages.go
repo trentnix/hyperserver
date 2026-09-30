@@ -1,7 +1,7 @@
-// messages.go defines the interaction session management and flash messages. A slice of Message instances
-// is stored in a session explicitly for flash messages. Each message has a message value and a message type.
-// Messages are stored in categories, allowing different message categories to be managed and retrieved
-// separately.
+// Package messages stores categorized flash messages, notifications, and browser
+// console messages in sessions. Its HTTP helpers require session management in
+// the request context. Retrieval removes messages from the request-local session,
+// but persistence of that removal depends on the session store and save path.
 package messages
 
 import (
@@ -12,11 +12,13 @@ import (
 )
 
 type (
+	// SessionMessage is the stored text and type shared by message categories.
 	SessionMessage struct {
 		Message string `json:"message"`
 		Type    string `json:"messageType"`
 	}
 
+	// SessionKey names a session used for messages.
 	SessionKey string
 )
 
@@ -28,6 +30,7 @@ func init() {
 	gob.Register([]SessionMessage{}) // needed for securecookie/gob encoding
 }
 
+// String returns the underlying string value.
 func (s SessionKey) String() string {
 	return string(s)
 }

@@ -1,5 +1,6 @@
-// content.go defines the Content structure which is used as a ViewModel for the templates that
-// are rendered to a requestor
+// Package content combines page data and templates into full-page or HTMX responses.
+// Content can render its own templates or use a shared content manager. Templates
+// are currently parsed on each render, and rendering errors can follow partial output.
 package content
 
 import (
@@ -15,10 +16,11 @@ import (
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
-// Page defines the various fields that describe a particular site page
 type (
+	// TemplatePath identifies a template file passed to the renderer.
 	TemplatePath = types.TemplatePath
 
+	// Content holds template inputs and HTTP response metadata for a page or fragment.
 	Content struct {
 		// Site name
 		Site string
@@ -96,8 +98,8 @@ func NewContent(r *http.Request) *Content {
 	return &c
 }
 
-// NewManagedContent extracts Content data from the provided request and also sets
-// the Content's ContentManagerService
+// NewManagedContent creates request-specific content with defaults from cm.
+// It returns nil if cm is nil.
 func NewManagedContent(r *http.Request, cm *content_services.ContentManagerService) *Content {
 	if cm == nil {
 		return nil
@@ -156,9 +158,10 @@ func (c *Content) AddLogMessages(messages ...string) {
 	c.LogMessages = append(c.LogMessages, messages...)
 }
 
-// Render parses the layout and content templates and executes them with the specified Content as the
-// view model. If a ContentManager is specified, its templates will be prepended to the Content
-// instance templates before they are merged and rendered.
+// Render parses the selected templates and writes a full page or HTMX fragment.
+// Manager templates precede request-specific templates. Values are escaped by html/template
+// unless marked as trusted content. Render can return an error after writing partial output.
+// Callers must configure response headers before rendering. HTMX.Response is not applied here.
 func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	var managerLayouts, managerContents, managerComponents []TemplatePath
 	if c.ContentManager != nil {

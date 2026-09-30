@@ -1,4 +1,3 @@
-// redirect.go contains utility functions related to redirecting a requestor to a given URL
 package util
 
 import (
@@ -6,15 +5,15 @@ import (
 	"net/http"
 )
 
-// RedirectToURL redirects the requestor to the prodivided URL
+// RedirectToURL returns HTTP 200 with HX-Redirect for HTMX requests or an HTML
+// redirect page otherwise. It does not validate or escape redirectURL, which must
+// be a trusted destination. It does not issue a standard HTTP redirect status.
 func RedirectToURL(w http.ResponseWriter, r *http.Request, redirectURL string) {
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Redirect", redirectURL)
 		w.WriteHeader(http.StatusOK)
 	} else {
-		// Some browsers restrict 302 redirects for security or policy reasons. As
-		// a result, we will a page directly to the ResponseWriter to use client-side
-		// script to handle the redirect.
+		// The current fallback uses an HTML page rather than an HTTP redirect.
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusOK)
 		redirectPage := fmt.Sprintf(`

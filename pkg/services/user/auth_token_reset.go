@@ -1,5 +1,3 @@
-// auth_reset_token.go handles the creation and management of a token that can be
-// used to verify a user attempting to reset user authorization.
 package user
 
 import (
@@ -65,7 +63,8 @@ func NewAuthResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthR
 	return &AuthResetToken{AuthToken: *authToken}, nil
 }
 
-// ValidateResetToken confirms whether the provided reset authorization token is valid
+// ValidateResetToken checks the signature, reset purpose, stored hash, and expiry,
+// then returns the account. jwtKey is the account-token signing key. It does not consume the token.
 func ValidateResetToken(db *sqlx.DB, tokenString string, jwtKey []byte) (*User, error) {
 	return validateToken(db, tokenString, jwtKey, resetTokenType)
 }

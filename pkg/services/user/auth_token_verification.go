@@ -1,4 +1,3 @@
-// auth_token_verification.go handles account-verification tokens.
 package user
 
 import (
@@ -59,13 +58,14 @@ func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) 
 	return &AuthVerificationToken{AuthToken: *authToken}, nil
 }
 
-// ValidateVerificationToken validates a stored verification token.
+// ValidateVerificationToken checks a signed verification token against its stored
+// hash, purpose, and expiry. It does not consume the token. Unlike Verify, it requires a stored record.
 func ValidateVerificationToken(db *sqlx.DB, tokenString string, jwtKey []byte) (*User, error) {
 	return validateToken(db, tokenString, jwtKey, verificationTokenType)
 }
 
-// Verify handles a verification request by extracting and processing the provided token, updating
-// the user to verified, and returning the newly verified user
+// Verify checks the signed verification token and marks its account verified.
+// It does not require or consume a stored token. Reuse is allowed until expiry.
 func Verify(ctx context.Context, db *sqlx.DB, verificationToken string, jwtKey []byte) (*User, error) {
 	claims, err := parseAuthToken(verificationToken, jwtKey, verificationTokenType)
 	if err != nil {

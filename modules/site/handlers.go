@@ -1,4 +1,3 @@
-// handlers.go defines handlers for the Site module
 package module_site
 
 import (
@@ -81,8 +80,7 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Error is the handler for the /error endpoint
-// TODO: update
+// Error renders queued error notifications. It currently returns HTTP 200.
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 	notifications, messagesErr := messages.GetNotifications(w, r)
 	if messagesErr != nil {
@@ -107,8 +105,8 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleError writes the specified error to the messages store and redirects the
-// requestor to the error URL
+// HandleError queues message and renders the error page directly.
+// It currently ignores err and httpStatus, so the response normally remains HTTP 200.
 func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
 	errAddMessage := messages.AddErrorNotification(w, r, message)
 	if errAddMessage != nil {
@@ -118,7 +116,7 @@ func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message
 	m.Error(w, r)
 }
 
-// HandleMessage writes the specified message to the message page
+// HandleMessage renders message as trusted HTML. The caller must escape untrusted values.
 func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, message string) {
 	if message == "" {
 		message = "(no message)"

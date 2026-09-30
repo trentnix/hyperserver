@@ -1,4 +1,3 @@
-// error_handlers.go defines error handlers for the form package
 package form
 
 import (

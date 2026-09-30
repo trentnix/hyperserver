@@ -1,5 +1,3 @@
-// cookiestore.go implements the SessionStore interface with a way to manage session
-// exclusively via an HTTP cookie.
 package session
 
 import (
@@ -15,7 +13,7 @@ import (
 type (
 	// CookieStore serializes a Session to a browser cookie
 	CookieStore struct {
-		// key to encode the session data into a JWT
+		// JwtKey signs session JWTs. It does not encrypt their contents.
 		JwtKey []byte
 		// lifetime of the JWT
 		TokenLifetime time.Duration
@@ -96,7 +94,8 @@ func (c *CookieStore) New(r *http.Request, name string) (*Session, error) {
 	return newSession(c, name), nil
 }
 
-// Save saves the specified Session to a token that can be added to a cookie
+// Save encodes the session into a signed JWT and writes an HTTP cookie.
+// The payload is not encrypted. Call Save before writing response headers or a body.
 func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Session) error {
 	if len(c.JwtKey) == 0 {
 		return NewErrSessionKeyInvalid(fmt.Errorf("the JWT key is not set"))
@@ -149,8 +148,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	return nil
 }
 
-// End terminates the specified session by setting the corresponding session cookie
-// to expired
+// End expires the browser cookie. It cannot revoke copies of a signed cookie.
 func (c *CookieStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     session.Name,
@@ -165,7 +163,7 @@ func (c *CookieStore) End(w http.ResponseWriter, r *http.Request, session *Sessi
 	return nil
 }
 
-// IsEnabled informs the called whether the specified CookieStore is enabled and can be used
+// IsEnabled reports whether this cookie store is enabled in configuration.
 func (c *CookieStore) IsEnabled() bool {
 	return c.enabled
 }

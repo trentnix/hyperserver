@@ -1,4 +1,3 @@
-// errors.go defines the custom errors used by the database package
 package database
 
 import (
@@ -9,9 +8,10 @@ import (
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
+// BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 
-// ErrDatabaseUnavailable indicates the database is unavailable
+// ErrDatabase wraps an error from a database operation.
 type ErrDatabase struct {
 	*BaseError
 }
@@ -31,6 +31,7 @@ type ErrDatabaseNotSupported struct {
 	*BaseError
 }
 
+// ErrDatabaseMigrationFailed reports a failure creating or running a migration.
 type ErrDatabaseMigrationFailed struct {
 	*BaseError
 }
@@ -45,7 +46,7 @@ type ErrRecordAlreadyExists struct {
 	*BaseError
 }
 
-// NewErrDatabase creates an instance of ErrDatabase
+// NewErrDatabase returns an ErrDatabase wrapping err.
 func NewErrDatabase(err error) *ErrDatabase {
 	return &ErrDatabase{
 		BaseError: &BaseError{
@@ -55,7 +56,7 @@ func NewErrDatabase(err error) *ErrDatabase {
 	}
 }
 
-// NewErrDatabaseUnavailable creates an instance of ErrDatabaseUnavailable
+// NewErrDatabaseUnavailable returns an ErrDatabaseUnavailable wrapping err.
 func NewErrDatabaseUnavailable(err error) *ErrDatabaseUnavailable {
 	return &ErrDatabaseUnavailable{
 		BaseError: &BaseError{
@@ -65,7 +66,7 @@ func NewErrDatabaseUnavailable(err error) *ErrDatabaseUnavailable {
 	}
 }
 
-// NewErrDatabaseConfiguration creates an instance of ErrDatabaseConfiguration
+// NewErrDatabaseConfiguration returns an ErrDatabaseConfiguration wrapping err.
 func NewErrDatabaseConfiguration(err error) *ErrDatabaseConfiguration {
 	return &ErrDatabaseConfiguration{
 		BaseError: &BaseError{
@@ -75,7 +76,7 @@ func NewErrDatabaseConfiguration(err error) *ErrDatabaseConfiguration {
 	}
 }
 
-// NewErrDatabaseNotSupported creates an instance of ErrDatabaseNotSupported
+// NewErrDatabaseNotSupported returns an ErrDatabaseNotSupported wrapping err.
 func NewErrDatabaseNotSupported(err error) *ErrDatabaseNotSupported {
 	return &ErrDatabaseNotSupported{
 		BaseError: &BaseError{
@@ -85,6 +86,7 @@ func NewErrDatabaseNotSupported(err error) *ErrDatabaseNotSupported {
 	}
 }
 
+// NewErrDatabaseMigrationFailed returns an ErrDatabaseMigrationFailed wrapping err.
 func NewErrDatabaseMigrationFailed(err error) *ErrDatabaseMigrationFailed {
 	return &ErrDatabaseMigrationFailed{
 		BaseError: &BaseError{
@@ -94,7 +96,7 @@ func NewErrDatabaseMigrationFailed(err error) *ErrDatabaseMigrationFailed {
 	}
 }
 
-// NewErrInvalidData creates an instance of ErrInvalidData
+// NewErrInvalidData returns an ErrInvalidData wrapping err.
 func NewErrInvalidData(err error) *ErrInvalidData {
 	return &ErrInvalidData{
 		BaseError: &BaseError{
@@ -104,7 +106,7 @@ func NewErrInvalidData(err error) *ErrInvalidData {
 	}
 }
 
-// NewErrRecordAlreadyExists wraps a uniqueness constraint error.
+// NewErrRecordAlreadyExists returns an ErrRecordAlreadyExists wrapping err.
 func NewErrRecordAlreadyExists(err error) *ErrRecordAlreadyExists {
 	return &ErrRecordAlreadyExists{
 		BaseError: &BaseError{
@@ -114,9 +116,8 @@ func NewErrRecordAlreadyExists(err error) *ErrRecordAlreadyExists {
 	}
 }
 
-// translateError inspects the error depending on the database driver and provides
-// a package-specific error type that can be inspected. This will prevent the caller
-// from needing to be aware what database driver is being used.
+// TranslateError wraps SQLite uniqueness failures in ErrRecordAlreadyExists.
+// It returns nil or unrecognized errors unchanged.
 func TranslateError(db *sql.DB, e error) error {
 	if e != nil {
 		// Detect the database type by inspecting the driver

@@ -1,4 +1,3 @@
-// errors.go defines the custom errors used by the auth pkg
 package auth
 
 import (
@@ -7,6 +6,7 @@ import (
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
+// BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 
 // ErrEmailAuthServiceInit indicates an error configuring an instance of EmailAuthService
@@ -14,7 +14,7 @@ type ErrEmailAuthServiceInit struct {
 	*BaseError
 }
 
-// NewErrEmailAuthServiceInit creates an instance of ErrEmailAuthServiceInit
+// NewErrEmailAuthServiceInit returns an ErrEmailAuthServiceInit wrapping err.
 func NewErrEmailAuthServiceInit(err error) *ErrEmailAuthServiceInit {
 	return &ErrEmailAuthServiceInit{
 		BaseError: &BaseError{
@@ -24,13 +24,13 @@ func NewErrEmailAuthServiceInit(err error) *ErrEmailAuthServiceInit {
 	}
 }
 
-// ErrDatabaseUnavailable indicates the database is unavailable
+// ErrLoadingTemplate reports a failure loading a template file.
 type ErrLoadingTemplate struct {
 	template string
 	*BaseError
 }
 
-// NewErrDatabaseUnavailable creates an instance of ErrDatabaseUnavailable
+// NewErrLoadingTemplate returns an ErrLoadingTemplate wrapping err.
 func NewErrLoadingTemplate(err error, t string) *ErrLoadingTemplate {
 	errorMessage := fmt.Sprintf("there was an error loading the specified template: %s", t)
 	return &ErrLoadingTemplate{
@@ -48,7 +48,7 @@ type ErrAuthServiceNotFound struct {
 	*BaseError
 }
 
-// NewErrDatabaseUnavailable creates an instance of ErrDatabaseUnavailable
+// NewErrAuthServiceNotFound returns an ErrAuthServiceNotFound wrapping err.
 func NewErrAuthServiceNotFound(err error, serviceName string) *ErrAuthServiceNotFound {
 	errorMessage := fmt.Sprintf("there was an error loading the specified auth service: %s", serviceName)
 	return &ErrAuthServiceNotFound{
@@ -65,7 +65,7 @@ type ErrUserRegistration struct {
 	*BaseError
 }
 
-// NewErrUserRegistration creates an instance of ErrUserRegistration
+// NewErrUserRegistration returns an ErrUserRegistration wrapping err.
 func NewErrUserRegistration(username string, err error) *ErrUserRegistration {
 	errorMessage := fmt.Sprintf("there was an error trying to register the specified user '%s'", username)
 	return &ErrUserRegistration{

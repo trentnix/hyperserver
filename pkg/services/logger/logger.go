@@ -1,5 +1,5 @@
-// logger.go defines the Logger interface that is used by the application. The interface
-// will make it easier to replace the logger if necessary
+// Package logger defines structured logging and request-context helpers.
+// ZapLogger implements Logger. Callers must avoid logging secrets or account tokens.
 package logger
 
 import (
@@ -14,16 +14,23 @@ type (
 )
 
 const (
+	// LoggerContextKey identifies a *Logger stored in a context.
 	LoggerContextKey = contextKey("logger")
-	RequestIDKey     = contextKey("requestID")
+	// RequestIDKey identifies the tracing ID assigned by request logging middleware.
+	RequestIDKey = contextKey("requestID")
 )
 
 // Logger is a custom logging interface.
 type Logger interface {
+	// Debug writes a diagnostic message and structured fields.
 	Debug(msg string, fields ...Field)
+	// Info writes an informational message and structured fields.
 	Info(msg string, fields ...Field)
+	// Warn writes a warning and structured fields.
 	Warn(msg string, fields ...Field)
+	// Error writes an error message and structured fields.
 	Error(msg string, fields ...Field)
+	// With returns a logger that includes fields in subsequent entries.
 	With(fields ...Field) Logger
 }
 
@@ -48,8 +55,9 @@ func Get(ctx context.Context) *Logger {
 	return logger
 }
 
-// LogRequestError writes a log entry using the provided request and error. Using
-// .With guarantees thread safety.
+// LogRequestError logs the error chain and request metadata.
+// A nil request is ignored. A non-nil request must have a Logger in its context.
+// Errors must not contain secrets because their messages are included verbatim.
 func LogRequestError(r *http.Request, err error) {
 	if r == nil {
 		return

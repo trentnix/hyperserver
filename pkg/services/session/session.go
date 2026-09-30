@@ -1,4 +1,3 @@
-// session.go defines the Session struct to store session data.
 package session
 
 import (
@@ -28,6 +27,7 @@ type (
 )
 
 const (
+	// SessionContextKey identifies the SessionManager stored in a request context.
 	SessionContextKey contextKey = "auth-user"
 )
 
@@ -83,7 +83,8 @@ func (s *Session) Save(w http.ResponseWriter, r *http.Request) error {
 	return s.Store.Save(w, r, s)
 }
 
-// End terminates the specified session in its corresponding store
+// End delegates to the session's store. Revocation depends on the store implementation.
+// It does not clear the request-local session cache.
 func (s *Session) End(w http.ResponseWriter, r *http.Request) error {
 	if s.Store == nil {
 		return NewErrSessionStoreNotFound(nil)
@@ -92,7 +93,8 @@ func (s *Session) End(w http.ResponseWriter, r *http.Request) error {
 	return s.Store.End(w, r, s)
 }
 
-// EncodedValue returns a string value that encodes the data stored in Session's Data map
+// EncodedData returns Data encoded as gob in URL-safe base64.
+// Encoding does not encrypt the data, and custom concrete values may require gob registration.
 func (s *Session) EncodedData() (string, error) {
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(s.Data); err != nil {
@@ -102,8 +104,7 @@ func (s *Session) EncodedData() (string, error) {
 	return base64.URLEncoding.EncodeToString(buf.Bytes()), nil
 }
 
-// getCachedSession retrieves the cached session from the request's context.
-// If the session is not found, it returns an error.
+// getCachedSession returns the request-cached session, or nil if it is absent.
 func getCachedSession(r *http.Request, name string) *Session {
 	if r == nil {
 		return nil
@@ -122,8 +123,7 @@ func getCachedSession(r *http.Request, name string) *Session {
 	return session
 }
 
-// setCachedSession stores a session in the request's session registry.
-// It returns a new request instance with the updated context.
+// setCachedSession caches the session and replaces r's context in place.
 func setCachedSession(r *http.Request, session *Session) error {
 	if r == nil {
 		return NewErrRequestNotSpecified(errors.New("unable to set the session to the session cache"))

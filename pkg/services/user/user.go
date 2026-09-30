@@ -1,5 +1,7 @@
-// users.go defines the User model, database interactions, and serializes a user
-// to and from a context
+// Package user stores accounts and account tokens and connects users to sessions.
+// Schema preparation currently runs during account access and uses process-wide
+// state. Reset and verification tokens have distinct signed purposes, but token
+// consumption is not yet atomic and verification tokens remain reusable until expiry.
 package user
 
 import (
@@ -14,9 +16,9 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 )
 
-// User stores an authenticated user, the type of authentication used, whether the user has been verified,
-// and any password that may be used
 type (
+	// User is a persisted account, including its authentication provider and verification state.
+	// Password contains the provider's stored password hash, not plaintext.
 	User struct {
 		ID                   string    `db:"id"`
 		Email                string    `db:"email"`
@@ -32,6 +34,7 @@ type (
 )
 
 const (
+	// UserContextKey identifies the current User stored in a request context.
 	UserContextKey contextKey = "auth-user"
 )
 
@@ -223,7 +226,7 @@ func AddUserToRequestContext(r *http.Request, user *User) *http.Request {
 	return r.WithContext(ctx)
 }
 
-// GetUserFromContext adds the specified user to the provided context
+// GetUserFromContext returns the User attached to ctx, or nil if none is present.
 func GetUserFromContext(ctx context.Context) *User {
 	if ctx == nil {
 		return nil

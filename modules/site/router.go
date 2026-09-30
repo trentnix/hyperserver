@@ -1,4 +1,3 @@
-// router.go contains all of the routes and their respective handlers for the module
 package module_site
 
 import (

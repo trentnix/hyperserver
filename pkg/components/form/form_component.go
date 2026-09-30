@@ -1,4 +1,3 @@
-// form_component.go defines the FormComponent interface and functions that use the interface
 package form
 
 import (
@@ -13,38 +12,38 @@ import (
 type (
 	// FormComponent defines an interface for a form that is rendered to a requestor
 	FormComponent interface {
-		// specifies whether the form has been validated (but not whether any errors were found)
+		// IsValidated reports whether validation ran, not whether the form is valid.
 		IsValidated() bool
-		// sets the form status to having been validated or not
+		// SetValidated records whether validation ran.
 		SetValidated(bool)
 
-		// gets the errors messages for the specified field
+		// GetFieldErrors returns errors for a named field.
 		GetFieldErrors(string) []string
-		// gets all the field error messages in a single slice
+		// GetAllFieldErrors returns errors across all fields.
 		GetAllFieldErrors() []string
-		// sets the form field error messages
+		// SetFieldErrors records field errors from a validation result.
 		SetFieldErrors(error)
-		// determines whether a specific field has errors
+		// HasFieldErrors reports whether a named field has errors.
 		HasFieldErrors(string) bool
 
-		// gets form-level success messages
+		// GetSuccessMessages returns form-level success messages.
 		GetSuccessMessages() []messages.Message
-		// gets form-level error messages
+		// GetErrorMessages returns form-level errors, excluding field errors.
 		GetErrorMessages() []messages.Message
-		// gets form-level informational messages
+		// GetInfoMessages returns informational messages.
 		GetInfoMessages() []messages.Message
-		// determines whether the form has error messages
+		// HasErrorMessages checks only form-level errors.
 		HasErrorMessages() bool
-		// determines whether field or form-level errors prevent submission
+		// HasErrors checks both field and form-level errors.
 		HasErrors() bool
 
-		// sets a form-level non-error messages
+		// SetMessages replaces the form-level messages.
 		SetMessages([]messages.Message)
-		// adds an error message
+		// AddErrorMessage records a form-level error.
 		AddErrorMessage(string)
-		// adds a success message
+		// AddSuccessMessage records a successful operation.
 		AddSuccessMessage(string)
-		// adds an informational message
+		// AddMessage records an informational message.
 		AddMessage(string)
 
 		// Bind allows a form to populate its fields from an http.Request
@@ -55,13 +54,13 @@ type (
 )
 
 const (
-	// defines the key that serializes a form to and from a context
+	// FormKey identifies a FormComponent stored in a context.
 	FormKey contextKey = "form"
 )
 
-// Validate takes the specified form, confirms it implements the FormComponent interface,
-// and validates it according to any struct-field validation attributes that were provided in
-// the form struct definition
+// Validate records struct-tag validation errors on f, which must be a pointer
+// to a struct implementing FormComponent. Field validation failures do not produce
+// a returned error. Call HasErrors after a nil return before processing the form.
 func Validate(f any) error {
 	validate := NewValidator()
 
@@ -132,8 +131,9 @@ func GetFormFromContext(ctx context.Context) (any, error) {
 	return f, nil
 }
 
-// ParseAndValidate combines the parsing, binding, and validation of the
-// specified form into a single call
+// ParseAndValidate parses request data, binds f, and records validation errors.
+// The returned message and error describe parsing, binding, or form-setup failures.
+// A nil error does not mean the input is valid: callers must also check f.HasErrors().
 func ParseAndValidate(r *http.Request, f FormComponent) (string, error) {
 	if err := r.ParseForm(); err != nil {
 		return "Unable to parse form data", err

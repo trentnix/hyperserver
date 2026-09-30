@@ -1,5 +1,6 @@
-// content_manager.go contains the definition of the ContentManagerService, which manages templates
-// used to render data to the requestor
+// Package content configures shared templates and response handlers for rendering.
+// Configure a ContentManagerService before serving requests. Its maps and callbacks
+// are mutable and are not protected against concurrent configuration changes.
 package content
 
 import (
@@ -10,40 +11,42 @@ import (
 )
 
 type (
+	// TemplatePath identifies a template file passed to the renderer.
 	TemplatePath = types.TemplatePath
 
+	// ContentManagerService groups templates by response type and supplies response callbacks.
 	ContentManagerService struct {
-		// Layouts templates will host content and components
+		// Layouts maps response types to outer template files.
 		Layouts map[string][]TemplatePath
-		// Contents should contain the data rendered in a layout (or data sent to the server without a layout)
+		// Contents maps response types to page and fragment template files.
 		Contents map[string][]TemplatePath
-		// Components should be the helper templates used to manage layouts and content
+		// Components maps response types to reusable helper template files.
 		Components map[string][]TemplatePath
 
-		// url of the default home page - used for redirects
+		// HomeURL is the default home-page redirect destination.
 		HomeURL string
-		// url of the default authentication portal page - used for redirects
+		// AuthURL is the login-page redirect destination.
 		AuthURL string
-		// message URL
+		// MessageURL holds an optional application message-page address.
 		MessageURL string
-		// error URL
+		// ErrorURL holds an optional application error-page address.
 		ErrorURL string
-		// url for 404 errors
+		// NotFoundURL holds an optional application not-found-page address.
 		NotFoundURL string
 
 		// HandleMessage lets the caller respond with the specified message
 		HandleMessage func(w http.ResponseWriter, r *http.Request, message string)
-		// HandleError lets the caller access the "error" handler
+		// HandleError delegates error presentation to the application.
 		HandleError func(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int)
-		// HandleNotFound
+		// HandleNotFound renders a response for an unknown resource.
 		HandleNotFound http.HandlerFunc
 
-		// name of the application
+		// AppName is the name supplied to templates.
 		AppName string
-		// default HTML page title
+		// AppTitle is the default page title.
 		AppTitle string
 
-		// specifies whether notifications should be rendered when rendering content
+		// RenderNotifications enables retrieval of session-backed notifications during rendering.
 		RenderNotifications bool
 	}
 )
@@ -54,13 +57,17 @@ const (
 	// HtmxType should be used when an HTMX response is required
 	HtmxType = "htmx"
 
-	DefaultAppName  = "HyperServer"
+	// DefaultAppName is the application name used before configuration.
+	DefaultAppName = "HyperServer"
+	// DefaultAppTitle is the default page title.
 	DefaultAppTitle = "HyperServer"
 
+	// HomeDefault is the default home-page path.
 	HomeDefault = "/"
 )
 
-// NewContentManager returns a (non-Singleton) instance of a ContentManagerService
+// NewContentManager allocates template maps and sets application and home-page defaults.
+// Response callbacks are left nil and must be supplied by the application.
 func NewContentManager() *ContentManagerService {
 	cm := ContentManagerService{}
 	cm.Layouts = make(map[string][]TemplatePath)
@@ -78,8 +85,7 @@ func NewContentManager() *ContentManagerService {
 	return &cm
 }
 
-// Configure does any configuration on the ContentServiceManager that was loaded from
-// the application configuration
+// Configure copies the application name and notification-rendering setting from cfg.
 func (c *ContentManagerService) Configure(cfg *config.Config) {
 	if cfg.App.Name != "" {
 		c.AppName = cfg.App.Name
@@ -148,7 +154,7 @@ func (c *ContentManagerService) AddHtmxLayout(template TemplatePath) {
 	c.AddLayout(HtmxType, template)
 }
 
-// AddHtmxLayoutTemplate adds layout templates for the HtmxType content type
+// AddHtmxLayouts appends layout templates for HtmxType responses.
 func (c *ContentManagerService) AddHtmxLayouts(templates []TemplatePath) {
 	c.AddLayouts(HtmxType, templates)
 }

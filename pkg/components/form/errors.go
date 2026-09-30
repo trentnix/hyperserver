@@ -1,8 +1,8 @@
-// errors.go defines custom errors for the form package
 package form
 
 import hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 
+// BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 
 // ErrInvalidForm indicates the form was not passed by reference
@@ -16,7 +16,7 @@ type ErrFormComponentInterfaceNotImplemented struct {
 	*BaseError
 }
 
-// NewErrInvalidForm creates an instance of ErrInvalidForm
+// NewErrInvalidForm returns an ErrInvalidForm wrapping err.
 func NewErrInvalidForm(err error) *ErrInvalidForm {
 	return &ErrInvalidForm{
 		BaseError: &BaseError{
@@ -26,7 +26,7 @@ func NewErrInvalidForm(err error) *ErrInvalidForm {
 	}
 }
 
-// NewErrFormComponentInterfaceNotImplemented creates an instance of ErrFormComponentInterfaceNotImplemented
+// NewErrFormComponentInterfaceNotImplemented returns an ErrFormComponentInterfaceNotImplemented wrapping err.
 func NewErrFormComponentInterfaceNotImplemented(err error) *ErrFormComponentInterfaceNotImplemented {
 	return &ErrFormComponentInterfaceNotImplemented{
 		BaseError: &BaseError{

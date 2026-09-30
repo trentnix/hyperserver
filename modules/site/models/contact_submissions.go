@@ -1,5 +1,4 @@
-// contact_submissions.go defines the ContactSubmission struct and the code to
-// serialize it to and from the specified database connection
+// Package models stores contact submissions for the development site.
 package models
 
 import (
@@ -16,6 +15,7 @@ import (
 )
 
 type (
+	// ContactSubmission is a contact message persisted by the development site.
 	ContactSubmission struct {
 		Id        string    `db:"id"`
 		Name      string    `db:"name"`
@@ -24,6 +24,7 @@ type (
 		CreatedAt time.Time `db:"created_at"`
 	}
 
+	// BaseError aliases the shared HyperServer error wrapper.
 	BaseError = hs_errors.BaseError
 
 	// ErrInvalidEmail indicates an email address field is invalid
@@ -69,7 +70,7 @@ func IsValidEmail(email string) bool {
 	return err == nil
 }
 
-// NewErrInvalidEmail creates an instance of ErrDatabase
+// NewErrInvalidEmail returns an ErrInvalidEmail wrapping err.
 func NewErrInvalidEmail(err error) *ErrInvalidEmail {
 	return &ErrInvalidEmail{
 		BaseError: &BaseError{

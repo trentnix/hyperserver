@@ -1,5 +1,3 @@
-// session.go contains middleware that loads the application's SessionManager into the request context and
-// also loads any currently authenticated user into the request context
 package middleware
 
 import (
@@ -13,11 +11,8 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// LoadSessionManagement loads both the SessionManager instance from the server application and any
-// currently authenticated user into the request context. A single middleware function was used
-// instead of splitting these two steps because loading the user requires a session manager to be
-// loaded. If the steps were split, the order the middleware functions to separately load the session manager
-// and the authenticated user would have had to run in a specific order.
+// LoadSessionManagement attaches the session manager, then loads the authenticated
+// user into the request context. It requires non-nil database and session dependencies.
 func LoadSessionManagement(db *sqlx.DB, s *session.SessionManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

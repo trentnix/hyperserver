@@ -1,4 +1,3 @@
-// handlers.go defines default handlers that can be used throughout the project
 package util
 
 import (
@@ -8,7 +7,9 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
-// HttpError calls http.Error instead of using a customer error handler
+// HttpError writes a plain-text error response with httpStatus.
+// When err is non-nil, it logs err and includes its message in the response.
+// Do not pass internal errors containing secrets or sensitive details.
 func HttpError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
 	errMessage := message
 	if err != nil {

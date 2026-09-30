@@ -1,4 +1,3 @@
-// logger.go defines middleware that relates to
 package middleware
 
 import (

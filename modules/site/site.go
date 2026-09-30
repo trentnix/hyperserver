@@ -1,4 +1,6 @@
-// site.go defines and initializes the site module
+// Package module_site provides the development site's pages, layouts, and sample routes.
+// Importing it registers a shared SiteModule. Production applications must not
+// import this module because it exposes diagnostic and sample handlers.
 package module_site
 
 import (

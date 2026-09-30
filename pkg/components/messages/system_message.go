@@ -1,4 +1,3 @@
-// system_message.go defines a SystemMessage and related methods
 package messages
 
 import (
@@ -8,23 +7,31 @@ import (
 )
 
 type (
+	// SystemMessage is a session-backed message intended for the browser console.
 	SystemMessage struct {
 		SessionMessage
 	}
 
+	// SystemMessageType selects a browser console logging method.
 	SystemMessageType string
 )
 
 const (
 	categorySystemMessage string = "hs-message-system-content-message"
 
-	SystemMessageTypeDebug   SystemMessageType = "debug"
-	SystemMessageTypeLog     SystemMessageType = "log"
-	SystemMessageTypeInfo    SystemMessageType = "info"
+	// SystemMessageTypeDebug selects console.debug.
+	SystemMessageTypeDebug SystemMessageType = "debug"
+	// SystemMessageTypeLog selects console.log.
+	SystemMessageTypeLog SystemMessageType = "log"
+	// SystemMessageTypeInfo selects console.info.
+	SystemMessageTypeInfo SystemMessageType = "info"
+	// SystemMessageTypeWarning selects console.warn.
 	SystemMessageTypeWarning SystemMessageType = "warn"
-	SystemMessageTypeError   SystemMessageType = "error"
+	// SystemMessageTypeError selects console.error.
+	SystemMessageTypeError SystemMessageType = "error"
 )
 
+// String returns the underlying string value.
 func (m SystemMessageType) String() string {
 	return string(m)
 }
@@ -54,6 +61,8 @@ func (c *SystemMessage) IsError() bool {
 	return c.Type == SystemMessageTypeError.String()
 }
 
+// ConsoleMessage formats a browser console call as trusted JavaScript.
+// It uses Go string quoting, not HTML script-context escaping. Do not pass untrusted text.
 func (c *SystemMessage) ConsoleMessage() template.JS {
 	var msgType string
 	switch SystemMessageType(c.Type) {
@@ -98,7 +107,7 @@ func AddSystemInfoMessage(w http.ResponseWriter, r *http.Request, message string
 	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeInfo))
 }
 
-// AddSystemWarningMessage adds an info SystemMessage to a session
+// AddSystemWarningMessage stores a warning message for the browser console.
 func AddSystemWarningMessage(w http.ResponseWriter, r *http.Request, message string) error {
 	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeWarning))
 }
@@ -108,9 +117,8 @@ func AddSystemErrorMessage(w http.ResponseWriter, r *http.Request, message strin
 	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeError))
 }
 
-// GetSystemMessages returns the slice of SystemMessage instances that have been saved to
-// a session. The messages (and the session they are contained in) are then deleted,
-// meaning that this function is not idempotent.
+// GetSystemMessages retrieves console messages and removes them from the request-local session.
+// It ends the session if empty, but otherwise does not save the removal to storage.
 func GetSystemMessages(w http.ResponseWriter, r *http.Request) ([]SystemMessage, error) {
 	msgs, err := getMessages(w, r, categorySystemMessage)
 	if err != nil {

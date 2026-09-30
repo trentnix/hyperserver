@@ -1,4 +1,6 @@
-// util.go contains utility functions that are used in the application
+// Package util provides URL, template-file, and HTTP response helpers.
+// BuildPublicURL uses configured addresses rather than request host or forwarded
+// headers. LoadHTMLFromFile and RedirectToURL require trusted input.
 package util
 
 import (
@@ -38,8 +40,8 @@ func SetWorkingDirectory(wd string) error {
 	return nil
 }
 
-// LoadHTMLFromFile takes the file at the specified filePath and returns a template.HTML object with
-// its contents
+// LoadHTMLFromFile reads a trusted file and marks its contents as template.HTML.
+// It does not parse or escape the file's contents.
 func LoadHTMLFromFile(filePath string) (template.HTML, error) {
 	htmlBytes, err := os.ReadFile(filePath)
 	if err != nil {

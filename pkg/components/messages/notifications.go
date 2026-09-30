@@ -1,23 +1,27 @@
-// notifications.go defines a Notification and related methods
 package messages
 
 import "net/http"
 
 type (
+	// Notification is a success or error message intended for page notifications.
 	Notification struct {
 		SessionMessage
 	}
 
+	// NotificationType identifies a notification's severity.
 	NotificationType string
 )
 
 const (
+	// NotificationTypeSuccess identifies a success notification.
 	NotificationTypeSuccess NotificationType = "success"
-	NotificationTypeError   NotificationType = "error"
+	// NotificationTypeError identifies an error notification.
+	NotificationTypeError NotificationType = "error"
 
 	categoryNotification string = "hs-message-category-notification"
 )
 
+// String returns the underlying string value.
 func (n NotificationType) String() string {
 	return string(n)
 }
@@ -52,9 +56,8 @@ func AddSuccessNotification(w http.ResponseWriter, r *http.Request, message stri
 	return addNotification(w, r, NewNotification(message, NotificationTypeSuccess))
 }
 
-// GetNotifications returns the slice of Notification instances that have been saved to
-// a session. The messages (and the session they are contained in) are then deleted,
-// meaning that this function is not idempotent.
+// GetNotifications retrieves notifications and removes them from the request-local session.
+// It ends the session if empty, but otherwise does not save the removal to storage.
 func GetNotifications(w http.ResponseWriter, r *http.Request) ([]Notification, error) {
 	msgs, err := getMessages(w, r, categoryNotification)
 	if err != nil {

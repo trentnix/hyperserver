@@ -1,4 +1,3 @@
-// zaplogger.go is a wrapper for a Zap logger that implements the Logger interface used by the application
 package logger
 
 import (

@@ -6,26 +6,32 @@ import (
 )
 
 type (
+	// Message is a categorized flash message stored in a session.
 	Message struct {
 		SessionMessage
 	}
 
+	// MessageType identifies an informational, success, or error flash message.
 	MessageType string
 )
 
 const (
+	// MessageTypeDefault identifies an informational flash message.
 	MessageTypeDefault MessageType = "default"
+	// MessageTypeSuccess identifies a successful operation.
 	MessageTypeSuccess MessageType = "success"
-	MessageTypeError   MessageType = "error"
+	// MessageTypeError identifies a failed operation.
+	MessageTypeError MessageType = "error"
 
 	// value appended to flash message categories to mitigate the potential over overlap with
 	// session names that might be used in the code
 	sessionFlashMessagePrefix string = "hs-message-category-flash-message"
 
-	// built-in flash message categories
+	// AuthMessages is the flash-message category used by authentication forms.
 	AuthMessages = "hs_auth"
 )
 
+// String returns the underlying string value.
 func (m MessageType) String() string {
 	return string(m)
 }
@@ -70,9 +76,8 @@ func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string, c
 	return addFlashMessage(w, r, NewMessage(message, MessageTypeSuccess), category)
 }
 
-// GetMessages returns the slice of Message instances that have been saved to a session in the
-// specified category. The messages (and the session they are contained in) are then deleted,
-// meaning that this function is not idempotent.
+// GetMessages retrieves a category and removes it from the request-local session.
+// It ends the session if empty, but otherwise does not save the removal to storage.
 func GetMessages(w http.ResponseWriter, r *http.Request, category string) ([]Message, error) {
 	if category == "" {
 		return nil, NewErrMessageCategoryNotSpecified(nil)
