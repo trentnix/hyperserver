@@ -8,20 +8,20 @@ This document defines the intended architecture and implementation order. Planne
 
 ### Current implementation
 
-Snapshot updated September 28, 2026. Phase 0 is complete. Phase 1 is in progress.
+Phase 0 is complete. Phase 1 is in progress. HyperServer is not ready for public deployment.
 
-[CI](.github/workflows/ci.yml) runs tests, vet, and full-suite race checks. These checks do not establish production readiness or replace a security audit. Performance remains unmeasured.
+[CI](.github/workflows/ci.yml) runs tests, vet, and full-suite race checks. These checks do not establish production readiness or replace a security audit. Performance has not been measured.
 
 | Area | Current state | Remaining work |
 | --- | --- | --- |
 | Startup and modules | [Server construction](pkg/server/server.go) initializes database, sessions, and mail unconditionally. The [handler registry](pkg/handlers/handlers.go) stores instances globally. | Activate required services and create module instances per application. |
 | Shutdown and TLS | [Startup](cmd/web/main.go) calls `ListenAndServe` regardless of TLS configuration. `ApplicationServer.Shutdown` is empty. | Implement explicit TLS/proxy configuration, shutdown, and resource cleanup. |
-| Configuration and middleware | The [template](config-template.yaml) now uses `http.session.jwtKey`. Startup validates signing keys, lifetimes, and provider selections, with [regression tests](cmd/web/startup_test.go). [Auth middleware](pkg/services/middleware/auth.go) still has missing error returns and a reversed save-error condition. | Fix middleware error paths and test rejection behavior. |
-| Forms and account writes | [Email-auth](auth/modules/email/email_auth.go) and [contact](modules/site/contact.go) handlers reject invalid forms. [User creation](pkg/services/user/user.go) is insert-only, and updates require an existing ID. [HTTP tests](cmd/web/http_test.go) cover competing registrations without password overwrites. | Complete the recovery and session safeguards below. |
-| Recovery and verification | [Password-reset requests](auth/modules/email/email_auth.go) and [verification resend](auth/auth_manager.go) email links to the account's stored address, not to the requester in the HTTP response. Signed purposes separate reset and verification tokens. [Password reset](pkg/services/user/auth_token_reset.go) consumes the exact submitted token and updates the password in one transaction, rejecting replay and concurrent reuse. Verification tokens are not invalidated after use. | Apply the same single-use guarantee to account verification. |
-| Mail and sessions | [Mail](pkg/services/messaging/mail.go) has an injectable sender, reports unavailable delivery, bounds SMTP operations, honors cancellation, and validates headers. Verification email and diagnostic email escape dynamic HTML values. [SQLite logout](pkg/services/session/sqlitestore.go) only expires the browser cookie. | Rotate and revoke sessions. |
-| Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. The development [site module](modules/site/router.go) owns diagnostic routes and requires POST for mail, logout, and session changes. [Redirects](pkg/util/redirect.go) still interpolate URLs into HTML and JavaScript. | Keep development modules out of production applications. Fix redirects and remaining auth route methods. Add CSRF protection and request limits. |
-| Rendering and tests | The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. Coverage now includes startup, configuration, auth, forms, mail, and sessions. [Rendering](pkg/components/content/content.go) still parses templates on each render. | Add coverage for the remaining security blockers and reuse parsed templates. |
+| Configuration and middleware | [Startup](cmd/web/startup_test.go) validates signing keys, lifetimes, and provider selections. [Authentication middleware](pkg/services/middleware/auth.go) has incomplete error handling. | Fix middleware error paths and test rejection behavior. |
+| Forms and account writes | [Form handlers](auth/modules/email/email_auth.go) validate input. [Account creation and updates](pkg/services/user/user.go) use separate operations. | Add request limits and CSRF protection. |
+| Recovery and verification | [Password reset](pkg/services/user/auth_token_reset.go) and [account verification](pkg/services/user/auth_token_verification.go) use emailed, single-use links. Token consumption and the account change share a transaction. Verification links are bound to the recipient's email address. | Address recovery-response timing and rate limits. |
+| Mail and sessions | [SMTP delivery](pkg/services/messaging/mail.go) runs during the request, with timeouts and cancellation. [SQLite logout](pkg/services/session/sqlitestore.go) expires the browser cookie but leaves the stored session active. | Rotate and revoke sessions. Decide whether mail delivery needs background processing. |
+| Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. The [site module](modules/site/router.go) provides diagnostic and sample routes. [Redirects](pkg/util/redirect.go) interpolate URLs into HTML and JavaScript. | Keep development modules out of production applications. Use safe redirects and explicit methods for state-changing routes. |
+| Rendering and tests | [Templates](pkg/components/content/content.go) are parsed per response. The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. | Reuse parsed templates and cover unresolved security issues with regression tests. |
 
 ## Design principles
 
@@ -181,25 +181,21 @@ Benchmark rendering, middleware, sessions, and representative requests with late
 
 ## Delivery plan
 
-The phases define implementation order. Security fixes can interrupt any phase. Keep basic CI active from Phase 1 and use the reference application to validate changes throughout.
+The phases define implementation order. The active and planned phases list remaining work. Security fixes can interrupt any phase. Keep CI active and use the reference application to validate changes throughout.
 
 ### Phase 0: Record decisions (complete)
 
-The roadmap defines the core and replaceable service boundaries. Public APIs are marked experimental. [Architecture decisions](docs/decisions/readme.md) record module-registration ownership and list unresolved contracts. Continue recording decisions as implementation resolves those contracts.
-
-Exit when contributors can identify the core, service contracts, and unresolved API decisions.
+The roadmap defines the core and replaceable service boundaries. Public APIs are experimental. [Architecture decisions](docs/decisions/readme.md) record module-registration ownership and list unresolved contracts. Record further decisions as those contracts are defined.
 
 ### Phase 1: Correctness and security (in progress)
 
-- Keep development modules out of production applications, fix middleware error paths, and validate configuration, including the session signing-key mapping.
+- Fix authentication and session error handling. Distinguish missing or expired sessions from storage failures and invalid persisted data.
 - Replace interpolated redirects, enforce intended route methods, and add CSRF protection, request limits, safe cookies, security headers, and a documented CSP.
-- Define TLS termination and trusted-proxy behavior. Add rate limits and address recovery-response timing differences. Acknowledgments are generic, but eligible accounts still wait for token storage and mail delivery.
+- Define TLS termination and trusted-proxy behavior. Add rate limits and prevent recovery-response timing from revealing account eligibility.
 - Replace `dgrijalva/jwt-go`, whose upstream repository is archived. Validate the exact signing algorithm for JWT consumers. [Upstream archive](https://github.com/dgrijalva/jwt-go)
 - Do not decode attacker-controlled input with gob. [Go gob security guidance](https://pkg.go.dev/encoding/gob#hdr-Security)
-- Deliver reset and verification tokens to the account's email address. Do not return usable links to the requester. Consume tokens atomically with the protected change, including concurrent redemption tests.
-- Make disabled mail and delivery failures explicit. Validate SMTP headers, bound delivery time, and make registration failures recoverable.
 - Rotate sessions at login and privilege changes. Revoke server-side sessions on logout, test replay, and clean expired records.
-- Add regression and HTTP integration tests for registration, verification, login, logout, reset, password change, and failure paths. Run tests and vet in CI.
+- Add regression and HTTP integration tests for each security fix, including failure, concurrency, and replay cases.
 
 Exit when these known blockers have regression coverage and the reference application's security controls work through HTTP tests. Passing this phase does not establish complete production readiness.
 

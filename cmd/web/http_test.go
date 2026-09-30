@@ -629,11 +629,8 @@ func TestHTTPVerificationUpdatesExistingAccount(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		token, err := user.NewVerificationToken(u.ID, []byte(h.app.Config.Auth.JwtKey), time.Hour)
-		if err != nil {
-			t.Fatal(err)
-		}
-		w = h.request(http.MethodGet, "/auth/verify?token="+url.QueryEscape(token), nil, true)
+		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
+		w = h.request(http.MethodGet, link.RequestURI(), nil, true)
 		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 			t.Fatal("verification did not succeed")
 		}
@@ -1179,15 +1176,15 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 		if err := reset.Create(h.app.Database); err != nil {
 			t.Fatal(err)
 		}
-		verification, err := user.NewVerificationToken(u.ID, key, time.Hour)
+		verification, err := user.NewAuthVerificationToken(u, key, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, htmx := range []bool{false, true} {
 			for _, tc := range []struct{ method, path, message string }{
 				{http.MethodGet, "/auth/verify?token=" + url.QueryEscape(reset.Token), "Verification failed"},
-				{http.MethodGet, "/auth/reset/email?token=" + url.QueryEscape(verification), "invalid token"},
-				{http.MethodPost, "/auth/reset/email?token=" + url.QueryEscape(verification), "invalid token"},
+				{http.MethodGet, "/auth/reset/email?token=" + url.QueryEscape(verification.Token), "invalid token"},
+				{http.MethodPost, "/auth/reset/email?token=" + url.QueryEscape(verification.Token), "invalid token"},
 			} {
 				w := h.request(tc.method, tc.path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, htmx)
 				if !strings.Contains(w.Body.String(), tc.message) || strings.Contains(w.Body.String(), `id="reset-password-form"`) || w.Header().Get("HX-Redirect") != "" {
@@ -1196,7 +1193,7 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 				h.assertUserUnchanged(t, u)
 				h.assertRowCount(t, "usertoken", 1)
 				h.assertNoTokenExposure(t, w, reset.Token)
-				h.assertNoTokenExposure(t, w, verification)
+				h.assertNoTokenExposure(t, w, verification.Token)
 			}
 		}
 	})

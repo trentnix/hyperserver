@@ -6,7 +6,7 @@ HyperServer is an experimental Go framework for server-rendered web applications
 
 HyperServer is in early development and is not production-ready. Public APIs and configuration can change without backward compatibility during `v0.x`.
 
-Known security and correctness issues remain in authentication, recovery, sessions, request handling, and application lifecycle. Do not expose the reference application to the public internet or use it with real accounts or sensitive data.
+Known security and correctness issues affect authentication, recovery, sessions, request handling, and application lifecycle. Do not expose the reference application to the public internet or use it with real accounts or sensitive data.
 
 The reference application is loopback-only, but a tunnel or reverse proxy can still expose it. This restriction applies to `cmd/web`, not the framework.
 
@@ -21,7 +21,7 @@ High performance is a design goal, not an established benchmark result. Passing 
 - Experimental email/password authentication, account verification and recovery, cookie and SQLite session stores, SMTP mail, and request logging.
 - SQLite-backed persistence used by the reference application and framework services.
 
-Services are not yet consistently optional or independently replaceable, and module instances still share process-wide state.
+Some services require other framework services and cannot be replaced independently. Module instances share process-wide state.
 
 ## Direction
 
@@ -41,11 +41,11 @@ Use [config-template.yaml](config-template.yaml) as the starting point for a loc
 
 ### Registration and email
 
-With `auth.enabled`, set `auth.registrationEnabled: true` to allow new accounts. Registration is disabled by default. Disabled registration hides its links and returns HTTP 403, without disabling existing-account login or recovery.
+Registration is disabled by default. With `auth.enabled`, set `auth.registrationEnabled: true` to allow new accounts. Existing accounts can log in and reset passwords when registration is disabled.
 
-If registration requires verification, startup must find configured delivery. A later delivery failure leaves the account pending verification so the user can log in and request another email.
+Account verification and password reset use emailed, single-use links. If registration requires verification, startup validates the delivery configuration. Failed delivery leaves the account pending verification so the user can log in and request another email.
 
-Recovery links go to the account's stored email address, never in the HTTP acknowledgment. Reset acknowledgments are generic, but synchronous delivery can still reveal account eligibility through response timing. Verification links remain reusable until expiry, and reset consumption is not yet atomic.
+Mail is sent during the request. Password-reset response timing can reveal whether an account is eligible for recovery.
 
 ### Public links and the server address
 

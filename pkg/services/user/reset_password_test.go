@@ -72,7 +72,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 			if failure == "signed expiry" {
 				lifetime = time.Nanosecond
 			}
-			token, err := newAuthToken(u.ID, key, lifetime, purpose)
+			token, err := newAuthToken(u, key, lifetime, purpose)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -177,7 +177,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 	if err := token.Create(db); err != nil {
 		t.Fatal(err)
 	}
-	observed, started := observeResetDeletes(t, db)
+	observed, started := observeTokenDeletes(t, db)
 	lock, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -202,7 +202,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 	// Both transactions must reach deletion while a separate connection owns
 	// the write lock. Neither redemption can finish before the lock is released.
 	for range 2 {
-		waitForResetDelete(t, ctx, started)
+		waitForTokenDelete(t, ctx, started)
 	}
 	select {
 	case result := <-results:
@@ -266,7 +266,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 			if err := token.Create(db); err != nil {
 				t.Fatal(err)
 			}
-			observed, started := observeResetDeletes(t, db)
+			observed, started := observeTokenDeletes(t, db)
 			lock, err := db.BeginTxx(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -281,7 +281,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 			before := *u
 			result := make(chan error, 1)
 			go func() { result <- u.ResetPassword(resetCtx, observed, token.Token, key, "new hash") }()
-			waitForResetDelete(t, ctx, started)
+			waitForTokenDelete(t, ctx, started)
 			if scenario != "cancellation" && !time.Now().Before(deadline) {
 				t.Fatal("token expired before contention was established")
 			}

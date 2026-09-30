@@ -1,7 +1,7 @@
 // Package user stores accounts and account tokens and connects users to sessions.
 // Schema preparation currently runs during account access and uses process-wide
-// state. Password resets consume their token atomically with the password update.
-// Verification tokens remain reusable until expiry.
+// state. Password resets and email verification consume their exact stored token
+// atomically with the account change.
 package user
 
 import (

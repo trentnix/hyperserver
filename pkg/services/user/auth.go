@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -87,13 +86,4 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
 	}
 
 	return u_db, nil
-}
-
-// NewVerificationToken creates a signed verification token without storing it.
-func NewVerificationToken(userId string, jwtKey []byte, expiration time.Duration) (string, error) {
-	token, err := newAuthToken(userId, jwtKey, expiration, verificationTokenType)
-	if err != nil {
-		return "", err
-	}
-	return token.Token, nil
 }

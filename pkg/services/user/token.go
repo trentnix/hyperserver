@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -9,15 +10,14 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/database"
 )
 
-// AuthToken holds an account token and its storage metadata.
-// Create persists the hash, account ID, purpose, and expiry, but not the raw Token.
 type (
-	// AuthToken defines the data that will be serialized to the database to
-	// manage a reset token
+	// AuthToken holds an account token and its storage metadata.
+	// Create persists the hash, account ID, purpose, and expiry, but not the raw Token.
 	AuthToken struct {
 		UserId string `db:"user_id"`
 		// TokenHash is the SHA-256 hash stored instead of the raw token.
@@ -31,8 +31,16 @@ type (
 // Create inserts the token's hash, account ID, expiry, and purpose.
 // The account schema must already exist. It does not start a transaction with an account change.
 func (token *AuthToken) Create(db *sqlx.DB) error {
+	return token.CreateContext(context.Background(), db)
+}
+
+// CreateContext stores token metadata using ctx. It never stores the raw token.
+func (token *AuthToken) CreateContext(ctx context.Context, db *sqlx.DB) error {
+	if db == nil {
+		return database.NewErrDatabaseUnavailable(nil)
+	}
 	errCreateToken := errors.New("error creating a new token in the database")
-	if token.UserId == "" {
+	if token == nil || token.UserId == "" {
 		return NewErrUserNotSpecified(errCreateToken)
 	}
 
@@ -52,7 +60,7 @@ func (token *AuthToken) Create(db *sqlx.DB) error {
         VALUES (:user_id, :token_hash, :expires_at, :token_type)
     `, userTokenTableName)
 
-	_, err := db.NamedExec(query, token)
+	_, err := db.NamedExecContext(ctx, query, token)
 	return err
 }
 
@@ -159,9 +167,9 @@ func getTokenByHash(db *sqlx.DB, token string, tokenType string) (*AuthToken, er
 	return &passwordResetToken, nil
 }
 
-func newAuthToken(userId string, jwtKey []byte, expiration time.Duration, tokenType string) (*AuthToken, error) {
+func newAuthToken(u *User, jwtKey []byte, expiration time.Duration, tokenType string) (*AuthToken, error) {
 	errNewToken := errors.New("error creating a new token instance")
-	if userId == "" {
+	if u == nil || u.ID == "" {
 		return nil, NewErrUserNotSpecified(errNewToken)
 	}
 
@@ -174,16 +182,27 @@ func newAuthToken(userId string, jwtKey []byte, expiration time.Duration, tokenT
 	if tokenType != resetTokenType && tokenType != verificationTokenType {
 		return nil, NewErrToken(errors.New("invalid token purpose"))
 	}
+	if tokenType == verificationTokenType && u.Email == "" {
+		return nil, NewErrToken(errors.New("verification requires an email address"))
+	}
 
-	// create token - user.id and expiration
+	tokenID, err := uuid.NewRandom()
+	if err != nil {
+		return nil, NewErrToken(err)
+	}
 	expirationTime := time.Now().Add(expiration)
 
+	// A random token ID prevents same-second resends from reissuing a consumed token.
 	claims := &VerificationClaims{
-		Id:      userId,
+		Id:      u.ID,
 		Purpose: tokenType,
 		StandardClaims: jwt.StandardClaims{
+			Id:        tokenID.String(),
 			ExpiresAt: expirationTime.Unix(),
 		},
+	}
+	if tokenType == verificationTokenType {
+		claims.Email = u.Email
 	}
 
 	// Create and sign the token with the specified algorithm and claims
@@ -197,7 +216,7 @@ func newAuthToken(userId string, jwtKey []byte, expiration time.Duration, tokenT
 	verificationTokenHash := hex.EncodeToString(hash[:])
 
 	authToken := &AuthToken{}
-	authToken.UserId = userId
+	authToken.UserId = u.ID
 	authToken.TokenHash = verificationTokenHash
 	authToken.Token = verificationToken
 	authToken.ExpiresAt = expirationTime
@@ -231,7 +250,34 @@ func parseAuthToken(tokenString string, jwtKey []byte, purpose string) (*Verific
 	if !token.Valid || claims.Id == "" || claims.Purpose != purpose || claims.ExpiresAt == 0 {
 		return nil, NewErrToken(errors.New("invalid token claims"))
 	}
+	if purpose == verificationTokenType && claims.Email == "" {
+		return nil, NewErrToken(errors.New("verification token has no email address"))
+	}
 	return claims, nil
+}
+
+// consumeAuthToken claims an already signature-checked token with the first write.
+// The caller must commit the protected change in the same transaction. Rollback
+// restores the token on failure. Expiry is checked after acquiring the write lock.
+func consumeAuthToken(ctx context.Context, tx *sqlx.Tx, token string, claims *VerificationClaims) error {
+	hash := sha256.Sum256([]byte(token))
+	var expiresAt time.Time
+	err := tx.QueryRowContext(ctx, `DELETE FROM `+userTokenTableName+`
+		WHERE user_id = ? AND token_hash = ? AND token_type = ?
+		RETURNING expires_at`, claims.Id, hex.EncodeToString(hash[:]), claims.Purpose).
+		Scan(&expiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NewErrTokenNotFound(err)
+	}
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if !now.Before(expiresAt) || now.Unix() >= claims.ExpiresAt {
+		return NewErrTokenExpired(nil)
+	}
+	return nil
 }
 
 func validateToken(db *sqlx.DB, tokenString string, jwtKey []byte, tokenType string) (*User, error) {
@@ -276,5 +322,8 @@ func validateToken(db *sqlx.DB, tokenString string, jwtKey []byte, tokenType str
 		return nil, database.NewErrDatabase(err)
 	}
 
+	if tokenType == verificationTokenType && user.Email != claims.Email {
+		return nil, NewErrToken(errors.New("verification address no longer matches the account"))
+	}
 	return user, nil
 }

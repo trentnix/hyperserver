@@ -408,19 +408,22 @@ func (a *EmailAuthService) SendVerificationEmail(ctx context.Context, u *user.Us
 		tokenExpiration = 24 * time.Hour
 	}
 
-	verificationToken, err := user.NewVerificationToken(u.ID, []byte(a.config.Auth.JwtKey), tokenExpiration)
+	verificationToken, err := user.NewAuthVerificationToken(u, []byte(a.config.Auth.JwtKey), tokenExpiration)
 	if err != nil {
 		return err
 	}
 
 	verificationURL := url.URL{Scheme: origin.Scheme, Host: origin.Host, Path: verificationEndpoint}
-	verificationURL.RawQuery = url.Values{"token": {verificationToken}}.Encode()
+	verificationURL.RawQuery = url.Values{"token": {verificationToken.Token}}.Encode()
 
 	body, err := a.renderAccountEmail(a.verificationEmail, verificationURL.String())
 	if err != nil {
 		return err
 	}
 
+	if err := verificationToken.CreateContext(ctx, a.db); err != nil {
+		return err
+	}
 	return a.mailClient.Compose().
 		To(u.Email).
 		Subject("Verify your account").

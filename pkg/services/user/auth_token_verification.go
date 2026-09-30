@@ -2,7 +2,8 @@ package user
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -48,9 +49,10 @@ func GetAuthVerificationTokenByHash(db *sqlx.DB, token string) (*AuthVerificatio
 	return authVerificationToken, nil
 }
 
-// NewAuthVerificationToken creates a verification token and its hash. Call Create to store it.
+// NewAuthVerificationToken creates a distinct token bound to u.ID and u.Email.
+// Store it with CreateContext before sending the link. Other tokens remain valid.
 func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthVerificationToken, error) {
-	authToken, err := newAuthToken(u.ID, jwtKey, expiration, verificationTokenType)
+	authToken, err := newAuthToken(u, jwtKey, expiration, verificationTokenType)
 	if err != nil {
 		return nil, err
 	}
@@ -59,32 +61,49 @@ func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) 
 }
 
 // ValidateVerificationToken checks a signed verification token against its stored
-// hash, purpose, and expiry. It does not consume the token. Unlike Verify, it requires a stored record.
+// hash, purpose, expiry, and current email address. It does not consume the token.
 func ValidateVerificationToken(db *sqlx.DB, tokenString string, jwtKey []byte) (*User, error) {
 	return validateToken(db, tokenString, jwtKey, verificationTokenType)
 }
 
-// Verify checks the signed verification token and marks its account verified.
-// It does not require or consume a stored token. Reuse is allowed until expiry.
+// Verify consumes the exact stored token and verifies its email address in one
+// transaction. The account schema must exist. A changed email address rejects
+// the token. Failed operations leave both the account and token unchanged.
 func Verify(ctx context.Context, db *sqlx.DB, verificationToken string, jwtKey []byte) (*User, error) {
+	if db == nil {
+		return nil, database.NewErrDatabaseUnavailable(nil)
+	}
+
 	claims, err := parseAuthToken(verificationToken, jwtKey, verificationTokenType)
 	if err != nil {
 		return nil, err
 	}
 
-	userAccount, err := GetUserByID(db, claims.Id)
+	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		return nil, NewErrUserNotFound(err)
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	if err := consumeAuthToken(ctx, tx, verificationToken, claims); err != nil {
+		return nil, err
 	}
 
-	alreadyVerified := userAccount.Verified
-	if !alreadyVerified {
-		userAccount.Verified = true
-		err := userAccount.Update(ctx, db)
-		if err != nil {
-			return nil, database.NewErrDatabase(fmt.Errorf("error updating the specified user in the database: %w", err))
-		}
+	var account User
+	err = tx.GetContext(ctx, &account, `UPDATE `+userTableName+`
+		SET verified = TRUE, updated_at = ? WHERE id = ? AND email = ?
+		RETURNING id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password`,
+		time.Now(), claims.Id, claims.Email)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, NewErrToken(errors.New("verification address changed or account no longer exists"))
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	return userAccount, nil
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &account, nil
 }

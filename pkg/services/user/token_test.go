@@ -44,6 +44,9 @@ func TestTokenPurposeStorage(t *testing.T) {
 			if claims["purpose"] != purpose {
 				t.Errorf("signed purpose = %v, want %q", claims["purpose"], purpose)
 			}
+			if purpose == verificationTokenType && claims["email"] != u.Email {
+				t.Error("verification token is not bound to the recipient address")
+			}
 			if err := token.Create(db); err != nil {
 				t.Fatal(err)
 			}
@@ -108,7 +111,7 @@ func TestSignedTokenValidation(t *testing.T) {
 	for _, purpose := range []string{resetTokenType, verificationTokenType} {
 		for _, failure := range []string{"missing purpose", "unknown purpose", "wrong purpose", "missing user", "missing expiry", "expired", "wrong key", "empty key", "wrong algorithm", "malformed"} {
 			t.Run(purpose+"/"+failure, func(t *testing.T) {
-				claims := jwt.MapClaims{"Id": "test-user", "purpose": purpose, "exp": time.Now().Add(time.Hour).Unix()}
+				claims := jwt.MapClaims{"Id": "test-user", "purpose": purpose, "email": "person@example.invalid", "exp": time.Now().Add(time.Hour).Unix()}
 				key := []byte("test-signing-key")
 				method := jwt.SigningMethodHS256
 				switch failure {
@@ -155,6 +158,57 @@ func TestSignedTokenValidation(t *testing.T) {
 	}
 }
 
+func TestVerifyRejectsUnboundOrExpiredSignedTokens(t *testing.T) {
+	for _, failure := range []string{"missing email", "signed expiry"} {
+		t.Run(failure, func(t *testing.T) {
+			db, u, _, key := verificationFixture(t)
+			claims := VerificationClaims{Id: u.ID, Purpose: verificationTokenType, Email: u.Email,
+				StandardClaims: jwt.StandardClaims{ExpiresAt: time.Now().Add(time.Hour).Unix()}}
+			if failure == "missing email" {
+				claims.Email = ""
+			} else {
+				claims.ExpiresAt = time.Now().Add(-time.Hour).Unix()
+			}
+			raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash := sha256.Sum256([]byte(raw))
+			token := AuthToken{UserId: u.ID, TokenHash: hex.EncodeToString(hash[:]), Type: verificationTokenType, ExpiresAt: time.Now().Add(time.Hour)}
+			if err := token.Create(db); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := Verify(context.Background(), db, raw, key); err == nil || got != nil {
+				t.Fatal("invalid signed verification token accepted")
+			}
+			stored, err := GetUserByID(db, u.ID)
+			if err != nil || stored.Verified {
+				t.Fatalf("invalid token verified account: %v", err)
+			}
+			if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+				t.Fatalf("invalid token was consumed: %v", err)
+			}
+		})
+	}
+}
+
+func TestCreateTokenHonorsCancellation(t *testing.T) {
+	db, u, _, key := verificationFixture(t)
+	token, err := NewAuthVerificationToken(u, key, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := token.CreateContext(ctx, db); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled creation returned %v", err)
+	}
+	var missing *ErrTokenNotFound
+	if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); !errors.As(err, &missing) {
+		t.Fatalf("canceled creation stored token: %v", err)
+	}
+}
+
 func TestLegacyStoredResetTokenRejected(t *testing.T) {
 	db := userTestDB(t)
 	u := &User{Email: "person@example.invalid"}
@@ -184,7 +238,7 @@ func TestLegacyStoredResetTokenRejected(t *testing.T) {
 func TestTokenRejectsUnsupportedPurpose(t *testing.T) {
 	for _, purpose := range []string{"", "session"} {
 		t.Run(purpose, func(t *testing.T) {
-			if _, err := newAuthToken("test-user", []byte("test-key"), time.Hour, purpose); err == nil {
+			if _, err := newAuthToken(&User{ID: "test-user"}, []byte("test-key"), time.Hour, purpose); err == nil {
 				t.Fatal("created a token with an unsupported purpose")
 			}
 			token := AuthToken{UserId: "test-user", TokenHash: "test-hash", ExpiresAt: time.Now().Add(time.Hour), Type: purpose}

@@ -12,10 +12,10 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-// observeResetDeletes opens another pool on the fixture database. The signal
-// marks a reset transaction reaching its DELETE, without changing production code
+// observeTokenDeletes opens another pool on the fixture database. The signal
+// marks an account-token transaction reaching its DELETE, without changing production code
 // or replacing SQLite's locking and transaction behavior with a mock.
-func observeResetDeletes(t *testing.T, db *sqlx.DB) (*sqlx.DB, <-chan struct{}) {
+func observeTokenDeletes(t *testing.T, db *sqlx.DB) (*sqlx.DB, <-chan struct{}) {
 	t.Helper()
 	var sequence int
 	var name, path string
@@ -24,7 +24,7 @@ func observeResetDeletes(t *testing.T, db *sqlx.DB) (*sqlx.DB, <-chan struct{}) 
 	}
 	started := make(chan struct{}, 2)
 	uri := url.URL{Scheme: "file", Path: path, RawQuery: "_busy_timeout=10000"}
-	connector := &resetConnector{dsn: uri.String(), started: started}
+	connector := &tokenConnector{dsn: uri.String(), started: started}
 	observed := sqlx.NewDb(sql.OpenDB(connector), "sqlite3")
 	observed.SetMaxOpenConns(2)
 	t.Cleanup(func() {
@@ -35,15 +35,15 @@ func observeResetDeletes(t *testing.T, db *sqlx.DB) (*sqlx.DB, <-chan struct{}) 
 	return observed, started
 }
 
-type resetConnector struct {
+type tokenConnector struct {
 	driver  sqlite3.SQLiteDriver
 	dsn     string
 	started chan<- struct{}
 }
 
-func (c *resetConnector) Driver() driver.Driver { return &c.driver }
+func (c *tokenConnector) Driver() driver.Driver { return &c.driver }
 
-func (c *resetConnector) Connect(ctx context.Context) (driver.Conn, error) {
+func (c *tokenConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -51,15 +51,15 @@ func (c *resetConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &resetConnection{SQLiteConn: conn.(*sqlite3.SQLiteConn), started: c.started}, nil
+	return &tokenConnection{SQLiteConn: conn.(*sqlite3.SQLiteConn), started: c.started}, nil
 }
 
-type resetConnection struct {
+type tokenConnection struct {
 	*sqlite3.SQLiteConn
 	started chan<- struct{}
 }
 
-func (c *resetConnection) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+func (c *tokenConnection) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if strings.HasPrefix(query, "DELETE FROM "+userTokenTableName) {
 		select {
 		case c.started <- struct{}{}:
@@ -70,11 +70,11 @@ func (c *resetConnection) QueryContext(ctx context.Context, query string, args [
 	return c.SQLiteConn.QueryContext(ctx, query, args)
 }
 
-func waitForResetDelete(t *testing.T, ctx context.Context, started <-chan struct{}) {
+func waitForTokenDelete(t *testing.T, ctx context.Context, started <-chan struct{}) {
 	t.Helper()
 	select {
 	case <-started:
 	case <-ctx.Done():
-		t.Fatal("reset did not reach token deletion:", ctx.Err())
+		t.Fatal("operation did not reach token deletion:", ctx.Err())
 	}
 }
