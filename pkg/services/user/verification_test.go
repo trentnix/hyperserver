@@ -44,7 +44,7 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if firstClaims.StandardClaims.Id == "" || secondClaims.StandardClaims.Id == "" || firstClaims.StandardClaims.Id == secondClaims.StandardClaims.Id {
+	if firstClaims.ID == "" || secondClaims.ID == "" || firstClaims.ID == secondClaims.ID {
 		t.Fatal("resend must have a distinct token ID even when issued in the same second")
 	}
 	if err := second.Create(db); err != nil {

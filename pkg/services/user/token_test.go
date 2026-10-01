@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestTokenPurposeStorage(t *testing.T) {
@@ -109,11 +109,17 @@ func TestTokensCannotSubstituteForEachOther(t *testing.T) {
 
 func TestSignedTokenValidation(t *testing.T) {
 	for _, purpose := range []string{resetTokenType, verificationTokenType} {
-		for _, failure := range []string{"missing purpose", "unknown purpose", "wrong purpose", "missing user", "missing expiry", "expired", "wrong key", "empty key", "wrong algorithm", "malformed"} {
+		for _, failure := range []string{
+			"missing purpose", "unknown purpose", "wrong purpose", "missing user",
+			"missing expiry", "null expiry", "zero expiry", "invalid expiry", "expired", "expired wrong key",
+			"wrong key", "empty key", "HS384", "HS512", "unsigned",
+			"future issued at", "future not before", "malformed",
+		} {
 			t.Run(purpose+"/"+failure, func(t *testing.T) {
 				claims := jwt.MapClaims{"Id": "test-user", "purpose": purpose, "email": "person@example.invalid", "exp": time.Now().Add(time.Hour).Unix()}
 				key := []byte("test-signing-key")
-				method := jwt.SigningMethodHS256
+				var signingKey any = key
+				var method jwt.SigningMethod = jwt.SigningMethodHS256
 				switch failure {
 				case "missing purpose":
 					delete(claims, "purpose")
@@ -128,17 +134,31 @@ func TestSignedTokenValidation(t *testing.T) {
 					delete(claims, "Id")
 				case "missing expiry":
 					delete(claims, "exp")
-				case "expired":
+				case "null expiry":
+					claims["exp"] = nil
+				case "zero expiry":
+					claims["exp"] = 0
+				case "invalid expiry":
+					claims["exp"] = "tomorrow"
+				case "expired", "expired wrong key":
 					claims["exp"] = time.Now().Add(-time.Hour).Unix()
-				case "wrong algorithm":
+				case "HS384":
+					method = jwt.SigningMethodHS384
+				case "HS512":
 					method = jwt.SigningMethodHS512
+				case "unsigned":
+					method, signingKey = jwt.SigningMethodNone, jwt.UnsafeAllowNoneSignatureType
+				case "future issued at":
+					claims["iat"] = time.Now().Add(time.Hour).Unix()
+				case "future not before":
+					claims["nbf"] = time.Now().Add(time.Hour).Unix()
 				}
-				raw, err := jwt.NewWithClaims(method, claims).SignedString(key)
+				raw, err := jwt.NewWithClaims(method, claims).SignedString(signingKey)
 				if err != nil {
 					t.Fatal(err)
 				}
 				switch failure {
-				case "wrong key":
+				case "wrong key", "expired wrong key":
 					key = []byte("another-key")
 				case "empty key":
 					key = nil
@@ -152,6 +172,11 @@ func TestSignedTokenValidation(t *testing.T) {
 					if !errors.As(err, &expired) {
 						t.Fatalf("error = %v, want ErrTokenExpired", err)
 					}
+				} else if failure == "expired wrong key" {
+					var expired *ErrTokenExpired
+					if errors.As(err, &expired) {
+						t.Fatal("invalid signature was classified as an expired valid token")
+					}
 				}
 			})
 		}
@@ -163,11 +188,11 @@ func TestVerifyRejectsUnboundOrExpiredSignedTokens(t *testing.T) {
 		t.Run(failure, func(t *testing.T) {
 			db, u, _, key := verificationFixture(t)
 			claims := VerificationClaims{Id: u.ID, Purpose: verificationTokenType, Email: u.Email,
-				StandardClaims: jwt.StandardClaims{ExpiresAt: time.Now().Add(time.Hour).Unix()}}
+				RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
 			if failure == "missing email" {
 				claims.Email = ""
 			} else {
-				claims.ExpiresAt = time.Now().Add(-time.Hour).Unix()
+				claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(-time.Hour))
 			}
 			raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
 			if err != nil {

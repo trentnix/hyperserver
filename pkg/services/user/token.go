@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/database"
@@ -196,9 +196,9 @@ func newAuthToken(u *User, jwtKey []byte, expiration time.Duration, tokenType st
 	claims := &VerificationClaims{
 		Id:      u.ID,
 		Purpose: tokenType,
-		StandardClaims: jwt.StandardClaims{
-			Id:        tokenID.String(),
-			ExpiresAt: expirationTime.Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        tokenID.String(),
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
 	if tokenType == verificationTokenType {
@@ -233,21 +233,17 @@ func parseAuthToken(tokenString string, jwtKey []byte, purpose string) (*Verific
 	}
 
 	claims := &VerificationClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if token.Method != jwt.SigningMethodHS256 {
-			return nil, errors.New("unexpected token signing method")
-		}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(*jwt.Token) (any, error) {
 		return jwtKey, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil {
-		var validationErr *jwt.ValidationError
-		if errors.As(err, &validationErr) && validationErr.Errors == jwt.ValidationErrorExpired {
+		if errors.Is(err, jwt.ErrTokenExpired) {
 			return nil, NewErrTokenExpired(err)
 		}
 		return nil, NewErrToken(errors.New("invalid signed token"))
 	}
 
-	if !token.Valid || claims.Id == "" || claims.Purpose != purpose || claims.ExpiresAt == 0 {
+	if !token.Valid || claims.Id == "" || claims.Purpose != purpose {
 		return nil, NewErrToken(errors.New("invalid token claims"))
 	}
 	if purpose == verificationTokenType && claims.Email == "" {
@@ -274,7 +270,7 @@ func consumeAuthToken(ctx context.Context, tx *sqlx.Tx, token string, claims *Ve
 	}
 
 	now := time.Now()
-	if !now.Before(expiresAt) || now.Unix() >= claims.ExpiresAt {
+	if !now.Before(expiresAt) || !now.Before(claims.ExpiresAt.Time) {
 		return NewErrTokenExpired(nil)
 	}
 	return nil

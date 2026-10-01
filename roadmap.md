@@ -55,7 +55,7 @@ After the security fixes, reduce dependencies in this order. Replace the behavio
 
 Keep `golang.org/x/crypto/bcrypt`, a maintained SQLite driver, and `golang-migrate` for now. Migration tooling can run separately during deployment. Keep `google/uuid` unless opaque identifiers meet the application's needs and the storage and compatibility costs justify changing formats.
 
-Replace the archived JWT library as part of security work, not dependency cleanup. Separately evaluate whether server-side sessions and opaque recovery tokens remove the need for JWTs. Do not write a JWT implementation.
+JWT signing and validation use `golang-jwt/jwt/v5`. Separately evaluate whether server-side sessions and opaque recovery tokens remove the need for JWTs. Do not write a JWT implementation.
 
 After each replacement, inspect the dependency graph to confirm what disappeared. An optional provider can still add module dependencies. Reduce maintenance and complexity, not just the number of entries in `go.mod`.
 
@@ -192,7 +192,6 @@ The roadmap defines the core and replaceable service boundaries. Public APIs are
 - Fix authentication and session error handling. Distinguish missing or expired sessions from storage failures and invalid persisted data.
 - Replace interpolated redirects, enforce intended route methods, and add CSRF protection, request limits, safe cookies, security headers, and a documented CSP.
 - Define TLS termination and trusted-proxy behavior. Add rate limits and prevent recovery-response timing from revealing account eligibility.
-- Replace `dgrijalva/jwt-go`, whose upstream repository is archived. Validate the exact signing algorithm for JWT consumers. [Upstream archive](https://github.com/dgrijalva/jwt-go)
 - Do not decode attacker-controlled input with gob. [Go gob security guidance](https://pkg.go.dev/encoding/gob#hdr-Security)
 - Rotate sessions at login and privilege changes. Revoke server-side sessions on logout, test replay, and clean expired records.
 - Add regression and HTTP integration tests for each security fix, including failure, concurrency, and replay cases.

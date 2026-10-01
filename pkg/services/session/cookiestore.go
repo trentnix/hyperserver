@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/trentnix/hyperserver/config"
 )
 
@@ -117,11 +117,12 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	}
 
 	claims := &SessionClaims{
-		ID:    session.ID,
-		Value: sessionValue,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: tokenExpiration.UTC().Unix(),
-			IssuedAt:  time.Now().UTC().Unix(),
+		ID:      session.ID,
+		Purpose: sessionTokenPurpose,
+		Value:   sessionValue,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(tokenExpiration),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 

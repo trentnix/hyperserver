@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type (
@@ -12,16 +12,23 @@ type (
 	SessionClaims struct {
 		// identifies a unique session
 		ID string `json:"id"`
+		// Purpose distinguishes session cookies from account-action tokens.
+		Purpose string `json:"purpose"`
 		// values that can be stored in a session
 		Value string `json:"data"`
-		// StandardClaims carries signed lifetime metadata.
-		jwt.StandardClaims
+		// RegisteredClaims carries signed lifetime metadata.
+		jwt.RegisteredClaims
 	}
 )
 
-// ExpiresAtTime returns the expiration time as time.Time
+const sessionTokenPurpose = "session"
+
+// ExpiresAtTime returns the signed expiration, or zero time if it is absent.
 func (c *SessionClaims) ExpiresAtTime() time.Time {
-	return time.Unix(c.ExpiresAt, 0)
+	if c.ExpiresAt == nil {
+		return time.Time{}
+	}
+	return c.ExpiresAt.Time
 }
 
 // parseSessionJWT validates a signed session token and extracts its claims.
@@ -34,21 +41,16 @@ func parseSessionJWT(tokenString string, jwtKey []byte) (*SessionClaims, error) 
 		return nil, NewErrTokenKeyNotSet(fmt.Errorf("unable to parse the JWT"))
 	}
 
-	// Parse and validate the JWT
-	token, err := jwt.ParseWithClaims(tokenString, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, NewErrInvalidToken(fmt.Errorf("the token is not signed with the expected method"))
-		}
+	claims := &SessionClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(*jwt.Token) (any, error) {
 		return jwtKey, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil {
 		return nil, err
 	}
 
-	// Extract claims
-	if claims, ok := token.Claims.(*SessionClaims); ok && token.Valid {
-		return claims, nil
+	if !token.Valid || claims.ID == "" || claims.Purpose != sessionTokenPurpose {
+		return nil, NewErrInvalidToken(fmt.Errorf("invalid session claims"))
 	}
-
-	return nil, NewErrInvalidToken(fmt.Errorf("unable to parse the JWT"))
+	return claims, nil
 }

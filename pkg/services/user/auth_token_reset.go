@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/database"
 )
@@ -22,7 +22,7 @@ type (
 		Id      string
 		Purpose string `json:"purpose"`
 		Email   string `json:"email,omitempty"`
-		jwt.StandardClaims
+		jwt.RegisteredClaims
 	}
 )
 
