@@ -59,7 +59,13 @@ func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...fun
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, executable, "-test.run=^"+regexp.QuoteMeta(t.Name())+"$")
+	// Go treats each slash-separated component as its own regular expression.
+	// Anchor every component so a scenario named "mail" cannot also run "mail failure".
+	parts := strings.Split(t.Name(), "/")
+	for i, part := range parts {
+		parts[i] = "^" + regexp.QuoteMeta(part) + "$"
+	}
+	cmd := exec.CommandContext(ctx, executable, "-test.run="+strings.Join(parts, "/"))
 	for _, entry := range os.Environ() {
 		if !strings.HasPrefix(entry, "HYPERSERVER_") && !strings.HasPrefix(entry, "HS_HTTP_TEST_CASE=") {
 			cmd.Env = append(cmd.Env, entry)
@@ -81,9 +87,14 @@ type fakeMailSender struct {
 	attempts           []messaging.MailMessage
 	err                error
 	includeBodyInError bool
+	// Configure before starting requests. The hook can hold delivery for timing tests.
+	beforeSend func()
 }
 
 func (f *fakeMailSender) Send(_ context.Context, message messaging.MailMessage) error {
+	if f.beforeSend != nil {
+		f.beforeSend()
+	}
 	f.mu.Lock()
 	f.attempts = append(f.attempts, message)
 	err, includeBody := f.err, f.includeBodyInError

@@ -156,6 +156,10 @@ Storage implementations must not dictate the serialization format. Services that
 
 A provider must bind all repository operations participating in a transaction to the same transaction scope.
 
+Move password resets to background processing. Queue validated email addresses before looking up accounts. The application must limit the queue size and worker count. Workers look up accounts, store tokens, and send mail. If the queue is full or unavailable, return the same temporary-unavailability response for every address. Background processing is not yet implemented.
+
+Update the [timing tests](cmd/web/recovery_timing_test.go) to show that responses do not wait for lookup, token storage, or mail, with or without HTMX. Rate limits and load testing are still needed. Background processing alone does not prevent every way of discovering accounts.
+
 For registration and verification email, define recoverable state and a resend path. If durable asynchronous delivery is required, store the outbox record atomically with the account changes. Delivery retries require duplicate handling or idempotency. Do not promise exactly-once email delivery.
 
 ### Adapter validation
