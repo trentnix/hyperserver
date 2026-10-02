@@ -56,6 +56,7 @@ type (
 		VerificationEndpoint         string
 		VerificationTokenExpiration  time.Duration
 		ResetTokenExpiration         time.Duration
+		ResetMinimumResponseTime     time.Duration // Minimum reset response time. File loading defaults to 2s. Zero disables the wait.
 		ResetRequiresNewCredentials  bool
 		RegisterRequiresVerification bool                         // Requires configured verification delivery when registration is enabled.
 		Services                     map[string]map[string]string `mapstructure:"services"`
@@ -109,6 +110,7 @@ func readConfig(v *viper.Viper) (Config, error) {
 	v.AllowEmptyEnv(true)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.SetDefault("http.listenHost", "127.0.0.1")
+	v.SetDefault("auth.resetMinimumResponseTime", 2*time.Second)
 
 	// Binding environment keys makes omitted YAML fields visible to Unmarshal,
 	// including provider options. Empty overrides must not revive file secrets.

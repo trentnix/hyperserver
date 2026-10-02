@@ -69,15 +69,19 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 
 // GetUserByEmail retrieves the user with the specified users.email value
 func GetUserByEmail(db *sqlx.DB, email string) (*User, error) {
+	if err := prepareDatabase(db); err != nil {
+		return nil, err
+	}
+	return GetUserByEmailContext(context.Background(), db, email)
+}
+
+// GetUserByEmailContext retrieves an account using ctx. The account schema must already exist.
+func GetUserByEmailContext(ctx context.Context, db *sqlx.DB, email string) (*User, error) {
 	if db == nil {
 		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
 	var user User
-	if err := prepareDatabase(db); err != nil {
-		return nil, err
-	}
-
 	if email == "" {
 		return nil, fmt.Errorf("a users.email value must be specified to retrieve a user")
 	}
@@ -88,7 +92,7 @@ func GetUserByEmail(db *sqlx.DB, email string) (*User, error) {
         WHERE email = ?
     `, userTableName)
 
-	err := db.Get(&user, query, email)
+	err := db.GetContext(ctx, &user, query, email)
 	if err != nil {
 		return nil, err
 	}

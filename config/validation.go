@@ -11,6 +11,9 @@ func (c Config) Validate() error {
 	if _, err := ParsePublicOrigin(c.HTTP.PublicOrigin); err != nil {
 		return err
 	}
+	if c.Auth.ResetMinimumResponseTime < 0 {
+		return fmt.Errorf("auth.resetMinimumResponseTime must not be negative")
+	}
 	if c.Auth.Enabled {
 		if err := ValidateSigningKey("auth.jwtKey", c.Auth.JwtKey); err != nil {
 			return err

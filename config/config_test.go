@@ -226,6 +226,44 @@ func TestMailTimeoutConfiguration(t *testing.T) {
 	}
 }
 
+func TestResetMinimumResponseTimeConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml, override string
+		want                 time.Duration
+		wantError            bool
+	}{
+		{name: "default", yaml: "{}", want: 2 * time.Second},
+		{name: "file", yaml: "auth:\n  resetMinimumResponseTime: 750ms", want: 750 * time.Millisecond},
+		{name: "zero duration", yaml: "auth:\n  resetMinimumResponseTime: 0s"},
+		{name: "numeric zero", yaml: "auth:\n  resetMinimumResponseTime: 0"},
+		{name: "environment only", yaml: "{}", override: "3s", want: 3 * time.Second},
+		{name: "environment override", yaml: "auth:\n  resetMinimumResponseTime: 4s", override: "500ms", want: 500 * time.Millisecond},
+		{name: "environment disables wait", yaml: "auth:\n  resetMinimumResponseTime: 4s", override: "0"},
+		{name: "negative file", yaml: "auth:\n  resetMinimumResponseTime: -1ms", wantError: true},
+		{name: "negative environment", yaml: "{}", override: "-1s", wantError: true},
+		{name: "malformed file", yaml: "auth:\n  resetMinimumResponseTime: tomorrow", wantError: true},
+		{name: "malformed environment", yaml: "{}", override: "tomorrow", wantError: true},
+		{name: "overflow", yaml: "{}", override: "999999999999999999999h", wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanConfigEnvironment(t)
+			if tc.override != "" {
+				t.Setenv("HYPERSERVER_AUTH_RESETMINIMUMRESPONSETIME", tc.override)
+			}
+			cfg, err := loadTestConfig(t, tc.yaml)
+			if tc.wantError {
+				if err == nil || !strings.Contains(strings.ToLower(err.Error()), "resetminimumresponsetime") {
+					t.Fatalf("error = %v, want resetMinimumResponseTime error", err)
+				}
+				return
+			}
+			if err != nil || cfg.Auth.ResetMinimumResponseTime != tc.want {
+				t.Fatalf("minimum response time = %v, error = %v, want %v", cfg.Auth.ResetMinimumResponseTime, err, tc.want)
+			}
+		})
+	}
+}
+
 func TestConfigLoadsDoNotShareState(t *testing.T) {
 	cleanConfigEnvironment(t)
 	if _, err := loadTestConfig(t, "app:\n  name: first\n"); err != nil {
@@ -313,6 +351,7 @@ func TestSharedConfigValidation(t *testing.T) {
 		{"missing verification age", func(c *Config) { c.Auth.VerificationTokenExpiration = 0 }, "auth.verificationTokenExpiration"},
 		{"negative reset age", func(c *Config) { c.Auth.ResetTokenExpiration = -time.Second }, "auth.resetTokenExpiration"},
 		{"subsecond reset age", func(c *Config) { c.Auth.ResetTokenExpiration = time.Millisecond }, "auth.resetTokenExpiration"},
+		{"negative reset response time", func(c *Config) { c.Auth.ResetMinimumResponseTime = -time.Nanosecond }, "auth.resetMinimumResponseTime"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := Config{Auth: AuthConfig{Enabled: true, JwtKey: strings.Repeat("x", 32), VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour}}

@@ -88,17 +88,20 @@ type fakeMailSender struct {
 	err                error
 	includeBodyInError bool
 	// Configure before starting requests. The hook can hold delivery for timing tests.
-	beforeSend func()
+	beforeSend func(context.Context)
 }
 
-func (f *fakeMailSender) Send(_ context.Context, message messaging.MailMessage) error {
+func (f *fakeMailSender) Send(ctx context.Context, message messaging.MailMessage) error {
 	if f.beforeSend != nil {
-		f.beforeSend()
+		f.beforeSend(ctx)
 	}
 	f.mu.Lock()
 	f.attempts = append(f.attempts, message)
 	err, includeBody := f.err, f.includeBodyInError
 	f.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if includeBody {
 		return fmt.Errorf("delivery failed for body: %s", message.Body)
 	}
@@ -167,7 +170,9 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 			RegistrationEnabled:          true,
 			RegisterRequiresVerification: true,
 			VerificationTokenExpiration:  time.Hour, ResetTokenExpiration: time.Hour,
-			Services: map[string]map[string]string{"email": {"enabled": "true"}},
+			// Timing scenarios set an explicit floor. Other tests disable the added wait.
+			ResetMinimumResponseTime: 0,
+			Services:                 map[string]map[string]string{"email": {"enabled": "true"}},
 		},
 	}
 	cfg.HTTP.Session.JwtKey = "http-test-only-session-signing-key"

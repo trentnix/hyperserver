@@ -81,6 +81,9 @@ auth:
   verificationTokenExpiration: "24h"
   # Password-reset token lifetime. Must be at least 1s when auth is enabled.
   resetTokenExpiration: "1h"
+  # Minimum response time for valid password-reset submissions. Defaults to 2s.
+  # Zero disables the wait. This does not limit processing time or change mail.timeout.
+  resetMinimumResponseTime: "2s"
   # Options for authentication providers imported by the application.
   services:
     # Email/password login, registration, and password management.

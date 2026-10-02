@@ -460,7 +460,7 @@ func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, exp
 		return err
 	}
 
-	if err := token.Create(a.db); err != nil {
+	if err := token.CreateContext(ctx, a.db); err != nil {
 		return err
 	}
 	return a.mailClient.Compose().
@@ -496,8 +496,10 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 
 // ResetRequest uses the same acknowledgment for eligible, unknown, and failed requests.
 // The acknowledgment confirms receipt of the request, not delivery of an email.
-// Delivery is synchronous, so response timing can still reveal account eligibility.
+// Valid requests have a minimum response time, not an additional processing timeout.
+// The returned delivery result must not change the acknowledgment.
 func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool {
+	respondAfter := time.Now().Add(a.config.Auth.ResetMinimumResponseTime)
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetRequestFormPartial
 	reset.AddContent(emailResetRequestFormTemplate)
@@ -517,7 +519,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 
-	u, err := user.GetUserByEmail(a.db, resetRequestForm.Email)
+	u, err := user.GetUserByEmailContext(r.Context(), a.db, resetRequestForm.Email)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}
@@ -536,6 +538,10 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		} else {
 			log.Print("password reset instructions could not be sent")
 		}
+	}
+
+	if err := waitForResetResponse(r.Context(), respondAfter); err != nil {
+		return false
 	}
 
 	resetRequestForm.Email = ""

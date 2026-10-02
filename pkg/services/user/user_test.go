@@ -34,6 +34,32 @@ func userTestDB(t *testing.T) *sqlx.DB {
 	return db
 }
 
+func TestGetUserByEmailContext(t *testing.T) {
+	db := userTestDB(t)
+	u := &User{Email: "person@example.invalid"}
+	if err := u.Create(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	got, err := GetUserByEmailContext(context.Background(), db, u.Email)
+	if err != nil || got.ID != u.ID {
+		t.Fatalf("account lookup = %v, %v", got, err)
+	}
+	if _, err := GetUserByEmailContext(context.Background(), db, "unknown@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown account error = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := GetUserByEmailContext(ctx, db, u.Email); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled lookup error = %v", err)
+	}
+	if _, err := GetUserByEmailContext(context.Background(), nil, u.Email); err == nil {
+		t.Fatal("missing database did not fail")
+	}
+	if _, err := GetUserByEmailContext(context.Background(), db, ""); err == nil {
+		t.Fatal("empty email did not fail")
+	}
+}
+
 func TestCreateRejectsStaleRegistration(t *testing.T) {
 	db := userTestDB(t)
 	if _, err := GetUserByEmail(db, "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
