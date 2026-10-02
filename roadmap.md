@@ -160,7 +160,9 @@ Password resets run during the request. `auth.resetMinimumResponseTime` sets the
 
 The [timing tests](cmd/web/recovery_timing_test.go) cover account states, delayed storage, and delivery failures with and without HTMX. The response floor is not a constant-time guarantee. Processing that exceeds the configured minimum can still reveal timing differences between accounts. Rate limits and load testing are still needed.
 
-For registration and verification email, define recoverable state and a resend path. If durable asynchronous delivery is required, store the outbox record atomically with the account changes. Delivery retries require duplicate handling or idempotency. Do not promise exactly-once email delivery.
+Built-in account email does not require a durable queue or automatic retries across restarts. Account and token records do not track pending delivery. If no email arrives, users can request another reset or sign in to resend verification. The reset acknowledgment confirms receipt, not guaranteed delivery.
+
+If an application requires delivery to survive a restart, provide an optional durable delivery service. Store its outbox record atomically with the relevant account changes and make retries safe. Do not promise exactly-once email delivery.
 
 ### Adapter validation
 
