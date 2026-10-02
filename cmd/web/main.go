@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -37,6 +38,10 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+	}
+
+	if err := setupAccountStorage(context.Background(), s); err != nil {
+		log.Fatalf("failed to prepare account storage: %v", err)
 	}
 
 	// attach routes and their handlers to the router

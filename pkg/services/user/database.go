@@ -1,8 +1,8 @@
 package user
 
 import (
+	"context"
 	"fmt"
-	"sync"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
@@ -10,117 +10,53 @@ import (
 )
 
 const (
-	userTableName      string = "user"
-	userTokenTableName string = "usertoken"
+	userTableName      = "user"
+	userTokenTableName = "usertoken"
 )
 
-var (
-	dbMutex            sync.Mutex
-	databaseConfigured bool
-)
-
-// prepareDatabase creates the account and token tables once per process.
-func prepareDatabase(db *sqlx.DB) error {
+// PrepareDatabase creates missing account and token tables in a SQLite database.
+// Applications must call it before using account storage. It is safe to call
+// again and leaves existing tables and records unchanged. It does not migrate schemas.
+func PrepareDatabase(ctx context.Context, db *sqlx.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
-
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
-
-	// Check if the database has already been configured
-	if databaseConfigured {
-		return nil
-	}
-
-	// Attempt to configure the database
-	userTableExists, err := database.TableExists(db.DB, userTableName)
-	if err != nil {
-		return database.NewErrDatabaseConfiguration(err)
-	}
-
-	if !userTableExists {
-		if err = createUserTable(db); err != nil {
-			return database.NewErrDatabase(err)
-		}
-	}
-
-	// Ensure the second table is created, since it has a FK reference to the first table
-	userTokenTableExists, err := database.TableExists(db.DB, userTokenTableName)
-	if err != nil {
-		return database.NewErrDatabaseConfiguration(err)
-	}
-
-	if !userTokenTableExists {
-		if err = createUserTokenTable(db); err != nil {
-			return database.NewErrDatabase(err)
-		}
-	}
-
-	// Mark the database as configured so that subsequent calls can skip initialization
-	databaseConfigured = true
-
-	return nil
-}
-
-// createUserTable creates the user table according to the specified database vendor
-func createUserTable(db *sqlx.DB) error {
-	var createTableSQL string
-
-	// Detect the database type by inspecting the driver
-	driver := db.Driver()
-
-	switch driver.(type) {
-	case *sqlite3.SQLiteDriver:
-		createTableSQL = fmt.Sprintf(`
-			CREATE TABLE %s (
-				id VARCHAR(36) PRIMARY KEY,
-				email VARCHAR(255) NOT NULL UNIQUE,
-				verified BOOLEAN NOT NULL DEFAULT FALSE,
-				verification_required BOOLEAN NOT NULL DEFAULT FALSE,
-				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				registration_auth_type VARCHAR(50),
-				password VARCHAR(255)
-			);`, userTableName)
-	default:
+	if _, ok := db.Driver().(*sqlite3.SQLiteDriver); !ok {
 		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
 	}
 
-	_, err := db.Exec(createTableSQL)
+	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		return database.NewErrDatabase(err)
+		return fmt.Errorf("begin account schema setup: %w", err)
 	}
+	defer tx.Rollback()
 
-	return nil
-}
-
-// createUserTokenTable creates the UserToken table according to the specified database vendor
-func createUserTokenTable(db *sqlx.DB) error {
-	var createTableSQL string
-
-	// Detect the database type by inspecting the driver
-	driver := db.Driver()
-
-	switch driver.(type) {
-	case *sqlite3.SQLiteDriver:
-		createTableSQL = fmt.Sprintf(`
-			CREATE TABLE %s (
-				user_id VARCHAR(36),
-				token_hash VARCHAR(255) NOT NULL,
-				expires_at TIMESTAMP NOT NULL,
-				token_type VARCHAR(255) NOT NULL, 
-				PRIMARY KEY (user_id, token_hash),
-				FOREIGN KEY (user_id) REFERENCES %s(id) ON DELETE CASCADE
-			);`, userTokenTableName, userTableName)
-	default:
-		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
-	}
-
-	_, err := db.Exec(createTableSQL)
+	_, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS user (
+		id VARCHAR(36) PRIMARY KEY,
+		email VARCHAR(255) NOT NULL UNIQUE,
+		verified BOOLEAN NOT NULL DEFAULT FALSE,
+		verification_required BOOLEAN NOT NULL DEFAULT FALSE,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		registration_auth_type VARCHAR(50),
+		password VARCHAR(255)
+	)`)
 	if err != nil {
-		return database.NewErrDatabase(err)
+		return fmt.Errorf("create account table: %w", err)
 	}
-
+	_, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usertoken (
+		user_id VARCHAR(36),
+		token_hash VARCHAR(255) NOT NULL,
+		expires_at TIMESTAMP NOT NULL,
+		token_type VARCHAR(255) NOT NULL,
+		PRIMARY KEY (user_id, token_hash),
+		FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+	)`)
+	if err != nil {
+		return fmt.Errorf("create account token table: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit account schema setup: %w", err)
+	}
 	return nil
 }

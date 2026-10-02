@@ -1,6 +1,6 @@
 // Package user stores accounts and account tokens and connects users to sessions.
-// Schema preparation currently runs during account access and uses process-wide
-// state. Password resets and email verification consume their exact stored token
+// Applications must call PrepareDatabase before accessing account storage.
+// Password resets and email verification consume their exact stored token
 // atomically with the account change.
 package user
 
@@ -45,10 +45,6 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 	}
 
 	var u User
-	if err := prepareDatabase(db); err != nil {
-		return nil, err
-	}
-
 	if id == "" {
 		return nil, fmt.Errorf("a users.id value must be specified to retrieve a user")
 	}
@@ -69,9 +65,6 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 
 // GetUserByEmail retrieves the user with the specified users.email value
 func GetUserByEmail(db *sqlx.DB, email string) (*User, error) {
-	if err := prepareDatabase(db); err != nil {
-		return nil, err
-	}
 	return GetUserByEmailContext(context.Background(), db, email)
 }
 
@@ -115,8 +108,8 @@ func (user *User) Create(ctx context.Context, db *sqlx.DB) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := prepareDatabase(db); err != nil {
-		return err
+	if db == nil {
+		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
 	created := *user
@@ -152,8 +145,8 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := prepareDatabase(db); err != nil {
-		return err
+	if db == nil {
+		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
 	updated := *user
@@ -208,10 +201,6 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 func (user *User) Delete(db *sqlx.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
-	}
-
-	if err := prepareDatabase(db); err != nil {
-		return err
 	}
 
 	if user.ID == "" {

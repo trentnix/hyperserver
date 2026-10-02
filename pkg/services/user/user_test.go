@@ -11,25 +11,26 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 )
 
-// These tests are sequential because schema initialization still uses package
-// state. Reset that state only when no test operations are running.
 func userTestDB(t *testing.T) *sqlx.DB {
+	t.Helper()
+	db := unpreparedUserTestDB(t)
+	if err := PrepareDatabase(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func unpreparedUserTestDB(t *testing.T) *sqlx.DB {
 	t.Helper()
 	db, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "users.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	db.SetMaxOpenConns(1)
-	dbMutex.Lock()
-	databaseConfigured = false
-	dbMutex.Unlock()
 	t.Cleanup(func() {
 		if err := db.Close(); err != nil {
 			t.Error(err)
 		}
-		dbMutex.Lock()
-		databaseConfigured = false
-		dbMutex.Unlock()
 	})
 	return db
 }

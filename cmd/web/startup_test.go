@@ -34,6 +34,16 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := os.Chdir(s.Config.App.WorkingDirectory); err != nil {
 			t.Fatal(err)
 		}
+		if err := setupAccountStorage(context.Background(), s); err != nil {
+			t.Fatal(err)
+		}
+		var tables int
+		if err := s.Database.Get(&tables, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`); err != nil {
+			t.Fatal(err)
+		}
+		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {
+			t.Fatalf("account tables before handler initialization = %d, auth enabled = %t", tables, s.Config.Auth.Enabled)
+		}
 		if err := SetupHandlers(s); err != nil {
 			t.Fatal(err)
 		}
@@ -140,6 +150,22 @@ func TestStartupAcceptsValidConfiguration(t *testing.T) {
 				t.Fatalf("valid configuration failed: %v\n%s", err, output)
 			}
 		})
+	}
+}
+
+func TestStartupRejectsUnavailableAccountStorage(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
+	connection := filepath.Join(t.TempDir(), "missing-directory", "accounts.db")
+	output, err := runStartupProcess(t, yaml, "1", "HYPERSERVER_DATABASE_CONNECTION="+connection)
+	if err == nil || !strings.Contains(string(output), "failed to prepare account storage") {
+		t.Fatalf("unavailable account storage: error = %v, output = %s", err, output)
+	}
+	if strings.Contains(string(output), "Starting server at") {
+		t.Fatalf("startup attempted to listen with unavailable account storage: %s", output)
 	}
 }
 

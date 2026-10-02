@@ -214,6 +214,9 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 		Config: cfg, Database: db, Web: http.NewServeMux(),
 		ContentManager: cm, SessionManager: session.NewSessionManager(cfg), Mail: mailClient,
 	}
+	if err := setupAccountStorage(context.Background(), app); err != nil {
+		t.Fatal(err)
+	}
 	if err := SetupHandlers(app); err != nil {
 		t.Fatal(err)
 	}
