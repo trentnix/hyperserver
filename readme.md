@@ -39,6 +39,8 @@ The development [site module owns the diagnostic and sample routes](modules/site
 
 Use [config-template.yaml](config-template.yaml) as the starting point for a local `config.yaml`, not a production configuration.
 
+To exercise two storage platforms together, run `go run ./cmd/web -contact-directory ./tmp/contacts`. Accounts stay in SQLite, while the site saves contacts as individual JSON files in a private directory. The file provider requires hard-link support. Without this flag, contacts also use SQLite. This is reference-application wiring, not a framework-wide storage setting.
+
 ### Registration and email
 
 Registration is disabled by default. With `auth.enabled`, set `auth.registrationEnabled: true` to allow new accounts. Existing accounts can log in and reset passwords when registration is disabled.

@@ -154,6 +154,8 @@ Modules can build their own repositories around a shared connection pool. Each m
 
 The reference application creates missing tables from bootstrap schemas, including the site's [schema.sql](modules/site/database/schema.sql). Bootstrap setup does not migrate existing tables.
 
+The reference application's `-contact-directory` option runs SQLite accounts alongside [file-backed contact storage](modules/site/models/file_contacts.go). Each module initializes its selected provider before binding routes. The [mixed-storage test](cmd/web/mixed_storage_test.go) covers both platforms in one application and failures isolated to each provider. It does not establish a universal storage contract or cross-provider transactions.
+
 Storage implementations must not dictate the serialization format. Services that store encoded values must allow the serializer to be replaced.
 
 ### Transactions and delivery

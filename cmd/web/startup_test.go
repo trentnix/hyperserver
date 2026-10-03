@@ -21,6 +21,13 @@ func TestStartupHelperProcess(t *testing.T) {
 	switch os.Getenv("HS_STARTUP_TEST_HELPER") {
 	case "1":
 		main()
+	case "invalid-contact-storage":
+		path := filepath.Join(t.TempDir(), "not-a-directory")
+		if err := os.WriteFile(path, []byte("existing file"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		os.Args = append(os.Args, "-contact-directory", path)
+		main()
 	case "shutdown":
 		checkRunShutdown(t)
 	case "signals":
@@ -197,6 +204,21 @@ func TestStartupClosesPoolOnListenFailure(t *testing.T) {
 	output, err := runStartupProcess(t, yaml, "listen-failure")
 	if err != nil || !strings.Contains(string(output), "listen failure cleanup passed") {
 		t.Fatalf("listen failure cleanup: error = %v, output = %s", err, output)
+	}
+}
+
+func TestStartupRejectsInvalidFileContactStorage(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
+	output, err := runStartupProcess(t, yaml, "invalid-contact-storage")
+	if err == nil || !strings.Contains(string(output), "prepare contact directory") {
+		t.Fatalf("invalid contact storage: error = %v, output = %s", err, output)
+	}
+	if strings.Contains(string(output), "Starting server at") {
+		t.Fatal("application listened after contact provider initialization failed")
 	}
 }
 

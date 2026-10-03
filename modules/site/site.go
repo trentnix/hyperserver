@@ -5,6 +5,7 @@ package module_site
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -15,11 +16,20 @@ import (
 )
 
 type (
+	// ContactRepository stores a submission and sets its ID and creation time only
+	// after a successful write. Implementations must not close borrowed resources.
+	ContactRepository interface {
+		Create(context.Context, *models.ContactSubmission) error
+	}
+
 	// SiteModule contains all of the data required to implement the site module
 	SiteModule struct {
 		AppName string
+		// NewContacts optionally selects and prepares this module's contact storage.
+		// Set it before initialization. A nil factory uses the shared SQLite pool.
+		NewContacts func(context.Context) (ContactRepository, error)
 
-		contacts            *models.ContactRepository
+		contacts            ContactRepository
 		sessionManager      *session.SessionManager
 		contentManager      *content_services.ContentManagerService
 		mailClient          *messaging.MailClient
@@ -64,9 +74,18 @@ func init() {
 
 // Init takes care of initializing the specified SiteModule instance
 func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) error {
-	contacts, err := models.NewContactRepository(ctx, s.Database)
+	var contacts ContactRepository
+	var err error
+	if m.NewContacts != nil {
+		contacts, err = m.NewContacts(ctx)
+	} else {
+		contacts, err = models.NewContactRepository(ctx, s.Database)
+	}
 	if err != nil {
 		return err
+	}
+	if contacts == nil {
+		return fmt.Errorf("site contact repository is not configured")
 	}
 
 	m.AppName = s.Config.App.Name
