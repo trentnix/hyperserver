@@ -236,6 +236,9 @@ func TestStartupRejectsInvalidConfiguration(t *testing.T) {
 		{name: "unknown file store", old: "cookieStore:", replacement: "missing:", want: "unknown enabled session store"},
 		{name: "unknown environment store", env: "HYPERSERVER_HTTP_SESSION_STORES_MISSING_ENABLED=true", want: "unknown enabled session store"},
 		{name: "unknown environment selection", env: "HYPERSERVER_HTTP_SESSION_TYPES_DEFAULT=missing", want: "unknown or disabled store"},
+		{name: "unknown file selection", old: "default: cookieStore", replacement: "default: missing", want: "http.session.types.default selects unknown or disabled store"},
+		{name: "unknown named selection", env: "HYPERSERVER_HTTP_SESSION_TYPES_USER=missing", want: "http.session.types.user selects unknown or disabled store"},
+		{name: "disabled selected store", env: "HYPERSERVER_HTTP_SESSION_STORES_COOKIESTORE_ENABLED=false", want: "unknown or disabled store"},
 		{name: "unknown file auth provider", old: "email:", replacement: "missing:", want: "unknown enabled auth service"},
 		{name: "unknown environment auth provider", env: "HYPERSERVER_AUTH_SERVICES_MISSING_ENABLED=true", want: "unknown enabled auth service"},
 	} {

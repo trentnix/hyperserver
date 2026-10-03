@@ -139,14 +139,12 @@ func (m *SessionManager) getStore(sessionName string) (SessionStore, error) {
 		if storeErr != nil {
 			return nil, NewErrSQLiteStoreNotCreated(storeErr)
 		}
+	default:
+		return nil, NewErrSessionStoreNotFound(fmt.Errorf("store type: %s", storeType))
 	}
 
 	if !store.IsEnabled() {
 		return nil, NewErrStoreDisabled(fmt.Errorf("store type: %s", storeType))
-	}
-
-	if store == nil {
-		return nil, NewErrSessionStoreNotFound(fmt.Errorf("store type: %s", storeType))
 	}
 
 	return store, nil
