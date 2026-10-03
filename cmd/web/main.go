@@ -78,8 +78,8 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 	}
 
 	mux := middleware.ChainMiddleware(s.Web,
-		middleware.LoggerMiddleware(l),
 		middleware.LoadSessionManagement(s.Database, s.SessionManager),
+		middleware.LoggerMiddleware(l),
 	)
 
 	server := &http.Server{

@@ -56,10 +56,14 @@ func Get(ctx context.Context) *Logger {
 }
 
 // LogRequestError logs the error chain and request metadata.
-// A nil request is ignored. A non-nil request must have a Logger in its context.
+// A nil request, nil error, or missing request logger is ignored.
 // Errors must not contain secrets because their messages are included verbatim.
 func LogRequestError(r *http.Request, err error) {
-	if r == nil {
+	if r == nil || err == nil {
+		return
+	}
+	requestLogger := Get(r.Context())
+	if requestLogger == nil || *requestLogger == nil {
 		return
 	}
 
@@ -73,7 +77,7 @@ func LogRequestError(r *http.Request, err error) {
 	// join messages with a separator (e.g., " -> ") to show the chain.
 	errMessage := strings.Join(msgs, " -> ")
 
-	ctxLogger := *Get(r.Context())
+	ctxLogger := *requestLogger
 	requestID, _ := r.Context().Value(RequestIDKey).(string)
 
 	errorLogger := ctxLogger.With(

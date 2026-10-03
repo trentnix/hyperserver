@@ -232,7 +232,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	return &httpHarness{
 		baseURL: "http://127.0.0.1:8080",
 		app:     app, mail: mail, cookies: jar, logs: logs,
-		handler: middleware.ChainMiddleware(app.Web, middleware.LoggerMiddleware(l), middleware.LoadSessionManagement(db, app.SessionManager)),
+		handler: middleware.ChainMiddleware(app.Web, middleware.LoadSessionManagement(db, app.SessionManager), middleware.LoggerMiddleware(l)),
 	}
 }
 

@@ -13,6 +13,12 @@ const (
 	userSessionKey string = "auth-user-session"
 )
 
+// ClearAuthenticationCookie removes the browser's authentication cookie without
+// loading or revoking its session. Use it to discard an invalid cookie.
+func ClearAuthenticationCookie(w http.ResponseWriter, r *http.Request) {
+	session.ExpireCookie(w, r, userSessionKey)
+}
+
 // SetAuthenticatedUser saves the account ID in the current user session.
 // It does not rotate the session ID. Session management must be attached to r.
 func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error {

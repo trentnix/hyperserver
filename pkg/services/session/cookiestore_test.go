@@ -79,7 +79,7 @@ func TestCookieStore_Get_NoCookie(t *testing.T) {
 	}
 }
 
-// Test when an invalid JWT cookie is present; expect a new session and an error.
+// An invalid JWT must return an error without a replacement session.
 func TestCookieStore_Get_InvalidJWT(t *testing.T) {
 	store := setupCookieStore(t)
 
@@ -94,11 +94,8 @@ func TestCookieStore_Get_InvalidJWT(t *testing.T) {
 	if err == nil {
 		t.Error("expected an error for invalid JWT, got nil")
 	}
-	if session == nil {
-		t.Fatal("expected a session object even if JWT is invalid, got nil")
-	}
-	if !session.IsNew {
-		t.Errorf("expected IsNew to be true for an invalid JWT cookie")
+	if session != nil {
+		t.Fatal("invalid JWT returned a replacement session")
 	}
 }
 

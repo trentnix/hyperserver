@@ -46,7 +46,7 @@ func parseSessionJWT(tokenString string, jwtKey []byte) (*SessionClaims, error) 
 		return jwtKey, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil {
-		return nil, err
+		return nil, NewErrInvalidToken(err)
 	}
 
 	if !token.Valid || claims.ID == "" || claims.Purpose != sessionTokenPurpose {

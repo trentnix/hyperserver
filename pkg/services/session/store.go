@@ -8,12 +8,21 @@ import (
 	"github.com/trentnix/hyperserver/config"
 )
 
+// ExpireCookie removes a session cookie from the browser without loading its data.
+// It does not revoke stored sessions or clear the request-local session cache.
+func ExpireCookie(w http.ResponseWriter, r *http.Request, name string) {
+	http.SetCookie(w, &http.Cookie{
+		Name: name, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode,
+	})
+}
+
 // SessionStore loads, creates, saves, and ends named sessions.
 // Callers must check each provider's revocation and persistence guarantees.
 type (
 	SessionStore interface {
-		// Get reads a session, returning a new one when none exists.
-		// Some providers return a new session alongside a decoding error.
+		// Get returns a stored session or a new one when absent or expired.
+		// Invalid cookies, storage failures, and corrupt data return an error.
 		Get(r *http.Request, name string) (*Session, error)
 		// New creates an unsaved session with a new ID.
 		New(r *http.Request, name string) (*Session, error)

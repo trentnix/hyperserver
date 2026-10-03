@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -56,8 +57,8 @@ func NewCookieStore(c *config.Config) (*CookieStore, error) {
 	return cookieStore, nil
 }
 
-// Get retrieves a session from the specified request. If a session does not exist,
-// an empty (new) session is returned even if an error has occurred.
+// Get returns a stored session or a new session if the cookie is missing or expired.
+// Invalid cookies and decoding failures return an error without a session.
 func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 	jwtValue := ""
 
@@ -67,22 +68,24 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 		jwtValue = cookie.Value
 	}
 
-	if cookie == nil || jwtValue == "" {
+	if cookie == nil {
 		// if there is no cookie, return an empty session
 		return newSession(c, name), nil
 	}
 
 	// return the decoded Session data
 	claimsData, sessionError := parseSessionJWT(jwtValue, c.JwtKey)
-	if sessionError != nil || jwtValue == "" {
-		// if there is no session data or there was an error, return the new, empty session (and any error)
-		return newSession(c, name), sessionError
+	if errors.Is(sessionError, jwt.ErrTokenExpired) {
+		return newSession(c, name), nil
+	}
+	if sessionError != nil {
+		return nil, sessionError
 	}
 
 	// the session exists - overwrite the ID with the session data that was extracted from the cookie
 	existingSession, loadErr := loadSession(claimsData.ID, name, claimsData.ExpiresAtTime(), c, claimsData.Value)
 	if loadErr != nil {
-		return newSession(c, name), loadErr
+		return nil, loadErr
 	}
 
 	return existingSession, nil
@@ -151,16 +154,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 
 // End expires the browser cookie. It cannot revoke copies of a signed cookie.
 func (c *CookieStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
-	http.SetCookie(w, &http.Cookie{
-		Name:     session.Name,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   r.TLS != nil,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1, // Delete now
-	})
-
+	ExpireCookie(w, r, session.Name)
 	return nil
 }
 

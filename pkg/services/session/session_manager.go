@@ -51,9 +51,9 @@ func NewSessionManager(c *config.Config) *SessionManager {
 	return sessionManager
 }
 
-// Get returns a request-cached or stored session, or creates a new one.
-// A SessionManager must be attached to r. Store-load errors are currently discarded,
-// so a new session does not reliably distinguish missing data from failed storage.
+// Get returns a request-cached or stored session, or creates a new one when absent
+// or expired. A SessionManager must be attached to r. Load failures return an error
+// without caching or replacing the failed session.
 func Get(r *http.Request, name string) (*Session, error) {
 	var session *Session
 
@@ -73,7 +73,10 @@ func Get(r *http.Request, name string) (*Session, error) {
 	}
 
 	// retrieve the session from the request
-	session, _ = store.Get(r, name)
+	session, err = store.Get(r, name)
+	if err != nil {
+		return nil, err
+	}
 	if session == nil {
 		// if the request doesn't have a session, return a new session
 		session, err = New(r, name)

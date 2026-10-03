@@ -79,3 +79,29 @@ func TestSessionOperationsRejectUnknownStore(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDoesNotCacheLoadFailures(t *testing.T) {
+	cfg := validSessionConfig()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.AddCookie(&http.Cookie{Name: "user", Value: "invalid.jwt.token"})
+	r = AddSessionManagerToRequestContext(r, NewSessionManager(cfg))
+	for range 2 {
+		s, err := Get(r, "user")
+		if s != nil || err == nil {
+			t.Fatalf("Get = %v, %v, want nil and a load error", s, err)
+		}
+		if getCachedSession(r, "user") != nil {
+			t.Fatal("failed load cached a replacement session")
+		}
+	}
+
+	// A later successful read can create and cache a session on the same request.
+	r.Header.Del("Cookie")
+	s, err := Get(r, "user")
+	if err != nil || s == nil || !s.IsNew {
+		t.Fatalf("Get after removing invalid cookie = %v, %v", s, err)
+	}
+	if cached, err := Get(r, "user"); err != nil || cached != s {
+		t.Fatalf("successful load was not cached: %v", err)
+	}
+}

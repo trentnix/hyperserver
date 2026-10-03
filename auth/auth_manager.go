@@ -232,6 +232,20 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Load the redirect session before issuing an authenticated session.
+	s, err := session.Get(r, session.AuthSession)
+	if err != nil {
+		logger.LogRequestError(r, err)
+		var invalidToken *session.ErrInvalidToken
+		if errors.As(err, &invalidToken) {
+			session.ExpireCookie(w, r, session.AuthSession)
+			util.HttpError(w, r, "Invalid session cookie", nil, http.StatusBadRequest)
+			return
+		}
+		util.HttpError(w, r, "Unable to load the login session", nil, http.StatusInternalServerError)
+		return
+	}
+
 	setAuthenticatedUserErr := user.SetAuthenticatedUser(w, r, u)
 	if setAuthenticatedUserErr != nil {
 		a.contentManager.HandleError(w, r, "There was an internal error when trying to login", setAuthenticatedUserErr, http.StatusInternalServerError)
@@ -239,16 +253,8 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r = user.AddUserToRequestContext(r, u)
-	err := messages.AddSuccessNotification(w, r, "You have been successfully logged in")
+	err = messages.AddSuccessNotification(w, r, "You have been successfully logged in")
 	if err != nil {
-		logger.LogRequestError(r, err)
-	}
-
-	// retrieve any session where a redirect URL might be stored
-	// get a session for redirect values
-	s, err := session.Get(r, session.AuthSession)
-	if err != nil {
-		// couldn't get a session, log the error
 		logger.LogRequestError(r, err)
 	}
 

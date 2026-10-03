@@ -6,6 +6,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
@@ -26,7 +27,14 @@ func LoadSessionManagement(db *sqlx.DB, s *session.SessionManager) func(http.Han
 			var authUserErr error
 			r, authUserErr = loadAuthenticatedUser(r, db)
 			if authUserErr != nil {
-				util.HttpError(w, r, "There was an error loading the authenticated user", authUserErr, http.StatusInternalServerError)
+				logger.LogRequestError(r, authUserErr)
+				var invalidToken *session.ErrInvalidToken
+				if errors.As(authUserErr, &invalidToken) {
+					user.ClearAuthenticationCookie(w, r)
+					util.HttpError(w, r, "Invalid session cookie", nil, http.StatusBadRequest)
+					return
+				}
+				util.HttpError(w, r, "There was an error loading the authenticated user", nil, http.StatusInternalServerError)
 				return
 			}
 
@@ -41,20 +49,20 @@ func loadSessionManager(r *http.Request, s *session.SessionManager) (*http.Reque
 		return session.AddSessionManagerToRequestContext(r, s), nil
 	}
 
-	return nil, session.NewErrSessionManagerNotFound(nil)
+	return r, session.NewErrSessionManagerNotFound(nil)
 }
 
 // loadUser loads any authenticated user into the specified request's context
 func loadAuthenticatedUser(r *http.Request, db *sqlx.DB) (*http.Request, error) {
 	if db == nil {
-		return nil, database.NewErrDatabaseUnavailable(nil)
+		return r, database.NewErrDatabaseUnavailable(nil)
 	}
 
 	u, err := user.GetAuthenticatedUser(r, db)
 
 	var notFoundErr *user.ErrUserNotFound
 	if err != nil && !errors.As(err, &notFoundErr) {
-		return nil, err
+		return r, err
 	}
 
 	if u != nil {

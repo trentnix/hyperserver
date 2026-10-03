@@ -1,6 +1,7 @@
 package session
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -88,8 +89,8 @@ func NewSQLiteStore(c *config.Config) (*SQLiteStore, error) {
 }
 
 // Get loads the session identified by the signed request cookie.
-// A missing cookie returns a new session. Invalid cookies can return a new session
-// with an error. Database failures return an error. Stored expiry is not checked.
+// A missing or expired cookie or missing row returns a new session. Invalid cookies,
+// database failures, and corrupt data return an error. Stored expiry is not checked.
 func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 	if s.db == nil {
 		return nil, ErrDatabaseNotConfigured
@@ -112,11 +113,11 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 
 	// return the decoded Session data
 	claimsData, sessionError := parseSessionJWT(jwtValue, s.JwtKey)
-	if sessionError != nil || jwtValue == "" {
-		// if there is no session data or there was an error, return a new
-		// session (and the error)
-		session := newSession(s, name)
-		return session, sessionError
+	if errors.Is(sessionError, jwt.ErrTokenExpired) {
+		return newSession(s, name), nil
+	}
+	if sessionError != nil {
+		return nil, sessionError
 	}
 
 	// get the session from the database
@@ -202,16 +203,7 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 // End expires the browser cookie. It does not delete or expire the SQLite row,
 // so a captured cookie is not revoked by this method.
 func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
-	http.SetCookie(w, &http.Cookie{
-		Name:     session.Name,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   r.TLS != nil,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1, // delete now
-	})
-
+	ExpireCookie(w, r, session.Name)
 	return nil
 }
 
@@ -301,17 +293,14 @@ func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Se
 
 	query := fmt.Sprintf("SELECT id, session, expires_at, created_at, updated_at FROM %s WHERE id = ?", s.tableName)
 	err := s.db.Get(&dbSession, query, sessionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	if dbSession.Session != "" {
-		// create a new session and serialize the session data
-		existingSession, loadErr := loadSession(dbSession.ID, name, dbSession.Expires_at, s, dbSession.Session)
-		return existingSession, loadErr
-	}
-
-	return nil, nil
+	return loadSession(dbSession.ID, name, dbSession.Expires_at, s, dbSession.Session)
 }
 
 // saveSessionToDatabase creates or updates the specified session in the database
