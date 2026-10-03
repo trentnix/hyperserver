@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
+	"time"
+
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 )
 
-// SetupHandlers iterates over the Handler instances that have self-registered, calls
-// Init to initalize each Handler, and calls each Handler instance's Routes method to
-// register route handlers with the Application Server's router
-func SetupHandlers(s *server.ApplicationServer) error {
+// SetupHandlers initializes registered modules with a bounded context and binds
+// their routes. Each module prepares its own storage before its routes are bound.
+func SetupHandlers(ctx context.Context, s *server.ApplicationServer) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	for _, h := range handlers.GetHandlers() {
-		if err := h.Init(s); err != nil {
+		if err := h.Init(ctx, s); err != nil {
 			return err
 		}
 

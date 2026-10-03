@@ -1,10 +1,12 @@
 package module_site
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
@@ -17,7 +19,14 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 		ContentManager: content_services.NewContentManager(),
 	}
 	m := new(SiteModule)
-	if err := m.Init(s); err != nil {
+	db, err := sqlx.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s.Database = db
+	t.Cleanup(func() { s.Shutdown() })
+	if err := m.Init(context.Background(), s); err != nil {
 		t.Fatal(err)
 	}
 	// Avoid loading templates or sessions when the site's catch-all reports a 404.

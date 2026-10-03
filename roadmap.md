@@ -15,7 +15,7 @@ Phase 0 is complete. Phase 1 is in progress. HyperServer is not ready for public
 | Area | Current state | Remaining work |
 | --- | --- | --- |
 | Startup and modules | [Server construction](pkg/server/server.go) initializes database, sessions, and mail unconditionally. The [handler registry](pkg/handlers/handlers.go) stores instances globally. | Activate required services and create module instances per application. |
-| Shutdown and TLS | [Startup](cmd/web/main.go) calls `ListenAndServe` regardless of TLS configuration. `ApplicationServer.Shutdown` is empty. | Implement explicit TLS/proxy configuration, shutdown, and resource cleanup. |
+| Shutdown and TLS | The [reference application](cmd/web/main.go) serves plain HTTP and drains requests before closing its shared SQL pool. | Implement explicit TLS/proxy configuration and lifecycle management for other module-owned resources. |
 | Configuration and middleware | [Startup](cmd/web/startup_test.go) validates signing keys, lifetimes, and provider selections. [Authentication middleware](pkg/services/middleware/auth.go) has incomplete error handling. | Fix middleware error paths and test rejection behavior. |
 | Forms and account writes | [Form handlers](auth/modules/email/email_auth.go) validate input. [Account creation and updates](pkg/services/user/user.go) use separate operations. | Add request limits and CSRF protection. |
 | Recovery and verification | [Password reset](pkg/services/user/auth_token_reset.go) and [account verification](pkg/services/user/auth_token_verification.go) use emailed, single-use links. Token consumption and the account change share a transaction. Verification links are bound to the recipient's email address. Reset requests have a minimum response time. | Add rate limits and test timing under load. |
@@ -53,7 +53,7 @@ After the security fixes, reduce dependencies in this order. Replace the behavio
 | `go-playground/validator` | Use explicit form validation and field errors. Define email acceptance and test existing rules. Do not build another tag-driven validation engine. |
 | `jmoiron/sqlx` | Evaluate `database/sql` during repository extraction. Prefer explicit queries and scanning where the added repetition is manageable. |
 
-Keep `golang.org/x/crypto/bcrypt`, a maintained SQLite driver, and `golang-migrate` for now. Migration tooling can run separately during deployment. Keep `google/uuid` unless opaque identifiers meet the application's needs and the storage and compatibility costs justify changing formats.
+Keep `golang.org/x/crypto/bcrypt` and a maintained SQLite driver. Use established tooling such as `golang-migrate` for versioned migrations, which can run separately during deployment. Keep `google/uuid` unless opaque identifiers meet the application's needs and the storage and compatibility costs justify changing formats.
 
 JWT signing and validation use `golang-jwt/jwt/v5`. Separately evaluate whether server-side sessions and opaque recovery tokens remove the need for JWTs. Do not write a JWT implementation.
 
@@ -149,6 +149,10 @@ Use narrow repositories for operations such as finding a user or creating an acc
 Specify missing-value errors, uniqueness, concurrency, expiration, and durability where the consumer depends on them. Express transactions or compare-and-swap as required capabilities when necessary. Reject unsupported guarantees instead of silently weakening them.
 
 Applications can use backend clients directly. Framework contracts must not force all storage access through one abstraction.
+
+Modules can build their own repositories around a shared connection pool. Each module owns its table names and prepares its schema before activation, whether at startup or later. The application owns the pool and closes it only after its consumers stop. Borrowing a pool does not give a module ownership of it.
+
+The reference application creates missing tables from bootstrap schemas, including the site's [schema.sql](modules/site/database/schema.sql). Bootstrap setup does not migrate existing tables.
 
 Storage implementations must not dictate the serialization format. Services that store encoded values must allow the serializer to be replaced.
 

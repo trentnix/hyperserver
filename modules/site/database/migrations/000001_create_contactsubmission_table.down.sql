@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS hyperserver_contact_submission;

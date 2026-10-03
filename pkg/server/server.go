@@ -20,7 +20,9 @@ type (
 	// ApplicationServer is the application container that contains various services and
 	// utilities that will be shared and used by the application
 	ApplicationServer struct {
-		Config         *config.Config
+		Config *config.Config
+
+		// Database is owned by the application. Modules borrow it and must not close it.
 		Database       *sqlx.DB
 		Web            *http.ServeMux
 		ContentManager *content_services.ContentManagerService
@@ -45,8 +47,12 @@ func NewApplicationServer() *ApplicationServer {
 	return s
 }
 
-// Shutdown currently returns nil without closing resources or draining requests.
+// Shutdown closes the application's database pool. The caller must first drain
+// HTTP requests and stop any other consumers. Borrowing modules must not call it.
 func (s *ApplicationServer) Shutdown() error {
+	if s.Database != nil {
+		return s.Database.Close()
+	}
 	return nil
 }
 

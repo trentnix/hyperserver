@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -18,8 +19,9 @@ type (
 	Handler interface {
 		// Routes binds the initialized module's HTTP routes.
 		Routes(*http.ServeMux)
-		// Init prepares the module using the application's shared services.
-		Init(*server.ApplicationServer) error
+		// Init prepares the module before activation. Shared services are borrowed,
+		// and the module must not close them. Use ctx for initialization I/O.
+		Init(context.Context, *server.ApplicationServer) error
 	}
 )
 

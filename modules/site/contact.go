@@ -101,7 +101,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		Message: contactForm.Message,
 	}
 
-	err = cs.Create(m.Database)
+	err = m.contacts.Create(r.Context(), &cs)
 	if err != nil {
 		form.HandleFormError(w, r, contact, contactForm, "Unable to save your message", err)
 		return

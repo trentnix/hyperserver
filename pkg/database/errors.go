@@ -31,11 +31,6 @@ type ErrDatabaseNotSupported struct {
 	*BaseError
 }
 
-// ErrDatabaseMigrationFailed reports a failure creating or running a migration.
-type ErrDatabaseMigrationFailed struct {
-	*BaseError
-}
-
 // ErrInvalidData indicates invalid data was provided
 type ErrInvalidData struct {
 	*BaseError
@@ -82,16 +77,6 @@ func NewErrDatabaseNotSupported(err error) *ErrDatabaseNotSupported {
 		BaseError: &BaseError{
 			Err:     err,
 			Message: "the database is not supported",
-		},
-	}
-}
-
-// NewErrDatabaseMigrationFailed returns an ErrDatabaseMigrationFailed wrapping err.
-func NewErrDatabaseMigrationFailed(err error) *ErrDatabaseMigrationFailed {
-	return &ErrDatabaseMigrationFailed{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "database migration failed",
 		},
 	}
 }

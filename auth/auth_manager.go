@@ -69,7 +69,7 @@ func init() {
 }
 
 // Init processes the initialization of the AuthManager handler
-func (a *AuthManager) Init(s *server.ApplicationServer) error {
+func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
 	a.db = s.Database
 	a.httpConfig = s.Config.HTTP

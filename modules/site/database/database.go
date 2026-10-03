@@ -2,33 +2,32 @@
 package database
 
 import (
+	"context"
 	"database/sql"
+	_ "embed"
 	"fmt"
 
+	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
 )
 
-const (
-	// MigrationsDirectory is the development site's file-based migration source.
-	MigrationsDirectory = "file://modules/site/database/migrations"
-)
+//go:embed schema.sql
+var schema string
 
-// PrepareDatabase ensures that the module's database is configured correctly and is ready for use
-func PrepareDatabase(db *sql.DB, contactSubmissionsTable string) error {
+// PrepareDatabase creates the site's missing tables without changing existing data.
+// The site owns its table names and schema. The caller owns the borrowed pool.
+// This prepares the current schema only. It does not apply versioned migrations.
+func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("the database is not valid"))
 	}
 
-	tableExists, err := database.TableExists(db, contactSubmissionsTable)
-	if err != nil {
-		return database.NewErrDatabase(err)
+	if _, ok := db.Driver().(*sqlite3.SQLiteDriver); !ok {
+		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
 	}
 
-	if !tableExists {
-		err = database.RunMigrations(db, MigrationsDirectory)
-		if err != nil {
-			return database.NewErrDatabase(err)
-		}
+	if _, err := db.ExecContext(ctx, schema); err != nil {
+		return fmt.Errorf("prepare site schema: %w", err)
 	}
 
 	return nil

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,11 +21,29 @@ func TestStartupHelperProcess(t *testing.T) {
 	switch os.Getenv("HS_STARTUP_TEST_HELPER") {
 	case "1":
 		main()
+	case "shutdown":
+		checkRunShutdown(t)
+	case "signals":
+		runSignalTestHelper(t)
+	case "listen-failure":
+		s := server.NewApplicationServer()
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer listener.Close()
+		s.Config.HTTP.Port = uint16(listener.Addr().(*net.TCPAddr).Port)
+		if err := run(context.Background(), s); err == nil || !strings.Contains(err.Error(), "address already in use") {
+			t.Fatalf("listen failure = %v", err)
+		}
+		if err := s.Database.Ping(); err == nil {
+			t.Fatal("listen failure left the application's pool open")
+		}
+		fmt.Println("listen failure cleanup passed")
 	case "initialize":
 		// Exercise successful initialization without binding a network port.
 		s := server.NewApplicationServer()
 		defer s.Shutdown()
-		defer s.Database.Close()
 		if err := s.Database.Ping(); err != nil {
 			t.Fatal(err)
 		}
@@ -44,7 +63,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {
 			t.Fatalf("account tables before handler initialization = %d, auth enabled = %t", tables, s.Config.Auth.Enabled)
 		}
-		if err := SetupHandlers(s); err != nil {
+		if err := SetupHandlers(context.Background(), s); err != nil {
 			t.Fatal(err)
 		}
 		if err := SetupAuthentication(s); err != nil {
@@ -166,6 +185,18 @@ func TestStartupRejectsUnavailableAccountStorage(t *testing.T) {
 	}
 	if strings.Contains(string(output), "Starting server at") {
 		t.Fatalf("startup attempted to listen with unavailable account storage: %s", output)
+	}
+}
+
+func TestStartupClosesPoolOnListenFailure(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
+	output, err := runStartupProcess(t, yaml, "listen-failure")
+	if err != nil || !strings.Contains(string(output), "listen failure cleanup passed") {
+		t.Fatalf("listen failure cleanup: error = %v, output = %s", err, output)
 	}
 }
 

@@ -153,7 +153,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Template and migration paths are relative to the repository root. Changing
+	// Template paths are relative to the repository root. Changing
 	// directories here affects only this scenario's subprocess.
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
@@ -217,7 +217,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	if err := setupAccountStorage(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetupHandlers(app); err != nil {
+	if err := SetupHandlers(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
 	if err := SetupAuthentication(app); err != nil {
@@ -1330,9 +1330,6 @@ func TestHTTPChangeRejectsInvalidPassword(t *testing.T) {
 
 func TestHTTPContactRejectsInvalidForm(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
-		if err := database.RunMigrations(h.app.Database.DB, "modules/site/database/migrations"); err != nil {
-			t.Fatal(err)
-		}
 		for _, htmx := range []bool{false, true} {
 			for _, tc := range []struct{ field, value, message string }{
 				{"name", "", "This field is required."},

@@ -4,7 +4,9 @@
 package module_site
 
 import (
-	"github.com/jmoiron/sqlx"
+	"context"
+
+	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
@@ -15,9 +17,9 @@ import (
 type (
 	// SiteModule contains all of the data required to implement the site module
 	SiteModule struct {
-		AppName  string
-		Database *sqlx.DB
+		AppName string
 
+		contacts            *models.ContactRepository
 		sessionManager      *session.SessionManager
 		contentManager      *content_services.ContentManagerService
 		mailClient          *messaging.MailClient
@@ -61,10 +63,15 @@ func init() {
 }
 
 // Init takes care of initializing the specified SiteModule instance
-func (m *SiteModule) Init(s *server.ApplicationServer) error {
+func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) error {
+	contacts, err := models.NewContactRepository(ctx, s.Database)
+	if err != nil {
+		return err
+	}
+
 	m.AppName = s.Config.App.Name
 
-	m.Database = s.Database
+	m.contacts = contacts
 	m.sessionManager = s.SessionManager
 	m.contentManager = s.ContentManager
 	m.mailClient = s.Mail

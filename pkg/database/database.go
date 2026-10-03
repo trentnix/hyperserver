@@ -1,5 +1,5 @@
 // Package database opens SQL connection pools and provides SQLite schema helpers.
-// It uses sqlx and golang-migrate. Setup does not create tables or verify connectivity.
+// Setup does not create tables or verify connectivity.
 package database
 
 import (
@@ -8,10 +8,6 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	sqlite3 "github.com/mattn/go-sqlite3" // SQLite driver
-
-	"github.com/golang-migrate/migrate/v4"
-	migrationDriver "github.com/golang-migrate/migrate/v4/database/sqlite3"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 // Setup opens a sqlx connection pool for driver and connection.
@@ -24,31 +20,6 @@ func Setup(driver string, connection string) (*sqlx.DB, error) {
 	}
 
 	return db, nil
-}
-
-// RunMigrations applies pending SQLite migrations from modules/site/database/migrations.
-// The migrationsLocation argument is currently ignored. No pending migrations is not an error.
-func RunMigrations(db *sql.DB, migrationsLocation string) error {
-	// Use the underlying *sql.DB for migration
-	sqlDriver, err := migrationDriver.WithInstance(db, &migrationDriver.Config{})
-	if err != nil {
-		return NewErrDatabaseMigrationFailed(fmt.Errorf("could not start migration driver: %w", err))
-	}
-
-	// Run migrations
-	m, err := migrate.NewWithDatabaseInstance(
-		"file://modules/site/database/migrations",
-		"sqlite3", sqlDriver)
-	if err != nil {
-		return NewErrDatabaseMigrationFailed(err)
-	}
-
-	// Apply migrations
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return NewErrDatabaseMigrationFailed(fmt.Errorf("could not apply migrations: %w", err))
-	}
-
-	return nil
 }
 
 // TableExists reports whether a table exists in a SQLite database.
