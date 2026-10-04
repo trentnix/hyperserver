@@ -20,7 +20,7 @@ Phase 0 is complete. Phase 1 is in progress. HyperServer is not ready for public
 | Forms and account writes | [Form handlers](auth/modules/email/email_auth.go) validate input. [Account creation and updates](pkg/services/user/user.go) use separate operations. | Add request limits and CSRF protection. |
 | Recovery and verification | [Password reset](pkg/services/user/auth_token_reset.go) and [account verification](pkg/services/user/auth_token_verification.go) use emailed, single-use links. Token consumption and the account change share a transaction. Verification links are bound to the recipient's email address. Reset requests have a minimum response time. | Add rate limits and test timing under load. |
 | Mail and sessions | [SMTP delivery](pkg/services/messaging/mail.go) has timeouts and cancellation. Authentication uses revocable [SQLite sessions](pkg/services/session/sqlitestore.go), with ID rotation at login and verification. Password reset or change invalidates all account sessions. [Session JSON](pkg/services/session/readme.md) is limited to 64 KiB and cookies to 4 KiB. An explicit [cleanup command](cmd/cleanup) removes expired sessions and account tokens in bounded batches. | Add optional automatic cleanup with application lifecycle management. |
-| Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. The [site module](modules/site/router.go) provides diagnostic and sample routes. [Redirects](pkg/util/redirect.go) interpolate URLs into HTML and JavaScript. | Keep development modules out of production applications. Use safe redirects and explicit methods for state-changing routes. |
+| Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. [Authentication mutations](auth/auth_manager.go) and [site mutations](modules/site/router.go) require POST. Verification and reset links display forms without consuming tokens. [Redirects](pkg/util/redirect.go) interpolate URLs into HTML and JavaScript. | Keep development modules out of production applications. Use safe redirects and add CSRF protection. |
 | Rendering and tests | [Templates](pkg/components/content/content.go) are parsed per response. The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. | Reuse parsed templates and cover unresolved security issues with regression tests. |
 
 ## Design principles
@@ -201,7 +201,7 @@ The roadmap defines the core and replaceable service boundaries. Public APIs are
 
 ### Phase 1: Correctness and security (in progress)
 
-- Replace interpolated redirects, enforce intended route methods, and add CSRF protection, request limits, safe cookies, security headers, and a documented CSP.
+- Replace interpolated redirects and add CSRF protection, request limits, safe cookies, security headers, and a documented CSP.
 - Define TLS termination and trusted-proxy behavior. Add rate limits and prevent recovery-response timing from revealing account eligibility.
 - Add regression and HTTP integration tests for each security fix, including failure, concurrency, and replay cases.
 

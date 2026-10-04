@@ -89,8 +89,53 @@ func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 	for _, host := range []string{"localhost", "example.com"} {
 		req := httptest.NewRequest(http.MethodGet, "http://"+host+"/auth/login", nil)
 		_, pattern := mux.Handler(req)
-		if pattern != "/auth/login" {
-			t.Errorf("host %s: pattern = %q, want /auth/login", host, pattern)
+		if pattern != "GET /auth/login" {
+			t.Errorf("host %s: pattern = %q, want GET /auth/login", host, pattern)
+		}
+	}
+}
+
+func TestAuthRouteMethods(t *testing.T) {
+	mux := http.NewServeMux()
+	manager := &AuthManager{Enabled: true, registrationEnabled: true}
+	manager.Routes(mux)
+	for _, route := range []struct {
+		path, pattern string
+		get, post     bool
+	}{
+		{"/auth/login", "/auth/login", true, false},
+		{"/auth/login/email", "/auth/login/{authType}", true, true},
+		{"/auth/logout", "/auth/logout", false, true},
+		{"/auth/register", "/auth/register", true, false},
+		{"/auth/register/email", "/auth/register/{authType}", true, true},
+		{"/auth/verify", "/auth/verify", true, true},
+		{"/auth/request/verify", "/auth/request/verify", false, true},
+		{"/auth/reset/request/email", "/auth/reset/request/{authType}", true, true},
+		{"/auth/reset/email", "/auth/reset/{authType}", true, true},
+		{"/auth/change/email", "/auth/change/{authType}", true, true},
+	} {
+		for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions} {
+			t.Run(method+" "+route.path, func(t *testing.T) {
+				r := httptest.NewRequest(method, route.path, nil)
+				_, pattern := mux.Handler(r)
+				if route.get && (method == http.MethodGet || method == http.MethodHead) {
+					if pattern != "GET "+route.pattern {
+						t.Fatalf("read route = %q", pattern)
+					}
+					return
+				}
+				if route.post && method == http.MethodPost {
+					if pattern != "POST "+route.pattern {
+						t.Fatalf("mutation route = %q", pattern)
+					}
+					return
+				}
+				w := httptest.NewRecorder()
+				mux.ServeHTTP(w, r)
+				if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") == "" {
+					t.Fatalf("unsupported method returned %d with Allow %q", w.Code, w.Header().Get("Allow"))
+				}
+			})
 		}
 	}
 }
@@ -103,39 +148,6 @@ func TestDisabledRegistrationHandlers(t *testing.T) {
 		if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
 			t.Errorf("disabled registration returned %d %q, want 403 and an explanation", w.Code, w.Body.String())
 		}
-	}
-}
-
-func TestVerificationRouteMethods(t *testing.T) {
-	mux := http.NewServeMux()
-	manager := &AuthManager{Enabled: true}
-	manager.Routes(mux)
-	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions} {
-		t.Run(method, func(t *testing.T) {
-			r := httptest.NewRequest(method, "/auth/verify?token=test-token", nil)
-			_, pattern := mux.Handler(r)
-			// Go's GET patterns also match HEAD.
-			if method == http.MethodGet || method == http.MethodHead {
-				if pattern != "GET /auth/verify" {
-					t.Errorf("pattern = %q, want GET /auth/verify", pattern)
-				}
-				return
-			}
-			if method == http.MethodPost {
-				if pattern != "POST /auth/verify" {
-					t.Errorf("pattern = %q, want POST /auth/verify", pattern)
-				}
-				return
-			}
-			if pattern != "" {
-				t.Fatalf("unexpected verification handler for %s: %q", method, pattern)
-			}
-			w := httptest.NewRecorder()
-			mux.ServeHTTP(w, r)
-			if w.Code != http.StatusMethodNotAllowed {
-				t.Errorf("status = %d, want 405", w.Code)
-			}
-		})
 	}
 }
 

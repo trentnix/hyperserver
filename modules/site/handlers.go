@@ -12,7 +12,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
-	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // ServeFavicon serves the favicon resource to a requestor
@@ -190,7 +189,7 @@ func (m *SiteModule) NotFound(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Logout redirects the "/logout" route to the logout functionality provides by the auth package
+// Logout forwards the site's POST to authentication logout without changing its method.
 func (m *SiteModule) Logout(w http.ResponseWriter, r *http.Request) {
-	util.RedirectToURL(w, r, "/auth/logout")
+	http.Redirect(w, r, "/auth/logout", http.StatusTemporaryRedirect)
 }

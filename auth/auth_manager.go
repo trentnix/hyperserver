@@ -94,10 +94,10 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 func (a *AuthManager) Routes(mux *http.ServeMux) {
 	if a.Enabled {
 		// login / logout
-		mux.Handle(authEndpoint, middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetLogin)))
+		mux.Handle("GET "+authEndpoint, middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetLogin)))
 		mux.Handle("GET /auth/login/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetLoginService)))
 		mux.Handle("POST /auth/login/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Login)))
-		mux.Handle("/auth/logout", http.HandlerFunc(a.Logout))
+		mux.Handle("POST /auth/logout", http.HandlerFunc(a.Logout))
 
 		// register
 		if a.registrationEnabled {

@@ -77,10 +77,10 @@ func TestStartupHelperProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, pattern := s.Web.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil))
-		if s.Config.Auth.Enabled && pattern != "/auth/login" {
-			t.Fatalf("login pattern = %q, want /auth/login", pattern)
+		if s.Config.Auth.Enabled && pattern != "GET /auth/login" {
+			t.Fatalf("login pattern = %q, want GET /auth/login", pattern)
 		}
-		if !s.Config.Auth.Enabled && pattern == "/auth/login" {
+		if !s.Config.Auth.Enabled && pattern == "GET /auth/login" {
 			t.Fatal("disabled authentication registered a login route")
 		}
 		w := httptest.NewRecorder()
