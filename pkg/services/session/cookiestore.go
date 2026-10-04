@@ -72,6 +72,9 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 		// if there is no cookie, return an empty session
 		return newSession(c, name), nil
 	}
+	if err := validateSessionCookie(cookie); err != nil {
+		return nil, NewErrInvalidToken(err)
+	}
 
 	// return the decoded Session data
 	claimsData, sessionError := parseSessionJWT(jwtValue, c.JwtKey)
@@ -98,7 +101,8 @@ func (c *CookieStore) New(r *http.Request, name string) (*Session, error) {
 }
 
 // Save encodes the session into a signed JWT and writes an HTTP cookie.
-// The payload is not encrypted. Call Save before writing response headers or a body.
+// The payload is not encrypted and must not contain secrets. Cookies larger than
+// MaxCookieSize are rejected. Call Save before writing response headers or a body.
 func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Session) error {
 	if len(c.JwtKey) == 0 {
 		return NewErrSessionKeyInvalid(fmt.Errorf("the JWT key is not set"))
@@ -139,7 +143,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	cookieAge := int(c.CookieLifetime / time.Second)
 
 	// write the cookie
-	http.SetCookie(w, &http.Cookie{
+	cookie := &http.Cookie{
 		Name:     session.Name,
 		Value:    tokenString,
 		Path:     "/",
@@ -147,7 +151,11 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   cookieAge,
-	})
+	}
+	if err := validateSessionCookie(cookie); err != nil {
+		return err
+	}
+	http.SetCookie(w, cookie)
 
 	return nil
 }

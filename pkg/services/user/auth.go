@@ -87,8 +87,8 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
 		return nil, userRetrievalErr
 	}
 
-	version, ok := s.Data[userSessionVersionKey].(int64)
-	if !ok || version != u_db.SessionVersion {
+	var version int64
+	if err := s.DecodeValue(userSessionVersionKey, &version); err != nil || version != u_db.SessionVersion {
 		return nil, nil
 	}
 	return u_db, nil

@@ -111,6 +111,9 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 		session := newSession(s, name)
 		return session, nil
 	}
+	if err := validateSessionCookie(cookie); err != nil {
+		return nil, NewErrInvalidToken(err)
+	}
 
 	// return the decoded Session data
 	claimsData, sessionError := parseSessionJWT(jwtValue, s.JwtKey)
@@ -191,7 +194,7 @@ func (s *SQLiteStore) sessionCookie(session *Session, secure bool) (*http.Cookie
 
 	cookieAge := int(s.CookieLifetime / time.Second)
 
-	return &http.Cookie{
+	cookie := &http.Cookie{
 		Name:     session.Name,
 		Value:    tokenString,
 		Path:     "/",
@@ -199,7 +202,11 @@ func (s *SQLiteStore) sessionCookie(session *Session, secure bool) (*http.Cookie
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   cookieAge,
-	}, nil
+	}
+	if err := validateSessionCookie(cookie); err != nil {
+		return nil, err
+	}
+	return cookie, nil
 }
 
 // Rotate replaces the old row and inserts a fresh session in one transaction.
@@ -362,8 +369,10 @@ func (s *SQLiteStore) getSessionFromDatabase(ctx context.Context, sessionID stri
 
 	var dbSession SQLiteSession
 
-	query := fmt.Sprintf("SELECT id, session, expires_at, created_at, updated_at FROM %s WHERE id = ?", s.tableName)
-	err := s.db.GetContext(ctx, &dbSession, query, sessionID)
+	// Read only a bounded prefix so corrupt oversized rows cannot allocate their
+	// entire payload in Go. loadSession rejects the extra byte before decoding.
+	query := fmt.Sprintf("SELECT id, substr(CAST(session AS BLOB), 1, ?) AS session, expires_at, created_at, updated_at FROM %s WHERE id = ?", s.tableName)
+	err := s.db.GetContext(ctx, &dbSession, query, maxEncodedSessionSize+1, sessionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

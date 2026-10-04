@@ -33,6 +33,9 @@ func (c *SessionClaims) ExpiresAtTime() time.Time {
 
 // parseSessionJWT validates a signed session token and extracts its claims.
 func parseSessionJWT(tokenString string, jwtKey []byte) (*SessionClaims, error) {
+	if len(tokenString) > MaxCookieSize {
+		return nil, NewErrInvalidToken(ErrSessionCookieTooLarge)
+	}
 	if tokenString == "" {
 		return nil, NewErrInvalidToken(fmt.Errorf("the token string is empty"))
 	}

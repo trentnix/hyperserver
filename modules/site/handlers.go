@@ -147,7 +147,11 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	counter, _ := mySession.Data[counterKey].(int)
+	var counter int
+	if err := mySession.DecodeValue(counterKey, &counter); err != nil {
+		m.contentManager.HandleError(w, r, "unable to decode the counter session", err, http.StatusInternalServerError)
+		return
+	}
 	counter++ // add this visit
 
 	page := content.NewManagedContent(r, m.contentManager)

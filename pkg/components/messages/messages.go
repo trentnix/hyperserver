@@ -5,7 +5,6 @@
 package messages
 
 import (
-	"encoding/gob"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -25,10 +24,6 @@ type (
 const (
 	messagesSession SessionKey = "hs-message-session"
 )
-
-func init() {
-	gob.Register([]SessionMessage{}) // needed for securecookie/gob encoding
-}
 
 // String returns the underlying string value.
 func (s SessionKey) String() string {
@@ -53,7 +48,10 @@ func addMessage(w http.ResponseWriter, r *http.Request, message string, messageT
 
 	m := newMessage(message, messageType)
 
-	msgs, _ := s.Data[category].([]SessionMessage)
+	var msgs []SessionMessage
+	if err := s.DecodeValue(category, &msgs); err != nil {
+		return NewErrRetrievingContentMessages(err)
+	}
 	msgs = append(msgs, m)
 	s.Data[category] = msgs
 
@@ -73,7 +71,10 @@ func getMessages(w http.ResponseWriter, r *http.Request, category string) ([]Ses
 		return nil, NewErrRetrievingContentMessages(err)
 	}
 
-	contentMessages, _ := s.Data[category].([]SessionMessage)
+	var contentMessages []SessionMessage
+	if err := s.DecodeValue(category, &contentMessages); err != nil {
+		return nil, NewErrRetrievingContentMessages(err)
+	}
 	delete(s.Data, category)
 
 	var deleteMessagesErr error

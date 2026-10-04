@@ -131,7 +131,7 @@ func TestHTTPProtectedRouteSessionExpiry(t *testing.T) {
 
 func TestHTTPSessionLoading(t *testing.T) {
 	for _, provider := range []string{"cookieStore", "sqliteStore"} {
-		for _, outcome := range []string{"missing cookie", "valid", "expired", "invalid signature", "expired invalid signature", "malformed", "empty cookie", "corrupt base64", "corrupt gob", "empty data", "missing row", "unavailable storage"} {
+		for _, outcome := range []string{"missing cookie", "valid", "expired", "invalid signature", "expired invalid signature", "malformed", "empty cookie", "oversized cookie", "oversized data", "corrupt base64", "corrupt JSON", "empty data", "missing row", "unavailable storage"} {
 			if provider == "cookieStore" && (outcome == "missing row" || outcome == "unavailable storage") {
 				continue
 			}
@@ -147,10 +147,12 @@ func TestHTTPSessionLoading(t *testing.T) {
 					switch outcome {
 					case "corrupt base64":
 						encoded = "not base64!"
-					case "corrupt gob":
+					case "corrupt JSON":
 						encoded = "aW52YWxpZA=="
 					case "empty data":
 						encoded = ""
+					case "oversized data":
+						encoded = strings.Repeat("a", session.MaxSessionDataSize*2)
 					}
 					expires := time.Now().Add(time.Hour)
 					if strings.HasPrefix(outcome, "expired") {
@@ -189,6 +191,8 @@ func TestHTTPSessionLoading(t *testing.T) {
 						raw = "not-a-token"
 					} else if outcome == "empty cookie" {
 						raw = ""
+					} else if outcome == "oversized cookie" {
+						raw = strings.Repeat("a", session.MaxCookieSize+1)
 					}
 					if outcome != "missing cookie" {
 						base, err := url.Parse(h.baseURL)
@@ -216,7 +220,7 @@ func TestHTTPSessionLoading(t *testing.T) {
 					wantStatus := http.StatusInternalServerError
 					if wantSuccess {
 						wantStatus = http.StatusNoContent
-					} else if strings.Contains(outcome, "invalid signature") || outcome == "malformed" || outcome == "empty cookie" {
+					} else if strings.Contains(outcome, "invalid signature") || outcome == "malformed" || outcome == "empty cookie" || outcome == "oversized cookie" || (outcome == "oversized data" && provider == "cookieStore") {
 						wantStatus = http.StatusBadRequest
 					}
 					if w.Code != wantStatus || called != wantSuccess {

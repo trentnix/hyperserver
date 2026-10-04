@@ -23,6 +23,8 @@ High performance is a design goal, not an established benchmark result. Passing 
 
 Authentication requires SQLite sessions. Login and account verification rotate the session ID. Password reset or change signs out all devices. Cookie-only sessions are available for non-authentication data.
 
+Session data uses JSON, limited to 64 KiB before base64 encoding. Cookies are limited to 4 KiB including their name and attributes. Cookie-store data is signed, not encrypted, and must not contain secrets. See the [session guide](pkg/services/session/readme.md) for supported values and typed reads.
+
 Some services require other framework services and cannot be replaced independently. Module instances share process-wide state.
 
 ## Direction

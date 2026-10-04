@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/gob"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -15,7 +16,9 @@ import (
 type (
 	// Session is used to manage a user or usage session
 	Session struct {
-		ID        string
+		ID string
+		// Data contains JSON-compatible values. Loaded numbers use json.Number.
+		// Cookie stores expose these values to the browser. Never store secrets there.
 		Data      map[string]any
 		Name      string
 		Store     SessionStore
@@ -58,14 +61,30 @@ func loadSession(id string, name string, expiration time.Time, s SessionStore, v
 		IsNew:     false,
 	}
 
-	byteValue, base64DecodeErr := base64.URLEncoding.DecodeString(value)
+	if len(value) > maxEncodedSessionSize {
+		return nil, ErrSessionTooLarge
+	}
+	byteValue, base64DecodeErr := base64.URLEncoding.Strict().DecodeString(value)
 	if base64DecodeErr != nil {
 		return nil, base64DecodeErr
 	}
 
+	if len(byteValue) > MaxSessionDataSize {
+		return nil, ErrSessionTooLarge
+	}
+
 	var sessionData map[string]any
-	if err := gob.NewDecoder(bytes.NewReader(byteValue)).Decode(&sessionData); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(byteValue))
+	decoder.UseNumber()
+	if err := decoder.Decode(&sessionData); err != nil {
 		return nil, err
+	}
+	if sessionData == nil {
+		return nil, NewErrSessionInvalid(errors.New("session data must be a JSON object"))
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, NewErrSessionInvalid(errors.New("unexpected data after session object"))
 	}
 
 	session.Data = sessionData
@@ -128,15 +147,40 @@ func (s *Session) End(w http.ResponseWriter, r *http.Request) error {
 	return setCachedSession(r, s)
 }
 
-// EncodedData returns Data encoded as gob in URL-safe base64.
-// Encoding does not encrypt the data, and custom concrete values may require gob registration.
+// DecodeValue decodes a JSON-compatible Data value into target, which must be a
+// pointer. A missing key leaves target unchanged. Use it for numbers and structured
+// values, whose Go types are not preserved across JSON storage.
+func (s *Session) DecodeValue(key string, target any) error {
+	value, ok := s.Data[key]
+	if !ok {
+		return nil
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	if len(encoded) > MaxSessionDataSize {
+		return ErrSessionTooLarge
+	}
+	return json.Unmarshal(encoded, target)
+}
+
+// EncodedData returns JSON in URL-safe base64, limited to MaxSessionDataSize
+// bytes before base64 encoding. Encoding does not encrypt data. Gob is unsupported.
 func (s *Session) EncodedData() (string, error) {
-	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(s.Data); err != nil {
+	data := s.Data
+	if data == nil {
+		data = map[string]any{}
+	}
+	encoded, err := json.Marshal(data)
+	if err != nil {
 		return "", err
 	}
+	if len(encoded) > MaxSessionDataSize {
+		return "", ErrSessionTooLarge
+	}
 
-	return base64.URLEncoding.EncodeToString(buf.Bytes()), nil
+	return base64.URLEncoding.EncodeToString(encoded), nil
 }
 
 // getCachedSession returns the request-cached session, or nil if it is absent.
