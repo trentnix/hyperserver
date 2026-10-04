@@ -36,7 +36,9 @@ type (
 
 		// HandleMessage displays plain text. HTML renderers must escape the message.
 		HandleMessage func(w http.ResponseWriter, r *http.Request, message string)
-		// HandleError delegates error presentation to the application.
+		// HandleError presents a public message with an error status and logs err.
+		// Callers must remove secrets from err. Pass nil if already logged.
+		// Call before writing a response.
 		HandleError func(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int)
 		// HandleNotFound renders a response for an unknown resource.
 		HandleNotFound http.HandlerFunc

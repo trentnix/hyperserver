@@ -6,11 +6,10 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Display forbidden responses, including disabled registration, in the HTMX target. -->
+    <!-- Error swaps are limited to HTML responses by /js/site.js. -->
     <meta name="htmx-config" content='{"responseHandling": [
       {"code":"204","swap":false},
       {"code":"[23]..","swap":true},
-      {"code":"403","swap":true,"error":true},
       {"code":"[45]..","swap":false,"error":true},
       {"code":"...","swap":false}
     ]}' />
@@ -19,6 +18,7 @@
       integrity="sha384-QWGpdj554B4ETpJJC9z+ZHJcA/i59TyjxEPXiiUgN2WmTyV5OEZWCD6gQhgkdpB/"
       crossorigin="anonymous" defer>
     </script>
+    <script src="/js/site.js" defer></script>
     <title>{{ .Site }} | {{ .Title }}</title>
   </head>
 

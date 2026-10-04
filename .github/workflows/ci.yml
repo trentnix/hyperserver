@@ -39,6 +39,11 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Test HTMX in Firefox
+        env:
+          HS_TEST_FIREFOX: firefox
+        run: go test -count=1 -timeout=1m ./cmd/web -run '^TestBrowserSiteErrors$'
+
       - name: Test with race detector
         env:
           GORACE: atexit_sleep_ms=0 # Avoid an exit delay for every test subprocess.

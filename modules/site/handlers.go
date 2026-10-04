@@ -7,8 +7,6 @@ import (
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/components/content"
-	"github.com/trentnix/hyperserver/pkg/components/messages"
-	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -76,42 +74,6 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 		m.contentManager.HandleError(w, r, "there was an error rendering the register page", err, http.StatusInternalServerError)
 		return
 	}
-}
-
-// Error renders queued error notifications. It currently returns HTTP 200.
-func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	notifications, messagesErr := messages.GetNotifications(w, r)
-	if messagesErr != nil {
-		logger.LogRequestError(r, messagesErr)
-	}
-
-	var errorMessages []messages.Notification
-	for _, n := range notifications {
-		if n.IsError() {
-			errorMessages = append(errorMessages, n)
-		}
-	}
-
-	errorPage := content.NewManagedContent(r, m.contentManager)
-	errorPage.PartialName = errorPagePartialName
-	errorPage.Title = "Error"
-	errorPage.AddContent(errorPageTemplate)
-	errorPage.Data = errorMessages
-
-	if err := errorPage.Render(w, r); err != nil {
-		m.contentManager.HandleError(w, r, "there was an error rendering the error page", err, http.StatusInternalServerError)
-	}
-}
-
-// HandleError queues message and renders the error page directly.
-// It currently ignores err and httpStatus, so the response normally remains HTTP 200.
-func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
-	errAddMessage := messages.AddErrorNotification(w, r, message)
-	if errAddMessage != nil {
-		logger.LogRequestError(r, fmt.Errorf("there was an error adding an error message before redirecting to the error page: %w", errAddMessage))
-	}
-
-	m.Error(w, r)
 }
 
 // HandleMessage renders message as text escaped by the page template.

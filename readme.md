@@ -98,6 +98,8 @@ go test -race ./...
 
 The [CI workflow](.github/workflows/ci.yml) runs these checks on pushes and pull requests. See [AGENTS.md](AGENTS.md) for working agreements and regression-test guidance.
 
+CI also tests error responses in headless Firefox. Run `HS_TEST_FIREFOX=firefox go test -count=1 ./cmd/web -run '^TestBrowserSiteErrors$'` locally with Firefox installed. The test downloads the HTMX version pinned in the site layout and checks its integrity hash. Ordinary Go test runs skip this browser test.
+
 ## Feedback
 
 Feedback on the design, code, and developer experience is welcome. Email me at trentnix at gmail.com.

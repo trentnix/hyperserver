@@ -402,12 +402,15 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 	}, func(cfg *config.Config) { cfg.Auth.RegistrationEnabled = false })
 }
 
-func TestHTTPForbiddenResponseHandling(t *testing.T) {
+func TestHTTPErrorResponseHandling(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		w := h.request(http.MethodGet, "/", nil, false)
 		match := regexp.MustCompile(`(?s)<meta name="htmx-config" content='([^']+)'`).FindStringSubmatch(w.Body.String())
 		if w.Code != http.StatusOK || len(match) != 2 {
 			t.Fatal("page is missing HTMX response handling configuration")
+		}
+		if !strings.Contains(w.Body.String(), `<script src="/js/site.js" defer></script>`) {
+			t.Fatal("page is missing the HTML error response handler")
 		}
 		var cfg struct {
 			ResponseHandling []struct {
@@ -426,7 +429,7 @@ func TestHTTPForbiddenResponseHandling(t *testing.T) {
 		}{
 			{"200", true, false},
 			{"204", false, false},
-			{"403", true, true},
+			{"403", false, true},
 			{"404", false, true},
 			{"422", false, true},
 			{"500", false, true},
@@ -1014,16 +1017,8 @@ func TestHTTPResetMailFailureAcknowledgment(t *testing.T) {
 
 func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
-		// The reference renderer currently returns 200 for error pages. Check the
-		// status supplied by auth separately without changing the renderer here.
-		var errorStatus int
-		renderError := h.app.ContentManager.HandleError
-		h.app.ContentManager.HandleError = func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
-			errorStatus = status
-			renderError(w, r, message, err, status)
-		}
 		w := h.request(http.MethodPost, "/auth/request/verify", nil, true)
-		if errorStatus != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "Authentication required") || len(h.mail.snapshot()) != 0 {
+		if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "Authentication required") || len(h.mail.snapshot()) != 0 {
 			t.Fatal("anonymous resend was not denied")
 		}
 		u := h.seedUser(t, "resend@example.invalid")
@@ -1051,7 +1046,7 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 				h.mail.err, h.mail.includeBodyInError = tc.err, tc.includeBody
 				before := len(h.mail.snapshot())
 				w = h.request(http.MethodPost, "/auth/request/verify", nil, htmx)
-				if errorStatus != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "Unable to send verification instructions.") || len(h.mail.snapshot()) != before+1 {
+				if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "Unable to send verification instructions.") || len(h.mail.snapshot()) != before+1 {
 					t.Fatal("verification delivery failure was not reported")
 				}
 				link := mailLink(t, h.mail.snapshot()[before], "/auth/verify")
@@ -1081,7 +1076,7 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 		}
 		h.establishSession(t, u)
 		w = h.request(http.MethodPost, "/auth/request/verify", nil, true)
-		if errorStatus != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "Unable to send verification instructions.") || len(h.mail.snapshot()) != before {
+		if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "Unable to send verification instructions.") || len(h.mail.snapshot()) != before {
 			t.Error("missing verification provider was not handled")
 		}
 	})

@@ -1,0 +1,6 @@
+{{ define "test.browser.errors" }}
+<div id="browser-target">Original content</div>
+<div id="untouched">Outside the target</div>
+<button id="browser-request" hx-get="/test/browser/success" hx-target="#browser-target" hx-swap="innerHTML settle:0">Request</button>
+<script src="/test/browser/run.js" defer></script>
+{{ end }}

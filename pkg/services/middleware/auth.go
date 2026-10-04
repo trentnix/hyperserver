@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
@@ -131,11 +130,6 @@ func getAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
 	if u == nil {
 		u, err := user.GetAuthenticatedUser(r, db)
 		if err != nil {
-			var notFoundErr *user.ErrUserNotFound
-			if !errors.As(err, &notFoundErr) {
-				// log the error encountered when trying to retrieve the user
-				logger.LogRequestError(r, fmt.Errorf("unable to load the authenticated user: %w", err))
-			}
 			return nil, err
 		}
 
