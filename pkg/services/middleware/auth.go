@@ -21,10 +21,12 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if db == nil {
 				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
+				return
 			}
 
 			if cm == nil {
 				util.HttpError(w, r, "content manager not specified", errors.New("content manager not specified"), http.StatusInternalServerError)
+				return
 			}
 
 			u, err := getAuthenticatedUser(r, db)
@@ -51,11 +53,15 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 
 				redirectURL := r.RequestURI
 				s.Data[session.RedirectURL] = redirectURL
-				messages.AddMessage(w, r, "The requested resource is only available to authenticated users.", messages.AuthMessages)
-
 				sessionErr := s.Save(w, r)
-				if sessionErr == nil {
+				if sessionErr != nil {
 					logger.LogRequestError(r, sessionErr)
+					util.HttpError(w, r, "Unable to save the login session", nil, http.StatusInternalServerError)
+					return
+				}
+
+				if err := messages.AddMessage(w, r, "The requested resource is only available to authenticated users.", messages.AuthMessages); err != nil {
+					logger.LogRequestError(r, err)
 				}
 
 				// redirect to login
@@ -84,10 +90,12 @@ func RequireAnonymous(db *sqlx.DB, cm *content_services.ContentManagerService) f
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if db == nil {
 				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
+				return
 			}
 
 			if cm == nil {
 				util.HttpError(w, r, "content manager not specified", errors.New("content manager not specified"), http.StatusInternalServerError)
+				return
 			}
 
 			u, err := getAuthenticatedUser(r, db)
