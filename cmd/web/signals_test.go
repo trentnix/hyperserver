@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 )
 
@@ -186,7 +187,7 @@ type signalTestModule struct {
 
 func (*signalTestModule) Init(context.Context, *server.ApplicationServer) error { return nil }
 
-func (m *signalTestModule) Routes(mux *http.ServeMux) {
+func (m *signalTestModule) Routes(mux *routing.Routes) {
 	mux.HandleFunc("POST /signal-test", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Signal test request started")
 		<-m.release

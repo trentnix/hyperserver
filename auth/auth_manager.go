@@ -17,9 +17,11 @@ import (
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -91,7 +93,7 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 }
 
 // Routes defines the routes the AuthManager handler will be responsible for
-func (a *AuthManager) Routes(mux *http.ServeMux) {
+func (a *AuthManager) Routes(mux *routing.Routes) {
 	if a.Enabled {
 		// login / logout
 		mux.Handle("GET "+authEndpoint, middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetLogin)))
@@ -477,6 +479,11 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 
 // Reset delegates token redemption and redirects only after the provider commits.
 func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
+	if err := form.Parse(r); err != nil {
+		util.HttpError(w, r, err.Error(), nil, err.StatusCode)
+		return
+	}
+
 	authType := r.PathValue("authType")
 	if authType == "" {
 		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
@@ -656,8 +663,8 @@ func (a *AuthManager) GetVerify(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	if err := r.ParseForm(); err != nil {
-		a.contentManager.HandleError(w, r, "Unable to read the verification form.", nil, http.StatusBadRequest)
+	if err := form.Parse(r); err != nil {
+		util.HttpError(w, r, err.Error(), nil, err.StatusCode)
 		return
 	}
 	verificationToken := r.PostForm.Get("token")

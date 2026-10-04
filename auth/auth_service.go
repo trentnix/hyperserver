@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -36,7 +37,7 @@ type VerificationEmailSender interface {
 // Providers write form errors themselves and return operation results to AuthManager.
 type AuthService interface {
 	// Routes binds any provider-specific routes after initialization.
-	Routes(*http.ServeMux)
+	Routes(*routing.Routes)
 	// Init configures the provider using application-owned services.
 	Init(*server.ApplicationServer) error
 	// IsLoaded reports whether the provider is available for selection.

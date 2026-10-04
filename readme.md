@@ -78,6 +78,20 @@ The reference application uses Go's [CrossOriginProtection](https://pkg.go.dev/n
 
 Other applications must include this middleware in their HTTP stack. Reverse proxies must preserve the browser-facing Host and origin headers. `http.publicOrigin` controls generated links, not which origins may submit requests.
 
+[Route registration](pkg/routing/routes.go) limits body reads to 64 KiB by default using `http.MaxBytesReader`. For application-supplied handlers:
+
+```go
+routes := routing.NewRoutes(mux)
+
+routes.Handle("POST /contact", contactHandler)
+routes.HandleWithBodyLimit("POST /upload", uploadHandler, 8*routing.MiB)
+routes.HandleWithoutBodyLimit("POST /stream", streamHandler)
+```
+
+Prefer a finite limit. Direct registration on the underlying `http.ServeMux` bypasses these defaults. Handlers must check read errors before changing data and return 413 for `*http.MaxBytesError`.
+
+[Form parsing](pkg/components/form/request.go) limits decoded field names and values to 16 KiB and encoded query strings to 64 KiB. `ParseWithOptions` and `ParseAndValidateWithOptions` accept an explicit field limit or `UnlimitedFields: true`. These options do not change body or query limits. Account and contact forms return 413 for oversized input, 400 for malformed forms, and 415 for unsupported encodings. JSON and multipart handlers use their own parsers under the route's body limit.
+
 Redirects accept local paths beginning with a single `/`, including queries and fragments. Absolute URLs are not accepted, even for the same host. Ordinary requests receive HTTP 303, and HTMX requests receive HTTP 200 with `HX-Redirect`. Invalid login destinations fall back to the configured home path, then `/` if that path is also invalid.
 
 ### Expired-record cleanup

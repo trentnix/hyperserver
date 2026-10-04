@@ -13,6 +13,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -85,7 +86,7 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 	mux := http.NewServeMux()
 	manager := &AuthManager{Enabled: true}
-	manager.Routes(mux)
+	manager.Routes(routing.NewRoutes(mux))
 	for _, host := range []string{"localhost", "example.com"} {
 		req := httptest.NewRequest(http.MethodGet, "http://"+host+"/auth/login", nil)
 		_, pattern := mux.Handler(req)
@@ -98,7 +99,7 @@ func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 func TestAuthRouteMethods(t *testing.T) {
 	mux := http.NewServeMux()
 	manager := &AuthManager{Enabled: true, registrationEnabled: true}
-	manager.Routes(mux)
+	manager.Routes(routing.NewRoutes(mux))
 	for _, route := range []struct {
 		path, pattern string
 		get, post     bool
@@ -161,7 +162,7 @@ func TestVerificationRejectsMissingOrMalformedForm(t *testing.T) {
 		name, body, message string
 	}{
 		{"missing", "", "No verification token specified"},
-		{"malformed", "token=%zz", "Unable to read the verification form"},
+		{"malformed", "token=%zz", "Unable to parse form data"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPost, "/auth/verify?token=query-token", strings.NewReader(tc.body))
@@ -195,7 +196,7 @@ func TestRegistrationHonorsCancellation(t *testing.T) {
 func TestDisabledAuthDoesNotRegisterLogin(t *testing.T) {
 	mux := http.NewServeMux()
 	manager := &AuthManager{}
-	manager.Routes(mux)
+	manager.Routes(routing.NewRoutes(mux))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/auth/login", nil))
 	if w.Code != http.StatusNotFound {

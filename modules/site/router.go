@@ -5,13 +5,14 @@ import (
 	"path/filepath"
 
 	"github.com/trentnix/hyperserver/auth"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // Routes registers routes with the provided router and, along with Init, satisfies
 // the Handler interface
-func (m *SiteModule) Routes(mux *http.ServeMux) {
+func (m *SiteModule) Routes(mux *routing.Routes) {
 	// media paths
 	cssPath := filepath.Join("modules", "site", "templates", "html", "css")
 	jsPath := filepath.Join("modules", "site", "templates", "html", "js")

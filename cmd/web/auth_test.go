@@ -9,6 +9,7 @@ import (
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 )
 
@@ -23,7 +24,7 @@ func (s *setupAuthService) Init(*server.ApplicationServer) error {
 	s.initialized = true
 	return s.initErr
 }
-func (s *setupAuthService) Routes(*http.ServeMux) { s.routed = true }
+func (s *setupAuthService) Routes(*routing.Routes) { s.routed = true }
 
 type verifyingSetupAuthService struct {
 	*setupAuthService

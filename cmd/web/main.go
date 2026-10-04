@@ -94,8 +94,9 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 }
 
 // applicationHandler logs requests, checks browser origins, then loads sessions
-// and dispatches routes. Non-browser requests without origin headers follow Go's
-// CrossOriginProtection defaults. No trusted-origin or route exemptions are set.
+// and dispatches routes. Body limits are applied during route registration.
+// Non-browser requests without origin headers follow Go's CrossOriginProtection
+// defaults. No trusted origins or CSRF exemptions are set.
 func applicationHandler(s *server.ApplicationServer, l logger.Logger) http.Handler {
 	return middleware.ChainMiddleware(s.Web,
 		middleware.LoadSessionManagement(s.Database, s.SessionManager),

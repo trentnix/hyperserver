@@ -1,6 +1,7 @@
 package form
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -11,7 +12,8 @@ import (
 )
 
 // HandleFormError is a generic handler to render the specified content with the specified form
-// to display the specified error. If an error is specified, it will be logged.
+// to display the specified error. ParseError returns a plain-text rejection
+// without rendering submitted values. Other errors are logged before rendering.
 func HandleFormError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -20,6 +22,12 @@ func HandleFormError(
 	formErrorMessage string,
 	e error,
 ) {
+	var parseErr *ParseError
+	if errors.As(e, &parseErr) {
+		util.HttpError(w, r, parseErr.Error(), nil, parseErr.StatusCode)
+		return
+	}
+
 	if formErrorMessage != "" {
 		f.AddErrorMessage(formErrorMessage)
 	}

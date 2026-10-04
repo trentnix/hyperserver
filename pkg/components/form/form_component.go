@@ -131,12 +131,19 @@ func GetFormFromContext(ctx context.Context) (any, error) {
 	return f, nil
 }
 
-// ParseAndValidate parses request data, binds f, and records validation errors.
+// ParseAndValidate parses request data with the default field limits, binds f,
+// and records validation errors. Use ParseAndValidateWithOptions for other limits.
 // The returned message and error describe parsing, binding, or form-setup failures.
 // A nil error does not mean the input is valid: callers must also check f.HasErrors().
 func ParseAndValidate(r *http.Request, f FormComponent) (string, error) {
-	if err := r.ParseForm(); err != nil {
-		return "Unable to parse form data", err
+	return ParseAndValidateWithOptions(r, f, ParseOptions{})
+}
+
+// ParseAndValidateWithOptions parses and validates with explicit field limits.
+// Callers must still check f.HasErrors after a nil error.
+func ParseAndValidateWithOptions(r *http.Request, f FormComponent, options ParseOptions) (string, error) {
+	if err := ParseWithOptions(r, options); err != nil {
+		return err.Error(), err
 	}
 
 	if err := f.Bind(r); err != nil {

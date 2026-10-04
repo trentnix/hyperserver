@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 )
@@ -32,7 +33,7 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 	// Avoid loading templates or sessions when the site's catch-all reports a 404.
 	s.ContentManager.HandleNotFound = http.NotFound
 	mux := http.NewServeMux()
-	m.Routes(mux)
+	m.Routes(routing.NewRoutes(mux))
 	return m, mux
 }
 

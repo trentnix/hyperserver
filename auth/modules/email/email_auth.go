@@ -24,6 +24,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -204,7 +205,7 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 
 // Routes is implemented to fulfill the AuthService interface but is not supported by
 // the EmailAuthService implementation
-func (a *EmailAuthService) Routes(mux *http.ServeMux) {
+func (a *EmailAuthService) Routes(mux *routing.Routes) {
 	// none needed for EmailAuthService
 }
 

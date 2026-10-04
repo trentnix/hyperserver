@@ -5,6 +5,7 @@ import (
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 
 	// AuthService implementations - required so that init() is run in each so they
@@ -19,6 +20,7 @@ func SetupAuthentication(s *server.ApplicationServer) error {
 		return err
 	}
 	if s.Config.Auth.Enabled {
+		routes := routing.NewRoutes(s.Web)
 		authServices := make([]auth.AuthService, len(auth.GetAuthServices()))
 		copy(authServices, auth.GetAuthServices())
 
@@ -48,7 +50,7 @@ func SetupAuthentication(s *server.ApplicationServer) error {
 			}
 
 			// register any custom routes the initialized auth service handles
-			a.Routes(s.Web)
+			a.Routes(routes)
 		}
 
 		if len(auth.GetAuthServices()) == 0 {

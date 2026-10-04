@@ -6,6 +6,7 @@ import (
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // ContactForm binds the development site's contact submission fields.
@@ -54,8 +55,8 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 
 // Contact handles a contact submission
 func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
-	// extract login information, confirm the password, and authenticate the user
-	if err := r.ParseForm(); err != nil {
+	if err := form.Parse(r); err != nil {
+		util.HttpError(w, r, err.Error(), nil, err.StatusCode)
 		return
 	}
 
