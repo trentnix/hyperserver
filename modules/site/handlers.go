@@ -2,7 +2,6 @@ package module_site
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"path/filepath"
 
@@ -115,7 +114,7 @@ func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message
 	m.Error(w, r)
 }
 
-// HandleMessage renders message as trusted HTML. The caller must escape untrusted values.
+// HandleMessage renders message as text escaped by the page template.
 func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, message string) {
 	if message == "" {
 		message = "(no message)"
@@ -124,7 +123,7 @@ func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, messa
 	messagePage := content.NewManagedContent(r, m.contentManager)
 	messagePage.PartialName = messagePagePartialName
 	messagePage.AddContent(messagePageTemplate)
-	messagePage.Data = template.HTML(message)
+	messagePage.Data = message
 	err := messagePage.Render(w, r)
 	if err != nil {
 		m.contentManager.HandleError(w, r,

@@ -30,7 +30,13 @@
                 </div>
             {{ end }}
             {{ if .HasErrorMessages }}
-                <div class="form-messages">{{ .GetErrorMessagesHTML }}</div>
+                <div class="form-messages">
+                    <ul>
+                        {{ range .GetErrorMessages }}
+                            <li>{{ .Message }}</li>
+                        {{ end }}
+                    </ul>
+                </div>
             {{ end }}
         </form>
         {{ else }}

@@ -303,9 +303,9 @@ The form template used in the previous example code can be seen below:
         <button type="submit">Register</button>
         
         {{ if .HasErrorMessages }}
-            <div class="form-messages">{{ .GetErrorMessagesHTML }}</div>
+            <div class="form-messages"><ul>{{ range .GetErrorMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>
         {{ else if .HasInfoMessages }}
-            <div class="form-messages">{{ .GetInfoMessagesHTML }}</div>
+            <div class="form-messages"><ul>{{ range .GetInfoMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>
         {{ end }}
     </form>
 {{ else }}

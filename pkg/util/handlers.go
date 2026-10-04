@@ -8,16 +8,15 @@ import (
 )
 
 // HttpError writes a plain-text error response with httpStatus.
-// When err is non-nil, it logs err and includes its message in the response.
-// Do not pass internal errors containing secrets or sensitive details.
+// Only message is sent to the client and must be suitable for public display.
+// A non-nil err is logged through the request logger, not included in the response.
+// Logged errors must not contain secrets.
 func HttpError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
-	errMessage := message
 	if err != nil {
-		errMessage = fmt.Sprintf("%s: %v", message, err)
 		logger.LogRequestError(r, fmt.Errorf("%s (%d): %w", message, httpStatus, err))
 	}
 
-	http.Error(w, errMessage, httpStatus)
+	http.Error(w, message, httpStatus)
 }
 
 // HttpMessage writes a text message to the ResponseWriter

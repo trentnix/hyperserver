@@ -9,11 +9,23 @@
             hx-trigger="submit">
 
             {{ if .HasInfoMessages }}
-                <div class="form-messages">{{ .GetInfoMessagesHTML }}</div>
+                <div class="form-messages">
+                    <ul>
+                        {{ range .GetInfoMessages }}
+                            <li>{{ .Message }}</li>
+                        {{ end }}
+                    </ul>
+                </div>
             {{ end }}
 
             {{ if .HasSuccessMessages }}
-                <div class="form-messages">{{ .GetSuccessMessagesHTML }}</div>
+                <div class="form-messages">
+                    <ul>
+                        {{ range .GetSuccessMessages }}
+                            <li>{{ .Message }}</li>
+                        {{ end }}
+                    </ul>
+                </div>
             {{ end }}
 
             <label for="email">Email</label>
@@ -42,7 +54,13 @@
             <button type="submit">Register</button>
 
             {{ if .HasErrorMessages }}
-                <div class="form-messages">{{ .GetErrorMessagesHTML }}</div>
+                <div class="form-messages">
+                    <ul>
+                        {{ range .GetErrorMessages }}
+                            <li>{{ .Message }}</li>
+                        {{ end }}
+                    </ul>
+                </div>
             {{ end }}
         </form>
     </div>

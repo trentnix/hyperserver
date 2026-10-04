@@ -34,7 +34,7 @@ type (
 		// NotFoundURL holds an optional application not-found-page address.
 		NotFoundURL string
 
-		// HandleMessage lets the caller respond with the specified message
+		// HandleMessage displays plain text. HTML renderers must escape the message.
 		HandleMessage func(w http.ResponseWriter, r *http.Request, message string)
 		// HandleError delegates error presentation to the application.
 		HandleError func(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int)

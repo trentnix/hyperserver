@@ -1,12 +1,11 @@
 // Package form binds HTTP input and records field and form-level validation errors.
 // Embed Form in an application form and implement FormComponent.Bind. After
 // ParseAndValidate returns without an error, check HasErrors before changing data.
-// The HTML message helpers do not escape message strings.
+// Message strings are plain text. Render them through html/template for escaping.
 package form
 
 import (
 	"fmt"
-	"html/template"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
@@ -176,45 +175,4 @@ func (f *Form) addMessage(msg string, msgType messages.MessageType) {
 // SetMessages replaces all form-level messages with formMessages.
 func (f *Form) SetMessages(formMessages []messages.Message) {
 	f.messages = formMessages
-}
-
-// GetErrorMessagesHTML renders error messages as an HTML list without escaping.
-// Message strings must be trusted HTML.
-func (f *Form) GetErrorMessagesHTML() template.HTML {
-	return f.getMessagesHTML(messages.MessageTypeError)
-}
-
-// GetSuccessMessagesHTML renders success messages as an HTML list without escaping.
-// Message strings must be trusted HTML.
-func (f *Form) GetSuccessMessagesHTML() template.HTML {
-	return f.getMessagesHTML(messages.MessageTypeSuccess)
-}
-
-// GetInfoMessagesHTML renders informational messages as an HTML list without escaping.
-// Message strings must be trusted HTML.
-func (f *Form) GetInfoMessagesHTML() template.HTML {
-	return f.getMessagesHTML(messages.MessageTypeDefault)
-}
-
-// getMessagesHTML retrieves a slice of messages from Form.messages that
-// match the specified type
-func (f *Form) getMessagesHTML(msgType messages.MessageType) template.HTML {
-	var msgs []messages.Message
-	switch msgType {
-	case messages.MessageTypeError:
-		msgs = f.GetErrorMessages()
-	case messages.MessageTypeSuccess:
-		msgs = f.GetSuccessMessages()
-	default:
-		msgs = f.GetInfoMessages()
-	}
-
-	var htmlMessages string
-	htmlMessages = "<ul>"
-	for _, m := range msgs {
-		htmlMessages += fmt.Sprintf("<li>%s</li>", m.Message)
-	}
-	htmlMessages += "</ul>"
-
-	return template.HTML(htmlMessages)
 }
