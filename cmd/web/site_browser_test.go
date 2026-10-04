@@ -120,7 +120,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 			t.Fatalf("browser exited before reporting results: %v\n%s", exitErr, output)
 		case <-ctx.Done():
 			output, _ := os.ReadFile(logPath)
-			t.Fatalf("browser checks timed out: %s", output)
+			t.Fatalf("browser checks timed out: %s\nHTTP requests:\n%s", output, h.logs.String())
 		}
 	})
 }
