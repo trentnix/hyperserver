@@ -677,6 +677,13 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 
 	verificationErrMsg := "Verification failed: unable to verify your user account."
 
+	authenticatedUser, err := user.GetAuthenticatedUser(r, a.db)
+	if err != nil {
+		logVerificationFailure(r, "verification account lookup failed")
+		util.HttpError(w, r, "Unable to verify your account. Please try again later.", nil, http.StatusInternalServerError)
+		return
+	}
+
 	verifiedUser, err := user.Verify(r.Context(), a.db, verificationToken, []byte(a.verificationJwtKey))
 	if err != nil {
 		a.contentManager.HandleError(
@@ -698,7 +705,6 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authenticatedUser, _ := user.GetAuthenticatedUser(r, a.db)
 	if authenticatedUser != nil {
 		// a user is currently authenticated - redirect to Home with a custom message
 		authenticatedUserMessage := "Your account was verified successfully."
