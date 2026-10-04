@@ -64,6 +64,11 @@ func PrepareDatabase(ctx context.Context, db *sqlx.DB) error {
 	if err != nil {
 		return fmt.Errorf("create account token table: %w", err)
 	}
+	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS usertoken_expiration
+		ON usertoken (julianday(expires_at), user_id, token_hash)`)
+	if err != nil {
+		return fmt.Errorf("create account token expiration index: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit account schema setup: %w", err)
 	}

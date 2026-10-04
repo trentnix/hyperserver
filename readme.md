@@ -66,6 +66,12 @@ http:
 
 For direct connections, leave `publicOrigin` empty. Links then use the listener settings and connection's TLS state, not request host or forwarding headers. Wildcard listeners require an explicit public origin for links. This setting does not configure TLS, cookie security, or trusted proxies. See the configuration template for defaults and validation rules.
 
+### Expired-record cleanup
+
+Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration and working directory as `cmd/web`. Each run deletes at most 100 expired rows from each selected SQLite session store and, when authentication is enabled, account-token storage. The tables must already exist. Live records and accounts are unchanged.
+
+Schedule the command externally for regular cleanup. The server does not run cleanup automatically. The command reports deleted counts and exits with an error if either cleanup fails. Expiration checks still reject expired sessions and tokens before cleanup runs.
+
 ### Checks
 
 From the repository root, run the existing checks with:

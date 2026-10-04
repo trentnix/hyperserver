@@ -288,7 +288,7 @@ func (s *SQLiteStore) IsEnabled() bool {
 	return s.enabled
 }
 
-// validateDatabase determines whether the sessionsTable exists and, if not, it creates it
+// prepareDatabase opens the shared pool and prepares its session table and index.
 func (s *SQLiteStore) prepareDatabase() error {
 	if dbSQLiteSessionStore != nil {
 		s.db = dbSQLiteSessionStore
@@ -302,18 +302,9 @@ func (s *SQLiteStore) prepareDatabase() error {
 			return
 		}
 
-		tableExists, err := database.TableExists(s.db.DB, s.tableName)
-		if err != nil {
-			dbError = database.NewErrDatabaseConfiguration(err)
+		if err := s.configureDatabase(); err != nil {
+			dbError = database.NewErrDatabase(err)
 			return
-		}
-
-		if !tableExists {
-			err = s.configureDatabase()
-			if err != nil {
-				dbError = database.NewErrDatabase(err)
-				return
-			}
 		}
 
 		dbSQLiteSessionStore = s.db
@@ -326,7 +317,7 @@ func (s *SQLiteStore) prepareDatabase() error {
 	return nil
 }
 
-// configureDatabase creates the sessionTable according to the specified database vendor
+// configureDatabase prepares the session table and expiration index.
 func (s *SQLiteStore) configureDatabase() error {
 	var createTableSQL string
 
@@ -336,7 +327,7 @@ func (s *SQLiteStore) configureDatabase() error {
 	switch driver.(type) {
 	case *sqlite3.SQLiteDriver:
 		createTableSQL = fmt.Sprintf(`
-			CREATE TABLE %s (
+			CREATE TABLE IF NOT EXISTS %s (
 				id VARCHAR(36) PRIMARY KEY,
 				session TEXT,
 				expires_at DATETIME,
@@ -349,6 +340,10 @@ func (s *SQLiteStore) configureDatabase() error {
 
 	_, err := s.db.Exec(createTableSQL)
 	if err != nil {
+		return database.NewErrDatabase(err)
+	}
+	query := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s_expiration ON %s (julianday(expires_at), id)", s.tableName, s.tableName)
+	if _, err := s.db.Exec(query); err != nil {
 		return database.NewErrDatabase(err)
 	}
 
