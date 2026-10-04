@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 
 	"github.com/trentnix/hyperserver/auth"
+	"github.com/trentnix/hyperserver/pkg/services/middleware"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // Routes registers routes with the provided router and, along with Init, satisfies
@@ -34,7 +36,11 @@ func (m *SiteModule) Routes(mux *http.ServeMux) {
 
 	// These routes exercise framework features in the local development application.
 	// Production applications must not load this module.
-	mux.Handle("POST /test-email", http.HandlerFunc(m.TestEmail))
+	mailPolicy := func(r *http.Request) (bool, error) {
+		u := user.GetUserFromContext(r.Context())
+		return u != nil && !u.NeedsVerification(), nil
+	}
+	mux.Handle("POST /test-email", middleware.RequireAuthorization(mailPolicy)(http.HandlerFunc(m.TestEmail)))
 	mux.Handle("GET "+authURL, http.HandlerFunc(m.Login))
 	if m.registrationEnabled {
 		mux.Handle("GET "+registerURL, http.HandlerFunc(m.Register))

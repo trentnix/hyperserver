@@ -530,6 +530,7 @@ func TestHTTPRegistrationMailFailure(t *testing.T) {
 
 func TestHTTPTestEmailDeliveryOutcome(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
+		h.establishSession(t, h.seedUser(t, "mail-operator@example.invalid"))
 		path := "/test-email?to=person@example.invalid"
 		h.mail.err = messaging.ErrMailUnavailable
 		w := h.request(http.MethodPost, path, nil, true)
@@ -562,6 +563,7 @@ func TestHTTPMailEscapesDynamicHTML(t *testing.T) {
 		if !strings.Contains(body, `<a href="http://127.0.0.1:8080/auth/verify?token=`) {
 			t.Error("verification link did not remain usable")
 		}
+		h.establishSession(t, h.seedUser(t, "mail-operator@example.invalid"))
 		w = h.request(http.MethodPost, "/test-email?to=person@example.invalid&body="+url.QueryEscape(input), nil, true)
 		if w.Code != http.StatusOK || len(h.mail.snapshot()) != 2 {
 			t.Fatal("test email failed")

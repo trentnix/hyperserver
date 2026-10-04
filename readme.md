@@ -23,6 +23,8 @@ High performance is a design goal, not an established benchmark result. Passing 
 
 Authentication requires SQLite sessions. Login and account verification rotate the session ID. Password reset or change signs out all devices. Cookie-only sessions are available for non-authentication data.
 
+Applications define access rules through [route-level authorization policies](pkg/services/middleware/authorization_example_test.go), separate from authentication. Policies can inspect the loaded identity and route values. Denial returns 403, and policy failures return 500 without exposing the error, for both ordinary and HTMX requests.
+
 Session data uses JSON, limited to 64 KiB before base64 encoding. Cookies are limited to 4 KiB including their name and attributes. Cookie-store data is signed, not encrypted, and must not contain secrets. See the [session guide](pkg/services/session/readme.md) for supported values and typed reads.
 
 Some services require other framework services and cannot be replaced independently. Module instances share process-wide state.
@@ -40,6 +42,8 @@ Use the Go version declared in [go.mod](go.mod), which also controls CI. SQLite 
 Start with [cmd/web](cmd/web) for application composition, [modules/site](modules/site) for the reference application, and [pkg](pkg) for framework components and services.
 
 The development [site module owns the diagnostic and sample routes](modules/site/router.go). Production applications must not import it. Omitting it does not resolve the framework's outstanding security issues.
+
+`POST /test-email` allows logged-in users who have completed any required account verification. Other users receive 403, and no mail is sent.
 
 Use [config-template.yaml](config-template.yaml) as the starting point for a local `config.yaml`, not a production configuration.
 
