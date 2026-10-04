@@ -42,7 +42,10 @@ jobs:
       - name: Test HTMX in Firefox
         env:
           HS_TEST_FIREFOX: firefox
-        run: go test -count=1 -timeout=1m ./cmd/web -run '^TestBrowserSiteErrors$'
+          TMPDIR: ${{ runner.temp }} # Keep profiles visible to browsers that isolate /tmp.
+        run: |
+          firefox --version
+          go test -count=1 -timeout=1m ./cmd/web -run '^TestBrowserSiteErrors$'
 
       - name: Test with race detector
         env:
