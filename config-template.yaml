@@ -54,6 +54,8 @@ http:
         sessionTable: "session"
     # Map session names to enabled providers. Names without a mapping use default.
     types:
+      # Authentication requires server-side revocation. Cookie-only storage is not supported.
+      auth-user-session: sqliteStore
       # Fallback provider for session names not listed here.
       default: sqliteStore
       # Provider for sessions named "visit".

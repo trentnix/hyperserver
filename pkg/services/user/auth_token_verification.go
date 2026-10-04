@@ -91,8 +91,9 @@ func Verify(ctx context.Context, db *sqlx.DB, verificationToken string, jwtKey [
 
 	var account User
 	err = tx.GetContext(ctx, &account, `UPDATE `+userTableName+`
-		SET verified = TRUE, updated_at = ? WHERE id = ? AND email = ?
-		RETURNING id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password`,
+		SET session_version = session_version + CASE WHEN verified THEN 0 ELSE 1 END,
+		verified = TRUE, updated_at = ? WHERE id = ? AND email = ?
+		RETURNING id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version`,
 		time.Now(), claims.Id, claims.Email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, NewErrToken(errors.New("verification address changed or account no longer exists"))

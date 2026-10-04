@@ -28,6 +28,8 @@ type (
 		UpdatedAt            time.Time `db:"updated_at"`
 		RegistrationAuthType string    `db:"registration_auth_type"`
 		Password             string    `db:"password"`
+		// SessionVersion changes when credentials or account access changes.
+		SessionVersion int64 `db:"session_version"`
 	}
 
 	contextKey string
@@ -40,6 +42,11 @@ const (
 
 // GetUserByID retrieves the user with the specified users.id value
 func GetUserByID(db *sqlx.DB, id string) (*User, error) {
+	return GetUserByIDContext(context.Background(), db, id)
+}
+
+// GetUserByIDContext retrieves an account using ctx.
+func GetUserByIDContext(ctx context.Context, db *sqlx.DB, id string) (*User, error) {
 	if db == nil {
 		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
@@ -50,12 +57,12 @@ func GetUserByID(db *sqlx.DB, id string) (*User, error) {
 	}
 
 	query := fmt.Sprintf(`
-        SELECT id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password
+        SELECT id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version
         FROM %s
         WHERE id = ?
     `, userTableName)
 
-	err := db.Get(&u, query, id)
+	err := db.GetContext(ctx, &u, query, id)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +87,7 @@ func GetUserByEmailContext(ctx context.Context, db *sqlx.DB, email string) (*Use
 	}
 
 	query := fmt.Sprintf(`
-        SELECT id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password
+        SELECT id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version
         FROM %s
         WHERE email = ?
     `, userTableName)
@@ -116,6 +123,7 @@ func (user *User) Create(ctx context.Context, db *sqlx.DB) error {
 	created.ID = uuid.New().String()
 	created.CreatedAt = time.Now()
 	created.UpdatedAt = created.CreatedAt
+	created.SessionVersion = 1
 
 	query := fmt.Sprintf(`
         INSERT INTO %s (id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password)
@@ -131,7 +139,8 @@ func (user *User) Create(ctx context.Context, db *sqlx.DB) error {
 
 // Update changes an existing account by ID. It never inserts an account and
 // returns ErrUserNotFound if the ID no longer exists. Changing the email address
-// revokes stored verification tokens in the same transaction.
+// revokes stored verification tokens in the same transaction. Changes to credentials,
+// email, provider, or verification settings also invalidate authenticated sessions.
 func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 	if user == nil {
 		return NewErrUserNotSpecified(nil)
@@ -175,6 +184,10 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 			verification_required = :verification_required,
             updated_at = :updated_at,
             registration_auth_type = :registration_auth_type,
+            session_version = session_version + CASE WHEN password IS NOT :password
+                OR email IS NOT :email OR verified IS NOT :verified
+                OR verification_required IS NOT :verification_required
+                OR registration_auth_type IS NOT :registration_auth_type THEN 1 ELSE 0 END,
             password = :password
         WHERE id = :id
     `, userTableName)
@@ -190,10 +203,14 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 	if count == 0 {
 		return NewErrUserNotFound(sql.ErrNoRows)
 	}
+	if err := tx.GetContext(ctx, &updated.SessionVersion, `SELECT session_version FROM user WHERE id = ?`, user.ID); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	user.UpdatedAt = updated.UpdatedAt
+	user.SessionVersion = updated.SessionVersion
 	return nil
 }
 

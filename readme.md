@@ -21,6 +21,8 @@ High performance is a design goal, not an established benchmark result. Passing 
 - Experimental email/password authentication, account verification and recovery, cookie and SQLite session stores, SMTP mail, and request logging.
 - SQLite-backed persistence used by the reference application and framework services.
 
+Authentication requires SQLite sessions. Login and account verification rotate the session ID. Password reset or change signs out all devices. Cookie-only sessions are available for non-authentication data.
+
 Some services require other framework services and cannot be replaced independently. Module instances share process-wide state.
 
 ## Direction

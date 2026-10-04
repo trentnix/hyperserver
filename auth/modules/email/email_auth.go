@@ -751,8 +751,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 		return false
 	}
 
-	u.Password = hashedPassword
-	err = u.Update(r.Context(), a.db)
+	err = u.ChangePassword(r.Context(), a.db, hashedPassword)
 	if err != nil {
 		// the user could not be updated
 		form.HandleFormError(
@@ -768,7 +767,9 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	changeForm.OldPassword = ""
 	changeForm.NewPassword = ""
 	changeForm.NewPasswordMatch = ""
-	changeForm.AddSuccessMessage("Your password has been changed.")
+	*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
+	user.ClearAuthenticationCookie(w, r)
+	changeForm.AddSuccessMessage("Your password has been changed. Please log in again.")
 
 	err = change.Render(w, r)
 	if err != nil {

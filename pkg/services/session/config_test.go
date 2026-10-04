@@ -59,3 +59,33 @@ func TestValidateSessionConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRotationConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		types map[string]string
+		valid bool
+	}{
+		{"explicit SQLite", map[string]string{"default": "cookieStore", "account": "sqliteStore"}, true},
+		{"SQLite fallback", map[string]string{"default": "sqliteStore"}, true},
+		{"case insensitive", map[string]string{"account": "SQLITESTORE"}, true},
+		{"explicit cookie", map[string]string{"default": "sqliteStore", "account": "cookieStore"}, false},
+		{"cookie fallback", map[string]string{"default": "cookieStore"}, false},
+		{"unknown provider", map[string]string{"account": "unknown"}, false},
+		{"empty selection", map[string]string{"default": "sqliteStore", "account": ""}, false},
+		{"missing selection", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &config.Config{}
+			c.HTTP.Session.Types = tc.types
+			// No connection or signing key: capability validation must not open a store.
+			err := ValidateRotationConfig(c, "account")
+			if (err == nil) != tc.valid {
+				t.Fatalf("rotation validation = %v, want valid=%v", err, tc.valid)
+			}
+			if err != nil && !strings.Contains(err.Error(), "http.session.types.account") {
+				t.Fatalf("error does not identify the selection: %v", err)
+			}
+		})
+	}
+}

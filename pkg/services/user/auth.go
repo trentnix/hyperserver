@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	userSessionKey string = "auth-user-session"
+	userSessionKey        = "auth-user-session"
+	userSessionVersionKey = "auth-session-version"
 )
 
 // ClearAuthenticationCookie removes the browser's authentication cookie without
@@ -19,11 +20,15 @@ func ClearAuthenticationCookie(w http.ResponseWriter, r *http.Request) {
 	session.ExpireCookie(w, r, userSessionKey)
 }
 
-// SetAuthenticatedUser saves the account ID in the current user session.
-// It does not rotate the session ID. Session management must be attached to r.
+// SetAuthenticatedUser rotates the session and records the account's session version.
+// Call after authenticating credentials or granting new privileges. The account
+// must be freshly loaded or saved. Session management must be attached to r.
 func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error {
 	if u == nil || u.ID == "" {
 		return errors.New("The specified user is not specified. The user's ID must be set.")
+	}
+	if u.SessionVersion < 1 {
+		return errors.New("the user's session version must be loaded from account storage")
 	}
 
 	s, err := session.Get(r, userSessionKey)
@@ -31,12 +36,10 @@ func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error
 		return err
 	}
 
-	s.Data[userSessionKey] = u.ID
-	sessionSaveErr := s.Save(w, r)
-	if sessionSaveErr != nil {
-		return sessionSaveErr
+	if err := s.Rotate(w, r, map[string]any{userSessionKey: u.ID, userSessionVersionKey: u.SessionVersion}); err != nil {
+		return err
 	}
-
+	*r = *AddUserToRequestContext(r, u)
 	return nil
 }
 
@@ -75,7 +78,7 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
 	}
 
 	// get the user's information from the database
-	u_db, userRetrievalErr := GetUserByID(db, userId)
+	u_db, userRetrievalErr := GetUserByIDContext(r.Context(), db, userId)
 	if userRetrievalErr != nil {
 		if errors.Is(userRetrievalErr, sql.ErrNoRows) {
 			return nil, NewErrUserNotFound(userRetrievalErr)
@@ -84,5 +87,9 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
 		return nil, userRetrievalErr
 	}
 
+	version, ok := s.Data[userSessionVersionKey].(int64)
+	if !ok || version != u_db.SessionVersion {
+		return nil, nil
+	}
 	return u_db, nil
 }

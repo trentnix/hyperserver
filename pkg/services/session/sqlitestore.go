@@ -152,8 +152,18 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	if s.db == nil {
 		return ErrDatabaseNotConfigured
 	}
+	cookie, err := s.sessionCookie(session, r.TLS != nil)
+	if err != nil {
+		return err
+	}
+	if err := s.save(r.Context(), session); err != nil {
+		return err
+	}
+	http.SetCookie(w, cookie)
+	return nil
+}
 
-	// create a token with just the session (and expiration)
+func (s *SQLiteStore) sessionCookie(session *Session, secure bool) (*http.Cookie, error) {
 	var tokenExpiration time.Time
 
 	if session.IsNew {
@@ -176,29 +186,81 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(s.JwtKey)
 	if err != nil {
-		return NewErrSessionKeyInvalid(err)
+		return nil, NewErrSessionKeyInvalid(err)
 	}
 
 	cookieAge := int(s.CookieLifetime / time.Second)
 
-	// save the session to the database
-	saveErr := s.save(r.Context(), session)
-	if saveErr != nil {
-		return saveErr
-	}
-
-	// write the cookie with the session token
-	http.SetCookie(w, &http.Cookie{
+	return &http.Cookie{
 		Name:     session.Name,
 		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   cookieAge,
-	})
+	}, nil
+}
 
-	return nil
+// Rotate replaces the old row and inserts a fresh session in one transaction.
+// A revoked or expired session cannot be rotated back into an active session.
+func (s *SQLiteStore) Rotate(w http.ResponseWriter, r *http.Request, previous *Session, data map[string]any) (*Session, error) {
+	if s.db == nil {
+		return nil, ErrDatabaseNotConfigured
+	}
+	if s.tableName == "" {
+		return nil, ErrSQLiteStoreNotConfigured
+	}
+	if previous == nil || previous.ID == "" {
+		return nil, NewErrSessionInvalid(nil)
+	}
+
+	next := newSession(s, previous.Name)
+	for key, value := range data {
+		next.Data[key] = value
+	}
+	encoded, err := next.EncodedData()
+	if err != nil {
+		return nil, err
+	}
+	cookie, err := s.sessionCookie(next, r.TLS != nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := s.db.BeginTxx(r.Context(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	if !previous.IsNew {
+		result, err := tx.ExecContext(r.Context(), "DELETE FROM "+s.tableName+" WHERE id = ? AND julianday(expires_at) > julianday(?)",
+			previous.ID, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return nil, err
+		}
+		if count != 1 {
+			return nil, NewErrSessionInvalid(nil)
+		}
+	}
+
+	_, err = tx.ExecContext(r.Context(), "INSERT INTO "+s.tableName+" (id, session, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		next.ID, encoded, next.ExpiresAt, time.Now(), time.Now())
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	next.IsNew = false
+	http.SetCookie(w, cookie)
+	return next, nil
 }
 
 // End deletes the stored session before expiring the browser cookie. Missing rows

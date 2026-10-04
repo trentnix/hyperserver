@@ -16,7 +16,7 @@ const (
 
 // PrepareDatabase creates missing account and token tables in a SQLite database.
 // Applications must call it before using account storage. It is safe to call
-// again and leaves existing tables and records unchanged. It does not migrate schemas.
+// again. Existing accounts receive a session version without changing their credentials.
 func PrepareDatabase(ctx context.Context, db *sqlx.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
@@ -43,6 +43,15 @@ func PrepareDatabase(ctx context.Context, db *sqlx.DB) error {
 	)`)
 	if err != nil {
 		return fmt.Errorf("create account table: %w", err)
+	}
+	var versionColumn int
+	if err := tx.GetContext(ctx, &versionColumn, `SELECT count(*) FROM pragma_table_info('user') WHERE name = 'session_version'`); err != nil {
+		return fmt.Errorf("check account session version: %w", err)
+	}
+	if versionColumn == 0 {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE user ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1`); err != nil {
+			return fmt.Errorf("add account session version: %w", err)
+		}
 	}
 	_, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usertoken (
 		user_id VARCHAR(36),

@@ -32,11 +32,14 @@ func TestValidateAuthConfig(t *testing.T) {
 		{"invalid enable flag", func(c *config.Config) { c.Auth.Services["custom"]["enabled"] = "perhaps" }, "enabled"},
 		{"no active provider", func(c *config.Config) { c.Auth.Services["custom"]["enabled"] = "false" }, "at least one enabled"},
 		{"missing session default", func(c *config.Config) { c.HTTP.Session.Types = nil }, "types.default"},
+		{"cookie authentication", func(c *config.Config) { c.HTTP.Session.Types["auth-user-session"] = "cookieStore" }, "session revocation"},
+		{"cookie fallback", func(c *config.Config) { delete(c.HTTP.Session.Types, "auth-user-session") }, "session revocation"},
+		{"SQLite fallback", func(c *config.Config) { c.HTTP.Session.Types = map[string]string{"default": "SQLITESTORE"} }, ""},
 		{"disabled auth", func(c *config.Config) { *c = config.Config{} }, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := &config.Config{Auth: config.AuthConfig{Enabled: true, JwtKey: strings.Repeat("a", 32), VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"custom": {"enabled": "true"}}}}
-			c.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
+			c.HTTP.Session.Types = map[string]string{"default": "cookieStore", "auth-user-session": "sqliteStore"}
 			tc.change(c)
 			err := ValidateConfig(c)
 			if tc.want == "" {

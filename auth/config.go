@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 // ValidateConfig checks enabled providers against the imported auth services.
@@ -57,6 +58,9 @@ func ValidateConfig(c *config.Config) error {
 	}
 	if c.HTTP.Session.Types["default"] == "" {
 		return fmt.Errorf("authentication requires http.session.types.default")
+	}
+	if err := session.ValidateRotationConfig(c, "auth-user-session"); err != nil {
+		return fmt.Errorf("authentication requires session revocation: %w", err)
 	}
 	return nil
 }

@@ -72,7 +72,13 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			if failure == "account storage unavailable" {
 				setup := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), sessions)
 				w := httptest.NewRecorder()
-				if err := user.SetAuthenticatedUser(w, setup, account); err != nil {
+				// Seed a legacy cookie directly to exercise account lookup failure.
+				s, err := session.New(setup, "auth-user-session")
+				if err != nil {
+					t.Fatal(err)
+				}
+				s.Data["auth-user-session"] = account.ID
+				if err := s.Save(w, setup); err != nil {
 					t.Fatal(err)
 				}
 				for _, cookie := range w.Result().Cookies() {

@@ -248,7 +248,8 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	setAuthenticatedUserErr := user.SetAuthenticatedUser(w, r, u)
 	if setAuthenticatedUserErr != nil {
-		a.contentManager.HandleError(w, r, "There was an internal error when trying to login", setAuthenticatedUserErr, http.StatusInternalServerError)
+		logger.LogRequestError(r, setAuthenticatedUserErr)
+		util.HttpError(w, r, "There was an internal error when trying to login", nil, http.StatusInternalServerError)
 		return
 	}
 
@@ -530,6 +531,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 
 	resetSuccessful := (*authService).Reset(w, r, u, token, a.resetRequiresNewCredentials)
 	if resetSuccessful {
+		*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
 		// redirect the user to the auth page
 		err := messages.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site.")
 		if err != nil {
@@ -704,6 +706,13 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if authenticatedUser != nil {
+		if authenticatedUser.ID == verifiedUser.ID {
+			if err := user.SetAuthenticatedUser(w, r, verifiedUser); err != nil {
+				logger.LogRequestError(r, err)
+				util.HttpError(w, r, "Your account was verified, but the session could not be renewed. Please log in again.", nil, http.StatusInternalServerError)
+				return
+			}
+		}
 		// a user is currently authenticated - redirect to Home with a custom message
 		authenticatedUserMessage := "Your account was verified successfully."
 		if authenticatedUser.Email != verifiedUser.Email {

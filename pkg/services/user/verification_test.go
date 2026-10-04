@@ -63,6 +63,7 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	before.Verified, before.UpdatedAt = true, stored.UpdatedAt
+	before.SessionVersion++
 	if *stored != *before || *verified != *stored {
 		t.Fatal("verification changed unrelated account data")
 	}

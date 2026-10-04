@@ -178,8 +178,11 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	cfg.HTTP.Session.JwtKey = "http-test-only-session-signing-key"
 	cfg.HTTP.Session.TokenAge = time.Hour
 	cfg.HTTP.Session.CookieAge = time.Hour
-	cfg.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}}
-	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
+	cfg.HTTP.Session.Stores = map[string]map[string]string{
+		"cookieStore": {"enabled": "true"},
+		"sqliteStore": {"enabled": "true", "connection": cfg.Database.Connection, "sessiontable": "session"},
+	}
+	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore", "auth-user-session": "sqliteStore"}
 	for _, change := range configure {
 		change(cfg)
 	}
@@ -187,6 +190,11 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 		t.Fatal(err)
 	}
 	if err := session.ValidateConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	// Open before concurrent requests and synctest bubbles. Runtime-global store
+	// ownership remains isolated to this scenario's subprocess.
+	if _, err := session.NewSQLiteStore(cfg); err != nil {
 		t.Fatal(err)
 	}
 	db, err := database.Setup(cfg.Database.Driver, cfg.Database.Connection)
@@ -1057,6 +1065,7 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 		if err := u.Update(context.Background(), h.app.Database); err != nil {
 			t.Fatal(err)
 		}
+		h.establishSession(t, u)
 		w = h.request(http.MethodPost, "/auth/request/verify", nil, true)
 		if w.Code != http.StatusOK || len(h.mail.snapshot()) != before {
 			t.Error("verified account caused another email")
@@ -1065,6 +1074,7 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 		if err := u.Update(context.Background(), h.app.Database); err != nil {
 			t.Fatal(err)
 		}
+		h.establishSession(t, u)
 		w = h.request(http.MethodPost, "/auth/request/verify", nil, true)
 		if errorStatus != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "Unable to send verification instructions.") || len(h.mail.snapshot()) != before {
 			t.Error("missing verification provider was not handled")

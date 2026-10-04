@@ -64,6 +64,7 @@ func TestSQLiteSessionLoadRetry(t *testing.T) {
 }
 
 func TestHTTPProtectedRouteSessionExpiry(t *testing.T) {
+	// Authentication always uses SQLite. Exercise both default providers for other sessions.
 	for _, provider := range []string{"cookieStore", "sqliteStore"} {
 		t.Run(provider, func(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
@@ -137,6 +138,8 @@ func TestHTTPSessionLoading(t *testing.T) {
 			t.Run(provider+"/"+outcome, func(t *testing.T) {
 				runHTTPScenario(t, func(h *httpHarness) {
 					const name = "auth-user-session"
+					// Exercise raw cookie loading too, without authenticating an account.
+					h.app.SessionManager.Types[name] = provider
 					encoded, err := (&session.Session{Data: map[string]any{"marker": "stored"}}).EncodedData()
 					if err != nil {
 						t.Fatal(err)

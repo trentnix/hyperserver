@@ -71,3 +71,16 @@ func ValidateConfig(c *config.Config) error {
 	}
 	return config.ValidateLifetime("http.session.cookieAge", c.HTTP.Session.CookieAge)
 }
+
+// ValidateRotationConfig checks whether the selected provider supports revocable
+// rotation without opening a store. ValidateConfig must also validate provider options.
+func ValidateRotationConfig(c *config.Config, name string) error {
+	provider, ok := c.HTTP.Session.Types[name]
+	if !ok {
+		provider = c.HTTP.Session.Types[defaultStore]
+	}
+	if !strings.EqualFold(provider, sqliteStoreName) {
+		return fmt.Errorf("http.session.types.%s selects store %q, which does not support revocable session rotation", name, provider)
+	}
+	return nil
+}

@@ -104,8 +104,13 @@ const startupTestConfig = `http:
     stores:
       cookieStore:
         enabled: "true"
+      sqliteStore:
+        enabled: "true"
+        connection: "file:startup-sessions?mode=memory&cache=shared"
+        sessionTable: "session"
     types:
       default: cookieStore
+      auth-user-session: sqliteStore
 auth:
   enabled: true
   registrationEnabled: true

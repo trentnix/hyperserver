@@ -49,6 +49,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	original.Password = "new hash"
+	original.SessionVersion++
 	original.UpdatedAt = stored.UpdatedAt
 	if *stored != *original || u.Password != stored.Password || !u.UpdatedAt.Equal(stored.UpdatedAt) {
 		t.Fatal("reset changed unrelated account data or replay changed the password")

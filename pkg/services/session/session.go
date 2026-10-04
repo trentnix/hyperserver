@@ -83,6 +83,33 @@ func (s *Session) Save(w http.ResponseWriter, r *http.Request) error {
 	return s.Store.Save(w, r, s)
 }
 
+// RotatingStore atomically replaces a stored session with a new ID and data.
+// A failure must leave the old session valid and must not issue a cookie.
+type RotatingStore interface {
+	Rotate(http.ResponseWriter, *http.Request, *Session, map[string]any) (*Session, error)
+}
+
+// Rotate replaces the session and its request-local cache only after the store
+// commits the replacement. Providers without server-side revocation are rejected.
+func (s *Session) Rotate(w http.ResponseWriter, r *http.Request, data map[string]any) error {
+	store, ok := s.Store.(RotatingStore)
+	if !ok {
+		return errors.New("session store does not support revocable session rotation")
+	}
+	if r == nil {
+		return NewErrRequestNotSpecified(nil)
+	}
+
+	replacement, err := store.Rotate(w, r, s, data)
+	if err != nil {
+		return err
+	}
+
+	clear(s.Data)
+	*s = *replacement
+	return setCachedSession(r, s)
+}
+
 // End delegates revocation to the store, then replaces this session and its cached
 // value with a new empty session. A failed revocation leaves local state unchanged.
 func (s *Session) End(w http.ResponseWriter, r *http.Request) error {

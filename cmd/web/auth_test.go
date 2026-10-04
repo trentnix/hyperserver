@@ -73,7 +73,7 @@ func TestSetupAuthenticationRequiresVerificationMechanism(t *testing.T) {
 				JwtKey: "test-auth-signing-key", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
 				Services: map[string]map[string]string{"custom": {"enabled": "true"}},
 			}}
-			cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
+			cfg.HTTP.Session.Types = map[string]string{"default": "sqliteStore"}
 			err := SetupAuthentication(&server.ApplicationServer{Config: cfg, Web: http.NewServeMux()})
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
