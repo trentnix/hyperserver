@@ -290,12 +290,10 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 	logoutErr := user.LogoutAuthenticatedUser(w, r)
 	if logoutErr != nil {
-		a.contentManager.HandleError(w, r, "There was an error trying to log out", logoutErr, http.StatusInternalServerError)
+		logger.LogRequestError(r, logoutErr)
+		util.HttpError(w, r, "There was an error trying to log out", nil, http.StatusInternalServerError)
 		return
 	}
-
-	clearedCtx := user.ClearUserFromContext(r.Context())
-	r = r.WithContext(clearedCtx)
 
 	err := messages.AddSuccessNotification(w, r, "You have been successfully logged out")
 	if err != nil {

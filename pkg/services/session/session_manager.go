@@ -1,7 +1,7 @@
 // Package session manages named sessions through cookie and SQLite stores.
 // Attach a SessionManager to each request before calling Get or New. Session data
 // is gob-encoded, and cookie payloads are signed, not encrypted. SQLite store setup
-// currently shares process-wide state, and End does not revoke stored sessions.
+// currently shares process-wide state. SQLite End revokes the stored session.
 package session
 
 import (

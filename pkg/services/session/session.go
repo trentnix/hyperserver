@@ -83,14 +83,22 @@ func (s *Session) Save(w http.ResponseWriter, r *http.Request) error {
 	return s.Store.Save(w, r, s)
 }
 
-// End delegates to the session's store. Revocation depends on the store implementation.
-// It does not clear the request-local session cache.
+// End delegates revocation to the store, then replaces this session and its cached
+// value with a new empty session. A failed revocation leaves local state unchanged.
 func (s *Session) End(w http.ResponseWriter, r *http.Request) error {
 	if s.Store == nil {
 		return NewErrSessionStoreNotFound(nil)
 	}
 
-	return s.Store.End(w, r, s)
+	if r == nil {
+		return NewErrRequestNotSpecified(nil)
+	}
+	if err := s.Store.End(w, r, s); err != nil {
+		return err
+	}
+	clear(s.Data)
+	*s = *newSession(s.Store, s.Name)
+	return setCachedSession(r, s)
 }
 
 // EncodedData returns Data encoded as gob in URL-safe base64.

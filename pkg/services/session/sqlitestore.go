@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -89,8 +90,8 @@ func NewSQLiteStore(c *config.Config) (*SQLiteStore, error) {
 }
 
 // Get loads the session identified by the signed request cookie.
-// A missing or expired cookie or missing row returns a new session. Invalid cookies,
-// database failures, and corrupt data return an error. Stored expiry is not checked.
+// A missing or expired cookie or stored session returns a new session. Invalid
+// cookies, database failures, and corrupt unexpired data return an error.
 func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 	if s.db == nil {
 		return nil, ErrDatabaseNotConfigured
@@ -122,7 +123,7 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*Session, error) {
 
 	// get the session from the database
 	sessionID := claimsData.ID
-	session, sessionError := s.getSessionFromDatabase(sessionID, name)
+	session, sessionError := s.getSessionFromDatabase(r.Context(), sessionID, name)
 	if sessionError != nil {
 		// return an error
 		return nil, sessionError
@@ -145,8 +146,8 @@ func (s *SQLiteStore) New(r *http.Request, name string) (*Session, error) {
 	return newSession(s, name), nil
 }
 
-// Save serializes specified Session to the database and saves the session identifier
-// to an HTTP cookie
+// Save stores session data and writes its signed identifier to an HTTP cookie.
+// Updating a session does not extend its stored lifetime or recreate a deleted row.
 func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Session) error {
 	if s.db == nil {
 		return ErrDatabaseNotConfigured
@@ -181,7 +182,7 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	cookieAge := int(s.CookieLifetime / time.Second)
 
 	// save the session to the database
-	saveErr := s.save(session)
+	saveErr := s.save(r.Context(), session)
 	if saveErr != nil {
 		return saveErr
 	}
@@ -200,9 +201,22 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	return nil
 }
 
-// End expires the browser cookie. It does not delete or expire the SQLite row,
-// so a captured cookie is not revoked by this method.
+// End deletes the stored session before expiring the browser cookie. Missing rows
+// are already revoked. A storage failure leaves the browser cookie unchanged.
 func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
+	if s.db == nil {
+		return ErrDatabaseNotConfigured
+	}
+	if s.tableName == "" {
+		return ErrSQLiteStoreNotConfigured
+	}
+	if session == nil || session.ID == "" {
+		return NewErrSessionInvalid(nil)
+	}
+	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", s.tableName)
+	if _, err := s.db.ExecContext(r.Context(), query, session.ID); err != nil {
+		return err
+	}
 	ExpireCookie(w, r, session.Name)
 	return nil
 }
@@ -280,7 +294,7 @@ func (s *SQLiteStore) configureDatabase() error {
 }
 
 // getSessionFromDatabase attempts to retrieve the specified session from the database
-func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Session, error) {
+func (s *SQLiteStore) getSessionFromDatabase(ctx context.Context, sessionID string, name string) (*Session, error) {
 	if s.db == nil {
 		return nil, database.NewErrDatabaseUnavailable(nil)
 	}
@@ -292,19 +306,22 @@ func (s *SQLiteStore) getSessionFromDatabase(sessionID string, name string) (*Se
 	var dbSession SQLiteSession
 
 	query := fmt.Sprintf("SELECT id, session, expires_at, created_at, updated_at FROM %s WHERE id = ?", s.tableName)
-	err := s.db.Get(&dbSession, query, sessionID)
+	err := s.db.GetContext(ctx, &dbSession, query, sessionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if !dbSession.Expires_at.After(time.Now()) {
+		return nil, nil
+	}
 
 	return loadSession(dbSession.ID, name, dbSession.Expires_at, s, dbSession.Session)
 }
 
 // saveSessionToDatabase creates or updates the specified session in the database
-func (s *SQLiteStore) save(session *Session) error {
+func (s *SQLiteStore) save(ctx context.Context, session *Session) error {
 	if s.db == nil {
 		return database.NewErrDatabaseUnavailable(nil)
 	}
@@ -322,9 +339,9 @@ func (s *SQLiteStore) save(session *Session) error {
 
 	var dbErr error
 	if session.IsNew {
-		dbErr = s.create(dbSession)
+		dbErr = s.create(ctx, dbSession)
 	} else {
-		dbErr = s.update(dbSession)
+		dbErr = s.update(ctx, dbSession)
 	}
 
 	if dbErr != nil {
@@ -336,7 +353,7 @@ func (s *SQLiteStore) save(session *Session) error {
 }
 
 // create creates a new sessions table entry
-func (s *SQLiteStore) create(session *SQLiteSession) error {
+func (s *SQLiteStore) create(ctx context.Context, session *SQLiteSession) error {
 	if session.ID == "" {
 		return NewErrSessionInvalid(nil)
 	}
@@ -345,49 +362,31 @@ func (s *SQLiteStore) create(session *SQLiteSession) error {
 	session.Updated_at = session.Created_at
 
 	query := fmt.Sprintf("INSERT INTO %s (id, session, expires_at, updated_at, created_at) VALUES (:id, :session, :expires_at, :created_at, :updated_at)", s.tableName)
-	_, err := s.db.NamedExec(query, session)
+	_, err := s.db.NamedExecContext(ctx, query, session)
 
 	return err
 }
 
 // update updates the specified session in the sessions table
-func (s *SQLiteStore) update(session *SQLiteSession) error {
+func (s *SQLiteStore) update(ctx context.Context, session *SQLiteSession) error {
 	if session.ID == "" {
 		return NewErrSessionInvalid(nil)
 	}
 
 	session.Updated_at = time.Now()
 
-	query := fmt.Sprintf("UPDATE %s SET session = :session, expires_at = :expires_at, updated_at = :updated_at WHERE id = :id", s.tableName)
-	_, err := s.db.NamedExec(query, session)
-
-	return err
-}
-
-// end updates the database to terminate a session by setting the expiration time
-// to the current time
-func (s *SQLiteStore) end(session *SQLiteSession) error {
-	if session.ID == "" {
+	// Saving data must not extend stored expiry or recreate a revoked session.
+	query := fmt.Sprintf("UPDATE %s SET session = :session, updated_at = :updated_at WHERE id = :id", s.tableName)
+	result, err := s.db.NamedExecContext(ctx, query, session)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
 		return NewErrSessionInvalid(nil)
 	}
-
-	query := fmt.Sprintf("UPDATE %s SET expires_at = :expires_at WHERE id = :id", s.tableName)
-	_, err := s.db.NamedExec(query, map[string]interface{}{
-		"expires_at": time.Now(),
-		"id":         session.ID,
-	})
-
-	return err
-}
-
-// delete deletes the specified session from the sessions table
-func (s *SQLiteStore) delete(session *SQLiteSession) error {
-	if session.ID == "" {
-		return NewErrSessionInvalid(nil)
-	}
-
-	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", s.tableName)
-	_, err := s.db.Exec(query, session.ID)
-
-	return err
+	return nil
 }

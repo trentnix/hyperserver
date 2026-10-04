@@ -157,9 +157,7 @@ func TestSQLiteStore_End_NonTLS(t *testing.T) {
 
 	// Create a dummy session. Since tests are in the same package,
 	// we can set unexported fields directly.
-	session := &Session{
-		Name: "sqlitestore_test",
-	}
+	session := newSession(store, "sqlitestore_test")
 
 	// Create a non-TLS request.
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
@@ -197,9 +195,7 @@ func TestSQLiteStore_End_NonTLS(t *testing.T) {
 func TestSQLiteStore_End_TLS(t *testing.T) {
 	store := setupSQLiteStore(t)
 
-	session := &Session{
-		Name: "sqlitestore_test",
-	}
+	session := newSession(store, "sqlitestore_test")
 
 	// Create a TLS-enabled request. httptest.NewRequest doesn't set r.TLS,
 	// so we assign a dummy ConnectionState.

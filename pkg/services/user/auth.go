@@ -40,26 +40,19 @@ func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error
 	return nil
 }
 
-// LogoutAuthenticatedUser delegates logout to the user session's End method.
-// It does not clear a User already attached to the request context. Revocation
-// of captured cookies depends on the store and is not provided by the current stores.
+// LogoutAuthenticatedUser ends the user session and clears the request's user.
+// SQLite revokes stored sessions. Cookie-only stores cannot revoke captured cookies.
 func LogoutAuthenticatedUser(w http.ResponseWriter, r *http.Request) error {
 	s, err := session.Get(r, userSessionKey)
 	if err != nil {
 		return err
 	}
 
-	userId, ok := s.Data[userSessionKey]
-	if !ok || userId == "" {
-		s.End(w, r)
-		return nil
-	}
-
 	err = s.End(w, r)
 	if err != nil {
 		return err
 	}
-
+	*r = *r.WithContext(ClearUserFromContext(r.Context()))
 	return nil
 }
 
