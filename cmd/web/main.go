@@ -77,14 +77,9 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 		return fmt.Errorf("failed to instantiate a logger: %w", err)
 	}
 
-	mux := middleware.ChainMiddleware(s.Web,
-		middleware.LoadSessionManagement(s.Database, s.SessionManager),
-		middleware.LoggerMiddleware(l),
-	)
-
 	server := &http.Server{
 		Addr:         address,
-		Handler:      mux,
+		Handler:      applicationHandler(s, l),
 		ReadTimeout:  s.Config.HTTP.ReadTimeout,
 		WriteTimeout: s.Config.HTTP.WriteTimeout,
 		IdleTimeout:  s.Config.HTTP.IdleTimeout,
@@ -96,6 +91,17 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 	}
 	fmt.Printf("Starting server at %s\n", listener.Addr())
 	return serveHTTP(ctx, server, listener)
+}
+
+// applicationHandler logs requests, checks browser origins, then loads sessions
+// and dispatches routes. Non-browser requests without origin headers follow Go's
+// CrossOriginProtection defaults. No trusted-origin or route exemptions are set.
+func applicationHandler(s *server.ApplicationServer, l logger.Logger) http.Handler {
+	return middleware.ChainMiddleware(s.Web,
+		middleware.LoadSessionManagement(s.Database, s.SessionManager),
+		http.NewCrossOriginProtection().Handler,
+		middleware.LoggerMiddleware(l),
+	)
 }
 
 // serveHTTP stops accepting requests on cancellation and waits for handlers to

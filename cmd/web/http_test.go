@@ -28,7 +28,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
@@ -240,7 +239,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	return &httpHarness{
 		baseURL: "http://127.0.0.1:8080",
 		app:     app, mail: mail, cookies: jar, logs: logs,
-		handler: middleware.ChainMiddleware(app.Web, middleware.LoadSessionManagement(db, app.SessionManager), middleware.LoggerMiddleware(l)),
+		handler: applicationHandler(app, l),
 	}
 }
 
@@ -248,6 +247,8 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 // response before deciding which request comes next.
 func (h *httpHarness) request(method, path string, form url.Values, htmx bool) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, h.baseURL+path, strings.NewReader(form.Encode()))
+	r.Header.Set("Origin", h.baseURL)
+	r.Header.Set("Sec-Fetch-Site", "same-origin")
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	r = r.WithContext(ctx)

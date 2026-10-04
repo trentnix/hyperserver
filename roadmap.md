@@ -17,10 +17,10 @@ Phase 0 is complete. Phase 1 is in progress. HyperServer is not ready for public
 | Startup and modules | [Server construction](pkg/server/server.go) initializes database, sessions, and mail unconditionally. The [handler registry](pkg/handlers/handlers.go) stores instances globally. | Activate required services and create module instances per application. |
 | Shutdown and TLS | The [reference application](cmd/web/main.go) serves plain HTTP and drains requests before closing its shared SQL pool. | Implement explicit TLS/proxy configuration and lifecycle management for other module-owned resources. |
 | Configuration and middleware | [Startup](cmd/web/startup_test.go) validates signing keys, lifetimes, and provider selections. [Session loading](pkg/services/middleware/session.go) distinguishes missing or expired sessions from invalid cookies and storage failures, with [HTTP regression coverage](cmd/web/session_loading_test.go). | Add application-defined authorization hooks. |
-| Forms and account writes | [Form handlers](auth/modules/email/email_auth.go) validate input. [Account creation and updates](pkg/services/user/user.go) use separate operations. | Add request limits and CSRF protection. |
+| Forms and account writes | [Form handlers](auth/modules/email/email_auth.go) validate input. [Account creation and updates](pkg/services/user/user.go) use separate operations. The [reference HTTP stack](cmd/web/main.go) uses Go's CSRF protection for ordinary forms and HTMX. | Add request limits. |
 | Recovery and verification | [Password reset](pkg/services/user/auth_token_reset.go) and [account verification](pkg/services/user/auth_token_verification.go) use emailed, single-use links. Token consumption and the account change share a transaction. Verification links are bound to the recipient's email address. Reset requests have a minimum response time. | Add rate limits and test timing under load. |
 | Mail and sessions | [SMTP delivery](pkg/services/messaging/mail.go) has timeouts and cancellation. Authentication uses revocable [SQLite sessions](pkg/services/session/sqlitestore.go), with ID rotation at login and verification. Password reset or change invalidates all account sessions. [Session JSON](pkg/services/session/readme.md) is limited to 64 KiB and cookies to 4 KiB. An explicit [cleanup command](cmd/cleanup) removes expired sessions and account tokens in bounded batches. | Add optional automatic cleanup with application lifecycle management. |
-| Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. [Authentication mutations](auth/auth_manager.go) and [site mutations](modules/site/router.go) require POST. Verification and reset links display forms without consuming tokens. [Redirects](pkg/util/redirect.go) interpolate URLs into HTML and JavaScript. | Keep development modules out of production applications. Use safe redirects and add CSRF protection. |
+| Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. [Authentication mutations](auth/auth_manager.go) and [site mutations](modules/site/router.go) require POST. Verification and reset links display forms without consuming tokens. [Redirects](pkg/util/redirect.go) interpolate URLs into HTML and JavaScript. | Keep development modules out of production applications. Use safe redirects. |
 | Rendering and tests | [Templates](pkg/components/content/content.go) are parsed per response. The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. | Reuse parsed templates and cover unresolved security issues with regression tests. |
 
 ## Design principles
@@ -201,7 +201,7 @@ The roadmap defines the core and replaceable service boundaries. Public APIs are
 
 ### Phase 1: Correctness and security (in progress)
 
-- Replace interpolated redirects and add CSRF protection, request limits, safe cookies, security headers, and a documented CSP.
+- Replace interpolated redirects and add request limits, safe cookies, security headers, and a documented CSP.
 - Define TLS termination and trusted-proxy behavior. Add rate limits and prevent recovery-response timing from revealing account eligibility.
 - Add regression and HTTP integration tests for each security fix, including failure, concurrency, and replay cases.
 
