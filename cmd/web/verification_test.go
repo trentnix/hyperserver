@@ -23,9 +23,7 @@ func TestHTTPVerificationSingleUseAndResend(t *testing.T) {
 		}
 		for i, link := range []*url.URL{second, first} {
 			w := h.request(http.MethodPost, "/auth/verify", link.Query(), i == 0)
-			if (i == 0 && w.Header().Get("HX-Redirect") != "/") || (i == 1 && !strings.Contains(w.Body.String(), `<meta http-equiv="refresh" content="0; url=/">`)) {
-				t.Fatal("delivered verification link was rejected")
-			}
+			assertRedirectResponse(t, w, "/", i == 0)
 			h.assertRowCount(t, "usertoken", 1-i)
 			for _, htmx := range []bool{false, true} {
 				w = h.request(http.MethodPost, "/auth/verify", link.Query(), htmx)

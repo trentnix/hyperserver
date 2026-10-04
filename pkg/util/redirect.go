@@ -1,31 +1,49 @@
 package util
 
 import (
-	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
-// RedirectToURL returns HTTP 200 with HX-Redirect for HTMX requests or an HTML
-// redirect page otherwise. It does not validate or escape redirectURL, which must
-// be a trusted destination. It does not issue a standard HTTP redirect status.
+// SafeRedirectURL selects a local destination, then fallback, then "/".
+// Destinations must start with a single slash. Absolute URLs (even same-host
+// URLs), network-path references, backslashes, control characters, and malformed
+// escapes are rejected. Query strings and fragments are supported.
+// No request host or forwarding headers are trusted to establish the origin.
+func SafeRedirectURL(destination, fallback string) string {
+	for _, candidate := range []string{destination, fallback} {
+		if !strings.HasPrefix(candidate, "/") || strings.HasPrefix(candidate, "//") {
+			continue
+		}
+		u, err := url.Parse(candidate)
+		if err != nil || u.IsAbs() || u.Host != "" || strings.HasPrefix(u.Path, "//") {
+			continue
+		}
+
+		// Check escaped characters too, including those in queries and fragments.
+		decoded, err := url.PathUnescape(candidate)
+		if err != nil || strings.ContainsFunc(decoded, func(c rune) bool {
+			return c == '\\' || c < 0x20 || c == 0x7f
+		}) {
+			continue
+		}
+		return u.String()
+	}
+	return "/"
+}
+
+// RedirectToURL sends a 303 Location redirect for ordinary requests or a 200
+// HX-Redirect response for HTMX. Redirects do not replay mutation bodies.
+// Invalid destinations fall back to "/". No response body is rendered.
 func RedirectToURL(w http.ResponseWriter, r *http.Request, redirectURL string) {
+	redirectURL = SafeRedirectURL(redirectURL, "/")
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Redirect", redirectURL)
 		w.WriteHeader(http.StatusOK)
 	} else {
-		// The current fallback uses an HTML page rather than an HTTP redirect.
-		w.Header().Set("Content-Type", "text/html")
-		w.WriteHeader(http.StatusOK)
-		redirectPage := fmt.Sprintf(`
-<html>
-  <head>
-    <meta http-equiv="refresh" content="0; url=%s">
-  </head>
-  <body>
-    <script>window.location.href = "%s";</script>
-    <p>If you are not redirected automatically, <a href="%s">click here</a>.</p>
-  </body>
-</html>`, redirectURL, redirectURL, redirectURL)
-		fmt.Fprint(w, redirectPage)
+		w.Header().Set("Location", redirectURL)
+		w.WriteHeader(http.StatusSeeOther)
 	}
 }

@@ -48,9 +48,7 @@ func TestHTTPResetPasswordPolicy(t *testing.T) {
 					if _, err := user.GetAuthResetTokenByHash(h.app.Database, token.TokenHash); !errors.As(err, &missing) {
 						t.Fatalf("accepted password did not consume token: %v", err)
 					}
-					if htmx && w.Header().Get("HX-Redirect") != "/login" {
-						t.Fatal("successful reset did not redirect")
-					}
+					assertRedirectResponse(t, w, "/login", htmx)
 					stored, err := user.GetUserByID(h.app.Database, u.ID)
 					wantPassword := "TestPassword1!"
 					if requireNew {

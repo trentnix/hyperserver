@@ -51,7 +51,7 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 					return
 				}
 
-				redirectURL := r.RequestURI
+				redirectURL := r.URL.RequestURI()
 				s.Data[session.RedirectURL] = redirectURL
 				sessionErr := s.Save(w, r)
 				if sessionErr != nil {

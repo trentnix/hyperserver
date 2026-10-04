@@ -45,9 +45,7 @@ func TestHTTPLogoutRequiresPost(t *testing.T) {
 						// Follow 307 as a browser would: preserve the POST and HTMX header.
 						w = h.request(http.MethodPost, w.Header().Get("Location"), nil, htmx)
 					}
-					if w.Code != http.StatusOK || (htmx && w.Header().Get("HX-Redirect") != "/") {
-						t.Fatalf("POST logout failed: %d %s", w.Code, w.Body.String())
-					}
+					assertRedirectResponse(t, w, "/", htmx)
 					expired := false
 					for _, cookie := range w.Result().Cookies() {
 						if cookie.Name == captured.Name && cookie.MaxAge == -1 {

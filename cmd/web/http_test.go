@@ -314,33 +314,35 @@ func registrationForm() url.Values {
 }
 
 func TestHTTPRegistration(t *testing.T) {
-	runHTTPScenario(t, func(h *httpHarness) {
-		if _, err := user.GetUserByEmail(h.app.Database, "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
-			t.Fatalf("expected an empty database, got %v", err)
-		}
-		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
-		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/login" {
-			t.Fatalf("registration response: status %d, headers %v, body %s", w.Code, w.Header(), w.Body.String())
-		}
-		u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if u.Verified || !u.VerificationRequired || u.Password == "" || u.Password == "TestPassword1!" {
-			t.Fatalf("unexpected persisted account state: verified=%v, verification required=%v, password stored correctly=%v", u.Verified, u.VerificationRequired, u.Password != "" && u.Password != "TestPassword1!")
-		}
-		if len(h.mail.snapshot()) != 1 {
-			t.Fatalf("mail attempts = %d, want 1", len(h.mail.snapshot()))
-		}
-		message := h.mail.snapshot()[0]
-		if message.To != u.Email || message.From != "test@example.invalid" || message.Subject != "Verify your account" || !strings.Contains(message.Body, "/auth/verify?token=") {
-			t.Fatalf("unexpected verification email: %+v", message)
-		}
-		w = h.request(http.MethodGet, "/login", nil, false)
-		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "You have been successfully registered.") {
-			t.Fatalf("registration notification missing from next request: status %d, body %s", w.Code, w.Body.String())
-		}
-	})
+	for _, htmx := range []bool{false, true} {
+		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
+			runHTTPScenario(t, func(h *httpHarness) {
+				if _, err := user.GetUserByEmail(h.app.Database, "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+					t.Fatalf("expected an empty database, got %v", err)
+				}
+				w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), htmx)
+				assertRedirectResponse(t, w, "/login", htmx)
+				u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if u.Verified || !u.VerificationRequired || u.Password == "" || u.Password == "TestPassword1!" {
+					t.Fatalf("unexpected persisted account state: verified=%v, verification required=%v, password stored correctly=%v", u.Verified, u.VerificationRequired, u.Password != "" && u.Password != "TestPassword1!")
+				}
+				if len(h.mail.snapshot()) != 1 {
+					t.Fatalf("mail attempts = %d, want 1", len(h.mail.snapshot()))
+				}
+				message := h.mail.snapshot()[0]
+				if message.To != u.Email || message.From != "test@example.invalid" || message.Subject != "Verify your account" || !strings.Contains(message.Body, "/auth/verify?token=") {
+					t.Fatalf("unexpected verification email: %+v", message)
+				}
+				w = h.request(http.MethodGet, "/login", nil, false)
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "You have been successfully registered.") {
+					t.Fatalf("registration notification missing from next request: status %d, body %s", w.Code, w.Body.String())
+				}
+			})
+		})
+	}
 }
 
 func TestHTTPRegistrationDisabled(t *testing.T) {

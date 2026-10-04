@@ -270,16 +270,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if redirectURL == "" {
-		redirectURL = a.contentManager.HomeURL
-	}
-
-	// validate the URL
-	uriErr := util.IsValidUri(redirectURL, false)
-	if uriErr != nil {
-		// redirect URL is invalid, log the error and use the content manager's home URL
-		logger.LogRequestError(r, err)
-	}
+	redirectURL = util.SafeRedirectURL(redirectURL, a.contentManager.HomeURL)
 
 	// clear the redirect session, it is no longer valid
 	s.End(w, r)

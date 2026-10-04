@@ -47,15 +47,7 @@ func TestHTTPAuthenticationRedirectSaveFailure(t *testing.T) {
 				h.logs.lines = nil
 				h.logs.mu.Unlock()
 				w = h.request(http.MethodGet, "/protected-save-check", nil, htmx)
-				if w.Code != http.StatusOK {
-					t.Fatalf("redirect did not recover: %d %s", w.Code, w.Body.String())
-				}
-				if htmx && w.Header().Get("HX-Redirect") != "/login" {
-					t.Fatal("successful save did not redirect HTMX to login")
-				}
-				if !htmx && !strings.Contains(w.Body.String(), `url=/login`) {
-					t.Fatal("successful save did not render the login redirect")
-				}
+				assertRedirectResponse(t, w, "/login", htmx)
 				if strings.Contains(h.logs.String(), "Request Error") {
 					t.Fatalf("successful save logged an error: %s", h.logs.String())
 				}

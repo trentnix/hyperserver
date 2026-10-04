@@ -1,6 +1,7 @@
 // Package util provides URL, template-file, and HTTP response helpers.
 // BuildPublicURL uses configured addresses rather than request host or forwarded
-// headers. LoadHTMLFromFile and RedirectToURL require trusted input.
+// headers. RedirectToURL accepts only local destinations. LoadHTMLFromFile
+// requires trusted input.
 package util
 
 import (
@@ -96,20 +97,4 @@ func BuildPublicURL(r *http.Request, cfg config.HTTPConfig, path string, params 
 	}
 	origin.RawQuery = query.Encode()
 	return origin, nil
-}
-
-// IsValidUri validates that the specified URI has a valid value
-func IsValidUri(uri string, requireSchemeAndHost bool) error {
-	u, err := url.ParseRequestURI(uri)
-	if err != nil {
-		return NewErrInvalidUri(err, uri)
-	}
-
-	if requireSchemeAndHost {
-		if u.Scheme == "" || u.Host == "" {
-			return NewErrInvalidUri(errors.New("the scheme value or host value is empty"), uri)
-		}
-	}
-
-	return nil
 }

@@ -71,21 +71,3 @@ func NewErrLoadingTemplate(err error, t string) *ErrLoadingTemplate {
 		},
 	}
 }
-
-// ErrInvalidUri indicates that the specified URI is an invalid value
-type ErrInvalidUri struct {
-	uri string
-	*BaseError
-}
-
-// NewErrInvalidUri returns an ErrInvalidUri wrapping err.
-func NewErrInvalidUri(err error, uri string) *ErrInvalidUri {
-	errorMessage := fmt.Sprintf("the provided URI is invalid: '%s'", uri)
-	return &ErrInvalidUri{
-		uri: uri,
-		BaseError: &BaseError{
-			Err:     err,
-			Message: errorMessage,
-		},
-	}
-}
