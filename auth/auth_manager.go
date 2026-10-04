@@ -95,17 +95,20 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 // Routes defines the routes the AuthManager handler will be responsible for
 func (a *AuthManager) Routes(mux *routing.Routes) {
 	if a.Enabled {
+		anonymous := middleware.RequireAnonymous(a.db, a.contentManager)
+		authenticated := middleware.RequireAuthentication(a.db, a.contentManager)
+
 		// login / logout
-		mux.Handle("GET "+authEndpoint, middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetLogin)))
-		mux.Handle("GET /auth/login/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetLoginService)))
-		mux.Handle("POST /auth/login/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Login)))
+		mux.Handle("GET "+authEndpoint, anonymous(http.HandlerFunc(a.GetLogin)))
+		mux.Handle("GET /auth/login/{authType}", anonymous(http.HandlerFunc(a.GetLoginService)))
+		mux.Handle("POST /auth/login/{authType}", anonymous(http.HandlerFunc(a.Login)))
 		mux.Handle("POST /auth/logout", http.HandlerFunc(a.Logout))
 
 		// register
 		if a.registrationEnabled {
-			mux.Handle("GET /auth/register", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegister)))
-			mux.Handle("GET /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetRegisterService)))
-			mux.Handle("POST /auth/register/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Register)))
+			mux.Handle("GET /auth/register", anonymous(http.HandlerFunc(a.GetRegister)))
+			mux.Handle("GET /auth/register/{authType}", anonymous(http.HandlerFunc(a.GetRegisterService)))
+			mux.Handle("POST /auth/register/{authType}", anonymous(http.HandlerFunc(a.Register)))
 		} else {
 			mux.HandleFunc("/auth/register", RegistrationUnavailable)
 			mux.HandleFunc("/auth/register/{authType}", RegistrationUnavailable)
@@ -117,14 +120,14 @@ func (a *AuthManager) Routes(mux *routing.Routes) {
 		mux.Handle("POST /auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
 
 		// reset credentials
-		mux.Handle("GET /auth/reset/request/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetResetRequest)))
-		mux.Handle("POST /auth/reset/request/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.ResetRequest)))
-		mux.Handle("GET /auth/reset/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.GetReset)))
-		mux.Handle("POST /auth/reset/{authType}", middleware.RequireAnonymous(a.db, a.contentManager)(http.HandlerFunc(a.Reset)))
+		mux.Handle("GET /auth/reset/request/{authType}", anonymous(http.HandlerFunc(a.GetResetRequest)))
+		mux.Handle("POST /auth/reset/request/{authType}", anonymous(http.HandlerFunc(a.ResetRequest)))
+		mux.Handle("GET /auth/reset/{authType}", anonymous(http.HandlerFunc(a.GetReset)))
+		mux.Handle("POST /auth/reset/{authType}", anonymous(http.HandlerFunc(a.Reset)))
 
 		// change change credentials
-		mux.Handle("GET /auth/change/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.GetChange)))
-		mux.Handle("POST /auth/change/{authType}", middleware.RequireAuthentication(a.db, a.contentManager)(http.HandlerFunc(a.Change)))
+		mux.Handle("GET /auth/change/{authType}", authenticated(http.HandlerFunc(a.GetChange)))
+		mux.Handle("POST /auth/change/{authType}", authenticated(http.HandlerFunc(a.Change)))
 	}
 }
 
