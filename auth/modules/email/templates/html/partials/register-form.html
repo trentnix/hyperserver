@@ -40,7 +40,6 @@
             <label for="password">Password</label>
             <input type="password" id="password"
                 name="password"
-                value="{{ .Password }}"
                 required
                 {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
             {{ template "auth.partial.email.register.form.field_errors" (.GetFieldErrors "Password") }}
@@ -48,7 +47,6 @@
             <label for="passwordMatch">Confirm Password</label>
             <input type="password" id="passwordMatch"
                 name="passwordMatch"
-                value="{{ .PasswordMatch }}"
                 required
                 {{ if .HasFieldErrors "PasswordMatch" }} class="input-error" {{ end }}>
             {{ template "auth.partial.email.register.form.field_errors" (.GetFieldErrors "PasswordMatch") }}

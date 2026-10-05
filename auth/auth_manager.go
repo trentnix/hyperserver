@@ -102,8 +102,12 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		if err != nil {
 			return fmt.Errorf("auth.rateLimit.%w", err)
 		}
-		anonymous := middleware.RequireAnonymous(a.db, a.contentManager)
-		authenticated := middleware.RequireAuthentication(a.db, a.contentManager)
+		anonymous := func(handler http.Handler) http.Handler {
+			return noStore(middleware.RequireAnonymous(a.db, a.contentManager)(handler))
+		}
+		authenticated := func(handler http.Handler) http.Handler {
+			return noStore(middleware.RequireAuthentication(a.db, a.contentManager)(handler))
+		}
 		mutations, err := mux.WithRateLimit(ratelimit.Policy{Requests: 20, Window: time.Minute, MaxClients: maxClients})
 		if err != nil {
 			return err
@@ -113,7 +117,7 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		mux.Handle("GET "+authEndpoint, anonymous(http.HandlerFunc(a.GetLogin)))
 		mux.Handle("GET /auth/login/{authType}", anonymous(http.HandlerFunc(a.GetLoginService)))
 		mutations.Handle("POST /auth/login/{authType}", anonymous(http.HandlerFunc(a.Login)))
-		mux.WithoutRateLimit().Handle("POST /auth/logout", http.HandlerFunc(a.Logout))
+		mux.WithoutRateLimit().Handle("POST /auth/logout", noStore(http.HandlerFunc(a.Logout)))
 
 		// register
 		if a.registrationEnabled {
@@ -121,14 +125,14 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 			mux.Handle("GET /auth/register/{authType}", anonymous(http.HandlerFunc(a.GetRegisterService)))
 			mutations.Handle("POST /auth/register/{authType}", anonymous(http.HandlerFunc(a.Register)))
 		} else {
-			mux.HandleFunc("/auth/register", RegistrationUnavailable)
-			mux.HandleFunc("/auth/register/{authType}", RegistrationUnavailable)
+			mux.Handle("/auth/register", noStore(http.HandlerFunc(RegistrationUnavailable)))
+			mux.Handle("/auth/register/{authType}", noStore(http.HandlerFunc(RegistrationUnavailable)))
 		}
 
 		// validate a registered user
-		mux.Handle("GET /auth/verify", http.HandlerFunc(a.GetVerify))
-		mutations.Handle("POST /auth/verify", http.HandlerFunc(a.Verify))
-		mutations.Handle("POST /auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
+		mux.Handle("GET /auth/verify", noStore(http.HandlerFunc(a.GetVerify)))
+		mutations.Handle("POST /auth/verify", noStore(http.HandlerFunc(a.Verify)))
+		mutations.Handle("POST /auth/request/verify", noStore(http.HandlerFunc(a.SendVerificationRequest)))
 
 		// reset credentials
 		mux.Handle("GET /auth/reset/request/{authType}", anonymous(http.HandlerFunc(a.GetResetRequest)))
@@ -141,6 +145,15 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		mutations.Handle("POST /auth/change/{authType}", authenticated(http.HandlerFunc(a.Change)))
 	}
 	return nil
+}
+
+// noStore applies the auth response policy before handlers or access checks write
+// a form, redirect, or error. Other modules choose their own cache policies.
+func noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // GetLogin renders the various authentication options to a user trying to login
@@ -657,7 +670,6 @@ func logVerificationFailure(r *http.Request, message string) {
 
 // GetVerify displays a confirmation form without consuming the verification token.
 func (a *AuthManager) GetVerify(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	verificationToken := r.URL.Query().Get("token")
 	if verificationToken == "" {
@@ -676,7 +688,6 @@ func (a *AuthManager) GetVerify(w http.ResponseWriter, r *http.Request) {
 
 // Verify consumes the submitted token and verifies the account's email address.
 func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	if err := form.Parse(r); err != nil {
 		util.HttpError(w, r, err.Error(), nil, err.StatusCode)

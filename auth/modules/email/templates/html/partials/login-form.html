@@ -41,7 +41,6 @@
             <label for="password">Password</label>
             <input type="password" id="password"
                 name="password"
-                value="{{ .Password }}"
                 required
                 {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
             {{ template "auth.partial.email.login.form.field_errors" (.GetFieldErrors "Password") }}
