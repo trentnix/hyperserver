@@ -47,6 +47,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 		}
 		htmx := downloadBrowserHTMX(t, match[1], match[2])
 		html = strings.Replace(html, match[1], "/test/browser/htmx.js", 1)
+		html = strings.Replace(html, "<head>", `<head><script src="/test/diagnostics/errors.js"></script>`, 1)
 
 		h.app.Web.HandleFunc("GET /test/browser", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -128,10 +129,11 @@ func TestBrowserSiteErrors(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusNoContent)
 		})
-		server := httptest.NewServer(h.handler)
+		browserLogs := &capturedLogs{}
+		server := httptest.NewServer(browserDiagnosticHandler(h.handler, result, browserLogs))
 		defer server.Close()
 
-		runBrowser(t, server.URL+"/test/browser", ready, result, h.logs.String)
+		runBrowser(t, server.URL+"/test/browser", ready, result, browserLogs.String)
 	})
 }
 
@@ -184,6 +186,18 @@ func waitForBrowser(ready <-chan struct{}, result <-chan string, exited <-chan s
 	select {
 	case <-ready:
 		startup.Stop()
+	case report := <-result:
+		if report != "PASS" {
+			return fmt.Errorf("browser checks failed before readiness was observed: %s", report)
+		}
+		// Both channels can be ready when a fast test completes. Accept success
+		// only if the page has also reported readiness.
+		select {
+		case <-ready:
+			return nil
+		default:
+			return fmt.Errorf("browser reported success before JavaScript reported readiness")
+		}
 	case <-exited:
 		return fmt.Errorf("browser exited during startup, before JavaScript reported readiness")
 	case <-startup.C:

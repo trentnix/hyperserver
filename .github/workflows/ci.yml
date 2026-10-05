@@ -46,7 +46,7 @@ jobs:
         run: |
           firefox --version
           # Allow download, 30s startup, 15s checks, and cleanup inside the 75s scenario limit.
-          go test -count=1 -timeout=3m ./cmd/web -run '^TestBrowser(SiteErrors|NativeCredentialForms)$'
+          go test -count=1 -timeout=3m ./cmd/web -run '^TestBrowser(SiteErrors|NativeCredentialForms|ErrorReporting)$'
 
       - name: Test with race detector
         env:

@@ -18,6 +18,8 @@ func TestWaitForBrowser(t *testing.T) {
 		{name: "success", readyAfter: time.Second, reportAfter: 2 * time.Second, elapsed: 2 * time.Second, report: "PASS"},
 		{name: "slow startup leaves full check budget", readyAfter: 29 * time.Second, reportAfter: 43 * time.Second, elapsed: 43 * time.Second, report: "PASS"},
 		{name: "startup timeout", elapsed: 30 * time.Second, wantErr: "browser startup timed out after 30s"},
+		{name: "script failure before readiness", reportAfter: time.Second, elapsed: time.Second, report: "JavaScript error: script failed", wantErr: "browser checks failed before readiness was observed: JavaScript error: script failed"},
+		{name: "success requires readiness", reportAfter: time.Second, elapsed: time.Second, report: "PASS", wantErr: "browser reported success before JavaScript reported readiness"},
 		{name: "check timeout", readyAfter: 5 * time.Second, elapsed: 20 * time.Second, wantErr: "browser checks timed out after 15s"},
 		{name: "startup exit", exitAfter: time.Second, elapsed: time.Second, wantErr: "browser exited during startup"},
 		{name: "check exit", readyAfter: time.Second, exitAfter: 2 * time.Second, elapsed: 2 * time.Second, wantErr: "browser exited during checks"},
@@ -61,6 +63,18 @@ func TestWaitForBrowser(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+func TestWaitForBrowserAlreadyFinished(t *testing.T) {
+	for range 100 {
+		ready := make(chan struct{})
+		close(ready)
+		result := make(chan string, 1)
+		result <- "PASS"
+		if err := waitForBrowser(ready, result, make(chan struct{}), time.Second, time.Second); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

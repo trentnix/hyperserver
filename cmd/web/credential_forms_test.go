@@ -86,7 +86,7 @@ func TestBrowserNativeCredentialForms(t *testing.T) {
 		}
 		page := func(w http.ResponseWriter, body string) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			io.WriteString(w, `<!doctype html><html><body>`+body+`<script src="/test/submit.js"></script></body></html>`)
+			io.WriteString(w, `<!doctype html><html><head><script src="/test/diagnostics/errors.js"></script></head><body>`+body+`<script src="/test/submit.js"></script></body></html>`)
 		}
 		mux := http.NewServeMux()
 		mux.HandleFunc("POST /test/ready", func(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +96,8 @@ func TestBrowserNativeCredentialForms(t *testing.T) {
 		mux.HandleFunc("GET /test/submit.js", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/javascript")
 			io.WriteString(w, `document.addEventListener("DOMContentLoaded", async () => {
-  await fetch("/test/ready", {method: "POST"});
+  const ready = await fetch("/test/ready", {method: "POST"});
+  if (!ready.ok) throw new Error("Could not report browser readiness");
   if (typeof htmx !== "undefined") throw new Error("HTMX must be unavailable");
   const form = document.querySelector("form");
   for (const input of form.querySelectorAll("input")) {
@@ -135,8 +136,9 @@ func TestBrowserNativeCredentialForms(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 		}
-		server := httptest.NewServer(mux)
+		browserLogs := &capturedLogs{}
+		server := httptest.NewServer(browserDiagnosticHandler(mux, result, browserLogs))
 		defer server.Close()
-		runBrowser(t, server.URL+"/test/start", ready, result, h.logs.String)
+		runBrowser(t, server.URL+"/test/start", ready, result, browserLogs.String)
 	})
 }
