@@ -22,6 +22,28 @@ http:
   # Maximum wait for another request on a keep-alive connection.
   # Zero uses readTimeout.
   idleTimeout: "2m"
+  # Inherited default for routes registered through routing.Routes.
+  # Modules and handlers can override it or explicitly select no route limit.
+  defaultRateLimit:
+    # Disabled means no application default. Explicit module/handler policies still apply.
+    enabled: false
+    # Requests allowed per direct client IP, with a separate counter for each route.
+    requests: 20
+    # Window duration, starting with the client's first request to that route.
+    window: "1m"
+    # Maximum tracked IPs per route. At capacity, new clients wait for expiration.
+    maxClients: 4096
+  # Separate shared budget across every request, including pages, assets, and logout.
+  # Applied before session loading. Route policies cannot override this budget.
+  sharedRateLimit:
+    # Disabled by default. Forwarding headers are ignored by all rate limiters.
+    enabled: false
+    # Requests allowed per direct client IP in each window.
+    requests: 120
+    # Window duration, starting with the client's first request.
+    window: "1m"
+    # Maximum tracked IPs. At capacity, new clients wait for an entry to expire.
+    maxClients: 4096
   # These TLS fields are not wired into cmd/web. It currently serves HTTP only.
   tls:
     # Intended HTTPS switch. Setting true does not currently enable HTTPS.
@@ -69,6 +91,11 @@ http:
 
 # Authentication services and account-token settings.
 auth:
+  # Capacity for each authentication mutation route, independent of HTTP rate-limit settings.
+  rateLimit:
+    # Maximum tracked client IPs per route. Defaults to 4096. Must be positive.
+    # At capacity, new IPs receive 429 until an entry expires.
+    maxClients: 4096
   # Enable authentication routes. At least one imported service must be enabled.
   enabled: "true"
   # Allow new accounts to register. Defaults to false. Login and recovery remain available.
@@ -123,6 +150,11 @@ database:
 
 # Reference application identity and rendering settings.
 app:
+  # Capacity for each reference-site contact/test-email route.
+  siteRateLimit:
+    # Maximum tracked client IPs per route. Defaults to 4096. Must be positive.
+    # At capacity, new IPs receive 429 until an entry expires.
+    maxClients: 4096
   # Application name used in page content and verification emails.
   name: "HyperServer"
   # Change to this directory after server construction, before loading handlers.

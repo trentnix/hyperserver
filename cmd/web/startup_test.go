@@ -70,10 +70,10 @@ func TestStartupHelperProcess(t *testing.T) {
 		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {
 			t.Fatalf("account tables before handler initialization = %d, auth enabled = %t", tables, s.Config.Auth.Enabled)
 		}
-		if err := SetupHandlers(context.Background(), s); err != nil {
+		if err := SetupHandlers(context.Background(), s, nil); err != nil {
 			t.Fatal(err)
 		}
-		if err := SetupAuthentication(s); err != nil {
+		if err := SetupAuthentication(s, nil); err != nil {
 			t.Fatal(err)
 		}
 		_, pattern := s.Web.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil))

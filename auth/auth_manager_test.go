@@ -86,7 +86,9 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 	mux := http.NewServeMux()
 	manager := &AuthManager{Enabled: true}
-	manager.Routes(routing.NewRoutes(mux))
+	if err := manager.Routes(routing.NewRoutes(mux)); err != nil {
+		t.Fatal(err)
+	}
 	for _, host := range []string{"localhost", "example.com"} {
 		req := httptest.NewRequest(http.MethodGet, "http://"+host+"/auth/login", nil)
 		_, pattern := mux.Handler(req)
@@ -99,7 +101,9 @@ func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 func TestAuthRouteMethods(t *testing.T) {
 	mux := http.NewServeMux()
 	manager := &AuthManager{Enabled: true, registrationEnabled: true}
-	manager.Routes(routing.NewRoutes(mux))
+	if err := manager.Routes(routing.NewRoutes(mux)); err != nil {
+		t.Fatal(err)
+	}
 	for _, route := range []struct {
 		path, pattern string
 		get, post     bool
@@ -196,10 +200,26 @@ func TestRegistrationHonorsCancellation(t *testing.T) {
 func TestDisabledAuthDoesNotRegisterLogin(t *testing.T) {
 	mux := http.NewServeMux()
 	manager := &AuthManager{}
-	manager.Routes(routing.NewRoutes(mux))
+	if err := manager.Routes(routing.NewRoutes(mux)); err != nil {
+		t.Fatal(err)
+	}
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/auth/login", nil))
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestAuthRoutesRejectInvalidClientCapacity(t *testing.T) {
+	for _, capacity := range []int{0, -1} {
+		manager := &AuthManager{Enabled: true, rateLimit: &config.ModuleRateLimitConfig{MaxClients: capacity}}
+		mux := http.NewServeMux()
+		err := manager.Routes(routing.NewRoutes(mux))
+		if err == nil || !strings.Contains(err.Error(), "auth.rateLimit.maxClients") {
+			t.Fatalf("capacity %d: error = %v", capacity, err)
+		}
+		if _, pattern := mux.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil)); pattern != "" {
+			t.Fatal("invalid capacity left routes registered")
+		}
 	}
 }

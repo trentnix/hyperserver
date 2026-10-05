@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
@@ -61,25 +62,28 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 	if err := setupAccountStorage(ctx, s); err != nil {
 		return fmt.Errorf("failed to prepare account storage: %w", err)
 	}
-
-	// attach routes and their handlers to the router
-	if err := SetupHandlers(ctx, s); err != nil {
-		return fmt.Errorf("failed to set up the registered handlers: %w", err)
-	}
-
-	// set up authentication services and components
-	if err := SetupAuthentication(s); err != nil {
-		return fmt.Errorf("failed to set up the authorization services: %w", err)
-	}
-
 	l, err := logger.NewZapLogger()
 	if err != nil {
 		return fmt.Errorf("failed to instantiate a logger: %w", err)
 	}
 
+	// attach routes and their handlers to the router
+	if err := SetupHandlers(ctx, s, l); err != nil {
+		return fmt.Errorf("failed to set up the registered handlers: %w", err)
+	}
+
+	// set up authentication services and components
+	if err := SetupAuthentication(s, l); err != nil {
+		return fmt.Errorf("failed to set up the authorization services: %w", err)
+	}
+
+	handler, err := applicationHandler(s, l)
+	if err != nil {
+		return err
+	}
 	server := &http.Server{
 		Addr:         address,
-		Handler:      applicationHandler(s, l),
+		Handler:      handler,
 		ReadTimeout:  s.Config.HTTP.ReadTimeout,
 		WriteTimeout: s.Config.HTTP.WriteTimeout,
 		IdleTimeout:  s.Config.HTTP.IdleTimeout,
@@ -93,16 +97,24 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 	return serveHTTP(ctx, server, listener)
 }
 
-// applicationHandler logs requests, checks browser origins, then loads sessions
-// and dispatches routes. Body limits are applied during route registration.
+// applicationHandler logs requests, applies the optional shared application
+// budget, checks browser origins, then loads sessions and dispatches routes.
+// Inherited per-route policies and body limits are applied during registration.
 // Non-browser requests without origin headers follow Go's CrossOriginProtection
 // defaults. No trusted origins or CSRF exemptions are set.
-func applicationHandler(s *server.ApplicationServer, l logger.Logger) http.Handler {
-	return middleware.ChainMiddleware(s.Web,
+func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Handler, error) {
+	handler := middleware.ChainMiddleware(s.Web,
 		middleware.LoadSessionManagement(s.Database, s.SessionManager),
 		http.NewCrossOriginProtection().Handler,
-		middleware.LoggerMiddleware(l),
 	)
+	if limit := s.Config.HTTP.SharedRateLimit; limit.Enabled {
+		limiter, err := ratelimit.New("shared application", ratelimit.Policy{Requests: limit.Requests, Window: limit.Window, MaxClients: limit.MaxClients})
+		if err != nil {
+			return nil, fmt.Errorf("http.sharedRateLimit: %w", err)
+		}
+		handler = limiter.Handler(handler)
+	}
+	return middleware.LoggerMiddleware(l)(handler), nil
 }
 
 // serveHTTP stops accepting requests on cancellation and waits for handlers to

@@ -5,8 +5,8 @@ import (
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 
 	// AuthService implementations - required so that init() is run in each so they
 	// can self-register
@@ -15,12 +15,15 @@ import (
 
 // SetupAuthentication initializes enabled authentication providers, validates
 // required verification, and registers provider routes.
-func SetupAuthentication(s *server.ApplicationServer) error {
+func SetupAuthentication(s *server.ApplicationServer, log logger.Logger) error {
 	if err := auth.ValidateConfig(s.Config); err != nil {
 		return err
 	}
 	if s.Config.Auth.Enabled {
-		routes := routing.NewRoutes(s.Web)
+		routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)
+		if err != nil {
+			return err
+		}
 		authServices := make([]auth.AuthService, len(auth.GetAuthServices()))
 		copy(authServices, auth.GetAuthServices())
 
@@ -50,7 +53,9 @@ func SetupAuthentication(s *server.ApplicationServer) error {
 			}
 
 			// register any custom routes the initialized auth service handles
-			a.Routes(routes)
+			if err := a.Routes(routes); err != nil {
+				return fmt.Errorf("register auth service %q routes: %w", a.AuthType(), err)
+			}
 		}
 
 		if len(auth.GetAuthServices()) == 0 {

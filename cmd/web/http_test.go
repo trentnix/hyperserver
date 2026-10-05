@@ -224,22 +224,26 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	if err := setupAccountStorage(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetupHandlers(context.Background(), app); err != nil {
-		t.Fatal(err)
-	}
-	if err := SetupAuthentication(app); err != nil {
-		t.Fatal(err)
-	}
 	logs := &capturedLogs{}
 	l := &testLogger{logs: logs}
+	if err := SetupHandlers(context.Background(), app, l); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetupAuthentication(app, l); err != nil {
+		t.Fatal(err)
+	}
 	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := applicationHandler(app, l)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return &httpHarness{
 		baseURL: "http://127.0.0.1:8080",
 		app:     app, mail: mail, cookies: jar, logs: logs,
-		handler: applicationHandler(app, l),
+		handler: handler,
 	}
 }
 

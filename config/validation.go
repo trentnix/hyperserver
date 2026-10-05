@@ -11,8 +11,34 @@ func (c Config) Validate() error {
 	if _, err := ParsePublicOrigin(c.HTTP.PublicOrigin); err != nil {
 		return err
 	}
+	for _, item := range []struct {
+		name  string
+		limit RateLimitConfig
+	}{
+		{"http.defaultRateLimit", c.HTTP.DefaultRateLimit},
+		{"http.sharedRateLimit", c.HTTP.SharedRateLimit},
+	} {
+		if !item.limit.Enabled {
+			continue
+		}
+		if item.limit.Requests <= 0 {
+			return fmt.Errorf("%s.requests must be positive", item.name)
+		}
+		if item.limit.Window <= 0 {
+			return fmt.Errorf("%s.window must be positive", item.name)
+		}
+		if item.limit.MaxClients <= 0 {
+			return fmt.Errorf("%s.maxClients must be positive", item.name)
+		}
+	}
 	if c.Auth.ResetMinimumResponseTime < 0 {
 		return fmt.Errorf("auth.resetMinimumResponseTime must not be negative")
+	}
+	if _, err := c.Auth.RateLimit.ClientCapacity(); err != nil {
+		return fmt.Errorf("auth.rateLimit.%w", err)
+	}
+	if _, err := c.App.SiteRateLimit.ClientCapacity(); err != nil {
+		return fmt.Errorf("app.siteRateLimit.%w", err)
 	}
 	if c.Auth.Enabled {
 		if err := ValidateSigningKey("auth.jwtKey", c.Auth.JwtKey); err != nil {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -34,6 +35,7 @@ type (
 		contentManager      *content_services.ContentManagerService
 		mailClient          *messaging.MailClient
 		registrationEnabled bool
+		rateLimit           *config.ModuleRateLimitConfig
 	}
 )
 
@@ -89,6 +91,7 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	}
 
 	m.AppName = s.Config.App.Name
+	m.rateLimit = s.Config.App.SiteRateLimit
 
 	m.contacts = contacts
 	m.sessionManager = s.SessionManager

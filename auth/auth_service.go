@@ -37,7 +37,8 @@ type VerificationEmailSender interface {
 // Providers write form errors themselves and return operation results to AuthManager.
 type AuthService interface {
 	// Routes binds any provider-specific routes after initialization.
-	Routes(*routing.Routes)
+	// Registration errors must stop startup before accepting traffic.
+	Routes(*routing.Routes) error
 	// Init configures the provider using application-owned services.
 	Init(*server.ApplicationServer) error
 	// IsLoaded reports whether the provider is available for selection.

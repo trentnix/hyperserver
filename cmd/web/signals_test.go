@@ -187,10 +187,11 @@ type signalTestModule struct {
 
 func (*signalTestModule) Init(context.Context, *server.ApplicationServer) error { return nil }
 
-func (m *signalTestModule) Routes(mux *routing.Routes) {
+func (m *signalTestModule) Routes(mux *routing.Routes) error {
 	mux.HandleFunc("POST /signal-test", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Signal test request started")
 		<-m.release
 		w.WriteHeader(http.StatusNoContent)
 	})
+	return nil
 }

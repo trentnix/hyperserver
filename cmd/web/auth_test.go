@@ -16,6 +16,8 @@ import (
 type setupAuthService struct {
 	auth.AuthService
 	initErr             error
+	routeErr            error
+	registerRoute       bool
 	initialized, routed bool
 }
 
@@ -24,7 +26,16 @@ func (s *setupAuthService) Init(*server.ApplicationServer) error {
 	s.initialized = true
 	return s.initErr
 }
-func (s *setupAuthService) Routes(*routing.Routes) { s.routed = true }
+func (s *setupAuthService) Routes(routes *routing.Routes) error {
+	if s.routeErr != nil {
+		return s.routeErr
+	}
+	if s.registerRoute {
+		routes.HandleFunc("GET /custom", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })
+	}
+	s.routed = true
+	return nil
+}
 
 type verifyingSetupAuthService struct {
 	*setupAuthService
@@ -41,7 +52,8 @@ func TestSetupAuthenticationRequiresVerificationMechanism(t *testing.T) {
 	for _, tc := range []struct {
 		name                                string
 		registration, verification, capable bool
-		initErr, validationErr              error
+		initErr, validationErr, routeErr    error
+		warnRatePolicy                      bool
 		want                                string
 	}{
 		{name: "missing mechanism", registration: true, verification: true, want: "requires a verification mechanism"},
@@ -50,6 +62,8 @@ func TestSetupAuthenticationRequiresVerificationMechanism(t *testing.T) {
 		{name: "configured mechanism", registration: true, verification: true, capable: true},
 		{name: "unavailable mechanism", registration: true, verification: true, capable: true, validationErr: errors.New("delivery unavailable"), want: "delivery unavailable"},
 		{name: "initialization failed", initErr: errors.New("provider failed"), want: "provider failed"},
+		{name: "route registration failed", routeErr: errors.New("invalid route policy"), want: "invalid route policy"},
+		{name: "route policy warning", warnRatePolicy: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			previous := append([]auth.AuthService(nil), auth.GetAuthServices()...)
@@ -62,7 +76,7 @@ func TestSetupAuthenticationRequiresVerificationMechanism(t *testing.T) {
 					auth.Register(service)
 				}
 			})
-			provider := &setupAuthService{initErr: tc.initErr}
+			provider := &setupAuthService{initErr: tc.initErr, routeErr: tc.routeErr, registerRoute: tc.warnRatePolicy}
 			verifier := &verifyingSetupAuthService{setupAuthService: provider, validationErr: tc.validationErr}
 			if tc.capable {
 				auth.Register(verifier)
@@ -75,7 +89,12 @@ func TestSetupAuthenticationRequiresVerificationMechanism(t *testing.T) {
 				Services: map[string]map[string]string{"custom": {"enabled": "true"}},
 			}}
 			cfg.HTTP.Session.Types = map[string]string{"default": "sqliteStore"}
-			err := SetupAuthentication(&server.ApplicationServer{Config: cfg, Web: http.NewServeMux()})
+			if tc.warnRatePolicy {
+				cfg.HTTP.DefaultRateLimit = config.RateLimitConfig{Enabled: true, Requests: 200, Window: time.Minute, MaxClients: 10}
+				cfg.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 20, Window: time.Minute, MaxClients: 10}
+			}
+			log := &ratePolicyWarningLogger{}
+			err := SetupAuthentication(&server.ApplicationServer{Config: cfg, Web: http.NewServeMux()}, log)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
 					t.Fatalf("error = %v, routed = %t, want %q without routes", err, provider.routed, tc.want)
@@ -86,6 +105,9 @@ func TestSetupAuthenticationRequiresVerificationMechanism(t *testing.T) {
 			wantValidation := tc.registration && tc.verification && tc.capable && tc.initErr == nil
 			if !provider.initialized || verifier.validated != wantValidation {
 				t.Fatalf("initialized = %t, validated = %t", provider.initialized, verifier.validated)
+			}
+			if tc.warnRatePolicy && (len(log.warnings) != 1 || log.warnings[0]["route"] != "GET /custom") {
+				t.Fatalf("provider route warnings = %v", log.warnings)
 			}
 		})
 	}

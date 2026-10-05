@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -139,6 +140,7 @@ func TestHTTPMultipartBodyOverride(t *testing.T) {
 func TestHTTPFormLimits(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "limits@example.invalid")
+		requestNumber := 0
 		valid := url.Values{
 			"email": {u.Email}, "name": {"Test person"}, "message": {"Hello"},
 			"password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
@@ -164,6 +166,9 @@ func TestHTTPFormLimits(t *testing.T) {
 					{name: "multipart", body: valid, contentType: "multipart/form-data; boundary=test", status: 415},
 				} {
 					r := httptest.NewRequest(http.MethodPost, h.baseURL+path+tc.query, strings.NewReader(tc.body))
+					// Isolate parser cases from the independent per-client rate limit.
+					requestNumber++
+					r.RemoteAddr = "192.0.2." + strconv.Itoa(requestNumber) + ":1000"
 					r.Header.Set("Origin", h.baseURL)
 					r.Header.Set("Sec-Fetch-Site", "same-origin")
 					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")

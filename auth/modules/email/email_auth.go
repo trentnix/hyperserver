@@ -205,8 +205,9 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 
 // Routes is implemented to fulfill the AuthService interface but is not supported by
 // the EmailAuthService implementation
-func (a *EmailAuthService) Routes(mux *routing.Routes) {
+func (a *EmailAuthService) Routes(mux *routing.Routes) error {
 	// none needed for EmailAuthService
+	return nil
 }
 
 // IsLoaded currently always returns true. It does not verify initialization,

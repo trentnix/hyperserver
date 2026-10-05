@@ -26,12 +26,14 @@ type (
 
 	// HTTPConfig stores HTTP configuration
 	HTTPConfig struct {
-		PublicOrigin string        // Optional override for absolute links, independent of the listener.
-		ListenHost   string        // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
-		Port         uint16        // Listener port. Zero requests an ephemeral port but cannot supply fallback links.
-		ReadTimeout  time.Duration // Maximum time to read a request, including its body.
-		WriteTimeout time.Duration // Maximum time to write a response.
-		IdleTimeout  time.Duration // Maximum wait for another request on a keep-alive connection.
+		PublicOrigin     string          // Optional override for absolute links, independent of the listener.
+		ListenHost       string          // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
+		Port             uint16          // Listener port. Zero requests an ephemeral port but cannot supply fallback links.
+		ReadTimeout      time.Duration   // Maximum time to read a request, including its body.
+		WriteTimeout     time.Duration   // Maximum time to write a response.
+		IdleTimeout      time.Duration   // Maximum wait for another request on a keep-alive connection.
+		DefaultRateLimit RateLimitConfig // Inherited per-route policy. Module and handler policies replace it.
+		SharedRateLimit  RateLimitConfig // Optional aggregate per-client budget. Route overrides do not bypass it.
 		// TLS holds listener TLS settings. The reference command currently ignores them.
 		TLS struct {
 			Enabled     bool
@@ -48,11 +50,20 @@ type (
 		}
 	}
 
+	// RateLimitConfig specifies an optional per-client policy or shared budget.
+	RateLimitConfig struct {
+		Enabled    bool          // Enables this policy or budget. Defaults to false.
+		Requests   int           // Requests allowed per client IP in each window.
+		Window     time.Duration // Window duration, starting with the client's first request.
+		MaxClients int           // Maximum tracked IPs. New clients are rejected at capacity.
+	}
+
 	// AuthConfig selects authentication providers, registration policy, and account-token settings.
 	AuthConfig struct {
-		Enabled                      bool   // Enables authentication routes and provider initialization.
-		RegistrationEnabled          bool   // Allows new accounts. Defaults to false without disabling existing-account recovery.
-		JwtKey                       string // Signs account tokens. Must differ from the session signing key.
+		RateLimit                    *ModuleRateLimitConfig // Capacity for each authentication mutation route. Nil uses defaults.
+		Enabled                      bool                   // Enables authentication routes and provider initialization.
+		RegistrationEnabled          bool                   // Allows new accounts. Defaults to false without disabling existing-account recovery.
+		JwtKey                       string                 // Signs account tokens. Must differ from the session signing key.
 		VerificationEndpoint         string
 		VerificationTokenExpiration  time.Duration
 		ResetTokenExpiration         time.Duration
@@ -71,6 +82,7 @@ type (
 
 	// AppConfig stores application configuration
 	AppConfig struct {
+		SiteRateLimit       *ModuleRateLimitConfig // Capacity for each reference-site submission route. Nil uses defaults.
 		Name                string
 		WorkingDirectory    string
 		RenderNotifications bool
@@ -110,6 +122,14 @@ func readConfig(v *viper.Viper) (Config, error) {
 	v.AllowEmptyEnv(true)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.SetDefault("http.listenHost", "127.0.0.1")
+	v.SetDefault("http.defaultRateLimit.requests", 20)
+	v.SetDefault("http.defaultRateLimit.window", time.Minute)
+	v.SetDefault("http.defaultRateLimit.maxClients", 4096)
+	v.SetDefault("http.sharedRateLimit.requests", 120)
+	v.SetDefault("http.sharedRateLimit.window", time.Minute)
+	v.SetDefault("http.sharedRateLimit.maxClients", 4096)
+	v.SetDefault("auth.rateLimit.maxClients", 4096)
+	v.SetDefault("app.siteRateLimit.maxClients", 4096)
 	v.SetDefault("auth.resetMinimumResponseTime", 2*time.Second)
 
 	// Binding environment keys makes omitted YAML fields visible to Unmarshal,
@@ -126,6 +146,11 @@ func readConfig(v *viper.Viper) (Config, error) {
 
 	if err := v.ReadInConfig(); err != nil {
 		return c, err
+	}
+	for _, key := range v.AllKeys() {
+		if key == "http.ratelimit" || strings.HasPrefix(key, "http.ratelimit.") {
+			return c, errors.New("http.rateLimit is ambiguous. Use http.defaultRateLimit for inherited settings or http.sharedRateLimit for an aggregate budget")
+		}
 	}
 	if v.InConfig("http.hostname") || v.IsSet("http.hostname") {
 		return c, errors.New("http.hostname was renamed to http.listenHost. Rename HYPERSERVER_HTTP_HOSTNAME to HYPERSERVER_HTTP_LISTENHOST for environment configuration")

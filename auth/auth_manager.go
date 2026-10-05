@@ -21,6 +21,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
@@ -39,6 +40,7 @@ type (
 
 		db             *sqlx.DB
 		httpConfig     config.HTTPConfig
+		rateLimit      *config.ModuleRateLimitConfig
 		contentManager *content_services.ContentManagerService
 
 		verificationJwtKey   string
@@ -75,6 +77,7 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 	a.Enabled = s.Config.Auth.Enabled
 	a.db = s.Database
 	a.httpConfig = s.Config.HTTP
+	a.rateLimit = s.Config.Auth.RateLimit
 
 	if s.ContentManager == nil {
 		return errors.New("Content Manager not configured")
@@ -93,22 +96,30 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 }
 
 // Routes defines the routes the AuthManager handler will be responsible for
-func (a *AuthManager) Routes(mux *routing.Routes) {
+func (a *AuthManager) Routes(mux *routing.Routes) error {
 	if a.Enabled {
+		maxClients, err := a.rateLimit.ClientCapacity()
+		if err != nil {
+			return fmt.Errorf("auth.rateLimit.%w", err)
+		}
 		anonymous := middleware.RequireAnonymous(a.db, a.contentManager)
 		authenticated := middleware.RequireAuthentication(a.db, a.contentManager)
+		mutations, err := mux.WithRateLimit(ratelimit.Policy{Requests: 20, Window: time.Minute, MaxClients: maxClients})
+		if err != nil {
+			return err
+		}
 
 		// login / logout
 		mux.Handle("GET "+authEndpoint, anonymous(http.HandlerFunc(a.GetLogin)))
 		mux.Handle("GET /auth/login/{authType}", anonymous(http.HandlerFunc(a.GetLoginService)))
-		mux.Handle("POST /auth/login/{authType}", anonymous(http.HandlerFunc(a.Login)))
-		mux.Handle("POST /auth/logout", http.HandlerFunc(a.Logout))
+		mutations.Handle("POST /auth/login/{authType}", anonymous(http.HandlerFunc(a.Login)))
+		mux.WithoutRateLimit().Handle("POST /auth/logout", http.HandlerFunc(a.Logout))
 
 		// register
 		if a.registrationEnabled {
 			mux.Handle("GET /auth/register", anonymous(http.HandlerFunc(a.GetRegister)))
 			mux.Handle("GET /auth/register/{authType}", anonymous(http.HandlerFunc(a.GetRegisterService)))
-			mux.Handle("POST /auth/register/{authType}", anonymous(http.HandlerFunc(a.Register)))
+			mutations.Handle("POST /auth/register/{authType}", anonymous(http.HandlerFunc(a.Register)))
 		} else {
 			mux.HandleFunc("/auth/register", RegistrationUnavailable)
 			mux.HandleFunc("/auth/register/{authType}", RegistrationUnavailable)
@@ -116,19 +127,20 @@ func (a *AuthManager) Routes(mux *routing.Routes) {
 
 		// validate a registered user
 		mux.Handle("GET /auth/verify", http.HandlerFunc(a.GetVerify))
-		mux.Handle("POST /auth/verify", http.HandlerFunc(a.Verify))
-		mux.Handle("POST /auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
+		mutations.Handle("POST /auth/verify", http.HandlerFunc(a.Verify))
+		mutations.Handle("POST /auth/request/verify", http.HandlerFunc(a.SendVerificationRequest))
 
 		// reset credentials
 		mux.Handle("GET /auth/reset/request/{authType}", anonymous(http.HandlerFunc(a.GetResetRequest)))
-		mux.Handle("POST /auth/reset/request/{authType}", anonymous(http.HandlerFunc(a.ResetRequest)))
+		mutations.Handle("POST /auth/reset/request/{authType}", anonymous(http.HandlerFunc(a.ResetRequest)))
 		mux.Handle("GET /auth/reset/{authType}", anonymous(http.HandlerFunc(a.GetReset)))
-		mux.Handle("POST /auth/reset/{authType}", anonymous(http.HandlerFunc(a.Reset)))
+		mutations.Handle("POST /auth/reset/{authType}", anonymous(http.HandlerFunc(a.Reset)))
 
 		// change change credentials
 		mux.Handle("GET /auth/change/{authType}", authenticated(http.HandlerFunc(a.GetChange)))
-		mux.Handle("POST /auth/change/{authType}", authenticated(http.HandlerFunc(a.Change)))
+		mutations.Handle("POST /auth/change/{authType}", authenticated(http.HandlerFunc(a.Change)))
 	}
+	return nil
 }
 
 // GetLogin renders the various authentication options to a user trying to login

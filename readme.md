@@ -55,7 +55,7 @@ Registration is disabled by default. With `auth.enabled`, set `auth.registration
 
 Account verification and password reset use emailed, single-use links. If registration requires verification, startup validates the delivery configuration. Failed delivery leaves the account pending verification so the user can log in and request another email.
 
-Mail is sent during the request. `auth.resetMinimumResponseTime` sets the minimum response time for valid password-reset submissions, defaulting to `2s`. Set it to `0` to disable the wait. Slower requests finish without an additional wait, and `mail.timeout` remains independent. Rate limiting and timing tests under load are still needed.
+Mail is sent during the request. `auth.resetMinimumResponseTime` sets the minimum response time for admitted, valid password-reset submissions, defaulting to `2s`. Set it to `0` to disable the wait. Slower requests finish without an additional wait, and `mail.timeout` remains independent. Timing tests under load are still needed.
 
 HyperServer does not save pending delivery work or retry it after a restart. If no email arrives, request another password reset or sign in to resend verification.
 
@@ -93,6 +93,130 @@ Prefer a finite limit. Direct registration on the underlying `http.ServeMux` byp
 [Form parsing](pkg/components/form/request.go) limits decoded field names and values to 16 KiB and encoded query strings to 64 KiB. `ParseWithOptions` and `ParseAndValidateWithOptions` accept an explicit field limit or `UnlimitedFields: true`. These options do not change body or query limits. Account and contact forms return 413 for oversized input, 400 for malformed forms, and 415 for unsupported encodings. JSON and multipart handlers use their own parsers under the route's body limit.
 
 Redirects accept local paths beginning with a single `/`, including queries and fragments. Absolute URLs are not accepted, even for the same host. Ordinary requests receive HTTP 303, and HTMX requests receive HTTP 200 with `HX-Redirect`. Invalid login destinations fall back to the configured home path, then `/` if that path is also invalid.
+
+### Rate limiting
+
+[Rate limiting](pkg/ratelimit/limiter.go) separates inherited route policies from shared budgets. All allowances below apply per direct client IP.
+
+#### Route policies: the most specific setting wins
+
+A handler policy replaces its module policy, which replaces the application default. Create registration scopes to select those policies:
+
+```go
+policy := ratelimit.Policy{Requests: 20, Window: time.Minute, MaxClients: 4096}
+appRoutes, err := routing.NewRoutes(mux).WithRateLimit(policy)
+if err != nil {
+    return nil, err
+}
+appRoutes.Handle("GET /ordinary", ordinaryHandler)
+
+// Changing this value does not change appRoutes: scopes copy their policy.
+policy.Requests = 10
+moduleRoutes, err := appRoutes.WithRateLimit(policy)
+if err != nil {
+    return nil, err
+}
+moduleRoutes.Handle("GET /module", moduleHandler)
+moduleRoutes.Handle("GET /sibling", siblingHandler)
+
+policy.Requests = 200
+busyRoute, err := moduleRoutes.WithRateLimit(policy)
+if err != nil {
+    return nil, err
+}
+busyRoute.Handle("GET /poll", pollingHandler)
+moduleRoutes.WithoutRateLimit().Handle("GET /unlimited", streamingHandler)
+```
+
+| Route | Requests per minute | Rule |
+| --- | ---: | --- |
+| `/ordinary` | 20 | Inherits the application default. |
+| `/module` | 10 | Module policy replaces 20 with 10. |
+| `/sibling` | 10 | Has its own counter, independent of `/module`. |
+| `/poll` | 200 | Handler policy replaces 10 with 200. Neither parent caps it. |
+| `/unlimited` | Unlimited | Explicitly removes the inherited route policy. Body limits still apply. |
+
+Creating a child scope does not change its parent or existing registrations. Exhausting `/module` leaves `/sibling`'s allowance untouched. These are per-route defaults, not a combined module or application budget.
+
+#### Counters belong to registered patterns
+
+Continuing with the 10-request module policy:
+
+```go
+moduleRoutes.Handle("GET /items/{id}", getItemHandler)
+moduleRoutes.Handle("POST /items/{id}", updateItemHandler)
+```
+
+Within one window, ten GET requests to `/items/one` exhaust the allowance for GET `/items/two` and HEAD `/items/one` too. Changing path parameters or query strings does not create a fresh counter. POST `/items/one` still has its own 10-request allowance because it is a separate registration.
+
+#### Shared budgets: every attached limit must allow the request
+
+Reuse one named limiter when several routes must share a combined allowance:
+
+```go
+mailBudget, err := ratelimit.New("shared mail", ratelimit.Policy{
+    Requests: 5, Window: time.Minute, MaxClients: 4096,
+})
+if err != nil {
+    return nil, err
+}
+moduleRoutes.Handle("POST /contact", mailBudget.Handler(contactHandler))
+busyRoute.Handle("POST /resend", mailBudget.Handler(resendHandler))
+moduleRoutes.WithoutRateLimit().Handle("POST /feedback", mailBudget.Handler(feedbackHandler))
+```
+
+From one IP within the same window, three admitted contact requests and two resend requests exhaust the shared mail budget. The next request to any of these three routes receives 429. Neither the 200-request override on `/resend` nor the opt-out on `/feedback` bypasses that budget. Unrelated routes, such as `/poll`, do not consume the mail budget.
+
+Each limiter counts admission before calling the next handler. A later rejection does not refund earlier counters. Do not wrap a request twice with the same limiter instance.
+
+#### Application defaults are not application-wide budgets
+
+The reference application's [configuration](config-template.yaml) exposes both settings. Both are off by default. To enable a 20-request default and a separate 120-request shared budget:
+
+```yaml
+http:
+  defaultRateLimit:
+    enabled: true
+    requests: 20
+  sharedRateLimit:
+    enabled: true
+    requests: 120
+```
+
+Both settings default to one-minute windows and 4,096 tracked IPs per limiter. With this configuration, an ordinary route allows 20 requests per route window. A route with a 200-request override can admit at most 120 during one shared window before the shared budget rejects it. Other requests from the same IP also consume that shared allowance, including pages, assets, logout, and unmatched requests.
+
+The shared application budget runs before session loading. It also covers direct registrations on the underlying mux, which bypass inherited route policies. In another application, wrap the HTTP stack with `budget.Handler(stack)` before session loading to apply a shared budget.
+
+The reference modules set 20 requests/minute for each authentication mutation route and 10 for each contact/test-email route. Logout explicitly opts out of the inherited policy, but not the shared application budget.
+
+Configure their client capacities separately from the HTTP defaults:
+
+```yaml
+auth:
+  rateLimit:
+    maxClients: 10000
+app:
+  siteRateLimit:
+    maxClients: 2000
+```
+
+These settings bound tracked IPs per route, not requests per IP or the total across a module. Both default to 4,096 and must be positive. Environment overrides are `HYPERSERVER_AUTH_RATELIMIT_MAXCLIENTS` and `HYPERSERVER_APP_SITERATELIMIT_MAXCLIENTS`. Changing either HTTP rate-limit capacity does not change these module capacities.
+
+At startup, the reference application logs a warning if a route's allowance exceeds `http.sharedRateLimit` for the same window duration. The warning names the route and both per-IP allowances so you can confirm the restriction is intentional. Startup continues and both limits still apply. Equal or lower allowances, different window durations, explicit opt-outs, and a disabled shared budget do not trigger this warning.
+
+#### Client capacity is a temporary admission cap
+
+With `maxClients: 4096`, if all 4,096 tracked IPs have unexpired entries, a request from a new, 4,097th IP receives 429 with `Retry-After`. This applies even to that IP's first request. The limiter does not replace an existing entry or reset another client's counter.
+
+Existing clients can still use their remaining request allowances. Once an entry expires and capacity is available, a new IP can be admitted. A route limiter restricts only that route. A shared application limiter can reject the new IP across the application. This is not a permanent user limit, but an undersized capacity can block legitimate newcomers.
+
+Choose capacity for the distinct IPs expected within a limiter's window, not the number of registered accounts. Anonymous requests occupy entries too. Active entries are never evicted to make room because eviction would erase their counters and allow throttling to be bypassed. Expired entries are removed when the limiter receives another request, not by a background worker.
+
+#### Responses and limits
+
+Each window starts with the client's first admitted request to that limiter. Throttled requests receive a plain-text 429 with `Retry-After`, including HTMX requests. With request logging configured, rejections identify the registered route or named shared budget, its settings, and whether its allowance or client capacity was exhausted. Submitted account values do not affect recovery throttling or appear in these rejection logs.
+
+Limits ignore forwarding headers, so clients behind a proxy or NAT share an allowance. Memory capacity applies per limiter, not across all routes. State resets on restart and is not shared across servers. Fixed windows allow bursts near window boundaries. These controls do not prevent distributed abuse or cap concurrent work.
 
 ### Expired-record cleanup
 

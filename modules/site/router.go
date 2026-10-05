@@ -1,10 +1,13 @@
 package module_site
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/trentnix/hyperserver/auth"
+	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -12,7 +15,16 @@ import (
 
 // Routes registers routes with the provided router and, along with Init, satisfies
 // the Handler interface
-func (m *SiteModule) Routes(mux *routing.Routes) {
+func (m *SiteModule) Routes(mux *routing.Routes) error {
+	maxClients, err := m.rateLimit.ClientCapacity()
+	if err != nil {
+		return fmt.Errorf("app.siteRateLimit.%w", err)
+	}
+	submissions, err := mux.WithRateLimit(ratelimit.Policy{Requests: 10, Window: time.Minute, MaxClients: maxClients})
+	if err != nil {
+		return err
+	}
+
 	// media paths
 	cssPath := filepath.Join("modules", "site", "templates", "html", "css")
 	jsPath := filepath.Join("modules", "site", "templates", "html", "js")
@@ -33,7 +45,7 @@ func (m *SiteModule) Routes(mux *routing.Routes) {
 
 	// contact
 	mux.Handle("GET /contact", http.HandlerFunc(m.GetContact))
-	mux.Handle("POST /contact", http.HandlerFunc(m.Contact))
+	submissions.Handle("POST /contact", http.HandlerFunc(m.Contact))
 
 	// These routes exercise framework features in the local development application.
 	// Production applications must not load this module.
@@ -41,7 +53,7 @@ func (m *SiteModule) Routes(mux *routing.Routes) {
 		u := user.GetUserFromContext(r.Context())
 		return u != nil && !u.NeedsVerification(), nil
 	}
-	mux.Handle("POST /test-email", middleware.RequireAuthorization(mailPolicy)(http.HandlerFunc(m.TestEmail)))
+	submissions.Handle("POST /test-email", middleware.RequireAuthorization(mailPolicy)(http.HandlerFunc(m.TestEmail)))
 	mux.Handle("GET "+authURL, http.HandlerFunc(m.Login))
 	if m.registrationEnabled {
 		mux.Handle("GET "+registerURL, http.HandlerFunc(m.Register))
@@ -49,5 +61,6 @@ func (m *SiteModule) Routes(mux *routing.Routes) {
 		mux.HandleFunc(registerURL, auth.RegistrationUnavailable)
 	}
 	mux.Handle("POST /session-example", http.HandlerFunc(m.SessionExample))
-	mux.Handle("POST /logout", http.HandlerFunc(m.Logout))
+	mux.WithoutRateLimit().Handle("POST /logout", http.HandlerFunc(m.Logout))
+	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
@@ -33,8 +34,24 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 	// Avoid loading templates or sessions when the site's catch-all reports a 404.
 	s.ContentManager.HandleNotFound = http.NotFound
 	mux := http.NewServeMux()
-	m.Routes(routing.NewRoutes(mux))
+	if err := m.Routes(routing.NewRoutes(mux)); err != nil {
+		t.Fatal(err)
+	}
 	return m, mux
+}
+
+func TestSiteRoutesRejectInvalidClientCapacity(t *testing.T) {
+	for _, capacity := range []int{0, -1} {
+		module := &SiteModule{rateLimit: &config.ModuleRateLimitConfig{MaxClients: capacity}}
+		mux := http.NewServeMux()
+		err := module.Routes(routing.NewRoutes(mux))
+		if err == nil || !strings.Contains(err.Error(), "app.siteRateLimit.maxClients") {
+			t.Fatalf("capacity %d: error = %v", capacity, err)
+		}
+		if _, pattern := mux.Handler(httptest.NewRequest(http.MethodGet, "/contact", nil)); pattern != "" {
+			t.Fatal("invalid capacity left routes registered")
+		}
+	}
 }
 
 func TestSiteRegistersSampleRoutes(t *testing.T) {
