@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 // Use subprocesses to isolate startup exits, working directories, and registries.
@@ -46,6 +47,14 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := s.Database.Ping(); err == nil {
 			t.Fatal("listen failure left the application's pool open")
 		}
+		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), s.SessionManager)
+		value, err := session.New(r, "auth-user-session")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := value.Save(httptest.NewRecorder(), r); err == nil {
+			t.Fatal("listen failure left the session pool open")
+		}
 		fmt.Println("listen failure cleanup passed")
 	case "initialize":
 		// Exercise successful initialization without binding a network port.
@@ -58,6 +67,9 @@ func TestStartupHelperProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err := os.Chdir(s.Config.App.WorkingDirectory); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.InitializeSessions(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 		if err := setupAccountStorage(context.Background(), s); err != nil {
@@ -197,6 +209,22 @@ func TestStartupRejectsUnavailableAccountStorage(t *testing.T) {
 	}
 	if strings.Contains(string(output), "Starting server at") {
 		t.Fatalf("startup attempted to listen with unavailable account storage: %s", output)
+	}
+}
+
+func TestStartupRejectsUnavailableSessionStorage(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
+	connection := filepath.Join(t.TempDir(), "missing-directory", "sessions.db")
+	output, err := runStartupProcess(t, yaml, "1", "HYPERSERVER_HTTP_SESSION_STORES_SQLITESTORE_CONNECTION="+connection)
+	if err == nil || !strings.Contains(string(output), "failed to prepare session storage") {
+		t.Fatalf("unavailable session storage: error = %v, output = %s", err, output)
+	}
+	if strings.Contains(string(output), "Starting server at") {
+		t.Fatal("startup listened with unavailable session storage")
 	}
 }
 

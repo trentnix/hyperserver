@@ -163,9 +163,6 @@ func TestHTTPSessionLoading(t *testing.T) {
 						RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(expires)},
 					}
 					if provider == "sqliteStore" {
-						if _, err := session.NewSQLiteStore(h.app.Config); err != nil {
-							t.Fatal(err)
-						}
 						if outcome != "missing row" {
 							_, err := h.app.Database.Exec(`INSERT INTO session (id, session, expires_at) VALUES (?, ?, ?)`, claims.ID, encoded, time.Now().Add(time.Hour))
 							if err != nil {

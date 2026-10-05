@@ -18,9 +18,6 @@ func TestHTTPAuthenticationRedirectSaveFailure(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
-				if _, err := session.NewSQLiteStore(h.app.Config); err != nil {
-					t.Fatal(err)
-				}
 				// Reads and initialization work. Only saving the redirect session fails.
 				if _, err := h.app.Database.Exec(`CREATE TRIGGER reject_redirect BEFORE INSERT ON session BEGIN SELECT RAISE(ABORT, 'redirect write failed'); END`); err != nil {
 					t.Fatal(err)

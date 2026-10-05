@@ -3,6 +3,7 @@
 package session
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
@@ -54,10 +55,11 @@ func setupSQLiteStore(t *testing.T) *SQLiteStore {
 		},
 	}
 
-	store, err := NewSQLiteStore(c)
+	store, err := NewSQLiteStore(context.Background(), c)
 	if err != nil {
 		t.Fatalf("failed to create sqlite store: %v", err)
 	}
+	t.Cleanup(func() { store.Close() })
 
 	return store
 }

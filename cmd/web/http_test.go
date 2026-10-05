@@ -33,8 +33,8 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// HTTP scenarios run in separate processes because module instances and database
-// initialization currently use package globals. Each scenario owns its database,
+// HTTP scenarios run in separate processes because module instances currently use
+// package globals. Each scenario owns its databases,
 // configuration, mail fake, and browser cookies. No network listener is started.
 // Remove process isolation when those runtime globals become application-owned.
 func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...func(*config.Config)) {
@@ -197,11 +197,6 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	if err := session.ValidateConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
-	// Open before concurrent requests and synctest bubbles. Runtime-global store
-	// ownership remains isolated to this scenario's subprocess.
-	if _, err := session.NewSQLiteStore(cfg); err != nil {
-		t.Fatal(err)
-	}
 	db, err := database.Setup(cfg.Database.Driver, cfg.Database.Connection)
 	if err != nil {
 		t.Fatal(err)
@@ -225,8 +220,16 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	cm.HandleMessage, cm.HandleError, cm.HandleNotFound = util.HttpMessage, util.HttpError, util.HttpNotFound
 	app := &server.ApplicationServer{
 		Config: cfg, Database: db, Web: http.NewServeMux(),
-		ContentManager: cm, SessionManager: session.NewSessionManager(cfg), Mail: mailClient,
+		ContentManager: cm, Mail: mailClient,
 	}
+	if err := app.InitializeSessions(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := app.SessionManager.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if err := setupAccountStorage(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}

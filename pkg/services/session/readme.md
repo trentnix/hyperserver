@@ -55,6 +55,12 @@ The [cleanup command](../../../cmd/cleanup) removes expired SQLite sessions and 
 
 ## Ownership and extension
 
-Retrieved sessions are cached in the request context. Do not share their mutable data across concurrent requests. SQLite store initialization currently shares a process-wide pool.
+Create a manager with `NewSessionManager(ctx, cfg)` before serving requests. It validates configuration, copies session mappings, and initializes each selected provider once. Requests reuse those providers. Unselected providers do not open storage. Failed setup returns an error, closes acquired resources, and allows a fresh construction attempt.
 
-Custom stores implement `SessionStore`. Stores supporting revocable rotation also implement `RotatingStore`. Provider selection currently requires wiring the implementation into `SessionManager.getStore`. Independent provider ownership and replaceable serialization remain [roadmap](../../../roadmap.md) work.
+Each SQLite store owns its pool and prepares its table and expiration index in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
+
+The reference application calls `ApplicationServer.InitializeSessions(ctx)` after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. `ApplicationServer.Shutdown()` closes session providers after HTTP requests drain. If you construct a manager or SQLite store directly, call its `Close()` after its consumers stop. A closed manager must not be reused.
+
+Retrieved sessions are cached in the request context. Do not share their mutable data across concurrent requests. Set manager mappings before serving requests, not while requests are active.
+
+Custom stores implement `SessionStore`. Stores supporting revocable rotation also implement `RotatingStore`. Providers with owned resources implement `io.Closer`. Provider selection currently requires wiring the implementation into `NewSessionManager`. Replaceable serialization remains [roadmap](../../../roadmap.md) work.

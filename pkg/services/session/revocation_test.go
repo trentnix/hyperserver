@@ -20,7 +20,7 @@ func revocationStore(t *testing.T) *SQLiteStore {
 	}
 	t.Cleanup(func() { db.Close() })
 	s := &SQLiteStore{db: db, tableName: "sessions", JwtKey: []byte("revocation-test-key"), TokenLifetime: time.Hour, CookieLifetime: time.Hour, enabled: true}
-	if err := s.configureDatabase(); err != nil {
+	if err := s.configureDatabase(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	return s

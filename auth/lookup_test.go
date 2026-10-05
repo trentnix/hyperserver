@@ -42,7 +42,12 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 			http.Error(w, message, status)
 		},
 	}}
-	return manager, u, session.NewSessionManager(cfg)
+	sessions, err := session.NewSessionManager(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sessions.Close() })
+	return manager, u, sessions
 }
 
 func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {

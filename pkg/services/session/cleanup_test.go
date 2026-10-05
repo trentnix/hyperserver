@@ -33,7 +33,7 @@ func TestSQLiteCleanupBatches(t *testing.T) {
 	if _, err := store.db.Exec(`DROP INDEX sessions_expiration`); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.configureDatabase(); err != nil {
+	if err := store.configureDatabase(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	var count int

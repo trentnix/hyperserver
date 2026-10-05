@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -76,6 +78,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	started, release := make(chan struct{}), make(chan struct{})
 	var releaseOnce sync.Once
 	releaseRequest := func() { releaseOnce.Do(func() { close(release) }) }
+	var activeSession *session.Session
 	s.Web.HandleFunc("POST /test-shutdown", func(w http.ResponseWriter, r *http.Request) {
 		if (r.TLS != nil) != secure {
 			t.Error("request TLS state does not match the listener configuration")
@@ -84,6 +87,15 @@ func checkRunShutdown(t *testing.T, secure bool) {
 		<-release
 		account := &user.User{Email: "shutdown@example.invalid"}
 		if err := account.Create(r.Context(), s.Database); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var err error
+		activeSession, err = session.New(r, "auth-user-session")
+		if err == nil {
+			err = activeSession.Save(w, r)
+		}
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -175,6 +187,12 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	awaitResult(t, done)
 	if err := s.Database.Ping(); err == nil {
 		t.Fatal("run returned without closing the application's pool")
+	}
+	if activeSession == nil {
+		t.Fatal("in-flight request did not save its session")
+	}
+	if err := activeSession.Save(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil)); err == nil {
+		t.Fatal("run returned without closing the session pool")
 	}
 	fmt.Fprintln(stdout, "shutdown ordering passed")
 }
@@ -268,7 +286,7 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 }
 
 func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
-	for _, failure := range []string{"listen address", "TLS files", "account setup"} {
+	for _, failure := range []string{"listen address", "TLS files", "session setup", "account setup"} {
 		t.Run(failure, func(t *testing.T) {
 			db := accountSetupTestDB(t)
 			s := &server.ApplicationServer{Database: db, Config: &config.Config{}}
@@ -283,6 +301,10 @@ func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
 				s.Config.HTTP.TLS.Key = "missing-key.pem"
 			case "account setup":
 				s.Config.Auth.Enabled = true
+				if _, err := db.Exec("CREATE TABLE usertoken (incompatible TEXT)"); err != nil {
+					t.Fatal(err)
+				}
+			case "session setup":
 				cancel()
 			}
 			if err := run(ctx, s); err == nil {

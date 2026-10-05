@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,14 +11,19 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
-func messageRequests() func([]*http.Cookie) *http.Request {
+func messageRequests(t *testing.T) func([]*http.Cookie) *http.Request {
+	t.Helper()
 	cfg := &config.Config{}
 	cfg.HTTP.Session.JwtKey = "message-test-key"
 	cfg.HTTP.Session.TokenAge = time.Hour
 	cfg.HTTP.Session.CookieAge = time.Hour
 	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
 	cfg.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}}
-	manager := session.NewSessionManager(cfg)
+	manager, err := session.NewSessionManager(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { manager.Close() })
 	return func(cookies []*http.Cookie) *http.Request {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		for _, cookie := range cookies {
@@ -28,7 +34,7 @@ func messageRequests() func([]*http.Cookie) *http.Request {
 }
 
 func TestMessagesJSONRoundTrip(t *testing.T) {
-	request := messageRequests()
+	request := messageRequests(t)
 	w := httptest.NewRecorder()
 	r := request(nil)
 	if err := AddSuccessNotification(w, r, "first"); err != nil {
@@ -55,7 +61,7 @@ func TestMessagesJSONRoundTrip(t *testing.T) {
 }
 
 func TestMessagesRejectInvalidStoredValues(t *testing.T) {
-	request := messageRequests()
+	request := messageRequests(t)
 	for _, value := range []any{"not a message array", []any{map[string]any{"message": 42}}} {
 		r := request(nil)
 		s, err := session.Get(r, messagesSession.String())

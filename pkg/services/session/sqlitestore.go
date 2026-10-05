@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -20,7 +19,7 @@ import (
 
 type (
 	// SQLiteStore persists session data in SQLite and signs session IDs in cookies.
-	// Database initialization currently uses a process-wide connection pool.
+	// Each store owns its pool. Close it after its consumers stop.
 	SQLiteStore struct {
 		// JwtKey signs the session-ID cookie. It does not encrypt its contents.
 		JwtKey []byte
@@ -49,9 +48,6 @@ type (
 )
 
 var (
-	dbSQLiteSessionStore *sqlx.DB
-	dbOnce               sync.Once
-
 	// ErrSQLiteStoreNotConfigured indicates that SQLite session settings are missing.
 	ErrSQLiteStoreNotConfigured = errors.New("the sqliteStore is not configured")
 	// ErrDatabaseNotConfigured indicates that the session store has no database connection.
@@ -63,9 +59,15 @@ const (
 	sqliteStoreName = "SQLiteStore"
 )
 
-// NewSQLiteStore validates cookie settings and prepares the SQLite store.
-// The first initialized store supplies the process-wide pool reused by later stores.
-func NewSQLiteStore(c *config.Config) (*SQLiteStore, error) {
+// NewSQLiteStore opens an owned pool and prepares the session table before use.
+// Setup honors ctx and closes the pool on failure. The caller must close the store.
+func NewSQLiteStore(ctx context.Context, c *config.Config) (*SQLiteStore, error) {
+	if c == nil {
+		return nil, ErrSQLiteStoreNotConfigured
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	configErr := checkStoreCookieConfig(c)
 	if configErr != nil {
 		return nil, configErr
@@ -82,9 +84,21 @@ func NewSQLiteStore(c *config.Config) (*SQLiteStore, error) {
 		enabled:          strings.EqualFold(configOptions["enabled"], "true") || configOptions["enabled"] == "1",
 	}
 
-	dbErr := sqliteStore.prepareDatabase()
-	if dbErr != nil {
-		return nil, dbErr
+	if !sqliteStore.enabled {
+		return nil, NewErrStoreDisabled(nil)
+	}
+	if strings.TrimSpace(sqliteStore.connectionString) == "" || strings.TrimSpace(sqliteStore.tableName) == "" {
+		return nil, ErrSQLiteStoreNotConfigured
+	}
+	db, err := database.Setup(sqliteDriver, sqliteStore.connectionString)
+	if err != nil {
+		return nil, err
+	}
+	sqliteStore.db = db
+	// Keep in-memory databases on one connection and serialize session writes.
+	db.SetMaxOpenConns(1)
+	if err := sqliteStore.configureDatabase(ctx); err != nil {
+		return nil, errors.Join(err, db.Close())
 	}
 
 	return sqliteStore, nil
@@ -296,37 +310,16 @@ func (s *SQLiteStore) IsEnabled() bool {
 	return s.enabled
 }
 
-// prepareDatabase opens the shared pool and prepares its session table and index.
-func (s *SQLiteStore) prepareDatabase() error {
-	if dbSQLiteSessionStore != nil {
-		s.db = dbSQLiteSessionStore
-		return nil
+// Close releases the store's pool. Call it after requests and cleanup work finish.
+func (s *SQLiteStore) Close() error {
+	if s.db != nil {
+		return s.db.Close()
 	}
-
-	var dbError error
-	dbOnce.Do(func() {
-		s.db, dbError = database.Setup(sqliteDriver, s.connectionString)
-		if dbError != nil {
-			return
-		}
-
-		if err := s.configureDatabase(); err != nil {
-			dbError = database.NewErrDatabase(err)
-			return
-		}
-
-		dbSQLiteSessionStore = s.db
-	})
-
-	if dbError != nil {
-		return dbError
-	}
-
 	return nil
 }
 
 // configureDatabase prepares the session table and expiration index.
-func (s *SQLiteStore) configureDatabase() error {
+func (s *SQLiteStore) configureDatabase(ctx context.Context) error {
 	var createTableSQL string
 
 	// Detect the database type by inspecting the driver
@@ -346,16 +339,21 @@ func (s *SQLiteStore) configureDatabase() error {
 		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", s.db.Driver()))
 	}
 
-	_, err := s.db.Exec(createTableSQL)
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return database.NewErrDatabase(err)
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, createTableSQL)
 	if err != nil {
 		return database.NewErrDatabase(err)
 	}
 	query := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s_expiration ON %s (julianday(expires_at), id)", s.tableName, s.tableName)
-	if _, err := s.db.Exec(query); err != nil {
+	if _, err := tx.ExecContext(ctx, query); err != nil {
 		return database.NewErrDatabase(err)
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 // getSessionFromDatabase attempts to retrieve the specified session from the database

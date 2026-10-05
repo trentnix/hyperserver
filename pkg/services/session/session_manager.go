@@ -1,13 +1,17 @@
 // Package session manages named sessions through cookie and SQLite stores.
 // Attach a SessionManager to each request before calling Get or New. Session data
-// is size-limited JSON, and cookie payloads are signed, not encrypted. SQLite store setup
-// currently shares process-wide state. SQLite End revokes the stored session.
+// is size-limited JSON, and cookie payloads are signed, not encrypted. Each manager
+// owns its initialized providers. SQLite End revokes the stored session.
 package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/trentnix/hyperserver/config"
@@ -17,12 +21,11 @@ import (
 type (
 	// SessionManager is used to manage sessions
 	SessionManager struct {
-		config *config.Config
-
-		// Stores maps provider names to their configuration options.
-		Stores map[string]map[string]string
 		// Types maps session names to provider names, with "default" as the fallback.
-		Types map[string]string
+		// Configure mappings before serving requests. Providers are fixed at construction.
+		Types   map[string]string
+		stores  map[string]SessionStore
+		closers []io.Closer
 	}
 
 	ctxKey int
@@ -39,16 +42,52 @@ func GetSessionManager(r *http.Request) *SessionManager {
 	return getSessionManagerFromContext(r.Context())
 }
 
-// NewSessionManager retains the session configuration and store mappings from c.
-// It does not validate configuration or open a store.
-func NewSessionManager(c *config.Config) *SessionManager {
-	sessionManager := &SessionManager{
-		config: c,
-		Stores: c.HTTP.Session.Stores,
-		Types:  c.HTTP.Session.Types,
+// NewSessionManager validates configuration and initializes each selected provider
+// once. It copies session mappings and releases acquired resources on failure.
+// Call Close after all consumers stop. Requests never initialize providers.
+func NewSessionManager(ctx context.Context, c *config.Config) (*SessionManager, error) {
+	if c == nil {
+		return nil, fmt.Errorf("session configuration is required")
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := ValidateConfig(c); err != nil {
+		return nil, err
+	}
+	m := &SessionManager{Types: maps.Clone(c.HTTP.Session.Types), stores: make(map[string]SessionStore)}
+	selected := make(map[string]bool)
+	for _, name := range m.Types {
+		selected[strings.ToLower(name)] = true
+	}
+	for _, name := range slices.Sorted(maps.Keys(selected)) {
+		var store SessionStore
+		var err error
+		switch name {
+		case strings.ToLower(cookieStoreName):
+			store, err = NewCookieStore(c)
+		case strings.ToLower(sqliteStoreName):
+			store, err = NewSQLiteStore(ctx, c)
+		}
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("initialize session store %s: %w", name, err), m.Close())
+		}
+		m.stores[name] = store
+		if closer, ok := store.(io.Closer); ok {
+			m.closers = append(m.closers, closer)
+		}
+	}
+	return m, nil
+}
 
-	return sessionManager
+// Close releases owned provider resources in reverse initialization order.
+// Requests and background consumers must have stopped before Close is called.
+func (m *SessionManager) Close() error {
+	var err error
+	for i := len(m.closers) - 1; i >= 0; i-- {
+		err = errors.Join(err, m.closers[i].Close())
+	}
+	return err
 }
 
 // Get returns a request-cached or stored session, or creates a new one when absent
@@ -128,26 +167,9 @@ func (m *SessionManager) getStore(sessionName string) (SessionStore, error) {
 		}
 	}
 
-	var store SessionStore
-	var storeErr error
-
-	switch {
-	case strings.EqualFold(storeType, cookieStoreName):
-		store, storeErr = NewCookieStore(m.config)
-		if storeErr != nil {
-			return nil, NewErrCookieStoreNotCreated(storeErr)
-		}
-	case strings.EqualFold(storeType, sqliteStoreName):
-		store, storeErr = NewSQLiteStore(m.config)
-		if storeErr != nil {
-			return nil, NewErrSQLiteStoreNotCreated(storeErr)
-		}
-	default:
+	store := m.stores[strings.ToLower(storeType)]
+	if store == nil {
 		return nil, NewErrSessionStoreNotFound(fmt.Errorf("store type: %s", storeType))
-	}
-
-	if !store.IsEnabled() {
-		return nil, NewErrStoreDisabled(fmt.Errorf("store type: %s", storeType))
 	}
 
 	return store, nil

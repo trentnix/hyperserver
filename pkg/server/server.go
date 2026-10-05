@@ -4,8 +4,11 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
@@ -32,28 +35,31 @@ type (
 )
 
 // NewApplicationServer loads configuration and creates the database pool, router,
-// content manager, session manager, and mail client. It panics on initialization
-// errors. The caller must initialize modules, serve HTTP, and close owned resources.
+// content manager, and mail client. It panics on initialization errors. The caller
+// must initialize sessions and modules, serve HTTP, and close owned resources.
 func NewApplicationServer() *ApplicationServer {
 	s := new(ApplicationServer)
 
 	s.initConfig()
 	s.initDatabase()
 	s.initWeb()
-	s.initSessionManager()
 	s.initContentManager()
 	s.initMail()
 
 	return s
 }
 
-// Shutdown closes the application's database pool. The caller must first drain
-// HTTP requests and stop any other consumers. Borrowing modules must not call it.
+// Shutdown closes session providers and the application's database pool. The caller
+// must first drain HTTP requests and stop other consumers. Borrowing modules must not call it.
 func (s *ApplicationServer) Shutdown() error {
-	if s.Database != nil {
-		return s.Database.Close()
+	var err error
+	if s.SessionManager != nil {
+		err = s.SessionManager.Close()
 	}
-	return nil
+	if s.Database != nil {
+		err = errors.Join(err, s.Database.Close())
+	}
+	return err
 }
 
 // initConfig initializes the config.Config instance in the ApplicationServer
@@ -84,9 +90,21 @@ func (s *ApplicationServer) initWeb() {
 	s.Web = http.NewServeMux()
 }
 
-// initSessionManager initializes the session manager with the provided configuration
-func (s *ApplicationServer) initSessionManager() {
-	s.SessionManager = session.NewSessionManager(s.Config)
+// InitializeSessions prepares selected providers before modules and requests use
+// them. It preserves an already supplied manager. Call serially during startup,
+// after resolving relative storage paths. Failed initialization can be retried.
+func (s *ApplicationServer) InitializeSessions(ctx context.Context) error {
+	if s.SessionManager != nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	manager, err := session.NewSessionManager(ctx, s.Config)
+	if err != nil {
+		return err
+	}
+	s.SessionManager = manager
+	return nil
 }
 
 // initContentManager loads the configuration data in the singleton ContentManager that
