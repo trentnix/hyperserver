@@ -22,6 +22,8 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   try {
+    const ready = await fetch("/test/browser/ready", { method: "POST" });
+    check(ready.ok, "Could not report browser readiness");
     check(typeof htmx !== "undefined", "HTMX did not load");
     for (const [path, status] of [["bad-request", 400], ["forbidden", 403], ["unavailable", 503]]) {
       target.textContent = "Original content";

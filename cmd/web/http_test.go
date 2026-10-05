@@ -39,6 +39,12 @@ import (
 // Remove process isolation when those runtime globals become application-owned.
 func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
+	runHTTPScenarioWithTimeout(t, 30*time.Second, scenario, configure...)
+}
+
+// Browser scenarios need room for download, startup, checks, and process cleanup.
+func runHTTPScenarioWithTimeout(t *testing.T, timeout time.Duration, scenario func(*httpHarness), configure ...func(*config.Config)) {
+	t.Helper()
 	if os.Getenv("HS_HTTP_TEST_CASE") == t.Name() {
 		// These overrides would fail if the harness accidentally loaded runtime
 		// configuration instead of using its explicit fixture.
@@ -56,7 +62,7 @@ func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...fun
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	// Go treats each slash-separated component as its own regular expression.
 	// Anchor every component so a scenario named "mail" cannot also run "mail failure".

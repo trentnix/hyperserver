@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,7 +28,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
 	}
-	runHTTPScenario(t, func(h *httpHarness) {
+	runHTTPScenarioWithTimeout(t, 75*time.Second, func(h *httpHarness) {
 		// Render the real layout, changing only HTMX's URL to a local copy. The
 		// browser still checks the layout's integrity attribute when loading it.
 		page := content.NewManagedContent(httptest.NewRequest(http.MethodGet, "/", nil), h.app.ContentManager)
@@ -68,6 +70,12 @@ func TestBrowserSiteErrors(t *testing.T) {
 			io.WriteString(w, `<p id="success">Saved</p>`)
 		})
 
+		ready := make(chan struct{})
+		var readyOnce sync.Once
+		h.app.Web.HandleFunc("POST /test/browser/ready", func(w http.ResponseWriter, r *http.Request) {
+			readyOnce.Do(func() { close(ready) })
+			w.WriteHeader(http.StatusNoContent)
+		})
 		result := make(chan string, 1)
 		h.app.Web.HandleFunc("POST /test/browser/result", func(w http.ResponseWriter, r *http.Request) {
 			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
@@ -84,7 +92,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 		server := httptest.NewServer(h.handler)
 		defer server.Close()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		logPath := filepath.Join(t.TempDir(), "firefox.log")
 		logFile, err := os.Create(logPath)
@@ -92,13 +100,17 @@ func TestBrowserSiteErrors(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer logFile.Close()
-		cmd := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", t.TempDir(), server.URL+"/test/browser")
+		profile := t.TempDir()
+		cmd := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, server.URL+"/test/browser")
 		cmd.Stdout, cmd.Stderr = logFile, logFile
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = 2 * time.Second
+		t.Logf("Browser executable: %s\nArguments: %q\nTMPDIR: %s\nStartup limit: 30s\nCheck limit: 15s", cmd.Path, cmd.Args, os.TempDir())
 		if err := cmd.Start(); err != nil {
-			t.Fatal(err)
+			t.Fatalf("start browser: %v\n%s", err, browserDiagnostics(profile, logPath, h.logs.String()))
 		}
+		started := time.Now()
+		t.Logf("Browser PID: %d", cmd.Process.Pid)
 		exited := make(chan struct{})
 		var exitErr error
 		go func() {
@@ -110,19 +122,52 @@ func TestBrowserSiteErrors(t *testing.T) {
 			<-exited
 		}()
 
-		select {
-		case report := <-result:
-			if report != "PASS" {
-				t.Fatalf("browser checks failed: %s", report)
-			}
-		case <-exited:
-			output, _ := os.ReadFile(logPath)
-			t.Fatalf("browser exited before reporting results: %v\n%s", exitErr, output)
-		case <-ctx.Done():
-			output, _ := os.ReadFile(logPath)
-			t.Fatalf("browser checks timed out: %s\nHTTP requests:\n%s", output, h.logs.String())
+		if err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second); err != nil {
+			// Reap the process before reading its final output and exit status.
+			cancel()
+			<-exited
+			t.Fatalf("%v\nElapsed: %s\nBrowser exit: %v\n%s", err, time.Since(started), exitErr, browserDiagnostics(profile, logPath, h.logs.String()))
 		}
 	})
+}
+
+// Readiness means the page's JavaScript has started, not just that Firefox exists.
+// Time spent starting the browser and loading the page does not consume check time.
+func waitForBrowser(ready <-chan struct{}, result <-chan string, exited <-chan struct{}, startupTimeout, checkTimeout time.Duration) error {
+	startup := time.NewTimer(startupTimeout)
+	defer startup.Stop()
+	select {
+	case <-ready:
+		startup.Stop()
+	case <-exited:
+		return fmt.Errorf("browser exited during startup, before JavaScript reported readiness")
+	case <-startup.C:
+		return fmt.Errorf("browser startup timed out after %s, before JavaScript reported readiness", startupTimeout)
+	}
+
+	checks := time.NewTimer(checkTimeout)
+	defer checks.Stop()
+	select {
+	case report := <-result:
+		if report != "PASS" {
+			return fmt.Errorf("browser checks failed: %s", report)
+		}
+		return nil
+	case <-exited:
+		return fmt.Errorf("browser exited during checks, after JavaScript reported readiness")
+	case <-checks.C:
+		return fmt.Errorf("browser checks timed out after %s, after JavaScript reported readiness", checkTimeout)
+	}
+}
+
+func browserDiagnostics(profile, logPath, requests string) string {
+	entries, profileErr := os.ReadDir(profile)
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	output, logErr := os.ReadFile(logPath)
+	return fmt.Sprintf("Profile: %s\nProfile entries (read error: %v): %v\nBrowser output (read error: %v):\n%s\nHTTP requests:\n%s", profile, profileErr, names, logErr, output, requests)
 }
 
 func downloadBrowserHTMX(t *testing.T, url, integrity string) []byte {
