@@ -39,14 +39,14 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test HTMX in Firefox
+      - name: Test HTMX and native forms in Firefox
         env:
           HS_TEST_FIREFOX: firefox
           TMPDIR: ${{ runner.temp }} # Keep profiles visible to browsers that isolate /tmp.
         run: |
           firefox --version
           # Allow download, 30s startup, 15s checks, and cleanup inside the 75s scenario limit.
-          go test -count=1 -timeout=90s ./cmd/web -run '^TestBrowserSiteErrors$'
+          go test -count=1 -timeout=3m ./cmd/web -run '^TestBrowser(SiteErrors|NativeCredentialForms)$'
 
       - name: Test with race detector
         env:

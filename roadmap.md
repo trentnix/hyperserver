@@ -17,12 +17,12 @@ Phase 0 is complete. Phase 1 is in progress. HyperServer is not ready for public
 | Startup and modules | [Server construction](pkg/server/server.go) initializes database, sessions, and mail unconditionally. The [handler registry](pkg/handlers/handlers.go) stores instances globally. | Activate required services and create module instances per application. |
 | Shutdown and TLS | The [reference application](cmd/web/main.go) supports direct TLS and an explicitly trusted edge proxy. Verified client IPs and HTTPS state feed rate limits and session cookies. Links use configured addresses. Shutdown drains requests before closing the shared SQL pool. | Manage other module-owned resources through the application lifecycle. |
 | Configuration and middleware | [Startup](cmd/web/startup_test.go) validates signing keys, lifetimes, and provider selections. [Session loading](pkg/services/middleware/session.go) distinguishes missing or expired sessions from invalid cookies and storage failures. [Route-level authorization](pkg/services/middleware/authorization.go) enforces application-defined policies separately from identity loading. | Make service dependencies application-owned. |
-| Forms and account writes | [Route registration](pkg/routing/routes.go) applies body limits and inherited per-route rate policies. Handler policies override module and application defaults. Explicit [shared budgets](pkg/ratelimit/limiter.go) apply independently, including an optional application budget before session loading. The [HTTP stack](cmd/web/main.go) uses Go's CSRF protection. The [form parser](pkg/components/form/request.go) checks field sizes before binding. [Account creation and updates](pkg/services/user/user.go) use separate operations. | Validate limits under load. |
+| Forms and account writes | [Route registration](pkg/routing/routes.go) applies body limits and inherited per-route rate policies. Handler policies override module and application defaults. Explicit [shared budgets](pkg/ratelimit/limiter.go) apply independently, including an optional application budget before session loading. The [HTTP stack](cmd/web/main.go) uses Go's CSRF protection. The [form parser](pkg/components/form/request.go) checks field sizes before binding. [Account creation and updates](pkg/services/user/user.go) use separate operations. | Prevent credential exposure when HTMX is unavailable or forms redisplay. Reject stale account writes. Validate limits under load. |
 | Recovery and verification | [Password reset](pkg/services/user/auth_token_reset.go) and [account verification](pkg/services/user/auth_token_verification.go) use emailed, single-use links. Token consumption and the account change share a transaction. Verification links are bound to the recipient's email address. Admitted reset requests have a minimum response time. Rate limits do not depend on account existence. | Test timing under load. |
-| Mail and sessions | [SMTP delivery](pkg/services/messaging/mail.go) has timeouts and cancellation. Authentication uses revocable [SQLite sessions](pkg/services/session/sqlitestore.go), with ID rotation at login and verification. Password reset or change invalidates all account sessions. [Session JSON](pkg/services/session/readme.md) is limited to 64 KiB and cookies to 4 KiB. An explicit [cleanup command](cmd/cleanup) removes expired sessions and account tokens in bounded batches. | Add optional automatic cleanup with application lifecycle management. |
+| Mail and sessions | [SMTP delivery](pkg/services/messaging/mail.go) has timeouts and cancellation. Authentication uses revocable [SQLite sessions](pkg/services/session/sqlitestore.go), with ID rotation at login and verification. Password reset or change invalidates all account sessions. [Session JSON](pkg/services/session/readme.md) is limited to 64 KiB and cookies to 4 KiB. An explicit [cleanup command](cmd/cleanup) removes expired sessions and account tokens in bounded batches. | Fix global session initialization, failed-setup retry, and application isolation. Add optional automatic cleanup with application lifecycle management. |
 | Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. [Authentication mutations](auth/auth_manager.go) and [site mutations](modules/site/router.go) require POST. Verification and reset links display forms without consuming tokens. [Redirects](pkg/util/redirect.go) accept local paths and use HTTP 303 or HTMX headers without rendering HTML or JavaScript. | Keep development modules out of production applications. |
 | Browser security | The [reference CSP](cmd/web/security.go) blocks inline scripts and evaluation. HTMX uses external scripts and styles, without fragment scripts or local history snapshots. [Security headers](pkg/services/middleware/security.go) cover pages, fragments, and errors. HSTS is opt-in for verified HTTPS. Cookie attributes have HTTP and provider-level tests. | Keep the CSP aligned with application assets and features. |
-| Rendering and tests | Form and site messages are escaped as text. [HandleError](modules/site/error.go) uses the requested error status and keeps internal details in logs. Failed error-page rendering returns a plain-text 500. [Templates](pkg/components/content/content.go) are parsed per response. The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. | Reuse parsed templates and cover unresolved security issues with regression tests. |
+| Rendering and tests | Form and site messages are escaped as text. [HandleError](modules/site/error.go) uses the requested error status and keeps internal details in logs. Failed error-page rendering returns a plain-text 500. [Templates](pkg/components/content/content.go) are parsed per response. The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. | Prevent partial success responses on render failure, persist flash-message removal, and distinguish page and fragment cache entries. Reuse parsed templates. |
 
 ## Design principles
 
@@ -79,7 +79,7 @@ flowchart LR
 
 Application operations return outcomes independently of HTTP presentation. Handlers map those outcomes to response results. The dispatcher handles request classification, view selection, redirects, notifications, and HTMX response metadata.
 
-The reference feature must demonstrate a form submission, validation errors that preserve input, persistence through a replaceable repository, and a successful fragment update or redirect. It must also demonstrate an ordinary form submission as an example of progressive enhancement.
+The reference feature must demonstrate a form submission, validation errors that preserve non-secret input, persistence through a replaceable repository, and a successful fragment update or redirect. It must also demonstrate an ordinary form submission as an example of progressive enhancement.
 
 ## Intended architecture
 
@@ -202,6 +202,10 @@ The roadmap defines the core and replaceable service boundaries. Public APIs are
 
 ### Phase 1: Correctness and security (in progress)
 
+- Give credential forms explicit POST actions, keep secrets out of request logs and redisplayed fields, and prevent caching of credential and token-bearing responses. Test the actual forms with HTMX unavailable.
+- Make SQLite session initialization application-owned and safe under concurrent startup, failed-setup retry, and independent shutdown. Do not wait for the full module refactor.
+- Prevent stale account updates from restoring old passwords or security state.
+- Buffer ordinary rendering before committing a response. Persist flash-message removal and report storage failures. Set `Vary: HX-Request` for page/fragment selection and explicit cache policies for personalized responses.
 - Validate request limits and recovery-response timing under load. A minimum response time does not conceal work that takes longer than that minimum.
 - Keep regression, HTTP integration, and browser coverage for security fixes, including failure, concurrency, and replay cases where applicable.
 
@@ -215,13 +219,15 @@ Exit when these known blockers have regression coverage and the reference applic
 - Handle `SIGINT` and `SIGTERM`, drain requests, and close owned resources. Test startup rollback and shutdown deadlines.
 - Allow applications to enable automatic, bounded session and token cleanup. Start cleanup after storage initialization, prevent overlapping runs, report failures, and stop cleanup before closing storage. External scheduling of the cleanup command remains sufficient for production readiness.
 - Use explicit filesystems or embedded assets for templates and migrations. Honor configured migration locations.
+- Build a small second application, including a stateless configuration, to test service boundaries before they settle.
 
-Exit when two independent servers can run in one process and tests cover partial startup, provider ambiguity, route conflicts, and cleanup.
+Exit when two independent servers can run and stop in one process without affecting each other, a stateless application needs no database, sessions, authentication, or mail, and tests cover partial startup, provider ambiguity, route conflicts, and cleanup.
 
 ### Phase 3: Rendering and reference workflow
 
-- Replace tag-driven form validation with explicit validation and field errors.
-- Implement response dispatch and reusable template sets.
+- Replace tag-driven form validation with explicit validation and field errors. Share password rules between forms and account operations.
+- Implement response dispatch and reusable template sets. Consolidate duplicate HTMX helpers and keep session mutation outside template execution.
+- Narrow form and content-manager interfaces around callers. Remove redundant error wrappers and pointers to interfaces, and use error-last return values. Keep distinct security operations explicit.
 - Build the representative form workflow with full-page and HTMX requests, inline errors, notifications, redirects, and out-of-band updates.
 - Test escaping and response behavior against the supported HTMX version, including validation-error status handling.
 - Establish rendering and middleware benchmarks. Publish a concise example of progressive enhancement.
@@ -231,6 +237,8 @@ Exit when the workflow uses shared response handling, passes HTTP tests, and has
 ### Phase 4: Persistence and serialization contracts
 
 - Extract repositories, required storage capabilities, and serializers from actual consumers.
+- Separate authentication-provider operations from HTTP and lifecycle handling. Providers implement only the account capabilities they supply.
+- Carry request cancellation through account lookup and storage calls instead of replacing it with background contexts.
 - Evaluate replacing `sqlx` with `database/sql` inside the extracted repositories.
 - Implement in-memory and SQLite adapters, then validate PostgreSQL and one suitable non-relational adapter.
 - Test transaction scope, uniqueness, concurrency, format migration, and recoverable delivery where required.
@@ -257,6 +265,6 @@ Exit when a clean environment can deploy, operate, recover, and restore the refe
 
 ### Phase 7: Validate framework usability
 
-Build a second application with different requirements and exercise a minimal stateless configuration. Use those applications to remove coupling, document extension contracts, and decide which APIs can stabilize.
+Extend the second application introduced in Phase 2 to validate provider replacement. Use both applications to remove remaining coupling, document extension contracts, and decide which APIs can stabilize. Choose a project license and publish a security-reporting policy before inviting outside adoption.
 
 Exit when multiple applications validate the core, unused services stay inactive, and compatibility and deprecation policies are explicit.

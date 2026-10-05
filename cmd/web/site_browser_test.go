@@ -131,43 +131,49 @@ func TestBrowserSiteErrors(t *testing.T) {
 		server := httptest.NewServer(h.handler)
 		defer server.Close()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		logPath := filepath.Join(t.TempDir(), "firefox.log")
-		logFile, err := os.Create(logPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer logFile.Close()
-		profile := t.TempDir()
-		cmd := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, server.URL+"/test/browser")
-		cmd.Stdout, cmd.Stderr = logFile, logFile
-		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-		cmd.WaitDelay = 2 * time.Second
-		t.Logf("Browser executable: %s\nArguments: %q\nTMPDIR: %s\nStartup limit: 30s\nCheck limit: 15s", cmd.Path, cmd.Args, os.TempDir())
-		if err := cmd.Start(); err != nil {
-			t.Fatalf("start browser: %v\n%s", err, browserDiagnostics(profile, logPath, h.logs.String()))
-		}
-		started := time.Now()
-		t.Logf("Browser PID: %d", cmd.Process.Pid)
-		exited := make(chan struct{})
-		var exitErr error
-		go func() {
-			exitErr = cmd.Wait()
-			close(exited)
-		}()
-		defer func() {
-			cancel()
-			<-exited
-		}()
-
-		if err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second); err != nil {
-			// Reap the process before reading its final output and exit status.
-			cancel()
-			<-exited
-			t.Fatalf("%v\nElapsed: %s\nBrowser exit: %v\n%s", err, time.Since(started), exitErr, browserDiagnostics(profile, logPath, h.logs.String()))
-		}
+		runBrowser(t, server.URL+"/test/browser", ready, result, h.logs.String)
 	})
+}
+
+func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan string, logs func() string) {
+	t.Helper()
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	logPath := filepath.Join(t.TempDir(), "firefox.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logFile.Close()
+	profile := t.TempDir()
+	cmd := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, url)
+	cmd.Stdout, cmd.Stderr = logFile, logFile
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = 2 * time.Second
+	t.Logf("Browser executable: %s\nArguments: %q\nTMPDIR: %s\nStartup limit: 30s\nCheck limit: 15s", cmd.Path, cmd.Args, os.TempDir())
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start browser: %v\n%s", err, browserDiagnostics(profile, logPath, logs()))
+	}
+	started := time.Now()
+	t.Logf("Browser PID: %d", cmd.Process.Pid)
+	exited := make(chan struct{})
+	var exitErr error
+	go func() {
+		exitErr = cmd.Wait()
+		close(exited)
+	}()
+	defer func() {
+		cancel()
+		<-exited
+	}()
+
+	if err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second); err != nil {
+		// Reap the process before reading its final output and exit status.
+		cancel()
+		<-exited
+		t.Fatalf("%v\nElapsed: %s\nBrowser exit: %v\n%s", err, time.Since(started), exitErr, browserDiagnostics(profile, logPath, logs()))
+	}
 }
 
 // Readiness means the page's JavaScript has started, not just that Firefox exists.
