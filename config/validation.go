@@ -20,6 +20,9 @@ func (c Config) Validate() error {
 	if len(c.HTTP.TrustedProxies) > 0 && origin == nil {
 		return fmt.Errorf("http.publicOrigin is required when http.trustedProxies is configured")
 	}
+	if c.HTTP.HSTSMaxAge < 0 {
+		return fmt.Errorf("http.hstsMaxAge must not be negative")
+	}
 	if c.HTTP.TLS.Enabled {
 		if strings.TrimSpace(c.HTTP.TLS.Certificate) == "" || strings.TrimSpace(c.HTTP.TLS.Key) == "" {
 			return fmt.Errorf("http.tls.certificate and http.tls.key are required when http.tls.enabled is true")

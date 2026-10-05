@@ -1,10 +1,6 @@
 package messages
 
-import (
-	"fmt"
-	"html/template"
-	"net/http"
-)
+import "net/http"
 
 type (
 	// SystemMessage is a session-backed message intended for the browser console.
@@ -59,27 +55,6 @@ func (c *SystemMessage) IsWarning() bool {
 // IsError returns true if the specified SystemMessage is an error message
 func (c *SystemMessage) IsError() bool {
 	return c.Type == SystemMessageTypeError.String()
-}
-
-// ConsoleMessage formats a browser console call as trusted JavaScript.
-// It uses Go string quoting, not HTML script-context escaping. Do not pass untrusted text.
-func (c *SystemMessage) ConsoleMessage() template.JS {
-	var msgType string
-	switch SystemMessageType(c.Type) {
-	case SystemMessageTypeDebug:
-		msgType = "debug"
-	case SystemMessageTypeLog:
-		msgType = "log"
-	case SystemMessageTypeInfo:
-		msgType = "info"
-	case SystemMessageTypeWarning:
-		msgType = "warn"
-	case SystemMessageTypeError:
-		msgType = "error"
-	default:
-		msgType = "debug"
-	}
-	return template.JS(fmt.Sprintf(`console.%s(%q);`, msgType, c.Message))
 }
 
 // NewSystemMessage creates a new instance of a SystemMessage struct

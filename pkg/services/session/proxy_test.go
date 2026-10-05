@@ -60,6 +60,12 @@ func TestSessionCookiesUseVerifiedHTTPS(t *testing.T) {
 					if len(cookies) != 1 || cookies[0].Secure != tc.secure {
 						t.Fatalf("cookies=%v, want Secure=%t", cookies, tc.secure)
 					}
+					if cookie := cookies[0]; !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" || cookie.Domain != "" {
+						t.Fatalf("unsafe cookie attributes: %s", cookie)
+					}
+					if action != "end" && cookies[0].MaxAge <= 0 {
+						t.Fatal("saved cookie has no bounded browser lifetime")
+					}
 					if action == "end" && cookies[0].MaxAge != -1 {
 						t.Fatal("logout did not expire the cookie")
 					}

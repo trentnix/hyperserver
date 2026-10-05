@@ -28,6 +28,7 @@ type (
 	HTTPConfig struct {
 		PublicOrigin     string          // Address for absolute links. Required with trusted proxies.
 		TrustedProxies   []string        // Direct proxy peer CIDRs. Empty trusts no forwarding headers.
+		HSTSMaxAge       int64           // HTTPS-only HSTS lifetime in seconds. Zero disables the header.
 		ListenHost       string          // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
 		Port             uint16          // Listener port. Zero requests an ephemeral port but cannot supply fallback links.
 		ReadTimeout      time.Duration   // Maximum time to read a request, including its body.

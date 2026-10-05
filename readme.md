@@ -95,6 +95,14 @@ Verified proxy information supplies rate-limit client IPs and session-cookie sec
 
 ### Browser request protection
 
+The reference application sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and disables camera, microphone, and geolocation access through `Permissions-Policy`. Its [Content Security Policy](cmd/web/security.go) allows local assets, the pinned HTMX script, and Google Fonts. It blocks inline scripts, `eval`, framing, and cross-origin form submissions. Headers also cover fragments and error responses.
+
+The site disables HTMX's [evaluation, fragment scripts, inline indicator styles, and local history cache](https://htmx.org/docs/#config). Put scripts and styles in external files. Console messages render as escaped text and are logged by `site.js`. Other applications must choose a CSP that matches their assets and HTMX features. The optional [SecurityHeaders middleware](pkg/services/middleware/security.go) accepts that policy and must wrap handlers that can reject requests.
+
+For an HTTPS-only deployment, set `http.hstsMaxAge` to a lifetime in seconds, for example `31536000` for one year. HSTS tells browsers to use HTTPS for future visits. It is sent only for direct or verified proxy HTTPS, without `includeSubDomains` or `preload`. The default `0` omits the header. It does not clear a [policy the browser already remembers](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security). Install `NewHSTS` after proxy verification in a custom HTTP stack.
+
+Session cookies use `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`, and a lifetime bounded by session configuration. `Secure` requires direct or verified proxy HTTPS. HTTP is supported for local development, not public authentication traffic.
+
 The reference application uses Go's [CrossOriginProtection](https://pkg.go.dev/net/http#CrossOriginProtection) before session loading. It rejects cross-origin mutations with HTTP 403 for ordinary forms and HTMX, without form tokens. Requests with neither `Sec-Fetch-Site` nor `Origin` are allowed for non-browser clients. When only `Origin` is available, Go compares its host and port with the request Host, not its scheme.
 
 Other applications must include this middleware in their HTTP stack. Reverse proxies must preserve the browser-facing Host and origin headers. `http.publicOrigin` controls generated links, not which origins may submit requests.

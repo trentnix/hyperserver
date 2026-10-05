@@ -21,6 +21,7 @@ Phase 0 is complete. Phase 1 is in progress. HyperServer is not ready for public
 | Recovery and verification | [Password reset](pkg/services/user/auth_token_reset.go) and [account verification](pkg/services/user/auth_token_verification.go) use emailed, single-use links. Token consumption and the account change share a transaction. Verification links are bound to the recipient's email address. Admitted reset requests have a minimum response time. Rate limits do not depend on account existence. | Test timing under load. |
 | Mail and sessions | [SMTP delivery](pkg/services/messaging/mail.go) has timeouts and cancellation. Authentication uses revocable [SQLite sessions](pkg/services/session/sqlitestore.go), with ID rotation at login and verification. Password reset or change invalidates all account sessions. [Session JSON](pkg/services/session/readme.md) is limited to 64 KiB and cookies to 4 KiB. An explicit [cleanup command](cmd/cleanup) removes expired sessions and account tokens in bounded batches. | Add optional automatic cleanup with application lifecycle management. |
 | Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. [Authentication mutations](auth/auth_manager.go) and [site mutations](modules/site/router.go) require POST. Verification and reset links display forms without consuming tokens. [Redirects](pkg/util/redirect.go) accept local paths and use HTTP 303 or HTMX headers without rendering HTML or JavaScript. | Keep development modules out of production applications. |
+| Browser security | The [reference CSP](cmd/web/security.go) blocks inline scripts and evaluation. HTMX uses external scripts and styles, without fragment scripts or local history snapshots. [Security headers](pkg/services/middleware/security.go) cover pages, fragments, and errors. HSTS is opt-in for verified HTTPS. Cookie attributes have HTTP and provider-level tests. | Keep the CSP aligned with application assets and features. |
 | Rendering and tests | Form and site messages are escaped as text. [HandleError](modules/site/error.go) uses the requested error status and keeps internal details in logs. Failed error-page rendering returns a plain-text 500. [Templates](pkg/components/content/content.go) are parsed per response. The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. | Reuse parsed templates and cover unresolved security issues with regression tests. |
 
 ## Design principles
@@ -201,9 +202,8 @@ The roadmap defines the core and replaceable service boundaries. Public APIs are
 
 ### Phase 1: Correctness and security (in progress)
 
-- Add request limits, safe cookies, security headers, and a documented CSP.
-- Define TLS termination and trusted-proxy behavior. Add rate limits and prevent recovery-response timing from revealing account eligibility.
-- Add regression and HTTP integration tests for each security fix, including failure, concurrency, and replay cases.
+- Validate request limits and recovery-response timing under load. A minimum response time does not conceal work that takes longer than that minimum.
+- Keep regression, HTTP integration, and browser coverage for security fixes, including failure, concurrency, and replay cases where applicable.
 
 Exit when these known blockers have regression coverage and the reference application's security controls work through HTTP tests. Passing this phase does not establish complete production readiness.
 

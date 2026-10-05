@@ -1,9 +1,9 @@
 {{ define "site.component.console_messages" }}
   {{ if .SystemMessages }}
-    <script>
+    <div hidden>
       {{ range .SystemMessages }}
-        {{ .ConsoleMessage }}
+        <span data-console-level="{{ .Type }}">{{ .Message }}</span>
       {{ end }}
-    </script>
+    </div>
   {{ end }}
 {{ end }}

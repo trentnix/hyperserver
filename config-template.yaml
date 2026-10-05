@@ -20,6 +20,10 @@ http:
   # The proxy must overwrite X-Forwarded-For with one client IP and
   # X-Forwarded-Proto with http or https, and preserve the browser-facing Host.
   trustedProxies: []
+  # HSTS lifetime in seconds, sent only for direct or verified proxy HTTPS.
+  # Zero disables the header. Enable only for an HTTPS-only deployment.
+  # Browsers remember this policy. No subdomain or preload commitment is added.
+  hstsMaxAge: 0
   # Maximum time to read a request, including its body. Zero disables the limit.
   readTimeout: "5s"
   # Maximum time to write a response. Zero disables the limit.

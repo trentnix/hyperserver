@@ -12,6 +12,7 @@ func TestTransportConfiguration(t *testing.T) {
 		env                 map[string]string
 		proxies             []string
 		tls                 bool
+		hsts                int64
 	}{
 		{name: "defaults", yaml: "{}"},
 		{name: "explicitly no proxies", yaml: "http:\n  trustedProxies: []"},
@@ -21,6 +22,11 @@ func TestTransportConfiguration(t *testing.T) {
 		{name: "unused files", yaml: "http:\n  tls:\n    certificate: server.pem\n    key: server.key", wantErr: "http.tls.enabled"},
 		{name: "trusted proxy", yaml: "http:\n  publicOrigin: https://example.test\n  trustedProxies: [127.0.0.1/32, '::1/128']", proxies: []string{"127.0.0.1/32", "::1/128"}},
 		{name: "invalid proxy", yaml: "http:\n  trustedProxies: [localhost]", wantErr: "http.trustedProxies"},
+		{name: "negative HSTS", yaml: "http:\n  hstsMaxAge: -1", wantErr: "http.hstsMaxAge"},
+		{name: "HSTS", yaml: "http:\n  hstsMaxAge: 86400", hsts: 86400},
+		{name: "HSTS environment", yaml: "{}", env: map[string]string{"HYPERSERVER_HTTP_HSTSMAXAGE": "86400"}, hsts: 86400},
+		{name: "environment disables HSTS", yaml: "http:\n  hstsMaxAge: 86400", env: map[string]string{"HYPERSERVER_HTTP_HSTSMAXAGE": "0"}},
+		{name: "negative HSTS environment", yaml: "{}", env: map[string]string{"HYPERSERVER_HTTP_HSTSMAXAGE": "-1"}, wantErr: "http.hstsMaxAge"},
 		{name: "proxy needs origin", yaml: "http:\n  trustedProxies: [127.0.0.1/32]", wantErr: "http.publicOrigin"},
 		{name: "environment", yaml: "{}", env: map[string]string{"HYPERSERVER_HTTP_PUBLICORIGIN": "https://example.test", "HYPERSERVER_HTTP_TRUSTEDPROXIES": "127.0.0.1/32,::1/128"}, proxies: []string{"127.0.0.1/32", "::1/128"}},
 		{name: "environment replaces list", yaml: "http:\n  publicOrigin: https://example.test\n  trustedProxies: [192.0.2.1/32]", env: map[string]string{"HYPERSERVER_HTTP_TRUSTEDPROXIES": "127.0.0.1/32"}, proxies: []string{"127.0.0.1/32"}},
@@ -40,11 +46,17 @@ func TestTransportConfiguration(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || cfg.HTTP.TLS.Enabled != tc.tls || !slices.Equal(cfg.HTTP.TrustedProxies, tc.proxies) {
-				t.Fatalf("TLS=%t proxies=%v error=%v", cfg.HTTP.TLS.Enabled, cfg.HTTP.TrustedProxies, err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.HTTP.TLS.Enabled != tc.tls || !slices.Equal(cfg.HTTP.TrustedProxies, tc.proxies) {
+				t.Fatalf("TLS=%t proxies=%v", cfg.HTTP.TLS.Enabled, cfg.HTTP.TrustedProxies)
 			}
 			if tc.tls && (cfg.HTTP.TLS.Certificate != "server.pem" || cfg.HTTP.TLS.Key != "server.key") {
 				t.Fatalf("certificate=%q key=%q", cfg.HTTP.TLS.Certificate, cfg.HTTP.TLS.Key)
+			}
+			if cfg.HTTP.HSTSMaxAge != tc.hsts {
+				t.Fatalf("HSTS max-age=%d, want %d", cfg.HTTP.HSTSMaxAge, tc.hsts)
 			}
 		})
 	}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -33,6 +34,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 		// browser still checks the layout's integrity attribute when loading it.
 		page := content.NewManagedContent(httptest.NewRequest(http.MethodGet, "/", nil), h.app.ContentManager)
 		page.PartialName = "test.browser.errors"
+		page.SystemMessages = []messages.SystemMessage{messages.NewSystemMessage(`</script><script>window.systemMessageInjected=true</script>`, messages.SystemMessageTypeDebug)}
 		page.AddContent("modules/site/testdata/error-responses.html")
 		w := httptest.NewRecorder()
 		if err := page.Render(w, httptest.NewRequest(http.MethodGet, "/", nil)); err != nil {
@@ -67,7 +69,11 @@ func TestBrowserSiteErrors(t *testing.T) {
 		})
 		h.app.Web.HandleFunc("GET /test/browser/success", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			io.WriteString(w, `<p id="success">Saved</p>`)
+			io.WriteString(w, `<p id="success">Saved</p><script src="/test/browser/injected.js"></script>`)
+		})
+		h.app.Web.HandleFunc("GET /test/browser/injected.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/javascript")
+			io.WriteString(w, `window.fragmentScriptExecuted=true`)
 		})
 
 		ready := make(chan struct{})
@@ -77,6 +83,39 @@ func TestBrowserSiteErrors(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		})
 		result := make(chan string, 1)
+		for _, mode := range []string{"htmx", "native"} {
+			h.app.Web.HandleFunc("POST /test/browser/"+mode+"-form", func(w http.ResponseWriter, r *http.Request) {
+				r.Body = http.MaxBytesReader(w, r.Body, 4096)
+				report := "PASS"
+				if err := r.ParseForm(); err != nil || r.PostForm.Get("message") != "A&B + café" {
+					report = mode + " form: missing or incorrectly encoded fields"
+				}
+				wantHX := ""
+				if mode == "htmx" {
+					wantHX = "true"
+				}
+				if r.Header.Get("HX-Request") != wantHX {
+					report = mode + " form: unexpected HX-Request header"
+				}
+
+				if mode == "native" {
+					// The native POST completes the browser checks. A blocked form
+					// never reaches this handler and cannot report a false success.
+					w.WriteHeader(http.StatusNoContent)
+					select {
+					case result <- report:
+					default:
+					}
+					return
+				}
+				if report != "PASS" {
+					http.Error(w, report, http.StatusBadRequest)
+					return
+				}
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				io.WriteString(w, `<p id="form-success">Form saved</p>`)
+			})
+		}
 		h.app.Web.HandleFunc("POST /test/browser/result", func(w http.ResponseWriter, r *http.Request) {
 			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
 			if err != nil {

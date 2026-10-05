@@ -103,8 +103,9 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 	return serveHTTP(ctx, server, listener)
 }
 
-// applicationHandler logs requests, verifies proxy metadata, applies the optional
-// shared budget, checks browser origins, then loads sessions and dispatches routes.
+// applicationHandler logs requests and sets browser security headers, then verifies
+// proxy metadata before applying HSTS, the optional shared budget, origin checks,
+// session loading, and route dispatch.
 // Inherited per-route policies and body limits are applied during registration.
 // Non-browser requests without origin headers follow Go's CrossOriginProtection
 // defaults. No trusted origins or CSRF exemptions are set.
@@ -112,6 +113,10 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 	proxy, err := requestinfo.NewProxyMiddleware(s.Config.HTTP.TrustedProxies)
 	if err != nil {
 		return nil, fmt.Errorf("http.trustedProxies: %w", err)
+	}
+	hsts, err := middleware.NewHSTS(s.Config.HTTP.HSTSMaxAge)
+	if err != nil {
+		return nil, fmt.Errorf("http.hstsMaxAge: %w", err)
 	}
 	handler := middleware.ChainMiddleware(s.Web,
 		middleware.LoadSessionManagement(s.Database, s.SessionManager),
@@ -124,7 +129,9 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 		}
 		handler = limiter.Handler(handler)
 	}
-	return middleware.LoggerMiddleware(l)(proxy(handler)), nil
+	handler = proxy(hsts(handler))
+	handler = middleware.SecurityHeaders(referenceContentSecurityPolicy)(handler)
+	return middleware.LoggerMiddleware(l)(handler), nil
 }
 
 // serveHTTP stops accepting requests on cancellation and waits for handlers to

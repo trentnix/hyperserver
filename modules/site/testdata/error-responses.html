@@ -2,5 +2,14 @@
 <div id="browser-target">Original content</div>
 <div id="untouched">Outside the target</div>
 <button id="browser-request" hx-get="/test/browser/success" hx-target="#browser-target" hx-swap="innerHTML settle:0">Request</button>
+<form id="htmx-form" method="post" action="/test/browser/htmx-form" hx-post="/test/browser/htmx-form" hx-target="#form-target" hx-swap="innerHTML settle:0">
+  <input name="message" value="A&amp;B + café">
+  <button type="submit">Submit with HTMX</button>
+</form>
+<div id="form-target"></div>
+<form id="native-form" method="post" action="/test/browser/native-form">
+  <input name="message" value="A&amp;B + café">
+  <button type="submit">Submit without HTMX</button>
+</form>
 <script src="/test/browser/run.js" defer></script>
 {{ end }}
