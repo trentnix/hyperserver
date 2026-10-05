@@ -28,8 +28,8 @@ func TestStartupHelperProcess(t *testing.T) {
 		}
 		os.Args = append(os.Args, "-contact-directory", path)
 		main()
-	case "shutdown":
-		checkRunShutdown(t)
+	case "shutdown", "shutdown-tls":
+		checkRunShutdown(t, os.Getenv("HS_STARTUP_TEST_HELPER") == "shutdown-tls")
 	case "signals":
 		runSignalTestHelper(t)
 	case "listen-failure":

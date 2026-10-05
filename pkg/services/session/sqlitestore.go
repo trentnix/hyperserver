@@ -15,6 +15,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/requestinfo"
 )
 
 type (
@@ -155,7 +156,7 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	if s.db == nil {
 		return ErrDatabaseNotConfigured
 	}
-	cookie, err := s.sessionCookie(session, r.TLS != nil)
+	cookie, err := s.sessionCookie(session, requestinfo.IsHTTPS(r))
 	if err != nil {
 		return err
 	}
@@ -230,7 +231,7 @@ func (s *SQLiteStore) Rotate(w http.ResponseWriter, r *http.Request, previous *S
 	if err != nil {
 		return nil, err
 	}
-	cookie, err := s.sessionCookie(next, r.TLS != nil)
+	cookie, err := s.sessionCookie(next, requestinfo.IsHTTPS(r))
 	if err != nil {
 		return nil, err
 	}

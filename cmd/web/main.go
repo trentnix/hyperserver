@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
+	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
@@ -59,6 +60,10 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 		}
 	}
 
+	tlsConfig, err := listenerTLS(s.Config.HTTP)
+	if err != nil {
+		return err
+	}
 	if err := setupAccountStorage(ctx, s); err != nil {
 		return fmt.Errorf("failed to prepare account storage: %w", err)
 	}
@@ -87,6 +92,7 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 		ReadTimeout:  s.Config.HTTP.ReadTimeout,
 		WriteTimeout: s.Config.HTTP.WriteTimeout,
 		IdleTimeout:  s.Config.HTTP.IdleTimeout,
+		TLSConfig:    tlsConfig,
 	}
 
 	listener, err := net.Listen("tcp", address)
@@ -97,12 +103,16 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 	return serveHTTP(ctx, server, listener)
 }
 
-// applicationHandler logs requests, applies the optional shared application
-// budget, checks browser origins, then loads sessions and dispatches routes.
+// applicationHandler logs requests, verifies proxy metadata, applies the optional
+// shared budget, checks browser origins, then loads sessions and dispatches routes.
 // Inherited per-route policies and body limits are applied during registration.
 // Non-browser requests without origin headers follow Go's CrossOriginProtection
 // defaults. No trusted origins or CSRF exemptions are set.
 func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Handler, error) {
+	proxy, err := requestinfo.NewProxyMiddleware(s.Config.HTTP.TrustedProxies)
+	if err != nil {
+		return nil, fmt.Errorf("http.trustedProxies: %w", err)
+	}
 	handler := middleware.ChainMiddleware(s.Web,
 		middleware.LoadSessionManagement(s.Database, s.SessionManager),
 		http.NewCrossOriginProtection().Handler,
@@ -114,14 +124,21 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 		}
 		handler = limiter.Handler(handler)
 	}
-	return middleware.LoggerMiddleware(l)(handler), nil
+	return middleware.LoggerMiddleware(l)(proxy(handler)), nil
 }
 
 // serveHTTP stops accepting requests on cancellation and waits for handlers to
 // finish before returning. The caller can then close their shared dependencies.
 func serveHTTP(ctx context.Context, s *http.Server, listener net.Listener) error {
+	defer listener.Close()
 	done := make(chan error, 1)
-	go func() { done <- s.Serve(listener) }()
+	go func() {
+		if s.TLSConfig != nil {
+			done <- s.ServeTLS(listener, "", "")
+		} else {
+			done <- s.Serve(listener)
+		}
+	}()
 
 	var err error
 	select {

@@ -59,18 +59,39 @@ Mail is sent during the request. `auth.resetMinimumResponseTime` sets the minimu
 
 HyperServer does not save pending delivery work or retry it after a restart. If no email arrives, request another password reset or sign in to resend verification.
 
-### Public links and the server address
+### Addresses, TLS, and proxies
 
-`http.listenHost` and `http.port` select the listening address. Set `http.publicOrigin` when public links need a different address, such as behind a reverse proxy:
+`http.listenHost` and `http.port` select the listening address. For direct connections, leave `http.publicOrigin` empty to build links from the listener settings and connection's TLS state. Wildcard listeners require an explicit public origin for links. Request host and forwarding headers never supply the link's address.
+
+For direct HTTPS, configure a PEM certificate chain and its matching private key:
+
+```yaml
+http:
+  listenHost: "127.0.0.1"
+  port: 8443
+  tls:
+    enabled: true
+    certificate: "certs/server.pem"
+    key: "certs/server.key"
+```
+
+The listener supports TLS 1.2 or newer. Invalid or unreadable files stop startup. Relative paths use `app.workingDirectory` when configured. Restart to reload certificates. Certificate issuance, renewal, and HTTP-to-HTTPS redirects are not automatic.
+
+For a local reverse proxy that terminates HTTPS and connects to HyperServer over HTTP:
 
 ```yaml
 http:
   listenHost: "127.0.0.1"
   port: 8080
   publicOrigin: "https://example.com"
+  trustedProxies: ["127.0.0.1/32"]
 ```
 
-For direct connections, leave `publicOrigin` empty. Links then use the listener settings and connection's TLS state, not request host or forwarding headers. Wildcard listeners require an explicit public origin for links. This setting does not configure TLS, cookie security, or trusted proxies. See the configuration template for defaults and validation rules.
+`trustedProxies` lists the direct proxy peer's CIDR ranges and requires `publicOrigin`. Empty means trust no forwarding headers. Use only the proxy's addresses, not broad client networks. Restrict backend access to the proxy. Trusting loopback also trusts other local processes. The reference application remains loopback-only and unsuitable for public deployment.
+
+The supported setup has one edge proxy. It must overwrite `X-Forwarded-For` with exactly one client IP and `X-Forwarded-Proto` with `http` or `https`. It must preserve the browser-facing Host and origin headers. Missing, duplicate, chained, or malformed forwarding values from a trusted peer receive 400 before rate limiting or session loading. Forwarding headers from other peers are ignored. `Forwarded` and `X-Forwarded-Host` are not used.
+
+Verified proxy information supplies rate-limit client IPs and session-cookie security. Direct HTTPS and verified proxy HTTPS set `Secure` cookies. Setting `publicOrigin` alone does not enable TLS or make cookies secure. Go's `RemoteAddr` and `r.TLS` still describe the actual backend connection. Other applications can install [requestinfo.NewProxyMiddleware](pkg/requestinfo/request.go) before rate limits and sessions and use `ClientIP` and `IsHTTPS` to read verified values.
 
 ### Browser request protection
 
@@ -96,7 +117,7 @@ Redirects accept local paths beginning with a single `/`, including queries and 
 
 ### Rate limiting
 
-[Rate limiting](pkg/ratelimit/limiter.go) separates inherited route policies from shared budgets. All allowances below apply per direct client IP.
+[Rate limiting](pkg/ratelimit/limiter.go) separates inherited route policies from shared budgets. All allowances below apply per client IP: the verified forwarded address when a trusted proxy is configured, otherwise the direct peer.
 
 #### Route policies: the most specific setting wins
 
@@ -216,7 +237,7 @@ Choose capacity for the distinct IPs expected within a limiter's window, not the
 
 Each window starts with the client's first admitted request to that limiter. Throttled requests receive a plain-text 429 with `Retry-After`, including HTMX requests. With request logging configured, rejections identify the registered route or named shared budget, its settings, and whether its allowance or client capacity was exhausted. Submitted account values do not affect recovery throttling or appear in these rejection logs.
 
-Limits ignore forwarding headers, so clients behind a proxy or NAT share an allowance. Memory capacity applies per limiter, not across all routes. State resets on restart and is not shared across servers. Fixed windows allow bursts near window boundaries. These controls do not prevent distributed abuse or cap concurrent work.
+Clients behind a NAT or an unconfigured proxy share an allowance. Memory capacity applies per limiter, not across all routes. State resets on restart and is not shared across servers. Fixed windows allow bursts near window boundaries. These controls do not prevent distributed abuse or cap concurrent work.
 
 ### Expired-record cleanup
 

@@ -4,12 +4,28 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/trentnix/hyperserver/pkg/requestinfo"
 )
 
 // Validate checks shared settings. Provider packages validate their own options.
 func (c Config) Validate() error {
-	if _, err := ParsePublicOrigin(c.HTTP.PublicOrigin); err != nil {
+	origin, err := ParsePublicOrigin(c.HTTP.PublicOrigin)
+	if err != nil {
 		return err
+	}
+	if _, err := requestinfo.NewProxyMiddleware(c.HTTP.TrustedProxies); err != nil {
+		return fmt.Errorf("http.trustedProxies: %w", err)
+	}
+	if len(c.HTTP.TrustedProxies) > 0 && origin == nil {
+		return fmt.Errorf("http.publicOrigin is required when http.trustedProxies is configured")
+	}
+	if c.HTTP.TLS.Enabled {
+		if strings.TrimSpace(c.HTTP.TLS.Certificate) == "" || strings.TrimSpace(c.HTTP.TLS.Key) == "" {
+			return fmt.Errorf("http.tls.certificate and http.tls.key are required when http.tls.enabled is true")
+		}
+	} else if c.HTTP.TLS.Certificate != "" || c.HTTP.TLS.Key != "" {
+		return fmt.Errorf("http.tls.enabled must be true when TLS certificate or key files are configured")
 	}
 	for _, item := range []struct {
 		name  string

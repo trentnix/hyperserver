@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -23,13 +24,26 @@ import (
 )
 
 func TestRunDrainsRequestsBeforeClosingPool(t *testing.T) {
+	for _, scheme := range []string{"http", "https"} {
+		t.Run(scheme, func(t *testing.T) {
+			testRunDrainsRequestsBeforeClosingPool(t, scheme)
+		})
+	}
+}
+
+func testRunDrainsRequestsBeforeClosingPool(t *testing.T, scheme string) {
+	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "shutdown.db")
 	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
-	output, err := runStartupProcess(t, yaml, "shutdown", "HYPERSERVER_DATABASE_CONNECTION="+path)
+	mode := "shutdown"
+	if scheme == "https" {
+		mode = "shutdown-tls"
+	}
+	output, err := runStartupProcess(t, yaml, mode, "HYPERSERVER_DATABASE_CONNECTION="+path)
 	if err != nil || !strings.Contains(string(output), "shutdown ordering passed") {
 		t.Fatalf("application shutdown: error = %v, output = %s", err, output)
 	}
@@ -46,14 +60,26 @@ func TestRunDrainsRequestsBeforeClosingPool(t *testing.T) {
 }
 
 // checkRunShutdown runs in a subprocess to isolate registries, stdout, and cwd.
-func checkRunShutdown(t *testing.T) {
+func checkRunShutdown(t *testing.T, secure bool) {
 	t.Helper()
 	s := server.NewApplicationServer()
 	s.Config.HTTP.Port = 0
+	scheme := "http"
+	transport := &http.Transport{}
+	if secure {
+		cfg, roots := testTLSFiles(t)
+		s.Config.HTTP.TLS = cfg.TLS
+		transport.TLSClientConfig = &tls.Config{RootCAs: roots}
+		scheme = "https"
+	}
+	defer transport.CloseIdleConnections()
 	started, release := make(chan struct{}), make(chan struct{})
 	var releaseOnce sync.Once
 	releaseRequest := func() { releaseOnce.Do(func() { close(release) }) }
 	s.Web.HandleFunc("POST /test-shutdown", func(w http.ResponseWriter, r *http.Request) {
+		if (r.TLS != nil) != secure {
+			t.Error("request TLS state does not match the listener configuration")
+		}
 		close(started)
 		<-release
 		account := &user.User{Email: "shutdown@example.invalid"}
@@ -105,11 +131,11 @@ func checkRunShutdown(t *testing.T) {
 		t.Fatal("application did not start listening")
 	}
 
-	client := &http.Client{Timeout: 3 * time.Second}
+	client := &http.Client{Transport: transport, Timeout: 3 * time.Second}
 	defer client.CloseIdleConnections()
 	response := make(chan error, 1)
 	go func() {
-		res, err := client.Post("http://"+listeningAddress+"/test-shutdown", "text/plain", nil)
+		res, err := client.Post(scheme+"://"+listeningAddress+"/test-shutdown", "text/plain", nil)
 		if err == nil {
 			body, readErr := io.ReadAll(res.Body)
 			res.Body.Close()
@@ -242,15 +268,20 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 }
 
 func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
-	for _, failure := range []string{"listen address", "account setup"} {
+	for _, failure := range []string{"listen address", "TLS files", "account setup"} {
 		t.Run(failure, func(t *testing.T) {
 			db := accountSetupTestDB(t)
 			s := &server.ApplicationServer{Database: db, Config: &config.Config{}}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			if failure == "listen address" {
+			switch failure {
+			case "listen address":
 				s.Config.HTTP.ListenHost = "0.0.0.0"
-			} else {
+			case "TLS files":
+				s.Config.HTTP.TLS.Enabled = true
+				s.Config.HTTP.TLS.Certificate = "missing-certificate.pem"
+				s.Config.HTTP.TLS.Key = "missing-key.pem"
+			case "account setup":
 				s.Config.Auth.Enabled = true
 				cancel()
 			}

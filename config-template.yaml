@@ -15,6 +15,11 @@ http:
   # Wildcard listeners (0.0.0.0 or ::) require a publicOrigin to build absolute links.
   # Forwarded headers are ignored. Paths, credentials, queries, and fragments are rejected.
   publicOrigin: ""
+  # Direct proxy peer CIDRs. Empty means no forwarding headers are trusted.
+  # Requires publicOrigin. For one local edge proxy, use ["127.0.0.1/32"].
+  # The proxy must overwrite X-Forwarded-For with one client IP and
+  # X-Forwarded-Proto with http or https, and preserve the browser-facing Host.
+  trustedProxies: []
   # Maximum time to read a request, including its body. Zero disables the limit.
   readTimeout: "5s"
   # Maximum time to write a response. Zero disables the limit.
@@ -27,7 +32,7 @@ http:
   defaultRateLimit:
     # Disabled means no application default. Explicit module/handler policies still apply.
     enabled: false
-    # Requests allowed per direct client IP, with a separate counter for each route.
+    # Requests allowed per client IP, with a separate counter for each route.
     requests: 20
     # Window duration, starting with the client's first request to that route.
     window: "1m"
@@ -36,21 +41,22 @@ http:
   # Separate shared budget across every request, including pages, assets, and logout.
   # Applied before session loading. Route policies cannot override this budget.
   sharedRateLimit:
-    # Disabled by default. Forwarding headers are ignored by all rate limiters.
+    # Disabled by default. Client IPs come from a trusted proxy or the direct peer.
     enabled: false
-    # Requests allowed per direct client IP in each window.
+    # Requests allowed per client IP in each window.
     requests: 120
     # Window duration, starting with the client's first request.
     window: "1m"
     # Maximum tracked IPs. At capacity, new clients wait for an entry to expire.
     maxClients: 4096
-  # These TLS fields are not wired into cmd/web. It currently serves HTTP only.
+  # Direct HTTPS listener. Leave disabled when a proxy terminates TLS.
   tls:
-    # Intended HTTPS switch. Setting true does not currently enable HTTPS.
+    # Enable TLS 1.2 or newer. Requires both files below.
     enabled: false
-    # Intended path to a PEM certificate file. Currently unused.
+    # PEM certificate chain. Relative paths use app.workingDirectory when set.
+    # Loaded at startup. Restart after replacing the certificate or key.
     certificate: ""
-    # Intended path to the matching PEM private key. Currently unused.
+    # Matching PEM private key. Both paths must be empty when TLS is disabled.
     key: ""
   # Shared session settings and mappings from session names to storage providers.
   session:

@@ -11,10 +11,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
-// Policy specifies a fixed-window allowance per direct client IP.
+// Policy specifies a fixed-window allowance per client IP.
 // Inheriting a Policy does not share counters. All fields must be positive.
 type Policy struct {
 	Requests   int
@@ -30,10 +31,11 @@ func (p Policy) Validate() error {
 	return nil
 }
 
-// Limiter bounds requests per direct client IP in fixed windows starting
+// Limiter bounds requests per client IP in fixed windows starting
 // with each client's first request. Reuse Handler to share a budget across routes.
-// State is local to this instance and is lost on restart. Forwarding headers are
-// ignored. Clients behind the same proxy or NAT share a budget.
+// State is local to this instance and is lost on restart. Client addresses come
+// from requestinfo: the direct peer unless trusted proxy middleware verified them.
+// Clients behind the same NAT or an unconfigured proxy share a budget.
 //
 // Expired entries are removed during requests. At capacity, new clients are
 // rejected until an entry expires. Active entries are never evicted to admit a
@@ -78,18 +80,22 @@ func (l *Limiter) Handler(next http.Handler) http.Handler {
 			http.Error(w, "Rate limiter is not configured", http.StatusInternalServerError)
 			return
 		}
-		peer, err := netip.ParseAddrPort(r.RemoteAddr)
+
+		client, err := requestinfo.ClientIP(r)
 		if err != nil {
 			http.Error(w, "Invalid client address", http.StatusBadRequest)
 			return
 		}
-		if retry, reason := l.admit(peer.Addr().Unmap().WithZone("")); retry > 0 {
+
+		if retry, reason := l.admit(client); retry > 0 {
 			seconds := int64(retry / time.Second)
 			if retry%time.Second != 0 {
 				seconds++
 			}
+
 			w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
 			w.Header().Set("Cache-Control", "no-store")
+
 			if log := logger.Get(r.Context()); log != nil && *log != nil {
 				(*log).Warn("Request rate limited",
 					logger.Field{Key: "limiter", Value: l.name},
@@ -100,9 +106,11 @@ func (l *Limiter) Handler(next http.Handler) http.Handler {
 					logger.Field{Key: "retryAfter", Value: seconds},
 				)
 			}
+
 			http.Error(w, "Too many requests. Please try again later.", http.StatusTooManyRequests)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }

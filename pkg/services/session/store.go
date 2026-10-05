@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/requestinfo"
 )
 
 // ExpireCookie removes a session cookie from the browser without loading its data.
@@ -13,7 +14,7 @@ import (
 func ExpireCookie(w http.ResponseWriter, r *http.Request, name string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: name, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: requestinfo.IsHTTPS(r), SameSite: http.SameSiteLaxMode,
 	})
 }
 

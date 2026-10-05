@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/requestinfo"
 )
 
 type (
@@ -148,7 +149,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   requestinfo.IsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   cookieAge,
 	}

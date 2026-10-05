@@ -26,7 +26,8 @@ type (
 
 	// HTTPConfig stores HTTP configuration
 	HTTPConfig struct {
-		PublicOrigin     string          // Optional override for absolute links, independent of the listener.
+		PublicOrigin     string          // Address for absolute links. Required with trusted proxies.
+		TrustedProxies   []string        // Direct proxy peer CIDRs. Empty trusts no forwarding headers.
 		ListenHost       string          // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
 		Port             uint16          // Listener port. Zero requests an ephemeral port but cannot supply fallback links.
 		ReadTimeout      time.Duration   // Maximum time to read a request, including its body.
@@ -34,7 +35,7 @@ type (
 		IdleTimeout      time.Duration   // Maximum wait for another request on a keep-alive connection.
 		DefaultRateLimit RateLimitConfig // Inherited per-route policy. Module and handler policies replace it.
 		SharedRateLimit  RateLimitConfig // Optional aggregate per-client budget. Route overrides do not bypass it.
-		// TLS holds listener TLS settings. The reference command currently ignores them.
+		// TLS enables direct HTTPS using a PEM certificate and private key.
 		TLS struct {
 			Enabled     bool
 			Certificate string
