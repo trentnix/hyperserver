@@ -759,7 +759,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 		return false
 	}
 
-	err = u.ChangePassword(r.Context(), a.db, hashedPassword)
+	err = a.accounts.ChangePassword(r.Context(), u, hashedPassword)
 	if err != nil {
 		// the user could not be updated
 		form.HandleFormError(

@@ -108,12 +108,17 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 
 type emailAccountRepository struct {
 	user.AccountRepository
-	lookup func(context.Context, string) (*user.User, error)
-	create func(context.Context, *user.User) error
+	lookup         func(context.Context, string) (*user.User, error)
+	create         func(context.Context, *user.User) error
+	changePassword func(context.Context, *user.User, string) error
 }
 
 func (s emailAccountRepository) Create(ctx context.Context, u *user.User) error {
 	return s.create(ctx, u)
+}
+
+func (s emailAccountRepository) ChangePassword(ctx context.Context, u *user.User, hash string) error {
+	return s.changePassword(ctx, u, hash)
 }
 
 func TestEmailAuthInitAccountRepository(t *testing.T) {
@@ -238,5 +243,78 @@ func TestRegisterUsesAccountRepository(t *testing.T) {
 	}
 	if !service.Register(httptest.NewRecorder(), r) || calls != 1 {
 		t.Fatalf("registration bypassed the account repository: calls=%d", calls)
+	}
+}
+
+func TestChangeUsesAccountRepository(t *testing.T) {
+	t.Chdir("../../..")
+	hash, err := password.HashPassword("OldPassword1!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []string{"success", "storage failure", "canceled", "wrong password", "invalid confirmation"} {
+		t.Run(scenario, func(t *testing.T) {
+			account := &user.User{ID: "account", Password: hash, SessionVersion: 1}
+			before := *account
+			form := url.Values{"oldPassword": {"OldPassword1!"}, "newPassword": {"NewPassword1!"}, "newPasswordMatch": {"NewPassword1!"}}
+			if scenario == "wrong password" {
+				form.Set("oldPassword", "WrongPassword1!")
+			}
+			if scenario == "invalid confirmation" {
+				form.Set("newPasswordMatch", "DifferentPassword1!")
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if scenario == "canceled" {
+				cancel()
+			}
+			r := httptest.NewRequest(http.MethodPost, emailChangePath, strings.NewReader(form.Encode())).WithContext(ctx)
+			r = user.AddUserToRequestContext(r, account)
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			r.Header.Set("HX-Request", "true")
+			calls := 0
+			accounts := emailAccountRepository{changePassword: func(ctx context.Context, u *user.User, hash string) error {
+				calls++
+				if ctx != r.Context() || u != account || !password.CheckPasswordHash(form.Get("newPassword"), hash) {
+					t.Fatal("password change lost its context, account, or hashed password")
+				}
+				if scenario == "storage failure" {
+					return errors.New("private storage failure")
+				}
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				u.Password = hash
+				u.SessionVersion++
+				return nil
+			}}
+			cm := content.NewContentManager()
+			cm.AddHtmxLayout("modules/site/templates/html/layouts/partial.html")
+			// No SQL pool: password changes must use the supplied repository.
+			service := &EmailAuthService{accounts: accounts, contentManager: cm}
+			w := httptest.NewRecorder()
+			changed := service.Change(w, r, account)
+			wantCalls := 1
+			if scenario == "wrong password" || scenario == "invalid confirmation" {
+				wantCalls = 0
+			}
+			if calls != wantCalls || changed != (scenario == "success") {
+				t.Fatalf("changed=%t, repository calls=%d, want %d", changed, calls, wantCalls)
+			}
+
+			if scenario == "success" {
+				cookies := w.Result().Cookies()
+				if user.GetUserFromContext(r.Context()) != nil || len(cookies) != 1 || cookies[0].MaxAge != -1 || !strings.Contains(w.Body.String(), "Your password has been changed. Please log in again.") {
+					t.Fatalf("successful change did not clear authentication and render confirmation: %s", w.Body.String())
+				}
+				return
+			}
+			if *account != before || user.GetUserFromContext(r.Context()) != account || len(w.Result().Cookies()) != 0 || strings.Contains(w.Body.String(), "private storage failure") {
+				t.Fatal("failed change modified authentication or exposed a storage error")
+			}
+			if wantCalls == 1 && !strings.Contains(w.Body.String(), "unable to change your password") {
+				t.Fatalf("repository failure did not render an error: %s", w.Body.String())
+			}
+		})
 	}
 }

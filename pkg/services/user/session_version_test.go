@@ -64,8 +64,8 @@ func TestAccountChangesAdvanceSessionVersion(t *testing.T) {
 	}
 }
 
-func TestChangePasswordSessionVersion(t *testing.T) {
-	for _, outcome := range []string{"success", "stale password", "stale version", "storage failure", "canceled", "empty hash", "missing account"} {
+func TestSQLiteAccountRepositoryChangePassword(t *testing.T) {
+	for _, outcome := range []string{"success", "stale password", "stale provider", "stale version", "storage failure", "canceled", "empty hash", "missing account"} {
 		t.Run(outcome, func(t *testing.T) {
 			db := userTestDB(t)
 			u := &User{Email: "password@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
@@ -82,6 +82,8 @@ func TestChangePasswordSessionVersion(t *testing.T) {
 			switch outcome {
 			case "stale password":
 				u.Password = "stale"
+			case "stale provider":
+				u.RegistrationAuthType = "another-provider"
 			case "stale version":
 				u.SessionVersion--
 			case "storage failure":
@@ -98,7 +100,7 @@ func TestChangePasswordSessionVersion(t *testing.T) {
 				u.ID = "missing"
 			}
 			before := *u
-			err = u.ChangePassword(ctx, db, hash)
+			err = NewSQLiteAccountRepository(db).ChangePassword(ctx, u, hash)
 			if (err == nil) != (outcome == "success") {
 				t.Fatalf("password change error = %v", err)
 			}

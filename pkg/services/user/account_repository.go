@@ -8,7 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// AccountRepository loads and creates accounts for authentication. Missing accounts
+// AccountRepository stores accounts for authentication. Reads of missing accounts
 // must return ErrUserNotFound. Other failures must remain errors. Implementations
 // must honor cancellation and support concurrent calls. Successful reads must
 // return independent, non-nil User values.
@@ -19,9 +19,15 @@ type AccountRepository interface {
 	// Failure must leave stored accounts and u unchanged. Success fills in the ID,
 	// timestamps, and initial SessionVersion of 1. Password is already hashed.
 	Create(context.Context, *User) error
+	// ChangePassword atomically replaces the password hash and increments SessionVersion
+	// only if the stored password, registration provider, and SessionVersion match u.
+	// A missing account or a mismatch must return an error. Failure must leave storage
+	// and u unchanged. Success updates u's Password, UpdatedAt, and SessionVersion.
+	// The caller must validate and hash the new password before calling.
+	ChangePassword(ctx context.Context, u *User, passwordHash string) error
 }
 
-// SQLiteAccountRepository reads and creates accounts using an existing SQLite pool.
+// SQLiteAccountRepository stores accounts using an existing SQLite pool.
 // Its owner must prepare the account schema and close the pool after consumers stop.
 type SQLiteAccountRepository struct{ db *sqlx.DB }
 
@@ -53,4 +59,9 @@ func (s *SQLiteAccountRepository) GetByEmail(ctx context.Context, email string) 
 // Create inserts an account without changing an existing account with the same email.
 func (s *SQLiteAccountRepository) Create(ctx context.Context, u *User) error {
 	return u.Create(ctx, s.db)
+}
+
+// ChangePassword conditionally stores a password hash and revokes existing sessions.
+func (s *SQLiteAccountRepository) ChangePassword(ctx context.Context, u *User, passwordHash string) error {
+	return u.ChangePassword(ctx, s.db, passwordHash)
 }

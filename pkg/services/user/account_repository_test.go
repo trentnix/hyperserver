@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -167,6 +168,100 @@ func TestSQLiteAccountRepositoryRequiresPreparedStorage(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestSQLiteAccountRepositoryConcurrentPasswordChanges(t *testing.T) {
+	db := userTestDB(t)
+	repository := NewSQLiteAccountRepository(db)
+	u := &User{Email: "change@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
+	if err := repository.Create(context.Background(), u); err != nil {
+		t.Fatal(err)
+	}
+	u, err := repository.GetByID(context.Background(), u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := *u
+	accounts := [2]User{before, before}
+	hashes := [2]string{"first hash", "second hash"}
+	var results [2]error
+	var workers sync.WaitGroup
+	start := make(chan struct{})
+	for i := range accounts {
+		workers.Go(func() {
+			<-start
+			results[i] = repository.ChangePassword(context.Background(), &accounts[i], hashes[i])
+		})
+	}
+	close(start)
+	workers.Wait()
+
+	stored, err := repository.GetByID(context.Background(), u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	successes := 0
+	for i, err := range results {
+		if err != nil {
+			if accounts[i] != before {
+				t.Error("rejected change mutated its account")
+			}
+			continue
+		}
+		successes++
+		want := before
+		want.Password, want.UpdatedAt = hashes[i], stored.UpdatedAt
+		want.SessionVersion++
+		if *stored != want || accounts[i].Password != want.Password || accounts[i].SessionVersion != want.SessionVersion || !accounts[i].UpdatedAt.Equal(want.UpdatedAt) {
+			t.Error("successful change did not commit exactly one password and session-version update")
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successful changes = %d, want 1: %v", successes, results)
+	}
+}
+
+func TestSQLiteAccountRepositoryChangePasswordCancellationWhileWaiting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db := userTestDB(t)
+		repository := NewSQLiteAccountRepository(db)
+		u := &User{Email: "change@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
+		if err := repository.Create(context.Background(), u); err != nil {
+			t.Fatal(err)
+		}
+		u, err := repository.GetByID(context.Background(), u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := *u
+		connection, err := db.Conn(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer connection.Close()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		result := make(chan error, 1)
+		go func() { result <- repository.ChangePassword(ctx, u, "new hash") }()
+		synctest.Wait()
+		select {
+		case err := <-result:
+			t.Fatalf("change returned before a connection was available: %v", err)
+		default:
+		}
+
+		cancel()
+		if err := <-result; !errors.Is(err, context.Canceled) || *u != before {
+			t.Fatalf("canceled change did not preserve the account: %v", err)
+		}
+		if err := connection.Close(); err != nil {
+			t.Fatal(err)
+		}
+		stored, err := repository.GetByID(context.Background(), u.ID)
+		if err != nil || *stored != before {
+			t.Fatalf("canceled change altered storage: %v", err)
+		}
+	})
 }
 
 type accountReaderStub struct {
