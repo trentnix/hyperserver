@@ -91,9 +91,9 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 					Services: map[string]map[string]string{"email": {"enabled": "true"}},
 				}},
 				// Init requires a database reference but does not access it.
-				Database:       &sqlx.DB{},
-				AccountReader:  user.NewSQLiteAccountReader(&sqlx.DB{}),
-				ContentManager: &content.ContentManagerService{},
+				Database:          &sqlx.DB{},
+				AccountRepository: user.NewSQLiteAccountRepository(&sqlx.DB{}),
+				ContentManager:    &content.ContentManagerService{},
 			}
 			service := &EmailAuthService{}
 			initErr := service.Init(app)
@@ -106,12 +106,17 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 	}
 }
 
-type emailAccountReader struct {
-	user.AccountReader
+type emailAccountRepository struct {
+	user.AccountRepository
 	lookup func(context.Context, string) (*user.User, error)
+	create func(context.Context, *user.User) error
 }
 
-func TestEmailAuthInitAccountReader(t *testing.T) {
+func (s emailAccountRepository) Create(ctx context.Context, u *user.User) error {
+	return s.create(ctx, u)
+}
+
+func TestEmailAuthInitAccountRepository(t *testing.T) {
 	t.Chdir("../../..")
 	for _, scenario := range []string{"supplied", "missing"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -124,31 +129,31 @@ func TestEmailAuthInitAccountReader(t *testing.T) {
 				Database:       &sqlx.DB{},
 				ContentManager: content.NewContentManager(),
 			}
-			reader := &emailAccountReader{}
+			reader := &emailAccountRepository{}
 			if scenario == "supplied" {
-				app.AccountReader = reader
+				app.AccountRepository = reader
 			}
 			service := &EmailAuthService{}
 			err := service.Init(app)
 			if scenario == "missing" {
 				cause := errors.Unwrap(err)
-				if cause == nil || cause.Error() != "the account reader is not configured" {
-					t.Fatalf("missing account reader error = %v", err)
+				if cause == nil || cause.Error() != "the account repository is not configured" {
+					t.Fatalf("missing account repository error = %v", err)
 				}
 				return
 			}
 			if err != nil || service.accounts != reader {
-				t.Fatalf("initialization did not preserve the application-supplied account reader: %v", err)
+				t.Fatalf("initialization did not preserve the application-supplied account repository: %v", err)
 			}
 		})
 	}
 }
 
-func (s emailAccountReader) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+func (s emailAccountRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	return s.lookup(ctx, email)
 }
 
-func TestLoginUsesAccountReader(t *testing.T) {
+func TestLoginUsesAccountRepository(t *testing.T) {
 	t.Chdir("../../..")
 	hash, err := password.HashPassword("TestPassword1!")
 	if err != nil {
@@ -163,7 +168,7 @@ func TestLoginUsesAccountReader(t *testing.T) {
 				cancel()
 			}
 			calls := 0
-			reader := emailAccountReader{lookup: func(got context.Context, email string) (*user.User, error) {
+			reader := emailAccountRepository{lookup: func(got context.Context, email string) (*user.User, error) {
 				calls++
 				if got != ctx || email != account.Email {
 					t.Fatal("lookup lost the request context or email")
@@ -207,5 +212,31 @@ func TestLoginUsesAccountReader(t *testing.T) {
 				t.Fatalf("failed login authenticated or rendered an incorrect error: %d %s", w.Code, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestRegisterUsesAccountRepository(t *testing.T) {
+	t.Chdir("../../..")
+	form := url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"}}
+	r := httptest.NewRequest(http.MethodPost, emailRegisterPath, strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	calls := 0
+	accounts := emailAccountRepository{create: func(ctx context.Context, u *user.User) error {
+		calls++
+		if ctx != r.Context() || u.Email != form.Get("email") || !password.CheckPasswordHash(form.Get("password"), u.Password) {
+			t.Fatal("registration did not pass its context and hashed credentials to storage")
+		}
+		return nil
+	}}
+	// No SQL pool or mail client: this request only requires the account repository.
+	service := &EmailAuthService{
+		accounts: accounts,
+		config: &config.Config{Auth: config.AuthConfig{
+			Enabled: true, RegistrationEnabled: true,
+		}},
+		contentManager: content.NewContentManager(),
+	}
+	if !service.Register(httptest.NewRecorder(), r) || calls != 1 {
+		t.Fatalf("registration bypassed the account repository: calls=%d", calls)
 	}
 }

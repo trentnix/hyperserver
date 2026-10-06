@@ -28,13 +28,13 @@ type (
 
 		// Database is owned by the application. Modules borrow it and must not close it.
 		Database *sqlx.DB
-		// AccountReader supplies authentication lookups. Writes and token operations
-		// still use Database and must refer to the same accounts.
-		AccountReader  user.AccountReader
-		Web            *http.ServeMux
-		ContentManager *content_services.ContentManagerService
-		SessionManager *session.SessionManager
-		Mail           *messaging.MailClient
+		// AccountRepository supplies authentication lookups and account creation.
+		// Updates and token operations still use Database and must refer to the same accounts.
+		AccountRepository user.AccountRepository
+		Web               *http.ServeMux
+		ContentManager    *content_services.ContentManagerService
+		SessionManager    *session.SessionManager
+		Mail              *messaging.MailClient
 	}
 )
 
@@ -46,7 +46,7 @@ func NewApplicationServer() *ApplicationServer {
 
 	s.initConfig()
 	s.initDatabase()
-	s.AccountReader = user.NewSQLiteAccountReader(s.Database)
+	s.AccountRepository = user.NewSQLiteAccountRepository(s.Database)
 	s.initWeb()
 	s.initContentManager()
 	s.initMail()

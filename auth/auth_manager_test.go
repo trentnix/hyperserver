@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/routing"
@@ -191,9 +192,76 @@ func TestRegistrationReportsDatabaseFailure(t *testing.T) {
 func TestRegistrationHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err, message := ProcessRegistration(ctx, nil, "person@example.invalid", "TestPassword1!", "email", true)
+	accounts := registrationRepository{create: func(context.Context, *user.User) error {
+		t.Fatal("canceled registration reached storage")
+		return nil
+	}}
+	err, message := ProcessRegistration(ctx, accounts, "person@example.invalid", "TestPassword1!", "email", true)
 	if !errors.Is(err, context.Canceled) || message != "There was an error creating a user account" {
 		t.Fatalf("canceled registration = (%v, %q)", err, message)
+	}
+}
+
+func TestRegistrationHashFailureDoesNotCreateAccount(t *testing.T) {
+	accounts := registrationRepository{create: func(context.Context, *user.User) error {
+		t.Fatal("password hashing failure reached storage")
+		return nil
+	}}
+	err, message := ProcessRegistration(context.Background(), accounts, "person@example.invalid", strings.Repeat("a", 73), "email", true)
+	if err == nil || message != "There was an error creating a user account" {
+		t.Fatalf("password hashing failure = (%v, %q)", err, message)
+	}
+}
+
+type registrationRepository struct {
+	user.AccountRepository
+	create func(context.Context, *user.User) error
+}
+
+func (s registrationRepository) Create(ctx context.Context, u *user.User) error {
+	return s.create(ctx, u)
+}
+
+func TestRegistrationUsesAccountRepository(t *testing.T) {
+	duplicate := errors.Join(errors.New("insert failed"), database.NewErrRecordAlreadyExists(nil))
+	storageFailure := errors.New("storage unavailable")
+	for _, tc := range []struct {
+		name, password, message string
+		failure                 error
+	}{
+		{name: "success", password: "TestPassword1!"},
+		{name: "passwordless"},
+		{name: "duplicate", failure: duplicate, message: "The specified user is already registered"},
+		{name: "storage failure", failure: storageFailure, message: "There was an error creating a user account"},
+		{name: "storage cancellation", failure: context.Canceled, message: "There was an error creating a user account"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			calls := 0
+			accounts := registrationRepository{create: func(got context.Context, u *user.User) error {
+				calls++
+				if got != ctx || u.Email != "person@example.invalid" || u.RegistrationAuthType != "email" || !u.VerificationRequired || u.Verified || u.ID != "" || !u.CreatedAt.IsZero() || !u.UpdatedAt.IsZero() || u.SessionVersion != 0 {
+					t.Fatal("registration lost its context or changed the account before insertion")
+				}
+				if tc.password == "" {
+					if u.Password != "" {
+						t.Fatal("passwordless registration received a password")
+					}
+				} else if u.Password == tc.password || !password.CheckPasswordHash(tc.password, u.Password) {
+					t.Fatal("storage did not receive a hashed password")
+				}
+				if tc.failure == context.Canceled {
+					cancel()
+					return got.Err()
+				}
+				return tc.failure
+			}}
+			err, message := ProcessRegistration(ctx, accounts, "person@example.invalid", tc.password, "email", true)
+			if calls != 1 || !errors.Is(err, tc.failure) || message != tc.message {
+				t.Fatalf("registration: calls=%d, error=%v, message=%q", calls, err, message)
+			}
+		})
 	}
 }
 

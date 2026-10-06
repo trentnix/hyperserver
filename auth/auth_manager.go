@@ -39,7 +39,7 @@ type (
 		Enabled bool
 
 		db             *sqlx.DB
-		accounts       user.AccountReader
+		accounts       user.AccountRepository
 		httpConfig     config.HTTPConfig
 		rateLimit      *config.ModuleRateLimitConfig
 		contentManager *content_services.ContentManagerService
@@ -77,7 +77,7 @@ func init() {
 func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
 	a.db = s.Database
-	a.accounts = s.AccountReader
+	a.accounts = s.AccountRepository
 	a.httpConfig = s.Config.HTTP
 	a.rateLimit = s.Config.Auth.RateLimit
 
@@ -390,9 +390,12 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 // ProcessRegistration hashes credentials and inserts a new account.
 // It does not update an existing account or send verification mail. The returned
 // message is suitable for the registration form when an error occurs.
-func ProcessRegistration(ctx context.Context, db *sqlx.DB, uname string, pw string, authType string, verificationRequired bool) (error, string) {
+func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, uname string, pw string, authType string, verificationRequired bool) (error, string) {
 	if err := ctx.Err(); err != nil {
 		return NewErrUserRegistration(uname, err), "There was an error creating a user account"
+	}
+	if accounts == nil {
+		return NewErrUserRegistration(uname, database.NewErrDatabaseUnavailable(nil)), "There was an error creating a user account"
 	}
 
 	var err error
@@ -412,8 +415,8 @@ func ProcessRegistration(ctx context.Context, db *sqlx.DB, uname string, pw stri
 		VerificationRequired: verificationRequired,
 	}
 
-	// The unique email constraint decides which competing registration succeeds.
-	err = u.Create(ctx, db)
+	// Storage decides which competing registration succeeds.
+	err = accounts.Create(ctx, u)
 	if err != nil {
 		registrationErr := NewErrUserRegistration(uname, err)
 		var duplicate *database.ErrRecordAlreadyExists

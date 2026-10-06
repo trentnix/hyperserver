@@ -18,20 +18,20 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-func TestAuthManagerInitUsesAccountReader(t *testing.T) {
+func TestAuthManagerInitUsesAccountRepository(t *testing.T) {
 	// Initialization must preserve the supplied reader without calling it.
-	reader := &struct{ user.AccountReader }{}
+	reader := &struct{ user.AccountRepository }{}
 	app := &server.ApplicationServer{
-		Config:         &config.Config{Auth: config.AuthConfig{Enabled: true}},
-		AccountReader:  reader,
-		ContentManager: content.NewContentManager(),
+		Config:            &config.Config{Auth: config.AuthConfig{Enabled: true}},
+		AccountRepository: reader,
+		ContentManager:    content.NewContentManager(),
 	}
 	manager := &AuthManager{}
 	if err := manager.Init(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
 	if manager.accounts != reader {
-		t.Fatal("initialization did not preserve the application-supplied account reader")
+		t.Fatal("initialization did not preserve the application-supplied account repository")
 	}
 }
 
@@ -60,7 +60,7 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 			http.Error(w, message, status)
 		},
 	}}
-	manager.accounts = user.NewSQLiteAccountReader(db)
+	manager.accounts = user.NewSQLiteAccountRepository(db)
 	sessions, err := session.NewSessionManager(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)

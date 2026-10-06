@@ -13,7 +13,7 @@ import (
 
 // LoadSessionManagement attaches the session manager, then loads the authenticated
 // user into the request context. It requires non-nil account-reader and session dependencies.
-func LoadSessionManagement(accounts user.AccountReader, s *session.SessionManager) func(http.Handler) http.Handler {
+func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var sessionManagerErr error
@@ -52,7 +52,7 @@ func loadSessionManager(r *http.Request, s *session.SessionManager) (*http.Reque
 }
 
 // loadUser loads any authenticated user into the specified request's context
-func loadAuthenticatedUser(r *http.Request, accounts user.AccountReader) (*http.Request, error) {
+func loadAuthenticatedUser(r *http.Request, accounts user.AccountRepository) (*http.Request, error) {
 	if accounts == nil {
 		return r, database.NewErrDatabaseUnavailable(nil)
 	}

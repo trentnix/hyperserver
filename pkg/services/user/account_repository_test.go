@@ -7,21 +7,26 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
-func TestSQLiteAccountReader(t *testing.T) {
+func TestSQLiteAccountRepository(t *testing.T) {
 	for _, by := range []string{"ID", "email"} {
 		t.Run(by, func(t *testing.T) {
 			db := userTestDB(t)
+			reader := NewSQLiteAccountRepository(db)
 			account := &User{Email: "reader@example.invalid", Password: "hash", Verified: true, VerificationRequired: true, RegistrationAuthType: "email"}
-			if err := account.Create(context.Background(), db); err != nil {
+			if err := reader.Create(context.Background(), account); err != nil {
 				t.Fatal(err)
 			}
-			reader := NewSQLiteAccountReader(db)
+			if account.ID == "" || account.SessionVersion != 1 || account.CreatedAt.IsZero() || account.UpdatedAt.IsZero() {
+				t.Fatal("creation did not supply account identity, timestamps, and session version")
+			}
 			lookup, key := reader.GetByID, account.ID
 			if by == "email" {
 				lookup, key = reader.GetByEmail, account.Email
@@ -57,8 +62,104 @@ func TestSQLiteAccountReader(t *testing.T) {
 	}
 }
 
-func TestSQLiteAccountReaderRequiresPreparedStorage(t *testing.T) {
-	for _, reader := range []*SQLiteAccountReader{NewSQLiteAccountReader(nil), NewSQLiteAccountReader(unpreparedUserTestDB(t))} {
+func TestSQLiteAccountRepositoryCreateFailure(t *testing.T) {
+	for _, scenario := range []string{"duplicate", "nil pool", "closed pool", "canceled", "write failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			db := userTestDB(t)
+			repository := NewSQLiteAccountRepository(db)
+			account := &User{Email: "new@example.invalid", Password: "new hash", VerificationRequired: true}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var existing *User
+			switch scenario {
+			case "duplicate":
+				u := &User{Email: account.Email, Password: "original hash", Verified: true}
+				if err := repository.Create(ctx, u); err != nil {
+					t.Fatal(err)
+				}
+				var err error
+				existing, err = repository.GetByID(ctx, u.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "nil pool":
+				repository = NewSQLiteAccountRepository(nil)
+			case "closed pool":
+				if err := db.Close(); err != nil {
+					t.Fatal(err)
+				}
+			case "canceled":
+				cancel()
+			case "write failure":
+				if _, err := db.Exec(`CREATE TRIGGER reject_create BEFORE INSERT ON user BEGIN SELECT RAISE(ABORT, 'injected failure'); END`); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			before := *account
+			err := repository.Create(ctx, account)
+			if err == nil || *account != before {
+				t.Fatalf("failed insertion succeeded or changed its input: %v", err)
+			}
+			if scenario == "canceled" && !errors.Is(err, context.Canceled) {
+				t.Fatal("lost cancellation:", err)
+			}
+			if existing != nil {
+				var duplicate *database.ErrRecordAlreadyExists
+				if !errors.As(err, &duplicate) {
+					t.Fatal("duplicate email error lost:", err)
+				}
+				stored, err := repository.GetByID(context.Background(), existing.ID)
+				if err != nil || !reflect.DeepEqual(stored, existing) {
+					t.Fatal("failed insertion changed an existing account:", err)
+				}
+			} else if scenario != "closed pool" {
+				var count int
+				if err := db.Get(&count, "SELECT count(*) FROM user"); err != nil || count != 0 {
+					t.Fatalf("failed insertion left an account: count=%d, error=%v", count, err)
+				}
+			}
+		})
+	}
+}
+
+func TestSQLiteAccountRepositoryCreateCancellationWhileWaiting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db := userTestDB(t)
+		// Hold the only connection so Create must wait for the request context.
+		connection, err := db.Conn(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer connection.Close()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		account := &User{Email: "waiting@example.invalid"}
+		before := *account
+		result := make(chan error, 1)
+		go func() { result <- NewSQLiteAccountRepository(db).Create(ctx, account) }()
+		synctest.Wait()
+		select {
+		case err := <-result:
+			t.Fatalf("Create did not wait for the connection: %v", err)
+		default:
+		}
+		cancel()
+		if err := <-result; !errors.Is(err, context.Canceled) || *account != before {
+			t.Fatalf("canceled insertion changed its input or lost cancellation: %v", err)
+		}
+		if err := connection.Close(); err != nil {
+			t.Fatal(err)
+		}
+		var count int
+		if err := db.Get(&count, "SELECT count(*) FROM user"); err != nil || count != 0 {
+			t.Fatalf("canceled insertion left an account: count=%d, error=%v", count, err)
+		}
+	})
+}
+
+func TestSQLiteAccountRepositoryRequiresPreparedStorage(t *testing.T) {
+	for _, reader := range []*SQLiteAccountRepository{NewSQLiteAccountRepository(nil), NewSQLiteAccountRepository(unpreparedUserTestDB(t))} {
 		for _, lookup := range []func(context.Context, string) (*User, error){reader.GetByID, reader.GetByEmail} {
 			var notFound *ErrUserNotFound
 			if got, err := lookup(context.Background(), "account"); got != nil || err == nil || errors.As(err, &notFound) {
@@ -69,7 +170,7 @@ func TestSQLiteAccountReaderRequiresPreparedStorage(t *testing.T) {
 }
 
 type accountReaderStub struct {
-	AccountReader
+	AccountRepository
 	lookup func(context.Context, string) (*User, error)
 }
 
@@ -77,7 +178,7 @@ func (s accountReaderStub) GetByID(ctx context.Context, id string) (*User, error
 	return s.lookup(ctx, id)
 }
 
-func TestGetAuthenticatedUserUsesAccountReader(t *testing.T) {
+func TestGetAuthenticatedUserUsesAccountRepository(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.HTTP.Session.JwtKey = "account-reader-test-key"
 	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour

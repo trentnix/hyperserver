@@ -14,7 +14,7 @@ import (
 )
 
 // RequireAuthentication determines whether the user is authenticated and, if not, denies access
-func RequireAuthentication(accounts user.AccountReader, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
+func RequireAuthentication(accounts user.AccountRepository, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if accounts == nil {
@@ -83,7 +83,7 @@ func RequireAuthentication(accounts user.AccountReader, cm *content_services.Con
 }
 
 // RequireAnonymous determines whether the user is authenticated and, if so, denies access
-func RequireAnonymous(accounts user.AccountReader, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
+func RequireAnonymous(accounts user.AccountRepository, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if accounts == nil {
@@ -122,7 +122,7 @@ func RequireAnonymous(accounts user.AccountReader, cm *content_services.ContentM
 
 // getAuthenticatedUser retrieves the current user from the request context and, if it's not there, it
 // tries to retrieve the user from the session. If no user is found, nil is returned.
-func getAuthenticatedUser(r *http.Request, accounts user.AccountReader) (*user.User, error) {
+func getAuthenticatedUser(r *http.Request, accounts user.AccountRepository) (*user.User, error) {
 	ctx := r.Context()
 
 	u := user.GetUserFromContext(ctx)

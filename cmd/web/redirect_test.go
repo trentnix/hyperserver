@@ -83,7 +83,7 @@ func TestHTTPLoginReturnsToRequestedPath(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
 				u := h.seedUser(t, "return@example.invalid")
 				called := false
-				h.app.Web.Handle("GET /protected-return", middleware.RequireAuthentication(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.app.Web.Handle("GET /protected-return", middleware.RequireAuthentication(h.app.AccountRepository, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
 					w.WriteHeader(http.StatusNoContent)
 				})))

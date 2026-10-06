@@ -22,7 +22,7 @@ func TestHTTPAuthenticationRedirectSaveFailure(t *testing.T) {
 				if _, err := h.app.Database.Exec(`CREATE TRIGGER reject_redirect BEFORE INSERT ON session BEGIN SELECT RAISE(ABORT, 'redirect write failed'); END`); err != nil {
 					t.Fatal(err)
 				}
-				h.app.Web.Handle("GET /protected-save-check", middleware.RequireAuthentication(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				h.app.Web.Handle("GET /protected-save-check", middleware.RequireAuthentication(h.app.AccountRepository, h.app.ContentManager)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 					t.Error("anonymous request reached the protected handler")
 				})))
 				w := h.request(http.MethodGet, "/protected-save-check", nil, htmx)

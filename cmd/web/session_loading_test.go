@@ -70,7 +70,7 @@ func TestHTTPProtectedRouteSessionExpiry(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
 				account := h.seedUser(t, "session-user@example.invalid")
 				called := false
-				h.app.Web.Handle("GET /protected-session-check", middleware.RequireAuthentication(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.app.Web.Handle("GET /protected-session-check", middleware.RequireAuthentication(h.app.AccountRepository, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
 					u := user.GetUserFromContext(r.Context())
 					if u == nil || u.ID != account.ID {
@@ -202,7 +202,7 @@ func TestHTTPSessionLoading(t *testing.T) {
 					wantNew := outcome == "missing cookie" || outcome == "expired" || outcome == "missing row"
 					wantSuccess := wantNew || outcome == "valid"
 					called := false
-					h.app.Web.Handle("GET /session-check", middleware.RequireAnonymous(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					h.app.Web.Handle("GET /session-check", middleware.RequireAnonymous(h.app.AccountRepository, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						called = true
 						s, err := session.Get(r, name)
 						if err != nil || s == nil {
@@ -266,7 +266,7 @@ func TestHTTPInvalidAuthCookieRecovery(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				runHTTPScenario(t, func(h *httpHarness) {
 					if !logging {
-						h.handler = middleware.LoadSessionManagement(h.app.AccountReader, h.app.SessionManager)(h.app.Web)
+						h.handler = middleware.LoadSessionManagement(h.app.AccountRepository, h.app.SessionManager)(h.app.Web)
 					}
 					base, err := url.Parse(h.baseURL)
 					if err != nil {

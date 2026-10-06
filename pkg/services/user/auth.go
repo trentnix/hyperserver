@@ -59,7 +59,7 @@ func LogoutAuthenticatedUser(w http.ResponseWriter, r *http.Request) error {
 
 // GetAuthenticatedUser loads the session's account through accounts, unless the
 // request already has an authenticated user. Account reads use the request context.
-func GetAuthenticatedUser(r *http.Request, accounts AccountReader) (*User, error) {
+func GetAuthenticatedUser(r *http.Request, accounts AccountRepository) (*User, error) {
 	// first check the request context
 	u := GetUserFromContext(r.Context())
 	if u != nil {
@@ -77,7 +77,7 @@ func GetAuthenticatedUser(r *http.Request, accounts AccountReader) (*User, error
 	}
 
 	if accounts == nil {
-		return nil, errors.New("account reader is not configured")
+		return nil, errors.New("account repository is not configured")
 	}
 	u_db, userRetrievalErr := accounts.GetByID(r.Context(), userId)
 	if userRetrievalErr != nil {
