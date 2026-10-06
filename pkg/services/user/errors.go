@@ -37,6 +37,21 @@ func NewErrUserNotFound(err error) *ErrUserNotFound {
 	}
 }
 
+// ErrUserChanged indicates that an update used an outdated account security version.
+type ErrUserChanged struct {
+	*BaseError
+}
+
+// NewErrUserChanged returns an ErrUserChanged wrapping err.
+func NewErrUserChanged(err error) *ErrUserChanged {
+	return &ErrUserChanged{
+		BaseError: &BaseError{
+			Err:     err,
+			Message: "account security state changed since it was loaded",
+		},
+	}
+}
+
 // ErrToken indicates an error creating and managing a token
 type ErrToken struct {
 	*BaseError

@@ -344,7 +344,9 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 	if err := token.Create(db); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`UPDATE user SET verified = TRUE WHERE id = ?`, u.ID); err != nil {
+	verified := *u
+	verified.Verified = true
+	if err := verified.Update(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	if err := u.ResetPassword(ctx, db, token.Token, key, "new hash"); err != nil {
@@ -353,5 +355,16 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 	stored, err := GetUserByID(db, u.ID)
 	if err != nil || !stored.Verified || stored.Password != "new hash" {
 		t.Fatalf("reset lost the independent verification change: %v", err)
+	}
+	if *u != *stored {
+		t.Fatal("reset paired stale account fields with a current session version")
+	}
+	u.Email = "profile-edit@example.invalid"
+	if err := u.Update(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = GetUserByID(db, u.ID)
+	if err != nil || !stored.Verified || stored.Password != "new hash" {
+		t.Fatalf("profile update after reset lost the verification change: %v", err)
 	}
 }

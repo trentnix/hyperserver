@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -77,8 +78,9 @@ func ValidateResetToken(db *sqlx.DB, tokenString string, jwtKey []byte) (*User, 
 // ResetPassword consumes the exact reset token and stores passwordHash in one transaction.
 // The caller must validate and hash the new password before calling. The account
 // schema must exist. A concurrent password or provider change rejects the operation.
-// The receiver changes only after commit. All existing authenticated sessions are
-// invalidated. Other account fields and tokens are unchanged.
+// The receiver is refreshed from storage only after commit. All existing
+// authenticated sessions are invalidated. Other stored account fields and tokens
+// are unchanged.
 func (u *User) ResetPassword(ctx context.Context, db *sqlx.DB, token string, jwtKey []byte, passwordHash string) error {
 	if u == nil || u.ID == "" {
 		return NewErrUserNotSpecified(nil)
@@ -111,21 +113,15 @@ func (u *User) ResetPassword(ctx context.Context, db *sqlx.DB, token string, jwt
 
 	// Only update the password. Do not overwrite unrelated account changes with
 	// the snapshot used for form validation or the previous-password check.
-	result, err := tx.ExecContext(ctx, `UPDATE `+userTableName+` SET password = ?, updated_at = ?, session_version = session_version + 1
-		WHERE id = ? AND password = ? AND registration_auth_type = ?`,
+	var updated User
+	err = tx.GetContext(ctx, &updated, `UPDATE `+userTableName+` SET password = ?, updated_at = ?, session_version = session_version + 1
+		WHERE id = ? AND password = ? AND registration_auth_type = ?
+		RETURNING id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version`,
 		passwordHash, now, u.ID, u.Password, u.RegistrationAuthType)
-	if err != nil {
-		return err
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if count != 1 {
+	if errors.Is(err, sql.ErrNoRows) {
 		return NewErrToken(errors.New("account changed or no longer exists"))
 	}
-	var version int64
-	if err := tx.GetContext(ctx, &version, `SELECT session_version FROM user WHERE id = ?`, u.ID); err != nil {
+	if err != nil {
 		return err
 	}
 
@@ -133,8 +129,6 @@ func (u *User) ResetPassword(ctx context.Context, db *sqlx.DB, token string, jwt
 		return err
 	}
 
-	u.Password = passwordHash
-	u.UpdatedAt = now
-	u.SessionVersion = version
+	*u = updated
 	return nil
 }

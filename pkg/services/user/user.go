@@ -7,6 +7,7 @@ package user
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -29,6 +30,7 @@ type (
 		RegistrationAuthType string    `db:"registration_auth_type"`
 		Password             string    `db:"password"`
 		// SessionVersion changes when credentials or account access changes.
+		// Callers must preserve the version supplied by account reads and writes.
 		SessionVersion int64 `db:"session_version"`
 	}
 
@@ -141,6 +143,10 @@ func (user *User) Create(ctx context.Context, db *sqlx.DB) error {
 // returns ErrUserNotFound if the ID no longer exists. Changing the email address
 // revokes stored verification tokens in the same transaction. Changes to credentials,
 // email, provider, or verification settings also invalidate authenticated sessions.
+// The receiver must carry the security version from Create or an account read.
+// If security state has since changed, Update returns ErrUserChanged without
+// changing the account, its tokens, or the receiver. Reload the account and
+// reapply the intended edit before retrying. Do not copy only the new version.
 func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 	if user == nil {
 		return NewErrUserNotSpecified(nil)
@@ -189,7 +195,7 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
                 OR verification_required IS NOT :verification_required
                 OR registration_auth_type IS NOT :registration_auth_type THEN 1 ELSE 0 END,
             password = :password
-        WHERE id = :id
+        WHERE id = :id AND session_version = :session_version
     `, userTableName)
 
 	result, err := tx.NamedExecContext(ctx, query, &updated)
@@ -200,11 +206,15 @@ func (user *User) Update(ctx context.Context, db *sqlx.DB) error {
 	if err != nil {
 		return err
 	}
-	if count == 0 {
+	err = tx.GetContext(ctx, &updated.SessionVersion, `SELECT session_version FROM user WHERE id = ?`, user.ID)
+	if errors.Is(err, sql.ErrNoRows) {
 		return NewErrUserNotFound(sql.ErrNoRows)
 	}
-	if err := tx.GetContext(ctx, &updated.SessionVersion, `SELECT session_version FROM user WHERE id = ?`, user.ID); err != nil {
+	if err != nil {
 		return err
+	}
+	if count == 0 {
+		return NewErrUserChanged(nil)
 	}
 	if err := tx.Commit(); err != nil {
 		return err
