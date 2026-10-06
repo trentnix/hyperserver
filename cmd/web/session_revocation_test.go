@@ -40,7 +40,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 					t.Fatal(err)
 				}
 				called := false
-				h.app.Web.Handle("GET /revocation-protected", middleware.RequireAuthentication(h.app.Database, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.app.Web.Handle("GET /revocation-protected", middleware.RequireAuthentication(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
 					u := user.GetUserFromContext(r.Context())
 					if u == nil || u.ID != account.ID {
@@ -57,7 +57,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 				logout, _ := h.app.Web.Handler(httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
 				h.app.Web.Handle("POST /logout-observed", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					logout.ServeHTTP(w, r)
-					u, err := user.GetAuthenticatedUser(r, h.app.Database)
+					u, err := user.GetAuthenticatedUser(r, h.app.AccountReader)
 					if err != nil {
 						t.Fatal(err)
 					}

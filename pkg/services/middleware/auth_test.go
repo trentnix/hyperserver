@@ -12,7 +12,7 @@ import (
 )
 
 func TestAuthMiddlewareMissingDependencies(t *testing.T) {
-	for name, guard := range map[string]func(*sqlx.DB, *content.ContentManagerService) func(http.Handler) http.Handler{
+	for name, guard := range map[string]func(user.AccountReader, *content.ContentManagerService) func(http.Handler) http.Handler{
 		"authenticated": RequireAuthentication,
 		"anonymous":     RequireAnonymous,
 	} {
@@ -20,7 +20,7 @@ func TestAuthMiddlewareMissingDependencies(t *testing.T) {
 			t.Run(name+"/"+missing, func(t *testing.T) {
 				// A cached user avoids database I/O if a missing return lets execution continue.
 				r := user.AddUserToRequestContext(httptest.NewRequest(http.MethodGet, "/private", nil), &user.User{ID: "user", Verified: true})
-				db := &sqlx.DB{}
+				var db user.AccountReader = user.NewSQLiteAccountReader(&sqlx.DB{})
 				cm := &content.ContentManagerService{HandleError: func(http.ResponseWriter, *http.Request, string, error, int) {
 					t.Error("authentication continued after a dependency error")
 				}}
@@ -48,7 +48,8 @@ func TestAuthMiddlewareMissingDependencies(t *testing.T) {
 func TestSessionMiddlewareMissingDependencies(t *testing.T) {
 	for _, missing := range []string{"database", "session manager", "both"} {
 		t.Run(missing, func(t *testing.T) {
-			db, manager := &sqlx.DB{}, &session.SessionManager{}
+			var db user.AccountReader = user.NewSQLiteAccountReader(&sqlx.DB{})
+			manager := &session.SessionManager{}
 			if missing == "database" || missing == "both" {
 				db = nil
 			}

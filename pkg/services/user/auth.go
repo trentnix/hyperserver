@@ -1,11 +1,9 @@
 package user
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -59,8 +57,9 @@ func LogoutAuthenticatedUser(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// GetAuthenticatedUser retrieves the currently authenticated user
-func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
+// GetAuthenticatedUser loads the session's account through accounts, unless the
+// request already has an authenticated user. Account reads use the request context.
+func GetAuthenticatedUser(r *http.Request, accounts AccountReader) (*User, error) {
 	// first check the request context
 	u := GetUserFromContext(r.Context())
 	if u != nil {
@@ -77,13 +76,11 @@ func GetAuthenticatedUser(r *http.Request, db *sqlx.DB) (*User, error) {
 		return nil, nil
 	}
 
-	// get the user's information from the database
-	u_db, userRetrievalErr := GetUserByIDContext(r.Context(), db, userId)
+	if accounts == nil {
+		return nil, errors.New("account reader is not configured")
+	}
+	u_db, userRetrievalErr := accounts.GetByID(r.Context(), userId)
 	if userRetrievalErr != nil {
-		if errors.Is(userRetrievalErr, sql.ErrNoRows) {
-			return nil, NewErrUserNotFound(userRetrievalErr)
-		}
-
 		return nil, userRetrievalErr
 	}
 

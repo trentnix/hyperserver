@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
@@ -15,10 +14,10 @@ import (
 )
 
 // RequireAuthentication determines whether the user is authenticated and, if not, denies access
-func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
+func RequireAuthentication(accounts user.AccountReader, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if db == nil {
+			if accounts == nil {
 				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
 				return
 			}
@@ -28,7 +27,7 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 				return
 			}
 
-			u, err := getAuthenticatedUser(r, db)
+			u, err := getAuthenticatedUser(r, accounts)
 			if err != nil {
 				// don't allow access
 				cm.HandleError(w, r,
@@ -84,10 +83,10 @@ func RequireAuthentication(db *sqlx.DB, cm *content_services.ContentManagerServi
 }
 
 // RequireAnonymous determines whether the user is authenticated and, if so, denies access
-func RequireAnonymous(db *sqlx.DB, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
+func RequireAnonymous(accounts user.AccountReader, cm *content_services.ContentManagerService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if db == nil {
+			if accounts == nil {
 				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
 				return
 			}
@@ -97,7 +96,7 @@ func RequireAnonymous(db *sqlx.DB, cm *content_services.ContentManagerService) f
 				return
 			}
 
-			u, err := getAuthenticatedUser(r, db)
+			u, err := getAuthenticatedUser(r, accounts)
 			if err != nil {
 				// don't allow access
 				cm.HandleError(w, r,
@@ -123,12 +122,12 @@ func RequireAnonymous(db *sqlx.DB, cm *content_services.ContentManagerService) f
 
 // getAuthenticatedUser retrieves the current user from the request context and, if it's not there, it
 // tries to retrieve the user from the session. If no user is found, nil is returned.
-func getAuthenticatedUser(r *http.Request, db *sqlx.DB) (*user.User, error) {
+func getAuthenticatedUser(r *http.Request, accounts user.AccountReader) (*user.User, error) {
 	ctx := r.Context()
 
 	u := user.GetUserFromContext(ctx)
 	if u == nil {
-		u, err := user.GetAuthenticatedUser(r, db)
+		u, err := user.GetAuthenticatedUser(r, accounts)
 		if err != nil {
 			return nil, err
 		}

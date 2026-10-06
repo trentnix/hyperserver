@@ -39,6 +39,7 @@ type (
 		Enabled bool
 
 		db             *sqlx.DB
+		accounts       user.AccountReader
 		httpConfig     config.HTTPConfig
 		rateLimit      *config.ModuleRateLimitConfig
 		contentManager *content_services.ContentManagerService
@@ -76,6 +77,7 @@ func init() {
 func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
 	a.db = s.Database
+	a.accounts = s.AccountReader
 	a.httpConfig = s.Config.HTTP
 	a.rateLimit = s.Config.Auth.RateLimit
 
@@ -103,10 +105,10 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 			return fmt.Errorf("auth.rateLimit.%w", err)
 		}
 		anonymous := func(handler http.Handler) http.Handler {
-			return noStore(middleware.RequireAnonymous(a.db, a.contentManager)(handler))
+			return noStore(middleware.RequireAnonymous(a.accounts, a.contentManager)(handler))
 		}
 		authenticated := func(handler http.Handler) http.Handler {
-			return noStore(middleware.RequireAuthentication(a.db, a.contentManager)(handler))
+			return noStore(middleware.RequireAuthentication(a.accounts, a.contentManager)(handler))
 		}
 		mutations, err := mux.WithRateLimit(ratelimit.Policy{Requests: 20, Window: time.Minute, MaxClients: maxClients})
 		if err != nil {
@@ -624,7 +626,7 @@ func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 // SendVerificationRequest processes a user verification request by sending verification
 // instructions to the user
 func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Request) {
-	authUser, err := user.GetAuthenticatedUser(r, a.db)
+	authUser, err := user.GetAuthenticatedUser(r, a.accounts)
 	if err != nil {
 		logVerificationFailure(r, "verification account lookup failed")
 		a.contentManager.HandleError(w, r, "Unable to send verification instructions. Please try again later.", nil, http.StatusInternalServerError)
@@ -701,7 +703,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 
 	verificationErrMsg := "Verification failed: unable to verify your user account."
 
-	authenticatedUser, err := user.GetAuthenticatedUser(r, a.db)
+	authenticatedUser, err := user.GetAuthenticatedUser(r, a.accounts)
 	if err != nil {
 		logVerificationFailure(r, "verification account lookup failed")
 		util.HttpError(w, r, "Unable to verify your account. Please try again later.", nil, http.StatusInternalServerError)

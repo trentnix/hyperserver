@@ -16,6 +16,7 @@ import (
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -26,7 +27,10 @@ type (
 		Config *config.Config
 
 		// Database is owned by the application. Modules borrow it and must not close it.
-		Database       *sqlx.DB
+		Database *sqlx.DB
+		// AccountReader supplies authentication lookups. Writes and token operations
+		// still use Database and must refer to the same accounts.
+		AccountReader  user.AccountReader
 		Web            *http.ServeMux
 		ContentManager *content_services.ContentManagerService
 		SessionManager *session.SessionManager
@@ -42,6 +46,7 @@ func NewApplicationServer() *ApplicationServer {
 
 	s.initConfig()
 	s.initDatabase()
+	s.AccountReader = user.NewSQLiteAccountReader(s.Database)
 	s.initWeb()
 	s.initContentManager()
 	s.initMail()

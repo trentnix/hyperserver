@@ -97,7 +97,7 @@ func TestHTTPAuthenticationRotation(t *testing.T) {
 				}
 
 				called := false
-				h.app.Web.Handle("GET /rotation-protected", middleware.RequireAuthentication(h.app.Database, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.app.Web.Handle("GET /rotation-protected", middleware.RequireAuthentication(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
 					if got := user.GetUserFromContext(r.Context()); got == nil || got.ID != u.ID || (operation == "verification" && !got.Verified) {
 						t.Fatal("replacement lost account identity or privileges")
@@ -163,7 +163,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 				}
 
 				called := false
-				h.app.Web.Handle("GET /verification-protected", middleware.RequireAuthentication(h.app.Database, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.app.Web.Handle("GET /verification-protected", middleware.RequireAuthentication(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
 					account := user.GetUserFromContext(r.Context())
 					if account == nil || account.ID != u.ID || !account.Verified {
@@ -234,7 +234,7 @@ func TestHTTPPasswordChangesRevokeAllSessions(t *testing.T) {
 					t.Fatalf("wrong account version after password operation: %+v, %v", stored, err)
 				}
 				called := false
-				h.app.Web.Handle("GET /password-protected", middleware.RequireAuthentication(h.app.Database, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.app.Web.Handle("GET /password-protected", middleware.RequireAuthentication(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
 					w.WriteHeader(http.StatusNoContent)
 				})))
@@ -296,7 +296,7 @@ func TestHTTPAuthenticationRejectsOldSessionVersions(t *testing.T) {
 					base, _ := url.Parse(h.baseURL)
 					h.cookies.SetCookies(base, w.Result().Cookies())
 				}
-				h.app.Web.Handle("GET /version-protected", middleware.RequireAuthentication(h.app.Database, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.app.Web.Handle("GET /version-protected", middleware.RequireAuthentication(h.app.AccountReader, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					t.Fatal("stale or unversioned session authenticated")
 				})))
 				w := h.request(http.MethodGet, "/version-protected", nil, true)

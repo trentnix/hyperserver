@@ -1,18 +1,22 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestDisabledRegistration(t *testing.T) {
@@ -88,6 +92,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 				}},
 				// Init requires a database reference but does not access it.
 				Database:       &sqlx.DB{},
+				AccountReader:  user.NewSQLiteAccountReader(&sqlx.DB{}),
 				ContentManager: &content.ContentManagerService{},
 			}
 			service := &EmailAuthService{}
@@ -96,6 +101,110 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 			want := filepath.Base(tc.path)
 			if cause == nil || !strings.Contains(cause.Error(), want) {
 				t.Fatalf("Init error = %v, cause = %v, want %s failure", initErr, cause, want)
+			}
+		})
+	}
+}
+
+type emailAccountReader struct {
+	user.AccountReader
+	lookup func(context.Context, string) (*user.User, error)
+}
+
+func TestEmailAuthInitAccountReader(t *testing.T) {
+	t.Chdir("../../..")
+	for _, scenario := range []string{"supplied", "missing"} {
+		t.Run(scenario, func(t *testing.T) {
+			app := &server.ApplicationServer{
+				Config: &config.Config{Auth: config.AuthConfig{
+					Enabled: true, JwtKey: "test-key",
+					Services: map[string]map[string]string{"email": {"enabled": "true"}},
+				}},
+				// Initialization must not query storage.
+				Database:       &sqlx.DB{},
+				ContentManager: content.NewContentManager(),
+			}
+			reader := &emailAccountReader{}
+			if scenario == "supplied" {
+				app.AccountReader = reader
+			}
+			service := &EmailAuthService{}
+			err := service.Init(app)
+			if scenario == "missing" {
+				cause := errors.Unwrap(err)
+				if cause == nil || cause.Error() != "the account reader is not configured" {
+					t.Fatalf("missing account reader error = %v", err)
+				}
+				return
+			}
+			if err != nil || service.accounts != reader {
+				t.Fatalf("initialization did not preserve the application-supplied account reader: %v", err)
+			}
+		})
+	}
+}
+
+func (s emailAccountReader) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+	return s.lookup(ctx, email)
+}
+
+func TestLoginUsesAccountReader(t *testing.T) {
+	t.Chdir("../../..")
+	hash, err := password.HashPassword("TestPassword1!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := &user.User{ID: "account", Email: "person@example.invalid", Password: hash, SessionVersion: 1}
+	for _, scenario := range []string{"success", "missing", "storage failure", "canceled", "wrong password"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if scenario == "canceled" {
+				cancel()
+			}
+			calls := 0
+			reader := emailAccountReader{lookup: func(got context.Context, email string) (*user.User, error) {
+				calls++
+				if got != ctx || email != account.Email {
+					t.Fatal("lookup lost the request context or email")
+				}
+				switch scenario {
+				case "missing":
+					return nil, errors.Join(errors.New("lookup failed"), user.NewErrUserNotFound(nil))
+				case "storage failure":
+					return nil, errors.New("private storage failure")
+				case "canceled":
+					return nil, got.Err()
+				}
+				return account, nil
+			}}
+			cm := content.NewContentManager()
+			cm.AddHtmxLayout("modules/site/templates/html/layouts/partial.html")
+			service := &EmailAuthService{accounts: reader, contentManager: cm}
+			form := url.Values{"email": {account.Email}, "password": {"TestPassword1!"}}
+			if scenario == "wrong password" {
+				form.Set("password", "WrongPassword1!")
+			}
+			r := httptest.NewRequest(http.MethodPost, emailLoginPath, strings.NewReader(form.Encode())).WithContext(ctx)
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			r.Header.Set("HX-Request", "true")
+			w := httptest.NewRecorder()
+			got := service.Login(w, r)
+			if calls != 1 {
+				t.Fatalf("lookup calls = %d, want 1", calls)
+			}
+			if scenario == "success" {
+				if got != account {
+					t.Fatal("successful reader lookup did not authenticate")
+				}
+				return
+			}
+			want := "Invalid login/password"
+			if scenario == "storage failure" || scenario == "canceled" {
+				want = "The user specified could not be retrieved from the database"
+			}
+			if got != nil || !strings.Contains(w.Body.String(), want) || strings.Contains(w.Body.String(), "private storage failure") {
+				t.Fatalf("failed login authenticated or rendered an incorrect error: %d %s", w.Code, w.Body.String())
 			}
 		})
 	}

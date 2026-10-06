@@ -7,7 +7,6 @@ package auth
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"html/template"
@@ -37,6 +36,7 @@ type (
 	// EmailAuthService implements email/password authentication using shared application services.
 	EmailAuthService struct {
 		db                *sqlx.DB
+		accounts          user.AccountReader
 		config            *config.Config
 		contentManager    *content_services.ContentManagerService
 		mailClient        *messaging.MailClient
@@ -168,8 +168,12 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	if s.Database == nil {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the database service is not available"))
 	}
+	if s.AccountReader == nil {
+		return auth_services.NewErrEmailAuthServiceInit(errors.New("the account reader is not configured"))
+	}
 
 	a.db = s.Database
+	a.accounts = s.AccountReader
 	a.config = s.Config
 	a.contentManager = s.ContentManager
 	a.mailClient = s.Mail
@@ -287,8 +291,9 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	}
 
 	// authenticate the user
-	u, err := user.GetUserByEmail(a.db, loginForm.Email)
-	if err != nil && err != sql.ErrNoRows {
+	u, err := a.accounts.GetByEmail(r.Context(), loginForm.Email)
+	var notFound *user.ErrUserNotFound
+	if err != nil && !errors.As(err, &notFound) {
 		form.HandleFormError(w, r,
 			login,
 			loginForm,
@@ -366,7 +371,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	}
 
 	if a.config.Auth.RegisterRequiresVerification {
-		createdUser, err := user.GetUserByEmail(a.db, registerForm.Email)
+		createdUser, err := a.accounts.GetByEmail(r.Context(), registerForm.Email)
 		if err != nil || createdUser == nil {
 			form.HandleFormError(w, r, register, registerForm, "Your account was created, but verification email delivery failed. Please login and request a new verification email.", err)
 			return false
@@ -521,8 +526,9 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 
-	u, err := user.GetUserByEmailContext(r.Context(), a.db, resetRequestForm.Email)
-	if errors.Is(err, sql.ErrNoRows) {
+	u, err := a.accounts.GetByEmail(r.Context(), resetRequestForm.Email)
+	var notFound *user.ErrUserNotFound
+	if errors.As(err, &notFound) {
 		err = nil
 	}
 	if err == nil && u != nil && u.RegistrationAuthType == AuthTypeEmail {

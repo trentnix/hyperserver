@@ -220,6 +220,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	cm.HandleMessage, cm.HandleError, cm.HandleNotFound = util.HttpMessage, util.HttpError, util.HttpNotFound
 	app := &server.ApplicationServer{
 		Config: cfg, Database: db, Web: http.NewServeMux(),
+		AccountReader:  user.NewSQLiteAccountReader(db),
 		ContentManager: cm, Mail: mailClient,
 	}
 	if err := app.InitializeSessions(context.Background()); err != nil {
