@@ -49,7 +49,7 @@ func TestAccountChangesAdvanceSessionVersion(t *testing.T) {
 			case "provider":
 				u.RegistrationAuthType = "another-provider"
 			}
-			if err := u.Update(context.Background(), db); err != nil {
+			if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
 			want := int64(2)

@@ -242,7 +242,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 
 	// Updating unrelated fields must preserve both outstanding verification links.
 	u.Password = "new hash"
-	if err := u.Update(context.Background(), db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
 	for _, token := range []*AuthVerificationToken{first, second} {
@@ -254,7 +254,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	originalEmail := u.Email
 	for _, email := range []string{"changed@example.invalid", originalEmail} {
 		u.Email = email
-		if err := u.Update(context.Background(), db); err != nil {
+		if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
 		for _, token := range []*AuthVerificationToken{first, second} {
@@ -320,7 +320,7 @@ func TestEmailChangeRevocationRollsBack(t *testing.T) {
 
 			u.Email = "changed@example.invalid"
 			attempt := *u
-			if err := u.Update(context.Background(), db); err == nil {
+			if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); err == nil {
 				t.Fatal("email change succeeded despite storage failure")
 			}
 			if *u != attempt {

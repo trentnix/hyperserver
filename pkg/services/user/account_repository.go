@@ -19,6 +19,16 @@ type AccountRepository interface {
 	// Failure must leave stored accounts and u unchanged. Success fills in the ID,
 	// timestamps, and initial SessionVersion of 1. Password is already hashed.
 	Create(context.Context, *User) error
+	// Update changes an existing account by ID. Missing accounts return ErrUserNotFound,
+	// stale SessionVersion values return ErrUserChanged, and duplicate emails return
+	// database.ErrRecordAlreadyExists. The caller must preserve the version from its
+	// account read and validate and hash any new password before calling.
+	// Changes to Password, Email, RegistrationAuthType, Verified, or VerificationRequired
+	// must increment SessionVersion. Otherwise, the version must stay unchanged.
+	// ID and CreatedAt must stay unchanged. An email change must also revoke the account's
+	// verification tokens. These changes must commit together and preserve other tokens.
+	// Success updates u's UpdatedAt and SessionVersion. Failure must leave u and storage unchanged.
+	Update(context.Context, *User) error
 	// ChangePassword atomically replaces the password hash and increments SessionVersion
 	// only if the stored password, registration provider, and SessionVersion match u.
 	// A missing account or a mismatch must return an error. Failure must leave storage
@@ -59,6 +69,11 @@ func (s *SQLiteAccountRepository) GetByEmail(ctx context.Context, email string) 
 // Create inserts an account without changing an existing account with the same email.
 func (s *SQLiteAccountRepository) Create(ctx context.Context, u *User) error {
 	return u.Create(ctx, s.db)
+}
+
+// Update stores account changes and their token revocations in one transaction.
+func (s *SQLiteAccountRepository) Update(ctx context.Context, u *User) error {
+	return u.Update(ctx, s.db)
 }
 
 // ChangePassword conditionally stores a password hash and revokes existing sessions.

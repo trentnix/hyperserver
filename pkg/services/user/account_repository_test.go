@@ -264,6 +264,50 @@ func TestSQLiteAccountRepositoryChangePasswordCancellationWhileWaiting(t *testin
 	})
 }
 
+func TestSQLiteAccountRepositoryUpdateCancellationWhileWaiting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db, u, token, key := verificationFixture(t)
+		repository := NewSQLiteAccountRepository(db)
+		storedBefore, err := repository.GetByID(context.Background(), u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		u.Email = "changed@example.invalid"
+		before := *u
+		// Hold the only connection so Update must wait before starting its transaction.
+		connection, err := db.Conn(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer connection.Close()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		result := make(chan error, 1)
+		go func() { result <- repository.Update(ctx, u) }()
+		synctest.Wait()
+		select {
+		case err := <-result:
+			t.Fatalf("update returned before a connection was available: %v", err)
+		default:
+		}
+
+		cancel()
+		if err := <-result; !errors.Is(err, context.Canceled) || *u != before {
+			t.Fatalf("canceled update changed its input or lost cancellation: %v", err)
+		}
+		if err := connection.Close(); err != nil {
+			t.Fatal(err)
+		}
+		stored, err := repository.GetByID(context.Background(), u.ID)
+		if err != nil || *stored != *storedBefore {
+			t.Fatalf("canceled update changed the stored account: %v", err)
+		}
+		if _, err := ValidateVerificationToken(db, token.Token, key); err != nil {
+			t.Fatalf("canceled update revoked the verification token: %v", err)
+		}
+	})
+}
+
 type accountReaderStub struct {
 	AccountRepository
 	lookup func(context.Context, string) (*User, error)

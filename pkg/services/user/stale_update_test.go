@@ -11,6 +11,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 	for _, change := range []string{"password change", "password reset", "password update", "email", "provider", "verified", "verification required", "verification token", "changed back"} {
 		t.Run(change, func(t *testing.T) {
 			db := userTestDB(t)
+			repository := NewSQLiteAccountRepository(db)
 			ctx := context.Background()
 			u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
 			if err := u.Create(ctx, db); err != nil {
@@ -53,10 +54,10 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				case "verification required":
 					u.VerificationRequired = true
 				}
-				err = u.Update(ctx, db)
+				err = repository.Update(ctx, u)
 				if err == nil && change == "changed back" {
 					u.Verified = false
-					err = u.Update(ctx, db)
+					err = repository.Update(ctx, u)
 				}
 			}
 			if err != nil {
@@ -80,7 +81,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				stale.Email = email
 				before := stale
 				var changed *ErrUserChanged
-				if err := stale.Update(ctx, db); !errors.As(err, &changed) {
+				if err := repository.Update(ctx, &stale); !errors.As(err, &changed) {
 					t.Fatalf("stale update error = %v, want ErrUserChanged", err)
 				}
 				if stale != before {
@@ -101,7 +102,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				t.Fatal(err)
 			}
 			fresh.Email = "profile-edit@example.invalid"
-			if err := fresh.Update(ctx, db); err != nil {
+			if err := repository.Update(ctx, fresh); err != nil {
 				t.Fatalf("fresh update failed: %v", err)
 			}
 			stored, err := GetUserByID(db, u.ID)
@@ -119,6 +120,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 
 func TestConcurrentUpdatesRejectStaleSnapshot(t *testing.T) {
 	db := userTestDB(t)
+	repository := NewSQLiteAccountRepository(db)
 	db.SetMaxOpenConns(2)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -137,7 +139,7 @@ func TestConcurrentUpdatesRejectStaleSnapshot(t *testing.T) {
 		snapshot.Email = email
 		go func() {
 			<-start
-			err := snapshot.Update(ctx, db)
+			err := repository.Update(ctx, &snapshot)
 			results <- result{snapshot, err}
 		}()
 	}
@@ -182,7 +184,7 @@ func TestUpdateRejectsIncorrectSecurityVersion(t *testing.T) {
 		attempt.Email = "changed@example.invalid"
 		before := attempt
 		var changed *ErrUserChanged
-		if err := attempt.Update(ctx, db); !errors.As(err, &changed) {
+		if err := NewSQLiteAccountRepository(db).Update(ctx, &attempt); !errors.As(err, &changed) {
 			t.Fatalf("version %d: error=%v, want ErrUserChanged", version, err)
 		}
 		stored, err := GetUserByID(db, u.ID)

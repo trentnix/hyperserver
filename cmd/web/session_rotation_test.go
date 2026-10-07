@@ -268,11 +268,17 @@ func TestHTTPPasswordChangesRevokeAllSessions(t *testing.T) {
 }
 
 func TestHTTPAuthenticationRejectsOldSessionVersions(t *testing.T) {
-	for _, scenario := range []string{"missing version", "wrong version type", "stale login snapshot"} {
+	for _, scenario := range []string{"missing version", "wrong version type", "stale login snapshot", "account update"} {
 		t.Run(scenario, func(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
 				u := h.seedUser(t, "version@example.invalid")
-				if scenario == "stale login snapshot" {
+				if scenario == "account update" {
+					h.establishSession(t, u)
+					u.Email = "updated@example.invalid"
+					if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
+						t.Fatal(err)
+					}
+				} else if scenario == "stale login snapshot" {
 					updated := *u
 					if err := updated.ChangePassword(context.Background(), h.app.Database, "different hash"); err != nil {
 						t.Fatal(err)

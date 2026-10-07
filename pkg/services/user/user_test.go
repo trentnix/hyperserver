@@ -98,7 +98,7 @@ func TestUpdateRejectsMissingUser(t *testing.T) {
 	u := &User{ID: "missing-id", Email: "person@example.invalid", Password: "hash"}
 	before := *u
 	var missing *ErrUserNotFound
-	if err := u.Update(context.Background(), db); !errors.As(err, &missing) {
+	if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); !errors.As(err, &missing) {
 		t.Errorf("missing account error = %v, want ErrUserNotFound", err)
 	}
 	if *u != before {
@@ -120,7 +120,7 @@ func TestUpdateUsesID(t *testing.T) {
 	u.Email = "after@example.invalid"
 	u.Password = "updated hash"
 	u.Verified = true
-	if err := u.Update(ctx, db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Update(ctx, u); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := GetUserByID(db, id)
@@ -140,7 +140,7 @@ func TestUpdateUsesID(t *testing.T) {
 	if err := u.Delete(db); err != nil {
 		t.Fatal(err)
 	}
-	if err := u.Update(ctx, db); !errors.Is(err, sql.ErrNoRows) {
+	if err := NewSQLiteAccountRepository(db).Update(ctx, u); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("updating a deleted user = %v, want not found", err)
 	}
 }
@@ -158,7 +158,7 @@ func TestUpdateRejectsEmailConflict(t *testing.T) {
 	first.Email = second.Email
 	before := *first
 	var duplicate *database.ErrRecordAlreadyExists
-	if err := first.Update(ctx, db); !errors.As(err, &duplicate) {
+	if err := NewSQLiteAccountRepository(db).Update(ctx, first); !errors.As(err, &duplicate) {
 		t.Fatalf("email conflict = %v, want duplicate email", err)
 	}
 	if *first != before {
@@ -192,7 +192,7 @@ func TestUserWritesRejectInvalidInput(t *testing.T) {
 			if err := tc.u.Create(context.Background(), db); err == nil {
 				t.Error("Create accepted invalid input")
 			}
-			if err := tc.u.Update(context.Background(), db); err == nil {
+			if err := NewSQLiteAccountRepository(db).Update(context.Background(), tc.u); err == nil {
 				t.Error("Update accepted invalid input")
 			}
 		})
@@ -207,7 +207,7 @@ func TestUserWritesRejectInvalidInput(t *testing.T) {
 	t.Run("email alone cannot select an update target", func(t *testing.T) {
 		db := userTestDB(t)
 		u := &User{Email: "person@example.invalid"}
-		if err := u.Update(context.Background(), db); err == nil {
+		if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); err == nil {
 			t.Error("Update accepted a missing ID")
 		}
 	})
@@ -242,7 +242,7 @@ func TestUserWritesPropagateFailures(t *testing.T) {
 				if operation == "create" {
 					err = u.Create(ctx, target)
 				} else {
-					err = u.Update(ctx, target)
+					err = NewSQLiteAccountRepository(target).Update(ctx, u)
 				}
 				if err == nil {
 					t.Fatal("write failure was ignored")
