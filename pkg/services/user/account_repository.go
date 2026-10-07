@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -35,6 +36,26 @@ type AccountRepository interface {
 	// and u unchanged. Success updates u's Password, UpdatedAt, and SessionVersion.
 	// The caller must validate and hash the new password before calling.
 	ChangePassword(ctx context.Context, u *User, passwordHash string) error
+	// ResetPassword atomically consumes the exact reset token, replaces the password,
+	// and increments SessionVersion. The caller must validate the token's signature,
+	// reset purpose, and account identity, and validate and hash the new password.
+	// Implementations must match the stored token's hash, account, and reset purpose
+	// and recheck both signed and stored expiry when consuming it, including after
+	// any wait for storage.
+	// A missing token returns ErrTokenNotFound. Expiry returns ErrTokenExpired.
+	// A missing account or changed password or provider must reject the operation.
+	// Success refreshes u from storage. Failure must leave u and storage unchanged.
+	// Other account fields and tokens must remain unchanged.
+	ResetPassword(ctx context.Context, u *User, authorization ResetAuthorization, passwordHash string) error
+}
+
+// ResetAuthorization carries the storage checks for a signature-validated reset token.
+// ExpiresAt is the signed expiry, not the stored expiry. Construct this value only
+// after validating the token's signature, reset purpose, and account identity.
+type ResetAuthorization struct {
+	AccountID string
+	TokenHash string
+	ExpiresAt time.Time
 }
 
 // SQLiteAccountRepository stores accounts using an existing SQLite pool.

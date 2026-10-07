@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestResetPasswordConsumesExactToken(t *testing.T) {
@@ -31,7 +33,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := u.ResetPassword(ctx, db, tokens[1].Token, key, "new hash"); err != nil {
+	if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), tokens[1].Token, key, "new hash"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := GetAuthResetTokenByHash(db, tokens[0].TokenHash); err != nil {
@@ -41,7 +43,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	if _, err := GetAuthResetTokenByHash(db, tokens[1].TokenHash); !errors.As(err, &missing) {
 		t.Fatalf("presented token still exists: %v", err)
 	}
-	if err := u.ResetPassword(ctx, db, tokens[1].Token, key, "replayed hash"); !errors.As(err, &missing) {
+	if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), tokens[1].Token, key, "replayed hash"); !errors.As(err, &missing) {
 		t.Fatalf("replay error = %v, want ErrTokenNotFound", err)
 	}
 	stored, err := GetUserByID(db, u.ID)
@@ -57,7 +59,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 }
 
 func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
-	for _, failure := range []string{"update", "delete", "commit", "missing account", "stale password", "stale provider", "wrong account", "wrong purpose", "wrong signature", "signed expiry", "stored expiry", "missing token", "canceled", "empty password"} {
+	for _, failure := range []string{"update", "delete", "commit", "missing account", "stale password", "stale provider", "wrong account", "wrong purpose", "wrong signature", "signed expiry", "stored expiry", "stored account", "stored purpose", "missing token", "canceled", "empty password"} {
 		t.Run(failure, func(t *testing.T) {
 			db := userTestDB(t)
 			ctx := context.Background()
@@ -115,6 +117,15 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 				u.ID = "another-account"
 			case "wrong signature":
 				key = []byte("wrong-key")
+			case "stored account":
+				if _, err := db.Exec(`UPDATE usertoken SET user_id = ? WHERE token_hash = ?`, "another-account", token.TokenHash); err != nil {
+					t.Fatal(err)
+				}
+			case "stored purpose":
+				purpose = verificationTokenType
+				if _, err := db.Exec(`UPDATE usertoken SET token_type = ? WHERE token_hash = ?`, purpose, token.TokenHash); err != nil {
+					t.Fatal(err)
+				}
 			case "missing token":
 				if err := token.Delete(db); err != nil {
 					t.Fatal(err)
@@ -133,7 +144,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 			if failure == "empty password" {
 				hash = ""
 			}
-			if err := u.ResetPassword(ctx, db, token.Token, key, hash); err == nil {
+			if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), token.Token, key, hash); err == nil {
 				t.Fatal("reset succeeded despite failure")
 			}
 			if *u != before {
@@ -154,7 +165,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 				if _, err := db.Exec(`DROP TRIGGER fail_reset`); err != nil {
 					t.Fatal(err)
 				}
-				if err := u.ResetPassword(ctx, db, token.Token, key, hash); err != nil {
+				if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), token.Token, key, hash); err != nil {
 					t.Fatalf("retry after rollback failed: %v", err)
 				}
 			}
@@ -197,7 +208,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 		account := *u
 		go func() {
 			hash := fmt.Sprintf("new hash %d", i)
-			results <- result{hash, account.ResetPassword(ctx, observed, token.Token, key, hash)}
+			results <- result{hash, account.ResetPassword(ctx, NewSQLiteAccountRepository(observed), token.Token, key, hash)}
 		}()
 	}
 	// Both transactions must reach deletion while a separate connection owns
@@ -232,8 +243,140 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 		}
 	}
 	stored, err := GetUserByID(db, u.ID)
-	if successes != 1 || err != nil || stored.Password != winningHash {
+	if successes != 1 || err != nil || stored.Password != winningHash || stored.SessionVersion != u.SessionVersion+1 {
 		t.Fatalf("concurrent reset: successes=%d, lookup error=%v", successes, err)
+	}
+}
+
+func TestSQLiteAccountRepositoryResetRejectsInvalidInput(t *testing.T) {
+	for _, scenario := range []string{"nil account", "missing ID", "nil database", "empty password", "wrong account", "missing hash", "missing expiry", "expired authorization"} {
+		t.Run(scenario, func(t *testing.T) {
+			db := userTestDB(t)
+			repository := NewSQLiteAccountRepository(db)
+			u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
+			if err := repository.Create(context.Background(), u); err != nil {
+				t.Fatal(err)
+			}
+			u, err := repository.GetByID(context.Background(), u.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			token, err := NewAuthResetToken(u, []byte("test-signing-key"), time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := token.Create(db); err != nil {
+				t.Fatal(err)
+			}
+			authorization := ResetAuthorization{AccountID: u.ID, TokenHash: token.TokenHash, ExpiresAt: time.Unix(token.ExpiresAt.Unix(), 0)}
+			attempt := *u
+			candidate, hash := &attempt, "new hash"
+			switch scenario {
+			case "nil account":
+				candidate = nil
+			case "missing ID":
+				candidate.ID = ""
+			case "nil database":
+				repository = NewSQLiteAccountRepository(nil)
+			case "empty password":
+				hash = ""
+			case "wrong account":
+				authorization.AccountID = "another-account"
+			case "missing hash":
+				authorization.TokenHash = ""
+			case "missing expiry":
+				authorization.ExpiresAt = time.Time{}
+			case "expired authorization":
+				authorization.ExpiresAt = time.Now().Add(-time.Hour)
+			}
+			before := attempt
+			if err := repository.ResetPassword(context.Background(), candidate, authorization, hash); err == nil || attempt != before {
+				t.Fatalf("invalid reset succeeded or changed its account: %v", err)
+			}
+			stored, err := GetUserByID(db, u.ID)
+			if err != nil || *stored != *u {
+				t.Fatalf("invalid reset changed storage: %v", err)
+			}
+			if _, err := GetAuthResetTokenByHash(db, token.TokenHash); err != nil {
+				t.Fatalf("invalid reset consumed the token: %v", err)
+			}
+		})
+	}
+}
+
+type resetAccountRepository struct {
+	AccountRepository
+	reset func(context.Context, *User, ResetAuthorization, string) error
+}
+
+func (s resetAccountRepository) ResetPassword(ctx context.Context, u *User, authorization ResetAuthorization, hash string) error {
+	return s.reset(ctx, u, authorization, hash)
+}
+
+func TestResetPasswordValidatesBeforeCallingRepository(t *testing.T) {
+	for _, scenario := range []string{"success", "storage failure", "canceled", "wrong signature", "wrong purpose", "wrong account", "expired", "malformed", "empty hash", "nil account", "missing ID", "nil repository"} {
+		t.Run(scenario, func(t *testing.T) {
+			u := &User{ID: "account", Email: "person@example.invalid", Password: "old hash", SessionVersion: 1}
+			key := []byte("test-signing-key")
+			purpose, lifetime := resetTokenType, time.Hour
+			if scenario == "wrong purpose" {
+				purpose = verificationTokenType
+			}
+			token, err := newAuthToken(u, key, lifetime, purpose)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash := "new hash"
+			switch scenario {
+			case "wrong signature":
+				key = []byte("wrong-key")
+			case "wrong account":
+				u.ID = "other-account"
+			case "malformed":
+				token.Token = "not-a-token"
+			case "expired":
+				claims := &VerificationClaims{Id: u.ID, Purpose: resetTokenType,
+					RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour))}}
+				token.Token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "empty hash":
+				hash = ""
+			case "nil account":
+				u = nil
+			case "missing ID":
+				u.ID = ""
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var wantErr error
+			if scenario == "storage failure" {
+				wantErr = errors.New("storage unavailable")
+			} else if scenario == "canceled" {
+				cancel()
+				wantErr = context.Canceled
+			}
+			calls := 0
+			var repository AccountRepository = resetAccountRepository{reset: func(got context.Context, account *User, authorization ResetAuthorization, passwordHash string) error {
+				calls++
+				if got != ctx || account != u || passwordHash != hash || authorization.AccountID != token.UserId || authorization.TokenHash != token.TokenHash || !authorization.ExpiresAt.Equal(time.Unix(token.ExpiresAt.Unix(), 0)) {
+					t.Fatal("reset lost its context, account, password hash, or signed authorization")
+				}
+				return wantErr
+			}}
+			if scenario == "nil repository" {
+				repository = nil
+			}
+			err = u.ResetPassword(ctx, repository, token.Token, key, hash)
+			if scenario == "success" || wantErr != nil {
+				if calls != 1 || !errors.Is(err, wantErr) {
+					t.Fatalf("reset error=%v, repository calls=%d, want %v and 1", err, calls, wantErr)
+				}
+			} else if err == nil || calls != 0 {
+				t.Fatalf("invalid reset reached storage: error=%v, calls=%d", err, calls)
+			}
+		})
 	}
 }
 
@@ -281,7 +424,9 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 			defer cancelReset()
 			before := *u
 			result := make(chan error, 1)
-			go func() { result <- u.ResetPassword(resetCtx, observed, token.Token, key, "new hash") }()
+			go func() {
+				result <- u.ResetPassword(resetCtx, NewSQLiteAccountRepository(observed), token.Token, key, "new hash")
+			}()
 			waitForTokenDelete(t, ctx, started)
 			if scenario != "cancellation" && !time.Now().Before(deadline) {
 				t.Fatal("token expired before contention was established")
@@ -349,7 +494,7 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 	if err := verified.Update(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	if err := u.ResetPassword(ctx, db, token.Token, key, "new hash"); err != nil {
+	if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), token.Token, key, "new hash"); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := GetUserByID(db, u.ID)

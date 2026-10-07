@@ -2,13 +2,13 @@ package user
 
 import (
 	"context"
-	"database/sql"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
-	"github.com/trentnix/hyperserver/pkg/database"
 )
 
 type (
@@ -75,18 +75,16 @@ func ValidateResetToken(db *sqlx.DB, tokenString string, jwtKey []byte) (*User, 
 	return validateToken(db, tokenString, jwtKey, resetTokenType)
 }
 
-// ResetPassword consumes the exact reset token and stores passwordHash in one transaction.
-// The caller must validate and hash the new password before calling. The account
-// schema must exist. A concurrent password or provider change rejects the operation.
-// The receiver is refreshed from storage only after commit. All existing
-// authenticated sessions are invalidated. Other stored account fields and tokens
-// are unchanged.
-func (u *User) ResetPassword(ctx context.Context, db *sqlx.DB, token string, jwtKey []byte, passwordHash string) error {
+// ResetPassword validates the signed reset token and asks accounts to atomically
+// consume it and store passwordHash. The caller must validate and hash the new
+// password. A concurrent password or provider change rejects the operation.
+// Success refreshes the receiver and invalidates existing authenticated sessions.
+func (u *User) ResetPassword(ctx context.Context, accounts AccountRepository, token string, jwtKey []byte, passwordHash string) error {
 	if u == nil || u.ID == "" {
 		return NewErrUserNotSpecified(nil)
 	}
-	if db == nil {
-		return database.NewErrDatabaseUnavailable(nil)
+	if accounts == nil {
+		return errors.New("the account repository is not configured")
 	}
 	if passwordHash == "" {
 		return errors.New("a password hash is required")
@@ -100,35 +98,11 @@ func (u *User) ResetPassword(ctx context.Context, db *sqlx.DB, token string, jwt
 		return NewErrToken(errors.New("reset token belongs to another account"))
 	}
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
+	hash := sha256.Sum256([]byte(token))
+	authorization := ResetAuthorization{
+		AccountID: claims.Id,
+		TokenHash: hex.EncodeToString(hash[:]),
+		ExpiresAt: claims.ExpiresAt.Time,
 	}
-	defer tx.Rollback()
-
-	if err := consumeAuthToken(ctx, tx, token, claims); err != nil {
-		return err
-	}
-	now := time.Now()
-
-	// Only update the password. Do not overwrite unrelated account changes with
-	// the snapshot used for form validation or the previous-password check.
-	var updated User
-	err = tx.GetContext(ctx, &updated, `UPDATE `+userTableName+` SET password = ?, updated_at = ?, session_version = session_version + 1
-		WHERE id = ? AND password = ? AND registration_auth_type = ?
-		RETURNING id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version`,
-		passwordHash, now, u.ID, u.Password, u.RegistrationAuthType)
-	if errors.Is(err, sql.ErrNoRows) {
-		return NewErrToken(errors.New("account changed or no longer exists"))
-	}
-	if err != nil {
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	*u = updated
-	return nil
+	return accounts.ResetPassword(ctx, u, authorization, passwordHash)
 }

@@ -659,7 +659,7 @@ func (a *EmailAuthService) Reset(
 		return false
 	}
 
-	err = u.ResetPassword(r.Context(), a.db, token, []byte(a.config.Auth.JwtKey), hashedPassword)
+	err = u.ResetPassword(r.Context(), a.accounts, token, []byte(a.config.Auth.JwtKey), hashedPassword)
 	if err != nil {
 		// the user could not be updated
 		form.HandleFormError(

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/auth/password"
@@ -111,6 +112,7 @@ type emailAccountRepository struct {
 	lookup         func(context.Context, string) (*user.User, error)
 	create         func(context.Context, *user.User) error
 	changePassword func(context.Context, *user.User, string) error
+	resetPassword  func(context.Context, *user.User, user.ResetAuthorization, string) error
 }
 
 func (s emailAccountRepository) Create(ctx context.Context, u *user.User) error {
@@ -119,6 +121,10 @@ func (s emailAccountRepository) Create(ctx context.Context, u *user.User) error 
 
 func (s emailAccountRepository) ChangePassword(ctx context.Context, u *user.User, hash string) error {
 	return s.changePassword(ctx, u, hash)
+}
+
+func (s emailAccountRepository) ResetPassword(ctx context.Context, u *user.User, authorization user.ResetAuthorization, hash string) error {
+	return s.resetPassword(ctx, u, authorization, hash)
 }
 
 func TestEmailAuthInitAccountRepository(t *testing.T) {
@@ -314,6 +320,50 @@ func TestChangeUsesAccountRepository(t *testing.T) {
 			}
 			if wantCalls == 1 && !strings.Contains(w.Body.String(), "unable to change your password") {
 				t.Fatalf("repository failure did not render an error: %s", w.Body.String())
+			}
+		})
+	}
+}
+
+func TestResetUsesAccountRepository(t *testing.T) {
+	t.Chdir("../../..")
+	for _, scenario := range []string{"success", "storage failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			fail := scenario == "storage failure"
+			account := &user.User{ID: "account", SessionVersion: 1}
+			key := "test-signing-key"
+			token, err := user.NewAuthResetToken(account, []byte(key), time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			form := url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}
+			r := httptest.NewRequest(http.MethodPost, emailResetPath, strings.NewReader(form.Encode()))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			r.Header.Set("HX-Request", "true")
+			calls := 0
+			accounts := emailAccountRepository{resetPassword: func(ctx context.Context, u *user.User, authorization user.ResetAuthorization, hash string) error {
+				calls++
+				if ctx != r.Context() || u != account || authorization.AccountID != account.ID || authorization.TokenHash != token.TokenHash || !password.CheckPasswordHash(form.Get("password"), hash) {
+					t.Fatal("reset did not pass the request context, account, token identity, and hashed password")
+				}
+				if fail {
+					return errors.New("private storage failure")
+				}
+				return nil
+			}}
+			cm := content.NewContentManager()
+			cm.AddHtmxLayout("modules/site/templates/html/layouts/partial.html")
+			// No SQL pool: reset submission must use the supplied repository.
+			service := &EmailAuthService{
+				accounts: accounts, contentManager: cm,
+				config: &config.Config{Auth: config.AuthConfig{JwtKey: key}},
+			}
+			w := httptest.NewRecorder()
+			if got := service.Reset(w, r, account, token.Token, false); got == fail || calls != 1 {
+				t.Fatalf("reset success=%t, repository calls=%d", got, calls)
+			}
+			if fail && (!strings.Contains(w.Body.String(), "Unable to reset password") || strings.Contains(w.Body.String(), "private storage failure")) {
+				t.Fatalf("failed reset rendered an incorrect error: %s", w.Body.String())
 			}
 		})
 	}

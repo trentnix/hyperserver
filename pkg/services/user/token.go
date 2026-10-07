@@ -257,10 +257,16 @@ func parseAuthToken(tokenString string, jwtKey []byte, purpose string) (*Verific
 // restores the token on failure. Expiry is checked after acquiring the write lock.
 func consumeAuthToken(ctx context.Context, tx *sqlx.Tx, token string, claims *VerificationClaims) error {
 	hash := sha256.Sum256([]byte(token))
+	return consumeStoredToken(ctx, tx, claims.Id, hex.EncodeToString(hash[:]), claims.Purpose, claims.ExpiresAt.Time)
+}
+
+// consumeStoredToken matches a token's storage identity and checks both expiry
+// deadlines after acquiring the write lock. The caller must roll back on failure.
+func consumeStoredToken(ctx context.Context, tx *sqlx.Tx, accountID, tokenHash, purpose string, signedExpiry time.Time) error {
 	var expiresAt time.Time
 	err := tx.QueryRowContext(ctx, `DELETE FROM `+userTokenTableName+`
 		WHERE user_id = ? AND token_hash = ? AND token_type = ?
-		RETURNING expires_at`, claims.Id, hex.EncodeToString(hash[:]), claims.Purpose).
+		RETURNING expires_at`, accountID, tokenHash, purpose).
 		Scan(&expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return NewErrTokenNotFound(err)
@@ -270,7 +276,7 @@ func consumeAuthToken(ctx context.Context, tx *sqlx.Tx, token string, claims *Ve
 	}
 
 	now := time.Now()
-	if !now.Before(expiresAt) || !now.Before(claims.ExpiresAt.Time) {
+	if !now.Before(expiresAt) || !now.Before(signedExpiry) {
 		return NewErrTokenExpired(nil)
 	}
 	return nil

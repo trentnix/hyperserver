@@ -31,7 +31,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				if err := token.Create(db); err != nil {
 					t.Fatal(err)
 				}
-				err = u.ResetPassword(ctx, db, token.Token, key, "new hash")
+				err = u.ResetPassword(ctx, repository, token.Token, key, "new hash")
 			case "verification token":
 				token, tokenErr := NewAuthVerificationToken(u, key, time.Hour)
 				if tokenErr != nil {
