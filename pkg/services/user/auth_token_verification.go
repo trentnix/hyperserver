@@ -2,12 +2,12 @@ package user
 
 import (
 	"context"
-	"database/sql"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/trentnix/hyperserver/pkg/database"
 )
 
 type (
@@ -66,12 +66,12 @@ func ValidateVerificationToken(db *sqlx.DB, tokenString string, jwtKey []byte) (
 	return validateToken(db, tokenString, jwtKey, verificationTokenType)
 }
 
-// Verify consumes the exact stored token and verifies its email address in one
-// transaction. The account schema must exist. A changed email address rejects
-// the token. Failed operations leave both the account and token unchanged.
-func Verify(ctx context.Context, db *sqlx.DB, verificationToken string, jwtKey []byte) (*User, error) {
-	if db == nil {
-		return nil, database.NewErrDatabaseUnavailable(nil)
+// Verify validates the signed verification token and asks accounts to atomically
+// consume it and verify its email address. A changed email address rejects the
+// token. Failed operations leave both the account and token unchanged.
+func Verify(ctx context.Context, accounts AccountRepository, verificationToken string, jwtKey []byte) (*User, error) {
+	if accounts == nil {
+		return nil, errors.New("the account repository is not configured")
 	}
 
 	claims, err := parseAuthToken(verificationToken, jwtKey, verificationTokenType)
@@ -79,32 +79,12 @@ func Verify(ctx context.Context, db *sqlx.DB, verificationToken string, jwtKey [
 		return nil, err
 	}
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
+	hash := sha256.Sum256([]byte(verificationToken))
+	authorization := VerificationAuthorization{
+		AccountID: claims.Id,
+		Email:     claims.Email,
+		TokenHash: hex.EncodeToString(hash[:]),
+		ExpiresAt: claims.ExpiresAt.Time,
 	}
-	defer tx.Rollback()
-
-	if err := consumeAuthToken(ctx, tx, verificationToken, claims); err != nil {
-		return nil, err
-	}
-
-	var account User
-	err = tx.GetContext(ctx, &account, `UPDATE `+userTableName+`
-		SET session_version = session_version + CASE WHEN verified THEN 0 ELSE 1 END,
-		verified = TRUE, updated_at = ? WHERE id = ? AND email = ?
-		RETURNING id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version`,
-		time.Now(), claims.Id, claims.Email)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, NewErrToken(errors.New("verification address changed or account no longer exists"))
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return &account, nil
+	return accounts.Verify(ctx, authorization)
 }

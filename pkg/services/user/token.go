@@ -252,14 +252,6 @@ func parseAuthToken(tokenString string, jwtKey []byte, purpose string) (*Verific
 	return claims, nil
 }
 
-// consumeAuthToken claims an already signature-checked token with the first write.
-// The caller must commit the protected change in the same transaction. Rollback
-// restores the token on failure. Expiry is checked after acquiring the write lock.
-func consumeAuthToken(ctx context.Context, tx *sqlx.Tx, token string, claims *VerificationClaims) error {
-	hash := sha256.Sum256([]byte(token))
-	return consumeStoredToken(ctx, tx, claims.Id, hex.EncodeToString(hash[:]), claims.Purpose, claims.ExpiresAt.Time)
-}
-
 // consumeStoredToken matches a token's storage identity and checks both expiry
 // deadlines after acquiring the write lock. The caller must roll back on failure.
 func consumeStoredToken(ctx context.Context, tx *sqlx.Tx, accountID, tokenHash, purpose string, signedExpiry time.Time) error {

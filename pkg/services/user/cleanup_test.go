@@ -135,7 +135,7 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 				if purpose == resetTokenType {
 					redeemed <- u.ResetPassword(context.Background(), NewSQLiteAccountRepository(db), token.Token, key, "new hash")
 				} else {
-					_, err := Verify(context.Background(), db, token.Token, key)
+					_, err := Verify(context.Background(), NewSQLiteAccountRepository(db), token.Token, key)
 					redeemed <- err
 				}
 			}()

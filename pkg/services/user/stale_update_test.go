@@ -40,7 +40,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				if err := token.Create(db); err != nil {
 					t.Fatal(err)
 				}
-				u, err = Verify(ctx, db, token.Token, key)
+				u, err = Verify(ctx, NewSQLiteAccountRepository(db), token.Token, key)
 			default:
 				switch change {
 				case "password update":

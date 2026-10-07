@@ -2,10 +2,13 @@ package user
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -54,7 +57,7 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verified, err := Verify(context.Background(), db, second.Token, key)
+	verified, err := Verify(context.Background(), NewSQLiteAccountRepository(db), second.Token, key)
 	if err != nil || verified == nil || !verified.Verified {
 		t.Fatalf("verification failed: %v", err)
 	}
@@ -74,21 +77,27 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if _, err := GetAuthVerificationTokenByHash(db, first.TokenHash); err != nil {
 		t.Fatalf("different token was consumed: %v", err)
 	}
-	if got, err := Verify(context.Background(), db, second.Token, key); !errors.As(err, &missing) || got != nil {
+	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), second.Token, key); !errors.As(err, &missing) || got != nil {
 		t.Fatalf("replayed token accepted: %v", err)
 	}
 	// Each outstanding token remains independently usable once, including when
 	// another link has already verified the same address.
-	if _, err := Verify(context.Background(), db, first.Token, key); err != nil {
+	alreadyVerified, err := Verify(context.Background(), NewSQLiteAccountRepository(db), first.Token, key)
+	if err != nil {
 		t.Fatalf("earlier delivered link was invalidated by resend: %v", err)
+	}
+	stored.UpdatedAt = alreadyVerified.UpdatedAt
+	if *alreadyVerified != *stored {
+		t.Fatal("verifying an already-verified account changed its session version or other fields")
 	}
 }
 
 func TestVerifyFailureRollsBack(t *testing.T) {
-	for _, failure := range []string{"update", "delete", "commit", "email changed", "missing account", "missing token", "expired", "wrong key", "canceled"} {
+	for _, failure := range []string{"update", "delete", "commit", "email changed", "missing account", "missing token", "stored account", "stored purpose", "expired", "wrong key", "canceled"} {
 		t.Run(failure, func(t *testing.T) {
 			db, u, token, key := verificationFixture(t)
 			ctx := context.Background()
+			purpose := verificationTokenType
 			var statements []string
 			switch failure {
 			case "update":
@@ -113,6 +122,15 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				statements = []string{`DELETE FROM user`}
 			case "missing token":
 				statements = []string{`DELETE FROM usertoken`}
+			case "stored account":
+				if _, err := db.Exec(`UPDATE usertoken SET user_id = ? WHERE token_hash = ?`, "another-account", token.TokenHash); err != nil {
+					t.Fatal(err)
+				}
+			case "stored purpose":
+				purpose = resetTokenType
+				if _, err := db.Exec(`UPDATE usertoken SET token_type = ? WHERE token_hash = ?`, purpose, token.TokenHash); err != nil {
+					t.Fatal(err)
+				}
 			case "expired":
 				if _, err := db.Exec(`UPDATE usertoken SET expires_at = ?`, time.Now().Add(-time.Hour)); err != nil {
 					t.Fatal(err)
@@ -133,7 +151,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 			if failure != "missing account" && err != nil {
 				t.Fatal(err)
 			}
-			if got, err := Verify(ctx, db, token.Token, key); err == nil || got != nil {
+			if got, err := Verify(ctx, NewSQLiteAccountRepository(db), token.Token, key); err == nil || got != nil {
 				t.Fatal("verification succeeded despite failure")
 			}
 			if failure != "missing account" {
@@ -143,7 +161,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				}
 			}
 			if failure != "missing token" {
-				if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+				if _, err := getTokenByHash(db, token.TokenHash, purpose); err != nil {
 					t.Fatalf("failed verification consumed token: %v", err)
 				}
 			}
@@ -151,7 +169,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				if _, err := db.Exec(`DROP TRIGGER fail_verify`); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := Verify(ctx, db, token.Token, key); err != nil {
+				if _, err := Verify(ctx, NewSQLiteAccountRepository(db), token.Token, key); err != nil {
 					t.Fatalf("retry failed: %v", err)
 				}
 			}
@@ -175,7 +193,7 @@ func TestVerifyConcurrentRedemption(t *testing.T) {
 	results := make(chan error, 2)
 	for range 2 {
 		go func() {
-			_, err := Verify(ctx, observed, token.Token, key)
+			_, err := Verify(ctx, NewSQLiteAccountRepository(observed), token.Token, key)
 			results <- err
 		}()
 	}
@@ -207,8 +225,210 @@ func TestVerifyConcurrentRedemption(t *testing.T) {
 		}
 	}
 	stored, err := GetUserByID(db, u.ID)
-	if successes != 1 || err != nil || !stored.Verified {
+	if successes != 1 || err != nil || !stored.Verified || stored.SessionVersion != u.SessionVersion+1 {
 		t.Fatalf("concurrent verification: successes=%d, lookup error=%v", successes, err)
+	}
+}
+
+func TestSQLiteAccountRepositoryVerifyRejectsInvalidInput(t *testing.T) {
+	for _, scenario := range []string{"nil database", "missing account", "missing email", "missing hash", "missing expiry", "expired authorization"} {
+		t.Run(scenario, func(t *testing.T) {
+			db, u, token, _ := verificationFixture(t)
+			repository := NewSQLiteAccountRepository(db)
+			before, err := repository.GetByID(context.Background(), u.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			authorization := VerificationAuthorization{AccountID: u.ID, Email: u.Email, TokenHash: token.TokenHash, ExpiresAt: time.Unix(token.ExpiresAt.Unix(), 0)}
+			switch scenario {
+			case "nil database":
+				repository = NewSQLiteAccountRepository(nil)
+			case "missing account":
+				authorization.AccountID = ""
+			case "missing email":
+				authorization.Email = ""
+			case "missing hash":
+				authorization.TokenHash = ""
+			case "missing expiry":
+				authorization.ExpiresAt = time.Time{}
+			case "expired authorization":
+				authorization.ExpiresAt = time.Now().Add(-time.Hour)
+			}
+			if got, err := repository.Verify(context.Background(), authorization); got != nil || err == nil {
+				t.Fatalf("invalid verification succeeded: %v, %v", got, err)
+			}
+			stored, err := GetUserByID(db, u.ID)
+			if err != nil || *stored != *before {
+				t.Fatalf("invalid verification changed storage: %v", err)
+			}
+			if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+				t.Fatalf("invalid verification consumed token: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyCancellationAndExpiryDuringContention(t *testing.T) {
+	for _, scenario := range []string{"cancellation", "signed expiry", "stored expiry"} {
+		t.Run(scenario, func(t *testing.T) {
+			db, u, token, _ := verificationFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			before, err := GetUserByID(db, u.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Exercise storage after signature validation with a short deadline.
+			authorization := VerificationAuthorization{AccountID: u.ID, Email: u.Email, TokenHash: token.TokenHash, ExpiresAt: time.Unix(token.ExpiresAt.Unix(), 0)}
+			deadline := time.Now().Add(2 * time.Second)
+			if scenario == "signed expiry" {
+				authorization.ExpiresAt = deadline
+			} else if scenario == "stored expiry" {
+				if _, err := db.Exec(`UPDATE usertoken SET expires_at = ? WHERE token_hash = ?`, deadline, token.TokenHash); err != nil {
+					t.Fatal(err)
+				}
+			}
+			observed, started := observeTokenDeletes(t, db)
+			lock, err := db.BeginTxx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer lock.Rollback()
+			if _, err := lock.ExecContext(ctx, `UPDATE user SET verified = verified WHERE id = ?`, u.ID); err != nil {
+				t.Fatal(err)
+			}
+
+			verifyCtx, cancelVerify := context.WithCancel(ctx)
+			defer cancelVerify()
+			type result struct {
+				account *User
+				err     error
+			}
+			results := make(chan result, 1)
+			go func() {
+				account, err := NewSQLiteAccountRepository(observed).Verify(verifyCtx, authorization)
+				results <- result{account, err}
+			}()
+			waitForTokenDelete(t, ctx, started)
+			if scenario == "cancellation" {
+				cancelVerify()
+			} else {
+				if !time.Now().Before(deadline) {
+					t.Fatal("token expired before contention was established")
+				}
+				timer := time.NewTimer(time.Until(deadline))
+				defer timer.Stop()
+				select {
+				case <-timer.C:
+				case <-ctx.Done():
+					t.Fatal(ctx.Err())
+				}
+			}
+			if err := lock.Rollback(); err != nil {
+				t.Fatal(err)
+			}
+			var outcome result
+			select {
+			case outcome = <-results:
+			case <-ctx.Done():
+				t.Fatal("verification did not finish:", ctx.Err())
+			}
+			if outcome.account != nil {
+				t.Fatal("failed verification returned an account")
+			}
+			if scenario == "cancellation" {
+				if !errors.Is(outcome.err, context.Canceled) {
+					t.Fatalf("verification error=%v, want context.Canceled", outcome.err)
+				}
+			} else {
+				var expired *ErrTokenExpired
+				if !errors.As(outcome.err, &expired) {
+					t.Fatalf("verification error=%v, want ErrTokenExpired", outcome.err)
+				}
+			}
+			stored, err := GetUserByID(db, u.ID)
+			if err != nil || *stored != *before {
+				t.Fatalf("failed verification changed the account: %v", err)
+			}
+			if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+				t.Fatalf("failed verification consumed the token: %v", err)
+			}
+		})
+	}
+}
+
+type verificationAccountRepository struct {
+	AccountRepository
+	verify func(context.Context, VerificationAuthorization) (*User, error)
+}
+
+func (s verificationAccountRepository) Verify(ctx context.Context, authorization VerificationAuthorization) (*User, error) {
+	return s.verify(ctx, authorization)
+}
+
+func TestVerifyValidatesBeforeCallingRepository(t *testing.T) {
+	for _, scenario := range []string{"success", "storage failure", "canceled", "wrong signature", "wrong purpose", "missing account", "missing email", "expired", "malformed", "nil repository"} {
+		t.Run(scenario, func(t *testing.T) {
+			account := &User{ID: "account", Email: "person@example.invalid", Verified: true, SessionVersion: 2}
+			key := []byte("test-signing-key")
+			claims := &VerificationClaims{Id: account.ID, Email: account.Email, Purpose: verificationTokenType,
+				RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
+			switch scenario {
+			case "wrong purpose":
+				claims.Purpose = resetTokenType
+			case "missing account":
+				claims.Id = ""
+			case "missing email":
+				claims.Email = ""
+			case "expired":
+				claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(-time.Hour))
+			}
+			raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "wrong signature" {
+				key = []byte("wrong-key")
+			} else if scenario == "malformed" {
+				raw = "not-a-token"
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var wantErr error
+			if scenario == "storage failure" {
+				wantErr = errors.New("storage unavailable")
+			} else if scenario == "canceled" {
+				cancel()
+				wantErr = context.Canceled
+			}
+			calls := 0
+			hash := sha256.Sum256([]byte(raw))
+			var repository AccountRepository = verificationAccountRepository{verify: func(got context.Context, authorization VerificationAuthorization) (*User, error) {
+				calls++
+				if got != ctx || authorization.AccountID != account.ID || authorization.Email != account.Email || authorization.TokenHash != hex.EncodeToString(hash[:]) || !authorization.ExpiresAt.Equal(claims.ExpiresAt.Time) {
+					t.Fatal("verification lost its context or signed authorization")
+				}
+				if wantErr != nil {
+					return nil, wantErr
+				}
+				return account, nil
+			}}
+			if scenario == "nil repository" {
+				repository = nil
+			}
+			got, err := Verify(ctx, repository, raw, key)
+			if scenario == "success" {
+				if err != nil || calls != 1 || got != account {
+					t.Fatalf("verification result=%v, error=%v, calls=%d", got, err, calls)
+				}
+			} else if wantErr != nil {
+				if got != nil || calls != 1 || !errors.Is(err, wantErr) {
+					t.Fatalf("verification lost repository failure: result=%v, error=%v, calls=%d", got, err, calls)
+				}
+			} else if got != nil || err == nil || calls != 0 {
+				t.Fatalf("invalid verification reached storage: result=%v, error=%v, calls=%d", got, err, calls)
+			}
+		})
 	}
 }
 
@@ -259,7 +479,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 		}
 		for _, token := range []*AuthVerificationToken{first, second} {
 			var missing *ErrTokenNotFound
-			if _, err := Verify(context.Background(), db, token.Token, key); !errors.As(err, &missing) {
+			if _, err := Verify(context.Background(), NewSQLiteAccountRepository(db), token.Token, key); !errors.As(err, &missing) {
 				t.Fatalf("old link at %s: got %v, want revoked token", email, err)
 			}
 		}
@@ -281,7 +501,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	if err := newToken.Create(db); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Verify(context.Background(), db, newToken.Token, key); err != nil {
+	if _, err := Verify(context.Background(), NewSQLiteAccountRepository(db), newToken.Token, key); err != nil {
 		t.Fatalf("fresh link was rejected: %v", err)
 	}
 }

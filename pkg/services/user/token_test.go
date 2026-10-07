@@ -83,7 +83,7 @@ func TestTokensCannotSubstituteForEachOther(t *testing.T) {
 	if err := verification.Create(db); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := Verify(context.Background(), db, reset.Token, key); err == nil || got != nil {
+	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), reset.Token, key); err == nil || got != nil {
 		t.Error("reset token verified the account")
 	}
 	if got, err := ValidateResetToken(db, verification.Token, key); err == nil || got != nil {
@@ -102,7 +102,7 @@ func TestTokensCannotSubstituteForEachOther(t *testing.T) {
 	if got, err := ValidateVerificationToken(db, verification.Token, key); err != nil || got.ID != u.ID {
 		t.Fatalf("valid stored verification token rejected: %v", err)
 	}
-	if got, err := Verify(context.Background(), db, verification.Token, key); err != nil || !got.Verified {
+	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), verification.Token, key); err != nil || !got.Verified {
 		t.Fatalf("valid verification token rejected: %v", err)
 	}
 }
@@ -203,7 +203,7 @@ func TestVerifyRejectsUnboundOrExpiredSignedTokens(t *testing.T) {
 			if err := token.Create(db); err != nil {
 				t.Fatal(err)
 			}
-			if got, err := Verify(context.Background(), db, raw, key); err == nil || got != nil {
+			if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), raw, key); err == nil || got != nil {
 				t.Fatal("invalid signed verification token accepted")
 			}
 			stored, err := GetUserByID(db, u.ID)
@@ -255,7 +255,7 @@ func TestLegacyStoredResetTokenRejected(t *testing.T) {
 	if got, err := ValidateResetToken(db, raw, key); err == nil || got != nil {
 		t.Fatal("stored legacy token without a purpose was accepted")
 	}
-	if got, err := Verify(context.Background(), db, raw, key); err == nil || got != nil {
+	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), raw, key); err == nil || got != nil {
 		t.Fatal("legacy token without a purpose verified the account")
 	}
 }

@@ -2,11 +2,7 @@ package user
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 // AccountRepository stores accounts for authentication. Reads of missing accounts
@@ -47,6 +43,16 @@ type AccountRepository interface {
 	// Success refreshes u from storage. Failure must leave u and storage unchanged.
 	// Other account fields and tokens must remain unchanged.
 	ResetPassword(ctx context.Context, u *User, authorization ResetAuthorization, passwordHash string) error
+	// Verify atomically consumes the exact verification token and marks its account
+	// verified only if the current email matches the signed email. The caller must
+	// validate the token's signature, verification purpose, account ID, and email.
+	// Implementations must match the stored token's hash, account, and verification
+	// purpose and recheck signed and stored expiry when consuming it, including after
+	// any wait for storage. Missing tokens return ErrTokenNotFound. Expiry returns ErrTokenExpired.
+	// Success updates UpdatedAt and increments SessionVersion only if the account
+	// was not already verified. It returns the committed account. Other fields and
+	// tokens must stay unchanged. Failure must return nil and leave storage unchanged.
+	Verify(context.Context, VerificationAuthorization) (*User, error)
 }
 
 // ResetAuthorization carries the storage checks for a signature-validated reset token.
@@ -58,46 +64,12 @@ type ResetAuthorization struct {
 	ExpiresAt time.Time
 }
 
-// SQLiteAccountRepository stores accounts using an existing SQLite pool.
-// Its owner must prepare the account schema and close the pool after consumers stop.
-type SQLiteAccountRepository struct{ db *sqlx.DB }
-
-// NewSQLiteAccountRepository borrows db. It does not open, initialize, or close storage.
-func NewSQLiteAccountRepository(db *sqlx.DB) *SQLiteAccountRepository {
-	return &SQLiteAccountRepository{db: db}
-}
-
-var _ AccountRepository = (*SQLiteAccountRepository)(nil)
-
-// GetByID loads an account by ID, or returns ErrUserNotFound.
-func (s *SQLiteAccountRepository) GetByID(ctx context.Context, id string) (*User, error) {
-	u, err := GetUserByIDContext(ctx, s.db, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, NewErrUserNotFound(err)
-	}
-	return u, err
-}
-
-// GetByEmail loads an account by email, or returns ErrUserNotFound.
-func (s *SQLiteAccountRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
-	u, err := GetUserByEmailContext(ctx, s.db, email)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, NewErrUserNotFound(err)
-	}
-	return u, err
-}
-
-// Create inserts an account without changing an existing account with the same email.
-func (s *SQLiteAccountRepository) Create(ctx context.Context, u *User) error {
-	return u.Create(ctx, s.db)
-}
-
-// Update stores account changes and their token revocations in one transaction.
-func (s *SQLiteAccountRepository) Update(ctx context.Context, u *User) error {
-	return u.Update(ctx, s.db)
-}
-
-// ChangePassword conditionally stores a password hash and revokes existing sessions.
-func (s *SQLiteAccountRepository) ChangePassword(ctx context.Context, u *User, passwordHash string) error {
-	return u.ChangePassword(ctx, s.db, passwordHash)
+// VerificationAuthorization carries the storage checks for a signature-validated
+// verification token. Email and ExpiresAt must come from its signed claims.
+// Construct this value only after validating the signature and verification purpose.
+type VerificationAuthorization struct {
+	AccountID string
+	Email     string
+	TokenHash string
+	ExpiresAt time.Time
 }

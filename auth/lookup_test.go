@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -144,6 +145,58 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			var count int
 			if err := manager.db.Get(&count, `SELECT count(*) FROM usertoken`); err != nil || count != 0 {
 				t.Fatalf("retry left tokens: count=%d, error=%v", count, err)
+			}
+		})
+	}
+}
+
+type verificationRepository struct {
+	user.AccountRepository
+	verify func(context.Context, user.VerificationAuthorization) (*user.User, error)
+}
+
+func (s verificationRepository) Verify(ctx context.Context, authorization user.VerificationAuthorization) (*user.User, error) {
+	return s.verify(ctx, authorization)
+}
+
+func TestVerifyUsesAccountRepository(t *testing.T) {
+	for _, scenario := range []string{"success", "storage failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			manager, account, sessions := newLookupTestManager(t)
+			token, err := user.NewAuthVerificationToken(account, []byte(manager.verificationJwtKey), time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodPost, "/auth/verify", strings.NewReader(url.Values{"token": {token.Token}}.Encode()))
+			r = session.AddSessionManagerToRequestContext(r, sessions)
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			r.Header.Set("HX-Request", "true")
+			calls := 0
+			manager.accounts = verificationRepository{verify: func(ctx context.Context, authorization user.VerificationAuthorization) (*user.User, error) {
+				calls++
+				if ctx != r.Context() || authorization.AccountID != account.ID || authorization.Email != account.Email || authorization.TokenHash != token.TokenHash {
+					t.Fatal("verification lost its request context or token identity")
+				}
+				if scenario == "storage failure" {
+					return nil, errors.New("private storage failure")
+				}
+				account.Verified = true
+				account.SessionVersion++
+				return account, nil
+			}}
+			// Verification must work through the repository without a SQL pool.
+			manager.db = nil
+			w := httptest.NewRecorder()
+			manager.Verify(w, r)
+			if calls != 1 {
+				t.Fatalf("repository calls=%d, want 1", calls)
+			}
+			if scenario == "success" {
+				if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
+					t.Fatalf("verification did not redirect after success: %d %s", w.Code, w.Body.String())
+				}
+			} else if w.Code != http.StatusBadRequest || w.Header().Get("HX-Redirect") != "" || !strings.Contains(w.Body.String(), "Verification failed") || strings.Contains(w.Body.String(), "private storage failure") {
+				t.Fatalf("failed verification rendered an incorrect response: %d %s", w.Code, w.Body.String())
 			}
 		})
 	}
