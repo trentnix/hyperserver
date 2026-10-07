@@ -44,6 +44,15 @@ func (s *SQLiteAccountRepository) Create(ctx context.Context, u *User) error {
 	return u.Create(ctx, s.db)
 }
 
+// CreateToken inserts token metadata without replacing or revoking existing tokens.
+func (s *SQLiteAccountRepository) CreateToken(ctx context.Context, metadata TokenMetadata) error {
+	token := AuthToken{
+		UserId: metadata.AccountID, TokenHash: metadata.TokenHash,
+		Type: metadata.Purpose, ExpiresAt: metadata.ExpiresAt,
+	}
+	return token.CreateContext(ctx, s.db)
+}
+
 // Update stores account changes and their token revocations in one transaction.
 func (s *SQLiteAccountRepository) Update(ctx context.Context, u *User) error {
 	return u.Update(ctx, s.db)

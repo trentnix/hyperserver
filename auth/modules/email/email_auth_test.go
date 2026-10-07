@@ -2,7 +2,10 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,11 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -91,9 +95,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 					JwtKey:   "test-key",
 					Services: map[string]map[string]string{"email": {"enabled": "true"}},
 				}},
-				// Init requires a database reference but does not access it.
-				Database:          &sqlx.DB{},
-				AccountRepository: user.NewSQLiteAccountRepository(&sqlx.DB{}),
+				AccountRepository: &emailAccountRepository{},
 				ContentManager:    &content.ContentManagerService{},
 			}
 			service := &EmailAuthService{}
@@ -111,12 +113,17 @@ type emailAccountRepository struct {
 	user.AccountRepository
 	lookup         func(context.Context, string) (*user.User, error)
 	create         func(context.Context, *user.User) error
+	createToken    func(context.Context, user.TokenMetadata) error
 	changePassword func(context.Context, *user.User, string) error
 	resetPassword  func(context.Context, *user.User, user.ResetAuthorization, string) error
 }
 
 func (s emailAccountRepository) Create(ctx context.Context, u *user.User) error {
 	return s.create(ctx, u)
+}
+
+func (s emailAccountRepository) CreateToken(ctx context.Context, metadata user.TokenMetadata) error {
+	return s.createToken(ctx, metadata)
 }
 
 func (s emailAccountRepository) ChangePassword(ctx context.Context, u *user.User, hash string) error {
@@ -136,8 +143,7 @@ func TestEmailAuthInitAccountRepository(t *testing.T) {
 					Enabled: true, JwtKey: "test-key",
 					Services: map[string]map[string]string{"email": {"enabled": "true"}},
 				}},
-				// Initialization must not query storage.
-				Database:       &sqlx.DB{},
+				// A supplied repository needs no SQL pool and must not be queried during initialization.
 				ContentManager: content.NewContentManager(),
 			}
 			reader := &emailAccountRepository{}
@@ -366,5 +372,111 @@ func TestResetUsesAccountRepository(t *testing.T) {
 				t.Fatalf("failed reset rendered an incorrect error: %s", w.Body.String())
 			}
 		})
+	}
+}
+
+type accountMailSender func(context.Context, messaging.MailMessage) error
+
+func (send accountMailSender) Send(ctx context.Context, message messaging.MailMessage) error {
+	return send(ctx, message)
+}
+
+func TestAccountEmailStoresTokenBeforeDelivery(t *testing.T) {
+	for _, purpose := range []string{"auth-reset", "auth-verification"} {
+		for _, scenario := range []string{"success", "storage failure", "mail failure", "canceled"} {
+			t.Run(purpose+"/"+scenario, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				account := &user.User{ID: "account", Email: "person@example.invalid"}
+				key := "test-signing-key"
+				failure := errors.New("test failure")
+				attempt, storageCalls, mailCalls := 0, 0, 0
+				var saved []user.TokenMetadata
+				accounts := emailAccountRepository{createToken: func(got context.Context, metadata user.TokenMetadata) error {
+					storageCalls++
+					if got != ctx || metadata.AccountID != account.ID || metadata.Purpose != purpose || !metadata.ExpiresAt.After(time.Now()) {
+						t.Fatal("token storage lost its context or metadata")
+					}
+					if err := got.Err(); err != nil {
+						return err
+					}
+					if attempt == 1 && scenario == "storage failure" {
+						return failure
+					}
+					saved = append(saved, metadata)
+					return nil
+				}}
+				sender := accountMailSender(func(got context.Context, message messaging.MailMessage) error {
+					mailCalls++
+					if got != ctx || message.To != account.Email || len(saved) != attempt+1 {
+						t.Fatal("delivery lost its context or recipient, or preceded token storage")
+					}
+					link, err := url.Parse(message.Body)
+					if err != nil {
+						t.Fatal(err)
+					}
+					wantPath := "/auth/reset/email"
+					if purpose == "auth-verification" {
+						wantPath = "/auth/verify"
+					}
+					if link.Scheme != "https" || link.Host != "example.invalid" || link.Path != wantPath {
+						t.Fatalf("wrong account link: %s", link)
+					}
+					raw := link.Query().Get("token")
+					claims := &user.VerificationClaims{}
+					if _, err := jwt.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) { return []byte(key), nil }, jwt.WithExpirationRequired(), jwt.WithValidMethods([]string{"HS256"})); err != nil {
+						t.Fatal(err)
+					}
+					hash := sha256.Sum256([]byte(raw))
+					metadata := saved[attempt]
+					if metadata.TokenHash != hex.EncodeToString(hash[:]) || claims.Id != account.ID || claims.Purpose != purpose || claims.ExpiresAt.Unix() != metadata.ExpiresAt.Unix() || (purpose == "auth-verification" && claims.Email != account.Email) {
+						t.Fatal("emailed token does not match stored metadata or recipient")
+					}
+					if attempt == 1 && scenario == "mail failure" {
+						return failure
+					}
+					return nil
+				})
+				client, err := messaging.NewMailClientWithSender("sender@example.invalid", sender)
+				if err != nil {
+					t.Fatal(err)
+				}
+				email := template.Must(template.New("email").Parse("{{.URL}}"))
+				// No SQL pool: both delivery flows must use the supplied repository.
+				service := &EmailAuthService{
+					accounts: accounts, mailClient: client, verificationEmail: email, resetEmail: email,
+					config: &config.Config{Auth: config.AuthConfig{JwtKey: key, VerificationTokenExpiration: time.Hour}},
+				}
+				send := func() error {
+					link := url.URL{Scheme: "https", Host: "example.invalid", Path: "/auth/reset/email"}
+					if purpose == "auth-verification" {
+						return service.SendVerificationEmail(ctx, account, link)
+					}
+					return service.sendResetEmail(ctx, account, time.Hour, link)
+				}
+				if err := send(); err != nil {
+					t.Fatal(err)
+				}
+				first := saved[0]
+				attempt = 1
+				var wantErr error
+				wantStored, wantMail := 2, 2
+				switch scenario {
+				case "storage failure":
+					wantErr, wantStored, wantMail = failure, 1, 1
+				case "mail failure":
+					wantErr = failure
+				case "canceled":
+					cancel()
+					wantErr, wantStored, wantMail = context.Canceled, 1, 1
+				}
+				if err := send(); !errors.Is(err, wantErr) || storageCalls != 2 || len(saved) != wantStored || mailCalls != wantMail {
+					t.Fatalf("resend error=%v, storage calls=%d, stored=%d, mail calls=%d", err, storageCalls, len(saved), mailCalls)
+				}
+				if saved[0] != first || (len(saved) == 2 && saved[1].TokenHash == first.TokenHash) {
+					t.Fatal("resend changed or reused the first token")
+				}
+			})
+		}
 	}
 }

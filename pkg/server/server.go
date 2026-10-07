@@ -28,8 +28,8 @@ type (
 
 		// Database is owned by the application. Modules borrow it and must not close it.
 		Database *sqlx.DB
-		// AccountRepository supplies authentication lookups, creation, updates, resets, and verification.
-		// Token issuance and preliminary lookup still use Database and must refer to the same accounts.
+		// AccountRepository supplies account operations and stores newly issued tokens.
+		// Preliminary token lookup still uses Database and must refer to the same accounts and tokens.
 		AccountRepository user.AccountRepository
 		Web               *http.ServeMux
 		ContentManager    *content_services.ContentManagerService

@@ -28,6 +28,14 @@ type (
 	}
 )
 
+// Metadata returns the storage fields without the raw signed token.
+func (token AuthToken) Metadata() TokenMetadata {
+	return TokenMetadata{
+		AccountID: token.UserId, TokenHash: token.TokenHash,
+		Purpose: token.Type, ExpiresAt: token.ExpiresAt,
+	}
+}
+
 // Create inserts the token's hash, account ID, expiry, and purpose.
 // The account schema must already exist. It does not start a transaction with an account change.
 func (token *AuthToken) Create(db *sqlx.DB) error {

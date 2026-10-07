@@ -1,6 +1,6 @@
 // Package auth implements the email/password authentication provider.
 // Importing this package registers an EmailAuthService with the parent auth package.
-// The provider uses the application's database, content manager, and mail client.
+// The provider uses the application's account repository, content manager, and mail client.
 // Template paths currently require the repository root as the working directory.
 package auth
 
@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	auth_services "github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
@@ -35,7 +34,6 @@ import (
 type (
 	// EmailAuthService implements email/password authentication using shared application services.
 	EmailAuthService struct {
-		db                *sqlx.DB
 		accounts          user.AccountRepository
 		config            *config.Config
 		contentManager    *content_services.ContentManagerService
@@ -165,14 +163,10 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the email auth service is not enabled"))
 	}
 
-	if s.Database == nil {
-		return auth_services.NewErrEmailAuthServiceInit(errors.New("the database service is not available"))
-	}
 	if s.AccountRepository == nil {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the account repository is not configured"))
 	}
 
-	a.db = s.Database
 	a.accounts = s.AccountRepository
 	a.config = s.Config
 	a.contentManager = s.ContentManager
@@ -428,7 +422,7 @@ func (a *EmailAuthService) SendVerificationEmail(ctx context.Context, u *user.Us
 		return err
 	}
 
-	if err := verificationToken.CreateContext(ctx, a.db); err != nil {
+	if err := a.accounts.CreateToken(ctx, verificationToken.Metadata()); err != nil {
 		return err
 	}
 	return a.mailClient.Compose().
@@ -467,7 +461,7 @@ func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, exp
 		return err
 	}
 
-	if err := token.CreateContext(ctx, a.db); err != nil {
+	if err := a.accounts.CreateToken(ctx, token.Metadata()); err != nil {
 		return err
 	}
 	return a.mailClient.Compose().

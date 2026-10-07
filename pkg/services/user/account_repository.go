@@ -16,6 +16,11 @@ type AccountRepository interface {
 	// Failure must leave stored accounts and u unchanged. Success fills in the ID,
 	// timestamps, and initial SessionVersion of 1. Password is already hashed.
 	Create(context.Context, *User) error
+	// CreateToken inserts only. The account ID and token hash identify the record.
+	// Duplicate records must return an error without replacing the stored token.
+	// Failure must leave storage unchanged. Success must not change other tokens or accounts.
+	// Token generation, signing, and delivery belong to the caller.
+	CreateToken(context.Context, TokenMetadata) error
 	// Update changes an existing account by ID. Missing accounts return ErrUserNotFound,
 	// stale SessionVersion values return ErrUserChanged, and duplicate emails return
 	// database.ErrRecordAlreadyExists. The caller must preserve the version from its
@@ -53,6 +58,17 @@ type AccountRepository interface {
 	// was not already verified. It returns the committed account. Other fields and
 	// tokens must stay unchanged. Failure must return nil and leave storage unchanged.
 	Verify(context.Context, VerificationAuthorization) (*User, error)
+}
+
+// TokenMetadata contains only the fields needed to store an issued account token.
+// AccountID, TokenHash, and ExpiresAt must be set. Purpose must be "auth-reset" or
+// "auth-verification". TokenHash is the lowercase hexadecimal SHA-256 hash of the
+// signed token. The raw token and signing key must not be passed to storage.
+type TokenMetadata struct {
+	AccountID string
+	TokenHash string
+	Purpose   string
+	ExpiresAt time.Time
 }
 
 // ResetAuthorization carries the storage checks for a signature-validated reset token.
