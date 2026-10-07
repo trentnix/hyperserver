@@ -302,7 +302,7 @@ func TestSQLiteAccountRepositoryUpdateCancellationWhileWaiting(t *testing.T) {
 		if err != nil || *stored != *storedBefore {
 			t.Fatalf("canceled update changed the stored account: %v", err)
 		}
-		if _, err := ValidateVerificationToken(db, token.Token, key); err != nil {
+		if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), token.Token, key); err != nil {
 			t.Fatalf("canceled update revoked the verification token: %v", err)
 		}
 	})

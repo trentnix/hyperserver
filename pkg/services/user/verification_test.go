@@ -115,7 +115,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				if _, err := db.Exec(`UPDATE user SET email = ? WHERE id = ?`, "changed@example.invalid", u.ID); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := ValidateVerificationToken(db, token.Token, key); err == nil {
+				if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), token.Token, key); err == nil {
 					t.Fatal("old address token passed validation")
 				}
 			case "missing account":
@@ -466,7 +466,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, token := range []*AuthVerificationToken{first, second} {
-		if _, err := ValidateVerificationToken(db, token.Token, key); err != nil {
+		if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), token.Token, key); err != nil {
 			t.Fatalf("unchanged email invalidated verification: %v", err)
 		}
 	}
@@ -487,7 +487,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	if _, err := GetAuthResetTokenByHash(db, reset.TokenHash); err != nil {
 		t.Fatalf("email change revoked a reset token: %v", err)
 	}
-	if _, err := ValidateVerificationToken(db, otherToken.Token, key); err != nil {
+	if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), otherToken.Token, key); err != nil {
 		t.Fatalf("email change revoked another account's token: %v", err)
 	}
 	stored, err := GetUserByID(db, u.ID)
@@ -550,7 +550,7 @@ func TestEmailChangeRevocationRollsBack(t *testing.T) {
 			if err != nil || *stored != *before {
 				t.Fatalf("failed email change mutated the account: %v", err)
 			}
-			if _, err := ValidateVerificationToken(db, token.Token, key); err != nil {
+			if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), token.Token, key); err != nil {
 				t.Fatalf("failed email change revoked the verification link: %v", err)
 			}
 		})

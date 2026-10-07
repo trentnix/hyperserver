@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
@@ -38,7 +37,6 @@ type (
 	AuthManager struct {
 		Enabled bool
 
-		db             *sqlx.DB
 		accounts       user.AccountRepository
 		httpConfig     config.HTTPConfig
 		rateLimit      *config.ModuleRateLimitConfig
@@ -76,7 +74,6 @@ func init() {
 // Init processes the initialization of the AuthManager handler
 func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error {
 	a.Enabled = s.Config.Auth.Enabled
-	a.db = s.Database
 	a.accounts = s.AccountRepository
 	a.httpConfig = s.Config.HTTP
 	a.rateLimit = s.Config.Auth.RateLimit
@@ -482,7 +479,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 
 	var errTokenExpired *user.ErrTokenExpired
 
-	u, err := user.ValidateResetToken(a.db, token, []byte(a.verificationJwtKey))
+	u, err := user.ValidateResetToken(r.Context(), a.accounts, token, []byte(a.verificationJwtKey))
 	if err != nil {
 		switch {
 		case errors.As(err, &errTokenExpired):
@@ -531,7 +528,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 
 	var errTokenExpired *user.ErrTokenExpired
 
-	u, err := user.ValidateResetToken(a.db, token, []byte(a.verificationJwtKey))
+	u, err := user.ValidateResetToken(r.Context(), a.accounts, token, []byte(a.verificationJwtKey))
 	if err != nil {
 		switch {
 		case errors.As(err, &errTokenExpired):

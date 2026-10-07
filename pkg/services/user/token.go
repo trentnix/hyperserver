@@ -151,8 +151,15 @@ func getTokenByUser(db *sqlx.DB, userId string, tokenType string) (*AuthToken, e
 // getTokenByHash retrieves an AuthToken for the specified token value from the database. The
 // token's type must be provided to make sure the caller is aware of the token's context.
 func getTokenByHash(db *sqlx.DB, token string, tokenType string) (*AuthToken, error) {
+	return getTokenByHashContext(context.Background(), db, token, tokenType)
+}
+
+func getTokenByHashContext(ctx context.Context, db *sqlx.DB, token string, tokenType string) (*AuthToken, error) {
 	if token == "" {
 		return nil, NewErrTokenNotSpecified(fmt.Errorf("get token by value"))
+	}
+	if db == nil {
+		return nil, database.NewErrDatabaseUnavailable(nil)
 	}
 
 	var passwordResetToken AuthToken
@@ -163,7 +170,7 @@ func getTokenByHash(db *sqlx.DB, token string, tokenType string) (*AuthToken, er
         WHERE token_hash = ? AND token_type = ?
     `, userTokenTableName)
 
-	err := db.Get(&passwordResetToken, query, token, tokenType)
+	err := db.GetContext(ctx, &passwordResetToken, query, token, tokenType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// no row was found, handle accordingly.
@@ -282,50 +289,47 @@ func consumeStoredToken(ctx context.Context, tx *sqlx.Tx, accountID, tokenHash, 
 	return nil
 }
 
-func validateToken(db *sqlx.DB, tokenString string, jwtKey []byte, tokenType string) (*User, error) {
+func validateToken(ctx context.Context, accounts AccountRepository, tokenString string, jwtKey []byte, tokenType string) (*User, error) {
 	errValidateReset := errors.New("error validating the specified reset token")
 	if tokenString == "" {
 		return nil, NewErrTokenNotSpecified(errValidateReset)
+	}
+	if accounts == nil {
+		return nil, errors.New("the account repository is not configured")
 	}
 	claims, err := parseAuthToken(tokenString, jwtKey, tokenType)
 	if err != nil {
 		return nil, err
 	}
 
-	// hash the received token
 	hash := sha256.Sum256([]byte(tokenString))
 	tokenHash := hex.EncodeToString(hash[:])
-
-	// retrieve the token record from the database
-	passwordResetToken, err := getTokenByHash(db, tokenHash, tokenType)
+	stored, err := accounts.GetToken(ctx, tokenHash, tokenType)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, NewErrTokenNotFound(err)
-		}
-
 		return nil, err
 	}
-	if claims.Id != passwordResetToken.UserId {
+	if stored.AccountID != claims.Id || stored.TokenHash != tokenHash || stored.Purpose != tokenType {
 		return nil, NewErrToken(errors.New("token does not belong to the stored account"))
 	}
-
-	// check if the token is expired
-	if time.Now().After(passwordResetToken.ExpiresAt) {
+	if !time.Now().Before(stored.ExpiresAt) {
 		return nil, NewErrTokenExpired(errValidateReset)
 	}
 
-	// retrieve the associated user
-	user, err := GetUserByID(db, passwordResetToken.UserId)
+	account, err := accounts.GetByID(ctx, stored.AccountID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, NewErrUserNotFound(err)
-		}
-
-		return nil, database.NewErrDatabase(err)
+		return nil, err
 	}
-
-	if tokenType == verificationTokenType && user.Email != claims.Email {
+	if account == nil || account.ID != claims.Id {
+		return nil, NewErrUserNotFound(nil)
+	}
+	if tokenType == verificationTokenType && account.Email != claims.Email {
 		return nil, NewErrToken(errors.New("verification address no longer matches the account"))
 	}
-	return user, nil
+
+	// Either deadline may have passed while waiting for storage.
+	now := time.Now()
+	if !now.Before(claims.ExpiresAt.Time) || !now.Before(stored.ExpiresAt) {
+		return nil, NewErrTokenExpired(errValidateReset)
+	}
+	return account, nil
 }

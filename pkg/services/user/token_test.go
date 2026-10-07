@@ -81,7 +81,7 @@ func TestTokenPurposeStorage(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, raw := range []string{token.Token, resend.Token} {
-				if _, err := validateToken(db, raw, key, purpose); err != nil {
+				if _, err := validateToken(context.Background(), NewSQLiteAccountRepository(db), raw, key, purpose); err != nil {
 					t.Fatalf("resend invalidated an issued token: %v", err)
 				}
 			}
@@ -113,20 +113,20 @@ func TestTokensCannotSubstituteForEachOther(t *testing.T) {
 	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), reset.Token, key); err == nil || got != nil {
 		t.Error("reset token verified the account")
 	}
-	if got, err := ValidateResetToken(db, verification.Token, key); err == nil || got != nil {
+	if got, err := ValidateResetToken(context.Background(), NewSQLiteAccountRepository(db), verification.Token, key); err == nil || got != nil {
 		t.Error("verification token authorized a password reset")
 	}
-	if got, err := ValidateVerificationToken(db, reset.Token, key); err == nil || got != nil {
+	if got, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), reset.Token, key); err == nil || got != nil {
 		t.Error("reset token passed stored verification-token validation")
 	}
 	stored, err := GetUserByID(db, u.ID)
 	if err != nil || stored.Verified || stored.Password != u.Password {
 		t.Fatal("wrong-purpose token changed the account")
 	}
-	if got, err := ValidateResetToken(db, reset.Token, key); err != nil || got.ID != u.ID {
+	if got, err := ValidateResetToken(context.Background(), NewSQLiteAccountRepository(db), reset.Token, key); err != nil || got.ID != u.ID {
 		t.Fatalf("valid reset token rejected: %v", err)
 	}
-	if got, err := ValidateVerificationToken(db, verification.Token, key); err != nil || got.ID != u.ID {
+	if got, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), verification.Token, key); err != nil || got.ID != u.ID {
 		t.Fatalf("valid stored verification token rejected: %v", err)
 	}
 	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), verification.Token, key); err != nil || !got.Verified {
@@ -373,6 +373,288 @@ func TestSQLiteAccountRepositoryConcurrentTokenInsertion(t *testing.T) {
 	}
 }
 
+func TestSQLiteAccountRepositoryGetToken(t *testing.T) {
+	for _, purpose := range []string{resetTokenType, verificationTokenType} {
+		t.Run(purpose, func(t *testing.T) {
+			db, u, _, key := verificationFixture(t)
+			repository := NewSQLiteAccountRepository(db)
+			token, err := newAuthToken(u, key, time.Hour, purpose)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := repository.CreateToken(context.Background(), token.Metadata()); err != nil {
+				t.Fatal(err)
+			}
+			for _, expired := range []bool{false, true} {
+				if expired {
+					token.ExpiresAt = time.Now().Add(-time.Hour)
+					if _, err := db.Exec(`UPDATE usertoken SET expires_at = ? WHERE token_hash = ?`, token.ExpiresAt, token.TokenHash); err != nil {
+						t.Fatal(err)
+					}
+				}
+				for range 2 {
+					got, err := repository.GetToken(context.Background(), token.TokenHash, purpose)
+					if err != nil || got.AccountID != u.ID || got.TokenHash != token.TokenHash || got.Purpose != purpose || !got.ExpiresAt.Equal(token.ExpiresAt) {
+						t.Fatalf("lookup lost metadata or consumed token: %+v, %v", got, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestSQLiteAccountRepositoryGetTokenFailures(t *testing.T) {
+	for _, scenario := range []string{"missing", "wrong purpose", "empty hash", "invalid purpose", "nil database", "closed database", "missing schema", "canceled"} {
+		t.Run(scenario, func(t *testing.T) {
+			db, _, token, _ := verificationFixture(t)
+			repository := NewSQLiteAccountRepository(db)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			hash, purpose := token.TokenHash, verificationTokenType
+			switch scenario {
+			case "missing":
+				hash = "missing"
+			case "wrong purpose":
+				purpose = resetTokenType
+			case "empty hash":
+				hash = ""
+			case "invalid purpose":
+				purpose = "unknown"
+			case "nil database":
+				repository = NewSQLiteAccountRepository(nil)
+			case "closed database":
+				closed := userTestDB(t)
+				if err := closed.Close(); err != nil {
+					t.Fatal(err)
+				}
+				repository = NewSQLiteAccountRepository(closed)
+			case "missing schema":
+				repository = NewSQLiteAccountRepository(unpreparedUserTestDB(t))
+			case "canceled":
+				cancel()
+			}
+			got, err := repository.GetToken(ctx, hash, purpose)
+			var missing *ErrTokenNotFound
+			wantMissing := scenario == "missing" || scenario == "wrong purpose"
+			if err == nil || got != (TokenMetadata{}) || errors.As(err, &missing) != wantMissing {
+				t.Fatalf("failed lookup returned metadata or wrong error: %+v, %v", got, err)
+			}
+			if scenario == "canceled" && !errors.Is(err, context.Canceled) {
+				t.Fatalf("canceled lookup error=%v", err)
+			}
+		})
+	}
+}
+
+func TestSQLiteAccountRepositoryGetTokenCancellationWhileWaiting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db, _, token, _ := verificationFixture(t)
+		connection, err := db.Conn(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer connection.Close()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		result := make(chan error, 1)
+		go func() {
+			_, err := NewSQLiteAccountRepository(db).GetToken(ctx, token.TokenHash, token.Type)
+			result <- err
+		}()
+		synctest.Wait()
+		select {
+		case err := <-result:
+			t.Fatalf("lookup did not wait for a connection: %v", err)
+		default:
+		}
+		cancel()
+		if err := <-result; !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled lookup error=%v", err)
+		}
+		if err := connection.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+			t.Fatalf("canceled lookup consumed token: %v", err)
+		}
+	})
+}
+
+type tokenLookupRepository struct {
+	AccountRepository
+	token   func(context.Context, string, string) (TokenMetadata, error)
+	account func(context.Context, string) (*User, error)
+}
+
+func (s tokenLookupRepository) GetToken(ctx context.Context, hash, purpose string) (TokenMetadata, error) {
+	return s.token(ctx, hash, purpose)
+}
+
+func (s tokenLookupRepository) GetByID(ctx context.Context, id string) (*User, error) {
+	return s.account(ctx, id)
+}
+
+func TestValidateTokenUsesRepository(t *testing.T) {
+	for _, purpose := range []string{resetTokenType, verificationTokenType} {
+		for _, scenario := range []string{"success", "wrong signature", "wrong signed purpose", "empty token", "nil repository", "missing token", "token failure", "wrong stored account", "wrong stored hash", "wrong stored purpose", "stored expiry", "missing account", "account failure", "nil account", "wrong account", "changed email", "canceled", "account canceled"} {
+			t.Run(purpose+"/"+scenario, func(t *testing.T) {
+				account := &User{ID: "account", Email: "person@example.invalid"}
+				key := []byte("test-signing-key")
+				tokenPurpose := purpose
+				if scenario == "wrong signed purpose" {
+					tokenPurpose = resetTokenType
+					if purpose == resetTokenType {
+						tokenPurpose = verificationTokenType
+					}
+				}
+				token, err := newAuthToken(account, key, time.Hour, tokenPurpose)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if scenario == "wrong signature" {
+					key = []byte("wrong-key")
+				} else if scenario == "empty token" {
+					token.Token = ""
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				if scenario == "canceled" {
+					cancel()
+				}
+				failure := errors.New("storage unavailable")
+				tokenCalls, accountCalls := 0, 0
+				var repository AccountRepository = tokenLookupRepository{
+					token: func(got context.Context, hash, requestedPurpose string) (TokenMetadata, error) {
+						tokenCalls++
+						if got != ctx || hash != token.TokenHash || requestedPurpose != purpose {
+							t.Fatal("token lookup lost its context, hash, or purpose")
+						}
+						metadata := token.Metadata()
+						switch scenario {
+						case "missing token":
+							return TokenMetadata{}, NewErrTokenNotFound(nil)
+						case "token failure":
+							return TokenMetadata{}, failure
+						case "wrong stored account":
+							metadata.AccountID = "another-account"
+						case "wrong stored hash":
+							metadata.TokenHash = "another-hash"
+						case "wrong stored purpose":
+							metadata.Purpose = "another-purpose"
+						case "stored expiry":
+							metadata.ExpiresAt = time.Now().Add(-time.Hour)
+						case "canceled":
+							return TokenMetadata{}, got.Err()
+						}
+						return metadata, nil
+					},
+					account: func(got context.Context, id string) (*User, error) {
+						accountCalls++
+						if got != ctx || id != token.UserId {
+							t.Fatal("account lookup lost its context or ID")
+						}
+						switch scenario {
+						case "missing account":
+							return nil, NewErrUserNotFound(nil)
+						case "account failure":
+							return nil, failure
+						case "account canceled":
+							cancel()
+							return nil, got.Err()
+						case "nil account":
+							return nil, nil
+						case "wrong account":
+							return &User{ID: "another-account"}, nil
+						case "changed email":
+							account.Email = "new@example.invalid"
+						}
+						return account, nil
+					},
+				}
+				if scenario == "nil repository" {
+					repository = nil
+				}
+				validate := ValidateResetToken
+				if purpose == verificationTokenType {
+					validate = ValidateVerificationToken
+				}
+				got, err := validate(ctx, repository, token.Token, key)
+				wantSuccess := scenario == "success" || (scenario == "changed email" && purpose == resetTokenType)
+				if wantSuccess {
+					if err != nil || got != account {
+						t.Fatalf("valid token rejected: %v, %v", got, err)
+					}
+				} else if got != nil || err == nil {
+					t.Fatalf("invalid token accepted: %v, %v", got, err)
+				}
+				wantTokenCalls, wantAccountCalls := 1, 0
+				switch scenario {
+				case "wrong signature", "wrong signed purpose", "empty token", "nil repository":
+					wantTokenCalls = 0
+				case "success", "missing account", "account failure", "nil account", "wrong account", "changed email", "account canceled":
+					wantAccountCalls = 1
+				}
+				if tokenCalls != wantTokenCalls || accountCalls != wantAccountCalls {
+					t.Fatalf("token calls=%d, account calls=%d, want %d and %d", tokenCalls, accountCalls, wantTokenCalls, wantAccountCalls)
+				}
+				if (scenario == "token failure" || scenario == "account failure") && !errors.Is(err, failure) {
+					t.Fatalf("storage failure was hidden: %v", err)
+				}
+				if (scenario == "canceled" || scenario == "account canceled") && !errors.Is(err, context.Canceled) {
+					t.Fatalf("cancellation was hidden: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestValidateTokenExpiryDuringLookup(t *testing.T) {
+	for _, purpose := range []string{resetTokenType, verificationTokenType} {
+		for _, waitAt := range []string{"token", "account"} {
+			for _, deadline := range []string{"signed", "stored"} {
+				t.Run(purpose+"/"+waitAt+"/"+deadline, func(t *testing.T) {
+					synctest.Test(t, func(t *testing.T) {
+						account := &User{ID: "account", Email: "person@example.invalid"}
+						key := []byte("test-signing-key")
+						lifetime := time.Hour
+						if deadline == "signed" {
+							lifetime = time.Second
+						}
+						token, err := newAuthToken(account, key, lifetime, purpose)
+						if err != nil {
+							t.Fatal(err)
+						}
+						metadata := token.Metadata()
+						metadata.ExpiresAt = time.Now().Add(time.Hour)
+						if deadline == "stored" {
+							metadata.ExpiresAt = time.Now().Add(time.Second)
+						}
+						repository := tokenLookupRepository{
+							token: func(context.Context, string, string) (TokenMetadata, error) {
+								if waitAt == "token" {
+									time.Sleep(time.Second)
+								}
+								return metadata, nil
+							},
+							account: func(context.Context, string) (*User, error) {
+								if waitAt == "account" {
+									time.Sleep(time.Second)
+								}
+								return account, nil
+							},
+						}
+						got, err := validateToken(context.Background(), repository, token.Token, key, purpose)
+						var expired *ErrTokenExpired
+						if got != nil || !errors.As(err, &expired) {
+							t.Fatalf("lookup accepted token at its expiry boundary: %v, %v", got, err)
+						}
+					})
+				})
+			}
+		}
+	}
+}
+
 func TestLegacyStoredResetTokenRejected(t *testing.T) {
 	db := userTestDB(t)
 	u := &User{Email: "person@example.invalid"}
@@ -391,7 +673,7 @@ func TestLegacyStoredResetTokenRejected(t *testing.T) {
 	if err := token.Create(db); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := ValidateResetToken(db, raw, key); err == nil || got != nil {
+	if got, err := ValidateResetToken(context.Background(), NewSQLiteAccountRepository(db), raw, key); err == nil || got != nil {
 		t.Fatal("stored legacy token without a purpose was accepted")
 	}
 	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), raw, key); err == nil || got != nil {

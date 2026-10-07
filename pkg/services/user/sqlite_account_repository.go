@@ -39,6 +39,18 @@ func (s *SQLiteAccountRepository) GetByEmail(ctx context.Context, email string) 
 	return u, err
 }
 
+// GetToken reads stored metadata without consuming or checking the expiry of the token.
+func (s *SQLiteAccountRepository) GetToken(ctx context.Context, tokenHash, purpose string) (TokenMetadata, error) {
+	if purpose != resetTokenType && purpose != verificationTokenType {
+		return TokenMetadata{}, NewErrToken(errors.New("invalid token purpose"))
+	}
+	token, err := getTokenByHashContext(ctx, s.db, tokenHash, purpose)
+	if err != nil {
+		return TokenMetadata{}, err
+	}
+	return token.Metadata(), nil
+}
+
 // Create inserts an account without changing an existing account with the same email.
 func (s *SQLiteAccountRepository) Create(ctx context.Context, u *User) error {
 	return u.Create(ctx, s.db)

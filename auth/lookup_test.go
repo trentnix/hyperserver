@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmoiron/sqlx"
+
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -36,7 +38,7 @@ func TestAuthManagerInitUsesAccountRepository(t *testing.T) {
 	}
 }
 
-func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.SessionManager) {
+func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.SessionManager, *sqlx.DB) {
 	t.Helper()
 	db, err := database.Setup("sqlite3", filepath.Join(t.TempDir(), "accounts.db"))
 	if err != nil {
@@ -55,7 +57,7 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
 	cfg.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}}
 	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
-	manager := &AuthManager{db: db, verificationJwtKey: strings.Repeat("t", 32), contentManager: &content.ContentManagerService{
+	manager := &AuthManager{verificationJwtKey: strings.Repeat("t", 32), contentManager: &content.ContentManagerService{
 		HomeURL: "/", AuthURL: "/login",
 		HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
 			http.Error(w, message, status)
@@ -67,18 +69,18 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { sessions.Close() })
-	return manager, u, sessions
+	return manager, u, sessions, db
 }
 
 func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 	for _, failure := range []string{"missing session manager", "invalid session cookie", "account storage unavailable"} {
 		t.Run(failure, func(t *testing.T) {
-			manager, account, sessions := newLookupTestManager(t)
+			manager, account, sessions, db := newLookupTestManager(t)
 			token, err := user.NewAuthVerificationToken(account, []byte(manager.verificationJwtKey), time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := token.Create(manager.db); err != nil {
+			if err := token.Create(db); err != nil {
 				t.Fatal(err)
 			}
 			newRequest := func() *http.Request {
@@ -109,7 +111,7 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 				for _, cookie := range w.Result().Cookies() {
 					r.AddCookie(cookie)
 				}
-				if _, err := manager.db.Exec(`ALTER TABLE user RENAME TO unavailable_user`); err != nil {
+				if _, err := db.Exec(`ALTER TABLE user RENAME TO unavailable_user`); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -120,15 +122,15 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			}
 
 			if failure == "account storage unavailable" {
-				if _, err := manager.db.Exec(`ALTER TABLE unavailable_user RENAME TO user`); err != nil {
+				if _, err := db.Exec(`ALTER TABLE unavailable_user RENAME TO user`); err != nil {
 					t.Fatal(err)
 				}
 			}
-			stored, err := user.GetUserByID(manager.db, account.ID)
+			stored, err := user.GetUserByID(db, account.ID)
 			if err != nil || stored.Verified || !stored.UpdatedAt.Equal(account.UpdatedAt) {
 				t.Fatalf("failed lookup changed the account: %+v, %v", stored, err)
 			}
-			if _, err := user.GetAuthVerificationTokenByHash(manager.db, token.TokenHash); err != nil {
+			if _, err := user.GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
 				t.Fatalf("failed lookup consumed the token: %v", err)
 			}
 
@@ -138,12 +140,12 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 				t.Fatalf("verification retry failed: %d %s", w.Code, w.Body.String())
 			}
-			stored, err = user.GetUserByID(manager.db, account.ID)
+			stored, err = user.GetUserByID(db, account.ID)
 			if err != nil || !stored.Verified {
 				t.Fatalf("retry did not verify the account: %+v, %v", stored, err)
 			}
 			var count int
-			if err := manager.db.Get(&count, `SELECT count(*) FROM usertoken`); err != nil || count != 0 {
+			if err := db.Get(&count, `SELECT count(*) FROM usertoken`); err != nil || count != 0 {
 				t.Fatalf("retry left tokens: count=%d, error=%v", count, err)
 			}
 		})
@@ -162,7 +164,7 @@ func (s verificationRepository) Verify(ctx context.Context, authorization user.V
 func TestVerifyUsesAccountRepository(t *testing.T) {
 	for _, scenario := range []string{"success", "storage failure"} {
 		t.Run(scenario, func(t *testing.T) {
-			manager, account, sessions := newLookupTestManager(t)
+			manager, account, sessions, _ := newLookupTestManager(t)
 			token, err := user.NewAuthVerificationToken(account, []byte(manager.verificationJwtKey), time.Hour)
 			if err != nil {
 				t.Fatal(err)
@@ -184,8 +186,6 @@ func TestVerifyUsesAccountRepository(t *testing.T) {
 				account.SessionVersion++
 				return account, nil
 			}}
-			// Verification must work through the repository without a SQL pool.
-			manager.db = nil
 			w := httptest.NewRecorder()
 			manager.Verify(w, r)
 			if calls != 1 {
@@ -219,23 +219,114 @@ func (s *lookupTestAuthService) Reset(w http.ResponseWriter, r *http.Request, u 
 	return false
 }
 
+type tokenLookupRepository struct {
+	user.AccountRepository
+	token   func(context.Context, string, string) (user.TokenMetadata, error)
+	account func(context.Context, string) (*user.User, error)
+}
+
+func (s tokenLookupRepository) GetToken(ctx context.Context, hash, purpose string) (user.TokenMetadata, error) {
+	return s.token(ctx, hash, purpose)
+}
+
+func (s tokenLookupRepository) GetByID(ctx context.Context, id string) (*user.User, error) {
+	return s.account(ctx, id)
+}
+
+func TestResetLookupUsesAccountRepository(t *testing.T) {
+	previous := authServices
+	t.Cleanup(func() { authServices = previous })
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		for _, scenario := range []string{"success", "token failure", "account failure", "canceled"} {
+			t.Run(method+"/"+scenario, func(t *testing.T) {
+				account := &user.User{ID: "account", Email: "person@example.invalid"}
+				key := "test-signing-key"
+				token, err := user.NewAuthResetToken(account, []byte(key), time.Hour)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				if scenario == "canceled" {
+					cancel()
+				}
+				tokenCalls, accountCalls := 0, 0
+				repository := tokenLookupRepository{
+					token: func(got context.Context, hash, purpose string) (user.TokenMetadata, error) {
+						tokenCalls++
+						if got != ctx || hash != token.TokenHash || purpose != token.Type {
+							t.Fatal("token lookup lost the request context or token identity")
+						}
+						if scenario == "token failure" {
+							return user.TokenMetadata{}, errors.New("private storage failure")
+						}
+						if err := got.Err(); err != nil {
+							return user.TokenMetadata{}, err
+						}
+						return token.Metadata(), nil
+					},
+					account: func(got context.Context, id string) (*user.User, error) {
+						accountCalls++
+						if got != ctx || id != account.ID {
+							t.Fatal("account lookup lost the request context or account ID")
+						}
+						if scenario == "account failure" {
+							return nil, errors.New("private storage failure")
+						}
+						return account, nil
+					},
+				}
+				manager := &AuthManager{accounts: repository, verificationJwtKey: key, contentManager: &content.ContentManagerService{
+					HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
+						http.Error(w, message, status)
+					},
+				}}
+				provider := &lookupTestAuthService{}
+				authServices = []AuthService{provider}
+				r := httptest.NewRequest(method, "/auth/reset/lookup-test?token="+url.QueryEscape(token.Token), nil).WithContext(ctx)
+				r.SetPathValue("authType", "lookup-test")
+				w := httptest.NewRecorder()
+				if method == http.MethodGet {
+					manager.GetReset(w, r)
+				} else {
+					manager.Reset(w, r)
+				}
+				wantAccountCalls := 0
+				if scenario == "success" || scenario == "account failure" {
+					wantAccountCalls = 1
+				}
+				if tokenCalls != 1 || accountCalls != wantAccountCalls {
+					t.Fatalf("token calls=%d, account calls=%d", tokenCalls, accountCalls)
+				}
+				if scenario == "success" {
+					if w.Code != http.StatusNoContent || provider.calls != 1 {
+						t.Fatal("valid lookup did not reach authentication provider")
+					}
+				} else if w.Code != http.StatusInternalServerError || provider.calls != 0 || strings.Contains(w.Body.String(), "private storage failure") {
+					t.Fatalf("lookup failure continued or leaked details: %d %s", w.Code, w.Body.String())
+				}
+			})
+		}
+	}
+}
+
 func TestResetStopsOnTokenLookupFailure(t *testing.T) {
 	previous := authServices
 	t.Cleanup(func() { authServices = previous })
 	for _, table := range []string{"usertoken", "user"} {
 		for _, method := range []string{http.MethodGet, http.MethodPost} {
 			t.Run(table+"/"+method, func(t *testing.T) {
-				manager, account, _ := newLookupTestManager(t)
+				manager, account, _, db := newLookupTestManager(t)
 				provider := &lookupTestAuthService{}
 				authServices = []AuthService{provider}
 				token, err := user.NewAuthResetToken(account, []byte(manager.verificationJwtKey), time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := token.Create(manager.db); err != nil {
+				if err := token.Create(db); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := manager.db.Exec("ALTER TABLE " + table + " RENAME TO unavailable"); err != nil {
+				if _, err := db.Exec("ALTER TABLE " + table + " RENAME TO unavailable"); err != nil {
 					t.Fatal(err)
 				}
 				handler := manager.GetReset
@@ -256,13 +347,13 @@ func TestResetStopsOnTokenLookupFailure(t *testing.T) {
 					t.Fatal("lookup failure exposed token or storage details")
 				}
 
-				if _, err := manager.db.Exec("ALTER TABLE unavailable RENAME TO " + table); err != nil {
+				if _, err := db.Exec("ALTER TABLE unavailable RENAME TO " + table); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := user.ValidateResetToken(manager.db, token.Token, []byte(manager.verificationJwtKey)); err != nil {
+				if _, err := user.ValidateResetToken(context.Background(), manager.accounts, token.Token, []byte(manager.verificationJwtKey)); err != nil {
 					t.Fatalf("failed lookup invalidated the token: %v", err)
 				}
-				stored, err := user.GetUserByID(manager.db, account.ID)
+				stored, err := user.GetUserByID(db, account.ID)
 				if err != nil || stored.Password != account.Password || !stored.UpdatedAt.Equal(account.UpdatedAt) {
 					t.Fatalf("failed lookup changed the account: %+v, %v", stored, err)
 				}

@@ -12,6 +12,10 @@ import (
 type AccountRepository interface {
 	GetByID(context.Context, string) (*User, error)
 	GetByEmail(context.Context, string) (*User, error)
+	// GetToken reads metadata matching the token hash and purpose without consuming it.
+	// Missing tokens return ErrTokenNotFound. Expired tokens remain readable so the
+	// caller can distinguish expiry from absence. Other failures must remain errors.
+	GetToken(ctx context.Context, tokenHash, purpose string) (TokenMetadata, error)
 	// Create inserts only. Duplicate emails return database.ErrRecordAlreadyExists.
 	// Failure must leave stored accounts and u unchanged. Success fills in the ID,
 	// timestamps, and initial SessionVersion of 1. Password is already hashed.

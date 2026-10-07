@@ -62,8 +62,8 @@ func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) 
 
 // ValidateVerificationToken checks a signed verification token against its stored
 // hash, purpose, expiry, and current email address. It does not consume the token.
-func ValidateVerificationToken(db *sqlx.DB, tokenString string, jwtKey []byte) (*User, error) {
-	return validateToken(db, tokenString, jwtKey, verificationTokenType)
+func ValidateVerificationToken(ctx context.Context, accounts AccountRepository, tokenString string, jwtKey []byte) (*User, error) {
+	return validateToken(ctx, accounts, tokenString, jwtKey, verificationTokenType)
 }
 
 // Verify validates the signed verification token and asks accounts to atomically

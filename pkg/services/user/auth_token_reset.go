@@ -71,8 +71,8 @@ func NewAuthResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthR
 
 // ValidateResetToken checks the signature, reset purpose, stored hash, and expiry,
 // then returns the account. jwtKey is the account-token signing key. It does not consume the token.
-func ValidateResetToken(db *sqlx.DB, tokenString string, jwtKey []byte) (*User, error) {
-	return validateToken(db, tokenString, jwtKey, resetTokenType)
+func ValidateResetToken(ctx context.Context, accounts AccountRepository, tokenString string, jwtKey []byte) (*User, error) {
+	return validateToken(ctx, accounts, tokenString, jwtKey, resetTokenType)
 }
 
 // ResetPassword validates the signed reset token and asks accounts to atomically

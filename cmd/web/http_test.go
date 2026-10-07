@@ -819,7 +819,7 @@ func TestHTTPResetRequestEmailsInstructions(t *testing.T) {
 			if len(h.mail.snapshot()) != i+1 {
 				t.Error("unknown account caused mail delivery")
 			}
-			resetUser, err := user.ValidateResetToken(h.app.Database, token, []byte(h.app.Config.Auth.JwtKey))
+			resetUser, err := user.ValidateResetToken(context.Background(), h.app.AccountRepository, token, []byte(h.app.Config.Auth.JwtKey))
 			if err != nil || resetUser.ID != u.ID {
 				t.Fatal("emailed reset token does not belong to the account")
 			}

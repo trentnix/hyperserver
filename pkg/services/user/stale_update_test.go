@@ -91,7 +91,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				if err != nil || *stored != *current {
 					t.Fatalf("rejected update changed the stored account: %v", err)
 				}
-				if _, err := ValidateVerificationToken(db, token.Token, key); err != nil {
+				if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), token.Token, key); err != nil {
 					t.Fatalf("rejected update revoked a verification token: %v", err)
 				}
 			}
