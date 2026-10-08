@@ -16,6 +16,43 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
+func TestSQLiteAccountRepositoryInitialize(t *testing.T) {
+	db := unpreparedUserTestDB(t)
+	repository := NewSQLiteAccountRepository(db)
+	assertNoAccountTables(t, db)
+	ctx := context.Background()
+	if err := repository.Initialize(ctx); err != nil {
+		t.Fatal(err)
+	}
+	account := &User{Email: "initialized@example.invalid", Password: "hash"}
+	if err := repository.Create(ctx, account); err != nil {
+		t.Fatal(err)
+	}
+	before, err := repository.GetByID(ctx, account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := TokenMetadata{AccountID: account.ID, TokenHash: "stored-hash", Purpose: resetTokenType, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	if err := repository.CreateToken(ctx, metadata); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repository.Initialize(ctx); err != nil {
+		t.Fatal("repeated initialization:", err)
+	}
+	stored, err := repository.GetByID(ctx, account.ID)
+	if err != nil || !reflect.DeepEqual(stored, before) {
+		t.Fatalf("repeated initialization changed account: %+v, %v", stored, err)
+	}
+	token, err := repository.GetToken(ctx, metadata.TokenHash, metadata.Purpose)
+	if err != nil || token.AccountID != metadata.AccountID || token.TokenHash != metadata.TokenHash || token.Purpose != metadata.Purpose || !token.ExpiresAt.Equal(metadata.ExpiresAt) {
+		t.Fatalf("repeated initialization changed token: %+v, %v", token, err)
+	}
+	if err := db.Ping(); err != nil {
+		t.Fatal("provider closed its borrowed pool:", err)
+	}
+}
+
 func TestSQLiteAccountRepository(t *testing.T) {
 	for _, by := range []string{"ID", "email"} {
 		t.Run(by, func(t *testing.T) {

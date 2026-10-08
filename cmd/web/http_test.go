@@ -220,8 +220,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	cm.HandleMessage, cm.HandleError, cm.HandleNotFound = util.HttpMessage, util.HttpError, util.HttpNotFound
 	app := &server.ApplicationServer{
 		Config: cfg, Database: db, Web: http.NewServeMux(),
-		AccountRepository: user.NewSQLiteAccountRepository(db),
-		ContentManager:    cm, Mail: mailClient,
+		ContentManager: cm, Mail: mailClient,
 	}
 	if err := app.InitializeSessions(context.Background()); err != nil {
 		t.Fatal(err)
@@ -231,7 +230,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 			t.Error(err)
 		}
 	})
-	if err := setupAccountStorage(context.Background(), app); err != nil {
+	if err := app.InitializeAccounts(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	logs := &capturedLogs{}

@@ -29,6 +29,8 @@ type (
 		// Database is owned by the application. Modules borrow it and must not close it.
 		Database *sqlx.DB
 		// AccountRepository supplies authentication's account and token operations.
+		// An application-supplied repository must be ready to use. Its supplier owns
+		// any resources not already owned by the application.
 		AccountRepository user.AccountRepository
 		Web               *http.ServeMux
 		ContentManager    *content_services.ContentManagerService
@@ -39,13 +41,12 @@ type (
 
 // NewApplicationServer loads configuration and creates the database pool, router,
 // content manager, and mail client. It panics on initialization errors. The caller
-// must initialize sessions and modules, serve HTTP, and close owned resources.
+// must initialize sessions, accounts, and modules, serve HTTP, and close owned resources.
 func NewApplicationServer() *ApplicationServer {
 	s := new(ApplicationServer)
 
 	s.initConfig()
 	s.initDatabase()
-	s.AccountRepository = user.NewSQLiteAccountRepository(s.Database)
 	s.initWeb()
 	s.initContentManager()
 	s.initMail()
@@ -108,6 +109,27 @@ func (s *ApplicationServer) InitializeSessions(ctx context.Context) error {
 		return err
 	}
 	s.SessionManager = manager
+	return nil
+}
+
+const accountSetupTimeout = 10 * time.Second
+
+// InitializeAccounts prepares account storage when authentication is enabled.
+// It preserves an already supplied repository. The default SQLite repository
+// borrows the application's pool. Call serially before modules and requests use
+// accounts. Failed initialization leaves AccountRepository unset and can be retried.
+func (s *ApplicationServer) InitializeAccounts(ctx context.Context) error {
+	if !s.Config.Auth.Enabled || s.AccountRepository != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, accountSetupTimeout)
+	defer cancel()
+	repository := user.NewSQLiteAccountRepository(s.Database)
+	if err := repository.Initialize(ctx); err != nil {
+		return err
+	}
+	s.AccountRepository = repository
 	return nil
 }
 

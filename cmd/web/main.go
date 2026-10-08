@@ -67,7 +67,7 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 	if err := s.InitializeSessions(ctx); err != nil {
 		return fmt.Errorf("failed to prepare session storage: %w", err)
 	}
-	if err := setupAccountStorage(ctx, s); err != nil {
+	if err := s.InitializeAccounts(ctx); err != nil {
 		return fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l, err := logger.NewZapLogger()

@@ -72,7 +72,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := s.InitializeSessions(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if err := setupAccountStorage(context.Background(), s); err != nil {
+		if err := s.InitializeAccounts(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 		var tables int

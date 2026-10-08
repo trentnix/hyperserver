@@ -11,7 +11,7 @@ import (
 )
 
 // SQLiteAccountRepository stores accounts using an existing SQLite pool.
-// Its owner must prepare the account schema and close the pool after consumers stop.
+// Call Initialize before use. The pool's owner must close it after consumers stop.
 type SQLiteAccountRepository struct{ db *sqlx.DB }
 
 // NewSQLiteAccountRepository borrows db. It does not open, initialize, or close storage.
@@ -20,6 +20,12 @@ func NewSQLiteAccountRepository(db *sqlx.DB) *SQLiteAccountRepository {
 }
 
 var _ AccountRepository = (*SQLiteAccountRepository)(nil)
+
+// Initialize prepares the account schema using the borrowed pool. It can be
+// repeated or retried after failure and never closes the pool.
+func (s *SQLiteAccountRepository) Initialize(ctx context.Context) error {
+	return PrepareDatabase(ctx, s.db)
+}
 
 // GetByID loads an account by ID, or returns ErrUserNotFound.
 func (s *SQLiteAccountRepository) GetByID(ctx context.Context, id string) (*User, error) {

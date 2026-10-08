@@ -197,8 +197,23 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	fmt.Fprintln(stdout, "shutdown ordering passed")
 }
 
+func shutdownTestDB(t *testing.T) *sqlx.DB {
+	t.Helper()
+	db, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return db
+}
+
 func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
-	db := accountSetupTestDB(t)
+	db := shutdownTestDB(t)
 	owner := &server.ApplicationServer{Database: db}
 	if err := user.PrepareDatabase(context.Background(), db); err != nil {
 		t.Fatal(err)
@@ -288,7 +303,7 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
 	for _, failure := range []string{"listen address", "TLS files", "session setup", "account setup"} {
 		t.Run(failure, func(t *testing.T) {
-			db := accountSetupTestDB(t)
+			db := shutdownTestDB(t)
 			s := &server.ApplicationServer{Database: db, Config: &config.Config{}}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
