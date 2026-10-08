@@ -1,7 +1,7 @@
 // Package messages stores categorized flash messages, notifications, and browser
 // console messages in sessions. Its HTTP helpers require session management in
-// the request context. Retrieval removes messages from the request-local session,
-// but persistence of that removal depends on the session store and save path.
+// the request context. Successful retrieval persists category removal before
+// returning messages. Failed removal leaves the request-local category intact.
 package messages
 
 import (
@@ -71,16 +71,25 @@ func getMessages(w http.ResponseWriter, r *http.Request, category string) ([]Ses
 		return nil, NewErrRetrievingContentMessages(err)
 	}
 
+	stored, exists := s.Data[category]
+	if !exists {
+		return nil, nil
+	}
 	var contentMessages []SessionMessage
 	if err := s.DecodeValue(category, &contentMessages); err != nil {
 		return nil, NewErrRetrievingContentMessages(err)
 	}
 	delete(s.Data, category)
 
-	var deleteMessagesErr error
 	if len(s.Data) == 0 {
-		deleteMessagesErr = s.End(w, r)
+		err = s.End(w, r)
+	} else {
+		err = s.Save(w, r)
+	}
+	if err != nil {
+		s.Data[category] = stored
+		return nil, NewErrDeletingContentMessages(err)
 	}
 
-	return contentMessages, deleteMessagesErr
+	return contentMessages, nil
 }

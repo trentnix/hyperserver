@@ -92,8 +92,8 @@ func AddSystemErrorMessage(w http.ResponseWriter, r *http.Request, message strin
 	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeError))
 }
 
-// GetSystemMessages retrieves console messages and removes them from the request-local session.
-// It ends the session if empty, but otherwise does not save the removal to storage.
+// GetSystemMessages retrieves console messages and persists their removal, ending an empty session.
+// A failed removal returns no messages and leaves the request-local category intact.
 func GetSystemMessages(w http.ResponseWriter, r *http.Request) ([]SystemMessage, error) {
 	msgs, err := getMessages(w, r, categorySystemMessage)
 	if err != nil {

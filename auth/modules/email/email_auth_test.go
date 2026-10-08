@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -18,11 +19,83 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+type failingAuthMessageStore struct {
+	session.SessionStore
+	err error
+}
+
+func (s failingAuthMessageStore) Save(http.ResponseWriter, *http.Request, *session.Session) error {
+	return s.err
+}
+func (s failingAuthMessageStore) End(http.ResponseWriter, *http.Request, *session.Session) error {
+	return s.err
+}
+
+func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
+	cfg := &config.Config{Auth: config.AuthConfig{Enabled: true, RegistrationEnabled: true}}
+	cfg.HTTP.Session.JwtKey = "message-removal-test-key"
+	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
+	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
+	cfg.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}}
+	manager, err := session.NewSessionManager(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+	service := &EmailAuthService{config: cfg, contentManager: content.NewContentManager()}
+	handlers := map[string]http.HandlerFunc{
+		"login": service.GetLogin, "registration": service.GetRegister, "reset request": service.GetResetRequest,
+		"reset": func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") }, "change": service.GetChange,
+	}
+	for name, handler := range handlers {
+		for _, operation := range []string{"save", "end"} {
+			for _, htmx := range []bool{false, true} {
+				t.Run(name+"/"+operation+"/htmx="+fmt.Sprint(htmx), func(t *testing.T) {
+					r := httptest.NewRequest(http.MethodGet, "/", nil)
+					if htmx {
+						r.Header.Set("HX-Request", "true")
+					}
+					r = session.AddSessionManagerToRequestContext(r, manager)
+					if err := messages.AddMessage(httptest.NewRecorder(), r, "pending", messages.AuthMessages); err != nil {
+						t.Fatal(err)
+					}
+					if operation == "save" {
+						if err := messages.AddSuccessNotification(httptest.NewRecorder(), r, "other"); err != nil {
+							t.Fatal(err)
+						}
+					}
+					value, err := session.Get(r, "hs-message-session")
+					if err != nil {
+						t.Fatal(err)
+					}
+					failure := errors.New("message storage failure")
+					value.Store = failingAuthMessageStore{SessionStore: value.Store, err: failure}
+					calls := 0
+					service.contentManager.HandleError = func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
+						calls++
+						if !errors.Is(err, failure) || message != "Unable to load authentication messages" || status != http.StatusInternalServerError {
+							t.Fatalf("wrong error: %q, %v, %d", message, err, status)
+						}
+						http.Error(w, message, status)
+					}
+					w := httptest.NewRecorder()
+					handler(w, r)
+					if calls != 1 || w.Code != http.StatusInternalServerError || w.Body.String() != "Unable to load authentication messages\n" {
+						t.Fatalf("form ignored removal failure: calls=%d, status=%d, body=%q", calls, w.Code, w.Body.String())
+					}
+				})
+			}
+		}
+	}
+}
 
 func TestDisabledRegistration(t *testing.T) {
 	for _, cfg := range []config.AuthConfig{

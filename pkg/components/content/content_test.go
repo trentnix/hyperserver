@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -153,6 +154,28 @@ func TestRenderReportsDeliveryFailure(t *testing.T) {
 		}
 		if err := c.Render(w, r); !errors.Is(err, want) {
 			t.Fatalf("delivery error = %v, want %v", err, want)
+		}
+	}
+}
+
+func TestRenderReportsNotificationReadFailure(t *testing.T) {
+	for _, htmx := range []bool{false, true} {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		if htmx {
+			r.Header.Set("HX-Request", "true")
+		}
+		cm := contentservice.NewContentManager()
+		cm.RenderNotifications = true
+		c := NewManagedContent(r, cm)
+		c.ResponseStatusCode = http.StatusCreated
+		c.Headers = map[string]string{"X-Rendered": "yes"}
+		w := &recordingResponse{ResponseRecorder: httptest.NewRecorder()}
+		var retrieval *messages.ErrRetrievingContentMessages
+		if err := c.Render(w, r); !errors.As(err, &retrieval) {
+			t.Fatalf("missing session manager error = %v", err)
+		}
+		if w.committed || w.Body.Len() != 0 || w.Header().Get("X-Rendered") != "" || len(c.Notifications) != 0 {
+			t.Fatal("notification read failure committed output or changed notifications")
 		}
 	}
 }

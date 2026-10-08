@@ -76,8 +76,8 @@ func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string, c
 	return addFlashMessage(w, r, NewMessage(message, MessageTypeSuccess), category)
 }
 
-// GetMessages retrieves a category and removes it from the request-local session.
-// It ends the session if empty, but otherwise does not save the removal to storage.
+// GetMessages retrieves a category and persists its removal, ending an empty session.
+// A failed removal returns no messages and leaves the request-local category intact.
 func GetMessages(w http.ResponseWriter, r *http.Request, category string) ([]Message, error) {
 	if category == "" {
 		return nil, NewErrMessageCategoryNotSpecified(nil)

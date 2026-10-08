@@ -242,12 +242,16 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
 
-	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	if err != nil {
+		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
+		return
+	}
 	loginForm.SetMessages(authMessages)
 
 	login.Data = loginForm
 
-	err := login.Render(w, r)
+	err = login.Render(w, r)
 	if err != nil {
 		a.contentManager.HandleError(w, r,
 			"Unable to display the email authorization service login form",
@@ -317,12 +321,16 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
-	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	if err != nil {
+		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
+		return
+	}
 	registerForm.SetMessages(authMessages)
 
 	register.Data = registerForm
 
-	err := register.Render(w, r)
+	err = register.Render(w, r)
 	if err != nil {
 		a.contentManager.HandleError(w, r,
 			"Unable to display the email authorization service registration form",
@@ -480,12 +488,16 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
 
-	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	if err != nil {
+		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
+		return
+	}
 	resetRequestForm.SetMessages(authMessages)
 
 	reset.Data = resetRequestForm
 
-	err := reset.Render(w, r)
+	err = reset.Render(w, r)
 	if err != nil {
 		a.contentManager.HandleError(w, r,
 			"Unable to display the email authorization service password reset request form",
@@ -579,12 +591,16 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	reset.PartialName = emailResetPasswordFormPartial
 	reset.AddContent(emailResetPasswordFormTemplate)
 
-	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	if err != nil {
+		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
+		return
+	}
 	resetForm.SetMessages(authMessages)
 
 	reset.Data = resetForm
 
-	err := reset.Render(w, r)
+	err = reset.Render(w, r)
 	if err != nil {
 		a.contentManager.HandleError(w, r, resetErrMsg, err, http.StatusInternalServerError)
 		return
@@ -680,12 +696,16 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 	change.PartialName = emailChangePasswordFormPartial
 	change.AddContent(emailChangePasswordFormTemplate)
 
-	authMessages, _ := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	if err != nil {
+		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
+		return
+	}
 	changeForm.SetMessages(authMessages)
 
 	change.Data = changeForm
 
-	err := change.Render(w, r)
+	err = change.Render(w, r)
 	if err != nil {
 		a.contentManager.HandleError(w, r, changeErrMsg, err, http.StatusInternalServerError)
 		return

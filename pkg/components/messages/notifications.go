@@ -56,8 +56,8 @@ func AddSuccessNotification(w http.ResponseWriter, r *http.Request, message stri
 	return addNotification(w, r, NewNotification(message, NotificationTypeSuccess))
 }
 
-// GetNotifications retrieves notifications and removes them from the request-local session.
-// It ends the session if empty, but otherwise does not save the removal to storage.
+// GetNotifications retrieves notifications and persists their removal, ending an empty session.
+// A failed removal returns no notifications and leaves the request-local category intact.
 func GetNotifications(w http.ResponseWriter, r *http.Request) ([]Notification, error) {
 	msgs, err := getMessages(w, r, categoryNotification)
 	if err != nil {

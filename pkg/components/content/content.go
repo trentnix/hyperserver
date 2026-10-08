@@ -181,7 +181,10 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 
 		// render notifications
 		if c.ContentManager.RenderNotifications {
-			notifications, _ := messages.GetNotifications(w, r)
+			notifications, err := messages.GetNotifications(w, r)
+			if err != nil {
+				return err
+			}
 			c.Notifications = append(c.Notifications, notifications...)
 		}
 	}
