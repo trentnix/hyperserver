@@ -5,14 +5,7 @@
 // Provider packages validate their own configuration.
 package config
 
-import (
-	"errors"
-	"os"
-	"strings"
-	"time"
-
-	"github.com/spf13/viper"
-)
+import "time"
 
 type (
 	// Config stores complete configuration
@@ -47,8 +40,8 @@ type (
 			JwtKey    string
 			TokenAge  time.Duration
 			CookieAge time.Duration
-			Stores    map[string]map[string]string `mapstructure:"stores"`
-			Types     map[string]string            `mapstructure:"types"`
+			Stores    map[string]map[string]string
+			Types     map[string]string
 		}
 	}
 
@@ -72,8 +65,8 @@ type (
 		ResetTokenExpiration         time.Duration
 		ResetMinimumResponseTime     time.Duration // Minimum reset response time. File loading defaults to 2s. Zero disables the wait.
 		ResetRequiresNewCredentials  bool
-		RegisterRequiresVerification bool                         // Requires configured verification delivery when registration is enabled.
-		Services                     map[string]map[string]string `mapstructure:"services"`
+		RegisterRequiresVerification bool // Requires configured verification delivery when registration is enabled.
+		Services                     map[string]map[string]string
 	}
 
 	// AccountStorageConfig selects one account repository provider and its options.
@@ -107,68 +100,3 @@ type (
 		Timeout     time.Duration // Total SMTP operation limit. Zero uses 30 seconds.
 	}
 )
-
-// GetConfig loads config.yaml, applies environment overrides, and validates shared settings.
-// It searches ., config, ../config, and ../../config in that order. Provider-specific
-// validation must run separately. A missing or invalid file returns an error.
-func GetConfig() (Config, error) {
-	v := viper.New()
-
-	// Load the config file - config.yaml in either the current folder or
-	v.SetConfigName("config")
-	v.SetConfigType("yaml")
-	v.AddConfigPath(".")
-	v.AddConfigPath("config")
-	v.AddConfigPath("../config")
-	v.AddConfigPath("../../config")
-	return readConfig(v)
-}
-
-func readConfig(v *viper.Viper) (Config, error) {
-	var c Config
-	v.SetEnvPrefix("hyperserver")
-	v.AutomaticEnv()
-	v.AllowEmptyEnv(true)
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.SetDefault("http.listenHost", "127.0.0.1")
-	v.SetDefault("http.defaultRateLimit.requests", 20)
-	v.SetDefault("http.defaultRateLimit.window", time.Minute)
-	v.SetDefault("http.defaultRateLimit.maxClients", 4096)
-	v.SetDefault("http.sharedRateLimit.requests", 120)
-	v.SetDefault("http.sharedRateLimit.window", time.Minute)
-	v.SetDefault("http.sharedRateLimit.maxClients", 4096)
-	v.SetDefault("auth.rateLimit.maxClients", 4096)
-	v.SetDefault("app.siteRateLimit.maxClients", 4096)
-	v.SetDefault("auth.resetMinimumResponseTime", 2*time.Second)
-
-	// Binding environment keys makes omitted YAML fields visible to Unmarshal,
-	// including provider options. Empty overrides must not revive file secrets.
-	for _, entry := range os.Environ() {
-		name, _, _ := strings.Cut(entry, "=")
-		if suffix, ok := strings.CutPrefix(name, "HYPERSERVER_"); ok {
-			key := strings.ToLower(strings.ReplaceAll(suffix, "_", "."))
-			if err := v.BindEnv(key, name); err != nil {
-				return c, err
-			}
-		}
-	}
-
-	if err := v.ReadInConfig(); err != nil {
-		return c, err
-	}
-	for _, key := range v.AllKeys() {
-		if key == "http.ratelimit" || strings.HasPrefix(key, "http.ratelimit.") {
-			return c, errors.New("http.rateLimit is ambiguous. Use http.defaultRateLimit for inherited settings or http.sharedRateLimit for an aggregate budget")
-		}
-	}
-	if v.InConfig("http.hostname") || v.IsSet("http.hostname") {
-		return c, errors.New("http.hostname was renamed to http.listenHost. Rename HYPERSERVER_HTTP_HOSTNAME to HYPERSERVER_HTTP_LISTENHOST for environment configuration")
-	}
-	if err := v.Unmarshal(&c); err != nil {
-		return c, err
-	}
-	if err := c.Validate(); err != nil {
-		return Config{}, err
-	}
-	return c, nil
-}

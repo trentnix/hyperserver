@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 func cleanConfigEnvironment(t *testing.T) {
@@ -29,9 +27,12 @@ func loadTestConfig(t *testing.T, yaml string) (Config, error) {
 	if err := os.WriteFile(path, []byte(yaml), 0600); err != nil {
 		t.Fatal(err)
 	}
-	v := viper.New()
-	v.SetConfigFile(path)
-	return readConfig(v)
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	return readConfig(file, os.Environ())
 }
 
 func TestFileAndEnvironmentConfiguration(t *testing.T) {
@@ -416,9 +417,8 @@ func TestTemplateSessionSigningKey(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(yaml), 0600); err != nil {
 				t.Fatal(err)
 			}
-			v := viper.New()
-			v.SetConfigFile(filepath.Join(dir, "config.yaml"))
-			cfg, err := readConfig(v)
+			t.Chdir(dir)
+			cfg, err := GetConfig()
 			if err != nil {
 				t.Fatal(err)
 			}

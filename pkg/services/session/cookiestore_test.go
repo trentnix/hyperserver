@@ -36,8 +36,8 @@ func setupCookieStore(t *testing.T) *CookieStore {
 				JwtKey    string
 				TokenAge  time.Duration
 				CookieAge time.Duration
-				Stores    map[string]map[string]string `mapstructure:"stores"`
-				Types     map[string]string            `mapstructure:"types"`
+				Stores    map[string]map[string]string
+				Types     map[string]string
 			}{
 				JwtKey:    "secretKey",
 				TokenAge:  1 * time.Hour,

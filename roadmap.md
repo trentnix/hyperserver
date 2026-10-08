@@ -45,11 +45,10 @@ An external package needs to earn its place. Check who maintains it, what depend
 
 Keeping dependencies down also limits exposure to supply-chain attacks. That preference does not justify writing our own cryptography or password hashing. Use established, maintained implementations for that work.
 
-Logging uses `log/slog` behind the [logging contract](pkg/services/logger/logger.go). Continue reducing dependencies in this order. Replace the behavior HyperServer needs, not the full libraries.
+Logging uses `log/slog` behind the [logging contract](pkg/services/logger/logger.go). [Configuration loading](config/load.go) applies explicit defaults, YAML settings, and environment overrides before validation. Continue reducing dependencies in this order. Replace the behavior HyperServer needs, not the full libraries.
 
 | Dependency | Planned change |
 | --- | --- |
-| `spf13/viper` | Use an explicit configuration loader with defaults, environment overrides, and validation. Retain a YAML parser if YAML remains the file format. Do not write a parser. |
 | `go-playground/validator` | Use explicit form validation and field errors. Define email acceptance and test existing rules. Do not build another tag-driven validation engine. |
 | `jmoiron/sqlx` | Evaluate `database/sql` during repository extraction. Prefer explicit queries and scanning where the added repetition is manageable. |
 
@@ -214,7 +213,6 @@ Exit when these known blockers have regression coverage and the reference applic
 
 ### Phase 2: Lifecycle and module composition
 
-- Replace Viper with explicit configuration loading under the dependency policy.
 - Implement the catalog and per-application registry with provider selection, dependency ordering, route validation, and declared dependency access.
 - Return startup errors, validate required storage connectivity with deadlines, and remove shared mutable runtime state.
 - Handle `SIGINT` and `SIGTERM`, drain requests, and close owned resources. Test startup rollback and shutdown deadlines.

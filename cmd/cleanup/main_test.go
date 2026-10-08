@@ -231,7 +231,7 @@ func TestCleanupReportsBothFailures(t *testing.T) {
 }
 
 func TestCleanupCommand(t *testing.T) {
-	if os.Getenv("HYPERSERVER_CLEANUP_HELPER") == "1" {
+	if os.Getenv("HS_CLEANUP_TEST_HELPER") == "1" {
 		flag.CommandLine = flag.NewFlagSet("cleanup", flag.ExitOnError)
 		os.Args = []string{"cleanup", "-batch-size", "1"}
 		main()
@@ -275,11 +275,11 @@ http:
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCleanupCommand$")
 			cmd.Dir = dir
 			for _, entry := range os.Environ() {
-				if !strings.HasPrefix(entry, "HYPERSERVER_") {
+				if !strings.HasPrefix(entry, "HYPERSERVER_") && !strings.HasPrefix(entry, "HS_CLEANUP_TEST_HELPER=") {
 					cmd.Env = append(cmd.Env, entry)
 				}
 			}
-			cmd.Env = append(cmd.Env, "HYPERSERVER_CLEANUP_HELPER=1")
+			cmd.Env = append(cmd.Env, "HS_CLEANUP_TEST_HELPER=1")
 			out, err := cmd.CombinedOutput()
 			if !strings.Contains(string(out), "Deleted 1 expired sessions and 0 expired account tokens.") {
 				t.Fatalf("command: %v\n%s", err, out)

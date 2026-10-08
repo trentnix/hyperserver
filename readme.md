@@ -47,6 +47,8 @@ The development [site module owns the diagnostic and sample routes](modules/site
 
 Use [config-template.yaml](config-template.yaml) as the starting point for a local `config.yaml`, not a production configuration.
 
+The [configuration loader](config/load.go) uses the first `config.yaml` in `.`, `config`, `../config`, or `../../config`. Precedence is defaults, then the file, then `HYPERSERVER_` environment values. For example, `HYPERSERVER_MAIL_PASSWORD` overrides `mail.password`, including an empty value. Unknown settings and invalid values stop startup. Durations require units such as `5s` or `2h`, except `0`. Use a YAML list or comma-separated environment value for `http.trustedProxies`.
+
 To exercise two storage platforms together, run `go run ./cmd/web -contact-directory ./tmp/contacts`. Accounts stay in SQLite, while the site saves contacts as individual JSON files in a private directory. The file provider requires hard-link support. Without this flag, contacts also use SQLite. This is reference-application wiring, not a framework-wide storage setting.
 
 ### Account storage

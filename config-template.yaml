@@ -1,5 +1,8 @@
 # Override fields with HYPERSERVER_ environment variables, using underscores
 # between nested keys. For example: HYPERSERVER_MAIL_PASSWORD.
+# Precedence: defaults, then this file, then environment values.
+# Empty environment values clear strings and lists. Numeric and boolean values must be valid.
+# Unknown settings and null values are rejected. Durations require units, except 0.
 # Replace secret placeholders before enabling the services that require them.
 
 # HTTP addresses, listener settings, and sessions.

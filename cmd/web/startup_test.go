@@ -294,7 +294,7 @@ func TestStartupRejectsInvalidConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name, old, replacement, env, want string
 	}{
-		{name: "legacy file key", old: "jwtKey: \"ssss", replacement: "key: \"ssss", want: "http.session.jwtKey"},
+		{name: "legacy file key", old: "jwtKey: \"ssss", replacement: "key: \"ssss", want: "http.session.key: unknown setting"},
 		{name: "missing session key", old: "ssssssssssssssssssssssssssssssss", want: "http.session.jwtKey"},
 		{name: "empty environment session key", env: "HYPERSERVER_HTTP_SESSION_JWTKEY=", want: "http.session.jwtKey"},
 		{name: "placeholder environment auth key", env: "HYPERSERVER_AUTH_JWTKEY=<your auth token key goes here>", want: "auth.jwtKey"},
