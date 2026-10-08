@@ -63,6 +63,7 @@ func (m *SiteModule) renderError(w http.ResponseWriter, r *http.Request, notific
 		util.HttpError(w, r, "Unable to display the error page", err, http.StatusInternalServerError)
 		return
 	}
+	util.AddVary(w.Header(), buffer.Header().Values("Vary")...)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)

@@ -9,11 +9,13 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/components/types"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 type (
@@ -170,6 +172,9 @@ func (c *Content) AddLogMessages(messages ...string) {
 // Content headers are applied only after rendering succeeds. Delivery errors can
 // still follow partial writes. Call before committing the response. For streaming,
 // write directly to the ResponseWriter. HTMX.Response is not applied here.
+// Successful renders merge Vary: HX-Request and default to Cache-Control: no-store.
+// An existing cache policy takes precedence over Content.Headers. Without an
+// existing policy, callers can set Cache-Control in Headers for public or private caching.
 func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	var managerLayouts, managerContents, managerComponents []TemplatePath
 	if c.ContentManager != nil {
@@ -255,7 +260,20 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	for k, v := range c.Headers {
-		w.Header().Set(k, v)
+		switch {
+		case strings.EqualFold(k, "Vary"):
+			util.AddVary(w.Header(), v)
+		case strings.EqualFold(k, "Cache-Control"):
+			if w.Header().Get("Cache-Control") == "" {
+				w.Header().Set("Cache-Control", v)
+			}
+		default:
+			w.Header().Set(k, v)
+		}
+	}
+	util.AddVary(w.Header(), htmx.HeaderRequest)
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-store")
 	}
 	if c.ResponseStatusCode != 0 && c.ResponseStatusCode != http.StatusOK {
 		w.WriteHeader(c.ResponseStatusCode)

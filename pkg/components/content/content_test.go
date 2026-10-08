@@ -84,7 +84,7 @@ func TestRenderFailureDoesNotCommitResponse(t *testing.T) {
 				}
 				c := NewContent(r)
 				c.ResponseStatusCode = http.StatusCreated
-				c.Headers = map[string]string{"Content-Type": "text/html", "Content-Length": "999", "HX-Redirect": "/success"}
+				c.Headers = map[string]string{"Content-Type": "text/html", "Content-Length": "999", "HX-Redirect": "/success", "Vary": "Origin"}
 				privateErr := errors.New("private rendering failure")
 				c.Data = failingTemplateData{err: privateErr}
 				text := "<p>partial output</p>{{.Data.Fail}}"

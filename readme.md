@@ -83,6 +83,18 @@ Provider registrations belong to one application. Names are case-sensitive, and 
 
 `OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/cleanup.go) capability, an optional close function, and an error. It must not create or migrate tables. `CleanupAccountTokens` opens this capability, runs one batch, and closes its resources even when opening or deletion fails. An initialized repository can also implement `TokenMaintenance` directly. A missing capability returns an error rather than silently skipping cleanup.
 
+### Rendered-response caching
+
+`Content.Render` adds `Vary: HX-Request` to pages and fragments without removing existing `Vary` fields. An existing `Vary: *` already covers every request header. Rendered responses default to `Cache-Control: no-store`, including the reference site's personalized navigation and notifications. Static-file handlers are unchanged.
+
+For a public page with no user-specific content, secrets, or session changes, opt into caching before rendering:
+
+```go
+page.Headers = map[string]string{"Cache-Control": "public, max-age=60"}
+```
+
+An existing `Cache-Control` response header takes precedence over `page.Headers`. Authentication routes and site errors enforce `no-store`. Keep that policy for sensitive or transient content. A handler can use `private, max-age=60` for content that may be stored in the user's browser but must not be stored in shared caches. These headers define cache behavior. HyperServer does not yet provide a response cache.
+
 ### Registration and email
 
 Registration is disabled by default. With `auth.enabled`, set `auth.registrationEnabled: true` to allow new accounts. Existing accounts can log in and reset passwords when registration is disabled.
