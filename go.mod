@@ -9,7 +9,6 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/spf13/viper v1.19.0
-	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.35.0
 )
 

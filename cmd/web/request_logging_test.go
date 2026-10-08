@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +15,47 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
+
+func TestSlogRequestCorrelationAndRedaction(t *testing.T) {
+	var output bytes.Buffer
+	l := logger.NewSlogLogger(slog.NewJSONHandler(&output, nil))
+	handler := middleware.LoggerMiddleware(l)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.LogRequestError(r, errors.New("storage unavailable"))
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	r := httptest.NewRequest(http.MethodPost, "/account?token=query-secret", strings.NewReader("password=body-secret"))
+	r.Header.Set("Authorization", "Bearer header-secret")
+	r.AddCookie(&http.Cookie{Name: "session", Value: "cookie-secret"})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusInternalServerError || w.Header().Get("X-Request-ID") == "" {
+		t.Fatal("logging changed the response or lost the request ID")
+	}
+	if strings.Contains(output.String(), "-secret") {
+		t.Fatal("request metadata exposed credentials, query values, or cookies")
+	}
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("got %d records, want incoming request and error", len(lines))
+	}
+	for i, line := range lines {
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatal(err)
+		}
+		for key, want := range map[string]string{"requestID": w.Header().Get("X-Request-ID"), "method": http.MethodPost, "path": "/account"} {
+			if record[key] != want {
+				t.Errorf("record %d: %s = %v, want %s", i, key, record[key], want)
+			}
+		}
+		if i == 0 && (record["level"] != "INFO" || record["msg"] != "Incoming request") {
+			t.Errorf("incorrect incoming request record: %v", record)
+		}
+		if i == 1 && (record["level"] != "ERROR" || record["msg"] != "Request Error" || record["error"] != "storage unavailable") {
+			t.Errorf("incorrect error record: %v", record)
+		}
+	}
+}
 
 func TestRequestLoggingOmitsQuery(t *testing.T) {
 	for _, query := range []string{

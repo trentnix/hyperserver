@@ -1,5 +1,5 @@
 // Package logger defines structured logging and request-context helpers.
-// ZapLogger implements Logger. Callers must avoid logging secrets or account tokens.
+// Callers must avoid logging secrets or account tokens.
 package logger
 
 import (

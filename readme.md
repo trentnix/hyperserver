@@ -83,6 +83,12 @@ Provider registrations belong to one application. Names are case-sensitive, and 
 
 `OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/cleanup.go) capability, an optional close function, and an error. It must not create or migrate tables. `CleanupAccountTokens` opens this capability, runs one batch, and closes its resources even when opening or deletion fails. An initialized repository can also implement `TokenMaintenance` directly. A missing capability returns an error rather than silently skipping cleanup.
 
+### Logging
+
+The reference application uses [SlogLogger](pkg/services/logger/sloglogger.go) with JSON output on stderr at Info level. Records use slog's `time`, `level`, and `msg` fields, with uppercase levels. Request records include `requestID`, `method`, and the path without query values. The default handler does not sample messages or add caller locations or stack traces.
+
+Pass a `slog.Handler` to `logger.NewSlogLogger` to choose a writer, text output, levels, source locations, or `ReplaceAttr` redaction. Nil selects the default JSON handler. Application code must not log secrets. The adapter preserves handler redaction and `slog.LogValuer` behavior but does not automatically recognize sensitive fields.
+
 ### Rendered-response caching
 
 `Content.Render` adds `Vary: HX-Request` to pages and fragments without removing existing `Vary` fields. An existing `Vary: *` already covers every request header. Rendered responses default to `Cache-Control: no-store`, including the reference site's personalized navigation and notifications. Static-file handlers are unchanged.

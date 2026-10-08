@@ -70,10 +70,7 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 	if err := s.InitializeAccounts(ctx); err != nil {
 		return fmt.Errorf("failed to prepare account storage: %w", err)
 	}
-	l, err := logger.NewZapLogger()
-	if err != nil {
-		return fmt.Errorf("failed to instantiate a logger: %w", err)
-	}
+	l := logger.NewSlogLogger(nil)
 
 	// attach routes and their handlers to the router
 	if err := SetupHandlers(ctx, s, l); err != nil {
