@@ -72,6 +72,27 @@ func TestCleanupSeparateStores(t *testing.T) {
 	}
 }
 
+func TestCleanupRejectsUnsupportedAccountStorage(t *testing.T) {
+	for _, scenario := range []string{"custom provider", "SQLite options"} {
+		t.Run(scenario, func(t *testing.T) {
+			cfg, accounts, _ := cleanupFixture(t)
+			if scenario == "custom provider" {
+				cfg.Auth.AccountStorage.Provider = "custom"
+			} else {
+				cfg.Auth.AccountStorage.Options = map[string]string{"connection": "another-database"}
+			}
+			sessions, tokens, err := cleanup(context.Background(), cfg, 2)
+			if err == nil || sessions != 2 || tokens != 0 {
+				t.Fatalf("unsupported account cleanup = (%d, %d, %v)", sessions, tokens, err)
+			}
+			var count int
+			if err := accounts.Get(&count, "SELECT count(*) FROM usertoken"); err != nil || count != 4 {
+				t.Fatalf("unsupported account cleanup changed SQLite tokens: count=%d, error=%v", count, err)
+			}
+		})
+	}
+}
+
 func TestCleanupPartialFailure(t *testing.T) {
 	for _, failed := range []string{"accounts", "sessions"} {
 		t.Run(failed, func(t *testing.T) {

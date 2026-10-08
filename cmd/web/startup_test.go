@@ -15,6 +15,7 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // Use subprocesses to isolate startup exits, working directories, and registries.
@@ -35,6 +36,20 @@ func TestStartupHelperProcess(t *testing.T) {
 		runSignalTestHelper(t)
 	case "listen-failure":
 		s := server.NewApplicationServer()
+		closed := 0
+		s.Config.Auth.AccountStorage.Provider = "custom"
+		if err := s.RegisterAccountProvider("custom", func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
+			repository := user.NewSQLiteAccountRepository(s.Database)
+			if err := repository.Initialize(ctx); err != nil {
+				return nil, nil, err
+			}
+			return repository, func() error {
+				closed++
+				return s.Database.Ping()
+			}, nil
+		}); err != nil {
+			t.Fatal(err)
+		}
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
@@ -43,6 +58,9 @@ func TestStartupHelperProcess(t *testing.T) {
 		s.Config.HTTP.Port = uint16(listener.Addr().(*net.TCPAddr).Port)
 		if err := run(context.Background(), s); err == nil || !strings.Contains(err.Error(), "address already in use") {
 			t.Fatalf("listen failure = %v", err)
+		}
+		if closed != 1 {
+			t.Fatalf("listen failure called account cleanup %d times, want 1", closed)
 		}
 		if err := s.Database.Ping(); err == nil {
 			t.Fatal("listen failure left the application's pool open")
@@ -209,6 +227,23 @@ func TestStartupRejectsUnavailableAccountStorage(t *testing.T) {
 	}
 	if strings.Contains(string(output), "Starting server at") {
 		t.Fatalf("startup attempted to listen with unavailable account storage: %s", output)
+	}
+}
+
+func TestStartupRejectsInvalidAccountProvider(t *testing.T) {
+	for _, tc := range []struct{ name, env, want string }{
+		{"unknown provider", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_PROVIDER=unknown", "auth.accountStorage.provider"},
+		{"unsupported options", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION=unused", "auth.accountStorage.options"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output, err := runStartupProcess(t, startupTestConfig, "1", tc.env)
+			if err == nil || !strings.Contains(string(output), tc.want) {
+				t.Fatalf("invalid provider configuration: error=%v, output=%s", err, output)
+			}
+			if strings.Contains(string(output), "Starting server at") {
+				t.Fatal("startup listened with invalid account provider configuration")
+			}
+		})
 	}
 }
 

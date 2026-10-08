@@ -36,6 +36,8 @@ type (
 		ContentManager    *content_services.ContentManagerService
 		SessionManager    *session.SessionManager
 		Mail              *messaging.MailClient
+		accountProviders  map[string]AccountProvider
+		closeAccounts     func() error
 	}
 )
 
@@ -54,12 +56,18 @@ func NewApplicationServer() *ApplicationServer {
 	return s
 }
 
-// Shutdown closes session providers and the application's database pool. The caller
-// must first drain HTTP requests and stop other consumers. Borrowing modules must not call it.
+// Shutdown closes account providers, session providers, and the application's
+// database pool. Call serially after draining HTTP requests and stopping other
+// consumers. Borrowing modules must not call it.
 func (s *ApplicationServer) Shutdown() error {
 	var err error
+	if s.closeAccounts != nil {
+		closeAccounts := s.closeAccounts
+		s.closeAccounts = nil
+		err = closeAccounts()
+	}
 	if s.SessionManager != nil {
-		err = s.SessionManager.Close()
+		err = errors.Join(err, s.SessionManager.Close())
 	}
 	if s.Database != nil {
 		err = errors.Join(err, s.Database.Close())
@@ -109,27 +117,6 @@ func (s *ApplicationServer) InitializeSessions(ctx context.Context) error {
 		return err
 	}
 	s.SessionManager = manager
-	return nil
-}
-
-const accountSetupTimeout = 10 * time.Second
-
-// InitializeAccounts prepares account storage when authentication is enabled.
-// It preserves an already supplied repository. The default SQLite repository
-// borrows the application's pool. Call serially before modules and requests use
-// accounts. Failed initialization leaves AccountRepository unset and can be retried.
-func (s *ApplicationServer) InitializeAccounts(ctx context.Context) error {
-	if !s.Config.Auth.Enabled || s.AccountRepository != nil {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, accountSetupTimeout)
-	defer cancel()
-	repository := user.NewSQLiteAccountRepository(s.Database)
-	if err := repository.Initialize(ctx); err != nil {
-		return err
-	}
-	s.AccountRepository = repository
 	return nil
 }
 

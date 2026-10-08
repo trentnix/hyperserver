@@ -101,6 +101,13 @@ http:
 
 # Authentication services and account-token settings.
 auth:
+  # Account persistence, separate from the login providers under services.
+  accountStorage:
+    # Empty or omitted selects sqlite, which borrows database.connection.
+    # Custom names must be registered by the application before account initialization.
+    provider: sqlite
+    # Provider-specific settings. The built-in SQLite provider accepts none.
+    options: {}
   # Capacity for each authentication mutation route, independent of HTTP rate-limit settings.
   rateLimit:
     # Maximum tracked client IPs per route. Defaults to 4096. Must be positive.

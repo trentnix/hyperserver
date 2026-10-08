@@ -57,7 +57,15 @@ func cleanup(ctx context.Context, cfg *config.Config, limit int) (sessions, toke
 		return 0, 0, fmt.Errorf("cleanup batch size must be positive")
 	}
 	if cfg.Auth.Enabled {
-		tokens, err = cleanupTokens(ctx, cfg.Database, limit)
+		settings := cfg.Auth.AccountStorage
+		switch {
+		case settings.Provider != "" && settings.Provider != "sqlite":
+			err = fmt.Errorf("account-token cleanup supports only the sqlite account provider")
+		case len(settings.Options) != 0:
+			err = fmt.Errorf("auth.accountStorage.options: sqlite uses database configuration and accepts no options")
+		default:
+			tokens, err = cleanupTokens(ctx, cfg.Database, limit)
+		}
 	}
 	for _, provider := range cfg.HTTP.Session.Types {
 		if !strings.EqualFold(provider, "sqliteStore") {

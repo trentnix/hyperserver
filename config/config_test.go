@@ -87,6 +87,33 @@ func TestEnvironmentProviderOptions(t *testing.T) {
 	}
 }
 
+func TestAccountStorageConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml, provider, connection string
+		env                              map[string]string
+	}{
+		{name: "omitted", yaml: "{}"},
+		{name: "file", yaml: "auth:\n  accountStorage:\n    provider: custom\n    options:\n      connection: file-value\n", provider: "custom", connection: "file-value"},
+		{name: "environment only", yaml: "{}", env: map[string]string{"HYPERSERVER_AUTH_ACCOUNTSTORAGE_PROVIDER": "custom", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION": "env-value"}, provider: "custom", connection: "env-value"},
+		{name: "environment override", yaml: "auth:\n  accountStorage:\n    provider: sqlite\n    options:\n      connection: file-value\n", env: map[string]string{"HYPERSERVER_AUTH_ACCOUNTSTORAGE_PROVIDER": "custom", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION": "env-value"}, provider: "custom", connection: "env-value"},
+		{name: "empty option override", yaml: "auth:\n  accountStorage:\n    provider: custom\n    options:\n      connection: file-value\n", env: map[string]string{"HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION": ""}, provider: "custom"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanConfigEnvironment(t)
+			for key, value := range tc.env {
+				t.Setenv(key, value)
+			}
+			cfg, err := loadTestConfig(t, tc.yaml)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.Auth.AccountStorage; got.Provider != tc.provider || got.Options["connection"] != tc.connection {
+				t.Fatalf("account storage configuration = %+v", got)
+			}
+		})
+	}
+}
+
 func TestPublicOriginConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name, yaml, override, want string

@@ -62,6 +62,7 @@ type (
 
 	// AuthConfig selects authentication providers, registration policy, and account-token settings.
 	AuthConfig struct {
+		AccountStorage               AccountStorageConfig   // Selects account persistence, separate from authentication services.
 		RateLimit                    *ModuleRateLimitConfig // Capacity for each authentication mutation route. Nil uses defaults.
 		Enabled                      bool                   // Enables authentication routes and provider initialization.
 		RegistrationEnabled          bool                   // Allows new accounts. Defaults to false without disabling existing-account recovery.
@@ -73,6 +74,12 @@ type (
 		ResetRequiresNewCredentials  bool
 		RegisterRequiresVerification bool                         // Requires configured verification delivery when registration is enabled.
 		Services                     map[string]map[string]string `mapstructure:"services"`
+	}
+
+	// AccountStorageConfig selects one account repository provider and its options.
+	AccountStorageConfig struct {
+		Provider string            // Case-sensitive provider name. Empty selects sqlite.
+		Options  map[string]string // Validated by the selected provider. SQLite accepts no options.
 	}
 
 	// DatabaseConfig stores the database configuration

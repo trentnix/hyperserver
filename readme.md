@@ -49,6 +49,37 @@ Use [config-template.yaml](config-template.yaml) as the starting point for a loc
 
 To exercise two storage platforms together, run `go run ./cmd/web -contact-directory ./tmp/contacts`. Accounts stay in SQLite, while the site saves contacts as individual JSON files in a private directory. The file provider requires hard-link support. Without this flag, contacts also use SQLite. This is reference-application wiring, not a framework-wide storage setting.
 
+### Account storage
+
+`auth.accountStorage.provider` selects account persistence, separate from the login providers under `auth.services`. Empty or omitted selects `sqlite`, which uses the application-owned `database.connection`. SQLite accepts no `auth.accountStorage.options`. Unknown provider names stop startup when authentication is enabled.
+
+Applications can register another provider before calling `InitializeAccounts`:
+
+```go
+if err := app.RegisterAccountProvider("company", openCompanyAccounts); err != nil {
+    return err
+}
+if err := app.InitializeAccounts(ctx); err != nil {
+    return err
+}
+```
+
+`openCompanyAccounts` is an application-supplied function with the [AccountProvider](pkg/server/accounts.go) signature. It receives the startup context and a copy of the configured options. It must return an initialized `user.AccountRepository`, an optional cleanup function for resources it owns, and an error. HyperServer calls cleanup after failed setup or during shutdown after requests drain. Borrowed pools must not be closed by provider cleanup.
+
+Select the registered name and its options in configuration:
+
+```yaml
+auth:
+  accountStorage:
+    provider: company
+    options:
+      connection: your-provider-connection
+```
+
+Provider registrations belong to one application. Names are case-sensitive, and `sqlite` is reserved. Supplying `app.AccountRepository` directly bypasses selection and initialization. The supplier must initialize that repository and close any resources the application does not already own. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
+
+`cmd/cleanup` supports account-token cleanup only for SQLite. With another account provider, it reports an error without touching SQLite account tokens. Session cleanup still runs.
+
 ### Registration and email
 
 Registration is disabled by default. With `auth.enabled`, set `auth.registrationEnabled: true` to allow new accounts. Existing accounts can log in and reset passwords when registration is disabled.
