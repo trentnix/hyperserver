@@ -1,6 +1,6 @@
 // Package content combines page data and templates into full-page or HTMX responses.
 // Content can render its own templates or use a shared content manager. Templates
-// are currently parsed on each render, and rendering errors can follow partial output.
+// are currently parsed on each render. Template output is buffered before delivery.
 package content
 
 import (
@@ -160,8 +160,10 @@ func (c *Content) AddLogMessages(messages ...string) {
 
 // Render parses the selected templates and writes a full page or HTMX fragment.
 // Manager templates precede request-specific templates. Values are escaped by html/template
-// unless marked as trusted content. Render can return an error after writing partial output.
-// Callers must configure response headers before rendering. HTMX.Response is not applied here.
+// unless marked as trusted content. Template failures leave the status and body unwritten.
+// Content headers are applied only after rendering succeeds. Delivery errors can
+// still follow partial writes. Call before committing the response. For streaming,
+// write directly to the ResponseWriter. HTMX.Response is not applied here.
 func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	var managerLayouts, managerContents, managerComponents []TemplatePath
 	if c.ContentManager != nil {
@@ -203,11 +205,6 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		return NewErrNoTemplates(fmt.Errorf("No templates have been set"))
 	}
 
-	// set the headers
-	for k, v := range c.Headers {
-		w.Header().Set(k, v)
-	}
-
 	templatePaths := templatesToStrings(templates)
 	rootTemplateName := filepath.Base(templatePaths[0])
 
@@ -242,13 +239,19 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		return NewErrParsingTemplates(err)
 	}
 
-	if c.ResponseStatusCode != 0 && c.ResponseStatusCode != 200 {
-		w.WriteHeader(c.ResponseStatusCode)
+	var body bytes.Buffer
+	err = tmpl.ExecuteTemplate(&body, rootTemplateName, c)
+	if err != nil {
+		return NewErrRenderingTemplates(err)
 	}
 
-	// render the template
-	err = tmpl.ExecuteTemplate(w, rootTemplateName, c)
-	if err != nil {
+	for k, v := range c.Headers {
+		w.Header().Set(k, v)
+	}
+	if c.ResponseStatusCode != 0 && c.ResponseStatusCode != http.StatusOK {
+		w.WriteHeader(c.ResponseStatusCode)
+	}
+	if _, err := body.WriteTo(w); err != nil {
 		return NewErrRenderingTemplates(err)
 	}
 

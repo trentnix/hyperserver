@@ -139,6 +139,42 @@ func TestHTTPSiteQueuedErrors(t *testing.T) {
 	})
 }
 
+func TestHTTPPageRenderFailureReturnsOnlyErrorPage(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		path := filepath.Join(t.TempDir(), "broken-page.html")
+		if err := os.WriteFile(path, []byte(`<p>partial-success-output</p>{{index .Data 99}}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cm := *h.app.ContentManager
+		cm.RenderNotifications = false
+		cm.Layouts = map[string][]content.TemplatePath{
+			"page": {content.TemplatePath(path)}, "htmx": {content.TemplatePath(path)},
+		}
+		h.app.Web.HandleFunc("GET /test/render-failure", func(w http.ResponseWriter, r *http.Request) {
+			page := content.NewManagedContent(r, &cm)
+			page.ResponseStatusCode = http.StatusCreated
+			page.Headers = map[string]string{"HX-Redirect": "/success", "Content-Length": "999"}
+			page.Data = []string{}
+			if err := page.Render(w, r); err != nil {
+				h.app.ContentManager.HandleError(w, r, "Unable to display this page", err, http.StatusInternalServerError)
+			}
+		})
+		for _, htmx := range []bool{false, true} {
+			w := h.request(http.MethodGet, "/test/render-failure", nil, htmx)
+			body := w.Body.String()
+			if w.Code != http.StatusInternalServerError || !strings.Contains(body, "Unable to display this page") || strings.Contains(body, "partial-success-output") || strings.Contains(body, path) {
+				t.Fatalf("htmx=%t: status=%d, body=%q", htmx, w.Code, body)
+			}
+			if strings.Contains(body, "<!DOCTYPE html>") == htmx {
+				t.Fatal("error rendered the wrong page/fragment representation")
+			}
+			if w.Header().Get("HX-Redirect") != "" || w.Header().Get("Content-Length") != "" || w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("error inherited successful-render headers: %v", w.Header())
+			}
+		}
+	})
+}
+
 func TestHTTPSiteErrorRenderFailure(t *testing.T) {
 	for _, failure := range []string{"missing template", "invalid template", "execution failure"} {
 		t.Run(failure, func(t *testing.T) {

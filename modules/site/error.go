@@ -55,8 +55,8 @@ func (m *SiteModule) renderError(w http.ResponseWriter, r *http.Request, notific
 	page.AddContent(errorPageTemplate)
 	page.Data = notifications
 
-	// Buffer this error page so a template failure cannot commit a partial response
-	// or recursively invoke HandleError. Other rendering paths are unchanged.
+	// Stage the error page separately to control its status, headers, and HEAD body.
+	// Rendering failure uses plain text without recursively invoking HandleError.
 	buffer := &errorPageBuffer{headers: make(http.Header)}
 	w.Header().Set("Cache-Control", "no-store")
 	if err := page.Render(buffer, r); err != nil {
