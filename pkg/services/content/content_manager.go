@@ -23,6 +23,11 @@ type (
 		// Components maps response types to reusable helper template files.
 		Components map[string][]TemplatePath
 
+		// BuildLayoutData optionally supplies request-specific data for shared layouts.
+		// Configure it before serving requests. It must be concurrency-safe and
+		// return request-owned or immutable values. A nil request skips the callback.
+		BuildLayoutData func(*http.Request) any
+
 		// HomeURL is the default home-page redirect destination.
 		HomeURL string
 		// AuthURL is the login-page redirect destination.

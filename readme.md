@@ -89,6 +89,8 @@ Registration is disabled by default. With `auth.enabled`, set `auth.registration
 
 Account verification and password reset use emailed, single-use links. If registration requires verification, startup validates the delivery configuration. Failed delivery leaves the account pending verification so the user can log in and request another email.
 
+Users who still need verification land on `/auth/request/verify` after login. The page explains restricted access and offers a resend form. Signed-in users can return to that page at any time. Only submitting the form sends email.
+
 Mail is sent during the request. `auth.resetMinimumResponseTime` sets the minimum response time for admitted, valid password-reset submissions, defaulting to `2s`. Set it to `0` to disable the wait. Slower requests finish without an additional wait, and `mail.timeout` remains independent. Timing tests under load are still needed.
 
 HyperServer does not save pending delivery work or retry it after a restart. If no email arrives, request another password reset or sign in to resend verification.

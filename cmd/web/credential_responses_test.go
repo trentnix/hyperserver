@@ -119,7 +119,7 @@ func TestHTTPAuthCachePolicy(t *testing.T) {
 			for _, path := range []string{
 				"/auth/login", "/auth/register", "/auth/reset/request/email",
 				"/auth/login/missing", "/auth/reset/email?token=invalid", "/auth/verify?token=invalid",
-				"/auth/change/email",
+				"/auth/change/email", "/auth/request/verify",
 			} {
 				assertNoStore(t, h.request(http.MethodGet, path, nil, htmx))
 			}
@@ -128,9 +128,11 @@ func TestHTTPAuthCachePolicy(t *testing.T) {
 			fields.Set("email", fmt.Sprintf("mail-failure-%t@example.invalid", htmx))
 			w := h.request(http.MethodPost, "/auth/register/email", fields, htmx)
 			assertNoStore(t, w)
-			assertBlankPasswordFields(t, w.Body.String(), fields.Get("password"))
-			if !strings.Contains(w.Body.String(), "verification email delivery failed") {
-				t.Fatal("mail failure did not redisplay the form")
+			if strings.Contains(w.Body.String(), fields.Get("password")) || strings.Contains(w.Body.String(), `type="password"`) {
+				t.Fatal("mail failure exposed credentials or offered another registration")
+			}
+			if !strings.Contains(w.Body.String(), "we could not send the verification email") {
+				t.Fatal("mail failure did not explain account recovery")
 			}
 		}
 		h.establishSession(t, h.seedUser(t, "signed-in@example.invalid"))

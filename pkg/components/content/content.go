@@ -60,6 +60,9 @@ type (
 		// Data contains the data that should be rendered to any available templates
 		Data any
 
+		// LayoutData holds request-specific layout inputs, separate from page Data.
+		LayoutData any
+
 		// ContentManager contains layouts, content, and components that may be used
 		// across the application and need to be combined when the Content is rendered
 		ContentManager *content_services.ContentManagerService
@@ -109,6 +112,9 @@ func NewManagedContent(r *http.Request, cm *content_services.ContentManagerServi
 	c.ContentManager = cm
 	c.Site = c.ContentManager.AppName
 	c.Title = c.ContentManager.AppTitle
+	if r != nil && cm.BuildLayoutData != nil {
+		c.LayoutData = cm.BuildLayoutData(r)
+	}
 
 	return c
 }

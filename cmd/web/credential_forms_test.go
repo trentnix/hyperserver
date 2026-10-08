@@ -63,16 +63,27 @@ func TestBrowserNativeCredentialForms(t *testing.T) {
 			{path: "/auth/login/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}}},
 			{path: "/auth/register/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}, "passwordMatch": {secret}}},
 			{path: "/auth/change/email", fields: url.Values{"oldPassword": {secret}, "newPassword": {secret}, "newPasswordMatch": {secret}}},
+			{path: "/auth/logout", fields: url.Values{}},
 		}
 		for i := range forms {
 			if forms[i].path == "/auth/change/email" {
 				h.establishSession(t, h.seedUser(t, "native@example.invalid"))
 			}
-			w := h.request(http.MethodGet, forms[i].path, nil, true)
+			path := forms[i].path
+			if path == "/auth/logout" {
+				path = "/" // Logout is a POST form in the full-page navigation.
+			}
+			w := h.request(http.MethodGet, path, nil, path != "/")
 			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "<form") {
 				t.Fatalf("render %s: status %d", forms[i].path, w.Code)
 			}
 			forms[i].body = w.Body.String()
+			if forms[i].path == "/auth/logout" {
+				forms[i].body = regexp.MustCompile(`(?s)<form class="logout-form".*?</form>`).FindString(forms[i].body)
+				if forms[i].body == "" {
+					t.Fatal("navigation logout form is missing")
+				}
+			}
 		}
 
 		ready := make(chan struct{})

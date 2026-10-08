@@ -32,6 +32,7 @@ func (s *verificationTestAuthService) SendVerificationEmail(context.Context, *us
 }
 
 func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
+	t.Chdir("..")
 	previousServices, previousLogOutput := authServices, log.Writer()
 	t.Cleanup(func() {
 		authServices = previousServices
@@ -51,6 +52,9 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 			sender := new(verificationTestAuthService)
 			authServices = []AuthService{sender}
 			manager := &AuthManager{httpConfig: config.HTTPConfig{ListenHost: "localhost", Port: 8080}, contentManager: &content_services.ContentManagerService{
+				Layouts: map[string][]content_services.TemplatePath{
+					content_services.PageType: {"modules/site/templates/html/layouts/partial.html"},
+				},
 				HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
 					if err != nil {
 						t.Errorf("internal error reached renderer: %v", err)
@@ -115,7 +119,7 @@ func TestAuthRouteMethods(t *testing.T) {
 		{"/auth/register", "/auth/register", true, false},
 		{"/auth/register/email", "/auth/register/{authType}", true, true},
 		{"/auth/verify", "/auth/verify", true, true},
-		{"/auth/request/verify", "/auth/request/verify", false, true},
+		{"/auth/request/verify", "/auth/request/verify", true, true},
 		{"/auth/reset/request/email", "/auth/reset/request/{authType}", true, true},
 		{"/auth/reset/email", "/auth/reset/{authType}", true, true},
 		{"/auth/change/email", "/auth/change/{authType}", true, true},

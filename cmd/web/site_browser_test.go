@@ -19,6 +19,7 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -32,12 +33,13 @@ func TestBrowserSiteErrors(t *testing.T) {
 	runHTTPScenarioWithTimeout(t, 75*time.Second, func(h *httpHarness) {
 		// Render the real layout, changing only HTMX's URL to a local copy. The
 		// browser still checks the layout's integrity attribute when loading it.
-		page := content.NewManagedContent(httptest.NewRequest(http.MethodGet, "/", nil), h.app.ContentManager)
+		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.SessionManager)
+		page := content.NewManagedContent(r, h.app.ContentManager)
 		page.PartialName = "test.browser.errors"
 		page.SystemMessages = []messages.SystemMessage{messages.NewSystemMessage(`</script><script>window.systemMessageInjected=true</script>`, messages.SystemMessageTypeDebug)}
 		page.AddContent("modules/site/testdata/error-responses.html")
 		w := httptest.NewRecorder()
-		if err := page.Render(w, httptest.NewRequest(http.MethodGet, "/", nil)); err != nil {
+		if err := page.Render(w, r); err != nil {
 			t.Fatal(err)
 		}
 		html := w.Body.String()

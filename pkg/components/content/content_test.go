@@ -26,6 +26,36 @@ func renderTemplateFile(t *testing.T, name, text string) TemplatePath {
 
 type failingTemplateData struct{ err error }
 
+func TestManagedContentLayoutData(t *testing.T) {
+	cm := contentservice.NewContentManager()
+	cm.BuildLayoutData = func(r *http.Request) any {
+		return map[string]string{"path": r.URL.Path}
+	}
+	path := renderTemplateFile(t, "layout.html", `{{.LayoutData.path}}:{{.Data}}`)
+	for _, name := range []string{"first", "second"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequest(http.MethodGet, "/"+name, nil)
+			c := NewManagedContent(r, cm)
+			c.Data = "<page data>"
+			c.AddLayout(path)
+			w := httptest.NewRecorder()
+			if err := c.Render(w, r); err != nil {
+				t.Fatal(err)
+			}
+			if got, want := w.Body.String(), "/"+name+":&lt;page data&gt;"; got != want {
+				t.Fatalf("rendered %q, want %q", got, want)
+			}
+		})
+	}
+	if c := NewManagedContent(nil, cm); c.LayoutData != nil {
+		t.Fatal("nil request should not invoke the layout data callback")
+	}
+	if c := NewManagedContent(httptest.NewRequest(http.MethodGet, "/", nil), contentservice.NewContentManager()); c.LayoutData != nil {
+		t.Fatal("layout data should be optional")
+	}
+}
+
 func (d failingTemplateData) Fail() (string, error) { return "", d.err }
 
 // Track explicit and implicit commits, including an empty Write.

@@ -396,7 +396,7 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 			t.Fatal("disabling registration broke password recovery")
 		}
 		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
-		if w.Header().Get("HX-Redirect") != "/" {
+		if w.Header().Get("HX-Redirect") != "/auth/request/verify" {
 			t.Fatal("disabling registration broke login")
 		}
 		for _, htmx := range []bool{false, true} {
@@ -486,14 +486,14 @@ func TestHTTPRegistrationCanRecoverFromMailFailure(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		h.mail.err = errors.New("delivery temporarily unavailable")
 		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
-		assertFormRejected(t, w, "Your account was created, but verification email delivery failed.")
+		assertFormRejected(t, w, "Your account was created, but we could not send the verification email.")
 		if len(h.mail.snapshot()) != 1 {
 			t.Fatal("registration did not attempt delivery")
 		}
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
 		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
-		if w.Header().Get("HX-Redirect") != "/" {
+		if w.Header().Get("HX-Redirect") != "/auth/request/verify" {
 			t.Fatal("pending account could not log in to request verification")
 		}
 		h.mail.err = nil
@@ -526,7 +526,7 @@ func TestHTTPRegistrationMailFailure(t *testing.T) {
 				form := registrationForm()
 				form.Set("email", fmt.Sprintf("mail-failure-%d@example.invalid", i))
 				w := h.request(http.MethodPost, "/auth/register/email", form, true)
-				assertFormRejected(t, w, "Your account was created, but verification email delivery failed.")
+				assertFormRejected(t, w, "Your account was created, but we could not send the verification email.")
 				if len(h.mail.snapshot()) != i+1 {
 					t.Fatalf("mail attempts = %d, want %d", len(h.mail.snapshot()), i+1)
 				}
@@ -861,7 +861,7 @@ func TestHTTPVerificationResendEmailsInstructions(t *testing.T) {
 			t.Fatal(err)
 		}
 		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
-		if w.Header().Get("HX-Redirect") != "/" {
+		if w.Header().Get("HX-Redirect") != "/auth/request/verify" {
 			t.Fatal("login failed")
 		}
 		for i, htmx := range []bool{false, true} {
@@ -1040,13 +1040,13 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
-		if w.Header().Get("HX-Redirect") != "/" {
+		if w.Header().Get("HX-Redirect") != "/auth/request/verify" {
 			t.Fatal("login failed")
 		}
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
 			w = h.request(method, "/auth/request/verify", nil, true)
-			if (w.Code != http.StatusMethodNotAllowed && w.Code != http.StatusNotFound) || len(h.mail.snapshot()) != 0 {
-				t.Error("non-POST resend was not rejected without delivery")
+			if w.Code != http.StatusOK || len(h.mail.snapshot()) != 0 {
+				t.Error("verification page failed or sent mail without a POST")
 			}
 		}
 		for _, htmx := range []bool{false, true} {

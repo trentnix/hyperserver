@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,6 +12,77 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+func TestHTTPVerificationRecoveryNavigation(t *testing.T) {
+	for _, htmx := range []bool{false, true} {
+		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
+			runHTTPScenario(t, func(h *httpHarness) {
+				w := h.request(http.MethodGet, "/auth/request/verify", nil, htmx)
+				if w.Code != http.StatusUnauthorized || len(h.mail.snapshot()) != 0 {
+					t.Fatal("anonymous request exposed verification controls or sent mail")
+				}
+
+				h.mail.err = errors.New("private SMTP failure")
+				w = h.request(http.MethodPost, "/auth/register/email", registrationForm(), htmx)
+				body := w.Body.String()
+				for _, text := range []string{"Your account was created", `href="/auth/login/email"`, "Protected pages remain unavailable"} {
+					if !strings.Contains(body, text) {
+						t.Fatalf("registration failure is missing %q", text)
+					}
+				}
+				if strings.Contains(body, `id="register-form"`) || strings.Contains(body, "private SMTP failure") {
+					t.Fatal("registration failure offered duplicate registration or exposed SMTP details")
+				}
+				w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, htmx)
+				assertRedirectResponse(t, w, "/auth/request/verify", htmx)
+				w = h.request(http.MethodGet, "/auth/request/verify", nil, htmx)
+				if w.Code != http.StatusOK || len(h.mail.snapshot()) != 1 || !strings.Contains(w.Body.String(), "You are signed in") {
+					t.Fatal("pending account did not reach instructions without sending mail")
+				}
+				for _, field := range []string{`method="post"`, `action="/auth/request/verify"`, `hx-post="/auth/request/verify"`, `hx-target="#verification-request"`, `class="verification-panel"`} {
+					if !strings.Contains(w.Body.String(), field) {
+						t.Fatalf("resend form is missing %s", field)
+					}
+				}
+				w = h.request(http.MethodGet, "/auth/change/email", nil, htmx)
+				if w.Code != http.StatusForbidden {
+					t.Fatal("pending account gained access to a protected page")
+				}
+
+				w = h.request(http.MethodPost, "/auth/request/verify", nil, htmx)
+				if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "Send verification email") || w.Header().Get("Cache-Control") != "no-store" {
+					t.Fatal("failed resend did not retain retry controls and an uncached error status")
+				}
+				if w.Header().Get("Content-Type") != "text/html; charset=utf-8" {
+					t.Fatal("failed resend must identify its HTML so HTMX can display it")
+				}
+				if !strings.Contains(w.Body.String(), `verification-status--error`) || !strings.Contains(w.Body.String(), `role="alert"`) {
+					t.Fatal("failed resend did not display an accessible error inside the panel")
+				}
+				h.mail.err = nil
+				w = h.request(http.MethodPost, "/auth/request/verify", nil, htmx)
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Verification email sent") {
+					t.Fatal("successful resend did not explain the next step")
+				}
+				if !strings.Contains(w.Body.String(), `role="status"`) || strings.Contains(w.Body.String(), `verification-status--error`) {
+					t.Fatal("successful resend retained the error presentation")
+				}
+				mail := h.mail.snapshot()
+				link := mailLink(t, mail[len(mail)-1], "/auth/verify")
+				h.assertNoTokenExposure(t, w, link.Query().Get("token"))
+				w = h.request(http.MethodPost, "/auth/verify", link.Query(), htmx)
+				assertRedirectResponse(t, w, "/", htmx)
+				for _, method := range []string{http.MethodGet, http.MethodPost} {
+					w = h.request(method, "/auth/request/verify", nil, htmx)
+					if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "No verification needed") || strings.Contains(w.Body.String(), "Send verification email") || len(h.mail.snapshot()) != len(mail) {
+						t.Fatal("verified account was offered verification or caused more mail")
+					}
+				}
+				h.assertRowCount(t, "user", 1)
+			})
+		})
+	}
+}
 
 func TestHTTPVerificationSingleUseAndResend(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
@@ -54,7 +127,7 @@ func TestHTTPVerificationRequiresConfirmation(t *testing.T) {
 					t.Fatal("confirmation response did not protect the token from caching or referrer disclosure")
 				}
 				if method == http.MethodGet {
-					for _, field := range []string{`method="post"`, `action="/auth/verify"`, `hx-post="/auth/verify"`, `name="token" value="` + link.Query().Get("token") + `"`} {
+					for _, field := range []string{`method="post"`, `action="/auth/verify"`, `hx-post="/auth/verify"`, `hx-target="#verify-account"`, `class="verification-panel"`, `name="token" value="` + link.Query().Get("token") + `"`} {
 						if !strings.Contains(w.Body.String(), field) {
 							t.Fatalf("confirmation form is missing %s", field)
 						}
@@ -104,7 +177,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 						t.Fatal(err)
 					}
 					w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
-					if !strings.Contains(w.Body.String(), "verification email delivery failed") || len(h.mail.snapshot()) != 0 {
+					if !strings.Contains(w.Body.String(), "we could not send the verification email") || len(h.mail.snapshot()) != 0 {
 						t.Fatal("token storage failure was not reported before mail delivery")
 					}
 					h.assertRowCount(t, "user", 1)

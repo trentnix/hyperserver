@@ -1,0 +1,24 @@
+{{ define "auth.page.verification.request" }}
+<div id="verification-request" class="verification-panel" aria-labelledby="verification-title">
+    {{ if .Data.NeedsVerification }}
+    <h1 id="verification-title">Verify your email address</h1>
+    <p>You are signed in. Verify your email address to access protected pages.</p>
+    <p>Open the verification link in your email. If it hasn't arrived, request another below.</p>
+    {{ if .Data.Message }}
+    <p class="verification-status{{ if ge .ResponseStatusCode 400 }} verification-status--error{{ end }}" role="{{ if ge .ResponseStatusCode 400 }}alert{{ else }}status{{ end }}">{{ .Data.Message }}</p>
+    {{ end }}
+    <div class="verification-actions">
+        <form method="post" action="/auth/request/verify" hx-post="/auth/request/verify" hx-target="#verification-request" hx-swap="outerHTML">
+            <button type="submit">Send verification email</button>
+        </form>
+        <a href="{{ .ContentManager.HomeURL }}">Continue to the site</a>
+    </div>
+    {{ else }}
+    <h1 id="verification-title">No verification needed</h1>
+    <p>Your account does not need email verification.</p>
+    <div class="verification-actions">
+        <a href="{{ .ContentManager.HomeURL }}">Continue to the site</a>
+    </div>
+    {{ end }}
+</div>
+{{ end }}

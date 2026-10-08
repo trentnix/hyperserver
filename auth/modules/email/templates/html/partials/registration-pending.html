@@ -1,0 +1,7 @@
+{{ define "auth.partial.email.registration.pending" }}
+<div id="registration-pending" class="container">
+    <h1>Your account is waiting for verification</h1>
+    {{ range .Data.GetErrorMessages }}<p role="alert">{{ .Message }}</p>{{ end }}
+    <a href="/auth/login/email">Sign in to request a verification email</a>
+</div>
+{{ end }}

@@ -373,9 +373,13 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	}
 
 	if a.config.Auth.RegisterRequiresVerification {
+		// The account already exists. Offer sign-in instead of another registration.
+		register.PartialName = "auth.partial.email.registration.pending"
+		register.Contents = []content.TemplatePath{"auth/modules/email/templates/html/partials/registration-pending.html"}
+		const deliveryFailure = "Your account was created, but we could not send the verification email. You can sign in to request another email. Protected pages remain unavailable until you verify your address."
 		createdUser, err := a.accounts.GetByEmail(r.Context(), registerForm.Email)
 		if err != nil || createdUser == nil {
-			form.HandleFormError(w, r, register, registerForm, "Your account was created, but verification email delivery failed. Please login and request a new verification email.", err)
+			form.HandleFormError(w, r, register, registerForm, deliveryFailure, errors.New("verification account lookup failed"))
 			return false
 		}
 
@@ -384,7 +388,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 			err = a.SendVerificationEmail(r.Context(), createdUser, *origin)
 		}
 		if err != nil {
-			form.HandleFormError(w, r, register, registerForm, "Your account was created, but verification email delivery failed. Please login and request a new verification email.", errors.New("verification email delivery failed"))
+			form.HandleFormError(w, r, register, registerForm, deliveryFailure, errors.New("verification email delivery failed"))
 			return false
 		}
 	}

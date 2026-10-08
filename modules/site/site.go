@@ -6,6 +6,7 @@ package module_site
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
@@ -14,6 +15,7 @@ import (
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 type (
@@ -103,6 +105,13 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	m.contentManager.AddPageComponent(navComponentTemplate)
 	m.contentManager.AddPageComponent(notificationsComponentTemplate)
 	m.contentManager.AddPageComponent(consoleMessagesComponentTemplate)
+	authEnabled := s.Config.Auth.Enabled
+	m.contentManager.BuildLayoutData = func(r *http.Request) any {
+		return struct {
+			AuthEnabled   bool
+			Authenticated bool
+		}{authEnabled, user.GetUserFromContext(r.Context()) != nil}
+	}
 
 	m.contentManager.HomeURL = homeURL
 	m.contentManager.AuthURL = authURL

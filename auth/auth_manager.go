@@ -130,6 +130,7 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 
 		// validate a registered user
 		mux.Handle("GET /auth/verify", noStore(http.HandlerFunc(a.GetVerify)))
+		mux.Handle("GET /auth/request/verify", noStore(http.HandlerFunc(a.GetVerificationRequest)))
 		mutations.Handle("POST /auth/verify", noStore(http.HandlerFunc(a.Verify)))
 		mutations.Handle("POST /auth/request/verify", noStore(http.HandlerFunc(a.SendVerificationRequest)))
 
@@ -300,6 +301,9 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	redirectURL = util.SafeRedirectURL(redirectURL, a.contentManager.HomeURL)
+	if u.NeedsVerification() {
+		redirectURL = "/auth/request/verify"
+	}
 
 	// clear the redirect session, it is no longer valid
 	s.End(w, r)
@@ -645,7 +649,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 		}
 		if sender == nil {
 			logVerificationFailure(r, "verification email provider is unavailable")
-			a.contentManager.HandleError(w, r, "Unable to send verification instructions. Please try again later.", nil, http.StatusServiceUnavailable)
+			a.renderVerificationRequest(w, r, true, "Unable to send verification instructions. Please try again later.", http.StatusServiceUnavailable)
 			return
 		}
 		origin, err := util.BuildPublicURL(r, a.httpConfig, "", nil)
@@ -655,11 +659,11 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 		if err != nil {
 			// Provider errors can include tokens or message bodies. Do not expose them.
 			logVerificationFailure(r, "verification email delivery failed")
-			a.contentManager.HandleError(w, r, "Unable to send verification instructions. Please try again later.", nil, http.StatusServiceUnavailable)
+			a.renderVerificationRequest(w, r, true, "Unable to send verification instructions. Please try again later.", http.StatusServiceUnavailable)
 			return
 		}
 	}
-	a.contentManager.HandleMessage(w, r, "If your account needs verification, check your email for instructions.")
+	a.renderVerificationRequest(w, r, authUser.NeedsVerification(), "Verification email sent. Please check your email for instructions.", http.StatusOK)
 }
 
 func logVerificationFailure(r *http.Request, message string) {
