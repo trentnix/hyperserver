@@ -21,6 +21,20 @@ func NewSQLiteAccountRepository(db *sqlx.DB) *SQLiteAccountRepository {
 
 var _ AccountRepository = (*SQLiteAccountRepository)(nil)
 
+// ValidateSQLiteAccountOptions rejects account-specific settings. SQLite uses
+// the application's shared database configuration.
+func ValidateSQLiteAccountOptions(options map[string]string) error {
+	if len(options) != 0 {
+		return errors.New("auth.accountStorage.options: sqlite uses database configuration and accepts no options")
+	}
+	return nil
+}
+
+// DeleteExpiredTokens removes a bounded batch without initializing or closing storage.
+func (s *SQLiteAccountRepository) DeleteExpiredTokens(ctx context.Context, limit int) (int64, error) {
+	return DeleteExpiredTokens(ctx, s.db, limit)
+}
+
 // Initialize prepares the account schema using the borrowed pool. It can be
 // repeated or retried after failure and never closes the pool.
 func (s *SQLiteAccountRepository) Initialize(ctx context.Context) error {

@@ -147,7 +147,9 @@ Replacement contracts must describe behavior consumers need. SQLite, PostgreSQL,
 
 Use narrow repositories for operations such as finding a user or creating an account. Framework services can use smaller key/value or blob contracts when those match their needs. Do not introduce a universal database or query API.
 
-Authentication uses [AccountRepository](pkg/services/user/account_repository.go) for account and token operations. `auth.accountStorage` selects a provider registered with the application. SQLite borrows the shared pool. Other providers can supply their own cleanup function. Automatic module discovery and dependency resolution remain separate startup work.
+Authentication uses [AccountRepository](pkg/services/user/account_repository.go) for account and token operations. `auth.accountStorage` selects a provider registered with the application. SQLite borrows the shared pool. Other providers can supply a close function for owned resources. Automatic module discovery and dependency resolution remain separate startup work.
+
+Expired-record maintenance is a separate provider capability. Maintenance setup opens storage without creating or migrating tables. Commands invoke maintenance without interpreting database settings.
 
 Specify missing-value errors, uniqueness, concurrency, expiration, and durability where the consumer depends on them. Express transactions or compare-and-swap as required capabilities when necessary. Reject unsupported guarantees instead of silently weakening them.
 

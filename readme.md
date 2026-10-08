@@ -56,7 +56,10 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 Applications can register another provider before calling `InitializeAccounts`:
 
 ```go
-if err := app.RegisterAccountProvider("company", openCompanyAccounts); err != nil {
+if err := app.RegisterAccountProvider("company", server.AccountProvider{
+    Open: openCompanyAccounts,
+    OpenMaintenance: openCompanyTokenMaintenance, // Optional. Opens existing storage only.
+}); err != nil {
     return err
 }
 if err := app.InitializeAccounts(ctx); err != nil {
@@ -64,7 +67,7 @@ if err := app.InitializeAccounts(ctx); err != nil {
 }
 ```
 
-`openCompanyAccounts` is an application-supplied function with the [AccountProvider](pkg/server/accounts.go) signature. It receives the startup context and a copy of the configured options. It must return an initialized `user.AccountRepository`, an optional cleanup function for resources it owns, and an error. HyperServer calls cleanup after failed setup or during shutdown after requests drain. Borrowed pools must not be closed by provider cleanup.
+The application supplies the factories in [AccountProvider](pkg/server/accounts.go). `Open` receives the startup context and a copy of the configured options. It returns an initialized `user.AccountRepository`, an optional close function for resources it owns, and an error. HyperServer calls close after failed setup or during shutdown after requests drain. Borrowed pools must not be closed by the provider.
 
 Select the registered name and its options in configuration:
 
@@ -78,7 +81,7 @@ auth:
 
 Provider registrations belong to one application. Names are case-sensitive, and `sqlite` is reserved. Supplying `app.AccountRepository` directly bypasses selection and initialization. The supplier must initialize that repository and close any resources the application does not already own. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
 
-`cmd/cleanup` supports account-token cleanup only for SQLite. With another account provider, it reports an error without touching SQLite account tokens. Session cleanup still runs.
+`OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/cleanup.go) capability, an optional close function, and an error. It must not create or migrate tables. `CleanupAccountTokens` opens this capability, runs one batch, and closes its resources even when opening or deletion fails. An initialized repository can also implement `TokenMaintenance` directly. A missing capability returns an error rather than silently skipping cleanup.
 
 ### Registration and email
 
@@ -280,7 +283,9 @@ Clients behind a NAT or an unconfigured proxy share an allowance. Memory capacit
 
 ### Expired-record cleanup
 
-Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration and working directory as `cmd/web`. Each run deletes at most 100 expired rows from each selected SQLite session store and, when authentication is enabled, account-token storage. The tables must already exist. Live records and accounts are unchanged.
+Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration and working directory as `cmd/web`. Each run deletes at most 100 expired rows from each selected server-side session store and, when authentication is enabled, account-token storage. Storage providers own maintenance setup and pool handling. The tables must already exist. Live records and accounts are unchanged.
+
+The supplied command includes the built-in providers. A custom account provider must also be registered in the application's maintenance executable. Unknown providers and missing maintenance capabilities produce an error without falling back to SQLite. Independent session cleanup still runs.
 
 Schedule the command externally for regular cleanup. The server does not run cleanup automatically. The command reports deleted counts and exits with an error if either cleanup fails. Expiration checks still reject expired sessions and tokens before cleanup runs.
 

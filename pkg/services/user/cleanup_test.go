@@ -4,9 +4,59 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/trentnix/hyperserver/config"
 )
+
+func TestOpenSQLiteTokenMaintenance(t *testing.T) {
+	for _, scenario := range []string{"success", "canceled", "unsupported driver", "options", "unavailable"} {
+		t.Run(scenario, func(t *testing.T) {
+			cfg := config.DatabaseConfig{Driver: "sqlite3", Connection: filepath.Join(t.TempDir(), "accounts.db")}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var options map[string]string
+			switch scenario {
+			case "canceled":
+				cancel()
+			case "unsupported driver":
+				cfg.Driver = "other"
+			case "options":
+				options = map[string]string{"connection": "unsupported"}
+			case "unavailable":
+				cfg.Connection = filepath.Join(t.TempDir(), "missing", "accounts.db")
+			}
+			maintenance, closeStore, err := OpenSQLiteTokenMaintenance(ctx, cfg, options)
+			if scenario != "success" {
+				if err == nil || maintenance != nil || closeStore != nil {
+					t.Fatalf("failed opening returned resources: %v, %v", maintenance, err)
+				}
+				if scenario == "canceled" && !errors.Is(err, context.Canceled) {
+					t.Fatal("lost cancellation:", err)
+				}
+				return
+			}
+			if err != nil || closeStore == nil {
+				t.Fatal("opening failed:", err)
+			}
+			t.Cleanup(func() { _ = closeStore() })
+			repository := maintenance.(*SQLiteAccountRepository)
+			assertNoAccountTables(t, repository.db)
+			if _, err := maintenance.DeleteExpiredTokens(ctx, 1); err == nil {
+				t.Fatal("maintenance accepted missing schema")
+			}
+			assertNoAccountTables(t, repository.db)
+			if err := closeStore(); err != nil {
+				t.Fatal(err)
+			}
+			if err := repository.db.Ping(); err == nil {
+				t.Fatal("maintenance left its pool open")
+			}
+		})
+	}
+}
 
 func TestTokenCleanupBatches(t *testing.T) {
 	db := userTestDB(t)

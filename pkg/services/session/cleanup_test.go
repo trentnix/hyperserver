@@ -6,9 +6,71 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/trentnix/hyperserver/config"
 )
+
+func TestCleanupExpiredRejectsInvalidLimit(t *testing.T) {
+	for _, limit := range []int{0, -1} {
+		if count, err := CleanupExpired(context.Background(), &config.Config{}, limit); count != 0 || err == nil {
+			t.Fatalf("limit %d: count=%d, error=%v", limit, count, err)
+		}
+	}
+}
+
+func TestSQLiteMaintenanceDoesNotInitializeStorage(t *testing.T) {
+	store, err := openSQLiteMaintenance(context.Background(), map[string]string{
+		"connection": filepath.Join(t.TempDir(), "sessions.db"), "sessiontable": "sessions",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if _, err := store.DeleteExpired(context.Background(), 1); err == nil {
+		t.Fatal("maintenance accepted missing schema")
+	}
+	var tables int
+	if err := store.db.Get(&tables, "SELECT count(*) FROM sqlite_master WHERE type = 'table'"); err != nil || tables != 0 {
+		t.Fatalf("maintenance created tables: count=%d, error=%v", tables, err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.Ping(); err == nil {
+		t.Fatal("maintenance left its pool open")
+	}
+}
+
+func TestSQLiteMaintenanceOpenFailures(t *testing.T) {
+	for _, scenario := range []string{"canceled", "unavailable", "invalid connection"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			connection := filepath.Join(t.TempDir(), "sessions.db")
+			switch scenario {
+			case "canceled":
+				cancel()
+			case "unavailable":
+				connection = filepath.Join(t.TempDir(), "missing", "sessions.db")
+			case "invalid connection":
+				connection += "?_busy_timeout=invalid"
+			}
+			store, err := openSQLiteMaintenance(ctx, map[string]string{"connection": connection, "sessiontable": "sessions"})
+			if err == nil || store != nil {
+				if store != nil {
+					_ = store.Close()
+				}
+				t.Fatalf("failed setup returned a store: %v, %v", store, err)
+			}
+			if scenario == "canceled" && !errors.Is(err, context.Canceled) {
+				t.Fatal("lost cancellation:", err)
+			}
+		})
+	}
+}
 
 func TestSQLiteCleanupBatches(t *testing.T) {
 	store := revocationStore(t)

@@ -38,7 +38,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		s := server.NewApplicationServer()
 		closed := 0
 		s.Config.Auth.AccountStorage.Provider = "custom"
-		if err := s.RegisterAccountProvider("custom", func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
+		if err := s.RegisterAccountProvider("custom", server.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
 			repository := user.NewSQLiteAccountRepository(s.Database)
 			if err := repository.Initialize(ctx); err != nil {
 				return nil, nil, err
@@ -47,7 +47,7 @@ func TestStartupHelperProcess(t *testing.T) {
 				closed++
 				return s.Database.Ping()
 			}, nil
-		}); err != nil {
+		}}); err != nil {
 			t.Fatal(err)
 		}
 		listener, err := net.Listen("tcp", "127.0.0.1:0")

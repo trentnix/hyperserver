@@ -10,14 +10,12 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func main() {
@@ -29,9 +27,6 @@ func main() {
 	}
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Fatal(err)
-	}
-	if err := session.ValidateConfig(&cfg); err != nil {
 		log.Fatal(err)
 	}
 	if cfg.App.WorkingDirectory != "" {
@@ -56,55 +51,8 @@ func cleanup(ctx context.Context, cfg *config.Config, limit int) (sessions, toke
 	if limit < 1 {
 		return 0, 0, fmt.Errorf("cleanup batch size must be positive")
 	}
-	if cfg.Auth.Enabled {
-		settings := cfg.Auth.AccountStorage
-		switch {
-		case settings.Provider != "" && settings.Provider != "sqlite":
-			err = fmt.Errorf("account-token cleanup supports only the sqlite account provider")
-		case len(settings.Options) != 0:
-			err = fmt.Errorf("auth.accountStorage.options: sqlite uses database configuration and accepts no options")
-		default:
-			tokens, err = cleanupTokens(ctx, cfg.Database, limit)
-		}
-	}
-	for _, provider := range cfg.HTTP.Session.Types {
-		if !strings.EqualFold(provider, "sqliteStore") {
-			continue
-		}
-		for name, options := range cfg.HTTP.Session.Stores {
-			if strings.EqualFold(name, provider) {
-				var sessionErr error
-				sessions, sessionErr = cleanupSessions(ctx, options, limit)
-				return sessions, tokens, errors.Join(err, sessionErr)
-			}
-		}
-		return sessions, tokens, errors.Join(err, fmt.Errorf("selected SQLite session store is not configured"))
-	}
-	return sessions, tokens, err
-}
-
-func cleanupTokens(ctx context.Context, cfg config.DatabaseConfig, limit int) (count int64, err error) {
-	db, err := database.Setup(cfg.Driver, cfg.Connection)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { err = errors.Join(err, db.Close()) }()
-	count, err = user.DeleteExpiredTokens(ctx, db, limit)
-	if err != nil {
-		err = fmt.Errorf("clean up account tokens: %w", err)
-	}
-	return
-}
-
-func cleanupSessions(ctx context.Context, options map[string]string, limit int) (count int64, err error) {
-	db, err := database.Setup("sqlite3", options["connection"])
-	if err != nil {
-		return 0, err
-	}
-	defer func() { err = errors.Join(err, db.Close()) }()
-	count, err = session.DeleteExpiredSQLiteSessions(ctx, db, options["sessiontable"], limit)
-	if err != nil {
-		err = fmt.Errorf("clean up sessions: %w", err)
-	}
-	return
+	app := &server.ApplicationServer{Config: cfg}
+	tokens, tokenErr := app.CleanupAccountTokens(ctx, limit)
+	sessions, sessionErr := session.CleanupExpired(ctx, cfg, limit)
+	return sessions, tokens, errors.Join(tokenErr, sessionErr)
 }
