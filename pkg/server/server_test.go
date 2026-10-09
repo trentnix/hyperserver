@@ -85,6 +85,29 @@ func TestApplicationConstructionReturnsErrors(t *testing.T) {
 	}
 }
 
+func TestApplicationsOwnConfiguration(t *testing.T) {
+	cfg := config.Config{Auth: config.AuthConfig{Services: map[string]map[string]string{"email": {"enabled": "true"}}}}
+	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
+	first, err := NewApplicationServer(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewApplicationServer(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Config.Auth.Services["email"]["enabled"] = "false"
+	cfg.HTTP.Session.Types["default"] = "sqliteStore"
+	if second.Config.Auth.Services["email"]["enabled"] != "true" || cfg.Auth.Services["email"]["enabled"] != "true" {
+		t.Fatal("disabling a provider changed another configuration")
+	}
+	for _, app := range []*ApplicationServer{first, second} {
+		if app.Config.HTTP.Session.Types["default"] != "cookieStore" {
+			t.Fatal("source mutation changed application configuration")
+		}
+	}
+}
+
 func TestOptionalServicesInitializeExplicitly(t *testing.T) {
 	cfg := config.Config{Database: config.DatabaseConfig{Driver: "unknown"}, Mail: config.MailConfig{Timeout: -time.Second}}
 	cfg.HTTP.Session.Types = map[string]string{"default": "unknown"}

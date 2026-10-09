@@ -3,13 +3,11 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func TestHTTPNavigationLogout(t *testing.T) {
@@ -57,11 +55,7 @@ func TestHTTPNavigationLogout(t *testing.T) {
 
 func TestSiteNavigationWithoutAuthentication(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
-		// Test the site's navigation without the reference application's
-		// authentication middleware, which currently requires an account repository.
-		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.SessionManager)
-		w := httptest.NewRecorder()
-		h.app.Web.ServeHTTP(w, r)
+		w := h.request(http.MethodGet, "/", nil, false)
 		if w.Code != http.StatusOK || strings.Contains(w.Body.String(), ">Log in</a>") || strings.Contains(w.Body.String(), `action="/auth/logout"`) {
 			t.Fatalf("disabled authentication: status %d, body %s", w.Code, w.Body.String())
 		}

@@ -26,12 +26,10 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
-	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
-	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // HTTP scenarios use subprocesses to isolate working directories and environment
@@ -221,13 +219,11 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 	if err != nil {
 		t.Fatal(err)
 	}
-	cm := content.NewContentManager()
-	cm.Configure(cfg)
-	cm.HandleMessage, cm.HandleError, cm.HandleNotFound = util.HttpMessage, util.HttpError, util.HttpNotFound
-	app := &server.ApplicationServer{
-		Config: cfg, Database: db, Web: http.NewServeMux(),
-		ContentManager: cm, Mail: mailClient,
+	app, err := server.NewApplicationServer(*cfg)
+	if err != nil {
+		t.Fatal(err)
 	}
+	app.Database, app.Mail = db, mailClient
 	if err := app.InitializeSessions(context.Background()); err != nil {
 		t.Fatal(err)
 	}

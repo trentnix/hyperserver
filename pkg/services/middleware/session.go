@@ -11,9 +11,9 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// LoadSessionManagement attaches the session manager, then loads the authenticated
-// user into the request context. It requires non-nil account-reader and session dependencies.
-func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionManager) func(http.Handler) http.Handler {
+// WithSessionManager attaches the application's session manager without loading
+// an identity or requiring account storage. A missing manager returns HTTP 500.
+func WithSessionManager(s *session.SessionManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var sessionManagerErr error
@@ -22,7 +22,16 @@ func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionMa
 				util.HttpError(w, r, "There was an error loading the session manager", sessionManagerErr, http.StatusInternalServerError)
 				return
 			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
+// LoadSessionManagement attaches the session manager, then loads the authenticated
+// user into the request context. It requires non-nil account-reader and session dependencies.
+func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionManager) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return WithSessionManager(s)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var authUserErr error
 			r, authUserErr = loadAuthenticatedUser(r, accounts)
 			if authUserErr != nil {
@@ -38,7 +47,7 @@ func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionMa
 			}
 
 			next.ServeHTTP(w, r)
-		})
+		}))
 	}
 }
 

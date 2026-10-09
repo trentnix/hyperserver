@@ -44,12 +44,13 @@ type (
 // NewApplicationServer validates shared settings and creates routing and rendering
 // services. It does not load files, open storage, or initialize optional services.
 // The caller initializes required services and modules before serving HTTP, then
-// calls Shutdown after requests drain. Configuration maps must not be mutated
-// concurrently or shared with applications that change them.
+// calls Shutdown after requests drain. The server owns a configuration copy.
+// Configure that copy before initializing services and serving requests.
 func NewApplicationServer(cfg config.Config) (*ApplicationServer, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("application configuration: %w", err)
 	}
+	cfg = cfg.Clone()
 	s := &ApplicationServer{Config: &cfg, Web: http.NewServeMux()}
 	s.initContentManager()
 	return s, nil

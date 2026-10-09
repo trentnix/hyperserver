@@ -53,9 +53,11 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 
 ### Application startup
 
-`server.NewApplicationServer(cfg)` accepts a `config.Config` and returns `(*ApplicationServer, error)`. It validates shared settings and creates the router and content manager. It does not read configuration files or initialize database, session, authentication, or mail services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
+`server.NewApplicationServer(cfg)` accepts a `config.Config` and returns `(*ApplicationServer, error)`. It validates shared settings, copies the configuration including nested maps and pointers, and creates the router and content manager. Changes to the source configuration do not change the application. Configure services before serving requests. Construction does not read configuration files or initialize database, session, authentication, or mail services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
 
 Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(ctx)`, and `InitializeMail()` only for services the application needs, before initializing their consumers. The database initializer checks connectivity with a ten-second deadline. Mail initialization does not contact SMTP, and consumers that require delivery must validate its configuration. Drain requests before calling `Shutdown()`. The reference application explicitly initializes services for its site and authentication features, then uses `handlers.Initialize` for module dependencies and initialization.
+
+`middleware.WithSessionManager` attaches sessions without requiring authentication or account storage. `LoadSessionManagement` also loads the authenticated user and requires account storage. The reference application chooses between them using `auth.enabled`.
 
 ### Module registration
 

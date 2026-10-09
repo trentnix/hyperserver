@@ -133,8 +133,12 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 	if err != nil {
 		return nil, fmt.Errorf("http.hstsMaxAge: %w", err)
 	}
+	loadSession := middleware.WithSessionManager(s.SessionManager)
+	if s.Config.Auth.Enabled {
+		loadSession = middleware.LoadSessionManagement(s.AccountRepository, s.SessionManager)
+	}
 	handler := middleware.ChainMiddleware(s.Web,
-		middleware.LoadSessionManagement(s.AccountRepository, s.SessionManager),
+		loadSession,
 		http.NewCrossOriginProtection().Handler,
 	)
 	if limit := s.Config.HTTP.SharedRateLimit; limit.Enabled {
