@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -34,8 +35,10 @@ func TestStartupHelperProcess(t *testing.T) {
 		checkRunShutdown(t, os.Getenv("HS_STARTUP_TEST_HELPER") == "shutdown-tls")
 	case "signals":
 		runSignalTestHelper(t)
+	case "relative-database", "invalid-working-directory":
+		checkStartupStoragePaths(t)
 	case "listen-failure":
-		s := server.NewApplicationServer()
+		s := newStartupApplication(t)
 		closed := 0
 		s.Config.Auth.AccountStorage.Provider = "custom"
 		if err := s.RegisterAccountProvider("custom", server.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
@@ -76,15 +79,18 @@ func TestStartupHelperProcess(t *testing.T) {
 		fmt.Println("listen failure cleanup passed")
 	case "initialize":
 		// Exercise successful initialization without binding a network port.
-		s := server.NewApplicationServer()
+		s := newStartupApplication(t)
 		defer s.Shutdown()
-		if err := s.Database.Ping(); err != nil {
-			t.Fatal(err)
-		}
 		if _, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Chdir(s.Config.App.WorkingDirectory); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.InitializeDatabase(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.InitializeMail(); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.InitializeSessions(context.Background()); err != nil {
@@ -122,6 +128,20 @@ func TestStartupHelperProcess(t *testing.T) {
 	default:
 		return
 	}
+}
+
+// These subprocess scenarios exercise the reference application's services.
+func newStartupApplication(t *testing.T) *server.ApplicationServer {
+	t.Helper()
+	cfg, err := config.GetConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := server.NewApplicationServer(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
 }
 
 const startupTestConfig = `http:
@@ -214,7 +234,7 @@ func TestStartupAcceptsValidConfiguration(t *testing.T) {
 	}
 }
 
-func TestStartupRejectsUnavailableAccountStorage(t *testing.T) {
+func TestStartupRejectsUnavailableApplicationDatabase(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -222,8 +242,8 @@ func TestStartupRejectsUnavailableAccountStorage(t *testing.T) {
 	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
 	connection := filepath.Join(t.TempDir(), "missing-directory", "accounts.db")
 	output, err := runStartupProcess(t, yaml, "1", "HYPERSERVER_DATABASE_CONNECTION="+connection)
-	if err == nil || !strings.Contains(string(output), "failed to prepare account storage") {
-		t.Fatalf("unavailable account storage: error = %v, output = %s", err, output)
+	if err == nil || !strings.Contains(string(output), "failed to prepare application database") {
+		t.Fatalf("unavailable application database: error = %v, output = %s", err, output)
 	}
 	if strings.Contains(string(output), "Starting server at") {
 		t.Fatalf("startup attempted to listen with unavailable account storage: %s", output)
@@ -326,7 +346,9 @@ func TestStartupRejectsInvalidConfiguration(t *testing.T) {
 			if !strings.Contains(string(output), tc.want) {
 				t.Fatalf("output = %s, want %q", output, tc.want)
 			}
-			// The constructor still uses its existing panic path for configuration errors.
+			if strings.Contains(string(output), "panic:") {
+				t.Fatalf("startup panicked instead of reporting an error: %s", output)
+			}
 			if strings.Contains(string(output), "Starting server at") {
 				t.Fatalf("startup attempted to listen: %s", output)
 			}

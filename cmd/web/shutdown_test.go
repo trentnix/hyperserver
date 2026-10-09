@@ -64,7 +64,7 @@ func testRunDrainsRequestsBeforeClosingPool(t *testing.T, scheme string) {
 // checkRunShutdown runs in a subprocess to isolate registries, stdout, and cwd.
 func checkRunShutdown(t *testing.T, secure bool) {
 	t.Helper()
-	s := server.NewApplicationServer()
+	s := newStartupApplication(t)
 	s.Config.HTTP.Port = 0
 	scheme := "http"
 	transport := &http.Transport{}
@@ -301,7 +301,7 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 }
 
 func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
-	for _, failure := range []string{"listen address", "TLS files", "session setup", "account setup"} {
+	for _, failure := range []string{"listen address", "mail setup", "TLS files", "session setup", "account setup"} {
 		t.Run(failure, func(t *testing.T) {
 			db := shutdownTestDB(t)
 			s := &server.ApplicationServer{Database: db, Config: &config.Config{}}
@@ -310,6 +310,8 @@ func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
 			switch failure {
 			case "listen address":
 				s.Config.HTTP.ListenHost = "0.0.0.0"
+			case "mail setup":
+				s.Config.Mail.Timeout = -time.Second
 			case "TLS files":
 				s.Config.HTTP.TLS.Enabled = true
 				s.Config.HTTP.TLS.Certificate = "missing-certificate.pem"

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -37,7 +38,15 @@ func main() {
 		stop()
 		fmt.Println("Shutting down. Send another interrupt to force exit.")
 	}()
-	if err := run(ctx, server.NewApplicationServer()); err != nil {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	app, err := server.NewApplicationServer(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := run(ctx, app); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -52,12 +61,20 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 		return err
 	}
 
-	// if the working directory is configured, set the working directory
+	// Resolve relative resource paths before any service opens files or connections.
 	if s.Config.App.WorkingDirectory != "" {
-		err := util.SetWorkingDirectory(s.Config.App.WorkingDirectory)
-		if err != nil {
+		if err := util.SetWorkingDirectory(s.Config.App.WorkingDirectory); err != nil {
 			return err
 		}
+	}
+
+	// The reference site's contact storage uses this pool. Mail is used by its
+	// sample routes and the email authentication provider. Neither is a core requirement.
+	if err := s.InitializeDatabase(ctx); err != nil {
+		return fmt.Errorf("failed to prepare application database: %w", err)
+	}
+	if err := s.InitializeMail(); err != nil {
+		return fmt.Errorf("failed to prepare mail: %w", err)
 	}
 
 	tlsConfig, err := listenerTLS(s.Config.HTTP)

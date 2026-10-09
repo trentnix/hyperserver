@@ -1,6 +1,6 @@
-// Package server assembles configuration, storage, routing, and shared services.
-// The current constructor initializes services unconditionally and panics on setup
-// errors. It does not start an HTTP listener or initialize registered modules.
+// Package server assembles routing, rendering, and application-owned services.
+// Applications explicitly initialize the services their modules require before
+// accepting requests and close them after requests drain.
 package server
 
 import (
@@ -41,19 +41,18 @@ type (
 	}
 )
 
-// NewApplicationServer loads configuration and creates the database pool, router,
-// content manager, and mail client. It panics on initialization errors. The caller
-// must initialize sessions, accounts, and modules, serve HTTP, and close owned resources.
-func NewApplicationServer() *ApplicationServer {
-	s := new(ApplicationServer)
-
-	s.initConfig()
-	s.initDatabase()
-	s.initWeb()
+// NewApplicationServer validates shared settings and creates routing and rendering
+// services. It does not load files, open storage, or initialize optional services.
+// The caller initializes required services and modules before serving HTTP, then
+// calls Shutdown after requests drain. Configuration maps must not be mutated
+// concurrently or shared with applications that change them.
+func NewApplicationServer(cfg config.Config) (*ApplicationServer, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("application configuration: %w", err)
+	}
+	s := &ApplicationServer{Config: &cfg, Web: http.NewServeMux()}
 	s.initContentManager()
-	s.initMail()
-
-	return s
+	return s, nil
 }
 
 // Shutdown closes account providers, session providers, and the application's
@@ -75,32 +74,32 @@ func (s *ApplicationServer) Shutdown() error {
 	return err
 }
 
-// initConfig initializes the config.Config instance in the ApplicationServer
-func (s *ApplicationServer) initConfig() {
-	cfg, err := config.GetConfig()
-	if err == nil {
-		err = session.ValidateConfig(&cfg)
+// InitializeDatabase opens and checks the application-owned pool with a startup
+// deadline. Call only when a consumer needs it, before initializing that consumer.
+// A supplied pool is preserved. Failed setup leaves Database unset and can be retried.
+// Call serially during startup, before serving requests.
+func (s *ApplicationServer) InitializeDatabase(ctx context.Context) error {
+	if s.Database != nil {
+		return nil
 	}
-	if err != nil {
-		panic(fmt.Sprintf("there was an error loading the hyperserver configuration: %v", err))
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-
-	s.Config = &cfg
-}
-
-// initDatabase initializes the database that is used and shared throughout the application
-func (s *ApplicationServer) initDatabase() {
 	db, err := database.Setup(s.Config.Database.Driver, s.Config.Database.Connection)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
+	err = db.PingContext(ctx)
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		return errors.Join(fmt.Errorf("connect application database: %w", err), db.Close())
+	}
 	s.Database = db
-}
-
-// initWeb initialzes the ApplicationServer router
-func (s *ApplicationServer) initWeb() {
-	s.Web = http.NewServeMux()
+	return nil
 }
 
 // InitializeSessions prepares selected providers before modules and requests use
@@ -120,8 +119,7 @@ func (s *ApplicationServer) InitializeSessions(ctx context.Context) error {
 	return nil
 }
 
-// initContentManager loads the configuration data in the singleton ContentManager that
-// is used throughout the application
+// initContentManager prepares this application's rendering defaults and callbacks.
 func (s *ApplicationServer) initContentManager() {
 	contentManager := content_services.NewContentManager()
 	contentManager.HandleMessage = util.HttpMessage
@@ -132,11 +130,18 @@ func (s *ApplicationServer) initContentManager() {
 	s.ContentManager = contentManager
 }
 
-// initMail initialize the mail client.
-func (s *ApplicationServer) initMail() {
-	var err error
-	s.Mail, err = messaging.NewMailClient(s.Config)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create mail client: %v", err))
+// InitializeMail creates the mail client when an application needs mail operations.
+// It preserves a supplied client and does not contact the delivery service.
+// Construction does not guarantee configured delivery. Consumers that require
+// delivery must also call Mail.ValidateConfig at startup. Call serially before requests.
+func (s *ApplicationServer) InitializeMail() error {
+	if s.Mail != nil {
+		return nil
 	}
+	client, err := messaging.NewMailClient(s.Config)
+	if err != nil {
+		return err
+	}
+	s.Mail = client
+	return nil
 }
