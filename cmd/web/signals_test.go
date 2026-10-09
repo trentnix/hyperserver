@@ -177,7 +177,7 @@ func runSignalTestHelper(t *testing.T) {
 		io.ReadFull(os.Stdin, command[:])
 		close(release)
 	}()
-	handlers.Register(&signalTestModule{release: release})
+	handlers.Register(handlers.Descriptor{Name: "signal-test", New: func() handlers.Handler { return &signalTestModule{release: release} }})
 	main()
 }
 

@@ -66,23 +66,14 @@ func TestSetupAuthenticationRequiresVerificationMechanism(t *testing.T) {
 		{name: "route policy warning", warnRatePolicy: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			previous := append([]auth.AuthService(nil), auth.GetAuthServices()...)
-			for _, service := range previous {
-				auth.RemoveAuthService(service.AuthType())
-			}
-			t.Cleanup(func() {
-				auth.RemoveAuthService("custom")
-				for _, service := range previous {
-					auth.Register(service)
-				}
-			})
 			provider := &setupAuthService{initErr: tc.initErr, routeErr: tc.routeErr, registerRoute: tc.warnRatePolicy}
 			verifier := &verifyingSetupAuthService{setupAuthService: provider, validationErr: tc.validationErr}
-			if tc.capable {
-				auth.Register(verifier)
-			} else {
-				auth.Register(provider)
-			}
+			catalog := []auth.Descriptor{{Name: "custom", New: func() auth.AuthService {
+				if tc.capable {
+					return verifier
+				}
+				return provider
+			}}}
 			cfg := &config.Config{Auth: config.AuthConfig{
 				Enabled: true, RegistrationEnabled: tc.registration, RegisterRequiresVerification: tc.verification,
 				JwtKey: "test-auth-signing-key", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
@@ -94,7 +85,11 @@ func TestSetupAuthenticationRequiresVerificationMechanism(t *testing.T) {
 				cfg.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 20, Window: time.Minute, MaxClients: 10}
 			}
 			log := &ratePolicyWarningLogger{}
-			err := SetupAuthentication(&server.ApplicationServer{Config: cfg, Web: http.NewServeMux()}, log)
+			registry, err := auth.NewRegistry(cfg, catalog)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = SetupAuthentication(&server.ApplicationServer{Config: cfg, Web: http.NewServeMux()}, log, registry)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
 					t.Fatalf("error = %v, routed = %t, want %q without routes", err, provider.routed, tc.want)

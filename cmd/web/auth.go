@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/trentnix/hyperserver/auth"
-	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 
@@ -15,29 +14,16 @@ import (
 
 // SetupAuthentication initializes enabled authentication providers, validates
 // required verification, and registers provider routes.
-func SetupAuthentication(s *server.ApplicationServer, log logger.Logger) error {
-	if err := auth.ValidateConfig(s.Config); err != nil {
-		return err
-	}
+func SetupAuthentication(s *server.ApplicationServer, log logger.Logger, registry *auth.Registry) error {
 	if s.Config.Auth.Enabled {
 		routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)
 		if err != nil {
 			return err
 		}
-		authServices := make([]auth.AuthService, len(auth.GetAuthServices()))
-		copy(authServices, auth.GetAuthServices())
+		authServices := registry.Services()
 
 		// initialize and register all handlers
 		for _, a := range authServices {
-			options := auth.GetAuthConfigOptions(s.Config, a.AuthType())
-			enabled, err := config.ProviderEnabled("auth.services."+a.AuthType()+".enabled", options["enabled"])
-			if err != nil {
-				return err
-			}
-			if !enabled {
-				auth.RemoveAuthService(a.AuthType())
-				continue
-			}
 			if err := a.Init(s); err != nil {
 				return fmt.Errorf("initialize auth service %q: %w", a.AuthType(), err)
 			}
@@ -58,7 +44,7 @@ func SetupAuthentication(s *server.ApplicationServer, log logger.Logger) error {
 			}
 		}
 
-		if len(auth.GetAuthServices()) == 0 {
+		if len(authServices) == 0 {
 			return fmt.Errorf("auth is enabled but no auth services are configured")
 		}
 	}

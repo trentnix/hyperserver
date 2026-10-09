@@ -115,7 +115,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- run(ctx, s)
+		done <- run(ctx, s, "")
 	}()
 	defer func() {
 		cancel()
@@ -324,7 +324,7 @@ func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
 			case "session setup":
 				cancel()
 			}
-			if err := run(ctx, s); err == nil {
+			if err := run(ctx, s, ""); err == nil {
 				t.Fatal("invalid initialization succeeded")
 			}
 			if err := db.Ping(); err == nil {

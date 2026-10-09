@@ -1,5 +1,5 @@
 // Package module_site provides the development site's pages, layouts, and sample routes.
-// Importing it registers a shared SiteModule. Production applications must not
+// Importing it registers a SiteModule factory. Production applications must not
 // import this module because it exposes diagnostic and sample handlers.
 package module_site
 
@@ -70,10 +70,9 @@ const (
 	notFoundURL = "/404"
 )
 
-// init registers an instance of SiteModule with the application handlers. init runs
-// when the module_site
+// init makes the module available without creating application state.
 func init() {
-	handlers.Register(new(SiteModule))
+	handlers.Register(handlers.Descriptor{Name: "site", New: func() handlers.Handler { return new(SiteModule) }})
 }
 
 // Init takes care of initializing the specified SiteModule instance

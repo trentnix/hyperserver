@@ -87,7 +87,7 @@ func checkStartupStoragePaths(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err = run(context.Background(), app)
+	err = run(context.Background(), app, "")
 	if os.Getenv("HS_STARTUP_TEST_HELPER") == "invalid-working-directory" {
 		var directoryError *util.ErrFailedToSetWorkingDirectory
 		if !errors.As(err, &directoryError) || app.Database != nil || app.Mail != nil || app.SessionManager != nil {

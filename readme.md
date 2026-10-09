@@ -17,7 +17,7 @@ High performance is a design goal, not an established benchmark result. Passing 
 ## What is here today
 
 - A reference application with server-rendered pages, HTMX fragments, forms, and notifications.
-- Import-based module registration with route and initialization hooks.
+- Import-based module registration with application-owned instances, routes, and initialization hooks.
 - Experimental email/password authentication, account verification and recovery, cookie and SQLite session stores, SMTP mail, and request logging.
 - SQLite-backed persistence used by the reference application and framework services.
 
@@ -27,7 +27,7 @@ Applications define access rules through [route-level authorization policies](pk
 
 Session data uses JSON, limited to 64 KiB before base64 encoding. Cookies are limited to 4 KiB including their name and attributes. Cookie-store data is signed, not encrypted, and must not contain secrets. See the [session guide](pkg/services/session/readme.md) for supported values and typed reads.
 
-Some services require other framework services and cannot be replaced independently. Module instances share process-wide state.
+Some services require other framework services and cannot be replaced independently. Dependency ordering and module cleanup are still application responsibilities.
 
 ## Direction
 
@@ -56,6 +56,23 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 `server.NewApplicationServer(cfg)` accepts a `config.Config` and returns `(*ApplicationServer, error)`. It validates shared settings and creates the router and content manager. It does not read configuration files or initialize database, session, authentication, or mail services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
 
 Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(ctx)`, and `InitializeMail()` only for services the application needs, before initializing their consumers. The database initializer checks connectivity with a ten-second deadline. Mail initialization does not contact SMTP, and consumers that require delivery must validate its configuration. Drain requests before calling `Shutdown()`. The reference application explicitly initializes services for its site and authentication features. Module dependency discovery and ordering are still application responsibilities.
+
+### Module registration
+
+Imports register factories, not live modules:
+
+```go
+func init() {
+    handlers.Register(handlers.Descriptor{
+        Name: "reports",
+        New: func() handlers.Handler { return new(ReportsModule) },
+    })
+}
+```
+
+`handlers.Registered()` returns a catalog copy. Pass it to `handlers.Instantiate`, or supply a local `[]handlers.Descriptor` to select modules without changing the import catalog. Each factory must return a fresh instance without I/O. Initialize the instances and bind their routes before accepting requests. Invalid descriptions and duplicate names return errors.
+
+Auth providers use `auth.Descriptor` and `auth.Register`. `auth.NewRegistry(cfg, auth.Registered())` creates only enabled providers for one application. Supply that registry to `AuthManager.Services` before initialization, then initialize the providers and bind their routes. See [the reference startup](cmd/web/main.go) for wiring. Adding a descriptor does not activate it in applications already running.
 
 ### Account storage
 

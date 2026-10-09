@@ -11,17 +11,21 @@ import (
 	site "github.com/trentnix/hyperserver/modules/site"
 )
 
-// configureContactStorage selects storage for the site without changing account
-// storage. This is reference-application wiring, not a framework provider registry.
-func configureContactStorage(directory string) {
-	for _, handler := range handlers.GetHandlers() {
-		if module, ok := handler.(*site.SiteModule); ok {
-			module.NewContacts = nil
-			if directory != "" {
-				module.NewContacts = func(ctx context.Context) (site.ContactRepository, error) {
+// siteModules snapshots imports and configures the reference site's factory.
+// The directory belongs to this application, not the process-wide catalog.
+func siteModules(directory string) []handlers.Descriptor {
+	catalog := handlers.Registered()
+	if directory == "" {
+		return catalog
+	}
+	for i, descriptor := range catalog {
+		if descriptor.Name == "site" {
+			catalog[i].New = func() handlers.Handler {
+				return &site.SiteModule{NewContacts: func(ctx context.Context) (site.ContactRepository, error) {
 					return models.NewFileContactRepository(ctx, directory)
-				}
+				}}
 			}
 		}
 	}
+	return catalog
 }

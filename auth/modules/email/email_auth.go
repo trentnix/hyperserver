@@ -152,7 +152,7 @@ const (
 
 // init registers the AuthHandler handler with the application
 func init() {
-	auth_services.Register(new(EmailAuthService))
+	auth_services.Register(auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService { return new(EmailAuthService) }})
 }
 
 // Init initializes the EmailAuthService instance

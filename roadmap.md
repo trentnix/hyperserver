@@ -14,7 +14,7 @@ Phase 0 is complete. Phase 1 is in progress. HyperServer is not ready for public
 
 | Area | Current state | Remaining work |
 | --- | --- | --- |
-| Startup and modules | [Server construction](pkg/server/server.go) accepts configuration, returns errors, and creates only routing and rendering services. Applications explicitly initialize optional services before their consumers. Stateless page and HTMX rendering need no storage, sessions, authentication, or mail. The [handler registry](pkg/handlers/handlers.go) stores instances globally. | Resolve module requirements and create module instances per application. |
+| Startup and modules | [Server construction](pkg/server/server.go) creates only routing and rendering services. Applications initialize optional services explicitly. [Handler](pkg/handlers/handlers.go) and [auth](auth/auth_service.go) catalogs hold factories, with fresh instances per application and local catalogs for tests. | Resolve module requirements and order initialization and cleanup. |
 | Shutdown and TLS | The [reference application](cmd/web/main.go) supports direct TLS and an explicitly trusted edge proxy. Verified client IPs and HTTPS state feed rate limits and session cookies. Links use configured addresses. Shutdown drains requests before closing owned SQL pools. | Manage other module-owned resources through the application lifecycle. |
 | Configuration and middleware | [Startup](cmd/web/startup_test.go) validates signing keys, lifetimes, and provider selections. [Session loading](pkg/services/middleware/session.go) distinguishes missing or expired sessions from invalid cookies and storage failures. [Route-level authorization](pkg/services/middleware/authorization.go) enforces application-defined policies separately from identity loading. | Make service dependencies application-owned. |
 | Forms and account writes | [Route registration](pkg/routing/routes.go) applies body limits and inherited per-route rate policies. Handler policies override module and application defaults. Explicit [shared budgets](pkg/ratelimit/limiter.go) apply independently, including an optional application budget before session loading. The [HTTP stack](cmd/web/main.go) uses Go's CSRF protection. The [form parser](pkg/components/form/request.go) checks field sizes before binding. [Account creation and updates](pkg/services/user/user.go) use separate operations. Updates reject outdated security versions. | Prevent credential exposure when HTMX is unavailable or forms redisplay. Validate limits under load. |
@@ -127,7 +127,7 @@ Multiple providers can advertise the same capability. Configuration selects a pr
 
 On startup failure, close completed modules in reverse order. The failing factory must clean up resources it acquired before returning an error. Normal shutdown drains HTTP requests before closing dependent services in reverse order.
 
-Descriptor and factory signatures remain design work. The contract must support independent server instances without an unrestricted service locator.
+Descriptors currently contain a name and a factory. Per-application instances and catalog snapshots are implemented. Capability declarations, dependency resolution, and module cleanup remain design work. Modules must receive declared dependencies without an unrestricted service locator.
 
 ### Rendering and HTMX responses
 
@@ -213,7 +213,7 @@ Exit when these known blockers have regression coverage and the reference applic
 
 ### Phase 2: Lifecycle and module composition
 
-- Implement the catalog and per-application registry with provider selection, dependency ordering, route validation, and declared dependency access.
+- Extend the catalog and per-application instances with capability-based provider selection, dependency ordering, route validation, and declared dependency access.
 - Return startup errors, validate required storage connectivity with deadlines, and remove shared mutable runtime state.
 - Handle `SIGINT` and `SIGTERM`, drain requests, and close owned resources. Test startup rollback and shutdown deadlines.
 - Allow applications to enable automatic, bounded session and token cleanup. Start cleanup after storage initialization, prevent overlapping runs, report failures, and stop cleanup before closing storage. External scheduling of the cleanup command remains sufficient for production readiness.

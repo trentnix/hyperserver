@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -59,7 +60,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		}
 		defer listener.Close()
 		s.Config.HTTP.Port = uint16(listener.Addr().(*net.TCPAddr).Port)
-		if err := run(context.Background(), s); err == nil || !strings.Contains(err.Error(), "address already in use") {
+		if err := run(context.Background(), s, ""); err == nil || !strings.Contains(err.Error(), "address already in use") {
 			t.Fatalf("listen failure = %v", err)
 		}
 		if closed != 1 {
@@ -106,10 +107,14 @@ func TestStartupHelperProcess(t *testing.T) {
 		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {
 			t.Fatalf("account tables before handler initialization = %d, auth enabled = %t", tables, s.Config.Auth.Enabled)
 		}
-		if err := SetupHandlers(context.Background(), s, nil); err != nil {
+		services, err := auth.NewRegistry(s.Config, auth.Registered())
+		if err != nil {
 			t.Fatal(err)
 		}
-		if err := SetupAuthentication(s, nil); err != nil {
+		if err := SetupHandlers(context.Background(), s, nil, siteModules(""), services); err != nil {
+			t.Fatal(err)
+		}
+		if err := SetupAuthentication(s, nil, services); err != nil {
 			t.Fatal(err)
 		}
 		_, pattern := s.Web.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil))

@@ -21,9 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -33,10 +35,8 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// HTTP scenarios run in separate processes because module instances currently use
-// package globals. Each scenario owns its databases,
-// configuration, mail fake, and browser cookies. No network listener is started.
-// Remove process isolation when those runtime globals become application-owned.
+// HTTP scenarios use subprocesses to isolate working directories and environment
+// overrides. Each scenario owns its modules, providers, databases, and mail fake.
 func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
 	runHTTPScenarioWithTimeout(t, 30*time.Second, scenario, configure...)
@@ -45,13 +45,18 @@ func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...fun
 // Browser scenarios need room for download, startup, checks, and process cleanup.
 func runHTTPScenarioWithTimeout(t *testing.T, timeout time.Duration, scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
+	runHTTPScenarioWithCatalog(t, timeout, siteModules(""), scenario, configure...)
+}
+
+func runHTTPScenarioWithCatalog(t *testing.T, timeout time.Duration, catalog []handlers.Descriptor, scenario func(*httpHarness), configure ...func(*config.Config)) {
+	t.Helper()
 	if os.Getenv("HS_HTTP_TEST_CASE") == t.Name() {
 		// These overrides would fail if the harness accidentally loaded runtime
 		// configuration instead of using its explicit fixture.
 		t.Setenv("HYPERSERVER_DATABASE_CONNECTION", filepath.Join(t.TempDir(), "missing", "developer.db"))
 		t.Setenv("HYPERSERVER_AUTH_JWTKEY", "")
 		t.Setenv("HYPERSERVER_HTTP_SESSION_JWTKEY", "")
-		scenario(newHTTPHarness(t, configure...))
+		scenario(newHTTPHarnessWithCatalog(t, catalog, configure...))
 		if !t.Failed() {
 			fmt.Println("HTTP scenario passed")
 		}
@@ -154,15 +159,17 @@ type httpHarness struct {
 
 func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
+	return newHTTPHarnessWithCatalog(t, siteModules(""), configure...)
+}
+
+func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, configure ...func(*config.Config)) *httpHarness {
+	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Template paths are relative to the repository root. Changing
-	// directories here affects only this scenario's subprocess.
-	if err := os.Chdir(root); err != nil {
-		t.Fatal(err)
-	}
+	// Templates still use the process cwd. Restore it when this test finishes.
+	t.Chdir(root)
 
 	// Do not call GetConfig: local YAML files and environment settings must not
 	// select a developer's database or mail service.
@@ -235,10 +242,14 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	}
 	logs := &capturedLogs{}
 	l := &testLogger{logs: logs}
-	if err := SetupHandlers(context.Background(), app, l); err != nil {
+	services, err := auth.NewRegistry(cfg, auth.Registered())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := SetupAuthentication(app, l); err != nil {
+	if err := SetupHandlers(context.Background(), app, l, catalog, services); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetupAuthentication(app, l, services); err != nil {
 		t.Fatal(err)
 	}
 	jar, err := cookiejar.New(nil)

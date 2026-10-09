@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
@@ -16,7 +17,7 @@ import (
 
 func TestHTTPMixedStorage(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "contacts")
-	runHTTPScenario(t, func(h *httpHarness) {
+	runHTTPScenarioWithCatalog(t, 30*time.Second, siteModules(directory), func(h *httpHarness) {
 		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatalf("SQL-backed registration failed: %d %s", w.Code, w.Body.String())
@@ -77,6 +78,5 @@ func TestHTTPMixedStorage(t *testing.T) {
 		}
 	}, func(cfg *config.Config) {
 		cfg.Auth.RegisterRequiresVerification = false
-		configureContactStorage(directory)
 	})
 }

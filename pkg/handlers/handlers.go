@@ -1,17 +1,29 @@
-// Package handlers holds the process-wide registry of application modules.
-// Modules typically call Register during package initialization. Registration does
-// not initialize a module or bind its routes, and the registry stores shared instances.
+// Package handlers catalogs module factories. Imports register descriptions,
+// and each application creates its own module instances before initialization.
 package handlers
 
 import (
 	"context"
+	"fmt"
+	"slices"
+	"strings"
+	"sync"
 
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 )
 
-// handlers provides a global instance of Handlers that can be used in the application
-var handlers []Handler
+var catalog struct {
+	sync.RWMutex
+	descriptors []Descriptor
+}
+
+// Descriptor describes a module without holding its runtime state. New must return
+// a fresh instance without performing I/O. Names must be nonempty and unique.
+type Descriptor struct {
+	Name string
+	New  func() Handler
+}
 
 type (
 	// Handler defines an interface that can be used to add routes and handlers to
@@ -26,14 +38,42 @@ type (
 	}
 )
 
-// Register appends a shared module instance to the process-wide registry.
-// Call it during startup, before reading the registry or serving requests.
-func Register(h Handler) {
-	handlers = append(handlers, h)
+// Register adds a descriptor to the import catalog. Invalid registrations are
+// reported by Instantiate, not by a panic during package initialization.
+func Register(d Descriptor) {
+	catalog.Lock()
+	defer catalog.Unlock()
+	catalog.descriptors = append(catalog.descriptors, d)
 }
 
-// GetHandlers returns the registry's backing slice, not a copy.
-// Callers must not modify it while the application is running.
-func GetHandlers() []Handler {
-	return handlers
+// Registered returns a snapshot. Changing it does not change the import catalog.
+func Registered() []Descriptor {
+	catalog.RLock()
+	defer catalog.RUnlock()
+	return slices.Clone(catalog.descriptors)
+}
+
+// Instantiate validates a catalog and creates fresh modules in registration order.
+// Tests and applications can supply a local catalog, including an empty one.
+func Instantiate(descriptors []Descriptor) ([]Handler, error) {
+	seen := make(map[string]bool)
+	for _, d := range descriptors {
+		if d.Name == "" || strings.TrimSpace(d.Name) != d.Name || d.New == nil {
+			return nil, fmt.Errorf("invalid module descriptor %q", d.Name)
+		}
+		if seen[d.Name] {
+			return nil, fmt.Errorf("duplicate module %q", d.Name)
+		}
+		seen[d.Name] = true
+	}
+
+	instances := make([]Handler, 0, len(descriptors))
+	for _, d := range descriptors {
+		h := d.New()
+		if h == nil {
+			return nil, fmt.Errorf("module %q returned no instance", d.Name)
+		}
+		instances = append(instances, h)
+	}
+	return instances, nil
 }

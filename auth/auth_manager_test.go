@@ -33,9 +33,8 @@ func (s *verificationTestAuthService) SendVerificationEmail(context.Context, *us
 
 func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 	t.Chdir("..")
-	previousServices, previousLogOutput := authServices, log.Writer()
+	previousLogOutput := log.Writer()
 	t.Cleanup(func() {
-		authServices = previousServices
 		log.SetOutput(previousLogOutput)
 	})
 	for _, tc := range []struct {
@@ -50,8 +49,7 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 			var logs bytes.Buffer
 			log.SetOutput(&logs)
 			sender := new(verificationTestAuthService)
-			authServices = []AuthService{sender}
-			manager := &AuthManager{httpConfig: config.HTTPConfig{ListenHost: "localhost", Port: 8080}, contentManager: &content_services.ContentManagerService{
+			manager := &AuthManager{Services: &Registry{services: []AuthService{sender}}, httpConfig: config.HTTPConfig{ListenHost: "localhost", Port: 8080}, contentManager: &content_services.ContentManagerService{
 				Layouts: map[string][]content_services.TemplatePath{
 					content_services.PageType: {"modules/site/templates/html/layouts/partial.html"},
 				},

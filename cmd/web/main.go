@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
@@ -29,7 +30,6 @@ import (
 func main() {
 	contactDirectory := flag.String("contact-directory", "", "store contact submissions as JSON files in this directory instead of SQLite")
 	flag.Parse()
-	configureContactStorage(*contactDirectory)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -46,14 +46,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := run(ctx, app); err != nil {
+	if err := run(ctx, app, *contactDirectory); err != nil {
 		log.Fatal(err)
 	}
 }
 
 // run owns the application pool and closes it after requests have drained,
 // including when initialization or listening fails.
-func run(ctx context.Context, s *server.ApplicationServer) (err error) {
+func run(ctx context.Context, s *server.ApplicationServer, contactDirectory string) (err error) {
 	defer func() { err = errors.Join(err, s.Shutdown()) }()
 
 	address, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port)
@@ -88,14 +88,18 @@ func run(ctx context.Context, s *server.ApplicationServer) (err error) {
 		return fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l := logger.NewSlogLogger(nil)
+	services, err := auth.NewRegistry(s.Config, auth.Registered())
+	if err != nil {
+		return err
+	}
 
 	// attach routes and their handlers to the router
-	if err := SetupHandlers(ctx, s, l); err != nil {
+	if err := SetupHandlers(ctx, s, l, siteModules(contactDirectory), services); err != nil {
 		return fmt.Errorf("failed to set up the registered handlers: %w", err)
 	}
 
 	// set up authentication services and components
-	if err := SetupAuthentication(s, l); err != nil {
+	if err := SetupAuthentication(s, l, services); err != nil {
 		return fmt.Errorf("failed to set up the authorization services: %w", err)
 	}
 

@@ -16,10 +16,8 @@ type configTestAuthService struct {
 func (s configTestAuthService) AuthType() string { return s.name }
 
 func TestValidateAuthConfig(t *testing.T) {
-	previous := authServices
-	t.Cleanup(func() { authServices = previous })
 	// A custom imported provider must work without adding its name to the loader.
-	authServices = []AuthService{configTestAuthService{name: "custom"}}
+	descriptors := []Descriptor{{Name: "custom", New: func() AuthService { return configTestAuthService{name: "custom"} }}}
 	for _, tc := range []struct {
 		name   string
 		change func(*config.Config)
@@ -41,7 +39,7 @@ func TestValidateAuthConfig(t *testing.T) {
 			c := &config.Config{Auth: config.AuthConfig{Enabled: true, JwtKey: strings.Repeat("a", 32), VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"custom": {"enabled": "true"}}}}
 			c.HTTP.Session.Types = map[string]string{"default": "cookieStore", "auth-user-session": "sqliteStore"}
 			tc.change(c)
-			err := ValidateConfig(c)
+			err := ValidateConfig(c, descriptors)
 			if tc.want == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -54,13 +52,11 @@ func TestValidateAuthConfig(t *testing.T) {
 }
 
 func TestValidateAuthConfigRejectsDuplicateRegistrations(t *testing.T) {
-	previous := authServices
-	t.Cleanup(func() { authServices = previous })
 	for _, name := range []string{"custom", "CUSTOM"} {
 		t.Run(name, func(t *testing.T) {
-			authServices = []AuthService{
-				configTestAuthService{name: "custom"},
-				configTestAuthService{name: name},
+			descriptors := []Descriptor{
+				{Name: "custom", New: func() AuthService { return configTestAuthService{name: "custom"} }},
+				{Name: name, New: func() AuthService { return configTestAuthService{name: name} }},
 			}
 			c := &config.Config{Auth: config.AuthConfig{
 				Enabled:                     true,
@@ -70,7 +66,7 @@ func TestValidateAuthConfigRejectsDuplicateRegistrations(t *testing.T) {
 				Services:                    map[string]map[string]string{"custom": {"enabled": "true"}},
 			}}
 			c.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
-			if err := ValidateConfig(c); err == nil || !strings.Contains(err.Error(), "duplicate registered auth service") {
+			if err := ValidateConfig(c, descriptors); err == nil || !strings.Contains(err.Error(), "duplicate registered auth service") {
 				t.Fatalf("error = %v, want duplicate registration error", err)
 			}
 		})

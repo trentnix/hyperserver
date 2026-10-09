@@ -29,12 +29,27 @@ func TestAuthManagerInitUsesAccountRepository(t *testing.T) {
 		AccountRepository: reader,
 		ContentManager:    content.NewContentManager(),
 	}
-	manager := &AuthManager{}
+	manager := &AuthManager{Services: &Registry{}}
 	if err := manager.Init(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
 	if manager.accounts != reader {
 		t.Fatal("initialization did not preserve the application-supplied account repository")
+	}
+}
+
+func TestAuthManagerRequiresProviderRegistryWhenEnabled(t *testing.T) {
+	app := &server.ApplicationServer{
+		Config:         &config.Config{Auth: config.AuthConfig{Enabled: true}},
+		ContentManager: content.NewContentManager(),
+	}
+	manager := &AuthManager{}
+	if err := manager.Init(context.Background(), app); err == nil || !strings.Contains(err.Error(), "provider registry") {
+		t.Fatalf("missing registry: %v", err)
+	}
+	app.Config.Auth.Enabled = false
+	if err := manager.Init(context.Background(), app); err != nil {
+		t.Fatalf("disabled authentication required a registry: %v", err)
 	}
 }
 
@@ -234,8 +249,6 @@ func (s tokenLookupRepository) GetByID(ctx context.Context, id string) (*user.Us
 }
 
 func TestResetLookupUsesAccountRepository(t *testing.T) {
-	previous := authServices
-	t.Cleanup(func() { authServices = previous })
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		for _, scenario := range []string{"success", "token failure", "account failure", "canceled"} {
 			t.Run(method+"/"+scenario, func(t *testing.T) {
@@ -282,7 +295,7 @@ func TestResetLookupUsesAccountRepository(t *testing.T) {
 					},
 				}}
 				provider := &lookupTestAuthService{}
-				authServices = []AuthService{provider}
+				manager.Services = &Registry{services: []AuthService{provider}}
 				r := httptest.NewRequest(method, "/auth/reset/lookup-test?token="+url.QueryEscape(token.Token), nil).WithContext(ctx)
 				r.SetPathValue("authType", "lookup-test")
 				w := httptest.NewRecorder()
@@ -311,14 +324,12 @@ func TestResetLookupUsesAccountRepository(t *testing.T) {
 }
 
 func TestResetStopsOnTokenLookupFailure(t *testing.T) {
-	previous := authServices
-	t.Cleanup(func() { authServices = previous })
 	for _, table := range []string{"usertoken", "user"} {
 		for _, method := range []string{http.MethodGet, http.MethodPost} {
 			t.Run(table+"/"+method, func(t *testing.T) {
 				manager, account, _, db := newLookupTestManager(t)
 				provider := &lookupTestAuthService{}
-				authServices = []AuthService{provider}
+				manager.Services = &Registry{services: []AuthService{provider}}
 				token, err := user.NewAuthResetToken(account, []byte(manager.verificationJwtKey), time.Hour)
 				if err != nil {
 					t.Fatal(err)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
@@ -16,7 +17,7 @@ import (
 
 // SetupHandlers initializes registered modules with a bounded context and binds
 // their routes. Each module prepares its own storage before its routes are bound.
-func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger) error {
+func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger, catalog []handlers.Descriptor, services *auth.Registry) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)
@@ -24,7 +25,14 @@ func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.
 		return err
 	}
 
-	for _, h := range handlers.GetHandlers() {
+	modules, err := handlers.Instantiate(catalog)
+	if err != nil {
+		return err
+	}
+	for _, h := range modules {
+		if manager, ok := h.(*auth.AuthManager); ok {
+			manager.Services = services
+		}
 		if err := h.Init(ctx, s); err != nil {
 			return err
 		}

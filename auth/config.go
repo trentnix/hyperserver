@@ -9,22 +9,24 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
-// ValidateConfig checks enabled providers against the imported auth services.
-func ValidateConfig(c *config.Config) error {
+// ValidateConfig checks enabled providers against the supplied catalog.
+func ValidateConfig(c *config.Config, descriptors []Descriptor) error {
+	known := make(map[string]bool)
+	for _, d := range descriptors {
+		name := strings.ToLower(d.Name)
+		if name == "" || strings.TrimSpace(name) != name || d.New == nil {
+			return fmt.Errorf("invalid auth descriptor %q", d.Name)
+		}
+		if known[name] {
+			return fmt.Errorf("duplicate registered auth service %q", name)
+		}
+		known[name] = true
+	}
 	if !c.Auth.Enabled {
 		return nil
 	}
 	if err := c.Validate(); err != nil {
 		return err
-	}
-
-	known := make(map[string]bool)
-	for _, service := range GetAuthServices() {
-		name := strings.ToLower(service.AuthType())
-		if known[name] {
-			return fmt.Errorf("duplicate registered auth service %q", name)
-		}
-		known[name] = true
 	}
 
 	names := make([]string, 0, len(c.Auth.Services))

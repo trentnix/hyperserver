@@ -2,10 +2,13 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
@@ -14,9 +17,59 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-// authServices is the array of AuthService instances that is used when an AuthService
-// implementation self-registers via init()
-var authServices []AuthService
+var catalog struct {
+	sync.RWMutex
+	descriptors []Descriptor
+}
+
+// Descriptor names an authentication provider and supplies its factory.
+// New must return a fresh instance without I/O. Name must match AuthType.
+type Descriptor struct {
+	Name string
+	New  func() AuthService
+}
+
+// Registry holds one application's enabled providers. Initialize them before
+// serving requests. A registry must not be shared between applications.
+type Registry struct {
+	services []AuthService
+}
+
+// NewRegistry validates provider selections and creates enabled instances only.
+// The catalog can be an import snapshot or an application-supplied local catalog.
+func NewRegistry(c *config.Config, descriptors []Descriptor) (*Registry, error) {
+	if err := ValidateConfig(c, descriptors); err != nil {
+		return nil, err
+	}
+	r := &Registry{}
+	if !c.Auth.Enabled {
+		return r, nil
+	}
+
+	for _, d := range descriptors {
+		enabled, err := config.ProviderEnabled("auth.services."+d.Name+".enabled", GetAuthConfigOptions(c, d.Name)["enabled"])
+		if err != nil {
+			return nil, err
+		}
+		if !enabled {
+			continue
+		}
+		service := d.New()
+		if service == nil || service.AuthType() != d.Name {
+			return nil, fmt.Errorf("auth provider %q returned no instance or a different AuthType", d.Name)
+		}
+		r.services = append(r.services, service)
+	}
+	return r, nil
+}
+
+// Services returns a copy of the application's provider list, not new instances.
+func (r *Registry) Services() []AuthService {
+	if r == nil {
+		return nil
+	}
+	return slices.Clone(r.services)
+}
 
 // VerificationConfigValidator checks a provider's verification mechanism without I/O.
 // Providers must implement it when registration requires verification. Validation
@@ -81,38 +134,28 @@ type AuthService interface {
 	Change(w http.ResponseWriter, r *http.Request, u *user.User) bool
 }
 
-// Register appends a shared provider instance to the process-wide registry.
-// It does not initialize the provider. Call it during startup, not concurrently with requests.
-func Register(a AuthService) {
-	authServices = append(authServices, a)
+// Register adds a factory description without creating or initializing a provider.
+// Descriptor errors are reported when an application creates its registry.
+func Register(d Descriptor) {
+	catalog.Lock()
+	defer catalog.Unlock()
+	catalog.descriptors = append(catalog.descriptors, d)
 }
 
-// GetAuthServices returns the registry's backing slice, not a copy.
-// Callers must not modify it while the application is running.
-func GetAuthServices() []AuthService {
-	return authServices
+// Registered returns a copy of the import catalog.
+func Registered() []Descriptor {
+	catalog.RLock()
+	defer catalog.RUnlock()
+	return slices.Clone(catalog.descriptors)
 }
 
-// RemoveAuthService removes any AuthService implementations from the registered
-// AuthServices that matches the specified authType. This is to deal with
-// situations where the AuthService could not be initialized or is disabled.
-func RemoveAuthService(authType string) []AuthService {
-	i := 0
-	for _, service := range authServices {
-		if service.AuthType() != authType {
-			authServices[i] = service
-			i++
-		}
+// Loaded returns this application's providers whose IsLoaded method reports true.
+func (r *Registry) Loaded() []AuthService {
+	if r == nil {
+		return nil
 	}
-	// Slice off the removed elements.
-	authServices = authServices[:i]
-	return authServices
-}
-
-// GetLoadedAuthServices returns registered providers whose IsLoaded method reports true.
-func GetLoadedAuthServices() []AuthService {
 	var loadedAuthServices []AuthService
-	for _, s := range authServices {
+	for _, s := range r.services {
 		if s.IsLoaded() {
 			loadedAuthServices = append(loadedAuthServices, s)
 		}
