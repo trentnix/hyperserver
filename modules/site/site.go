@@ -72,11 +72,28 @@ const (
 
 // init makes the module available without creating application state.
 func init() {
-	handlers.Register(handlers.Descriptor{Name: "site", New: func() handlers.Handler { return new(SiteModule) }})
+	handlers.Register(Module(nil))
 }
 
-// Init takes care of initializing the specified SiteModule instance
+// Module describes the site with an optional contact-storage factory. Nil selects
+// SQLite using the application's pool. The factory runs during Init, not registration.
+// Applications own shared services and any connections supplied by the factory.
+func Module(newContacts func(context.Context) (ContactRepository, error)) handlers.Descriptor {
+	return handlers.Descriptor{Name: "site", New: func() handlers.Handler {
+		return &SiteModule{NewContacts: newContacts}
+	}}
+}
+
+// Init validates required services, prepares contact storage, and configures the
+// site's rendering. It does not initialize or close borrowed application services.
 func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) error {
+	if s.Config == nil {
+		return fmt.Errorf("site requires application configuration")
+	}
+	if s.ContentManager == nil {
+		return fmt.Errorf("site requires a content manager")
+	}
+
 	var contacts ContactRepository
 	var err error
 	if m.NewContacts != nil {

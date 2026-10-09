@@ -20,7 +20,7 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 		Config:         &config.Config{Auth: config.AuthConfig{Enabled: true, RegistrationEnabled: true}},
 		ContentManager: content_services.NewContentManager(),
 	}
-	m := new(SiteModule)
+	m := Module(nil).New().(*SiteModule)
 	db, err := sqlx.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -30,6 +30,9 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 	t.Cleanup(func() { s.Shutdown() })
 	if err := m.Init(context.Background(), s); err != nil {
 		t.Fatal(err)
+	}
+	if err := db.Ping(); err != nil {
+		t.Fatalf("module closed its borrowed database: %v", err)
 	}
 	// Avoid loading templates or sessions when the site's catch-all reports a 404.
 	s.ContentManager.HandleNotFound = http.NotFound

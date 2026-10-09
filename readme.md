@@ -87,6 +87,8 @@ modules, err := handlers.Instantiate(catalog)
 
 `reportStore` implements the repository interface required by `ReportsModule`. The application owns the supplied store and closes it after requests drain. `Replace` returns a copy, preserves module order, and rejects missing or duplicate names and missing factories. Other applications keep their original catalog.
 
+Modules own their registration, internal setup, requirement checks, and routes. Applications select modules, supply shared services, and coordinate startup and shutdown. Modules must not initialize or close borrowed services. A configurable module can expose a descriptor constructor: the site's `site.Module(newContacts)` accepts a contact-storage factory, while `site.Module(nil)` selects its default SQLite storage.
+
 Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth module creates its own manager and enabled providers, validates verification configuration during `Init`, and binds manager and provider routes during `Routes`. Initialize its required services first, as shown in [the reference startup](cmd/web/main.go). For an explicit provider catalog, replace the default module with `auth.Module(providers)` using `handlers.Replace`. An empty explicit catalog never falls back to imports. Adding a descriptor does not activate it in applications already running.
 
 ### Account storage

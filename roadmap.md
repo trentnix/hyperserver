@@ -113,6 +113,8 @@ A handler's response result connects these parts. It identifies the view and dat
 
 Modules register immutable descriptors through package `init()` functions. Registration performs no configuration loading, I/O, route binding, migration, or background work.
 
+Each module owns its internal setup, requirement checks, and route binding. Applications select and configure modules and supply shared services. Modules must not initialize or close borrowed services.
+
 The process-wide **module catalog** describes available module types, factories, and required, optional, and provided capabilities. Each server snapshots the catalog into a **per-application registry** that owns enabled module instances and their runtime state. Tests can supply local catalogs.
 
 Startup must:

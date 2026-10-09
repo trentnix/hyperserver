@@ -29,11 +29,13 @@ type (
 	// Handler defines an interface that can be used to add routes and handlers to
 	// a HyperServer application
 	Handler interface {
-		// Routes binds the initialized module's HTTP routes. Registration errors
+		// Routes binds the module's own routes and those of its internal components.
+		// Call after Init succeeds. Registration errors
 		// must stop startup before accepting traffic.
 		Routes(*routing.Routes) error
-		// Init prepares the module before activation. Shared services are borrowed,
-		// and the module must not close them. Use ctx for initialization I/O.
+		// Init validates the module's requirements and prepares its internal components.
+		// Applications supply shared services. Modules must not initialize or close
+		// borrowed services. Use ctx for initialization I/O.
 		Init(context.Context, *server.ApplicationServer) error
 	}
 )

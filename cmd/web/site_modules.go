@@ -24,7 +24,5 @@ func siteModules(directory string) ([]handlers.Descriptor, error) {
 	newContacts := func(ctx context.Context) (site.ContactRepository, error) {
 		return models.NewFileContactRepository(ctx, directory)
 	}
-	return handlers.Replace(catalog, handlers.Descriptor{Name: "site", New: func() handlers.Handler {
-		return &site.SiteModule{NewContacts: newContacts}
-	}})
+	return handlers.Replace(catalog, site.Module(newContacts))
 }
