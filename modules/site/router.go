@@ -62,5 +62,5 @@ func (m *SiteModule) Routes(mux *routing.Routes) error {
 	}
 	mux.Handle("POST /session-example", http.HandlerFunc(m.SessionExample))
 	mux.WithoutRateLimit().Handle("POST /logout", http.HandlerFunc(m.Logout))
-	return nil
+	return mux.Err()
 }

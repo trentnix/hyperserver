@@ -143,7 +143,7 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		mux.Handle("GET /auth/change/{authType}", authenticated(http.HandlerFunc(a.GetChange)))
 		mutations.Handle("POST /auth/change/{authType}", authenticated(http.HandlerFunc(a.Change)))
 	}
-	return nil
+	return mux.Err()
 }
 
 // noStore applies the auth response policy before handlers or access checks write

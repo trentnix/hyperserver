@@ -289,12 +289,8 @@ func TestRateLimitRegistrationDiagnostics(t *testing.T) {
 	}
 
 	// A conflicting registration fails before emitting a diagnostic.
-	func() {
-		defer func() {
-			if recover() == nil {
-				t.Error("duplicate registration did not panic")
-			}
-		}()
-		busy.HandleFunc("GET /busy", noContent)
-	}()
+	busy.HandleFunc("GET /busy", noContent)
+	if busy.Err() == nil || root.Err() != busy.Err() {
+		t.Fatal("duplicate registration did not report a shared error")
+	}
 }

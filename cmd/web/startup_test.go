@@ -15,6 +15,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -36,6 +37,21 @@ func TestStartupHelperProcess(t *testing.T) {
 		checkRunShutdown(t, os.Getenv("HS_STARTUP_TEST_HELPER") == "shutdown-tls")
 	case "signals":
 		runSignalTestHelper(t)
+	case "route-conflict":
+		s := newStartupApplication(t)
+		handlers.Register(handlers.Descriptor{Name: "conflicting-test-module", New: func() handlers.Handler {
+			return &registrationModule{bind: func(routes *routing.Routes) {
+				routes.HandleFunc("GET /contact", func(http.ResponseWriter, *http.Request) {})
+			}}
+		}})
+		err := run(context.Background(), s, "")
+		if err == nil || !strings.Contains(err.Error(), "conflicting-test-module") || !strings.Contains(err.Error(), "conflicts") {
+			t.Fatalf("route conflict = %v", err)
+		}
+		if s.Database == nil || s.Database.Ping() == nil {
+			t.Fatal("route conflict did not close the application pool")
+		}
+		fmt.Println("route conflict cleanup passed")
 	case "relative-database", "invalid-working-directory":
 		checkStartupStoragePaths(t)
 	case "listen-failure":
@@ -290,6 +306,21 @@ func TestStartupClosesPoolOnListenFailure(t *testing.T) {
 	output, err := runStartupProcess(t, yaml, "listen-failure")
 	if err != nil || !strings.Contains(string(output), "listen failure cleanup passed") {
 		t.Fatalf("listen failure cleanup: error = %v, output = %s", err, output)
+	}
+}
+
+func TestStartupRejectsRouteConflictBeforeListening(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
+	output, err := runStartupProcess(t, yaml, "route-conflict")
+	if err != nil || !strings.Contains(string(output), "route conflict cleanup passed") {
+		t.Fatalf("route conflict cleanup: error=%v output=%s", err, output)
+	}
+	if strings.Contains(string(output), "Starting server at") {
+		t.Fatal("application listened after a route conflict")
 	}
 }
 

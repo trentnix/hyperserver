@@ -10,7 +10,7 @@ The [roadmap](../../roadmap.md) defines project direction and priorities. These 
 
 | Area | Decisions still needed | When to resolve |
 | --- | --- | --- |
-| Modules | Runtime dependency delivery, route-conflict handling, and lifecycle error handling. | During Phase 2, extending the independent-application tests. |
+| Modules | Runtime dependency delivery and lifecycle error handling. | During Phase 2, extending the independent-application tests. |
 | Services | Typed dependency parameters versus a resolver limited to declared capabilities, provider-selection configuration, and absent optional-service behavior. Derive individual service methods from their consumers. | During Phase 2, or earlier when a security fix needs a contract change. |
 | Rendering | Response-result representation, view selection and naming, and how dispatch maps validation errors and HTMX instructions to HTTP responses. | During Phase 3, using the reference form workflow. |
 | Storage and serialization | Repository methods and error semantics, how repositories join an application-owned transaction, serializer interfaces, and stored-format versioning. | Establish atomic recovery operations during Phase 1. Complete provider and format contracts during Phase 4. |

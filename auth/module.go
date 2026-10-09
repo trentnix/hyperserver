@@ -68,6 +68,9 @@ func (m *module) Routes(routes *routing.Routes) error {
 		if err := provider.Routes(routes); err != nil {
 			return fmt.Errorf("register auth service %q routes: %w", provider.AuthType(), err)
 		}
+		if err := routes.Err(); err != nil {
+			return fmt.Errorf("register auth service %q routes: %w", provider.AuthType(), err)
+		}
 	}
-	return nil
+	return routes.Err()
 }

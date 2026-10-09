@@ -104,3 +104,19 @@ func TestModuleProviderSelection(t *testing.T) {
 		}
 	}
 }
+
+func TestModuleRejectsProviderRouteConflict(t *testing.T) {
+	app, err := server.NewApplicationServer(moduleConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Web.HandleFunc("GET /provider", func(http.ResponseWriter, *http.Request) {})
+	module := auth.Module([]auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+	if err := module.Init(context.Background(), app); err != nil {
+		t.Fatal(err)
+	}
+	err = module.Routes(routing.NewRoutes(app.Web))
+	if err == nil || !strings.Contains(err.Error(), `auth service "custom"`) || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("provider conflict = %v", err)
+	}
+}

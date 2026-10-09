@@ -109,7 +109,23 @@ catalog, err := handlers.Resolve(handlers.Registered(), map[string]string{
 
 `Optional: true` permits a missing provider. `Multiple: true` accepts all matching providers. Optional requirements still reject ambiguity unless they accept multiple providers. An explicit selection narrows either form to one provider, and invalid selections always fail. All modules in the supplied catalog still initialize, including unchosen alternatives. Remove a module from the local catalog to exclude it from the application.
 
-Resolution controls startup order, not runtime service access. Applications still supply typed dependencies. Route-conflict checks, declared-dependency injection, and module cleanup remain separate work.
+Resolution controls startup order, not runtime service access. Applications still supply typed dependencies. Declared-dependency injection and module cleanup remain separate work.
+
+### Route registration errors
+
+`routing.Routes` uses Go's `http.ServeMux` to check patterns. Duplicate or conflicting patterns, malformed patterns, and nil handlers set `Routes.Err()` instead of panicking. Module route methods must return that error:
+
+```go
+func (m *ReportsModule) Routes(routes *routing.Routes) error {
+    routes.HandleFunc("GET /reports", m.List)
+    routes.HandleFunc("POST /reports", m.Create)
+    return routes.Err()
+}
+```
+
+Child scopes share the first error. Later registrations through those scopes do nothing. Earlier routes remain registered, so the application must not serve a mux after registration fails. The reference application checks after every module and stops startup before listening. Checks run during route binding, after module initialization. They do not roll back module resources.
+
+Direct `http.ServeMux.Handle` calls retain Go's panic behavior. Panics in module code, diagnostic callbacks, or request handlers are not converted into registration errors.
 
 ### Account storage
 

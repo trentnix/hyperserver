@@ -39,7 +39,10 @@ func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.
 		}
 
 		if err := h.Routes(routes); err != nil {
-			return fmt.Errorf("register %T routes: %w", h, err)
+			return fmt.Errorf("register module %q (%T) routes: %w", catalog[i].Name, h, err)
+		}
+		if err := routes.Err(); err != nil {
+			return fmt.Errorf("register module %q routes: %w", catalog[i].Name, err)
 		}
 	}
 

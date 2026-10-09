@@ -118,3 +118,52 @@ func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
 		})
 	}
 }
+
+type registrationModule struct {
+	bind        func(*routing.Routes)
+	initialized bool
+}
+
+func (m *registrationModule) Init(context.Context, *server.ApplicationServer) error {
+	m.initialized = true
+	return nil
+}
+
+func (m *registrationModule) Routes(routes *routing.Routes) error {
+	m.bind(routes)
+	return nil // Startup must check Routes.Err even if a module forgets.
+}
+
+func TestSetupHandlersRejectsRouteConflicts(t *testing.T) {
+	first := &registrationModule{bind: func(r *routing.Routes) {
+		r.HandleFunc("GET /items/{id}", func(http.ResponseWriter, *http.Request) {})
+	}}
+	second := &registrationModule{bind: func(r *routing.Routes) {
+		r.WithoutRateLimit().HandleFunc("GET /{kind}/latest", func(http.ResponseWriter, *http.Request) {})
+	}}
+	last := &registrationModule{bind: func(*routing.Routes) { t.Error("bound routes after startup failure") }}
+	catalog := []handlers.Descriptor{
+		{Name: "first", New: func() handlers.Handler { return first }},
+		{Name: "conflicting", New: func() handlers.Handler { return second }},
+		{Name: "last", New: func() handlers.Handler { return last }},
+	}
+	app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
+	err := SetupHandlers(context.Background(), app, nil, catalog, nil)
+	if err == nil || !strings.Contains(err.Error(), `module "conflicting"`) || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("route-conflict error = %v", err)
+	}
+	if last.initialized {
+		t.Fatal("initialized another module after a route conflict")
+	}
+}
+
+func TestSetupHandlersDoesNotRecoverModulePanics(t *testing.T) {
+	defer func() {
+		if got := recover(); got != "module bug" {
+			t.Fatalf("recovered %v, want module bug", got)
+		}
+	}()
+	module := &registrationModule{bind: func(*routing.Routes) { panic("module bug") }}
+	app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
+	SetupHandlers(context.Background(), app, nil, []handlers.Descriptor{{Name: "bug", New: func() handlers.Handler { return module }}}, nil)
+}
