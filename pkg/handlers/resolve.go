@@ -11,8 +11,21 @@ import (
 // selections maps capability names to provider module names. Without a selection,
 // a requirement must have exactly one provider unless it permits zero or multiple.
 // All supplied modules remain selected, including unchosen alternative providers.
-// Resolution orders initialization. It does not inject runtime dependencies.
+// Resolution orders initialization. Use Initialize to bind runtime dependencies.
 func Resolve(descriptors []Descriptor, selections map[string]string) ([]Descriptor, error) {
+	plan, err := resolve(descriptors, selections)
+	if err != nil {
+		return nil, err
+	}
+	return plan.modules, nil
+}
+
+type resolution struct {
+	modules  []Descriptor
+	bindings map[string]map[string][]string
+}
+
+func resolve(descriptors []Descriptor, selections map[string]string) (*resolution, error) {
 	if err := validateDescriptors(descriptors); err != nil {
 		return nil, err
 	}
@@ -45,9 +58,12 @@ func Resolve(descriptors []Descriptor, selections map[string]string) ([]Descript
 	}
 
 	dependencies := make([][]int, len(descriptors))
+	bindings := make(map[string]map[string][]string)
 	for i, d := range descriptors {
+		bindings[d.Name] = make(map[string][]string)
 		for _, requirement := range d.Requires {
 			matches := providers[requirement.Capability]
+			bindings[d.Name][requirement.Capability] = nil
 			if len(matches) == 0 && !requirement.Optional {
 				return nil, fmt.Errorf("module %q requires missing capability %q", d.Name, requirement.Capability)
 			}
@@ -59,6 +75,7 @@ func Resolve(descriptors []Descriptor, selections map[string]string) ([]Descript
 				return nil, fmt.Errorf("module %q requires capability %q: select one provider from %s", d.Name, requirement.Capability, strings.Join(names, ", "))
 			}
 			for _, provider := range matches {
+				bindings[d.Name][requirement.Capability] = append(bindings[d.Name][requirement.Capability], descriptors[provider].Name)
 				if !slices.Contains(dependencies[i], provider) {
 					dependencies[i] = append(dependencies[i], provider)
 				}
@@ -100,7 +117,7 @@ func Resolve(descriptors []Descriptor, selections map[string]string) ([]Descript
 			return nil, err
 		}
 	}
-	return ordered, nil
+	return &resolution{modules: ordered, bindings: bindings}, nil
 }
 
 func validateDescriptors(descriptors []Descriptor) error {

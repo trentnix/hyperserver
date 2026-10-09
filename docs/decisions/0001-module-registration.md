@@ -1,6 +1,6 @@
 # 0001: Self-registration and application-owned runtime state
 
-Status: Accepted. Factory catalogs, per-application instances, and capability ordering are implemented. Runtime dependency delivery and module cleanup remain pending.
+Status: Accepted. Factory catalogs, per-application instances, capability ordering, and declared dependency delivery are implemented. Automatic module cleanup remains pending.
 
 ## Context
 
@@ -24,7 +24,9 @@ Descriptions contain a name, a factory that creates an instance without I/O, and
 
 `handlers.Resolve` validates module metadata and provider selections before factories run. A required capability needs one provider unless the consumer permits several. Optional requirements permit no provider but do not hide ambiguous selections. Explicit selections narrow matching providers to one. The resolver follows catalog and requirement order, orders dependencies first, and rejects cycles. Every module in the supplied catalog stays selected. Provider selection changes dependency edges, not which modules run.
 
-The resolver returns ordered descriptions, not runtime service objects. Dependency delivery remains an [unresolved contract](readme.md#unresolved-contracts). Modules must eventually receive only the dependencies they declare.
+`handlers.Initialize` uses the resolved selections to initialize providers before consumers. Providers publish their declared services through `Capabilities`. Consumers receive a `Dependencies` view in `BindDependencies` before `Init`. The view contains only declared requirements. Generic lookup functions check each value against a consumer-owned interface. Existing application-supplied services still use `Init` parameters.
+
+This approach supports different service interfaces without adding methods to a central service locator. Capability names connect modules, while Go interfaces describe the behavior consumers need. Type mismatches produce startup errors, not compile-time errors. Missing optional services return a zero value or empty slice. Optional requirements never hide provider failures. Consumers borrow services and must not close them. Initialization returns successfully initialized modules even on failure, leaving cleanup to the application until module lifecycle handling is implemented.
 
 Future plugin loaders can register module descriptions and factories through the same registration API that imports use. Registration must therefore be callable without relying on `init()`. We have not chosen how to load plugin code or check whether a plugin works with a particular HyperServer version.
 

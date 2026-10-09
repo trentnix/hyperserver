@@ -27,7 +27,7 @@ Applications define access rules through [route-level authorization policies](pk
 
 Session data uses JSON, limited to 64 KiB before base64 encoding. Cookies are limited to 4 KiB including their name and attributes. Cookie-store data is signed, not encrypted, and must not contain secrets. See the [session guide](pkg/services/session/readme.md) for supported values and typed reads.
 
-Some services require other framework services and cannot be replaced independently. Dependency ordering and module cleanup are still application responsibilities.
+Some services require other framework services and cannot be replaced independently. Modules can declare dependencies for ordered initialization. Shared application services and module cleanup still need explicit wiring.
 
 ## Direction
 
@@ -55,7 +55,7 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 
 `server.NewApplicationServer(cfg)` accepts a `config.Config` and returns `(*ApplicationServer, error)`. It validates shared settings and creates the router and content manager. It does not read configuration files or initialize database, session, authentication, or mail services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
 
-Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(ctx)`, and `InitializeMail()` only for services the application needs, before initializing their consumers. The database initializer checks connectivity with a ten-second deadline. Mail initialization does not contact SMTP, and consumers that require delivery must validate its configuration. Drain requests before calling `Shutdown()`. The reference application explicitly initializes services for its site and authentication features. Module dependency discovery and ordering are still application responsibilities.
+Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(ctx)`, and `InitializeMail()` only for services the application needs, before initializing their consumers. The database initializer checks connectivity with a ten-second deadline. Mail initialization does not contact SMTP, and consumers that require delivery must validate its configuration. Drain requests before calling `Shutdown()`. The reference application explicitly initializes services for its site and authentication features, then uses `handlers.Initialize` for module dependencies and initialization.
 
 ### Module registration
 
@@ -72,24 +72,33 @@ func init() {
 
 `handlers.Registered()` returns a catalog copy. Applications can instead supply a local `[]handlers.Descriptor` to select modules without changing the import catalog. Each factory must return a fresh instance without I/O. Resolve dependencies, create the instances, then initialize them and bind their routes before accepting requests.
 
-To configure a module with your own storage, replace its factory in the application's catalog:
+To supply your own storage, use the module's descriptor constructor. For example, give the site an application-owned contact repository:
 
 ```go
-catalog, err := handlers.Replace(handlers.Registered(), handlers.Descriptor{
-    Name: "reports",
-    New: func() handlers.Handler { return &ReportsModule{Repository: reportStore} },
-})
+catalog, err := handlers.Replace(handlers.Registered(), site.Module(
+    func(context.Context) (site.ContactRepository, error) { return contactStore, nil },
+))
 if err != nil {
     return err
 }
-catalog, err = handlers.Resolve(catalog, nil)
+modules, err := handlers.Initialize(ctx, app, catalog, nil)
 if err != nil {
     return err
 }
-modules, err := handlers.Instantiate(catalog)
+routes := routing.NewRoutes(app.Web)
+for _, module := range modules {
+    if err := module.Routes(routes); err != nil {
+        return err
+    }
+    if err := routes.Err(); err != nil {
+        return err
+    }
+}
 ```
 
-`reportStore` implements the repository interface required by `ReportsModule`. The application owns the supplied store and closes it after requests drain. `Replace` returns a copy, preserves module order, and rejects missing or duplicate names and missing factories. Other applications keep their original catalog.
+`contactStore` implements `site.ContactRepository`. The application prepares the store and closes it after requests drain. This direct wiring does not require a separate provider module.
+
+`Replace` replaces the entire descriptor, including `Provides` and `Requires`. A module-owned constructor supplies the appropriate declarations for its configuration. To replace only a factory, copy the original descriptor and change `New` before passing it to `Replace`. Other applications keep their original catalog.
 
 Modules own their registration, internal setup, requirement checks, and routes. Applications select modules, supply shared services, and coordinate startup and shutdown. Modules must not initialize or close borrowed services. A configurable module can expose a descriptor constructor: the site's `site.Module(newContacts)` accepts a contact-storage factory, while `site.Module(nil)` selects its default SQLite storage.
 
@@ -97,19 +106,31 @@ Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth mo
 
 ### Module dependencies
 
-Descriptors can declare `Provides: []string{"post-storage"}` and `Requires: []handlers.Requirement{{Capability: "post-storage"}}`. Capability and module names are case-sensitive. `handlers.Resolve` checks the entire selected catalog without invoking factories, then returns a copy ordered with providers before consumers. Missing requirements, ambiguous providers, duplicate names, invalid metadata, and dependency cycles return errors.
+Descriptors can declare `Provides: []string{"post-storage"}` and `Requires: []handlers.Requirement{{Capability: "post-storage"}}`. Capability and module names are case-sensitive. `handlers.Initialize` validates the catalog before invoking factories, then binds dependencies and initializes providers before consumers. Missing requirements, ambiguous providers, duplicate names, invalid metadata, and dependency cycles return errors. Use `handlers.Resolve` to check metadata without creating modules.
 
 If several modules provide a required capability, select one by module name:
 
 ```go
-catalog, err := handlers.Resolve(handlers.Registered(), map[string]string{
+modules, err := handlers.Initialize(ctx, app, handlers.Registered(), map[string]string{
     "post-storage": "postgres-posts",
 })
 ```
 
 `Optional: true` permits a missing provider. `Multiple: true` accepts all matching providers. Optional requirements still reject ambiguity unless they accept multiple providers. An explicit selection narrows either form to one provider, and invalid selections always fail. All modules in the supplied catalog still initialize, including unchosen alternatives. Remove a module from the local catalog to exclude it from the application.
 
-Resolution controls startup order, not runtime service access. Applications still supply typed dependencies. Declared-dependency injection and module cleanup remain separate work.
+Providers implement `Capabilities() map[string]any`, returning exactly their declared services after `Init` succeeds. Consumers implement `BindDependencies(handlers.Dependencies) error`, called before their `Init`. Both hooks must avoid I/O. Consumers request their own interfaces:
+
+```go
+func (m *PostsModule) BindDependencies(d handlers.Dependencies) error {
+    var err error
+    m.repository, err = handlers.GetDependency[PostRepository](d, "post-storage")
+    return err
+}
+```
+
+Only declared requirements are available. An absent optional capability returns the requested type's zero value, so an interface field is `nil`. The consumer must handle that absence. Use `GetDependencies[PostRepository]` for several providers. It returns a new slice in catalog order, or an empty slice when an optional capability is absent. Wrong types, nil services, missing hooks, and initialization failures stop startup. An optional requirement does not hide a broken provider.
+
+See the [complete storage-provider example](pkg/handlers/example_test.go). Modules without declared dependencies can keep using `Init` alone. Existing application-supplied services still arrive through `ApplicationServer`. `Initialize` does not bind routes or close resources. On failure it returns the modules whose `Init` succeeded so the application can clean them up. Automatic module cleanup remains pending.
 
 ### Route registration errors
 

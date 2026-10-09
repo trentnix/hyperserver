@@ -5,6 +5,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -66,7 +67,9 @@ func Registered() []Descriptor {
 	return cloneDescriptors(catalog.descriptors)
 }
 
-// Replace returns a catalog copy with one named module's factory replaced.
+// Replace returns a catalog copy with one named module's entire descriptor replaced,
+// including Provides and Requires. Use the module's descriptor constructor to retain
+// its contracts when configuring it. To change only New, copy the original descriptor.
 // The name must occur exactly once and the replacement must have a factory.
 // Neither the supplied catalog nor the process-wide catalog is changed.
 func Replace(descriptors []Descriptor, replacement Descriptor) ([]Descriptor, error) {
@@ -102,12 +105,25 @@ func Instantiate(descriptors []Descriptor) ([]Handler, error) {
 	instances := make([]Handler, 0, len(descriptors))
 	for _, d := range descriptors {
 		h := d.New()
-		if h == nil {
+		if isNil(h) {
 			return nil, fmt.Errorf("module %q returned no instance", d.Name)
 		}
 		instances = append(instances, h)
 	}
 	return instances, nil
+}
+
+// isNil also recognizes a nil pointer stored inside an interface.
+func isNil(value any) bool {
+	if value == nil {
+		return true
+	}
+	switch v := reflect.ValueOf(value); v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 func cloneDescriptor(d Descriptor) Descriptor {

@@ -4,14 +4,14 @@ The [roadmap](../../roadmap.md) defines project direction and priorities. These 
 
 ## Accepted decisions
 
-- [0001: Self-registration and application-owned runtime state](0001-module-registration.md) — factory catalogs, per-application instances, and capability ordering implemented. Runtime dependency delivery and module cleanup pending.
+- [0001: Self-registration and application-owned runtime state](0001-module-registration.md) — factory catalogs, per-application instances, capability ordering, and declared dependency delivery implemented. Automatic module cleanup pending.
 
 ## Unresolved contracts
 
 | Area | Decisions still needed | When to resolve |
 | --- | --- | --- |
-| Modules | Runtime dependency delivery and lifecycle error handling. | During Phase 2, extending the independent-application tests. |
-| Services | Typed dependency parameters versus a resolver limited to declared capabilities, provider-selection configuration, and absent optional-service behavior. Derive individual service methods from their consumers. | During Phase 2, or earlier when a security fix needs a contract change. |
+| Modules | Lifecycle error handling and cleanup. | During Phase 2, extending the independent-application tests. |
+| Services | Move remaining shared runtime services into application-owned wiring. Derive individual service methods from their consumers. | During Phase 2, or earlier when a security fix needs a contract change. |
 | Rendering | Response-result representation, view selection and naming, and how dispatch maps validation errors and HTMX instructions to HTTP responses. | During Phase 3, using the reference form workflow. |
 | Storage and serialization | Repository methods and error semantics, how repositories join an application-owned transaction, serializer interfaces, and stored-format versioning. | Establish atomic recovery operations during Phase 1. Complete provider and format contracts during Phase 4. |
 

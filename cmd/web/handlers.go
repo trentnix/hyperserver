@@ -18,10 +18,6 @@ import (
 // initializes them in dependency order with a bounded context and binds routes.
 // providers selects module names by capability. Nil requires unambiguous defaults.
 func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger, catalog []handlers.Descriptor, providers map[string]string) error {
-	catalog, err := handlers.Resolve(catalog, providers)
-	if err != nil {
-		return err
-	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)
@@ -29,20 +25,16 @@ func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.
 		return err
 	}
 
-	modules, err := handlers.Instantiate(catalog)
+	modules, err := handlers.Initialize(ctx, s, catalog, providers)
 	if err != nil {
 		return err
 	}
-	for i, h := range modules {
-		if err := h.Init(ctx, s); err != nil {
-			return fmt.Errorf("initialize module %q: %w", catalog[i].Name, err)
-		}
-
+	for _, h := range modules {
 		if err := h.Routes(routes); err != nil {
-			return fmt.Errorf("register module %q (%T) routes: %w", catalog[i].Name, h, err)
+			return fmt.Errorf("register module %q (%T) routes: %w", h.Name, h.Handler, err)
 		}
 		if err := routes.Err(); err != nil {
-			return fmt.Errorf("register module %q routes: %w", catalog[i].Name, err)
+			return fmt.Errorf("register module %q routes: %w", h.Name, err)
 		}
 	}
 

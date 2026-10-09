@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -63,6 +64,7 @@ func TestInvalidDescriptors(t *testing.T) {
 		{"missing factory", []Descriptor{{Name: "test"}}, "invalid"},
 		{"duplicate", []Descriptor{{Name: "test", New: func() Handler { return new(testModule) }}, {Name: "test", New: func() Handler { return new(testModule) }}}, "duplicate"},
 		{"nil instance", []Descriptor{{Name: "test", New: func() Handler { return nil }}}, "no instance"},
+		{"typed nil instance", []Descriptor{{Name: "test", New: func() Handler { return (*testModule)(nil) }}}, "no instance"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if modules, err := Instantiate(tc.descriptors); modules != nil || err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -74,6 +76,45 @@ func TestInvalidDescriptors(t *testing.T) {
 	_, err := Instantiate([]Descriptor{{Name: "first", New: func() Handler { calls++; return new(testModule) }}, {Name: "bad"}})
 	if err == nil || calls != 0 {
 		t.Fatal("factory ran before catalog validation")
+	}
+}
+
+func TestReplaceDescriptorMetadata(t *testing.T) {
+	original := Descriptor{
+		Name: "pages", New: func() Handler { return new(testModule) },
+		Provides: []string{"pages"}, Requires: []Requirement{{Capability: "storage"}},
+	}
+	catalog := []Descriptor{original, {
+		Name: "store", New: func() Handler { return new(testModule) }, Provides: []string{"storage"},
+	}}
+	// Copying the descriptor preserves contracts when only the factory changes.
+	replacement := original
+	replacement.New = func() Handler { return new(testModule) }
+	updated, err := Replace(catalog, replacement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(updated[0].Provides, original.Provides) || !slices.Equal(updated[0].Requires, original.Requires) {
+		t.Fatal("replacement lost capability metadata")
+	}
+	resolved, err := Resolve(updated, nil)
+	if err != nil || resolved[0].Name != "store" {
+		t.Fatalf("resolution = %v, error = %v", resolved, err)
+	}
+	updated[0].Provides[0] = "changed"
+	updated[0].Requires[0].Capability = "changed"
+	if original.Provides[0] != "pages" || original.Requires[0].Capability != "storage" {
+		t.Fatal("replacement metadata shares the source's slices")
+	}
+
+	// A complete replacement can intentionally remove requirements for borrowed storage.
+	replacement.Requires = nil
+	updated, err = Replace(catalog, replacement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated[0].Requires) != 0 || !slices.Equal(updated[0].Provides, original.Provides) {
+		t.Fatal("replacement did not use the new descriptor's contracts")
 	}
 }
 

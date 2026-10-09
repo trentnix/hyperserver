@@ -75,6 +75,21 @@ func (m *orderedModule) Routes(*routing.Routes) error {
 	return nil
 }
 
+func (m *orderedModule) Capabilities() map[string]any {
+	if m.name == "consumer" {
+		return map[string]any{"pages": m}
+	}
+	return map[string]any{"storage": m}
+}
+
+func (m *orderedModule) BindDependencies(dependencies handlers.Dependencies) error {
+	if m.name != "consumer" {
+		return nil
+	}
+	_, err := handlers.GetDependency[*orderedModule](dependencies, "storage")
+	return err
+}
+
 func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
 	for _, mode := range []string{"missing", "ambiguous", "cycle", "selected"} {
 		t.Run(mode, func(t *testing.T) {
@@ -111,7 +126,7 @@ func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := "new two,new consumer,new one,init two,routes two,init consumer,routes consumer,init one,routes one"
+			want := "new two,new consumer,new one,init two,init consumer,init one,routes two,routes consumer,routes one"
 			if strings.Join(steps, ",") != want {
 				t.Fatalf("initialization order=%v", steps)
 			}
@@ -152,8 +167,8 @@ func TestSetupHandlersRejectsRouteConflicts(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), `module "conflicting"`) || !strings.Contains(err.Error(), "conflicts") {
 		t.Fatalf("route-conflict error = %v", err)
 	}
-	if last.initialized {
-		t.Fatal("initialized another module after a route conflict")
+	if !last.initialized {
+		t.Fatal("route binding began before all modules initialized")
 	}
 }
 
@@ -166,4 +181,21 @@ func TestSetupHandlersDoesNotRecoverModulePanics(t *testing.T) {
 	module := &registrationModule{bind: func(*routing.Routes) { panic("module bug") }}
 	app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
 	SetupHandlers(context.Background(), app, nil, []handlers.Descriptor{{Name: "bug", New: func() handlers.Handler { return module }}}, nil)
+}
+
+func TestSetupHandlersDoesNotBindRoutesOnInitializationFailure(t *testing.T) {
+	cause := errors.New("storage unavailable")
+	first := &registrationModule{bind: func(*routing.Routes) { t.Error("bound routes before initialization completed") }}
+	failed := &routeFailureModule{initErr: cause}
+	catalog := []handlers.Descriptor{
+		{Name: "first", New: func() handlers.Handler { return first }},
+		{Name: "failed", New: func() handlers.Handler { return failed }},
+	}
+	app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
+	if err := SetupHandlers(context.Background(), app, nil, catalog, nil); !errors.Is(err, cause) {
+		t.Fatalf("initialization error = %v", err)
+	}
+	if !first.initialized {
+		t.Fatal("first module did not initialize")
+	}
 }
