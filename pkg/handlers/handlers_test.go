@@ -107,3 +107,44 @@ func TestInstantiatePreservesCatalogOrder(t *testing.T) {
 		t.Fatalf("factory order = %v", order)
 	}
 }
+
+func TestReplace(t *testing.T) {
+	original := &testModule{}
+	replacement := &testModule{}
+	catalog := []Descriptor{
+		{Name: "first", New: func() Handler { return original }},
+		{Name: "second", New: func() Handler { return new(testModule) }},
+	}
+	updated, err := Replace(catalog, Descriptor{Name: "first", New: func() Handler { return replacement }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if catalog[0].New() != original || updated[0].New() != replacement || updated[1].Name != "second" {
+		t.Fatal("replacement changed the source or catalog order")
+	}
+	updated[1].Name = "changed"
+	if catalog[1].Name != "second" {
+		t.Fatal("replacement shares the source slice")
+	}
+
+	for _, tc := range []struct {
+		name        string
+		catalog     []Descriptor
+		replacement Descriptor
+		want        string
+	}{
+		{"unknown", catalog, Descriptor{Name: "missing", New: catalog[0].New}, "unknown module"},
+		{"empty catalog", nil, catalog[0], "unknown module"},
+		{"missing factory", catalog, Descriptor{Name: "first"}, "invalid module descriptor"},
+		{"empty name", catalog, Descriptor{New: catalog[0].New}, "invalid module descriptor"},
+		{"whitespace name", catalog, Descriptor{Name: " first ", New: catalog[0].New}, "invalid module descriptor"},
+		{"duplicate", []Descriptor{catalog[0], catalog[0]}, catalog[0], "duplicate module"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Replace(tc.catalog, tc.replacement)
+			if got != nil || err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("replacement = %v, error = %v", got, err)
+			}
+		})
+	}
+}

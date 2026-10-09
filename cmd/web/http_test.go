@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
@@ -45,7 +44,7 @@ func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...fun
 // Browser scenarios need room for download, startup, checks, and process cleanup.
 func runHTTPScenarioWithTimeout(t *testing.T, timeout time.Duration, scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
-	runHTTPScenarioWithCatalog(t, timeout, siteModules(""), scenario, configure...)
+	runHTTPScenarioWithCatalog(t, timeout, handlers.Registered(), scenario, configure...)
 }
 
 func runHTTPScenarioWithCatalog(t *testing.T, timeout time.Duration, catalog []handlers.Descriptor, scenario func(*httpHarness), configure ...func(*config.Config)) {
@@ -159,7 +158,7 @@ type httpHarness struct {
 
 func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
-	return newHTTPHarnessWithCatalog(t, siteModules(""), configure...)
+	return newHTTPHarnessWithCatalog(t, handlers.Registered(), configure...)
 }
 
 func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, configure ...func(*config.Config)) *httpHarness {
@@ -242,14 +241,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 	}
 	logs := &capturedLogs{}
 	l := &testLogger{logs: logs}
-	services, err := auth.NewRegistry(cfg, auth.Registered())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := SetupHandlers(context.Background(), app, l, catalog, services); err != nil {
-		t.Fatal(err)
-	}
-	if err := SetupAuthentication(app, l, services); err != nil {
+	if err := SetupHandlers(context.Background(), app, l, catalog); err != nil {
 		t.Fatal(err)
 	}
 	jar, err := cookiejar.New(nil)

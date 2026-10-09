@@ -17,7 +17,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
@@ -88,19 +87,14 @@ func run(ctx context.Context, s *server.ApplicationServer, contactDirectory stri
 		return fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l := logger.NewSlogLogger(nil)
-	services, err := auth.NewRegistry(s.Config, auth.Registered())
+	catalog, err := siteModules(contactDirectory)
 	if err != nil {
 		return err
 	}
 
 	// attach routes and their handlers to the router
-	if err := SetupHandlers(ctx, s, l, siteModules(contactDirectory), services); err != nil {
+	if err := SetupHandlers(ctx, s, l, catalog); err != nil {
 		return fmt.Errorf("failed to set up the registered handlers: %w", err)
-	}
-
-	// set up authentication services and components
-	if err := SetupAuthentication(s, l, services); err != nil {
-		return fmt.Errorf("failed to set up the authorization services: %w", err)
 	}
 
 	handler, err := applicationHandler(s, l)

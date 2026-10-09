@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 
+	// Register the reference application's email authentication provider.
+	_ "github.com/trentnix/hyperserver/auth/modules/email"
+
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 
@@ -13,19 +16,15 @@ import (
 
 // siteModules snapshots imports and configures the reference site's factory.
 // The directory belongs to this application, not the process-wide catalog.
-func siteModules(directory string) []handlers.Descriptor {
+func siteModules(directory string) ([]handlers.Descriptor, error) {
 	catalog := handlers.Registered()
 	if directory == "" {
-		return catalog
+		return catalog, nil
 	}
-	for i, descriptor := range catalog {
-		if descriptor.Name == "site" {
-			catalog[i].New = func() handlers.Handler {
-				return &site.SiteModule{NewContacts: func(ctx context.Context) (site.ContactRepository, error) {
-					return models.NewFileContactRepository(ctx, directory)
-				}}
-			}
-		}
+	newContacts := func(ctx context.Context) (site.ContactRepository, error) {
+		return models.NewFileContactRepository(ctx, directory)
 	}
-	return catalog
+	return handlers.Replace(catalog, handlers.Descriptor{Name: "site", New: func() handlers.Handler {
+		return &site.SiteModule{NewContacts: newContacts}
+	}})
 }

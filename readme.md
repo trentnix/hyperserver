@@ -59,7 +59,7 @@ Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(c
 
 ### Module registration
 
-Imports register factories, not live modules:
+Go package imports register factories, not live modules:
 
 ```go
 func init() {
@@ -72,7 +72,22 @@ func init() {
 
 `handlers.Registered()` returns a catalog copy. Pass it to `handlers.Instantiate`, or supply a local `[]handlers.Descriptor` to select modules without changing the import catalog. Each factory must return a fresh instance without I/O. Initialize the instances and bind their routes before accepting requests. Invalid descriptions and duplicate names return errors.
 
-Auth providers use `auth.Descriptor` and `auth.Register`. `auth.NewRegistry(cfg, auth.Registered())` creates only enabled providers for one application. Supply that registry to `AuthManager.Services` before initialization, then initialize the providers and bind their routes. See [the reference startup](cmd/web/main.go) for wiring. Adding a descriptor does not activate it in applications already running.
+To configure a module with your own storage, replace its factory in the application's catalog:
+
+```go
+catalog, err := handlers.Replace(handlers.Registered(), handlers.Descriptor{
+    Name: "reports",
+    New: func() handlers.Handler { return &ReportsModule{Repository: reportStore} },
+})
+if err != nil {
+    return err
+}
+modules, err := handlers.Instantiate(catalog)
+```
+
+`reportStore` implements the repository interface required by `ReportsModule`. The application owns the supplied store and closes it after requests drain. `Replace` returns a copy, preserves module order, and rejects missing or duplicate names and missing factories. Other applications keep their original catalog.
+
+Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth module creates its own manager and enabled providers, validates verification configuration during `Init`, and binds manager and provider routes during `Routes`. Initialize its required services first, as shown in [the reference startup](cmd/web/main.go). For an explicit provider catalog, replace the default module with `auth.Module(providers)` using `handlers.Replace`. An empty explicit catalog never falls back to imports. Adding a descriptor does not activate it in applications already running.
 
 ### Account storage
 

@@ -53,6 +53,31 @@ func Registered() []Descriptor {
 	return slices.Clone(catalog.descriptors)
 }
 
+// Replace returns a catalog copy with one named module's factory replaced.
+// The name must occur exactly once and the replacement must have a factory.
+// Neither the supplied catalog nor the process-wide catalog is changed.
+func Replace(descriptors []Descriptor, replacement Descriptor) ([]Descriptor, error) {
+	if replacement.Name == "" || strings.TrimSpace(replacement.Name) != replacement.Name || replacement.New == nil {
+		return nil, fmt.Errorf("invalid module descriptor %q", replacement.Name)
+	}
+	index := -1
+	for i, d := range descriptors {
+		if d.Name != replacement.Name {
+			continue
+		}
+		if index >= 0 {
+			return nil, fmt.Errorf("duplicate module %q", replacement.Name)
+		}
+		index = i
+	}
+	if index < 0 {
+		return nil, fmt.Errorf("unknown module %q", replacement.Name)
+	}
+	result := slices.Clone(descriptors)
+	result[index] = replacement
+	return result, nil
+}
+
 // Instantiate validates a catalog and creates fresh modules in registration order.
 // Tests and applications can supply a local catalog, including an empty one.
 func Instantiate(descriptors []Descriptor) ([]Handler, error) {

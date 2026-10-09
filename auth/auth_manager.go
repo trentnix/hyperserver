@@ -1,6 +1,6 @@
 // Package auth coordinates authentication providers and their HTTP handlers.
-// Imports register factories. Each application supplies its own provider registry
-// and initializes its instances before serving requests.
+// Go package imports register factories. The auth module creates and initializes
+// each application's manager and enabled providers before binding their routes.
 package auth
 
 import (
@@ -18,7 +18,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
-	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -66,11 +65,6 @@ const (
 
 	authEndpoint = "/auth/login"
 )
-
-// init registers the AuthManager handler with the application
-func init() {
-	handlers.Register(handlers.Descriptor{Name: "auth", New: func() handlers.Handler { return new(AuthManager) }})
-}
 
 // Init processes the initialization of the AuthManager handler
 func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error {
