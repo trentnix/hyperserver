@@ -241,7 +241,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 	}
 	logs := &capturedLogs{}
 	l := &testLogger{logs: logs}
-	if err := SetupHandlers(context.Background(), app, l, catalog); err != nil {
+	if err := SetupHandlers(context.Background(), app, l, catalog, nil); err != nil {
 		t.Fatal(err)
 	}
 	jar, err := cookiejar.New(nil)

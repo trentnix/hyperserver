@@ -70,7 +70,7 @@ func init() {
 }
 ```
 
-`handlers.Registered()` returns a catalog copy. Pass it to `handlers.Instantiate`, or supply a local `[]handlers.Descriptor` to select modules without changing the import catalog. Each factory must return a fresh instance without I/O. Initialize the instances and bind their routes before accepting requests. Invalid descriptions and duplicate names return errors.
+`handlers.Registered()` returns a catalog copy. Applications can instead supply a local `[]handlers.Descriptor` to select modules without changing the import catalog. Each factory must return a fresh instance without I/O. Resolve dependencies, create the instances, then initialize them and bind their routes before accepting requests.
 
 To configure a module with your own storage, replace its factory in the application's catalog:
 
@@ -82,6 +82,10 @@ catalog, err := handlers.Replace(handlers.Registered(), handlers.Descriptor{
 if err != nil {
     return err
 }
+catalog, err = handlers.Resolve(catalog, nil)
+if err != nil {
+    return err
+}
 modules, err := handlers.Instantiate(catalog)
 ```
 
@@ -90,6 +94,22 @@ modules, err := handlers.Instantiate(catalog)
 Modules own their registration, internal setup, requirement checks, and routes. Applications select modules, supply shared services, and coordinate startup and shutdown. Modules must not initialize or close borrowed services. A configurable module can expose a descriptor constructor: the site's `site.Module(newContacts)` accepts a contact-storage factory, while `site.Module(nil)` selects its default SQLite storage.
 
 Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth module creates its own manager and enabled providers, validates verification configuration during `Init`, and binds manager and provider routes during `Routes`. Initialize its required services first, as shown in [the reference startup](cmd/web/main.go). For an explicit provider catalog, replace the default module with `auth.Module(providers)` using `handlers.Replace`. An empty explicit catalog never falls back to imports. Adding a descriptor does not activate it in applications already running.
+
+### Module dependencies
+
+Descriptors can declare `Provides: []string{"post-storage"}` and `Requires: []handlers.Requirement{{Capability: "post-storage"}}`. Capability and module names are case-sensitive. `handlers.Resolve` checks the entire selected catalog without invoking factories, then returns a copy ordered with providers before consumers. Missing requirements, ambiguous providers, duplicate names, invalid metadata, and dependency cycles return errors.
+
+If several modules provide a required capability, select one by module name:
+
+```go
+catalog, err := handlers.Resolve(handlers.Registered(), map[string]string{
+    "post-storage": "postgres-posts",
+})
+```
+
+`Optional: true` permits a missing provider. `Multiple: true` accepts all matching providers. Optional requirements still reject ambiguity unless they accept multiple providers. An explicit selection narrows either form to one provider, and invalid selections always fail. All modules in the supplied catalog still initialize, including unchosen alternatives. Remove a module from the local catalog to exclude it from the application.
+
+Resolution controls startup order, not runtime service access. Applications still supply typed dependencies. Route-conflict checks, declared-dependency injection, and module cleanup remain separate work.
 
 ### Account storage
 

@@ -1,6 +1,6 @@
 # 0001: Self-registration and application-owned runtime state
 
-Status: Accepted. Factory catalogs and per-application instances are implemented. Dependency resolution and module cleanup remain pending.
+Status: Accepted. Factory catalogs, per-application instances, and capability ordering are implemented. Runtime dependency delivery and module cleanup remain pending.
 
 ## Context
 
@@ -20,7 +20,11 @@ Each application snapshots the process-wide module catalog and owns its enabled 
 
 Importing a module still makes it available to every application in the process. Applications share descriptions of available modules, not the module objects themselves. Each application creates, initializes, and cleans up its own objects.
 
-Descriptions currently contain a name and a factory that creates an instance without I/O. Applications can copy the import catalog or supply a local catalog. Auth registries instantiate only configured, enabled providers. Capability declarations and dependency delivery remain [unresolved contracts](readme.md#unresolved-contracts). Modules must eventually receive only the dependencies they declare.
+Descriptions contain a name, a factory that creates an instance without I/O, and required and provided capabilities. Applications can copy the import catalog or supply a local catalog. Metadata slices are copied so applications cannot change each other's descriptions. Auth registries instantiate only configured, enabled providers.
+
+`handlers.Resolve` validates module metadata and provider selections before factories run. A required capability needs one provider unless the consumer permits several. Optional requirements permit no provider but do not hide ambiguous selections. Explicit selections narrow matching providers to one. The resolver follows catalog and requirement order, orders dependencies first, and rejects cycles. Every module in the supplied catalog stays selected. Provider selection changes dependency edges, not which modules run.
+
+The resolver returns ordered descriptions, not runtime service objects. Dependency delivery remains an [unresolved contract](readme.md#unresolved-contracts). Modules must eventually receive only the dependencies they declare.
 
 Future plugin loaders can register module descriptions and factories through the same registration API that imports use. Registration must therefore be callable without relying on `init()`. We have not chosen how to load plugin code or check whether a plugin works with a particular HyperServer version.
 

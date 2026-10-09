@@ -37,7 +37,7 @@ func TestSetupHandlersRejectsInvalidRatePolicies(t *testing.T) {
 			catalog := []handlers.Descriptor{{Name: "test", New: func() handlers.Handler { return module }}}
 			app := &server.ApplicationServer{Web: http.NewServeMux(), Config: &config.Config{}}
 			app.Config.HTTP.DefaultRateLimit.Enabled = invalidDefault
-			err := SetupHandlers(context.Background(), app, nil, catalog)
+			err := SetupHandlers(context.Background(), app, nil, catalog, nil)
 			if invalidDefault {
 				if err == nil || !strings.Contains(err.Error(), "http.defaultRateLimit") || module.initialized {
 					t.Fatalf("invalid default: error=%v initialized=%t", err, module.initialized)
@@ -54,8 +54,67 @@ func TestSetupHandlersIdentifiesInitializationFailure(t *testing.T) {
 	module := &routeFailureModule{initErr: cause}
 	catalog := []handlers.Descriptor{{Name: "test", New: func() handlers.Handler { return module }}}
 	app := &server.ApplicationServer{Web: http.NewServeMux(), Config: &config.Config{}}
-	err := SetupHandlers(context.Background(), app, nil, catalog)
+	err := SetupHandlers(context.Background(), app, nil, catalog, nil)
 	if !errors.Is(err, cause) || !strings.Contains(err.Error(), `initialize module "test"`) {
 		t.Fatalf("initialization error = %v", err)
+	}
+}
+
+type orderedModule struct {
+	name  string
+	steps *[]string
+}
+
+func (m *orderedModule) Init(context.Context, *server.ApplicationServer) error {
+	*m.steps = append(*m.steps, "init "+m.name)
+	return nil
+}
+
+func (m *orderedModule) Routes(*routing.Routes) error {
+	*m.steps = append(*m.steps, "routes "+m.name)
+	return nil
+}
+
+func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
+	for _, mode := range []string{"missing", "ambiguous", "cycle", "selected"} {
+		t.Run(mode, func(t *testing.T) {
+			var steps []string
+			factory := func(name string) func() handlers.Handler {
+				return func() handlers.Handler {
+					steps = append(steps, "new "+name)
+					return &orderedModule{name: name, steps: &steps}
+				}
+			}
+			catalog := []handlers.Descriptor{{Name: "consumer", New: factory("consumer"),
+				Provides: []string{"pages"}, Requires: []handlers.Requirement{{Capability: "storage"}}}}
+			var selections map[string]string
+			if mode != "missing" {
+				catalog = append(catalog, handlers.Descriptor{Name: "one", New: factory("one"), Provides: []string{"storage"}})
+			}
+			if mode == "ambiguous" || mode == "selected" {
+				catalog = append(catalog, handlers.Descriptor{Name: "two", New: factory("two"), Provides: []string{"storage"}})
+			}
+			if mode == "cycle" {
+				catalog[1].Requires = []handlers.Requirement{{Capability: "pages"}}
+			}
+			if mode == "selected" {
+				selections = map[string]string{"storage": "two"}
+			}
+			app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
+			err := SetupHandlers(context.Background(), app, nil, catalog, selections)
+			if mode != "selected" {
+				if err == nil || len(steps) != 0 {
+					t.Fatalf("invalid graph: error=%v steps=%v", err, steps)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "new two,new consumer,new one,init two,routes two,init consumer,routes consumer,init one,routes one"
+			if strings.Join(steps, ",") != want {
+				t.Fatalf("initialization order=%v", steps)
+			}
+		})
 	}
 }

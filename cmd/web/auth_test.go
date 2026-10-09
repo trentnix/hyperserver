@@ -89,7 +89,7 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 			}
 			log := &ratePolicyWarningLogger{}
 			app := &server.ApplicationServer{Config: cfg, Web: http.NewServeMux(), ContentManager: content.NewContentManager()}
-			err := SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(catalog)})
+			err := SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(catalog)}, nil)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
 					t.Fatalf("error = %v, routed = %t, want %q without routes", err, provider.routed, tc.want)

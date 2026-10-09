@@ -14,9 +14,14 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
-// SetupHandlers initializes registered modules with a bounded context and binds
-// their routes. Each module prepares its own storage before its routes are bound.
-func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger, catalog []handlers.Descriptor) error {
+// SetupHandlers resolves capability requirements before creating modules, then
+// initializes them in dependency order with a bounded context and binds routes.
+// providers selects module names by capability. Nil requires unambiguous defaults.
+func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger, catalog []handlers.Descriptor, providers map[string]string) error {
+	catalog, err := handlers.Resolve(catalog, providers)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)

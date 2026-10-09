@@ -93,7 +93,7 @@ func run(ctx context.Context, s *server.ApplicationServer, contactDirectory stri
 	}
 
 	// attach routes and their handlers to the router
-	if err := SetupHandlers(ctx, s, l, catalog); err != nil {
+	if err := SetupHandlers(ctx, s, l, catalog, nil); err != nil {
 		return fmt.Errorf("failed to set up the registered handlers: %w", err)
 	}
 
