@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/trentnix/hyperserver/pkg/server"
 )
+
+const defaultInitializationTimeout = 10 * time.Second
 
 // CapabilityProvider exposes the services named by its descriptor's Provides list.
 // Call after Init succeeds. Capabilities must perform no I/O and must return exactly
@@ -77,6 +80,8 @@ type Instance struct {
 
 // Initialize resolves requirements, creates modules, binds declared dependencies,
 // and initializes modules in dependency order. It checks cancellation between steps.
+// The whole initialization uses ctx's deadline, or ten seconds if it has none.
+// Init must honor ctx for storage setup and other I/O. Cancellation is cooperative.
 // It does not bind routes or close resources. Applications still own shared services
 // and failure cleanup. Modules must clean up resources they acquire on failed Init.
 // On failure, the returned instances contain every module whose Init succeeded,
@@ -88,6 +93,11 @@ func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []De
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if _, bounded := ctx.Deadline(); !bounded {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultInitializationTimeout)
+		defer cancel()
 	}
 	modules, err := Instantiate(plan.modules)
 	if err != nil {

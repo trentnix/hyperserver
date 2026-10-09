@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
@@ -264,7 +265,7 @@ func TestInitializeStopsOnFailureAndCancellation(t *testing.T) {
 	cause := errors.New("service unavailable")
 	for _, phase := range []string{"before factories", "bind failure", "init failure", "cancel bind", "cancel init", "cancel publication"} {
 		t.Run(phase, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 			var steps []string
 			module := &dependencyModule{

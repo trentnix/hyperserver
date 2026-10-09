@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	site "github.com/trentnix/hyperserver/modules/site"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -197,5 +201,77 @@ func TestSetupHandlersDoesNotBindRoutesOnInitializationFailure(t *testing.T) {
 	}
 	if !first.initialized {
 		t.Fatal("first module did not initialize")
+	}
+}
+
+func TestSetupHandlersStorageTimeoutPreventsRouteBinding(t *testing.T) {
+	for _, test := range []struct {
+		name                     string
+		configured, parent, want time.Duration
+	}{
+		{name: "default", want: 10 * time.Second},
+		{name: "shorter configured budget", configured: 2 * time.Second, want: 2 * time.Second},
+		{name: "longer configured budget", configured: time.Minute, want: time.Minute},
+		{name: "earlier parent", configured: time.Minute, parent: time.Second, want: time.Second},
+		{name: "later parent", configured: time.Second, parent: time.Minute, want: time.Second},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				cfg := config.Config{}
+				if test.configured != 0 {
+					cfg.App.InitializationTimeout = &test.configured
+				}
+				app, err := server.NewApplicationServer(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				first := &registrationModule{bind: func(*routing.Routes) { t.Error("bound routes before storage was ready") }}
+				catalog := []handlers.Descriptor{
+					{Name: "first", New: func() handlers.Handler { return first }},
+					site.Module(func(ctx context.Context) (site.ContactRepository, error) {
+						<-ctx.Done()
+						return nil, ctx.Err()
+					}),
+				}
+				started := time.Now()
+				ctx := context.Background()
+				if test.parent != 0 {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, test.parent)
+					defer cancel()
+				}
+				err = SetupHandlers(ctx, app, nil, catalog, nil)
+				if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), `module "site"`) {
+					t.Fatalf("storage setup error = %v", err)
+				}
+				if time.Since(started) != test.want || !first.initialized {
+					t.Fatal("startup did not use one bounded initialization phase")
+				}
+				_, pattern := app.Web.Handler(httptest.NewRequest(http.MethodPost, "/contact", nil))
+				if pattern != "" {
+					t.Fatalf("failed site initialization registered %q", pattern)
+				}
+			})
+		})
+	}
+}
+
+func TestSetupHandlersRejectsInvalidInitializationTimeout(t *testing.T) {
+	for _, timeout := range []time.Duration{0, -time.Second} {
+		t.Run(timeout.String(), func(t *testing.T) {
+			cfg := config.Config{App: config.AppConfig{InitializationTimeout: &timeout}}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("validation accepted nonpositive timeout")
+			}
+			app := &server.ApplicationServer{Config: &cfg, Web: http.NewServeMux()}
+			catalog := []handlers.Descriptor{{Name: "test", New: func() handlers.Handler {
+				t.Fatal("factory ran with invalid timeout")
+				return nil
+			}}}
+			err := SetupHandlers(context.Background(), app, nil, catalog, nil)
+			if err == nil || !strings.Contains(err.Error(), "app.initializationTimeout must be positive") {
+				t.Fatalf("invalid timeout error = %v", err)
+			}
+		})
 	}
 }

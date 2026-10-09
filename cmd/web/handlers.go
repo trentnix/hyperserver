@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -16,10 +15,17 @@ import (
 
 // SetupHandlers resolves capability requirements before creating modules, then
 // initializes them in dependency order with a bounded context and binds routes.
+// app.initializationTimeout sets the module budget. An earlier ctx deadline wins.
 // providers selects module names by capability. Nil requires unambiguous defaults.
 func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger, catalog []handlers.Descriptor, providers map[string]string) error {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	if timeout := s.Config.App.InitializationTimeout; timeout != nil {
+		if *timeout <= 0 {
+			return fmt.Errorf("app.initializationTimeout must be positive")
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *timeout)
+		defer cancel()
+	}
 	routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)
 	if err != nil {
 		return err

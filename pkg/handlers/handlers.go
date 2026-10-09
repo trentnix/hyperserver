@@ -47,7 +47,8 @@ type (
 		Routes(*routing.Routes) error
 		// Init validates the module's requirements and prepares its internal components.
 		// Applications supply shared services. Modules must not initialize or close
-		// borrowed services. Use ctx for initialization I/O.
+		// borrowed services. Open and validate owned storage before returning success.
+		// Honor ctx for initialization I/O. Do not retain it for request-time operations.
 		Init(context.Context, *server.ApplicationServer) error
 	}
 )

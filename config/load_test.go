@@ -69,6 +69,52 @@ func TestConfigFileRequired(t *testing.T) {
 	}
 }
 
+func TestInitializationTimeoutConfiguration(t *testing.T) {
+	for _, test := range []struct {
+		name, file, env string
+		want            time.Duration
+	}{
+		{name: "default", file: "{}", want: 10 * time.Second},
+		{name: "file", file: "app:\n  initializationTimeout: 2m", want: 2 * time.Minute},
+		{name: "environment", file: "{}", env: "45s", want: 45 * time.Second},
+		{name: "override", file: "app:\n  initializationTimeout: 2m", env: "30s", want: 30 * time.Second},
+		{name: "subsecond", file: "app:\n  initializationTimeout: 500ms", want: 500 * time.Millisecond},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var environment []string
+			if test.env != "" {
+				environment = []string{"HYPERSERVER_APP_INITIALIZATIONTIMEOUT=" + test.env}
+			}
+			cfg, err := readConfig(strings.NewReader(test.file), environment)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.App.InitializationTimeout == nil || *cfg.App.InitializationTimeout != test.want {
+				t.Fatalf("initialization timeout = %v, want %v", cfg.App.InitializationTimeout, test.want)
+			}
+		})
+	}
+	for _, value := range []string{"0", "0s", "-1s", "12", "not-a-duration", "null", "999999999999999999h", "\"\"", ""} {
+		for _, environment := range []bool{false, true} {
+			t.Run(value+map[bool]string{false: "/file", true: "/environment"}[environment], func(t *testing.T) {
+				file := "app:\n  initializationTimeout: " + value
+				var env []string
+				if environment {
+					file = "app:\n  initializationTimeout: 1m"
+					env = []string{"HYPERSERVER_APP_INITIALIZATIONTIMEOUT=" + value}
+				}
+				_, err := readConfig(strings.NewReader(file), env)
+				if err == nil || !strings.Contains(err.Error(), "app.initializationTimeout") {
+					t.Fatalf("invalid timeout error = %v", err)
+				}
+			})
+		}
+	}
+	if err := (Config{}).Validate(); err != nil {
+		t.Fatal("omitted programmatic setting must remain valid:", err)
+	}
+}
+
 func TestInvalidConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name, file, environment, want string
@@ -206,8 +252,14 @@ func TestConfigFieldsCoverScalarAndListSettings(t *testing.T) {
 		for i := 0; i < value.NumField(); i++ {
 			field := value.Field(i)
 			name := path + value.Type().Field(i).Name
+			if field.Kind() == reflect.Pointer {
+				if field.IsNil() {
+					t.Fatalf("%s has no default configuration value", name)
+				}
+				field = field.Elem()
+			}
 			switch field.Kind() {
-			case reflect.Struct, reflect.Pointer:
+			case reflect.Struct:
 				visit(field, name+".")
 			case reflect.Map:
 				// Provider-owned keys are exercised separately.

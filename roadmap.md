@@ -131,6 +131,8 @@ On startup failure, close completed modules in reverse order. The failing factor
 
 Descriptors contain a name, factory, and capability requirements and provisions. [Module initialization](pkg/handlers/initialize.go) resolves provider selections, initializes providers, and passes each consumer only its declared dependencies. Consumers read services through their own interfaces. Missing optional services return a zero value or empty slice. Failed or incompatible providers stop startup. Route binding reports pattern conflicts through `Routes.Err()` after initialization and before traffic. Application-supplied services still need explicit wiring. Automatic module cleanup remains pending.
 
+Storage setup runs during initialization, before consumers and routes become active. Module initialization uses the caller's deadline or a ten-second default for the whole phase. The reference application supplies that deadline through `app.initializationTimeout`. Providers must honor the context and leave borrowed pools open for their owner to close. Tests cover storage failures, deadlines, dependency ordering, and repositories sharing a pool.
+
 ### Rendering and HTMX responses
 
 A handler response result can describe full-page or fragment rendering, validation errors, redirects, notifications, out-of-band updates, client events, retargeting, and reswapping. Keep direct `http.Handler` use available for downloads, streaming, and specialized responses.

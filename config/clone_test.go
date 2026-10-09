@@ -3,9 +3,11 @@ package config
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestConfigClone(t *testing.T) {
+	timeout := time.Minute
 	original := Config{
 		HTTP: HTTPConfig{PublicOrigin: "https://example.com", TrustedProxies: []string{"127.0.0.1/32"}},
 		Auth: AuthConfig{
@@ -13,12 +15,13 @@ func TestConfigClone(t *testing.T) {
 			AccountStorage: AccountStorageConfig{Provider: "custom", Options: map[string]string{"bucket": "users"}},
 			RateLimit:      &ModuleRateLimitConfig{MaxClients: 100},
 		},
-		App: AppConfig{Name: "original", SiteRateLimit: &ModuleRateLimitConfig{MaxClients: 200}},
+		App: AppConfig{Name: "original", SiteRateLimit: &ModuleRateLimitConfig{MaxClients: 200}, InitializationTimeout: &timeout},
 	}
 	original.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
 	original.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}, "unset": nil}
 
 	for name, mutate := range map[string]func(*Config){
+		"initialization timeout":   func(c *Config) { *c.App.InitializationTimeout = time.Second },
 		"scalar":                   func(c *Config) { c.App.Name = "changed" },
 		"proxy slice":              func(c *Config) { c.HTTP.TrustedProxies[0] = "192.0.2.0/24" },
 		"session mapping":          func(c *Config) { c.HTTP.Session.Types["default"] = "sqliteStore" },

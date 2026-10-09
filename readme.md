@@ -132,6 +132,17 @@ func (m *PostsModule) BindDependencies(d handlers.Dependencies) error {
 
 Only declared requirements are available. An absent optional capability returns the requested type's zero value, so an interface field is `nil`. The consumer must handle that absence. Use `GetDependencies[PostRepository]` for several providers. It returns a new slice in catalog order, or an empty slice when an optional capability is absent. Wrong types, nil services, missing hooks, and initialization failures stop startup. An optional requirement does not hide a broken provider.
 
+`Initialize` uses the caller's deadline, or ten seconds if none is set, for the entire initialization phase. Pass `context.WithTimeout` to choose a different budget. Modules must open and validate their storage during `Init`, before consumers receive it or routes bind. Use the initialization context for setup I/O, not later requests. Deadlines cannot interrupt operations that ignore context, including some filesystem calls. Borrowed pools remain open until their application owner closes them after consumers stop.
+
+The reference application sets that deadline from `app.initializationTimeout`, which defaults to `10s` and must be positive. For longer module setup:
+
+```yaml
+app:
+  initializationTimeout: 2m
+```
+
+`HYPERSERVER_APP_INITIALIZATIONTIMEOUT` overrides the file. The budget covers all module initialization, not each module separately, and an earlier parent deadline wins. Database, account, and session setup retain their separate ten-second limits. The initializer itself does not read configuration.
+
 See the [complete storage-provider example](pkg/handlers/example_test.go). Modules without declared dependencies can keep using `Init` alone. Existing application-supplied services still arrive through `ApplicationServer`. `Initialize` does not bind routes or close resources. On failure it returns the modules whose `Init` succeeded so the application can clean them up. Automatic module cleanup remains pending.
 
 ### Route registration errors

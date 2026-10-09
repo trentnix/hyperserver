@@ -168,8 +168,12 @@ database:
   # Unused by the current application and test harness. Tests supply their own connections.
   testConnection: ":memory:?_journal=WAL&_timeout=5000&_fk=true"
 
-# Reference application identity and rendering settings.
+# Reference application startup, identity, and rendering settings.
 app:
+  # Budget for all module initialization, including module-owned storage setup.
+  # Defaults to 10s and must be positive. An earlier parent deadline takes precedence.
+  # Database, account, and session setup retain their separate ten-second limits.
+  initializationTimeout: "10s"
   # Capacity for each reference-site contact/test-email route.
   siteRateLimit:
     # Maximum tracked client IPs per route. Defaults to 4096. Must be positive.

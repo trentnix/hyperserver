@@ -84,10 +84,11 @@ type (
 
 	// AppConfig stores application configuration
 	AppConfig struct {
-		SiteRateLimit       *ModuleRateLimitConfig // Capacity for each reference-site submission route. Nil uses defaults.
-		Name                string
-		WorkingDirectory    string
-		RenderNotifications bool
+		InitializationTimeout *time.Duration         // Module startup budget. Nil uses the initializer's default. If set, must be positive.
+		SiteRateLimit         *ModuleRateLimitConfig // Capacity for each reference-site submission route. Nil uses defaults.
+		Name                  string
+		WorkingDirectory      string
+		RenderNotifications   bool
 	}
 
 	// MailConfig stores the mail configuration.
