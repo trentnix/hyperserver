@@ -22,10 +22,10 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -248,7 +248,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
 
-	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
 		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
 		return
@@ -327,7 +327,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
-	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
 		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
 		return
@@ -499,7 +499,7 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
 
-	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
 		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
 		return
@@ -602,7 +602,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	reset.PartialName = emailResetPasswordFormPartial
 	reset.AddContent(a.TemplateFS, emailResetPasswordFormTemplate)
 
-	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
 		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
 		return
@@ -707,7 +707,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 	change.PartialName = emailChangePasswordFormPartial
 	change.AddContent(a.TemplateFS, emailChangePasswordFormTemplate)
 
-	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
+	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
 		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
 		return

@@ -16,12 +16,12 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -283,7 +283,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r = user.AddUserToRequestContext(r, u)
-	err = messages.AddSuccessNotification(w, r, "You have been successfully logged in")
+	err = flash.AddSuccessNotification(w, r, "You have been successfully logged in")
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}
@@ -319,7 +319,7 @@ func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := messages.AddSuccessNotification(w, r, "You have been successfully logged out")
+	err := flash.AddSuccessNotification(w, r, "You have been successfully logged out")
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}
@@ -379,7 +379,7 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		successMessage = "You have been successfully registered. Check your email for verification instructions."
 	}
 
-	err := messages.AddSuccessNotification(w, r, successMessage)
+	err := flash.AddSuccessNotification(w, r, successMessage)
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}
@@ -487,7 +487,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.As(err, &errTokenExpired):
 			// show the reset request form with a message that the token is expired
-			messages.AddErrorNotification(w, r, "Unable to reset the specified authorization: the reset request has expired")
+			flash.AddErrorNotification(w, r, "Unable to reset the specified authorization: the reset request has expired")
 			a.GetResetRequest(w, r)
 			return
 		default:
@@ -536,7 +536,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.As(err, &errTokenExpired):
 			// show the reset request form with a message that the token is expired
-			addMessageErr := messages.AddErrorNotification(w, r, "Unable to reset the specified authorization: the reset request has expired")
+			addMessageErr := flash.AddErrorNotification(w, r, "Unable to reset the specified authorization: the reset request has expired")
 			if addMessageErr != nil {
 				logger.LogRequestError(r, addMessageErr)
 			}
@@ -564,7 +564,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 	if resetSuccessful {
 		*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
 		// redirect the user to the auth page
-		err := messages.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site.")
+		err := flash.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site.")
 		if err != nil {
 			logger.LogRequestError(r, err)
 		}
@@ -748,7 +748,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 			authenticatedUserMessage = "The account was verified successfully, but is not currently logged in. Logout and login with the newly verified account for access."
 		}
 
-		err = messages.AddSuccessNotification(w, r, authenticatedUserMessage)
+		err = flash.AddSuccessNotification(w, r, authenticatedUserMessage)
 		if err != nil {
 			logger.LogRequestError(r, err)
 		}
@@ -759,7 +759,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// no user is authenticated - redirect the requestor to the login page
-	err = messages.AddSuccessNotification(w, r, "Your account was verified successfully. Please login to access the site.")
+	err = flash.AddSuccessNotification(w, r, "Your account was verified successfully. Please login to access the site.")
 	if err != nil {
 		logger.LogRequestError(r, err)
 	}

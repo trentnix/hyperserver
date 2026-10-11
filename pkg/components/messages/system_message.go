@@ -1,9 +1,7 @@
 package messages
 
-import "net/http"
-
 type (
-	// SystemMessage is a session-backed message intended for the browser console.
+	// SystemMessage is a message intended for the browser console.
 	SystemMessage struct {
 		SessionMessage
 	}
@@ -13,8 +11,6 @@ type (
 )
 
 const (
-	categorySystemMessage string = "hs-message-system-content-message"
-
 	// SystemMessageTypeDebug selects console.debug.
 	SystemMessageTypeDebug SystemMessageType = "debug"
 	// SystemMessageTypeLog selects console.log.
@@ -65,52 +61,4 @@ func NewSystemMessage(message string, messageType SystemMessageType) SystemMessa
 			Type:    messageType.String(),
 		},
 	}
-}
-
-// AddSystemDebugMessage adds a debug SystemMessage to a session
-func AddSystemDebugMessage(w http.ResponseWriter, r *http.Request, message string) error {
-	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeDebug))
-}
-
-// AddSystemLogMessage adds a log SystemMessage to a session
-func AddSystemLogMessage(w http.ResponseWriter, r *http.Request, message string) error {
-	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeLog))
-}
-
-// AddSystemInfoMessage adds an info SystemMessage to a session
-func AddSystemInfoMessage(w http.ResponseWriter, r *http.Request, message string) error {
-	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeInfo))
-}
-
-// AddSystemWarningMessage stores a warning message for the browser console.
-func AddSystemWarningMessage(w http.ResponseWriter, r *http.Request, message string) error {
-	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeWarning))
-}
-
-// AddSystemErrorMessage adds an error SystemMessage to a session
-func AddSystemErrorMessage(w http.ResponseWriter, r *http.Request, message string) error {
-	return addSystemMessage(w, r, NewSystemMessage(message, SystemMessageTypeError))
-}
-
-// GetSystemMessages retrieves console messages and persists their removal, ending an empty session.
-// A failed removal returns no messages and leaves the request-local category intact.
-func GetSystemMessages(w http.ResponseWriter, r *http.Request) ([]SystemMessage, error) {
-	msgs, err := getMessages(w, r, categorySystemMessage)
-	if err != nil {
-		return nil, err
-	}
-
-	var systemMessages []SystemMessage
-	for _, msg := range msgs {
-		systemMessage := NewSystemMessage(msg.Message, SystemMessageType(msg.Type))
-		systemMessages = append(systemMessages, systemMessage)
-	}
-
-	return systemMessages, nil
-}
-
-// addSystemMessage serializes the specified message to a session used explicitly for storing
-// cosystemntent messages that can be accessed by handlers
-func addSystemMessage(w http.ResponseWriter, r *http.Request, c SystemMessage) error {
-	return addMessage(w, r, c.Message, c.Type, categorySystemMessage)
 }

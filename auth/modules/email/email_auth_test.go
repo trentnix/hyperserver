@@ -20,9 +20,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -65,11 +65,11 @@ func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
 						r.Header.Set("HX-Request", "true")
 					}
 					r = session.AddSessionManagerToRequestContext(r, manager)
-					if err := messages.AddMessage(httptest.NewRecorder(), r, "pending", messages.AuthMessages); err != nil {
+					if err := flash.AddMessage(httptest.NewRecorder(), r, "pending", flash.AuthMessages); err != nil {
 						t.Fatal(err)
 					}
 					if operation == "save" {
-						if err := messages.AddSuccessNotification(httptest.NewRecorder(), r, "other"); err != nil {
+						if err := flash.AddSuccessNotification(httptest.NewRecorder(), r, "other"); err != nil {
 							t.Fatal(err)
 						}
 					}

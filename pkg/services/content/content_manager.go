@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/components/types"
 )
 
@@ -54,8 +55,10 @@ type (
 		// AppTitle is the default page title.
 		AppTitle string
 
-		// RenderNotifications enables retrieval of session-backed notifications during rendering.
-		RenderNotifications bool
+		// LoadNotifications optionally supplies notifications before template execution.
+		// Configure it before serving requests. It must be concurrency-safe. Nil skips
+		// loading. Errors stop rendering without appending the returned notifications.
+		LoadNotifications func(http.ResponseWriter, *http.Request) ([]messages.Notification, error)
 	}
 )
 
@@ -87,19 +90,14 @@ func NewContentManager() *ContentManagerService {
 	cm.AppName = DefaultAppName
 	cm.AppTitle = DefaultAppTitle
 
-	// default value
-	cm.RenderNotifications = false
-
 	return &cm
 }
 
-// Configure copies the application name and notification-rendering setting from cfg.
+// Configure copies the application name from cfg. Applications supply optional loaders.
 func (c *ContentManagerService) Configure(cfg *config.Config) {
 	if cfg.App.Name != "" {
 		c.AppName = cfg.App.Name
 	}
-
-	c.RenderNotifications = cfg.App.RenderNotifications
 }
 
 // RegisterLayouts replaces layout paths for contentType with paths relative to files.

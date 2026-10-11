@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/components/messages"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 )
 
 func TestHTTPNotificationRemovalStorageFailure(t *testing.T) {
@@ -14,11 +14,11 @@ func TestHTTPNotificationRemovalStorageFailure(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
 				h.app.Web.HandleFunc("GET /test/seed-notification", func(w http.ResponseWriter, r *http.Request) {
-					if err := messages.AddSuccessNotification(w, r, "Retained notification"); err != nil {
+					if err := flash.AddSuccessNotification(w, r, "Retained notification"); err != nil {
 						t.Fatal(err)
 					}
 					if operation == "UPDATE" {
-						if err := messages.AddMessage(w, r, "Other category", messages.AuthMessages); err != nil {
+						if err := flash.AddMessage(w, r, "Other category", flash.AuthMessages); err != nil {
 							t.Fatal(err)
 						}
 					}

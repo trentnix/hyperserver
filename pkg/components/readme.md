@@ -121,99 +121,43 @@ contentManager.AddHtmxComponent(templateFiles, "templates/componenents/some-univ
 
 ## Messages
 
-Each Content instance has three different message types:
-
-- Notifications
-- ContentMessage
-- SystemMessage
-
-The **messages** package defines each message type, with methods that allow messages of each type to be stored and retrieved.
-
-### ContentMessage Component
-
-`ContentMessage`, defined in the **messages** package, provides session-stored messages earmarked for rendering inside of content. There are three types of `ContentMessage`:
-
-- Success
-- Error
-- Default (informational)
-
-There are functions available to make adding content messages easy:
+The `messages` package defines values for `Content.Messages`, `Content.Notifications`, and `Content.SystemMessages`. These values require no storage or session service:
 
 ```go
-messages.AddSuccessMessage(w, r, "processing complete")
-messages.AddErrorMessage(w, r, "try a different login mechanism")
-messages.AddMessage(w, r, "processing took 2 minutes and 15 seconds")
+message := messages.NewMessage("Your settings were saved.", messages.MessageTypeSuccess)
+notification := messages.NewNotification("Your settings were saved.", messages.NotificationTypeSuccess)
+systemMessage := messages.NewSystemMessage("Request completed.", messages.SystemMessageTypeInfo)
 ```
 
-When you fetch messages from the session, they are cleared after retrieval and can't be fetched again. To fetch content messages from the session:
+### Session-backed messages
+
+The [flash service](../services/flash/messages.go) stores messages between requests. Its helpers require session middleware on the request. Check errors from both storage and retrieval.
+
+For messages grouped by purpose, supply a category:
 
 ```go
-msgs, getMessagesErr := messages.GetContentMessages(r, w)
+if err := flash.AddSuccessMessage(w, r, "Your settings were saved.", "settings"); err != nil {
+    return err
+}
+
+storedMessages, err := flash.GetMessages(w, r, "settings")
+if err != nil {
+    return err
+}
+page.Messages = append(page.Messages, storedMessages...)
 ```
 
-To create a new `ContentMessage` without adding it to a session:
+Retrieval removes the category from storage before returning its messages. If removal fails, retrieval returns an error and no messages. Other categories remain available.
+
+For notifications, use `flash.AddSuccessNotification` or `flash.AddErrorNotification`. A content manager can retrieve notifications before template execution:
 
 ```go
-cm := messages.NewContentMessage("you have a new update", messages.MessageTypeError)
+contentManager.LoadNotifications = flash.GetNotifications
 ```
 
-### Notifications
+Set the loader before serving requests. It must be concurrency-safe. A nil loader skips retrieval but still allows manually supplied `Content.Notifications`. A custom loader can supply notifications from another source. Loader errors stop rendering.
 
-A `Notification`, defined in the **messages** package, provides session-stored messages earmarked for notifying a user of the success or failure of some action. There are two types of `Notification` messages:
-
-- Success
-- Error
-
-There are functions available to make adding notifications easy:
-
-```go
-messages.AddSuccessNotification(w, r, "logout successful")
-messages.AddErrorNotification(w, r, "unable to access the specified resource")
-```
-
-Like content messages, when you fetch notifications from the session they are cleared after retrieval and can't be fetched again. To fetch notifications from the session:
-
-```go
-msgs, getMessagesErr := messages.GetNotifications(r, w)
-```
-
-To create a new `Notification` without adding it to a session:
-
-```go
-cm := messages.NewNotification("something bad happened", messages.NotificationTypeError)
-```
-
-### System Messages
-
-A `SystemMessage`, defined in the **messages** package, provides session-stored messages earmarked for logging or console messages (if the requestor is a browser). There are several types of `SystemMessage` messages:
-
-- Debug
-- Log
-- Info
-- Warning
-- Error
-
-There are functions available to make adding `SystemMessage` instances easy:
-
-```go
-messages.AddSystemDebugMessage(w, r, "entered the function")
-messages.AddSystemLogMessage(w, r, "processed callback")
-messages.AddSystemInfoMessage(w, r, "database is version 2.7")
-messages.AddSystemWarningMessage(w, r, "callback processing exceed 200ms")
-messages.AddSystemErrorMessage(w, r, "call to server failed")
-```
-
-Like content messages and notifications, when you fetch system messages from the session they are cleared after retrieval and can't be fetched again. To fetch system messages from the session:
-
-```go
-msgs, getMessagesErr := messages.GetSystemMessages(r, w)
-```
-
-To create a new `SystemMessage` without adding it to a session:
-
-```go
-cm := messages.NewSystemMessage("something bad happened", messages.SystemMessageTypeError)
-```
+For browser console messages, use `flash.AddSystemDebugMessage`, `flash.AddSystemLogMessage`, `flash.AddSystemInfoMessage`, `flash.AddSystemWarningMessage`, or `flash.AddSystemErrorMessage`. Retrieve them with `flash.GetSystemMessages(w, r)` and assign them to `Content.SystemMessages`.
 
 ## form Package
 

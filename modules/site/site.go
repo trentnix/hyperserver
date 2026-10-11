@@ -13,6 +13,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -114,6 +115,9 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	m.contacts = contacts
 	m.sessionManager = s.SessionManager
 	m.contentManager = s.ContentManager
+	if s.Config.App.RenderNotifications && m.contentManager.LoadNotifications == nil {
+		m.contentManager.LoadNotifications = flash.GetNotifications
+	}
 	m.mailClient = s.Mail
 	m.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
 	m.contentManager.AddPageLayout(siteModuleTemplatesFS, pageLayoutTemplate)

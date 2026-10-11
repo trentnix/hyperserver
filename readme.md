@@ -233,6 +233,12 @@ The reference application uses [SlogLogger](pkg/services/logger/sloglogger.go) w
 
 Pass a `slog.Handler` to `logger.NewSlogLogger` to choose a writer, text output, levels, source locations, or `ReplaceAttr` redaction. Nil selects the default JSON handler. Application code must not log secrets. The adapter preserves handler redaction and `slog.LogValuer` behavior but does not automatically recognize sensitive fields.
 
+### Notifications
+
+Message values in `pkg/components/messages` need no session service. Applications can supply `Content.Notifications` directly or set `ContentManagerService.LoadNotifications` before serving requests. A nil loader skips retrieval. Loader errors stop rendering.
+
+For session-backed notifications, use [flash.GetNotifications](pkg/services/flash/notifications.go) as the loader. The reference site selects that loader when `app.renderNotifications` is enabled, unless the application already supplied one. See the [message examples](pkg/components/readme.md#messages) for storage helpers and direct message values.
+
 ### Rendered-response caching
 
 `Content.Render` adds `Vary: HX-Request` to pages and fragments without removing existing `Vary` fields. An existing `Vary: *` already covers every request header. Rendered responses default to `Cache-Control: no-store`, including the reference site's personalized navigation and notifications. Static-file handlers are unchanged.

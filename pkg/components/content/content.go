@@ -197,9 +197,8 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		managerContents = c.ContentManager.Contents[contentType]
 		managerComponents = c.ContentManager.Components[contentType]
 
-		// render notifications
-		if c.ContentManager.RenderNotifications {
-			notifications, err := messages.GetNotifications(w, r)
+		if load := c.ContentManager.LoadNotifications; load != nil {
+			notifications, err := load(w, r)
 			if err != nil {
 				return err
 			}

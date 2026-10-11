@@ -7,6 +7,7 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -14,7 +15,7 @@ import (
 // Error displays queued error notifications with HTTP 200. Notification retrieval
 // or rendering failures return 500. Current failures must use HandleError instead.
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	notifications, err := messages.GetNotifications(w, r)
+	notifications, err := flash.GetNotifications(w, r)
 	if err != nil {
 		m.HandleError(w, r, "Unable to load error notifications", err, http.StatusInternalServerError)
 		return
@@ -49,7 +50,7 @@ func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message
 func (m *SiteModule) renderError(w http.ResponseWriter, r *http.Request, notifications []messages.Notification, status int) {
 	// Error responses must still render when notification storage is unavailable.
 	cm := *m.contentManager
-	cm.RenderNotifications = false
+	cm.LoadNotifications = nil
 	page := content.NewManagedContent(r, &cm)
 	page.PartialName, page.Title = errorPagePartialName, "Error"
 	page.AddContent(siteModuleTemplatesFS, errorPageTemplate)

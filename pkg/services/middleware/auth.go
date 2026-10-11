@@ -4,9 +4,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -58,7 +58,7 @@ func RequireAuthentication(accounts user.AccountRepository, cm *content_services
 					return
 				}
 
-				if err := messages.AddMessage(w, r, "The requested resource is only available to authenticated users.", messages.AuthMessages); err != nil {
+				if err := flash.AddMessage(w, r, "The requested resource is only available to authenticated users.", flash.AuthMessages); err != nil {
 					logger.LogRequestError(r, err)
 				}
 

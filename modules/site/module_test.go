@@ -8,6 +8,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -81,4 +82,43 @@ func TestSiteRegistersDefaultFactory(t *testing.T) {
 		return
 	}
 	t.Fatal("site did not register its default factory")
+}
+
+func TestSiteNotificationLoaderSelection(t *testing.T) {
+	for _, mode := range []string{"disabled", "session", "custom"} {
+		t.Run(mode, func(t *testing.T) {
+			app, err := server.NewApplicationServer(config.Config{App: config.AppConfig{RenderNotifications: mode != "disabled"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			customCalled := false
+			if mode == "custom" {
+				app.ContentManager.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+					customCalled = true
+					return nil, nil
+				}
+			}
+			module := Module(func(context.Context) (ContactRepository, error) { return new(memoryContacts), nil }).New()
+			if err := module.Init(context.Background(), app); err != nil {
+				t.Fatal(err)
+			}
+			load := app.ContentManager.LoadNotifications
+			if mode == "disabled" {
+				if load != nil {
+					t.Fatal("disabled notifications installed a loader")
+				}
+				return
+			}
+			if load == nil {
+				t.Fatal("enabled notifications did not install a loader")
+			}
+			_, err = load(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+			if mode == "session" && err == nil {
+				t.Fatal("session loader silently accepted a missing session manager")
+			}
+			if mode == "custom" && (err != nil || !customCalled) {
+				t.Fatal("site replaced the application's notification loader")
+			}
+		})
+	}
 }

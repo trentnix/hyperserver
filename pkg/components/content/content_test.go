@@ -190,23 +190,64 @@ func TestRenderReportsDeliveryFailure(t *testing.T) {
 }
 
 func TestRenderReportsNotificationReadFailure(t *testing.T) {
+	failure := errors.New("notification source unavailable")
 	for _, htmx := range []bool{false, true} {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		if htmx {
 			r.Header.Set("HX-Request", "true")
 		}
 		cm := contentservice.NewContentManager()
-		cm.RenderNotifications = true
+		cm.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+			return []messages.Notification{messages.NewNotification("must not render", messages.NotificationTypeError)}, failure
+		}
 		c := NewManagedContent(r, cm)
 		c.ResponseStatusCode = http.StatusCreated
 		c.Headers = map[string]string{"X-Rendered": "yes"}
 		w := &recordingResponse{ResponseRecorder: httptest.NewRecorder()}
-		var retrieval *messages.ErrRetrievingContentMessages
-		if err := c.Render(w, r); !errors.As(err, &retrieval) {
-			t.Fatalf("missing session manager error = %v", err)
+		if err := c.Render(w, r); !errors.Is(err, failure) {
+			t.Fatalf("notification loader error = %v", err)
 		}
 		if w.committed || w.Body.Len() != 0 || w.Header().Get("X-Rendered") != "" || len(c.Notifications) != 0 {
 			t.Fatal("notification read failure committed output or changed notifications")
+		}
+	}
+}
+
+func TestRenderLoadsNotificationsWithoutSessionServices(t *testing.T) {
+	for _, htmx := range []bool{false, true} {
+		for _, load := range []bool{false, true} {
+			t.Run(fmt.Sprintf("htmx=%t/load=%t", htmx, load), func(t *testing.T) {
+				r := httptest.NewRequest(http.MethodGet, "/", nil)
+				if htmx {
+					r.Header.Set("HX-Request", "true")
+				}
+				w := httptest.NewRecorder()
+				cm := contentservice.NewContentManager()
+				calls := 0
+				if load {
+					cm.LoadNotifications = func(gotW http.ResponseWriter, gotR *http.Request) ([]messages.Notification, error) {
+						calls++
+						if gotW != w || gotR != r {
+							t.Error("loader did not receive the render's request and writer")
+						}
+						return []messages.Notification{messages.NewNotification("<remote>", messages.NotificationTypeSuccess)}, nil
+					}
+				}
+				page := NewManagedContent(r, cm)
+				page.Notifications = []messages.Notification{messages.NewNotification("local", messages.NotificationTypeError)}
+				page.AddContent(renderTemplateFile(t, "notifications.html", `{{range .Notifications}}{{.Message}}:{{.IsSuccess}}|{{end}}`))
+				if err := page.Render(w, r); err != nil {
+					t.Fatal(err)
+				}
+				want, wantCalls := "local:false|", 0
+				if load {
+					want += "&lt;remote&gt;:true|"
+					wantCalls = 1
+				}
+				if w.Body.String() != want || calls != wantCalls || len(w.Result().Cookies()) != 0 {
+					t.Fatalf("body=%q calls=%d cookies=%v", w.Body.String(), calls, w.Result().Cookies())
+				}
+			})
 		}
 	}
 }

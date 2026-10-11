@@ -1,4 +1,4 @@
-package messages
+package flash
 
 import (
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"

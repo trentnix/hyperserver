@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
-	"github.com/trentnix/hyperserver/pkg/components/messages"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 )
 
@@ -84,7 +84,7 @@ func TestHTTPSiteErrorResponses(t *testing.T) {
 				}
 			}
 		}
-		if strings.Contains(h.logs.String(), "private-query-token") || !h.app.ContentManager.RenderNotifications {
+		if strings.Contains(h.logs.String(), "private-query-token") || h.app.ContentManager.LoadNotifications == nil {
 			t.Fatal("error handling leaked a query token or changed notification configuration")
 		}
 	})
@@ -111,10 +111,10 @@ func TestHTTPSiteErrorWithoutSession(t *testing.T) {
 func TestHTTPSiteQueuedErrors(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		h.app.Web.HandleFunc("POST /test/queue-errors", func(w http.ResponseWriter, r *http.Request) {
-			if err := messages.AddErrorNotification(w, r, "Queued error"); err != nil {
+			if err := flash.AddErrorNotification(w, r, "Queued error"); err != nil {
 				t.Fatal(err)
 			}
-			if err := messages.AddSuccessNotification(w, r, "Queued success"); err != nil {
+			if err := flash.AddSuccessNotification(w, r, "Queued success"); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -146,7 +146,7 @@ func TestHTTPPageRenderFailureReturnsOnlyErrorPage(t *testing.T) {
 			t.Fatal(err)
 		}
 		cm := *h.app.ContentManager
-		cm.RenderNotifications = false
+		cm.LoadNotifications = nil
 		cm.Layouts = map[string][]content.TemplatePath{
 			"page": {testTemplateFile(t, path)}, "htmx": {testTemplateFile(t, path)},
 		}
