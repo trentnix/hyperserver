@@ -3,7 +3,6 @@ package module_site
 import (
 	"fmt"
 	"net/http"
-	"path/filepath"
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/components/content"
@@ -13,8 +12,7 @@ import (
 
 // ServeFavicon serves the favicon resource to a requestor
 func (m *SiteModule) ServeFavicon(w http.ResponseWriter, r *http.Request) {
-	faviconPath := filepath.Join("modules", "site", "templates", "html", "img", "favicon.ico")
-	http.ServeFile(w, r, faviconPath)
+	http.ServeFileFS(w, r, siteModuleTemplatesFS, "templates/html/img/favicon.ico")
 }
 
 // Home renders the homepage
@@ -32,7 +30,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	homepage := content.NewManagedContent(r, m.contentManager)
 	homepage.PartialName = homePagePartialName
-	homepage.AddContent(homePageTemplate)
+	homepage.AddContent(siteModuleTemplatesFS, homePageTemplate)
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -47,7 +45,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login.PartialName = loginPagePartialName
 	login.Title = "Login"
 
-	login.AddContent(loginPageTemplate)
+	login.AddContent(siteModuleTemplatesFS, loginPageTemplate)
 
 	err := login.Render(w, r)
 	if err != nil {
@@ -67,7 +65,7 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 	register.PartialName = registerPagePartialName
 	register.Title = "Register"
 
-	register.AddContent(registerPageTemplate)
+	register.AddContent(siteModuleTemplatesFS, registerPageTemplate)
 
 	err := register.Render(w, r)
 	if err != nil {
@@ -84,7 +82,7 @@ func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, messa
 
 	messagePage := content.NewManagedContent(r, m.contentManager)
 	messagePage.PartialName = messagePagePartialName
-	messagePage.AddContent(messagePageTemplate)
+	messagePage.AddContent(siteModuleTemplatesFS, messagePageTemplate)
 	messagePage.Data = message
 	err := messagePage.Render(w, r)
 	if err != nil {
@@ -116,7 +114,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 
 	page := content.NewManagedContent(r, m.contentManager)
 	page.PartialName = homePagePartialName
-	page.AddContent(homePageTemplate)
+	page.AddContent(siteModuleTemplatesFS, homePageTemplate)
 	page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
 	// save the updated counter value in the session
@@ -139,7 +137,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 func (m *SiteModule) NotFound(w http.ResponseWriter, r *http.Request) {
 	notFound := content.NewManagedContent(r, m.contentManager)
 	notFound.PartialName = notFoundPagePartialName
-	notFound.AddContent(notFoundPageTemplate)
+	notFound.AddContent(siteModuleTemplatesFS, notFoundPageTemplate)
 	notFound.Data = fmt.Sprintf("The resource you requested was not found: %s", r.URL.Path)
 	notFound.Title = "Resource Not Found"
 	notFound.ResponseStatusCode = http.StatusNotFound

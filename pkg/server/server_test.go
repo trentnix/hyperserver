@@ -43,7 +43,7 @@ func TestStatelessApplication(t *testing.T) {
 			page.Title = "fragment"
 		}
 		page.Data = "<safe>"
-		page.AddContent(content.TemplatePath(path))
+		page.AddContent(os.DirFS(filepath.Dir(path)), filepath.Base(path))
 		if err := page.Render(w, r); err != nil {
 			t.Error(err)
 		}

@@ -24,7 +24,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
-	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 func main() {
@@ -75,10 +74,8 @@ func run(ctx context.Context, s *server.ApplicationServer, contactDirectory stri
 	}
 
 	// Resolve relative resource paths before any service opens files or connections.
-	if s.Config.App.WorkingDirectory != "" {
-		if err := util.SetWorkingDirectory(s.Config.App.WorkingDirectory); err != nil {
-			return err
-		}
+	if err := s.Config.ResolvePaths(); err != nil {
+		return err
 	}
 
 	// The reference site's contact storage uses this pool. Mail is used by its
@@ -101,7 +98,7 @@ func run(ctx context.Context, s *server.ApplicationServer, contactDirectory stri
 		return fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l := logger.NewSlogLogger(nil)
-	catalog, err := siteModules(contactDirectory)
+	catalog, err := siteModules(s.Config.FilePath(contactDirectory))
 	if err != nil {
 		return err
 	}

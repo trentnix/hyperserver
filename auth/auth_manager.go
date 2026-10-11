@@ -52,12 +52,12 @@ type (
 )
 
 const (
-	authLoginSelectionTemplate    = "auth/templates/html/pages/login-selection.html"
-	authRegisterSelectionTemplate = "auth/templates/html/pages/register-selection.html"
-	authLoginDefaultTemplate      = "auth/templates/html/pages/login-default.html"
-	authRegisterDefaultTemplate   = "auth/templates/html/pages/register-default.html"
-	authVerifyTemplate            = "auth/templates/html/pages/verify.html"
-	messageTemplate               = "auth/templates/html/pages/message.html"
+	authLoginSelectionTemplate    = "templates/html/pages/login-selection.html"
+	authRegisterSelectionTemplate = "templates/html/pages/register-selection.html"
+	authLoginDefaultTemplate      = "templates/html/pages/login-default.html"
+	authRegisterDefaultTemplate   = "templates/html/pages/register-default.html"
+	authVerifyTemplate            = "templates/html/pages/verify.html"
+	messageTemplate               = "templates/html/pages/message.html"
 	authLoginSelectionPartial     = "auth.page.login.selection"
 	authRegisterSelectionPartial  = "auth.page.register.selection"
 	authLoginDefaultPartial       = "auth.page.login.default"
@@ -167,7 +167,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
 		c.PartialName = authLoginDefaultPartial
-		c.AddContent(authLoginDefaultTemplate)
+		c.AddContent(authModuleTemplatesFS, authLoginDefaultTemplate)
 		c.Data = "/auth/login/" + authServices[0].AuthType()
 	} else {
 		c.PartialName = authLoginSelectionPartial
@@ -175,7 +175,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 			loginHTML = append(loginHTML, service.GetLoginButton())
 		}
 
-		c.AddContent(authLoginSelectionTemplate)
+		c.AddContent(authModuleTemplatesFS, authLoginSelectionTemplate)
 		c.Data = loginHTML
 	}
 
@@ -201,7 +201,7 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
 		c.PartialName = authRegisterDefaultPartial
-		c.AddContent(authRegisterDefaultTemplate)
+		c.AddContent(authModuleTemplatesFS, authRegisterDefaultTemplate)
 		c.Data = "/auth/register/" + authServices[0].AuthType()
 	} else {
 		c.PartialName = authRegisterSelectionPartial
@@ -209,7 +209,7 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 			loginHTML = append(loginHTML, service.GetRegisterButton())
 		}
 
-		c.AddContent(authRegisterSelectionTemplate)
+		c.AddContent(authModuleTemplatesFS, authRegisterSelectionTemplate)
 		c.Data = loginHTML
 	}
 
@@ -684,7 +684,7 @@ func (a *AuthManager) GetVerify(w http.ResponseWriter, r *http.Request) {
 
 	c := content.NewManagedContent(r, a.contentManager)
 	c.PartialName = "auth.page.verify"
-	c.AddContent(authVerifyTemplate)
+	c.AddContent(authModuleTemplatesFS, authVerifyTemplate)
 	c.Data = verificationToken
 	if err := c.Render(w, r); err != nil {
 		a.contentManager.HandleError(w, r, "Unable to display the verification form.", err, http.StatusInternalServerError)

@@ -18,6 +18,7 @@ import (
 // GetConfig loads the first config.yaml in ., config, ../config, or ../../config.
 // Environment values override file values, which override defaults. A missing or
 // invalid file returns an error. Providers validate their own settings separately.
+// The selected file's directory anchors app.workingDirectory and local resources.
 func GetConfig() (Config, error) {
 	for _, directory := range []string{".", "config", "../config", "../../config"} {
 		path := filepath.Join(directory, "config.yaml")
@@ -31,6 +32,12 @@ func GetConfig() (Config, error) {
 		cfg, err := readConfig(bytes.NewReader(data), os.Environ())
 		if err != nil {
 			return Config{}, fmt.Errorf("%s: %w", path, err)
+		}
+		if !filepath.IsAbs(cfg.App.WorkingDirectory) {
+			cfg.App.WorkingDirectory, err = filepath.Abs(filepath.Join(filepath.Dir(path), cfg.App.WorkingDirectory))
+			if err != nil {
+				return Config{}, err
+			}
 		}
 		return cfg, nil
 	}

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
@@ -32,7 +33,6 @@ func (s *verificationTestAuthService) SendVerificationEmail(context.Context, *us
 }
 
 func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
-	t.Chdir("..")
 	previousLogOutput := log.Writer()
 	t.Cleanup(func() {
 		log.SetOutput(previousLogOutput)
@@ -51,7 +51,7 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 			sender := new(verificationTestAuthService)
 			manager := &AuthManager{Services: &Registry{services: []AuthService{sender}}, httpConfig: config.HTTPConfig{ListenHost: "localhost", Port: 8080}, contentManager: &content_services.ContentManagerService{
 				Layouts: map[string][]content_services.TemplatePath{
-					content_services.PageType: {"modules/site/templates/html/layouts/partial.html"},
+					content_services.PageType: {{FS: fstest.MapFS{"partial.html": &fstest.MapFile{Data: []byte(`{{renderPartial .PartialName .}}`)}}, Path: "partial.html"}},
 				},
 				HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
 					if err != nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -105,7 +106,13 @@ func (s *ApplicationServer) accountProvider() (string, AccountProvider, error) {
 		return name, AccountProvider{
 			Open: s.initializeSQLiteAccounts,
 			OpenMaintenance: func(ctx context.Context, options map[string]string) (user.TokenMaintenance, func() error, error) {
-				return user.OpenSQLiteTokenMaintenance(ctx, s.Config.Database, options)
+				cfg := s.Config.Database
+				var err error
+				cfg.Connection, err = database.ResolveConnection(cfg.Driver, cfg.Connection, s.Config.App.WorkingDirectory)
+				if err != nil {
+					return nil, nil, err
+				}
+				return user.OpenSQLiteTokenMaintenance(ctx, cfg, options)
 			},
 		}, nil
 	}

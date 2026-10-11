@@ -63,7 +63,7 @@ http:
   tls:
     # Enable TLS 1.2 or newer. Requires both files below.
     enabled: false
-    # PEM certificate chain. Relative paths use app.workingDirectory when set.
+    # PEM certificate chain. Relative paths use the config directory or app.workingDirectory.
     # Loaded at startup. Restart after replacing the certificate or key.
     certificate: ""
     # Matching PEM private key. Both paths must be empty when TLS is disabled.
@@ -166,7 +166,7 @@ mail:
 database:
   # Registered SQL driver name. The reference application imports sqlite3.
   driver: "sqlite3"
-  # Database file and driver options. Relative paths use the process working directory.
+  # Database file and driver options. Relative SQLite paths use the config directory or app.workingDirectory.
   connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
   # Unused by the current application and test harness. Tests supply their own connections.
   testConnection: ":memory:?_journal=WAL&_timeout=5000&_fk=true"
@@ -184,8 +184,9 @@ app:
     maxClients: 4096
   # Application name used in page content and verification emails.
   name: "HyperServer"
-  # Change to this directory after server construction, before loading handlers.
-  # Use the repository path on your machine, or leave empty to keep the current directory.
-  workingDirectory: "D:/source/hyperserver"
+  # Optional base directory for local storage, TLS files, and -contact-directory.
+  # Empty uses the config file's directory. Relative values start there too.
+  # This setting does not change the process directory. Bundled assets are embedded.
+  workingDirectory: ""
   # Include stored session notifications when rendering managed content.
   renderNotifications: "true"

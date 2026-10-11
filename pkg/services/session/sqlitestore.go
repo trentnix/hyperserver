@@ -90,7 +90,11 @@ func NewSQLiteStore(ctx context.Context, c *config.Config) (*SQLiteStore, error)
 	if strings.TrimSpace(sqliteStore.connectionString) == "" || strings.TrimSpace(sqliteStore.tableName) == "" {
 		return nil, ErrSQLiteStoreNotConfigured
 	}
-	db, err := database.Setup(sqliteDriver, sqliteStore.connectionString)
+	connection, err := database.ResolveConnection(sqliteDriver, sqliteStore.connectionString, c.App.WorkingDirectory)
+	if err != nil {
+		return nil, err
+	}
+	db, err := database.Setup(sqliteDriver, connection)
 	if err != nil {
 		return nil, err
 	}

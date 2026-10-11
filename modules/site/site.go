@@ -43,17 +43,17 @@ type (
 
 const (
 	module                           = "module_site"
-	pageLayoutTemplate               = "modules/site/templates/html/layouts/site.html"
-	partialLayoutTemplate            = "modules/site/templates/html/layouts/partial.html"
-	navComponentTemplate             = "modules/site/templates/html/components/nav.html"
-	notificationsComponentTemplate   = "modules/site/templates/html/components/notifications.html"
-	consoleMessagesComponentTemplate = "modules/site/templates/html/components/console-messages.html"
-	homePageTemplate                 = "modules/site/templates/html/pages/home.html"
-	loginPageTemplate                = "modules/site/templates/html/pages/login.html"
-	registerPageTemplate             = "modules/site/templates/html/pages/register.html"
-	errorPageTemplate                = "modules/site/templates/html/pages/error.html"
-	messagePageTemplate              = "modules/site/templates/html/pages/message.html"
-	notFoundPageTemplate             = "modules/site/templates/html/pages/not-found.html"
+	pageLayoutTemplate               = "templates/html/layouts/site.html"
+	partialLayoutTemplate            = "templates/html/layouts/partial.html"
+	navComponentTemplate             = "templates/html/components/nav.html"
+	notificationsComponentTemplate   = "templates/html/components/notifications.html"
+	consoleMessagesComponentTemplate = "templates/html/components/console-messages.html"
+	homePageTemplate                 = "templates/html/pages/home.html"
+	loginPageTemplate                = "templates/html/pages/login.html"
+	registerPageTemplate             = "templates/html/pages/register.html"
+	errorPageTemplate                = "templates/html/pages/error.html"
+	messagePageTemplate              = "templates/html/pages/message.html"
+	notFoundPageTemplate             = "templates/html/pages/not-found.html"
 	homePagePartialName              = "site.page.home"
 	loginPagePartialName             = "site.page.login"
 	registerPagePartialName          = "site.page.register"
@@ -116,11 +116,11 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	m.contentManager = s.ContentManager
 	m.mailClient = s.Mail
 	m.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
-	m.contentManager.AddPageLayout(pageLayoutTemplate)
-	m.contentManager.AddHtmxLayout(partialLayoutTemplate)
-	m.contentManager.AddPageComponent(navComponentTemplate)
-	m.contentManager.AddPageComponent(notificationsComponentTemplate)
-	m.contentManager.AddPageComponent(consoleMessagesComponentTemplate)
+	m.contentManager.AddPageLayout(siteModuleTemplatesFS, pageLayoutTemplate)
+	m.contentManager.AddHtmxLayout(siteModuleTemplatesFS, partialLayoutTemplate)
+	m.contentManager.AddPageComponent(siteModuleTemplatesFS, navComponentTemplate)
+	m.contentManager.AddPageComponent(siteModuleTemplatesFS, notificationsComponentTemplate)
+	m.contentManager.AddPageComponent(siteModuleTemplatesFS, consoleMessagesComponentTemplate)
 	authEnabled := s.Config.Auth.Enabled
 	m.contentManager.BuildLayoutData = func(r *http.Request) any {
 		return struct {

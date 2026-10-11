@@ -125,7 +125,11 @@ func (s *ApplicationServer) InitializeDatabase(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	db, err := database.Setup(s.Config.Database.Driver, s.Config.Database.Connection)
+	connection, err := database.ResolveConnection(s.Config.Database.Driver, s.Config.Database.Connection, s.Config.App.WorkingDirectory)
+	if err != nil {
+		return err
+	}
+	db, err := database.Setup(s.Config.Database.Driver, connection)
 	if err != nil {
 		return err
 	}

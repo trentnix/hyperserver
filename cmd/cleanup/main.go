@@ -29,10 +29,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if cfg.App.WorkingDirectory != "" {
-		if err := os.Chdir(cfg.App.WorkingDirectory); err != nil {
-			log.Fatal(err)
-		}
+	if err := cfg.ResolvePaths(); err != nil {
+		log.Fatal(err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -88,7 +88,7 @@ type (
 		InitializationTimeout *time.Duration         // Module startup budget. Nil uses the initializer's default. If set, must be positive.
 		SiteRateLimit         *ModuleRateLimitConfig // Capacity for each reference-site submission route. Nil uses defaults.
 		Name                  string
-		WorkingDirectory      string
+		WorkingDirectory      string // Resource base for local files. Does not change the process directory.
 		RenderNotifications   bool
 	}
 

@@ -10,7 +10,7 @@ import (
 )
 
 func TestRenderCacheHeaders(t *testing.T) {
-	path := renderTemplateFile(t, "page.html", "<p>Rendered</p>")
+	files, name := renderTemplateFile(t, "page.html", "<p>Rendered</p>")
 	for _, tc := range []struct {
 		name          string
 		existingCache []string
@@ -31,7 +31,7 @@ func TestRenderCacheHeaders(t *testing.T) {
 					r.Header.Set("HX-Request", "true")
 				}
 				c := NewContent(r)
-				c.AddContent(path)
+				c.AddContent(files, name)
 				c.Headers = map[string]string{"vary": "Origin, HX-Request", "cache-control": tc.contentCache}
 				w := httptest.NewRecorder()
 				w.Header().Add("Vary", "Accept-Encoding")

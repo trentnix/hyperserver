@@ -52,7 +52,7 @@ func (m *SiteModule) renderError(w http.ResponseWriter, r *http.Request, notific
 	cm.RenderNotifications = false
 	page := content.NewManagedContent(r, &cm)
 	page.PartialName, page.Title = errorPagePartialName, "Error"
-	page.AddContent(errorPageTemplate)
+	page.AddContent(siteModuleTemplatesFS, errorPageTemplate)
 	page.Data = notifications
 
 	// Stage the error page separately to control its status, headers, and HEAD body.

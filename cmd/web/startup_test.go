@@ -112,7 +112,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if _, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Chdir(s.Config.App.WorkingDirectory); err != nil {
+		if err := s.Config.ResolvePaths(); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.InitializeDatabase(context.Background()); err != nil {
@@ -148,6 +148,21 @@ func TestStartupHelperProcess(t *testing.T) {
 		s.Web.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Welcome!") {
 			t.Fatalf("initialized application did not render its homepage: status %d, body %s", w.Code, w.Body.String())
+		}
+		for _, path := range []string{"/css/site.css", "/js/site.js", "/img/hyperserver.png", "/favicon.ico"} {
+			w := httptest.NewRecorder()
+			s.Web.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+			if w.Code != http.StatusOK || w.Body.Len() == 0 {
+				t.Fatalf("bundled asset %s: status=%d body=%s", path, w.Code, w.Body.String())
+			}
+		}
+		if s.Config.Auth.Enabled {
+			w := httptest.NewRecorder()
+			r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/auth/login/email", nil), s.SessionManager)
+			s.Web.ServeHTTP(w, r)
+			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "login-form") {
+				t.Fatalf("bundled auth template: status=%d body=%s", w.Code, w.Body.String())
+			}
 		}
 		fmt.Println("startup initialization passed")
 	default:

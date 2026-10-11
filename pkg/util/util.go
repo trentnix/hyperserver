@@ -1,50 +1,29 @@
 // Package util provides URL, template-file, and HTTP response helpers.
 // BuildPublicURL uses configured addresses rather than request host or forwarded
-// headers. RedirectToURL accepts only local destinations. LoadHTMLFromFile
+// headers. RedirectToURL accepts only local destinations. LoadHTML
 // requires trusted input.
 package util
 
 import (
 	"errors"
-	"fmt"
 	"html/template"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/trentnix/hyperserver/config"
 )
 
-// GetWorkingDirectory will retrieve the current working directory
-func GetWorkingDirectory() (string, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", NewErrFailedToGetWorkingDirectory(nil)
-	}
-
-	return wd, nil
-}
-
-// SetWorkingDirectory will set the application's working directory to the specified path
-func SetWorkingDirectory(wd string) error {
-	if wd == "" {
-		return NewErrWorkingDirectoryNotSpecified(fmt.Errorf("SetWorkingDirectory"))
-	}
-
-	if err := os.Chdir(wd); err != nil {
-		return NewErrFailedToSetWorkingDirectory(err)
-	}
-
-	return nil
-}
-
-// LoadHTMLFromFile reads a trusted file and marks its contents as template.HTML.
+// LoadHTML reads a trusted file from files and marks its contents as template.HTML.
 // It does not parse or escape the file's contents.
-func LoadHTMLFromFile(filePath string) (template.HTML, error) {
-	htmlBytes, err := os.ReadFile(filePath)
+func LoadHTML(files fs.FS, filePath string) (template.HTML, error) {
+	if files == nil {
+		return "", NewErrLoadingTemplate(errors.New("template filesystem is required"), filePath)
+	}
+	htmlBytes, err := fs.ReadFile(files, filePath)
 	if err != nil {
 		return "", NewErrLoadingTemplate(err, filePath)
 	}

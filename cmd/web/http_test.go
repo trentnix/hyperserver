@@ -23,6 +23,7 @@ import (
 
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -159,15 +160,24 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	return newHTTPHarnessWithCatalog(t, handlers.Registered(), configure...)
 }
 
+func testTemplateFile(t *testing.T, name string) content.TemplatePath {
+	t.Helper()
+	if !filepath.IsAbs(name) {
+		name = filepath.Join("..", "..", name)
+	}
+	name, err := filepath.Abs(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return content.TemplatePath{FS: os.DirFS(filepath.Dir(name)), Path: filepath.Base(name)}
+}
+
 func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Templates still use the process cwd. Restore it when this test finishes.
-	t.Chdir(root)
-
 	// Do not call GetConfig: local YAML files and environment settings must not
 	// select a developer's database or mail service.
 	cfg := &config.Config{

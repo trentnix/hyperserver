@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,13 +16,13 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-func renderTemplateFile(t *testing.T, name, text string) TemplatePath {
+func renderTemplateFile(t *testing.T, name, text string) (fs.FS, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
 		t.Fatal(err)
 	}
-	return TemplatePath(path)
+	return os.DirFS(filepath.Dir(path)), filepath.Base(path)
 }
 
 type failingTemplateData struct{ err error }
@@ -31,14 +32,14 @@ func TestManagedContentLayoutData(t *testing.T) {
 	cm.BuildLayoutData = func(r *http.Request) any {
 		return map[string]string{"path": r.URL.Path}
 	}
-	path := renderTemplateFile(t, "layout.html", `{{.LayoutData.path}}:{{.Data}}`)
+	files, layoutName := renderTemplateFile(t, "layout.html", `{{.LayoutData.path}}:{{.Data}}`)
 	for _, name := range []string{"first", "second"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			r := httptest.NewRequest(http.MethodGet, "/"+name, nil)
 			c := NewManagedContent(r, cm)
 			c.Data = "<page data>"
-			c.AddLayout(path)
+			c.AddLayout(files, layoutName)
 			w := httptest.NewRecorder()
 			if err := c.Render(w, r); err != nil {
 				t.Fatal(err)
@@ -99,7 +100,7 @@ func TestRenderFailureDoesNotCommitResponse(t *testing.T) {
 				switch failure {
 				case "no templates":
 				case "missing file":
-					c.AddContent(TemplatePath(filepath.Join(t.TempDir(), "missing.html")))
+					c.AddContent(os.DirFS(t.TempDir()), "missing.html")
 				default:
 					c.AddContent(renderTemplateFile(t, "content.html", text))
 				}
@@ -130,9 +131,9 @@ func TestRenderFailureDoesNotCommitResponse(t *testing.T) {
 
 func TestRenderBufferedPageAndFragment(t *testing.T) {
 	cm := contentservice.NewContentManager()
-	cm.RegisterLayouts(contentservice.PageType, []TemplatePath{renderTemplateFile(t, "page.html", `<html>{{renderPartial .PartialName .}}</html>`)})
-	cm.RegisterLayouts(contentservice.HtmxType, []TemplatePath{renderTemplateFile(t, "fragment.html", `{{renderPartial .PartialName .}}`)})
-	part := renderTemplateFile(t, "part.html", `{{define "part"}}<p>{{.Data}}</p>{{end}}`)
+	cm.AddPageLayout(renderTemplateFile(t, "page.html", `<html>{{renderPartial .PartialName .}}</html>`))
+	cm.AddHtmxLayout(renderTemplateFile(t, "fragment.html", `{{renderPartial .PartialName .}}`))
+	files, name := renderTemplateFile(t, "part.html", `{{define "part"}}<p>{{.Data}}</p>{{end}}`)
 	for _, htmx := range []bool{false, true} {
 		for _, status := range []int{0, http.StatusOK, http.StatusCreated, http.StatusUnprocessableEntity} {
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -140,7 +141,7 @@ func TestRenderBufferedPageAndFragment(t *testing.T) {
 				r.Header.Set("HX-Request", "true")
 			}
 			c := NewManagedContent(r, cm)
-			c.AddContent(part)
+			c.AddContent(files, name)
 			c.PartialName, c.Data = "part", "<script>unsafe</script>"
 			c.ResponseStatusCode = status
 			c.Headers = map[string]string{"Content-Type": "text/html; charset=utf-8", "X-Rendered": "yes"}

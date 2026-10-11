@@ -24,22 +24,24 @@ Templates are categorized into:
 - **Contents**: Page-specific main content.
 - **Components**: Reusable snippets used in layouts or content.
 
+The examples use `templateFiles`, an `fs.FS` such as an `embed.FS` or an `os.DirFS` rooted at an absolute directory. Paths are relative to that filesystem. Each call can supply a different filesystem.
+
 Example usage:
 
 ```go
 homepage := content.NewContent(httpRequest /* *http.Request */)
 homepage.Title = "Home Page"
-homepage.AddLayout("templates/layout.html")
-homepage.AddContent("templates/home-content.html")
-homepage.AddComponent("templates/footer.html")
+homepage.AddLayout(templateFiles, "templates/layout.html")
+homepage.AddContent(templateFiles, "templates/home-content.html")
+homepage.AddComponent(templateFiles, "templates/footer.html")
 err := homepage.Render(w, r)
 ```
 
 The `Content` component contains plural methods for convenience:
 
 ```go
-homepage.AddContents("templates/home-content.html", "templates/admin-content.html")
-homepage.AddComponents("templates/footer.html", "templates/admin-components.html")
+homepage.AddContents(templateFiles, "templates/home-content.html", "templates/admin-content.html")
+homepage.AddComponents(templateFiles, "templates/footer.html", "templates/admin-components.html")
 ```
 
 *Note*: When serving an HTMX request, layout templates are ignored during rendering.
@@ -93,8 +95,8 @@ import content_services "github.com/trentnix/hyperserver/pkg/services/content"
 /* ... */
 
 cm := content_services.NewContentManager()
-cm.AddPageLayout("templates/some-layout.html")
-cm.AddPageComponent("templates/componenents/some-component.html")
+cm.AddPageLayout(templateFiles, "templates/some-layout.html")
+cm.AddPageComponent(templateFiles, "templates/componenents/some-component.html")
 
 cm.HomeURL = homeURL
 cm.AuthURL = authURL
@@ -113,8 +115,8 @@ func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, mes
 Templates can be selectively added to be rendered with standard responses, HTMX response, or both:
 
 ```go
-contentManager.AddPageComponent("templates/componenents/some-universal-component.html")
-contentManager.AddHtmxComponent("templates/componenents/some-universal-component.html")
+contentManager.AddPageComponent(templateFiles, "templates/componenents/some-universal-component.html")
+contentManager.AddHtmxComponent(templateFiles, "templates/componenents/some-universal-component.html")
 ```
 
 ## Messages
@@ -236,7 +238,7 @@ A `Form` is rendered in a `Content` instance:
 
 ```go
 register := content.NewManagedContent(r)
-register.AddContent("templates/forms/register-form.html")
+register.AddContent(templateFiles, "templates/forms/register-form.html")
 register.Data = &RegisterForm{}
 err := register.Render(w, r)
 ```
@@ -255,7 +257,7 @@ registerForm := &RegisterForm{
 
 if err := form.Validate(registerForm); err != nil {
   register := content.NewManagedContent(r)
-  register.AddContent("templates/forms/register-form.html")
+  register.AddContent(templateFiles, "templates/forms/register-form.html")
 
   content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated", err)
   return

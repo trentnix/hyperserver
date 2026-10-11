@@ -116,7 +116,8 @@ func TestHTTPFormMessageEscaping(t *testing.T) {
 				f.AddMessage("info: " + message)
 				c := content.NewManagedContent(r, h.app.ContentManager)
 				c.PartialName, c.Data = tc.partial, f
-				c.AddContent(content.TemplatePath(tc.path))
+				file := testTemplateFile(t, tc.path)
+				c.AddContent(file.FS, file.Path)
 				if err := c.Render(w, r); err != nil {
 					util.HttpError(w, r, "Unable to display test form", err, http.StatusInternalServerError)
 				}

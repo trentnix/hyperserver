@@ -1,7 +1,7 @@
 // Package auth implements the email/password authentication provider.
 // Importing this package registers an EmailAuthService with the parent auth package.
 // The provider uses the application's account repository, content manager, and mail client.
-// Template paths currently require the repository root as the working directory.
+// Bundled templates are embedded and do not depend on the process working directory.
 package auth
 
 import (
@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
@@ -34,6 +35,8 @@ import (
 type (
 	// EmailAuthService implements email/password authentication using shared application services.
 	EmailAuthService struct {
+		// TemplateFS overrides bundled templates. Set before Init. Nil uses embedded assets.
+		TemplateFS        fs.FS
 		accounts          user.AccountRepository
 		config            *config.Config
 		contentManager    *content_services.ContentManagerService
@@ -127,15 +130,15 @@ const (
 	// AuthTypeEmail identifies the email/password provider in routes and configuration.
 	AuthTypeEmail = "email"
 
-	emailLoginFormTemplate          = "auth/modules/email/templates/html/partials/login-form.html"
-	emailLoginButtonTemplateName    = "auth/modules/email/templates/html/partials/login-link.html"
-	emailRegisterFormTemplate       = "auth/modules/email/templates/html/partials/register-form.html"
-	emailRegisterButtonTemplateName = "auth/modules/email/templates/html/partials/register-link.html"
-	emailResetRequestFormTemplate   = "auth/modules/email/templates/html/partials/reset-request.html"
-	emailResetPasswordFormTemplate  = "auth/modules/email/templates/html/partials/reset-password.html"
-	emailChangePasswordFormTemplate = "auth/modules/email/templates/html/partials/change-password.html"
-	emailVerificationTemplate       = "auth/modules/email/templates/email/verification.html"
-	emailResetTemplate              = "auth/modules/email/templates/email/reset.html"
+	emailLoginFormTemplate          = "templates/html/partials/login-form.html"
+	emailLoginButtonTemplateName    = "templates/html/partials/login-link.html"
+	emailRegisterFormTemplate       = "templates/html/partials/register-form.html"
+	emailRegisterButtonTemplateName = "templates/html/partials/register-link.html"
+	emailResetRequestFormTemplate   = "templates/html/partials/reset-request.html"
+	emailResetPasswordFormTemplate  = "templates/html/partials/reset-password.html"
+	emailChangePasswordFormTemplate = "templates/html/partials/change-password.html"
+	emailVerificationTemplate       = "templates/email/verification.html"
+	emailResetTemplate              = "templates/email/reset.html"
 	emailLoginFormPartial           = "auth.partial.email.login.form"
 	emailRegisterFormPartial        = "auth.partial.email.register.form"
 	emailResetRequestFormPartial    = "auth.partial.email.reset.request.form"
@@ -177,23 +180,26 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	}
 
 	var err error
-	a.verificationEmail, err = template.ParseFiles(emailVerificationTemplate)
+	if a.TemplateFS == nil {
+		a.TemplateFS = emailAuthTemplatesFS
+	}
+	a.verificationEmail, err = template.ParseFS(a.TemplateFS, emailVerificationTemplate)
 	if err != nil {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("load verification email template %s: %w", emailVerificationTemplate, err))
 	}
-	a.resetEmail, err = template.ParseFiles(emailResetTemplate)
+	a.resetEmail, err = template.ParseFS(a.TemplateFS, emailResetTemplate)
 	if err != nil {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("load reset email template %s: %w", emailResetTemplate, err))
 	}
 
 	loginButtonTemplate := emailLoginButtonTemplateName
-	a.loginButton, err = util.LoadHTMLFromFile(loginButtonTemplate)
+	a.loginButton, err = util.LoadHTML(a.TemplateFS, loginButtonTemplate)
 	if err != nil {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", loginButtonTemplate))
 	}
 
 	registerButtonTemplate := emailRegisterButtonTemplateName
-	a.registerButton, err = util.LoadHTMLFromFile(registerButtonTemplate)
+	a.registerButton, err = util.LoadHTML(a.TemplateFS, registerButtonTemplate)
 	if err != nil {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", registerButtonTemplate))
 	}
@@ -238,7 +244,7 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r, a.contentManager)
 	login.PartialName = emailLoginFormPartial
-	login.AddContent(emailLoginFormTemplate)
+	login.AddContent(a.TemplateFS, emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
 
@@ -272,7 +278,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.User {
 	login := content.NewManagedContent(r, a.contentManager)
 	login.PartialName = emailLoginFormPartial
-	login.AddContent(emailLoginFormTemplate)
+	login.AddContent(a.TemplateFS, emailLoginFormTemplate)
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
 
@@ -317,7 +323,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 
 	register := content.NewManagedContent(r, a.contentManager)
 	register.PartialName = emailRegisterFormPartial
-	register.AddContent(emailRegisterFormTemplate)
+	register.AddContent(a.TemplateFS, emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
@@ -350,7 +356,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 
 	register := content.NewManagedContent(r, a.contentManager)
 	register.PartialName = emailRegisterFormPartial
-	register.AddContent(emailRegisterFormTemplate)
+	register.AddContent(a.TemplateFS, emailRegisterFormTemplate)
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
@@ -375,7 +381,8 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	if a.config.Auth.RegisterRequiresVerification {
 		// The account already exists. Offer sign-in instead of another registration.
 		register.PartialName = "auth.partial.email.registration.pending"
-		register.Contents = []content.TemplatePath{"auth/modules/email/templates/html/partials/registration-pending.html"}
+		register.Contents = nil
+		register.AddContent(a.TemplateFS, "templates/html/partials/registration-pending.html")
 		const deliveryFailure = "Your account was created, but we could not send the verification email. You can sign in to request another email. Protected pages remain unavailable until you verify your address."
 		createdUser, err := a.accounts.GetByEmail(r.Context(), registerForm.Email)
 		if err != nil || createdUser == nil {
@@ -487,7 +494,7 @@ func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, exp
 func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetRequestFormPartial
-	reset.AddContent(emailResetRequestFormTemplate)
+	reset.AddContent(a.TemplateFS, emailResetRequestFormTemplate)
 
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
@@ -519,7 +526,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	respondAfter := time.Now().Add(a.config.Auth.ResetMinimumResponseTime)
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetRequestFormPartial
-	reset.AddContent(emailResetRequestFormTemplate)
+	reset.AddContent(a.TemplateFS, emailResetRequestFormTemplate)
 
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
@@ -593,7 +600,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetPasswordFormPartial
-	reset.AddContent(emailResetPasswordFormTemplate)
+	reset.AddContent(a.TemplateFS, emailResetPasswordFormTemplate)
 
 	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
 	if err != nil {
@@ -621,7 +628,7 @@ func (a *EmailAuthService) Reset(
 ) bool {
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetPasswordFormPartial
-	reset.AddContent(emailResetPasswordFormTemplate)
+	reset.AddContent(a.TemplateFS, emailResetPasswordFormTemplate)
 
 	resetForm := &ResetPasswordForm{}
 	reset.Data = resetForm
@@ -698,7 +705,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 
 	change := content.NewManagedContent(r, a.contentManager)
 	change.PartialName = emailChangePasswordFormPartial
-	change.AddContent(emailChangePasswordFormTemplate)
+	change.AddContent(a.TemplateFS, emailChangePasswordFormTemplate)
 
 	authMessages, err := messages.GetMessages(w, r, messages.AuthMessages)
 	if err != nil {
@@ -723,7 +730,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 
 	change := content.NewManagedContent(r, a.contentManager)
 	change.PartialName = emailChangePasswordFormPartial
-	change.AddContent(emailChangePasswordFormTemplate)
+	change.AddContent(a.TemplateFS, emailChangePasswordFormTemplate)
 
 	changeForm := &ChangePasswordForm{}
 	change.Data = changeForm

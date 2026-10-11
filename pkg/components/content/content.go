@@ -7,8 +7,9 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
-	"path/filepath"
+	"path"
 	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
@@ -126,34 +127,40 @@ func (c *Content) IsHtmx() bool {
 	return c.HTMX.Request.Enabled
 }
 
-// AddLayout adds the content Template to the Content's LayoutTemplates
-func (c *Content) AddLayout(content TemplatePath) {
-	c.Layouts = append(c.Layouts, content)
+// AddLayout appends a layout path relative to files.
+func (c *Content) AddLayout(files fs.FS, name string) {
+	c.Layouts = append(c.Layouts, TemplatePath{FS: files, Path: name})
 }
 
-// AddLayouts adds the contents Templates to the Content's LayoutTemplates
-func (c *Content) AddLayouts(contents ...TemplatePath) {
-	c.Layouts = append(c.Layouts, contents...)
+// AddLayouts appends layout paths relative to files, in order.
+func (c *Content) AddLayouts(files fs.FS, names ...string) {
+	for _, name := range names {
+		c.AddLayout(files, name)
+	}
 }
 
-// AddContent adds the content Template to the Content's ContentTemplates
-func (c *Content) AddContent(content TemplatePath) {
-	c.Contents = append(c.Contents, content)
+// AddContent appends a content path relative to files.
+func (c *Content) AddContent(files fs.FS, name string) {
+	c.Contents = append(c.Contents, TemplatePath{FS: files, Path: name})
 }
 
-// AddContents adds the contents Templates to the Content's ContentTemplates
-func (c *Content) AddContents(contents ...TemplatePath) {
-	c.Contents = append(c.Contents, contents...)
+// AddContents appends content paths relative to files, in order.
+func (c *Content) AddContents(files fs.FS, names ...string) {
+	for _, name := range names {
+		c.AddContent(files, name)
+	}
 }
 
-// AddComponent adds the content Template to the Content's ComponentTemplates
-func (c *Content) AddComponent(content TemplatePath) {
-	c.Components = append(c.Components, content)
+// AddComponent appends a component path relative to files.
+func (c *Content) AddComponent(files fs.FS, name string) {
+	c.Components = append(c.Components, TemplatePath{FS: files, Path: name})
 }
 
-// AddComponents adds the contents Templates to the Content's ComponentTemplates
-func (c *Content) AddComponents(contents ...TemplatePath) {
-	c.Components = append(c.Components, contents...)
+// AddComponents appends component paths relative to files, in order.
+func (c *Content) AddComponents(files fs.FS, names ...string) {
+	for _, name := range names {
+		c.AddComponent(files, name)
+	}
 }
 
 // AddLogMessage adds the provided string to the Content's LogMessages
@@ -219,8 +226,7 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		return NewErrNoTemplates(fmt.Errorf("No templates have been set"))
 	}
 
-	templatePaths := templatesToStrings(templates)
-	rootTemplateName := filepath.Base(templatePaths[0])
+	rootTemplateName := path.Base(templates[0].Path)
 
 	var tmpl *template.Template
 	funcMap := template.FuncMap{
@@ -248,13 +254,26 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// parse the templates in the order specified
-	tmpl, err := template.New(rootTemplateName).Funcs(funcMap).ParseFiles(templatePaths...)
-	if err != nil {
-		return NewErrParsingTemplates(err)
+	tmpl = template.New(rootTemplateName).Funcs(funcMap)
+	for _, file := range templates {
+		if file.FS == nil || !fs.ValidPath(file.Path) {
+			return NewErrParsingTemplates(fmt.Errorf("template requires a filesystem and a valid path: %q", file.Path))
+		}
+		data, err := fs.ReadFile(file.FS, file.Path)
+		if err != nil {
+			return NewErrParsingTemplates(err)
+		}
+		target := tmpl
+		if name := path.Base(file.Path); name != rootTemplateName {
+			target = tmpl.New(name)
+		}
+		if _, err := target.Parse(string(data)); err != nil {
+			return NewErrParsingTemplates(err)
+		}
 	}
 
 	var body bytes.Buffer
-	err = tmpl.ExecuteTemplate(&body, rootTemplateName, c)
+	err := tmpl.ExecuteTemplate(&body, rootTemplateName, c)
 	if err != nil {
 		return NewErrRenderingTemplates(err)
 	}
@@ -283,14 +302,4 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return nil
-}
-
-// templatesToStrings takes the specified Template slice and converts it to a string slice
-func templatesToStrings(templates []TemplatePath) []string {
-	paths := make([]string, len(templates))
-	for i, t := range templates {
-		paths[i] = string(t)
-	}
-
-	return paths
 }

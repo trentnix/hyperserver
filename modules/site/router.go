@@ -2,8 +2,8 @@ package module_site
 
 import (
 	"fmt"
+	"io/fs"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	"github.com/trentnix/hyperserver/auth"
@@ -25,15 +25,14 @@ func (m *SiteModule) Routes(mux *routing.Routes) error {
 		return err
 	}
 
-	// media paths
-	cssPath := filepath.Join("modules", "site", "templates", "html", "css")
-	jsPath := filepath.Join("modules", "site", "templates", "html", "js")
-	imgPath := filepath.Join("modules", "site", "templates", "html", "img")
-
-	// serve media
-	mux.Handle("/css/", http.StripPrefix("/css/", http.FileServer(http.Dir(cssPath)))) // Serve .css files
-	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(jsPath))))    // Serve .js files
-	mux.Handle("/img/", http.StripPrefix("/img/", http.FileServer(http.Dir(imgPath)))) // Serve image files
+	for _, directory := range []string{"css", "js", "img"} {
+		files, err := fs.Sub(siteModuleTemplatesFS, "templates/html/"+directory)
+		if err != nil {
+			return err
+		}
+		prefix := "/" + directory + "/"
+		mux.Handle(prefix, http.StripPrefix(prefix, http.FileServerFS(files)))
+	}
 
 	// serve files
 	mux.HandleFunc("/favicon.ico", m.ServeFavicon)

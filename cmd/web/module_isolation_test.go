@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -17,20 +16,11 @@ import (
 func TestApplicationsOwnModulesAndAuthProviders(t *testing.T) {
 	for _, secondAuth := range []bool{true, false} {
 		t.Run(map[bool]string{true: "enabled", false: "disabled"}[secondAuth], func(t *testing.T) {
-			// Template paths still use the process cwd. Build both applications before
-			// concurrent requests and restore the package directory for other tests.
-			start, err := os.Getwd()
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Chdir(start)
+			t.Chdir(t.TempDir())
 			first := newHTTPHarness(t, func(c *config.Config) {
 				c.App.Name = "First application"
 				c.HTTP.Session.Types["isolation-session"] = "sqliteStore"
 			})
-			if err := os.Chdir(start); err != nil {
-				t.Fatal(err)
-			}
 			second := newHTTPHarness(t, func(c *config.Config) {
 				c.App.Name = "Second application"
 				c.Auth.Enabled = secondAuth

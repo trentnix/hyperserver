@@ -13,8 +13,16 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
-	"github.com/trentnix/hyperserver/pkg/util"
 )
+
+func TestStartupOutsideRepository(t *testing.T) {
+	// The subprocess receives only config.yaml in a new directory. No repository
+	// assets or workingDirectory override are available to the application.
+	output, err := runStartupProcess(t, startupTestConfig, "initialize")
+	if err != nil || !strings.Contains(string(output), "startup initialization passed") {
+		t.Fatalf("startup outside repository: error=%v\n%s", err, output)
+	}
+}
 
 func TestStartupStoragePaths(t *testing.T) {
 	for _, mode := range []string{"relative-database", "invalid-working-directory"} {
@@ -33,7 +41,7 @@ func TestStartupStoragePaths(t *testing.T) {
 	}
 }
 
-// Run in a subprocess because startup changes the process working directory.
+// Run in a subprocess to isolate launch directories and configuration loading.
 // Do not preinitialize services: the test must exercise run's actual ordering.
 func checkStartupStoragePaths(t *testing.T) {
 	t.Helper()
@@ -89,8 +97,7 @@ func checkStartupStoragePaths(t *testing.T) {
 	}
 	err = run(context.Background(), app, "")
 	if os.Getenv("HS_STARTUP_TEST_HELPER") == "invalid-working-directory" {
-		var directoryError *util.ErrFailedToSetWorkingDirectory
-		if !errors.As(err, &directoryError) || app.Database != nil || app.Mail != nil || app.SessionManager != nil {
+		if err == nil || !strings.Contains(err.Error(), "app.workingDirectory") || app.Database != nil || app.Mail != nil || app.SessionManager != nil {
 			t.Fatalf("invalid working directory acquired services or returned the wrong error: %v", err)
 		}
 	} else {
@@ -103,6 +110,9 @@ func checkStartupStoragePaths(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(launch, "relative.db")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("startup created a database in the launch directory: %v", err)
+	}
+	if current, err := os.Getwd(); err != nil || current != launch {
+		t.Fatalf("startup changed process directory: %q, %v", current, err)
 	}
 	fmt.Println("storage path checks passed")
 }

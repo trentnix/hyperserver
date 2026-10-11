@@ -4,6 +4,7 @@
 package content
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/config"
@@ -101,107 +102,116 @@ func (c *ContentManagerService) Configure(cfg *config.Config) {
 	c.RenderNotifications = cfg.App.RenderNotifications
 }
 
-// RegisterLayouts overwrites the layout templates stored in the specified content manager service
-func (c *ContentManagerService) RegisterLayouts(contentType string, templates []TemplatePath) {
-	c.Layouts[contentType] = templates
+// RegisterLayouts replaces layout paths for contentType with paths relative to files.
+func (c *ContentManagerService) RegisterLayouts(contentType string, files fs.FS, names ...string) {
+	c.Layouts[contentType] = nil
+	c.AddLayouts(contentType, files, names...)
 }
 
-// RegisterContents overwrites the content templates stored in the specified content manager service
-func (c *ContentManagerService) RegisterContents(contentType string, templates []TemplatePath) {
-	c.Contents[contentType] = templates
+// RegisterContents replaces content paths for contentType with paths relative to files.
+func (c *ContentManagerService) RegisterContents(contentType string, files fs.FS, names ...string) {
+	c.Contents[contentType] = nil
+	c.AddContents(contentType, files, names...)
 }
 
-// RegisterComponents overwrites the component templates stored in the specified content manager service
-func (c *ContentManagerService) RegisterComponents(contentType string, templates []TemplatePath) {
-	c.Components[contentType] = templates
+// RegisterComponents replaces component paths for contentType with paths relative to files.
+func (c *ContentManagerService) RegisterComponents(contentType string, files fs.FS, names ...string) {
+	c.Components[contentType] = nil
+	c.AddComponents(contentType, files, names...)
 }
 
-// AddLayout adds a layout template to the LayoutTemplates slice for the specified contentType
-func (c *ContentManagerService) AddLayout(contentType string, template TemplatePath) {
-	c.Layouts[contentType] = append(c.Layouts[contentType], template)
+// AddLayout appends a layout path relative to files for contentType.
+func (c *ContentManagerService) AddLayout(contentType string, files fs.FS, name string) {
+	c.Layouts[contentType] = append(c.Layouts[contentType], TemplatePath{FS: files, Path: name})
 }
 
-// AddLayouts adds layout templates to the LayoutTemplates slice for the specified contentType
-func (c *ContentManagerService) AddLayouts(contentType string, templates []TemplatePath) {
-	c.Layouts[contentType] = append(c.Layouts[contentType], templates...)
+// AddLayouts appends layout paths relative to files for contentType, in order.
+func (c *ContentManagerService) AddLayouts(contentType string, files fs.FS, names ...string) {
+	for _, name := range names {
+		c.AddLayout(contentType, files, name)
+	}
 }
 
-// AddContent adds a content template to the ContentTemplates slice for the specified contentType
-func (c *ContentManagerService) AddContent(contentType string, template TemplatePath) {
-	c.Contents[contentType] = append(c.Contents[contentType], template)
+// AddContent appends a content path relative to files for contentType.
+func (c *ContentManagerService) AddContent(contentType string, files fs.FS, name string) {
+	c.Contents[contentType] = append(c.Contents[contentType], TemplatePath{FS: files, Path: name})
 }
 
-// AddContents adds content templates to the ContentTemplates slice for the specified contentType
-func (c *ContentManagerService) AddContents(contentType string, templates []TemplatePath) {
-	c.Contents[contentType] = append(c.Contents[contentType], templates...)
+// AddContents appends content paths relative to files for contentType, in order.
+func (c *ContentManagerService) AddContents(contentType string, files fs.FS, names ...string) {
+	for _, name := range names {
+		c.AddContent(contentType, files, name)
+	}
 }
 
-// AddComponent adds a component template to the ComponentTemplates slice for the specified contentType
-func (c *ContentManagerService) AddComponent(contentType string, template TemplatePath) {
-	c.Components[contentType] = append(c.Components[contentType], template)
+// AddComponent appends a component path relative to files for contentType.
+func (c *ContentManagerService) AddComponent(contentType string, files fs.FS, name string) {
+	c.Components[contentType] = append(c.Components[contentType], TemplatePath{FS: files, Path: name})
 }
 
-// AddComponents adds component templates to the ComponentTemplates slice for the specified contentType
-func (c *ContentManagerService) AddComponents(contentType string, templates []TemplatePath) {
-	c.Components[contentType] = append(c.Components[contentType], templates...)
+// AddComponents appends component paths relative to files for contentType, in order.
+func (c *ContentManagerService) AddComponents(contentType string, files fs.FS, names ...string) {
+	for _, name := range names {
+		c.AddComponent(contentType, files, name)
+	}
 }
 
-// AddPageLayout adds a layout template for the PageType content type
-func (c *ContentManagerService) AddPageLayout(template TemplatePath) {
-	c.AddLayout(PageType, template)
+// AddPageLayout appends a layout path relative to files for PageType responses.
+func (c *ContentManagerService) AddPageLayout(files fs.FS, name string) {
+	c.AddLayout(PageType, files, name)
 }
 
-// AddPageLayouts adds layout templates for the PageType content type
-func (c *ContentManagerService) AddPageLayouts(templates []TemplatePath) {
-	c.AddLayouts(PageType, templates)
+// AddPageLayouts appends layout paths relative to files for PageType responses, in order.
+func (c *ContentManagerService) AddPageLayouts(files fs.FS, names ...string) {
+	c.AddLayouts(PageType, files, names...)
 }
 
-// AddHtmxLayout adds a layout template for the HtmxType content type
-func (c *ContentManagerService) AddHtmxLayout(template TemplatePath) {
-	c.AddLayout(HtmxType, template)
+// AddHtmxLayout appends a layout path relative to files for HtmxType responses.
+func (c *ContentManagerService) AddHtmxLayout(files fs.FS, name string) {
+	c.AddLayout(HtmxType, files, name)
 }
 
-// AddHtmxLayouts appends layout templates for HtmxType responses.
-func (c *ContentManagerService) AddHtmxLayouts(templates []TemplatePath) {
-	c.AddLayouts(HtmxType, templates)
+// AddHtmxLayouts appends layout paths relative to files for HtmxType responses, in order.
+func (c *ContentManagerService) AddHtmxLayouts(files fs.FS, names ...string) {
+	c.AddLayouts(HtmxType, files, names...)
 }
 
-// AddPageContent adds a content template for the PageType content type
-func (c *ContentManagerService) AddPageContent(template TemplatePath) {
-	c.AddContent(PageType, template)
+// AddPageContent appends a content path relative to files for PageType responses.
+func (c *ContentManagerService) AddPageContent(files fs.FS, name string) {
+	c.AddContent(PageType, files, name)
 }
 
-// AddPageContents adds content templates for the PageType content type
-func (c *ContentManagerService) AddPageContents(templates []TemplatePath) {
-	c.AddContents(PageType, templates)
+// AddPageContents appends content paths relative to files for PageType responses, in order.
+func (c *ContentManagerService) AddPageContents(files fs.FS, names ...string) {
+	c.AddContents(PageType, files, names...)
 }
 
-// AddHtmxContent adds a content template for the HtmxType content type
-func (c *ContentManagerService) AddHtmxContent(template TemplatePath) {
-	c.AddContent(HtmxType, template)
+// AddHtmxContent appends a content path relative to files for HtmxType responses.
+func (c *ContentManagerService) AddHtmxContent(files fs.FS, name string) {
+	c.AddContent(HtmxType, files, name)
 }
 
-// AddHtmxContents adds content templates for the HtmxType content type
-func (c *ContentManagerService) AddHtmxContents(templates []TemplatePath) {
-	c.AddContents(HtmxType, templates)
+// AddHtmxContents appends content paths relative to files for HtmxType responses, in order.
+func (c *ContentManagerService) AddHtmxContents(files fs.FS, names ...string) {
+	c.AddContents(HtmxType, files, names...)
 }
 
-// AddPageComponent adds a component template for the PageType content type
-func (c *ContentManagerService) AddPageComponent(template TemplatePath) {
-	c.AddComponent(PageType, template)
+// AddPageComponent appends a component path relative to files for PageType responses.
+func (c *ContentManagerService) AddPageComponent(files fs.FS, name string) {
+	c.AddComponent(PageType, files, name)
 }
 
-// AddPageComponents adds component templates for the PageType content type
-func (c *ContentManagerService) AddPageComponents(templates []TemplatePath) {
-	c.AddComponents(PageType, templates)
+// AddPageComponents appends component paths relative to files for PageType responses, in order.
+func (c *ContentManagerService) AddPageComponents(files fs.FS, names ...string) {
+	c.AddComponents(PageType, files, names...)
 }
 
-// AddHtmxComponent adds component templates for the HtmxType content type
-func (c *ContentManagerService) AddHtmxComponent(template TemplatePath) {
-	c.AddComponent(HtmxType, template)
+// AddHtmxComponent appends a component path relative to files for HtmxType responses.
+func (c *ContentManagerService) AddHtmxComponent(files fs.FS, name string) {
+	c.AddComponent(HtmxType, files, name)
 }
 
-// AddHtmxComponents adds component templates for the HtmxType content type
-func (c *ContentManagerService) AddHtmxComponents(templates []TemplatePath) {
-	c.AddComponents(HtmxType, templates)
+// AddHtmxComponents appends component paths relative to files for HtmxType responses, in order.
+func (c *ContentManagerService) AddHtmxComponents(files fs.FS, names ...string) {
+	c.AddComponents(HtmxType, files, names...)
 }

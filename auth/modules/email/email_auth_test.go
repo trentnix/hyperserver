@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -50,7 +51,7 @@ func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = manager.Close() })
-	service := &EmailAuthService{config: cfg, contentManager: content.NewContentManager()}
+	service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, config: cfg, contentManager: content.NewContentManager()}
 	handlers := map[string]http.HandlerFunc{
 		"login": service.GetLogin, "registration": service.GetRegister, "reset request": service.GetResetRequest,
 		"reset": func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") }, "change": service.GetChange,
@@ -129,19 +130,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 		{name: "invalid reset", path: emailResetTemplate, template: "{{if}}"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			originalDirectory, err := os.Getwd()
-			if err != nil {
-				t.Fatal(err)
-			}
 			root := t.TempDir()
-			if err := os.Chdir(root); err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				if err := os.Chdir(originalDirectory); err != nil {
-					t.Error(err)
-				}
-			})
 
 			files := map[string]string{
 				emailLoginButtonTemplateName:    "Login",
@@ -155,10 +144,10 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 				delete(files, tc.path)
 			}
 			for path, body := range files {
-				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				if err := os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0700); err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+				if err := os.WriteFile(filepath.Join(root, path), []byte(body), 0600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -171,7 +160,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 				AccountRepository: &emailAccountRepository{},
 				ContentManager:    &content.ContentManagerService{},
 			}
-			service := &EmailAuthService{}
+			service := &EmailAuthService{TemplateFS: os.DirFS(root)}
 			initErr := service.Init(app)
 			cause := errors.Unwrap(initErr)
 			want := filepath.Base(tc.path)
@@ -208,7 +197,6 @@ func (s emailAccountRepository) ResetPassword(ctx context.Context, u *user.User,
 }
 
 func TestEmailAuthInitAccountRepository(t *testing.T) {
-	t.Chdir("../../..")
 	for _, scenario := range []string{"supplied", "missing"} {
 		t.Run(scenario, func(t *testing.T) {
 			app := &server.ApplicationServer{
@@ -244,7 +232,6 @@ func (s emailAccountRepository) GetByEmail(ctx context.Context, email string) (*
 }
 
 func TestLoginUsesAccountRepository(t *testing.T) {
-	t.Chdir("../../..")
 	hash, err := password.HashPassword("TestPassword1!")
 	if err != nil {
 		t.Fatal(err)
@@ -274,8 +261,8 @@ func TestLoginUsesAccountRepository(t *testing.T) {
 				return account, nil
 			}}
 			cm := content.NewContentManager()
-			cm.AddHtmxLayout("modules/site/templates/html/layouts/partial.html")
-			service := &EmailAuthService{accounts: reader, contentManager: cm}
+			cm.AddHtmxLayout(fstest.MapFS{"partial.html": &fstest.MapFile{Data: []byte(`{{renderPartial .PartialName .}}`)}}, "partial.html")
+			service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, accounts: reader, contentManager: cm}
 			form := url.Values{"email": {account.Email}, "password": {"TestPassword1!"}}
 			if scenario == "wrong password" {
 				form.Set("password", "WrongPassword1!")
@@ -306,7 +293,6 @@ func TestLoginUsesAccountRepository(t *testing.T) {
 }
 
 func TestRegisterUsesAccountRepository(t *testing.T) {
-	t.Chdir("../../..")
 	form := url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"}}
 	r := httptest.NewRequest(http.MethodPost, emailRegisterPath, strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -320,7 +306,8 @@ func TestRegisterUsesAccountRepository(t *testing.T) {
 	}}
 	// No SQL pool or mail client: this request only requires the account repository.
 	service := &EmailAuthService{
-		accounts: accounts,
+		TemplateFS: emailAuthTemplatesFS,
+		accounts:   accounts,
 		config: &config.Config{Auth: config.AuthConfig{
 			Enabled: true, RegistrationEnabled: true,
 		}},
@@ -332,7 +319,6 @@ func TestRegisterUsesAccountRepository(t *testing.T) {
 }
 
 func TestChangeUsesAccountRepository(t *testing.T) {
-	t.Chdir("../../..")
 	hash, err := password.HashPassword("OldPassword1!")
 	if err != nil {
 		t.Fatal(err)
@@ -374,9 +360,9 @@ func TestChangeUsesAccountRepository(t *testing.T) {
 				return nil
 			}}
 			cm := content.NewContentManager()
-			cm.AddHtmxLayout("modules/site/templates/html/layouts/partial.html")
+			cm.AddHtmxLayout(fstest.MapFS{"partial.html": &fstest.MapFile{Data: []byte(`{{renderPartial .PartialName .}}`)}}, "partial.html")
 			// No SQL pool: password changes must use the supplied repository.
-			service := &EmailAuthService{accounts: accounts, contentManager: cm}
+			service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, accounts: accounts, contentManager: cm}
 			w := httptest.NewRecorder()
 			changed := service.Change(w, r, account)
 			wantCalls := 1
@@ -405,7 +391,6 @@ func TestChangeUsesAccountRepository(t *testing.T) {
 }
 
 func TestResetUsesAccountRepository(t *testing.T) {
-	t.Chdir("../../..")
 	for _, scenario := range []string{"success", "storage failure"} {
 		t.Run(scenario, func(t *testing.T) {
 			fail := scenario == "storage failure"
@@ -431,10 +416,11 @@ func TestResetUsesAccountRepository(t *testing.T) {
 				return nil
 			}}
 			cm := content.NewContentManager()
-			cm.AddHtmxLayout("modules/site/templates/html/layouts/partial.html")
+			cm.AddHtmxLayout(fstest.MapFS{"partial.html": &fstest.MapFile{Data: []byte(`{{renderPartial .PartialName .}}`)}}, "partial.html")
 			// No SQL pool: reset submission must use the supplied repository.
 			service := &EmailAuthService{
-				accounts: accounts, contentManager: cm,
+				TemplateFS: emailAuthTemplatesFS,
+				accounts:   accounts, contentManager: cm,
 				config: &config.Config{Auth: config.AuthConfig{JwtKey: key}},
 			}
 			w := httptest.NewRecorder()

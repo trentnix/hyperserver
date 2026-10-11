@@ -148,7 +148,7 @@ func TestHTTPPageRenderFailureReturnsOnlyErrorPage(t *testing.T) {
 		cm := *h.app.ContentManager
 		cm.RenderNotifications = false
 		cm.Layouts = map[string][]content.TemplatePath{
-			"page": {content.TemplatePath(path)}, "htmx": {content.TemplatePath(path)},
+			"page": {testTemplateFile(t, path)}, "htmx": {testTemplateFile(t, path)},
 		}
 		h.app.Web.HandleFunc("GET /test/render-failure", func(w http.ResponseWriter, r *http.Request) {
 			page := content.NewManagedContent(r, &cm)
@@ -190,7 +190,7 @@ func TestHTTPSiteErrorRenderFailure(t *testing.T) {
 					}
 				}
 				for _, kind := range []string{"page", "htmx"} {
-					h.app.ContentManager.Layouts[kind] = []content.TemplatePath{content.TemplatePath(path)}
+					h.app.ContentManager.Layouts[kind] = []content.TemplatePath{testTemplateFile(t, path)}
 				}
 				h.app.Web.HandleFunc("GET /test/broken-error-page", func(w http.ResponseWriter, r *http.Request) {
 					h.app.ContentManager.HandleError(w, r, "Not allowed", nil, http.StatusForbidden)

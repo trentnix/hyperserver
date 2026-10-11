@@ -165,6 +165,21 @@ http:
 
 See the [complete storage-provider example](pkg/handlers/example_test.go). Modules without declared dependencies can keep using `Init` alone. Existing application-supplied services still arrive through `ApplicationServer`. `Initialize` does not bind routes. On failure, it closes completed modules and returns no instances.
 
+### Files and templates
+
+The site and authentication modules embed their templates and static assets. A built binary does not need the repository beside it. Rebuild to apply changes to bundled assets.
+
+Rendering accepts explicit filesystems. A layout and its page content can come from different modules. Supply an `embed.FS`, `os.DirFS` rooted at an absolute directory, or another `fs.FS`:
+
+```go
+page.AddLayout(layoutFiles, "layouts/page.html")
+page.AddContents(templateFiles, "pages/home.html", "partials/banner.html")
+```
+
+Paths use forward slashes and are relative to the supplied filesystem. Missing files and invalid paths return rendering errors. The email provider accepts a `TemplateFS` override before initialization, with the same paths as its bundled `templates` directory.
+
+The reference commands resolve local storage and TLS paths relative to the selected `config.yaml`. `app.workingDirectory` overrides that base without changing the process directory. Relative overrides start at the config file's directory. `-contact-directory` uses the same base. SQLite memory connections and other drivers' connection strings are unchanged. Applications that construct configuration in Go can call `ResolvePaths()` before opening services to capture their resource base.
+
 ### Route registration errors
 
 `routing.Routes` uses Go's `http.ServeMux` to check patterns. Duplicate or conflicting patterns, malformed patterns, and nil handlers set `Routes.Err()` instead of panicking. Module route methods must return that error:
@@ -261,7 +276,7 @@ http:
     key: "certs/server.key"
 ```
 
-The listener supports TLS 1.2 or newer. Invalid or unreadable files stop startup. Relative paths use `app.workingDirectory` when configured. Restart to reload certificates. Certificate issuance, renewal, and HTTP-to-HTTPS redirects are not automatic.
+The listener supports TLS 1.2 or newer. Invalid or unreadable files stop startup. Relative paths use the config file's directory or the `app.workingDirectory` override. Restart to reload certificates. Certificate issuance, renewal, and HTTP-to-HTTPS redirects are not automatic.
 
 For a local reverse proxy that terminates HTTPS and connects to HyperServer over HTTP:
 
@@ -435,7 +450,7 @@ Clients behind a NAT or an unconfigured proxy share an allowance. Memory capacit
 
 ### Expired-record cleanup
 
-Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration and working directory as `cmd/web`. Each run deletes at most 100 expired rows from each selected server-side session store and, when authentication is enabled, account-token storage. Storage providers own maintenance setup and pool handling. The tables must already exist. Live records and accounts are unchanged.
+Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration as `cmd/web`. Both commands resolve storage paths from that configuration. Each run deletes at most 100 expired rows from each selected server-side session store and, when authentication is enabled, account-token storage. Storage providers own maintenance setup and pool handling. The tables must already exist. Live records and accounts are unchanged.
 
 The supplied command includes the built-in providers. A custom account provider must also be registered in the application's maintenance executable. Unknown providers and missing maintenance capabilities produce an error without falling back to SQLite. Independent session cleanup still runs.
 

@@ -21,8 +21,8 @@ type (
 )
 
 const (
-	contactPageTemplate = "modules/site/templates/html/pages/contact.html"
-	contactFormTemplate = "modules/site/templates/html/partials/contact-form.html"
+	contactPageTemplate = "templates/html/pages/contact.html"
+	contactFormTemplate = "templates/html/partials/contact-form.html"
 )
 
 // Bind populates the RegisterForm fields from the request.
@@ -40,10 +40,10 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 	if !contact.IsHtmx() {
 		contact.PartialName = contactPagePartialName
 		contact.Title = "Contact Us"
-		contact.AddContents(contactPageTemplate, contactFormTemplate)
+		contact.AddContents(siteModuleTemplatesFS, contactPageTemplate, contactFormTemplate)
 	} else {
 		contact.PartialName = contactFormPartialName
-		contact.AddContent(contactFormTemplate)
+		contact.AddContent(siteModuleTemplatesFS, contactFormTemplate)
 	}
 	contact.Data = &ContactForm{}
 
@@ -64,10 +64,10 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	if !contact.IsHtmx() {
 		contact.PartialName = contactPagePartialName
 		contact.Title = "Contact Us"
-		contact.AddContents(contactPageTemplate, contactFormTemplate)
+		contact.AddContents(siteModuleTemplatesFS, contactPageTemplate, contactFormTemplate)
 	} else {
 		contact.PartialName = contactFormPartialName
-		contact.AddContent(contactFormTemplate)
+		contact.AddContent(siteModuleTemplatesFS, contactFormTemplate)
 	}
 
 	// process a contact submission

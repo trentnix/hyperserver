@@ -66,7 +66,7 @@ func cleanupStore(ctx context.Context, c *config.Config, name string, limit int)
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	maintenance, closeStore, err := openMaintenance(ctx, name, options)
+	maintenance, closeStore, err := openMaintenance(ctx, name, options, c.App.WorkingDirectory)
 	if err != nil {
 		return 0, err
 	}
@@ -79,11 +79,17 @@ func cleanupStore(ctx context.Context, c *config.Config, name string, limit int)
 	return maintenance.DeleteExpired(ctx, limit)
 }
 
-func openMaintenance(ctx context.Context, name string, options map[string]string) (ExpiredSessionMaintenance, func() error, error) {
+func openMaintenance(ctx context.Context, name string, options map[string]string, directory string) (ExpiredSessionMaintenance, func() error, error) {
 	switch name {
 	case strings.ToLower(cookieStoreName):
 		return nil, nil, nil
 	case strings.ToLower(sqliteStoreName):
+		connection, err := database.ResolveConnection(sqliteDriver, options["connection"], directory)
+		if err != nil {
+			return nil, nil, err
+		}
+		options = maps.Clone(options)
+		options["connection"] = connection
 		store, err := openSQLiteMaintenance(ctx, options)
 		if err != nil {
 			return nil, nil, err
