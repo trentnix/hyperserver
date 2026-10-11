@@ -147,6 +147,10 @@ Register cleanup for each successfully returned resource before its consumers in
 
 Keep related types and defaults together. Split a package only to remove an unwanted dependency or establish a useful replacement or ownership boundary. Do not require an interface, package, configuration file, or Go module for every component.
 
+The [replacement-provider HTTP test](cmd/web/provider_replacement_test.go) supplies account reads, sessions, contact storage, and mail through application setup without a SQL pool. It covers ordinary and HTMX requests, login and logout, revoked-cookie replay, provider failures, and cleanup ownership. Configuration-precedence, missing-dependency, and application-isolation tests cover the surrounding setup. Import guards and the no-CGO stateless build enforce the core boundary.
+
+These in-memory fixtures prove wiring, not complete storage-provider contracts. Complete alternative storage adapters remain Phase 4 work. Further separation must solve a demonstrated problem.
+
 ### Responsibility boundaries
 
 Each part of HyperServer has a specific job when handling a request:
