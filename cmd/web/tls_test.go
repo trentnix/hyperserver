@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/server"
 )
 
 func testTLSFiles(t *testing.T) (config.HTTPConfig, *x509.CertPool) {
@@ -103,7 +104,7 @@ func TestServeHTTPWithTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := &http.Server{TLSConfig: tlsConfig, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	httpServer := &http.Server{TLSConfig: tlsConfig, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.TLS == nil {
 			t.Error("request reached the handler without TLS")
 		}
@@ -111,7 +112,7 @@ func TestServeHTTPWithTLS(t *testing.T) {
 	})}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- serveHTTP(ctx, server, listener, 10*time.Second) }()
+	go func() { done <- server.ServeHTTP(ctx, httpServer, listener, 10*time.Second) }()
 	t.Cleanup(func() {
 		cancel()
 		select {
@@ -120,7 +121,7 @@ func TestServeHTTPWithTLS(t *testing.T) {
 				t.Error(err)
 			}
 		case <-time.After(5 * time.Second):
-			server.Close()
+			httpServer.Close()
 			t.Error("TLS server did not shut down")
 		}
 	})

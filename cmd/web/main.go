@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -16,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
@@ -50,69 +48,60 @@ func main() {
 	}
 }
 
-// run closes application resources after requests drain, including on startup
-// failure. If draining times out, main exits without closing services underneath
-// handlers that might still be running.
-func run(ctx context.Context, s *server.ApplicationServer, contactDirectory string) (err error) {
-	defer func() {
-		if !errors.Is(err, errHTTPDrainIncomplete) {
-			err = errors.Join(err, s.Shutdown())
-		}
-	}()
+// run delegates serving and resource ownership to the shared application lifecycle.
+func run(ctx context.Context, s *server.ApplicationServer, contactDirectory string) error {
+	return s.Run(ctx, func(ctx context.Context) (*http.Server, net.Listener, error) {
+		return prepareHTTP(ctx, s, contactDirectory)
+	})
+}
 
-	shutdownTimeout := 10 * time.Second
-	if timeout := s.Config.HTTP.ShutdownTimeout; timeout != nil {
-		shutdownTimeout = *timeout
-		if shutdownTimeout <= 0 {
-			return fmt.Errorf("http.shutdownTimeout must be positive")
-		}
-	}
-
+// prepareHTTP selects the reference application's services, modules, and HTTP stack.
+func prepareHTTP(ctx context.Context, s *server.ApplicationServer, contactDirectory string) (*http.Server, net.Listener, error) {
 	address, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// Resolve relative resource paths before any service opens files or connections.
 	if err := s.Config.ResolvePaths(); err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// The reference site's contact storage uses this pool. Mail is used by its
 	// sample routes and the email authentication provider. Neither is a core requirement.
 	if err := s.InitializeDatabase(ctx); err != nil {
-		return fmt.Errorf("failed to prepare application database: %w", err)
+		return nil, nil, fmt.Errorf("failed to prepare application database: %w", err)
 	}
 	if err := s.InitializeMail(); err != nil {
-		return fmt.Errorf("failed to prepare mail: %w", err)
+		return nil, nil, fmt.Errorf("failed to prepare mail: %w", err)
 	}
 
 	tlsConfig, err := listenerTLS(s.Config.HTTP)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if err := s.InitializeSessions(ctx); err != nil {
-		return fmt.Errorf("failed to prepare session storage: %w", err)
+		return nil, nil, fmt.Errorf("failed to prepare session storage: %w", err)
 	}
 	if err := s.InitializeAccounts(ctx); err != nil {
-		return fmt.Errorf("failed to prepare account storage: %w", err)
+		return nil, nil, fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l := logger.NewSlogLogger(nil)
 	catalog, err := siteModules(s.Config.FilePath(contactDirectory))
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// attach routes and their handlers to the router
 	if err := SetupHandlers(ctx, s, l, catalog, nil); err != nil {
-		return fmt.Errorf("failed to set up the registered handlers: %w", err)
+		return nil, nil, fmt.Errorf("failed to set up the registered handlers: %w", err)
 	}
 
 	handler, err := applicationHandler(s, l)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:         address,
 		Handler:      handler,
 		ReadTimeout:  s.Config.HTTP.ReadTimeout,
@@ -123,10 +112,10 @@ func run(ctx context.Context, s *server.ApplicationServer, contactDirectory stri
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	fmt.Printf("Starting server at %s\n", listener.Addr())
-	return serveHTTP(ctx, server, listener, shutdownTimeout)
+	return httpServer, listener, nil
 }
 
 // applicationHandler logs requests and sets browser security headers, then verifies
@@ -162,44 +151,6 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 	handler = proxy(hsts(handler))
 	handler = middleware.SecurityHeaders(referenceContentSecurityPolicy)(handler)
 	return middleware.LoggerMiddleware(l)(handler), nil
-}
-
-var errHTTPDrainIncomplete = errors.New("HTTP shutdown did not finish draining requests; shared services left open until process exit")
-
-// serveHTTP stops accepting requests, then gives handlers a separate drain budget.
-// On timeout it closes connections and returns errHTTPDrainIncomplete. Close cannot
-// stop handlers that ignore cancellation, so callers must not close their services.
-// Hijacked connections are application-owned and require their own shutdown path.
-func serveHTTP(ctx context.Context, s *http.Server, listener net.Listener, timeout time.Duration) error {
-	defer listener.Close()
-	done := make(chan error, 1)
-	go func() {
-		if s.TLSConfig != nil {
-			done <- s.ServeTLS(listener, "", "")
-		} else {
-			done <- s.Serve(listener)
-		}
-	}()
-
-	var err error
-	select {
-	case err = <-done:
-	case <-ctx.Done():
-	}
-	// Do not reuse the canceled context: active requests still need their pool.
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	shutdownErr := s.Shutdown(shutdownCtx)
-	if shutdownErr != nil {
-		shutdownErr = errors.Join(errHTTPDrainIncomplete, shutdownErr, s.Close())
-	}
-	if err == nil {
-		err = <-done
-	}
-	if errors.Is(err, http.ErrServerClosed) {
-		err = nil
-	}
-	return errors.Join(err, shutdownErr)
 }
 
 // referenceListenAddress keeps the development application on loopback interfaces.

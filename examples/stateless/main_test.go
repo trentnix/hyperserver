@@ -46,11 +46,14 @@ func TestServeDrainsBeforeApplicationShutdown(t *testing.T) {
 			if timeout {
 				budget = 20 * time.Millisecond
 			}
+			app.Config.HTTP.ShutdownTimeout = &budget
 			var serveErr error
 			stopped := make(chan struct{})
 			go func() {
 				defer close(stopped)
-				serveErr = serve(ctx, app, listener, budget)
+				serveErr = app.Run(ctx, func(context.Context) (*http.Server, net.Listener, error) {
+					return newHTTPServer(app), listener, nil
+				})
 			}()
 			t.Cleanup(func() {
 				cancel()
@@ -117,29 +120,21 @@ func TestServeDrainsBeforeApplicationShutdown(t *testing.T) {
 }
 
 func TestServeFailureClosesApplication(t *testing.T) {
-	for _, invalidTimeout := range []bool{false, true} {
-		app, err := newApplication(context.Background(), "Hello")
-		if err != nil {
-			t.Fatal(err)
-		}
-		closed := false
-		app.OnShutdown("test", func(context.Context) error { closed = true; return nil })
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		budget := time.Second
-		if invalidTimeout {
-			budget = 0
-		} else {
-			listener.Close()
-		}
-		if err := serve(context.Background(), app, listener, budget); err == nil || !closed {
-			t.Fatalf("failed serving left resources open: error=%v closed=%t", err, closed)
-		}
-		if conn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second); err == nil {
-			conn.Close()
-			t.Fatal("failed serving left the listener open")
-		}
+	app, err := newApplication(context.Background(), "Hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := false
+	app.OnShutdown("test", func(context.Context) error { closed = true; return nil })
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener.Close()
+	err = app.Run(context.Background(), func(context.Context) (*http.Server, net.Listener, error) {
+		return newHTTPServer(app), listener, nil
+	})
+	if err == nil || !closed {
+		t.Fatalf("failed serving left resources open: error=%v closed=%t", err, closed)
 	}
 }

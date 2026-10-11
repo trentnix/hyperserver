@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -14,44 +13,14 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
-// SetupHandlers resolves capability requirements before creating modules, then
-// initializes them in dependency order with a bounded context and binds routes.
-// app.initializationTimeout sets the module budget. An earlier ctx deadline wins.
-// providers selects module names by capability. Nil requires unambiguous defaults.
-func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger, catalog []handlers.Descriptor, providers map[string]string) (err error) {
-	if timeout := s.Config.App.InitializationTimeout; timeout != nil {
-		if *timeout <= 0 {
-			return fmt.Errorf("app.initializationTimeout must be positive")
-		}
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, *timeout)
-		defer cancel()
-	}
+// SetupHandlers selects the reference application's route defaults and delegates
+// module initialization, registration, and cleanup to handlers.Setup.
+func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger, catalog []handlers.Descriptor, providers map[string]string) error {
 	routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)
 	if err != nil {
 		return err
 	}
-
-	modules, err := handlers.Initialize(ctx, s, catalog, providers)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, handlers.Close(context.WithoutCancel(ctx), modules))
-		}
-	}()
-	for _, h := range modules {
-		if err := h.Routes(routes); err != nil {
-			return fmt.Errorf("register module %q (%T) routes: %w", h.Name, h.Handler, err)
-		}
-		if err := routes.Err(); err != nil {
-			return fmt.Errorf("register module %q routes: %w", h.Name, err)
-		}
-	}
-
-	s.OnShutdown("modules", func(ctx context.Context) error { return handlers.Close(ctx, modules) })
-	return nil
+	return handlers.Setup(ctx, s, routes, catalog, providers)
 }
 
 // applicationRoutes selects defaults without allocating shared request counters.

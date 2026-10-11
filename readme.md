@@ -59,7 +59,11 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 
 `server.NewApplicationServer(cfg)` accepts a `config.Config` and returns `(*ApplicationServer, error)`. It validates shared settings, copies the configuration including nested maps and pointers, and creates the router and content manager. Changes to the source configuration do not change the application. Configure services before serving requests. Construction does not read configuration files or initialize database, session, authentication, or mail services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
 
-Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(ctx)`, and `InitializeMail()` only for services the application needs, before initializing their consumers. The database initializer checks connectivity with a ten-second deadline. Mail initialization does not contact SMTP, and consumers that require delivery must validate its configuration. Drain requests before calling `Shutdown()`. The reference application explicitly initializes services for its site and authentication features, then uses `handlers.Initialize` for module dependencies and initialization.
+Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(ctx)`, and `InitializeMail()` only for services the application needs, before initializing their consumers. The database initializer checks connectivity with a ten-second deadline. Mail initialization does not contact SMTP, and consumers that require delivery must validate its configuration. The reference application explicitly initializes services for its site and authentication features, then uses `handlers.Setup` for module initialization, route binding, and cleanup registration.
+
+`app.Run(ctx, prepare)` owns serving and application cleanup. The preparation function receives the context and returns a configured `*http.Server`, a `net.Listener`, and an error. It selects services and modules but must not start serving. Run closes resources on startup failure and drains requests before cleanup on cancellation. `http.shutdownTimeout` controls draining, with a `10s` default.
+
+If draining fails, Run closes connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. Signal handling stays in the command. See the [stateless example](examples/stateless/main.go) for a complete runner. Applications managing HTTP themselves can use `server.ServeHTTP` and call `Shutdown()` after requests drain.
 
 `middleware.WithSessionManager` attaches sessions without requiring authentication or account storage. `LoadSessionManagement` also loads the authenticated user and requires account storage. The reference application chooses between them using `auth.enabled`.
 
@@ -87,23 +91,12 @@ catalog, err := handlers.Replace(handlers.Registered(), site.Module(
 if err != nil {
     return err
 }
-modules, err := handlers.Initialize(ctx, app, catalog, nil)
-if err != nil {
+if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
     return err
 }
-app.OnShutdown("modules", func(ctx context.Context) error {
-    return handlers.Close(ctx, modules)
-})
-routes := routing.NewRoutes(app.Web)
-for _, module := range modules {
-    if err := module.Routes(routes); err != nil {
-        return err
-    }
-    if err := routes.Err(); err != nil {
-        return err
-    }
-}
 ```
+
+`handlers.Setup` resolves dependencies, initializes modules, checks route registrations, and registers reverse-order cleanup with the application. Pass a configured `*routing.Routes` instead of nil to supply route defaults. Failed setup closes initialized modules, but any registered routes remain in the mux. Discard the failed application. A nil catalog selects no modules. The lower-level `handlers.Initialize` remains available when callers need to manage routes and module cleanup themselves.
 
 `contactStore` implements `site.ContactRepository`. The application prepares the store and closes it after requests drain. This direct wiring does not require a separate provider module.
 

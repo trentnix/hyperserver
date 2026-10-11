@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -37,56 +36,26 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
-	if err != nil {
-		log.Fatal(errors.Join(err, app.Shutdown()))
-	}
-	log.Printf("Hello application listening at http://%s", listener.Addr())
-	if err := serve(ctx, app, listener, *timeout); err != nil {
+	app.Config.HTTP.ShutdownTimeout = timeout
+	if err := app.Run(ctx, func(context.Context) (*http.Server, net.Listener, error) {
+		listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
+		if err != nil {
+			return nil, nil, err
+		}
+		log.Printf("Hello application listening at http://%s", listener.Addr())
+		return newHTTPServer(app), listener, nil
+	}); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// serve drains HTTP requests before releasing application resources. If draining
-// fails, the command exits without closing services underneath active handlers.
-func serve(ctx context.Context, app *server.ApplicationServer, listener net.Listener, timeout time.Duration) (err error) {
-	defer listener.Close()
-	drained := true
-	defer func() {
-		if drained {
-			err = errors.Join(err, app.Shutdown())
-		}
-	}()
-	if timeout <= 0 {
-		return fmt.Errorf("shutdown timeout must be positive")
-	}
+func newHTTPServer(app *server.ApplicationServer) *http.Server {
 	handler := middleware.SecurityHeaders("default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")(app.Web)
-	httpServer := &http.Server{
+	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       time.Minute,
 	}
-	done := make(chan error, 1)
-	go func() { done <- httpServer.Serve(listener) }()
-	select {
-	case err = <-done:
-	case <-ctx.Done():
-	}
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	shutdownErr := httpServer.Shutdown(shutdownCtx)
-	if shutdownErr != nil {
-		drained = false
-		shutdownErr = errors.Join(fmt.Errorf("HTTP requests did not drain: %w", shutdownErr), httpServer.Close())
-	}
-	if err == nil {
-		err = <-done
-	}
-	if errors.Is(err, http.ErrServerClosed) {
-		err = nil
-	}
-	return errors.Join(err, shutdownErr)
 }

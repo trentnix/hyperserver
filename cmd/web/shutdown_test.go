@@ -211,7 +211,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	if os.Getenv("HS_STARTUP_TEST_HELPER") == "shutdown-timeout" {
 		select {
 		case err := <-done:
-			if !errors.Is(err, errHTTPDrainIncomplete) || !errors.Is(err, context.DeadlineExceeded) {
+			if !errors.Is(err, server.ErrHTTPDrainIncomplete) || !errors.Is(err, context.DeadlineExceeded) {
 				t.Fatal("unexpected shutdown error:", err)
 			}
 		case <-time.After(3 * time.Second):
@@ -297,7 +297,7 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- serveHTTP(ctx, s, closing, 10*time.Second) }()
+	go func() { done <- server.ServeHTTP(ctx, s, closing, 10*time.Second) }()
 	t.Cleanup(func() {
 		cancel()
 		releaseRequest()
@@ -390,7 +390,7 @@ func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
 func TestServeHTTPReturnsListenerFailure(t *testing.T) {
 	want := errors.New("accept failed")
 	listener := &failedListener{err: want}
-	if err := serveHTTP(context.Background(), &http.Server{}, listener, time.Second); !errors.Is(err, want) {
+	if err := server.ServeHTTP(context.Background(), &http.Server{}, listener, time.Second); !errors.Is(err, want) {
 		t.Fatalf("serve error = %v, want %v", err, want)
 	}
 }
@@ -432,7 +432,7 @@ func TestServeHTTPDrainDeadline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- serveHTTP(ctx, s, listener, 30*time.Millisecond) }()
+	go func() { done <- server.ServeHTTP(ctx, s, listener, 30*time.Millisecond) }()
 	client := &http.Client{Timeout: 3 * time.Second}
 	defer client.CloseIdleConnections()
 	response := make(chan error, 1)
@@ -447,7 +447,7 @@ func TestServeHTTPDrainDeadline(t *testing.T) {
 	cancel()
 	select {
 	case err := <-done:
-		if !errors.Is(err, errHTTPDrainIncomplete) || !errors.Is(err, context.DeadlineExceeded) {
+		if !errors.Is(err, server.ErrHTTPDrainIncomplete) || !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatal("drain timeout error:", err)
 		}
 	case <-time.After(3 * time.Second):
