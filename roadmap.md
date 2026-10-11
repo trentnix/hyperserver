@@ -97,6 +97,46 @@ The code using a cache decides what to cache, how long it can remain valid, and 
 
 The included site module exercises framework features in the local development application. It owns its diagnostic and sample routes. Production applications must not load development modules. Route inclusion follows module selection, not an application-wide development flag.
 
+### Application setup
+
+Keep application decisions in one setup path, in one file or a small group of related files. The following describes the target boundary. Optional services still live on `ApplicationServer`, and the site module currently installs shared rendering policy during initialization.
+
+| Owner | Responsibility |
+| --- | --- |
+| Application setup | Loads configuration once, selects modules and providers, supplies shared services, chooses middleware order and shared rendering policy, and assigns resource ownership. |
+| Core | Coordinates module initialization, route checks, rendering, HTTP serving, rollback, and shutdown. It must not select or construct optional service implementations. |
+| Module | Validates its supplied dependencies, prepares its internal resources and templates, and binds its routes. It must not change another module's configuration or close borrowed resources. |
+| Service provider | Implements its contract and prepares its own resources from supplied settings. It must not independently load application configuration. |
+
+Keep `ApplicationServer` as the core runtime passed to module initialization, not a catalog of every service an application might use. Application setup can hold related services in a typed struct and supply them through module options or constructors. Dependencies supplied by other modules use the existing declared-capability resolver. Each dependency must have one source. Do not add a service locator or another registration framework.
+
+Imports make modules discoverable. Setup must select modules or deliberately select the registered catalog. Registration alone must not activate routes or acquire resources.
+
+#### Reference application
+
+Keep the setup entry in [cmd/web/main.go](cmd/web/main.go), with module selection in [site_modules.go](cmd/web/site_modules.go) and route defaults in [handlers.go](cmd/web/handlers.go):
+
+1. Load settings and command-line options once. Resolve resource paths and validate selections before opening services.
+2. Prepare the services required by the site and configured authentication features. The default setup uses SQLite accounts and sessions, SQLite or file-based contacts, and the configured mail sender. Supply these services to their consumers outside the core container.
+3. Explicitly select the site's shared rendering defaults, including layouts, navigation data, notification loading, error handlers, and redirect URLs. Apply application overrides before serving. Modules still own their page templates and routes. Competing owners of a single setting must produce an error, not depend on module order.
+4. Initialize the selected modules with `handlers.Setup`. Assemble the HTTP stack in `applicationHandler`: request logging, security headers, proxy verification, HSTS, optional shared rate limits, origin checks, session or identity loading, and route dispatch. Supply the listener and HTTP server to `app.Run`.
+
+An optional-service helper can assemble a cohesive default setup. Its call and overrides must be visible here. Replacing account storage must change provider selection and wiring, not the renderer, core lifecycle, or unrelated modules.
+
+#### Stateless application
+
+Keep settings and HTTP setup in [examples/stateless/main.go](examples/stateless/main.go) and module assembly in [app.go](examples/stateless/app.go):
+
+1. Read the application name, loopback port, and shutdown timeout from flags. No configuration file or optional service setup is required.
+2. Create the core runtime and select only `pages.Module()`. The greeting module owns its templates. No notification loader, account service, session manager, storage provider, or mail client is supplied.
+3. Use `handlers.Setup` for modules and routes. Wrap the router with security headers, configure HTTP timeouts, and use `app.Run` for serving and cleanup.
+
+#### Resource ownership and scope
+
+Register cleanup for each successfully returned resource before its consumers initialize. A helper that fails before handing over ownership must release its partial acquisitions. Register each resource with one owner, not both the helper and its caller. `handlers.Setup` registers module cleanup after shared services, so reverse-order shutdown closes modules first. Modules can own repositories while borrowing application-owned connections. Retain startup rollback, request draining, and the rule against closing services under active requests after a drain timeout.
+
+Keep related types and defaults together. Split a package only to remove an unwanted dependency or establish a useful replacement or ownership boundary. Do not require an interface, package, configuration file, or Go module for every component.
+
 ### Responsibility boundaries
 
 Each part of HyperServer has a specific job when handling a request:
