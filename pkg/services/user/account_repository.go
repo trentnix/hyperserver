@@ -20,11 +20,11 @@ type AccountRepository interface {
 	// Failure must leave stored accounts and u unchanged. Success fills in the ID,
 	// timestamps, and initial SessionVersion of 1. Password is already hashed.
 	Create(context.Context, *User) error
-	// CreateToken inserts only. The account ID and token hash identify the record.
+	// InsertToken inserts only. The account ID and token hash identify the record.
 	// Duplicate records must return an error without replacing the stored token.
 	// Failure must leave storage unchanged. Success must not change other tokens or accounts.
 	// Token generation, signing, and delivery belong to the caller.
-	CreateToken(context.Context, TokenMetadata) error
+	InsertToken(context.Context, TokenMetadata) error
 	// Update changes an existing account by ID. Missing accounts return ErrUserNotFound,
 	// stale SessionVersion values return ErrUserChanged, and duplicate emails return
 	// database.ErrRecordAlreadyExists. The caller must preserve the version from its

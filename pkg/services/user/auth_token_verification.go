@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type (
@@ -21,36 +19,9 @@ const (
 	verificationTokenType = "auth-verification"
 )
 
-// GetAuthVerificationTokenByUser retrieves a stored verification token for the user.
-func GetAuthVerificationTokenByUser(db *sqlx.DB, userId string) (*AuthVerificationToken, error) {
-	authToken, err := getTokenByUser(db, userId, verificationTokenType)
-	if err != nil {
-		return nil, err
-	}
-
-	authVerificationToken := &AuthVerificationToken{
-		AuthToken: *authToken,
-	}
-
-	return authVerificationToken, nil
-}
-
-// GetAuthVerificationTokenByHash retrieves a stored verification token by its hash.
-func GetAuthVerificationTokenByHash(db *sqlx.DB, token string) (*AuthVerificationToken, error) {
-	authToken, err := getTokenByHash(db, token, verificationTokenType)
-	if err != nil {
-		return nil, err
-	}
-
-	authVerificationToken := &AuthVerificationToken{
-		AuthToken: *authToken,
-	}
-
-	return authVerificationToken, nil
-}
-
 // NewAuthVerificationToken creates a distinct token bound to u.ID and u.Email.
-// Store it with CreateContext before sending the link. Other tokens remain valid.
+// Store its Metadata with AccountRepository.InsertToken before sending the link.
+// Other tokens remain valid.
 func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthVerificationToken, error) {
 	authToken, err := newAuthToken(u, jwtKey, expiration, verificationTokenType)
 	if err != nil {

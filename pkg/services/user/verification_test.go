@@ -24,7 +24,7 @@ func verificationFixture(t *testing.T) (*sqlx.DB, *User, *AuthVerificationToken,
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := token.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	return db, u, token, key
@@ -50,7 +50,7 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if firstClaims.ID == "" || secondClaims.ID == "" || firstClaims.ID == secondClaims.ID {
 		t.Fatal("resend must have a distinct token ID even when issued in the same second")
 	}
-	if err := second.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), second.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	before, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
@@ -71,10 +71,10 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 		t.Fatal("verification changed unrelated account data")
 	}
 	var missing *ErrTokenNotFound
-	if _, err := GetAuthVerificationTokenByHash(db, second.TokenHash); !errors.As(err, &missing) {
+	if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), second.TokenHash, verificationTokenType); !errors.As(err, &missing) {
 		t.Fatalf("presented token was not consumed: %v", err)
 	}
-	if _, err := GetAuthVerificationTokenByHash(db, first.TokenHash); err != nil {
+	if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), first.TokenHash, verificationTokenType); err != nil {
 		t.Fatalf("different token was consumed: %v", err)
 	}
 	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), second.Token, key); !errors.As(err, &missing) || got != nil {
@@ -161,7 +161,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				}
 			}
 			if failure != "missing token" {
-				if _, err := getTokenByHash(db, token.TokenHash, purpose); err != nil {
+				if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, purpose); err != nil {
 					t.Fatalf("failed verification consumed token: %v", err)
 				}
 			}
@@ -261,7 +261,7 @@ func TestSQLiteAccountRepositoryVerifyRejectsInvalidInput(t *testing.T) {
 			if err != nil || *stored != *before {
 				t.Fatalf("invalid verification changed storage: %v", err)
 			}
-			if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+			if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, verificationTokenType); err != nil {
 				t.Fatalf("invalid verification consumed token: %v", err)
 			}
 		})
@@ -350,7 +350,7 @@ func TestVerifyCancellationAndExpiryDuringContention(t *testing.T) {
 			if err != nil || *stored != *before {
 				t.Fatalf("failed verification changed the account: %v", err)
 			}
-			if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+			if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, verificationTokenType); err != nil {
 				t.Fatalf("failed verification consumed the token: %v", err)
 			}
 		})
@@ -438,14 +438,14 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := second.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), second.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	reset, err := NewAuthResetToken(u, key, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := reset.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), reset.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	other := &User{Email: "other@example.invalid"}
@@ -456,7 +456,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := otherToken.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), otherToken.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -484,7 +484,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 			}
 		}
 	}
-	if _, err := GetAuthResetTokenByHash(db, reset.TokenHash); err != nil {
+	if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), reset.TokenHash, resetTokenType); err != nil {
 		t.Fatalf("email change revoked a reset token: %v", err)
 	}
 	if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), otherToken.Token, key); err != nil {
@@ -498,7 +498,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := newToken.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), newToken.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Verify(context.Background(), NewSQLiteAccountRepository(db), newToken.Token, key); err != nil {

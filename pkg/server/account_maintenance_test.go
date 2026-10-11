@@ -224,7 +224,7 @@ func TestAccountMaintenanceBorrowsInitializedSQLitePool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AccountRepository.CreateToken(ctx, user.TokenMetadata{
+	if err := s.AccountRepository.InsertToken(ctx, user.TokenMetadata{
 		AccountID: account.ID, TokenHash: "expired-hash", Purpose: "auth-reset", ExpiresAt: time.Now().Add(-time.Hour),
 	}); err != nil {
 		t.Fatal(err)

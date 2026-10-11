@@ -192,7 +192,7 @@ func assertAccountRepositoryReady(t *testing.T, repository user.AccountRepositor
 		t.Fatal("account lookup not ready:", err)
 	}
 	metadata := user.TokenMetadata{AccountID: account.ID, TokenHash: "stored-hash", Purpose: "auth-reset", ExpiresAt: time.Now().Add(time.Hour)}
-	if err := repository.CreateToken(ctx, metadata); err != nil {
+	if err := repository.InsertToken(ctx, metadata); err != nil {
 		t.Fatal("token storage not ready:", err)
 	}
 	if _, err := repository.GetToken(ctx, metadata.TokenHash, metadata.Purpose); err != nil {

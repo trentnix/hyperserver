@@ -109,7 +109,7 @@ func TestHTTPResetRequiresPasswordSubmission(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := token.Create(h.app.Database); err != nil {
+		if err := h.app.AccountRepository.InsertToken(t.Context(), token.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 		path := "/auth/reset/email?token=" + url.QueryEscape(token.Token)
@@ -127,7 +127,7 @@ func TestHTTPResetRequiresPasswordSubmission(t *testing.T) {
 					}
 				}
 				h.assertUserUnchanged(t, u)
-				if _, err := user.GetAuthResetTokenByHash(h.app.Database, token.TokenHash); err != nil {
+				if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-reset"); err != nil {
 					t.Fatalf("%s consumed the reset token: %v", method, err)
 				}
 			}

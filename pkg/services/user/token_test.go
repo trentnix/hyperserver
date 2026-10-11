@@ -49,16 +49,20 @@ func TestTokenPurposeStorage(t *testing.T) {
 				t.Error("verification token is not bound to the recipient address")
 			}
 			repository := NewSQLiteAccountRepository(db)
-			if err := repository.CreateToken(context.Background(), token.Metadata()); err != nil {
+			if err := repository.InsertToken(context.Background(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
-			byHash, err := getTokenByHash(db, token.TokenHash, purpose)
-			if err != nil || byHash.Type != purpose || byHash.UserId != u.ID || byHash.TokenHash != token.TokenHash || !byHash.ExpiresAt.Equal(token.ExpiresAt) || byHash.Token != "" {
-				t.Fatalf("stored token lookup by hash failed: %v", err)
+			var persisted TokenMetadata
+			err := db.QueryRowContext(t.Context(), `SELECT user_id, token_hash, expires_at, token_type FROM usertoken`).
+				Scan(&persisted.AccountID, &persisted.TokenHash, &persisted.ExpiresAt, &persisted.Purpose)
+			hash := sha256.Sum256([]byte(token.Token))
+			if err != nil || persisted.AccountID != u.ID || persisted.TokenHash != hex.EncodeToString(hash[:]) || persisted.Purpose != purpose || !persisted.ExpiresAt.Equal(token.ExpiresAt) {
+				t.Fatalf("persisted token metadata = %+v, %v", persisted, err)
 			}
-			byUser, err := getTokenByUser(db, u.ID, purpose)
-			if err != nil || byUser.Type != purpose {
-				t.Fatalf("stored token lookup by user failed: %v", err)
+
+			byHash, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, purpose)
+			if err != nil || byHash.Purpose != purpose || byHash.AccountID != u.ID || byHash.TokenHash != token.TokenHash || !byHash.ExpiresAt.Equal(token.ExpiresAt) {
+				t.Fatalf("stored token lookup by hash failed: %v", err)
 			}
 			duplicate := token.Metadata()
 			duplicate.ExpiresAt = duplicate.ExpiresAt.Add(time.Hour)
@@ -66,18 +70,18 @@ func TestTokenPurposeStorage(t *testing.T) {
 			if purpose == resetTokenType {
 				duplicate.Purpose = verificationTokenType
 			}
-			if err := repository.CreateToken(context.Background(), duplicate); err == nil {
+			if err := repository.InsertToken(context.Background(), duplicate); err == nil {
 				t.Fatal("duplicate insertion replaced the stored token")
 			}
-			stored, err := getTokenByHash(db, token.TokenHash, purpose)
-			if err != nil || *stored != *byHash {
+			stored, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, purpose)
+			if err != nil || stored != byHash {
 				t.Fatalf("duplicate insertion changed token metadata: %v", err)
 			}
 			resend, err := newAuthToken(u, key, time.Hour, purpose)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := repository.CreateToken(context.Background(), resend.Metadata()); err != nil {
+			if err := repository.InsertToken(context.Background(), resend.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			for _, raw := range []string{token.Token, resend.Token} {
@@ -100,14 +104,14 @@ func TestTokensCannotSubstituteForEachOther(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := reset.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), reset.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	verification, err := NewAuthVerificationToken(u, key, 2*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := verification.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), verification.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), reset.Token, key); err == nil || got != nil {
@@ -227,7 +231,7 @@ func TestVerifyRejectsUnboundOrExpiredSignedTokens(t *testing.T) {
 			}
 			hash := sha256.Sum256([]byte(raw))
 			token := AuthToken{UserId: u.ID, TokenHash: hex.EncodeToString(hash[:]), Type: verificationTokenType, ExpiresAt: time.Now().Add(time.Hour)}
-			if err := token.Create(db); err != nil {
+			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), raw, key); err == nil || got != nil {
@@ -237,14 +241,14 @@ func TestVerifyRejectsUnboundOrExpiredSignedTokens(t *testing.T) {
 			if err != nil || stored.Verified {
 				t.Fatalf("invalid token verified account: %v", err)
 			}
-			if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+			if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, verificationTokenType); err != nil {
 				t.Fatalf("invalid token was consumed: %v", err)
 			}
 		})
 	}
 }
 
-func TestCreateTokenHonorsCancellation(t *testing.T) {
+func TestInsertTokenHonorsCancellation(t *testing.T) {
 	db, u, _, key := verificationFixture(t)
 	token, err := NewAuthVerificationToken(u, key, time.Hour)
 	if err != nil {
@@ -252,16 +256,16 @@ func TestCreateTokenHonorsCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := NewSQLiteAccountRepository(db).CreateToken(ctx, token.Metadata()); !errors.Is(err, context.Canceled) {
+	if err := NewSQLiteAccountRepository(db).InsertToken(ctx, token.Metadata()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled creation returned %v", err)
 	}
 	var missing *ErrTokenNotFound
-	if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); !errors.As(err, &missing) {
+	if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, verificationTokenType); !errors.As(err, &missing) {
 		t.Fatalf("canceled creation stored token: %v", err)
 	}
 }
 
-func TestSQLiteAccountRepositoryCreateTokenFailure(t *testing.T) {
+func TestSQLiteAccountRepositoryInsertTokenFailure(t *testing.T) {
 	for _, scenario := range []string{"nil database", "closed database", "insert failure", "missing account", "missing hash", "missing expiry", "invalid purpose"} {
 		t.Run(scenario, func(t *testing.T) {
 			db, u, original, _ := verificationFixture(t)
@@ -290,22 +294,22 @@ func TestSQLiteAccountRepositoryCreateTokenFailure(t *testing.T) {
 			case "invalid purpose":
 				metadata.Purpose = "other"
 			}
-			if err := repository.CreateToken(context.Background(), metadata); err == nil {
+			if err := repository.InsertToken(context.Background(), metadata); err == nil {
 				t.Fatal("failed token insertion returned success")
 			}
 			var count int
 			if err := db.Get(&count, `SELECT count(*) FROM usertoken`); err != nil || count != 1 {
 				t.Fatalf("failed insertion changed stored tokens: count=%d, error=%v", count, err)
 			}
-			stored, err := GetAuthVerificationTokenByHash(db, original.TokenHash)
-			if err != nil || stored.UserId != u.ID || !stored.ExpiresAt.Equal(original.ExpiresAt) {
+			stored, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), original.TokenHash, verificationTokenType)
+			if err != nil || stored.AccountID != u.ID || !stored.ExpiresAt.Equal(original.ExpiresAt) {
 				t.Fatalf("failed insertion changed the original token: %v", err)
 			}
 		})
 	}
 }
 
-func TestSQLiteAccountRepositoryCreateTokenCancellationWhileWaiting(t *testing.T) {
+func TestSQLiteAccountRepositoryInsertTokenCancellationWhileWaiting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		db, _, token, _ := verificationFixture(t)
 		metadata := token.Metadata()
@@ -318,7 +322,7 @@ func TestSQLiteAccountRepositoryCreateTokenCancellationWhileWaiting(t *testing.T
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		result := make(chan error, 1)
-		go func() { result <- NewSQLiteAccountRepository(db).CreateToken(ctx, metadata) }()
+		go func() { result <- NewSQLiteAccountRepository(db).InsertToken(ctx, metadata) }()
 		synctest.Wait()
 		select {
 		case err := <-result:
@@ -350,7 +354,7 @@ func TestSQLiteAccountRepositoryConcurrentTokenInsertion(t *testing.T) {
 	for range 2 {
 		go func() {
 			<-start
-			results <- repository.CreateToken(context.Background(), metadata)
+			results <- repository.InsertToken(context.Background(), metadata)
 		}()
 	}
 	close(start)
@@ -363,8 +367,8 @@ func TestSQLiteAccountRepositoryConcurrentTokenInsertion(t *testing.T) {
 	if successes != 1 {
 		t.Fatalf("successful duplicate insertions=%d, want 1", successes)
 	}
-	stored, err := getTokenByHash(db, metadata.TokenHash, metadata.Purpose)
-	if err != nil || stored.UserId != metadata.AccountID || !stored.ExpiresAt.Equal(metadata.ExpiresAt) {
+	stored, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), metadata.TokenHash, metadata.Purpose)
+	if err != nil || stored.AccountID != metadata.AccountID || !stored.ExpiresAt.Equal(metadata.ExpiresAt) {
 		t.Fatalf("concurrent insertion lost token metadata: %v", err)
 	}
 	var count int
@@ -382,7 +386,7 @@ func TestSQLiteAccountRepositoryGetToken(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := repository.CreateToken(context.Background(), token.Metadata()); err != nil {
+			if err := repository.InsertToken(context.Background(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			for _, expired := range []bool{false, true} {
@@ -404,7 +408,7 @@ func TestSQLiteAccountRepositoryGetToken(t *testing.T) {
 }
 
 func TestSQLiteAccountRepositoryGetTokenFailures(t *testing.T) {
-	for _, scenario := range []string{"missing", "wrong purpose", "empty hash", "invalid purpose", "nil database", "closed database", "missing schema", "canceled"} {
+	for _, scenario := range []string{"missing", "wrong purpose", "empty hash", "invalid purpose", "nil database", "closed database", "missing schema", "invalid stored expiry", "canceled"} {
 		t.Run(scenario, func(t *testing.T) {
 			db, _, token, _ := verificationFixture(t)
 			repository := NewSQLiteAccountRepository(db)
@@ -430,6 +434,10 @@ func TestSQLiteAccountRepositoryGetTokenFailures(t *testing.T) {
 				repository = NewSQLiteAccountRepository(closed)
 			case "missing schema":
 				repository = NewSQLiteAccountRepository(unpreparedUserTestDB(t))
+			case "invalid stored expiry":
+				if _, err := db.ExecContext(ctx, `UPDATE usertoken SET expires_at = CAST('invalid' AS BLOB) WHERE token_hash = ?`, hash); err != nil {
+					t.Fatal(err)
+				}
 			case "canceled":
 				cancel()
 			}
@@ -474,7 +482,7 @@ func TestSQLiteAccountRepositoryGetTokenCancellationWhileWaiting(t *testing.T) {
 		if err := connection.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+		if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, verificationTokenType); err != nil {
 			t.Fatalf("canceled lookup consumed token: %v", err)
 		}
 	})
@@ -670,7 +678,7 @@ func TestLegacyStoredResetTokenRejected(t *testing.T) {
 	}
 	hash := sha256.Sum256([]byte(raw))
 	token := AuthToken{UserId: u.ID, TokenHash: hex.EncodeToString(hash[:]), ExpiresAt: expires, Type: resetTokenType}
-	if err := token.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := ValidateResetToken(context.Background(), NewSQLiteAccountRepository(db), raw, key); err == nil || got != nil {
@@ -694,7 +702,7 @@ func TestTokenRejectsUnsupportedPurpose(t *testing.T) {
 			}
 			token := AuthToken{UserId: u.ID, TokenHash: "test-hash", ExpiresAt: time.Now().Add(time.Hour), Type: purpose}
 			var invalid *ErrToken
-			if err := token.Create(db); !errors.As(err, &invalid) || invalid.Unwrap() == nil || invalid.Unwrap().Error() != "invalid token purpose" {
+			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); !errors.As(err, &invalid) || invalid.Unwrap() == nil || invalid.Unwrap().Error() != "invalid token purpose" {
 				t.Fatalf("unsupported purpose error = %v, want invalid token purpose", err)
 			}
 			var count int

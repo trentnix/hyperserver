@@ -33,7 +33,7 @@ func TestSQLiteAccountRepositoryInitialize(t *testing.T) {
 		t.Fatal(err)
 	}
 	metadata := TokenMetadata{AccountID: account.ID, TokenHash: "stored-hash", Purpose: resetTokenType, ExpiresAt: time.Now().UTC().Add(time.Hour)}
-	if err := repository.CreateToken(ctx, metadata); err != nil {
+	if err := repository.InsertToken(ctx, metadata); err != nil {
 		t.Fatal(err)
 	}
 

@@ -18,7 +18,7 @@ func TestPrepareDatabaseIndependentDatabases(t *testing.T) {
 			t.Fatal(err)
 		}
 		token := &AuthToken{UserId: u.ID, TokenHash: "stored-hash", ExpiresAt: time.Now().Add(time.Hour), Type: resetTokenType}
-		if err := token.Create(db); err != nil {
+		if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 
@@ -101,6 +101,15 @@ func TestAccountOperationsDoNotPrepareDatabase(t *testing.T) {
 		}},
 		{"update", func(db *sqlx.DB) error {
 			return NewSQLiteAccountRepository(db).Update(context.Background(), &User{ID: "missing", Email: "person@example.invalid"})
+		}},
+		{"create token", func(db *sqlx.DB) error {
+			return NewSQLiteAccountRepository(db).InsertToken(t.Context(), TokenMetadata{
+				AccountID: "missing", TokenHash: "hash", Purpose: resetTokenType, ExpiresAt: time.Now().Add(time.Hour),
+			})
+		}},
+		{"lookup token", func(db *sqlx.DB) error {
+			_, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), "hash", resetTokenType)
+			return err
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

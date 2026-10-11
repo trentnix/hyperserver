@@ -59,7 +59,7 @@ func TestHTTPCredentialResponses(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						if err := token.Create(h.app.Database); err != nil {
+						if err := h.app.AccountRepository.InsertToken(t.Context(), token.Metadata()); err != nil {
 							t.Fatal(err)
 						}
 						path += "?token=" + url.QueryEscape(token.Token)

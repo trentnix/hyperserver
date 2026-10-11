@@ -80,7 +80,7 @@ func TestHTTPAuthenticationRotation(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := token.Create(h.app.Database); err != nil {
+					if err := h.app.AccountRepository.InsertToken(t.Context(), token.Metadata()); err != nil {
 						t.Fatal(err)
 					}
 					w = h.request(http.MethodPost, "/auth/verify", url.Values{"token": {token.Token}}, true)
@@ -135,7 +135,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := token.Create(h.app.Database); err != nil {
+				if err := h.app.AccountRepository.InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := h.app.Database.Exec(`CREATE TRIGGER reject_rotation BEFORE INSERT ON session BEGIN SELECT RAISE(ABORT, 'private rotation failure'); END`); err != nil {
@@ -155,7 +155,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 					t.Fatalf("session failure rolled back verification: %+v, %v", stored, err)
 				}
 				var missing *user.ErrTokenNotFound
-				if _, err := user.GetAuthVerificationTokenByHash(h.app.Database, token.TokenHash); !errors.As(err, &missing) {
+				if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-verification"); !errors.As(err, &missing) {
 					t.Fatalf("verification token was not consumed: %v", err)
 				}
 				if _, err := h.app.Database.Exec(`DROP TRIGGER reject_rotation`); err != nil {
@@ -222,7 +222,7 @@ func TestHTTPPasswordChangesRevokeAllSessions(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := token.Create(h.app.Database); err != nil {
+					if err := h.app.AccountRepository.InsertToken(t.Context(), token.Metadata()); err != nil {
 						t.Fatal(err)
 					}
 					h.request(http.MethodPost, "/auth/reset/email?token="+url.QueryEscape(token.Token), url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, true)

@@ -28,7 +28,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				if tokenErr != nil {
 					t.Fatal(tokenErr)
 				}
-				if err := token.Create(db); err != nil {
+				if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 				err = u.ResetPassword(ctx, repository, token.Token, key, "new hash")
@@ -37,7 +37,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				if tokenErr != nil {
 					t.Fatal(tokenErr)
 				}
-				if err := token.Create(db); err != nil {
+				if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 				u, err = Verify(ctx, NewSQLiteAccountRepository(db), token.Token, key)
@@ -71,7 +71,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := token.Create(db); err != nil {
+			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 

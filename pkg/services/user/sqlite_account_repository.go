@@ -104,11 +104,24 @@ func (s *SQLiteAccountRepository) GetToken(ctx context.Context, tokenHash, purpo
 	if purpose != resetTokenType && purpose != verificationTokenType {
 		return TokenMetadata{}, NewErrToken(errors.New("invalid token purpose"))
 	}
-	token, err := getTokenByHashContext(ctx, s.db, tokenHash, purpose)
-	if err != nil {
-		return TokenMetadata{}, err
+	if tokenHash == "" {
+		return TokenMetadata{}, NewErrTokenNotSpecified(fmt.Errorf("get token by value"))
 	}
-	return token.Metadata(), nil
+	if s.db == nil {
+		return TokenMetadata{}, database.NewErrDatabaseUnavailable(nil)
+	}
+
+	var metadata TokenMetadata
+	err := s.db.QueryRowContext(ctx, `SELECT user_id, token_hash, expires_at, token_type
+		FROM `+userTokenTableName+` WHERE token_hash = ? AND token_type = ?`, tokenHash, purpose).
+		Scan(&metadata.AccountID, &metadata.TokenHash, &metadata.ExpiresAt, &metadata.Purpose)
+	if errors.Is(err, sql.ErrNoRows) {
+		return TokenMetadata{}, NewErrTokenNotFound(fmt.Errorf("get token by value"))
+	}
+	if err != nil {
+		return TokenMetadata{}, database.NewErrDatabase(fmt.Errorf("get token by value: %w", err))
+	}
+	return metadata, nil
 }
 
 // Create inserts a new account. An existing email returns ErrRecordAlreadyExists
@@ -148,13 +161,30 @@ func (s *SQLiteAccountRepository) Create(ctx context.Context, user *User) error 
 	return nil
 }
 
-// CreateToken inserts token metadata without replacing or revoking existing tokens.
-func (s *SQLiteAccountRepository) CreateToken(ctx context.Context, metadata TokenMetadata) error {
-	token := AuthToken{
-		UserId: metadata.AccountID, TokenHash: metadata.TokenHash,
-		Type: metadata.Purpose, ExpiresAt: metadata.ExpiresAt,
+// InsertToken inserts token metadata without replacing or revoking existing tokens.
+// The account schema must already exist. The raw token is never passed to storage.
+func (s *SQLiteAccountRepository) InsertToken(ctx context.Context, metadata TokenMetadata) error {
+	if s.db == nil {
+		return database.NewErrDatabaseUnavailable(nil)
 	}
-	return token.CreateContext(ctx, s.db)
+	errInsertToken := errors.New("error creating a new token in the database")
+	if metadata.AccountID == "" {
+		return NewErrUserNotSpecified(errInsertToken)
+	}
+	if metadata.TokenHash == "" {
+		return NewErrTokenNotSpecified(errInsertToken)
+	}
+	if metadata.ExpiresAt.IsZero() {
+		return NewErrTokenExpirationNotSpecified(errInsertToken)
+	}
+	if metadata.Purpose != resetTokenType && metadata.Purpose != verificationTokenType {
+		return NewErrToken(errors.New("invalid token purpose"))
+	}
+
+	_, err := s.db.ExecContext(ctx, `INSERT INTO `+userTokenTableName+`
+		(user_id, token_hash, expires_at, token_type) VALUES (?, ?, ?, ?)`,
+		metadata.AccountID, metadata.TokenHash, metadata.ExpiresAt, metadata.Purpose)
+	return err
 }
 
 // Update changes an existing account by ID. It never inserts an account and
@@ -301,7 +331,7 @@ func (s *SQLiteAccountRepository) ResetPassword(ctx context.Context, u *User, au
 	}
 	defer tx.Rollback()
 
-	if err := consumeStoredToken(ctx, tx, authorization.AccountID, authorization.TokenHash, resetTokenType, authorization.ExpiresAt); err != nil {
+	if err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, resetTokenType, authorization.ExpiresAt); err != nil {
 		return err
 	}
 	now := time.Now()
@@ -344,7 +374,7 @@ func (s *SQLiteAccountRepository) Verify(ctx context.Context, authorization Veri
 	}
 	defer tx.Rollback()
 
-	if err := consumeStoredToken(ctx, tx, authorization.AccountID, authorization.TokenHash, verificationTokenType, authorization.ExpiresAt); err != nil {
+	if err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, verificationTokenType, authorization.ExpiresAt); err != nil {
 		return nil, err
 	}
 
@@ -366,4 +396,27 @@ func (s *SQLiteAccountRepository) Verify(ctx context.Context, authorization Veri
 	}
 
 	return &account, nil
+}
+
+// deleteTokenAndCheckExpiry deletes the matching token, then checks its stored
+// and signed expiry after acquiring the write lock. The caller must roll back on
+// any error to restore the token.
+func deleteTokenAndCheckExpiry(ctx context.Context, tx *sqlx.Tx, accountID, tokenHash, purpose string, signedExpiry time.Time) error {
+	var expiresAt time.Time
+	err := tx.QueryRowContext(ctx, `DELETE FROM `+userTokenTableName+`
+		WHERE user_id = ? AND token_hash = ? AND token_type = ?
+		RETURNING expires_at`, accountID, tokenHash, purpose).
+		Scan(&expiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NewErrTokenNotFound(err)
+	}
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if !now.Before(expiresAt) || !now.Before(signedExpiry) {
+		return NewErrTokenExpired(nil)
+	}
+	return nil
 }

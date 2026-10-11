@@ -184,7 +184,7 @@ func (s emailAccountRepository) Create(ctx context.Context, u *user.User) error 
 	return s.create(ctx, u)
 }
 
-func (s emailAccountRepository) CreateToken(ctx context.Context, metadata user.TokenMetadata) error {
+func (s emailAccountRepository) InsertToken(ctx context.Context, metadata user.TokenMetadata) error {
 	return s.createToken(ctx, metadata)
 }
 

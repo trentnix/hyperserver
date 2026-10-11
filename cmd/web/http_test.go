@@ -1224,7 +1224,7 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := reset.Create(h.app.Database); err != nil {
+		if err := h.app.AccountRepository.InsertToken(t.Context(), reset.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 		verification, err := user.NewAuthVerificationToken(u, key, time.Hour)
@@ -1262,7 +1262,7 @@ func TestHTTPExpiredResetTokenRedisplaysRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 		token.ExpiresAt = time.Now().Add(-time.Hour)
-		if err := token.Create(h.app.Database); err != nil {
+		if err := h.app.AccountRepository.InsertToken(t.Context(), token.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 		for _, htmx := range []bool{false, true} {
@@ -1286,7 +1286,7 @@ func TestHTTPResetRejectsInvalidPassword(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := token.Create(h.app.Database); err != nil {
+		if err := h.app.AccountRepository.InsertToken(t.Context(), token.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 		path := "/auth/reset/email?token=" + url.QueryEscape(token.Token)
@@ -1302,7 +1302,7 @@ func TestHTTPResetRejectsInvalidPassword(t *testing.T) {
 					t.Error("validation response lost the reset URL and token")
 				}
 				h.assertUserUnchanged(t, u)
-				if _, err := user.GetAuthResetTokenByHash(h.app.Database, token.TokenHash); err != nil {
+				if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-reset"); err != nil {
 					t.Fatalf("invalid form consumed the reset token: %v", err)
 				}
 			})

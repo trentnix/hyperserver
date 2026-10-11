@@ -70,12 +70,12 @@ func TestTokenCleanupBatches(t *testing.T) {
 		if i%2 == 0 {
 			token.Type = verificationTokenType
 		}
-		if err := token.Create(db); err != nil {
+		if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 	}
 	live := &AuthToken{UserId: u.ID, TokenHash: "live", Type: verificationTokenType, ExpiresAt: time.Now().Add(time.Hour)}
-	if err := live.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), live.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	// Existing databases receive the cleanup index without losing their tokens.
@@ -96,8 +96,8 @@ func TestTokenCleanupBatches(t *testing.T) {
 			t.Fatalf("batch deleted %d, %v, want %d", count, err, want)
 		}
 	}
-	stored, err := GetAuthVerificationTokenByHash(db, live.TokenHash)
-	if err != nil || stored.UserId != u.ID || !stored.ExpiresAt.Equal(live.ExpiresAt) {
+	stored, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), live.TokenHash, verificationTokenType)
+	if err != nil || stored.AccountID != u.ID || !stored.ExpiresAt.Equal(live.ExpiresAt) {
 		t.Fatalf("cleanup changed live token: %+v, %v", stored, err)
 	}
 	var count int
@@ -170,11 +170,11 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := token.Create(db); err != nil {
+			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			expired := &AuthToken{UserId: u.ID, TokenHash: "expired", ExpiresAt: time.Now().Add(-time.Hour), Type: purpose}
-			if err := expired.Create(db); err != nil {
+			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), expired.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 

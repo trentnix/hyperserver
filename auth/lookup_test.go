@@ -95,7 +95,7 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := token.Create(db); err != nil {
+			if err := user.NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			newRequest := func() *http.Request {
@@ -145,7 +145,7 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			if err != nil || stored.Verified || !stored.UpdatedAt.Equal(account.UpdatedAt) {
 				t.Fatalf("failed lookup changed the account: %+v, %v", stored, err)
 			}
-			if _, err := user.GetAuthVerificationTokenByHash(db, token.TokenHash); err != nil {
+			if _, err := user.NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, "auth-verification"); err != nil {
 				t.Fatalf("failed lookup consumed the token: %v", err)
 			}
 
@@ -334,7 +334,7 @@ func TestResetStopsOnTokenLookupFailure(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := token.Create(db); err != nil {
+				if err := user.NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := db.Exec("ALTER TABLE " + table + " RENAME TO unavailable"); err != nil {

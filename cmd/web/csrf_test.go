@@ -131,14 +131,14 @@ func TestCSRFCrossOriginMutationsHaveNoSideEffects(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := verification.Create(h.app.Database); err != nil {
+				if err := h.app.AccountRepository.InsertToken(t.Context(), verification.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 				reset, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := reset.Create(h.app.Database); err != nil {
+				if err := h.app.AccountRepository.InsertToken(t.Context(), reset.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 				wantSessions := 0

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jmoiron/sqlx"
 )
 
 type (
@@ -31,35 +30,8 @@ const (
 	resetTokenType = "auth-reset"
 )
 
-// GetAuthResetTokenByUser retrieves an AuthResetToken for the specified user from the database
-func GetAuthResetTokenByUser(db *sqlx.DB, userId string) (*AuthResetToken, error) {
-	authToken, err := getTokenByUser(db, userId, resetTokenType)
-	if err != nil {
-		return nil, err
-	}
-
-	authVerificationToken := &AuthResetToken{
-		AuthToken: *authToken,
-	}
-
-	return authVerificationToken, nil
-}
-
-// GetAuthResetTokenByHash retrieves an AuthResetToken for the specified token value from the database
-func GetAuthResetTokenByHash(db *sqlx.DB, token string) (*AuthResetToken, error) {
-	authToken, err := getTokenByHash(db, token, resetTokenType)
-	if err != nil {
-		return nil, err
-	}
-
-	authVerificationToken := &AuthResetToken{
-		AuthToken: *authToken,
-	}
-
-	return authVerificationToken, nil
-}
-
-// NewAuthResetToken creates a reset token and its hash. Call Create to store it.
+// NewAuthResetToken creates a reset token and its hash.
+// Store its Metadata with AccountRepository.InsertToken before sending the link.
 func NewAuthResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthResetToken, error) {
 	authToken, err := newAuthToken(u, jwtKey, expiration, resetTokenType)
 	if err != nil {

@@ -24,7 +24,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := token.Create(db); err != nil {
+		if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 		tokens = append(tokens, token)
@@ -36,11 +36,11 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), tokens[1].Token, key, "new hash"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := GetAuthResetTokenByHash(db, tokens[0].TokenHash); err != nil {
+	if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), tokens[0].TokenHash, resetTokenType); err != nil {
 		t.Fatalf("consumed a different token: %v", err)
 	}
 	var missing *ErrTokenNotFound
-	if _, err := GetAuthResetTokenByHash(db, tokens[1].TokenHash); !errors.As(err, &missing) {
+	if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), tokens[1].TokenHash, resetTokenType); !errors.As(err, &missing) {
 		t.Fatalf("presented token still exists: %v", err)
 	}
 	if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), tokens[1].Token, key, "replayed hash"); !errors.As(err, &missing) {
@@ -82,7 +82,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 			if failure == "stored expiry" {
 				token.ExpiresAt = time.Now().Add(-time.Hour)
 			}
-			if err := token.Create(db); err != nil {
+			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			switch failure {
@@ -127,7 +127,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "missing token":
-				if err := token.Delete(db); err != nil {
+				if _, err := db.ExecContext(ctx, "DELETE FROM usertoken WHERE user_id = ? AND token_hash = ?", token.UserId, token.TokenHash); err != nil {
 					t.Fatal(err)
 				}
 			case "canceled":
@@ -157,7 +157,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 				}
 			}
 			if failure != "missing token" {
-				if _, err := getTokenByHash(db, token.TokenHash, purpose); err != nil {
+				if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, purpose); err != nil {
 					t.Fatalf("failed reset consumed token: %v", err)
 				}
 			}
@@ -186,7 +186,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := token.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	observed, started := observeTokenDeletes(t, db)
@@ -265,7 +265,7 @@ func TestSQLiteAccountRepositoryResetRejectsInvalidInput(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := token.Create(db); err != nil {
+			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			authorization := ResetAuthorization{AccountID: u.ID, TokenHash: token.TokenHash, ExpiresAt: time.Unix(token.ExpiresAt.Unix(), 0)}
@@ -297,7 +297,7 @@ func TestSQLiteAccountRepositoryResetRejectsInvalidInput(t *testing.T) {
 			if err != nil || *stored != *u {
 				t.Fatalf("invalid reset changed storage: %v", err)
 			}
-			if _, err := GetAuthResetTokenByHash(db, token.TokenHash); err != nil {
+			if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, resetTokenType); err != nil {
 				t.Fatalf("invalid reset consumed the token: %v", err)
 			}
 		})
@@ -407,7 +407,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 				deadline = time.Now().Add(time.Second)
 				token.ExpiresAt = deadline
 			}
-			if err := token.Create(db); err != nil {
+			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			observed, started := observeTokenDeletes(t, db)
@@ -467,7 +467,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 			if err != nil || stored.Password != before.Password {
 				t.Fatalf("failed reset changed the password: %v", err)
 			}
-			if _, err := GetAuthResetTokenByHash(db, token.TokenHash); err != nil {
+			if _, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), token.TokenHash, resetTokenType); err != nil {
 				t.Fatalf("failed reset consumed the token: %v", err)
 			}
 		})
@@ -486,7 +486,7 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := token.Create(db); err != nil {
+	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	verified := *u

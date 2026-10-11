@@ -441,7 +441,7 @@ func (a *EmailAuthService) SendVerificationEmail(ctx context.Context, u *user.Us
 		return err
 	}
 
-	if err := a.accounts.CreateToken(ctx, verificationToken.Metadata()); err != nil {
+	if err := a.accounts.InsertToken(ctx, verificationToken.Metadata()); err != nil {
 		return err
 	}
 	return a.mailClient.Compose().
@@ -480,7 +480,7 @@ func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, exp
 		return err
 	}
 
-	if err := a.accounts.CreateToken(ctx, token.Metadata()); err != nil {
+	if err := a.accounts.InsertToken(ctx, token.Metadata()); err != nil {
 		return err
 	}
 	return a.mailClient.Compose().
