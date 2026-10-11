@@ -20,6 +20,7 @@ func TestCoreDoesNotImportOptionalImplementations(t *testing.T) {
 			"github.com/trentnix/hyperserver/pkg/services/user",
 			"github.com/trentnix/hyperserver/internal/reference",
 			"github.com/trentnix/hyperserver/pkg/services/messaging",
+			"github.com/trentnix/hyperserver/pkg/services/session",
 		} {
 			if dependency == forbidden || strings.HasPrefix(dependency, forbidden+"/") {
 				t.Errorf("core or stateless application imports optional setup or service %s", dependency)

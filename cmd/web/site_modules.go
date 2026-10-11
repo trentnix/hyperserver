@@ -33,8 +33,8 @@ func siteModules(app *application, directory string) ([]handlers.Descriptor, err
 	providers := auth.Registered()
 	for i, provider := range providers {
 		if provider.Name == email.AuthTypeEmail {
-			providers[i] = email.Provider(app.AccountRepository, app.Mail)
+			providers[i] = email.Provider(app.AccountRepository, app.SessionManager, app.Mail)
 		}
 	}
-	return handlers.Replace(catalog, auth.Module(app.AccountRepository, providers))
+	return handlers.Replace(catalog, auth.Module(app.AccountRepository, app.SessionManager, providers))
 }

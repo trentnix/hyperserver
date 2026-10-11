@@ -123,7 +123,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := initializeMail(s); err != nil {
 			t.Fatal(err)
 		}
-		if err := initializeSessions(context.Background(), s.ApplicationServer); err != nil {
+		if err := initializeSessions(context.Background(), s); err != nil {
 			t.Fatal(err)
 		}
 		if err := initializeAccounts(context.Background(), s, reference.NewAccountStorage(s.Config)); err != nil {

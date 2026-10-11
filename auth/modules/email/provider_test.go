@@ -10,6 +10,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func TestProviderSuppliesDependencies(t *testing.T) {
@@ -21,7 +22,8 @@ func TestProviderSuppliesDependencies(t *testing.T) {
 		t.Fatal(err)
 	}
 	accounts := &emailAccountRepository{}
-	descriptor := Provider(accounts, client)
+	sessions := emailSessions(t, map[string]string{"default": "memory"})
+	descriptor := Provider(accounts, sessions, client)
 	first, second := descriptor.New().(*EmailAuthService), descriptor.New().(*EmailAuthService)
 	if descriptor.Name != AuthTypeEmail || first == second {
 		t.Fatal("provider did not create independent instances")
@@ -29,17 +31,25 @@ func TestProviderSuppliesDependencies(t *testing.T) {
 	if first.mailClient != client || second.mailClient != client || first.accounts != accounts || second.accounts != accounts {
 		t.Fatal("provider did not retain its supplied dependencies")
 	}
-	other := Provider(nil, nil).New().(*EmailAuthService)
+	if first.sessions != sessions || second.sessions != sessions {
+		t.Fatal("provider did not retain the supplied session manager")
+	}
+	other := Provider(nil, nil, nil).New().(*EmailAuthService)
 	second.mailClient = nil
 	second.accounts = nil
+	second.sessions = nil
 	if first.mailClient != client || first.accounts != accounts || other.mailClient != nil || other.accounts != nil {
 		t.Fatal("provider instances share mutable dependency selection")
+	}
+
+	if first.sessions != sessions || other.sessions != nil {
+		t.Fatal("provider instances share session selection")
 	}
 
 	for _, registered := range auth_services.Registered() {
 		if registered.Name == AuthTypeEmail {
 			provider := registered.New().(*EmailAuthService)
-			if provider.mailClient != nil || provider.accounts != nil {
+			if provider.mailClient != nil || provider.accounts != nil || provider.sessions != nil {
 				t.Fatal("application dependencies escaped into the import catalog")
 			}
 			return
@@ -69,7 +79,7 @@ func TestProviderMailRequirements(t *testing.T) {
 				t.Fatal(err)
 			}
 			accounts := &emailAccountRepository{}
-			app.SessionManager = emailSessions(t, map[string]string{"default": "memory", "auth-user-session": "identity"})
+			sessions := emailSessions(t, map[string]string{"default": "memory", "auth-user-session": "identity"})
 			var client *messaging.MailClient
 			if test.supplied {
 				client, err = messaging.NewMailClientWithSender("sender@example.invalid", accountMailSender(func(context.Context, messaging.MailMessage) error {
@@ -80,7 +90,7 @@ func TestProviderMailRequirements(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			module := auth_services.Module(accounts, []auth_services.Descriptor{Provider(accounts, client)}).New()
+			module := auth_services.Module(accounts, sessions, []auth_services.Descriptor{Provider(accounts, sessions, client)}).New()
 			err = module.Init(t.Context(), app)
 			if test.required && !test.supplied {
 				if !errors.Is(err, messaging.ErrMailUnavailable) {
@@ -90,5 +100,17 @@ func TestProviderMailRequirements(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestProviderRequiresSuppliedSessions(t *testing.T) {
+	app := &server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{
+		Services: map[string]map[string]string{"email": {"enabled": "true"}},
+	}}}
+	provider := Provider(&emailAccountRepository{}, nil, nil).New()
+	err := provider.Init(app)
+	var missing *session.ErrSessionManagerNotFound
+	if !errors.As(err, &missing) {
+		t.Fatalf("initialization error = %v, want missing session manager", err)
 	}
 }

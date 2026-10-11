@@ -12,7 +12,6 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
-	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -24,7 +23,6 @@ type (
 
 		Web            *http.ServeMux
 		ContentManager *content_services.ContentManagerService
-		SessionManager *session.SessionManager
 		shutdownHooks  []shutdownHook
 	}
 )
@@ -45,16 +43,15 @@ func NewApplicationServer(cfg config.Config) (*ApplicationServer, error) {
 	return s, nil
 }
 
-// Shutdown runs registered cleanup, then closes session providers
-// with a ten-second cooperative deadline. Call serially
+// Shutdown runs registered cleanup with a ten-second cooperative deadline. Call serially
 // after draining requests and stopping other consumers. Borrowing modules must not call it.
 func (s *ApplicationServer) Shutdown() error {
 	return s.ShutdownContext(context.Background())
 }
 
 // OnShutdown registers application-owned cleanup during startup. Hooks run once,
-// in reverse registration order, before session services
-// close. Call serially, registering providers before consumers. Hooks must honor ctx.
+// in reverse registration order. Call serially, registering providers before
+// consumers. Hooks must honor ctx.
 // A nil function is ignored.
 func (s *ApplicationServer) OnShutdown(name string, close func(context.Context) error) {
 	if close == nil {
@@ -88,9 +85,6 @@ func (s *ApplicationServer) ShutdownContext(ctx context.Context) error {
 		}
 	}
 
-	if s.SessionManager != nil {
-		err = errors.Join(err, s.SessionManager.Close())
-	}
 	return errors.Join(err, ctx.Err())
 }
 

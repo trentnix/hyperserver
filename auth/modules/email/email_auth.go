@@ -29,6 +29,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -39,6 +40,7 @@ type (
 		// TemplateFS overrides bundled templates. Set before Init. Nil uses embedded assets.
 		TemplateFS        fs.FS
 		accounts          user.AccountRepository
+		sessions          *session.SessionManager
 		config            *config.Config
 		contentManager    *content_services.ContentManagerService
 		mailClient        *messaging.MailClient
@@ -156,16 +158,16 @@ const (
 
 // init makes the provider discoverable without creating application state.
 func init() {
-	auth_services.Register(Provider(nil, nil))
+	auth_services.Register(Provider(nil, nil, nil))
 }
 
-// Provider supplies email authentication with an initialized account repository
-// and a mail client. The application owns both dependencies.
+// Provider supplies email authentication with initialized accounts and sessions,
+// and an optional mail client. The application owns these dependencies.
 // A nil client leaves delivery unavailable. Registration that requires verification
 // rejects unavailable delivery during module initialization.
-func Provider(accounts user.AccountRepository, mail *messaging.MailClient) auth_services.Descriptor {
+func Provider(accounts user.AccountRepository, sessions *session.SessionManager, mail *messaging.MailClient) auth_services.Descriptor {
 	return auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
-		return &EmailAuthService{accounts: accounts, mailClient: mail}
+		return &EmailAuthService{accounts: accounts, sessions: sessions, mailClient: mail}
 	}}
 }
 
@@ -180,7 +182,7 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	if a.accounts == nil {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the account repository is not configured"))
 	}
-	if err := flash.ValidateSessionManager(s.SessionManager); err != nil {
+	if err := flash.ValidateSessionManager(a.sessions); err != nil {
 		return fmt.Errorf("initialize email authentication: %w", err)
 	}
 

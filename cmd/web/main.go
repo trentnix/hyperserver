@@ -83,7 +83,7 @@ func prepareHTTP(ctx context.Context, s *application, accounts *reference.Accoun
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := initializeSessions(ctx, s.ApplicationServer); err != nil {
+	if err := initializeSessions(ctx, s); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare session storage: %w", err)
 	}
 	if err := initializeAccounts(ctx, s, accounts); err != nil {

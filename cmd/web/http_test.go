@@ -235,7 +235,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) (
 		t.Fatal(err)
 	}
 	app.Mail = mailClient
-	if err := initializeSessions(context.Background(), app.ApplicationServer); err != nil {
+	if err := initializeSessions(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
 	if err := initializeAccounts(context.Background(), app, reference.NewAccountStorage(app.Config)); err != nil {

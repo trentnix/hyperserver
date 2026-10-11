@@ -90,7 +90,7 @@ mail:
 	if err := newAccountSetup(app).Initialize(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := initializeSessions(t.Context(), app.ApplicationServer); err != nil {
+	if err := initializeSessions(t.Context(), app); err != nil {
 		t.Fatal(err)
 	}
 	if err := initializeMail(app); err != nil {

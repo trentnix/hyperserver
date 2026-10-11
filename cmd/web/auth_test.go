@@ -104,9 +104,8 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			app.SessionManager = manager
-			t.Cleanup(func() { app.Shutdown() })
-			err = SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(&struct{ user.AccountRepository }{}, catalog)}, nil)
+			t.Cleanup(func() { manager.Close() })
+			err = SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(&struct{ user.AccountRepository }{}, manager, catalog)}, nil)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
 					t.Fatalf("error = %v, routed = %t, want %q without routes", err, provider.routed, tc.want)

@@ -38,7 +38,7 @@ func TestApplicationsResolveIndependentStoragePaths(t *testing.T) {
 		if err := app.initializeDatabase(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if err := initializeSessions(context.Background(), app.ApplicationServer); err != nil {
+		if err := initializeSessions(context.Background(), app); err != nil {
 			t.Fatal(err)
 		}
 		app.Database.SetMaxIdleConns(0)

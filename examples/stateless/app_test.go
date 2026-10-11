@@ -56,9 +56,6 @@ func TestStatelessApplication(t *testing.T) {
 			}
 		}
 	}
-	if app.SessionManager != nil {
-		t.Fatal("stateless application activated an optional service")
-	}
 	entries, err := os.ReadDir(directory)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("application created files: entries=%v error=%v", entries, err)

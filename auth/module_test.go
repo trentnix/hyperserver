@@ -66,7 +66,8 @@ func moduleSessions(t *testing.T, types map[string]string) *session.SessionManag
 
 func TestModuleOwnsAuthenticationSetup(t *testing.T) {
 	providers := []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}
-	descriptor := auth.Module(&struct{ user.AccountRepository }{}, providers)
+	sessions := moduleSessions(t, map[string]string{"default": "custom"})
+	descriptor := auth.Module(&struct{ user.AccountRepository }{}, sessions, providers)
 	providers[0].New = nil // Module must retain a catalog snapshot.
 	var apps []*server.ApplicationServer
 	for _, name := range []string{"first", "second"} {
@@ -77,7 +78,6 @@ func TestModuleOwnsAuthenticationSetup(t *testing.T) {
 			t.Fatal(err)
 		}
 		module := descriptor.New()
-		app.SessionManager = moduleSessions(t, map[string]string{"default": "custom"})
 		if err := module.Init(context.Background(), app); err != nil {
 			t.Fatal(err)
 		}
@@ -108,7 +108,7 @@ func TestModuleProviderSelection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		module := auth.Module(nil, nil).New()
+		module := auth.Module(nil, nil, nil).New()
 		err = module.Init(context.Background(), app)
 		if enabled {
 			if err == nil || !strings.Contains(err.Error(), "unknown enabled") {
@@ -139,9 +139,9 @@ func TestModuleRequiresAccountRepository(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			app.SessionManager = moduleSessions(t, map[string]string{"default": "custom"})
+			sessions := moduleSessions(t, map[string]string{"default": "custom"})
 			provider := new(moduleProvider)
-			descriptor := auth.Module(nil, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return provider }}})
+			descriptor := auth.Module(nil, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return provider }}})
 			err = handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{descriptor}, nil)
 			if enabled {
 				if err == nil || !strings.Contains(err.Error(), "requires an account repository") {
@@ -171,8 +171,8 @@ func TestModuleRejectsProviderRouteConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	app.Web.HandleFunc("GET /provider", func(http.ResponseWriter, *http.Request) {})
-	app.SessionManager = moduleSessions(t, map[string]string{"default": "custom"})
-	module := auth.Module(&struct{ user.AccountRepository }{}, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+	sessions := moduleSessions(t, map[string]string{"default": "custom"})
+	module := auth.Module(&struct{ user.AccountRepository }{}, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
 	if err := module.Init(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
@@ -200,10 +200,11 @@ func TestModuleRequiresSelectedStoreRotation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			var sessions *session.SessionManager
 			if tc.types != nil {
-				app.SessionManager = moduleSessions(t, tc.types)
+				sessions = moduleSessions(t, tc.types)
 			}
-			module := auth.Module(&struct{ user.AccountRepository }{}, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+			module := auth.Module(&struct{ user.AccountRepository }{}, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
 			err = module.Init(t.Context(), app)
 			if tc.valid && err != nil {
 				t.Fatal(err)
@@ -237,8 +238,8 @@ func TestModuleValidatesInjectedSessions(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				app.SessionManager = moduleSessions(t, tc.types)
-				module := auth.Module(&struct{ user.AccountRepository }{}, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+				sessions := moduleSessions(t, tc.types)
+				module := auth.Module(&struct{ user.AccountRepository }{}, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
 
 				err = module.Init(t.Context(), app)
 				if tc.want == "" {

@@ -105,6 +105,11 @@ func checkRunShutdown(t *testing.T, secure bool) {
 			if err := s.Database.Ping(); err != nil {
 				t.Error("module closed after its shared pool:", err)
 			}
+			if activeSession != nil {
+				if err := activeSession.Save(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil)); err != nil {
+					t.Error("module closed after its session store:", err)
+				}
+			}
 			moduleClosed = true
 			return nil
 		}}

@@ -11,6 +11,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -23,6 +24,8 @@ type application struct {
 	// AccountRepository must be ready before modules and middleware use it.
 	// A supplied repository keeps its existing owner.
 	AccountRepository user.AccountRepository
+	// SessionManager can be borrowed. Use ownSessions to transfer cleanup.
+	SessionManager *session.SessionManager
 }
 
 func newApplication(cfg config.Config) (*application, error) {

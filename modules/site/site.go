@@ -15,7 +15,6 @@ import (
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -34,7 +33,6 @@ type (
 		NewContacts func(context.Context) (ContactRepository, error)
 
 		contacts            ContactRepository
-		sessionManager      *session.SessionManager
 		contentManager      *content_services.ContentManagerService
 		mailClient          *messaging.MailClient
 		registrationEnabled bool
@@ -111,7 +109,6 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	m.rateLimit = s.Config.App.SiteRateLimit
 
 	m.contacts = contacts
-	m.sessionManager = s.SessionManager
 	m.contentManager = s.ContentManager
 	if s.Config.App.RenderNotifications && m.contentManager.LoadNotifications == nil {
 		m.contentManager.LoadNotifications = flash.GetNotifications

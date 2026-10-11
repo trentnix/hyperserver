@@ -64,9 +64,6 @@ func TestStatelessApplication(t *testing.T) {
 			t.Fatal("stateless rendering set a cookie or lost response variation")
 		}
 	}
-	if app.SessionManager != nil {
-		t.Fatal("stateless application activated an optional service")
-	}
 }
 
 func TestApplicationConstructionReturnsErrors(t *testing.T) {

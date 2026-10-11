@@ -78,8 +78,8 @@ func TestEmailAuthModuleRequiresFlashSession(t *testing.T) {
 			case "default":
 				types["default"] = "memory"
 			}
-			app.SessionManager = emailSessions(t, types)
-			module := auth_services.Module(accounts, []auth_services.Descriptor{Provider(accounts, nil)}).New()
+			sessions := emailSessions(t, types)
+			module := auth_services.Module(accounts, sessions, []auth_services.Descriptor{Provider(accounts, sessions, nil)}).New()
 
 			err = module.Init(t.Context(), app)
 			if selection == "missing" {
@@ -101,7 +101,7 @@ func TestEmailAuthModuleRequiresFlashSession(t *testing.T) {
 				if htmx {
 					r.Header.Set("HX-Request", "true")
 				}
-				r = session.AddSessionManagerToRequestContext(r, app.SessionManager)
+				r = session.AddSessionManagerToRequestContext(r, sessions)
 				w := httptest.NewRecorder()
 				app.Web.ServeHTTP(w, r)
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `name="password"`) {
@@ -242,9 +242,8 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 					Services: map[string]map[string]string{"email": {"enabled": "true"}},
 				}},
 				ContentManager: &content.ContentManagerService{},
-				SessionManager: emailSessions(t, map[string]string{"default": "memory"}),
 			}
-			service := Provider(&emailAccountRepository{}, nil).New().(*EmailAuthService)
+			service := Provider(&emailAccountRepository{}, emailSessions(t, map[string]string{"default": "memory"}), nil).New().(*EmailAuthService)
 			service.TemplateFS = os.DirFS(root)
 			initErr := service.Init(app)
 			cause := errors.Unwrap(initErr)
@@ -291,14 +290,13 @@ func TestEmailAuthInitAccountRepository(t *testing.T) {
 				}},
 				// A supplied repository needs no SQL pool and must not be queried during initialization.
 				ContentManager: content.NewContentManager(),
-				SessionManager: emailSessions(t, map[string]string{"default": "memory"}),
 			}
 			reader := &emailAccountRepository{}
 			var accounts user.AccountRepository
 			if scenario == "supplied" {
 				accounts = reader
 			}
-			service := Provider(accounts, nil).New().(*EmailAuthService)
+			service := Provider(accounts, emailSessions(t, map[string]string{"default": "memory"}), nil).New().(*EmailAuthService)
 			err := service.Init(app)
 			if scenario == "missing" {
 				cause := errors.Unwrap(err)

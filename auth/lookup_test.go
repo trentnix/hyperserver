@@ -36,15 +36,15 @@ func TestAuthManagerInitUsesAccountRepository(t *testing.T) {
 		Config:         &config.Config{Auth: config.AuthConfig{Enabled: true}},
 		ContentManager: content.NewContentManager(),
 	}
-	manager := NewAuthManager(reader)
-	manager.Services = &Registry{}
-	var err error
-	app.SessionManager, err = session.NewSessionManager(t.Context(), map[string]string{"default": "custom"}, map[string]session.StoreFactory{
+	sessions, err := session.NewSessionManager(t.Context(), map[string]string{"default": "custom"}, map[string]session.StoreFactory{
 		"custom": func(context.Context) (session.SessionStore, error) { return initSessionStore{}, nil },
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { sessions.Close() })
+	manager := NewAuthManager(reader, sessions)
+	manager.Services = &Registry{}
 	if err := manager.Init(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}

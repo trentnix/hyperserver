@@ -59,7 +59,9 @@ For built-in providers, call `stores.NewSessionManager(ctx, cfg)` before serving
 
 Each SQLite store owns its pool and prepares its table and expiration index in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
 
-The reference application's [session setup](../../../cmd/web/sessions.go) supplies the manager after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. `ApplicationServer.Shutdown()` closes the supplied manager after HTTP requests drain. If you use a manager or SQLite store outside that container, call its `Close()` after its consumers stop. Give each resource one owner. A closed manager must not be reused.
+The reference application's [session setup](../../../cmd/web/sessions.go) supplies the manager after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. Setup registers cleanup for managers it creates. A supplied manager keeps its existing owner unless setup explicitly transfers ownership with `ownSessions`. The core has no session-manager field.
+
+Register owned managers with `app.OnShutdown` before their consumers initialize. Shutdown hooks close consumers before session stores after requests drain. Give each resource one owner. A closed manager must not be reused.
 
 Retrieved sessions are cached in the request context. Do not share their mutable data across concurrent requests. Set manager mappings before serving requests, not while requests are active.
 
@@ -70,7 +72,13 @@ manager, err := session.NewSessionManager(ctx,
     map[string]string{"default": "custom", "auth-user-session": "custom"},
     map[string]session.StoreFactory{"custom": openMySessionStore},
 )
+if err != nil {
+    return err
+}
+app.OnShutdown("sessions", func(context.Context) error { return manager.Close() })
 ```
+
+Pass the same manager to auth factories and `authmiddleware.LoadSessionManagement(accounts, manager)`, or use `session.WithSessionManager(manager)` when authentication is not needed. Register cleanup only if this application owns the manager.
 
 `openMySessionStore` must accept `context.Context` and return `(session.SessionStore, error)`. It must release partial resources on failure. The manager owns successful results, closes them in reverse initialization order, and closes each selected provider only once. Provider names are case-insensitive. Session names are case-sensitive. A named selection overrides `default`. Unknown selections and ambiguous provider names fail before any factory runs.
 
