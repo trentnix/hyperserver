@@ -29,7 +29,6 @@ jobs:
       CGO_ENABLED: '1' # Required by SQLite and the race detector.
       GOTOOLCHAIN: local
       GOFLAGS: -mod=readonly
-      HS_TEST_BROWSER_ARTIFACTS: ${{ runner.temp }}/browser-diagnostics
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +50,7 @@ jobs:
       - name: Test HTMX and native forms in Firefox
         env:
           HS_TEST_FIREFOX: firefox
+          HS_TEST_BROWSER_ARTIFACTS: ${{ runner.temp }}/browser-diagnostics
           TMPDIR: ${{ runner.temp }} # Keep profiles visible to browsers that isolate /tmp.
         run: |
           mkdir -p "$HS_TEST_BROWSER_ARTIFACTS"
@@ -69,6 +69,7 @@ jobs:
         if: ${{ !cancelled() && inputs.browser_diagnostics }}
         env:
           HS_TEST_FIREFOX: firefox
+          HS_TEST_BROWSER_ARTIFACTS: ${{ runner.temp }}/browser-diagnostics
           TMPDIR: ${{ runner.temp }}
         run: |
           mkdir -p "$HS_TEST_BROWSER_ARTIFACTS"
