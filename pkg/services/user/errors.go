@@ -1,8 +1,14 @@
 package user
 
 import (
+	"errors"
+
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
+
+// ErrEmailAlreadyExists indicates that another account has the requested email.
+// Providers can wrap it. Callers must use errors.Is to recognize it.
+var ErrEmailAlreadyExists = errors.New("an account with that email already exists")
 
 // BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError

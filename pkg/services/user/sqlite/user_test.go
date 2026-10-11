@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/trentnix/hyperserver/pkg/database"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -78,8 +77,7 @@ func TestCreateRejectsStaleRegistration(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := *loser
-	var duplicate *database.ErrRecordAlreadyExists
-	if err := NewAccountRepository(db).Create(context.Background(), loser); !errors.As(err, &duplicate) {
+	if err := NewAccountRepository(db).Create(context.Background(), loser); !errors.Is(err, accounts.ErrEmailAlreadyExists) {
 		t.Errorf("stale registration error = %v, want duplicate email", err)
 	}
 	if *loser != before {
@@ -158,8 +156,7 @@ func TestUpdateRejectsEmailConflict(t *testing.T) {
 	}
 	first.Email = second.Email
 	before := *first
-	var duplicate *database.ErrRecordAlreadyExists
-	if err := NewAccountRepository(db).Update(ctx, first); !errors.As(err, &duplicate) {
+	if err := NewAccountRepository(db).Update(ctx, first); !errors.Is(err, accounts.ErrEmailAlreadyExists) {
 		t.Fatalf("email conflict = %v, want duplicate email", err)
 	}
 	if *first != before {
@@ -247,6 +244,9 @@ func TestUserWritesPropagateFailures(t *testing.T) {
 				}
 				if err == nil {
 					t.Fatal("write failure was ignored")
+				}
+				if errors.Is(err, accounts.ErrEmailAlreadyExists) {
+					t.Fatalf("write failure was classified as a duplicate email: %v", err)
 				}
 				if failure == "canceled context" && !errors.Is(err, context.Canceled) {
 					t.Errorf("error = %v, want context.Canceled", err)

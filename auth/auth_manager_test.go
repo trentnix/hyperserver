@@ -225,7 +225,7 @@ func (s registrationRepository) Create(ctx context.Context, u *user.User) error 
 }
 
 func TestRegistrationUsesAccountRepository(t *testing.T) {
-	duplicate := errors.Join(errors.New("insert failed"), database.NewErrRecordAlreadyExists(nil))
+	duplicate := errors.Join(errors.New("insert failed"), user.ErrEmailAlreadyExists)
 	storageFailure := errors.New("storage unavailable")
 	for _, tc := range []struct {
 		name, password, message string
@@ -233,7 +233,8 @@ func TestRegistrationUsesAccountRepository(t *testing.T) {
 	}{
 		{name: "success", password: "TestPassword1!"},
 		{name: "passwordless"},
-		{name: "duplicate", failure: duplicate, message: "The specified user is already registered"},
+		{name: "duplicate", failure: user.ErrEmailAlreadyExists, message: "The specified user is already registered"},
+		{name: "wrapped duplicate", failure: duplicate, message: "The specified user is already registered"},
 		{name: "storage failure", failure: storageFailure, message: "There was an error creating a user account"},
 		{name: "storage cancellation", failure: context.Canceled, message: "There was an error creating a user account"},
 	} {

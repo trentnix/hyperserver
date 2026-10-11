@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -128,7 +129,7 @@ func (s *AccountRepository) GetToken(ctx context.Context, tokenHash, purpose str
 	return metadata, nil
 }
 
-// Create inserts a new account. An existing email returns [database.ErrRecordAlreadyExists].
+// Create inserts a new account. An existing email returns an error matching [accounts.ErrEmailAlreadyExists].
 // The supplied user is unchanged if insertion fails.
 func (s *AccountRepository) Create(ctx context.Context, user *accounts.User) error {
 	if user == nil {
@@ -159,7 +160,7 @@ func (s *AccountRepository) Create(ctx context.Context, user *accounts.User) err
     `, userTableName)
 
 	if _, err := s.db.NamedExecContext(ctx, query, &created); err != nil {
-		return database.TranslateError(s.db.DB, err)
+		return accountWriteError(err)
 	}
 	*user = created
 	return nil
@@ -252,7 +253,7 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 
 	result, err := tx.NamedExecContext(ctx, query, &updated)
 	if err != nil {
-		return database.TranslateError(s.db.DB, err)
+		return accountWriteError(err)
 	}
 	count, err := result.RowsAffected()
 	if err != nil {
@@ -277,6 +278,16 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 	user.UpdatedAt = updated.UpdatedAt
 	user.SessionVersion = updated.SessionVersion
 	return nil
+}
+
+func accountWriteError(err error) error {
+	var constraint sqlite3.Error
+	// Email is the account table's only UNIQUE constraint. Primary-key conflicts
+	// and other constraint failures must remain storage errors.
+	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {
+		return fmt.Errorf("%w: %w", accounts.ErrEmailAlreadyExists, err)
+	}
+	return err
 }
 
 // ChangePassword stores a validated password hash and invalidates all existing

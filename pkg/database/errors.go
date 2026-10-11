@@ -1,10 +1,6 @@
 package database
 
 import (
-	"database/sql"
-	"errors"
-
-	"github.com/mattn/go-sqlite3"
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
@@ -33,11 +29,6 @@ type ErrDatabaseNotSupported struct {
 
 // ErrInvalidData indicates invalid data was provided
 type ErrInvalidData struct {
-	*BaseError
-}
-
-// ErrRecordAlreadyExists indicates a record violates a uniqueness constraint.
-type ErrRecordAlreadyExists struct {
 	*BaseError
 }
 
@@ -89,46 +80,4 @@ func NewErrInvalidData(err error) *ErrInvalidData {
 			Message: "invalid data provided",
 		},
 	}
-}
-
-// NewErrRecordAlreadyExists returns an ErrRecordAlreadyExists wrapping err.
-func NewErrRecordAlreadyExists(err error) *ErrRecordAlreadyExists {
-	return &ErrRecordAlreadyExists{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "the record already exists",
-		},
-	}
-}
-
-// TranslateError wraps SQLite uniqueness failures in ErrRecordAlreadyExists.
-// It returns nil or unrecognized errors unchanged.
-func TranslateError(db *sql.DB, e error) error {
-	if e != nil {
-		// Detect the database type by inspecting the driver
-		driver := db.Driver()
-
-		switch driver.(type) {
-		case *sqlite3.SQLiteDriver:
-			return translateSQLiteError(e)
-		default:
-			return e
-		}
-	}
-
-	return e
-}
-
-// translateSQLiteError takes the error provided and inspects it against sqlite3 package
-// error types to identify what type of package-level error type it should be represented as
-func translateSQLiteError(e error) error {
-	var sqliteErr sqlite3.Error
-	if errors.As(e, &sqliteErr) {
-		if sqliteErr.Code == sqlite3.ErrConstraint && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
-			// Wrap the error with your custom error type
-			return NewErrRecordAlreadyExists(e)
-		}
-	}
-
-	return e
 }

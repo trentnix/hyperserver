@@ -420,8 +420,7 @@ func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, u
 	err = accounts.Create(ctx, u)
 	if err != nil {
 		registrationErr := NewErrUserRegistration(uname, err)
-		var duplicate *database.ErrRecordAlreadyExists
-		if errors.As(err, &duplicate) {
+		if errors.Is(err, user.ErrEmailAlreadyExists) {
 			return registrationErr, "The specified user is already registered"
 		}
 		return registrationErr, "There was an error creating a user account"

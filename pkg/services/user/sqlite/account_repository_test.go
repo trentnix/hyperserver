@@ -3,15 +3,48 @@ package sqlite
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
 
-	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/mattn/go-sqlite3"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+func TestAccountWriteError(t *testing.T) {
+	unique := sqlite3.Error{Code: sqlite3.ErrConstraint, ExtendedCode: sqlite3.ErrConstraintUnique}
+	for _, tc := range []struct {
+		name      string
+		err       error
+		duplicate bool
+	}{
+		{"nil", nil, false},
+		{"duplicate email", unique, true},
+		{"wrapped duplicate email", fmt.Errorf("insert account: %w", unique), true},
+		{"primary key", sqlite3.Error{Code: sqlite3.ErrConstraint, ExtendedCode: sqlite3.ErrConstraintPrimaryKey}, false},
+		{"not null", sqlite3.Error{Code: sqlite3.ErrConstraint, ExtendedCode: sqlite3.ErrConstraintNotNull}, false},
+		{"check", sqlite3.Error{Code: sqlite3.ErrConstraint, ExtendedCode: sqlite3.ErrConstraintCheck}, false},
+		{"trigger", sqlite3.Error{Code: sqlite3.ErrConstraint, ExtendedCode: sqlite3.ErrConstraintTrigger}, false},
+		{"storage failure", errors.New("storage unavailable"), false},
+		{"canceled", context.Canceled, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := accountWriteError(tc.err)
+			if errors.Is(err, accounts.ErrEmailAlreadyExists) != tc.duplicate {
+				t.Fatalf("error = %v, want duplicate = %t", err, tc.duplicate)
+			}
+			if !errors.Is(err, tc.err) {
+				t.Fatalf("error lost its cause: %v", err)
+			}
+			if !tc.duplicate && err != tc.err {
+				t.Fatalf("unrelated error was changed: %v", err)
+			}
+		})
+	}
+}
 
 func TestSQLiteAccountRepositoryInitialize(t *testing.T) {
 	db := unpreparedUserTestDB(t)
@@ -139,11 +172,10 @@ func TestSQLiteAccountRepositoryCreateFailure(t *testing.T) {
 			if scenario == "canceled" && !errors.Is(err, context.Canceled) {
 				t.Fatal("lost cancellation:", err)
 			}
+			if errors.Is(err, accounts.ErrEmailAlreadyExists) != (scenario == "duplicate") {
+				t.Fatalf("incorrect duplicate-email classification: %v", err)
+			}
 			if existing != nil {
-				var duplicate *database.ErrRecordAlreadyExists
-				if !errors.As(err, &duplicate) {
-					t.Fatal("duplicate email error lost:", err)
-				}
 				stored, err := repository.GetByID(context.Background(), existing.ID)
 				if err != nil || !reflect.DeepEqual(stored, existing) {
 					t.Fatal("failed insertion changed an existing account:", err)

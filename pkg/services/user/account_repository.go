@@ -30,7 +30,7 @@ type AccountRepository interface {
 	// Missing tokens return ErrTokenNotFound. Expired tokens remain readable so the
 	// caller can distinguish expiry from absence. Other failures must remain errors.
 	GetToken(ctx context.Context, tokenHash, purpose string) (TokenMetadata, error)
-	// Create inserts only. Duplicate emails return database.ErrRecordAlreadyExists.
+	// Create inserts only. Duplicate emails return an error matching ErrEmailAlreadyExists.
 	// Failure must leave stored accounts and u unchanged. Success fills in the ID,
 	// timestamps, and initial SessionVersion of 1. Password is already hashed.
 	Create(context.Context, *User) error
@@ -41,7 +41,7 @@ type AccountRepository interface {
 	InsertToken(context.Context, TokenMetadata) error
 	// Update changes an existing account by ID. Missing accounts return ErrUserNotFound,
 	// stale SessionVersion values return ErrUserChanged, and duplicate emails return
-	// database.ErrRecordAlreadyExists. The caller must preserve the version from its
+	// an error matching ErrEmailAlreadyExists. The caller must preserve the version from its
 	// account read and validate and hash any new password before calling.
 	// Changes to Password, Email, RegistrationAuthType, Verified, or VerificationRequired
 	// must increment SessionVersion. Otherwise, the version must stay unchanged.
