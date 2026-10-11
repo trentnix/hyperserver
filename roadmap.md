@@ -101,6 +101,8 @@ The included site module exercises framework features in the local development a
 
 Keep application decisions in one setup path, in one file or a small group of related files. The following describes the target boundary. Optional services still live on `ApplicationServer`, and the site module currently installs shared rendering policy during initialization.
 
+The web and cleanup commands already load configuration once and pass it to consumers. Keep configuration file and environment access there, with provider validation operating on supplied settings. [Configuration and provider defaults](readme.md#configuration) describe current selection and replacement behavior.
+
 | Owner | Responsibility |
 | --- | --- |
 | Application setup | Loads configuration once, selects modules and providers, supplies shared services, chooses middleware order and shared rendering policy, and assigns resource ownership. |

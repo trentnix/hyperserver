@@ -49,9 +49,22 @@ The development [site module owns the diagnostic and sample routes](modules/site
 
 `POST /test-email` allows logged-in users who have completed any required account verification. Other users receive 403, and no mail is sent.
 
+### Configuration
+
 Use [config-template.yaml](config-template.yaml) as the starting point for a local `config.yaml`, not a production configuration.
 
 The [configuration loader](config/load.go) uses the first `config.yaml` in `.`, `config`, `../config`, or `../../config`. Precedence is defaults, then the file, then `HYPERSERVER_` environment values. For example, `HYPERSERVER_MAIL_PASSWORD` overrides `mail.password`, including an empty value. Unknown settings and invalid values stop startup. Durations require units such as `5s` or `2h`, except `0`. Use a YAML list or comma-separated environment value for `http.trustedProxies`.
+
+The web and cleanup commands each load configuration once. Services validate the supplied settings without rereading files or environment variables. Later file or environment changes do not reconfigure a running application. Applications supplying `config.Config` directly bypass file loading, environment overrides, and loader defaults. Constructors still apply their documented zero-value defaults, such as SMTP's `30s` timeout.
+
+Provider selection uses the same resolved configuration:
+
+| Service | Default and replacement |
+| --- | --- |
+| Accounts | Empty `auth.accountStorage.provider` selects SQLite. Select a registered provider or supply an initialized repository. See [account storage](#account-storage). |
+| Sessions | `http.session.types` maps session names to stores, with `default` as the fallback. There is no implicit store when that mapping is absent. Unknown or disabled selections fail. [Custom stores](pkg/services/session/readme.md#ownership-and-extension) currently require code wiring. |
+| Authentication | Only configured, enabled providers in the selected auth catalog are instantiated when `auth.enabled` is true. Importing a provider alone does not enable it. |
+| Mail | `InitializeMail` creates the configured SMTP client unless `app.Mail` is supplied. Use `messaging.NewMailClientWithSender` for another sender. Incomplete SMTP configuration leaves delivery unavailable, not replaced by another sender. |
 
 To exercise two storage platforms together, run `go run ./cmd/web -contact-directory ./tmp/contacts`. Accounts stay in SQLite, while the site saves contacts as individual JSON files in a private directory. The file provider requires hard-link support. Without this flag, contacts also use SQLite. This is reference-application wiring, not a framework-wide storage setting.
 
