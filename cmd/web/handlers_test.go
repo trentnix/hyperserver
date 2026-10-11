@@ -231,7 +231,7 @@ func TestSetupHandlersStorageTimeoutPreventsRouteBinding(t *testing.T) {
 					site.Module(func(ctx context.Context) (site.ContactRepository, error) {
 						<-ctx.Done()
 						return nil, ctx.Err()
-					}),
+					}, nil),
 				}
 				started := time.Now()
 				ctx := context.Background()

@@ -5,8 +5,9 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	// Register the reference application's email authentication provider.
-	_ "github.com/trentnix/hyperserver/auth/modules/email"
+	"github.com/trentnix/hyperserver/auth"
+	email "github.com/trentnix/hyperserver/auth/modules/email"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -16,9 +17,9 @@ import (
 	site "github.com/trentnix/hyperserver/modules/site"
 )
 
-// siteModules snapshots imports and configures the reference site's factory.
-// The directory belongs to this application, not the process-wide catalog.
-func siteModules(db *sqlx.DB, directory string) ([]handlers.Descriptor, error) {
+// siteModules snapshots imports and supplies the reference application's storage
+// and mail dependencies without changing the process-wide catalogs.
+func siteModules(db *sqlx.DB, mail *messaging.MailClient, directory string) ([]handlers.Descriptor, error) {
 	catalog := handlers.Registered()
 	newContacts := func(ctx context.Context) (site.ContactRepository, error) {
 		if directory == "" {
@@ -26,5 +27,16 @@ func siteModules(db *sqlx.DB, directory string) ([]handlers.Descriptor, error) {
 		}
 		return models.NewFileContactRepository(ctx, directory)
 	}
-	return handlers.Replace(catalog, site.Module(newContacts))
+	catalog, err := handlers.Replace(catalog, site.Module(newContacts, mail))
+	if err != nil {
+		return nil, err
+	}
+
+	providers := auth.Registered()
+	for i, provider := range providers {
+		if provider.Name == email.AuthTypeEmail {
+			providers[i] = email.Provider(mail)
+		}
+	}
+	return handlers.Replace(catalog, auth.Module(providers))
 }

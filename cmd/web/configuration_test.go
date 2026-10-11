@@ -93,7 +93,7 @@ mail:
 	if err := initializeSessions(t.Context(), app.ApplicationServer); err != nil {
 		t.Fatal(err)
 	}
-	if err := initializeMail(app.ApplicationServer); err != nil {
+	if err := initializeMail(app); err != nil {
 		t.Fatal(err)
 	}
 

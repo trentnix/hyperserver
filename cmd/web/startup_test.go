@@ -120,7 +120,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := s.initializeDatabase(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if err := initializeMail(s.ApplicationServer); err != nil {
+		if err := initializeMail(s); err != nil {
 			t.Fatal(err)
 		}
 		if err := initializeSessions(context.Background(), s.ApplicationServer); err != nil {
@@ -136,7 +136,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {
 			t.Fatalf("account tables before handler initialization = %d, auth enabled = %t", tables, s.Config.Auth.Enabled)
 		}
-		catalog, err := siteModules(s.Database, "")
+		catalog, err := siteModules(s.Database, s.Mail, "")
 		if err != nil {
 			t.Fatal(err)
 		}

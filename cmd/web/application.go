@@ -10,14 +10,15 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 )
 
-// application keeps the reference site's shared pool outside the core runtime.
-// Account and contact repositories borrow the pool. They must not close it.
+// application owns the reference site's services outside the core runtime.
 type application struct {
 	*server.ApplicationServer
 	// Database can be borrowed. Use ownDatabase to transfer cleanup to this application.
 	Database *sqlx.DB
+	Mail     *messaging.MailClient
 }
 
 func newApplication(cfg config.Config) (*application, error) {

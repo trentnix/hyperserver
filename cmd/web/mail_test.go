@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 )
 
 func TestMailInitializesExplicitly(t *testing.T) {
 	cfg := config.Config{Database: config.DatabaseConfig{Driver: "unknown"}, Mail: config.MailConfig{Timeout: -time.Second}}
 	cfg.HTTP.Session.Types = map[string]string{"default": "unknown"}
-	app, err := server.NewApplicationServer(cfg)
+	app, err := newApplication(cfg)
 	if err != nil {
 		t.Fatal("unused services prevented construction:", err)
 	}
@@ -40,7 +39,7 @@ func TestMailInitializesExplicitly(t *testing.T) {
 }
 
 func TestMailSetupPreservesReplacement(t *testing.T) {
-	app, err := server.NewApplicationServer(config.Config{Mail: config.MailConfig{Timeout: -time.Second}})
+	app, err := newApplication(config.Config{Mail: config.MailConfig{Timeout: -time.Second}})
 	if err != nil {
 		t.Fatal(err)
 	}

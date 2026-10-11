@@ -14,7 +14,7 @@ const (
 	defaultTestEmailBody    = "<p>This is a test email from HyperServer.</p>"
 )
 
-// TestEmail sends a test email using SMTP settings from config.yaml.
+// TestEmail sends a test email through the application-supplied mail client.
 // Routes restricts POST /test-email to logged-in users who have completed any
 // required account verification.
 // The optional body query parameter is plain text, not HTML.

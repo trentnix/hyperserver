@@ -154,9 +154,18 @@ const (
 	emailChangePath       = "/auth/change/email"
 )
 
-// init registers the AuthHandler handler with the application
+// init makes the provider discoverable without creating application state.
 func init() {
-	auth_services.Register(auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService { return new(EmailAuthService) }})
+	auth_services.Register(Provider(nil))
+}
+
+// Provider describes email authentication with an application-supplied mail client.
+// A nil client leaves delivery unavailable. Registration that requires verification
+// rejects unavailable delivery during module initialization.
+func Provider(mail *messaging.MailClient) auth_services.Descriptor {
+	return auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
+		return &EmailAuthService{mailClient: mail}
+	}}
 }
 
 // Init initializes the EmailAuthService instance
@@ -177,7 +186,6 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	a.accounts = s.AccountRepository
 	a.config = s.Config
 	a.contentManager = s.ContentManager
-	a.mailClient = s.Mail
 
 	if a.config.Auth.JwtKey == "" {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the auth JWT key is not configured"))

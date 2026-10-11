@@ -76,7 +76,7 @@ func prepareHTTP(ctx context.Context, s *application, accounts *reference.Accoun
 	if err := s.initializeDatabase(ctx); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare application database: %w", err)
 	}
-	if err := initializeMail(s.ApplicationServer); err != nil {
+	if err := initializeMail(s); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare mail: %w", err)
 	}
 
@@ -91,7 +91,7 @@ func prepareHTTP(ctx context.Context, s *application, accounts *reference.Accoun
 		return nil, nil, fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l := logger.NewSlogLogger(nil)
-	catalog, err := siteModules(s.Database, s.Config.FilePath(contactDirectory))
+	catalog, err := siteModules(s.Database, s.Mail, s.Config.FilePath(contactDirectory))
 	if err != nil {
 		return nil, nil, err
 	}

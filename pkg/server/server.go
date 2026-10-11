@@ -12,7 +12,6 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
-	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
@@ -31,7 +30,6 @@ type (
 		Web               *http.ServeMux
 		ContentManager    *content_services.ContentManagerService
 		SessionManager    *session.SessionManager
-		Mail              *messaging.MailClient
 		shutdownHooks     []shutdownHook
 	}
 )

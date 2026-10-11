@@ -32,4 +32,4 @@ CGO_ENABLED=0 go build -o ./tmp/stateless ./examples/stateless
 
 The tests verify rendering, startup, shutdown, and that stateless requests activate no optional services or cookies. With CGO enabled, additional tests run the greeting application beside the reference site's module using an isolated SQLite database. Run `CGO_ENABLED=0 go test ./examples/stateless/...` to test the stateless application independently. Broader replacement-provider tests remain separate work.
 
-This is a local composition example, not a production deployment template. It does not import SQL-pool code, a SQLite driver, or SMTP delivery. The shared application container still holds mail-client, session, and account-service fields.
+This is a local composition example, not a production deployment template. It does not import SQL-pool code, a SQLite driver, or mail code. The shared application container still holds session and account-service fields.

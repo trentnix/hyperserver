@@ -73,15 +73,16 @@ const (
 
 // init makes the module available without creating application state.
 func init() {
-	handlers.Register(Module(nil))
+	handlers.Register(Module(nil, nil))
 }
 
 // Module describes the site with an application-supplied contact-storage factory.
 // The factory runs during Init, not registration. A nil factory prevents initialization.
+// Mail is optional. Without a client, the test-email route reports delivery unavailable.
 // Applications own shared services and any connections supplied by the factory.
-func Module(newContacts func(context.Context) (ContactRepository, error)) handlers.Descriptor {
+func Module(newContacts func(context.Context) (ContactRepository, error), mail *messaging.MailClient) handlers.Descriptor {
 	return handlers.Descriptor{Name: "site", New: func() handlers.Handler {
-		return &SiteModule{NewContacts: newContacts}
+		return &SiteModule{NewContacts: newContacts, mailClient: mail}
 	}}
 }
 
@@ -115,7 +116,6 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	if s.Config.App.RenderNotifications && m.contentManager.LoadNotifications == nil {
 		m.contentManager.LoadNotifications = flash.GetNotifications
 	}
-	m.mailClient = s.Mail
 	m.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
 	m.contentManager.AddPageLayout(siteModuleTemplatesFS, pageLayoutTemplate)
 	m.contentManager.AddHtmxLayout(siteModuleTemplatesFS, partialLayoutTemplate)

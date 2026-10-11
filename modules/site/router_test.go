@@ -29,7 +29,7 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 	s.OnShutdown("database", func(context.Context) error { return db.Close() })
 	m := Module(func(ctx context.Context) (ContactRepository, error) {
 		return models.NewContactRepository(ctx, db)
-	}).New().(*SiteModule)
+	}, nil).New().(*SiteModule)
 	t.Cleanup(func() { s.Shutdown() })
 	if err := m.Init(context.Background(), s); err != nil {
 		t.Fatal(err)

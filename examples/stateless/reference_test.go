@@ -71,7 +71,7 @@ func TestApplicationRunsBesideReferenceSite(t *testing.T) {
 			newContacts := func(ctx context.Context) (site.ContactRepository, error) {
 				return models.NewContactRepository(ctx, db)
 			}
-			modules, err := handlers.Initialize(context.Background(), reference, []handlers.Descriptor{site.Module(newContacts)}, nil)
+			modules, err := handlers.Initialize(context.Background(), reference, []handlers.Descriptor{site.Module(newContacts, nil)}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

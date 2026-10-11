@@ -46,7 +46,7 @@ func runHTTPScenarioWithTimeout(t *testing.T, timeout time.Duration, scenario fu
 	runHTTPScenarioWithCatalog(t, timeout, nil, scenario, configure...)
 }
 
-func runHTTPScenarioWithCatalog(t *testing.T, timeout time.Duration, catalog []handlers.Descriptor, scenario func(*httpHarness), configure ...func(*config.Config)) {
+func runHTTPScenarioWithCatalog(t *testing.T, timeout time.Duration, catalogFactory func(*application) ([]handlers.Descriptor, error), scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
 	if os.Getenv("HS_HTTP_TEST_CASE") == t.Name() {
 		// These overrides would fail if the harness accidentally loaded runtime
@@ -54,7 +54,7 @@ func runHTTPScenarioWithCatalog(t *testing.T, timeout time.Duration, catalog []h
 		t.Setenv("HYPERSERVER_DATABASE_CONNECTION", filepath.Join(t.TempDir(), "missing", "developer.db"))
 		t.Setenv("HYPERSERVER_AUTH_JWTKEY", "")
 		t.Setenv("HYPERSERVER_HTTP_SESSION_JWTKEY", "")
-		scenario(newHTTPHarnessWithCatalog(t, catalog, configure...))
+		scenario(newHTTPHarnessWithCatalog(t, catalogFactory, configure...))
 		if !t.Failed() {
 			fmt.Println("HTTP scenario passed")
 		}
@@ -172,7 +172,7 @@ func testTemplateFile(t *testing.T, name string) content.TemplatePath {
 	return content.TemplatePath{FS: os.DirFS(filepath.Dir(name)), Path: filepath.Base(name)}
 }
 
-func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, configure ...func(*config.Config)) *httpHarness {
+func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) ([]handlers.Descriptor, error), configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -243,11 +243,14 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 	}
 	logs := &capturedLogs{}
 	l := &testLogger{logs: logs}
-	if catalog == nil {
-		catalog, err = siteModules(db, "")
-		if err != nil {
-			t.Fatal(err)
+	if catalogFactory == nil {
+		catalogFactory = func(app *application) ([]handlers.Descriptor, error) {
+			return siteModules(app.Database, app.Mail, "")
 		}
+	}
+	catalog, err := catalogFactory(app)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err := SetupHandlers(context.Background(), app.ApplicationServer, l, catalog, nil); err != nil {
 		t.Fatal(err)

@@ -76,7 +76,7 @@ func TestSiteRequiresExplicitContactStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	module := Module(nil).New().(*SiteModule)
+	module := Module(nil, nil).New().(*SiteModule)
 	err = module.Init(t.Context(), app)
 	if err == nil || err.Error() != "site requires a contact-storage factory" {
 		t.Fatalf("missing factory: %v", err)

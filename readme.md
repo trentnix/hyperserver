@@ -64,7 +64,7 @@ Provider selection uses the same resolved configuration:
 | Accounts | Empty `auth.accountStorage.provider` selects SQLite. Select a registered provider or supply an initialized repository. See [account storage](#account-storage). |
 | Sessions | `http.session.types` maps session names to stores, with `default` as the fallback. There is no implicit store when that mapping is absent. Unknown or disabled selections fail. [Custom stores](pkg/services/session/readme.md#ownership-and-extension) currently require code wiring. |
 | Authentication | Only configured, enabled providers in the selected auth catalog are instantiated when `auth.enabled` is true. Importing a provider alone does not enable it. |
-| Mail | The reference application creates an SMTP sender from `mail` settings unless `app.Mail` is supplied. Use `messaging.NewMailClientWithSender` for another sender. Incomplete SMTP configuration leaves delivery unavailable, not replaced by another sender. |
+| Mail | The reference application creates an SMTP sender from `mail` settings unless its `Mail` field already holds a client. Use `messaging.NewMailClientWithSender` for another sender. Incomplete SMTP configuration leaves delivery unavailable, not replaced by another sender. |
 
 To exercise two storage platforms together, run `go run ./cmd/web -contact-directory ./tmp/contacts`. Accounts stay in SQLite, while the site saves contacts as individual JSON files in a private directory. The file provider requires hard-link support. Without this flag, contacts also use SQLite. This is reference-application wiring, not a framework-wide storage setting.
 
@@ -74,7 +74,9 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 
 Prepare storage in application setup, before initializing its consumers. The reference application owns its SQL pool in [application.go](cmd/web/application.go) and registers pool cleanup with `OnShutdown` before account and contact setup. The core has no SQL-pool field. The reference application checks SQL connectivity with a ten-second deadline. SQL drivers must be imported by the application or its storage providers.
 
-Supply an initialized `AccountRepository` and, when needed, a `SessionManager` through application-owned setup. Use `stores.NewSessionManager(ctx, cfg)` for the built-in session providers or supply custom factories as shown in [Sessions](pkg/services/session/readme.md#ownership-and-extension). For SMTP, construct a sender with `smtp.NewSender(cfg.Mail)` from [`pkg/services/messaging/smtp`](pkg/services/messaging/smtp/smtp.go), then pass it to `messaging.NewMailClientWithSender`. [Reference mail setup](cmd/web/mail.go) shows the wiring. Construction does not contact SMTP, and consumers that require delivery must validate configuration. After preparing services, use `handlers.Setup` for module initialization, route binding, and cleanup registration.
+Supply an initialized `AccountRepository` and, when needed, a `SessionManager` through application-owned setup. Use `stores.NewSessionManager(ctx, cfg)` for the built-in session providers or supply custom factories as shown in [Sessions](pkg/services/session/readme.md#ownership-and-extension).
+
+For SMTP, construct a sender with `smtp.NewSender(cfg.Mail)` from [`pkg/services/messaging/smtp`](pkg/services/messaging/smtp/smtp.go), then pass it to `messaging.NewMailClientWithSender`. The core has no mail-client field. Pass the client to `site.Module(newContacts, mailClient)` and `email.Provider(mailClient)` from [`auth/modules/email`](auth/modules/email/email_auth.go). [Reference mail setup](cmd/web/mail.go) and [module wiring](cmd/web/site_modules.go) show the wiring. Construction does not contact SMTP, and consumers that require delivery must validate configuration. After preparing services, use `handlers.Setup` for module initialization, route binding, and cleanup registration.
 
 `app.Run(ctx, prepare)` owns serving and application cleanup. The preparation function receives the context and returns a configured `*http.Server`, a `net.Listener`, and an error. It selects services and modules but must not start serving. Run closes resources on startup failure and drains requests before cleanup on cancellation. `http.shutdownTimeout` controls draining, with a `10s` default.
 
@@ -97,15 +99,23 @@ func init() {
 
 `handlers.Registered()` returns a catalog copy. Applications can instead supply a local `[]handlers.Descriptor` to select modules without changing the import catalog. Each factory must return a fresh instance without I/O. Resolve dependencies, create the instances, then initialize them and bind their routes before accepting requests.
 
-To supply your own storage, use the module's descriptor constructor. For example, give the site an application-owned contact repository:
+Configure module dependencies before calling `handlers.Setup`. For example, supply the site's contact storage and configure email authentication with the same mail client:
 
 ```go
 catalog, err := handlers.Replace(handlers.Registered(), site.Module(
     func(context.Context) (site.ContactRepository, error) { return contactStore, nil },
+    mailClient, // nil leaves the site's test-email delivery unavailable
 ))
 if err != nil {
     return err
 }
+
+providers := []auth.Descriptor{email.Provider(mailClient)}
+catalog, err = handlers.Replace(catalog, auth.Module(providers))
+if err != nil {
+    return err
+}
+
 if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
     return err
 }
@@ -117,9 +127,11 @@ if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
 
 `Replace` replaces the entire descriptor, including `Provides` and `Requires`. A module-owned constructor supplies the appropriate declarations for its configuration. To replace only a factory, copy the original descriptor and change `New` before passing it to `Replace`. Other applications keep their original catalog.
 
-Modules own their registration, internal setup, requirement checks, and routes. Applications select modules, supply shared services, and coordinate startup and shutdown. Modules must not initialize or close borrowed services. A configurable module can expose a descriptor constructor: the site's `site.Module(newContacts)` requires a contact-storage factory. The reference application selects SQLite or file storage in [site_modules.go](cmd/web/site_modules.go).
+Modules own their registration, internal setup, requirement checks, and routes. Applications select modules, supply shared services, and coordinate startup and shutdown. Modules must not initialize or close borrowed services. A configurable module can expose a descriptor constructor: the site's `site.Module(newContacts, mailClient)` requires a contact-storage factory and accepts an optional mail client. The reference application selects SQLite or file storage in [site_modules.go](cmd/web/site_modules.go).
 
 Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth module creates its own manager and enabled providers, validates verification configuration during `Init`, and binds manager and provider routes during `Routes`. Initialize its required services first, as shown in [the reference startup](cmd/web/main.go). For an explicit provider catalog, replace the default module with `auth.Module(providers)` using `handlers.Replace`. An empty explicit catalog never falls back to imports. Adding a descriptor does not activate it in applications already running.
+
+The example's explicit provider list selects only email authentication. Import discovery still works, but the imported email descriptor has no mail client. Applications must configure the descriptor to enable delivery. [Reference module setup](cmd/web/site_modules.go) replaces the email descriptor in a snapshot while preserving other discovered providers.
 
 ### Module dependencies
 
