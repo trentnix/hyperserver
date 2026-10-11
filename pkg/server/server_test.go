@@ -118,9 +118,6 @@ func TestOptionalServicesInitializeExplicitly(t *testing.T) {
 	if err := app.InitializeDatabase(context.Background()); err == nil || app.Database != nil {
 		t.Fatal("invalid database initialization succeeded")
 	}
-	if err := app.InitializeSessions(context.Background()); err == nil || app.SessionManager != nil {
-		t.Fatal("invalid session initialization succeeded")
-	}
 	if err := app.InitializeMail(); err == nil || app.Mail != nil {
 		t.Fatal("invalid mail initialization succeeded")
 	}

@@ -35,7 +35,7 @@ func TestNewSession(t *testing.T) {
 	mockStore := &mockSessionStore{} // Create a mock session store
 	sessionName := "testSession"
 
-	session := newSession(mockStore, sessionName)
+	session := NewSession(mockStore, sessionName)
 
 	// Test: ID should not be empty
 	if session.ID == "" {

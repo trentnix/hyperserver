@@ -1,4 +1,4 @@
-package session
+package stores
 
 import (
 	"net/http"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func TestParseSessionJWT(t *testing.T) {
@@ -87,7 +88,7 @@ func TestParseSessionJWT(t *testing.T) {
 func TestSessionStoresRejectInvalidClaims(t *testing.T) {
 	for _, provider := range []string{"cookie", "sqlite"} {
 		t.Run(provider, func(t *testing.T) {
-			var store SessionStore
+			var store sessions.SessionStore
 			if provider == "cookie" {
 				store = setupCookieStore(t)
 			} else {

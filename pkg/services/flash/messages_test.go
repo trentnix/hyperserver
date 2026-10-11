@@ -15,7 +15,51 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 )
+
+type validationStore struct{ session.SessionStore }
+
+func (validationStore) IsEnabled() bool { return true }
+
+func TestValidateSessionManager(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		types map[string]string
+		valid bool
+	}{
+		{"no manager", nil, false},
+		{"missing selection", map[string]string{}, false},
+		{"named selection", map[string]string{messagesSession.String(): "test"}, true},
+		{"default selection", map[string]string{"default": "test"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var manager *session.SessionManager
+			if tc.types != nil {
+				var err error
+				manager, err = session.NewSessionManager(t.Context(), tc.types, map[string]session.StoreFactory{
+					"test": func(context.Context) (session.SessionStore, error) { return validationStore{}, nil },
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { manager.Close() })
+			}
+
+			err := ValidateSessionManager(manager)
+			if (err == nil) != tc.valid {
+				t.Fatalf("validation error = %v, valid = %t", err, tc.valid)
+			}
+			if !tc.valid {
+				var missingManager *session.ErrSessionManagerNotFound
+				var missingStore *session.ErrSessionStoreNotFound
+				if !errors.As(err, &missingManager) && !errors.As(err, &missingStore) {
+					t.Fatalf("validation lost the session error: %v", err)
+				}
+			}
+		})
+	}
+}
 
 func messageRequests(t *testing.T) func([]*http.Cookie) *http.Request {
 	return messageStoreRequests(t, "cookieStore")
@@ -31,7 +75,7 @@ func messageStoreRequests(t *testing.T, provider string) func([]*http.Cookie) *h
 	cfg.HTTP.Session.Stores = map[string]map[string]string{provider: {
 		"enabled": "true", "connection": filepath.Join(t.TempDir(), "messages.db"), "sessiontable": "messages",
 	}}
-	manager, err := session.NewSessionManager(context.Background(), cfg)
+	manager, err := stores.NewSessionManager(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

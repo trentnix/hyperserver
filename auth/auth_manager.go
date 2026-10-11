@@ -72,6 +72,18 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 	if s.Config.Auth.Enabled && a.Services == nil {
 		return errors.New("authentication requires an application-owned provider registry")
 	}
+	if s.Config.Auth.Enabled {
+		store, err := s.SessionManager.Store("auth-user-session")
+		if err != nil {
+			return fmt.Errorf("authentication requires session revocation: %w", err)
+		}
+		if _, ok := store.(session.RotatingStore); !ok {
+			return errors.New("authentication requires session revocation: selected store does not support revocable session rotation")
+		}
+		if _, err := s.SessionManager.Store(session.AuthSession); err != nil {
+			return fmt.Errorf("authentication requires a redirect session: %w", err)
+		}
+	}
 
 	a.Enabled = s.Config.Auth.Enabled
 	a.accounts = s.AccountRepository

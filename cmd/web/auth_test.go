@@ -14,6 +14,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 type setupAuthService struct {
@@ -23,6 +24,13 @@ type setupAuthService struct {
 	registerRoute       bool
 	initialized, routed bool
 }
+
+type setupSessionStore struct {
+	session.SessionStore
+	session.RotatingStore
+}
+
+func (setupSessionStore) IsEnabled() bool { return true }
 
 func (*setupAuthService) AuthType() string { return "custom" }
 func (s *setupAuthService) Init(*server.ApplicationServer) error {
@@ -89,7 +97,15 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 			}
 			log := &ratePolicyWarningLogger{}
 			app := &server.ApplicationServer{Config: cfg, Web: http.NewServeMux(), ContentManager: content.NewContentManager()}
-			err := SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(catalog)}, nil)
+			manager, err := session.NewSessionManager(t.Context(), map[string]string{"default": "custom"}, map[string]session.StoreFactory{
+				"custom": func(context.Context) (session.SessionStore, error) { return setupSessionStore{}, nil },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			app.SessionManager = manager
+			t.Cleanup(func() { app.Shutdown() })
+			err = SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(catalog)}, nil)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
 					t.Fatalf("error = %v, routed = %t, want %q without routes", err, provider.routed, tc.want)

@@ -170,6 +170,9 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	if s.AccountRepository == nil {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the account repository is not configured"))
 	}
+	if err := flash.ValidateSessionManager(s.SessionManager); err != nil {
+		return fmt.Errorf("initialize email authentication: %w", err)
+	}
 
 	a.accounts = s.AccountRepository
 	a.config = s.Config

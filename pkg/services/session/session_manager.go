@@ -1,7 +1,6 @@
-// Package session manages named sessions through cookie and SQLite stores.
+// Package session manages named sessions through application-supplied stores.
 // Attach a SessionManager to each request before calling Get or New. Session data
-// is size-limited JSON, and cookie payloads are signed, not encrypted. Each manager
-// owns its initialized providers. SQLite End revokes the stored session.
+// is size-limited JSON. Each manager owns its initialized providers.
 package session
 
 import (
@@ -14,7 +13,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
@@ -42,42 +40,58 @@ func GetSessionManager(r *http.Request) *SessionManager {
 	return getSessionManagerFromContext(r.Context())
 }
 
-// NewSessionManager validates configuration and initializes each selected provider
+// StoreFactory initializes a session store. On failure it must release any
+// partially acquired resources. On success the manager owns the returned store.
+type StoreFactory func(context.Context) (SessionStore, error)
+
+// NewSessionManager validates selections and initializes each selected provider
 // once. It copies session mappings and releases acquired resources on failure.
 // Call Close after all consumers stop. Requests never initialize providers.
-func NewSessionManager(ctx context.Context, c *config.Config) (*SessionManager, error) {
-	if c == nil {
-		return nil, fmt.Errorf("session configuration is required")
-	}
+// Provider names are case-insensitive. Unselected factories are not called.
+func NewSessionManager(ctx context.Context, types map[string]string, factories map[string]StoreFactory) (*SessionManager, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := ValidateConfig(c); err != nil {
-		return nil, err
+	providers := make(map[string]StoreFactory, len(factories))
+	for _, name := range slices.Sorted(maps.Keys(factories)) {
+		key := strings.ToLower(name)
+		if key == "" || strings.TrimSpace(key) != key || factories[name] == nil {
+			return nil, fmt.Errorf("invalid session store factory %q", name)
+		}
+		if _, exists := providers[key]; exists {
+			return nil, fmt.Errorf("duplicate session store factory %q", name)
+		}
+		providers[key] = factories[name]
 	}
 
-	m := &SessionManager{Types: maps.Clone(c.HTTP.Session.Types), stores: make(map[string]SessionStore)}
+	m := &SessionManager{Types: maps.Clone(types), stores: make(map[string]SessionStore)}
 	selected := make(map[string]bool)
-	for _, name := range m.Types {
+	for _, sessionName := range slices.Sorted(maps.Keys(m.Types)) {
+		name := m.Types[sessionName]
+		if providers[strings.ToLower(name)] == nil {
+			return nil, fmt.Errorf("session %q selects unknown store %q", sessionName, name)
+		}
 		selected[strings.ToLower(name)] = true
 	}
 
 	for _, name := range slices.Sorted(maps.Keys(selected)) {
-		var store SessionStore
-		var err error
-		switch name {
-		case strings.ToLower(cookieStoreName):
-			store, err = NewCookieStore(c)
-		case strings.ToLower(sqliteStoreName):
-			store, err = NewSQLiteStore(ctx, c)
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Join(err, m.Close())
 		}
+		store, err := providers[name](ctx)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("initialize session store %s: %w", name, err), m.Close())
 		}
-		m.stores[name] = store
 		if closer, ok := store.(io.Closer); ok {
 			m.closers = append(m.closers, closer)
 		}
+		if store == nil || !store.IsEnabled() {
+			return nil, errors.Join(fmt.Errorf("session store %q is missing or disabled", name), m.Close())
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Join(err, m.Close())
+		}
+		m.stores[name] = store
 	}
 	return m, nil
 }
@@ -86,8 +100,10 @@ func NewSessionManager(ctx context.Context, c *config.Config) (*SessionManager, 
 // Requests and background consumers must have stopped before Close is called.
 func (m *SessionManager) Close() error {
 	var err error
-	for i := len(m.closers) - 1; i >= 0; i-- {
-		err = errors.Join(err, m.closers[i].Close())
+	closers := m.closers
+	m.closers = nil
+	for i := len(closers) - 1; i >= 0; i-- {
+		err = errors.Join(err, closers[i].Close())
 	}
 	return err
 }
@@ -108,7 +124,7 @@ func Get(r *http.Request, name string) (*Session, error) {
 		return nil, NewErrSessionManagerNotFound(nil)
 	}
 
-	store, err := sm.getStore(name)
+	store, err := sm.Store(name)
 	if err != nil {
 		return nil, NewErrSessionStoreNotFound(err)
 	}
@@ -143,12 +159,12 @@ func New(r *http.Request, name string) (*Session, error) {
 		return nil, NewErrSessionManagerNotFound(nil)
 	}
 
-	store, err := sm.getStore(name)
+	store, err := sm.Store(name)
 	if err != nil {
 		return nil, err
 	}
 
-	session := newSession(store, name)
+	session := NewSession(store, name)
 
 	// cache the session so any subsequent retrieval is efficient
 	cacheSessionErr := setCachedSession(r, session)
@@ -159,8 +175,12 @@ func New(r *http.Request, name string) (*Session, error) {
 	return session, nil
 }
 
-// getStore retrieves the session store that has been configured for the specified session name.
-func (m *SessionManager) getStore(sessionName string) (SessionStore, error) {
+// Store returns the provider selected for a session name, falling back to "default".
+// Callers borrow the store and must not close it.
+func (m *SessionManager) Store(sessionName string) (SessionStore, error) {
+	if m == nil {
+		return nil, NewErrSessionManagerNotFound(nil)
+	}
 	storeType, ok := m.Types[sessionName]
 	if !ok {
 		// the session type isn't explicitly defined so check for a default configuration

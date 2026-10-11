@@ -1,4 +1,4 @@
-package session
+package stores
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/database"
+	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func revocationStore(t *testing.T) *SQLiteStore {
@@ -26,9 +27,9 @@ func revocationStore(t *testing.T) *SQLiteStore {
 	return s
 }
 
-func savedSession(t *testing.T, store SessionStore) (*Session, *http.Request) {
+func savedSession(t *testing.T, store sessions.SessionStore) (*sessions.Session, *http.Request) {
 	t.Helper()
-	s := newSession(store, "test-session")
+	s := sessions.NewSession(store, "test-session")
 	s.Data["identity"] = "account"
 	w := httptest.NewRecorder()
 	if err := s.Save(w, httptest.NewRequest(http.MethodGet, "/", nil)); err != nil {
@@ -64,7 +65,7 @@ func TestSQLiteSessionRevocation(t *testing.T) {
 	if len(oldData) != 0 || len(original.Data) != 0 || original.ID == id || !original.IsNew {
 		t.Fatal("logout retained local session identity")
 	}
-	if cached, err := Get(r, original.Name); err != nil || cached != original {
+	if cached, err := sessions.Get(r, original.Name); err != nil || cached != original {
 		t.Fatalf("logout cache = %v, %v", cached, err)
 	}
 	loaded, err := store.Get(r, original.Name)
@@ -77,7 +78,7 @@ func TestSQLiteSessionRevocation(t *testing.T) {
 	}
 
 	w = httptest.NewRecorder()
-	var invalid *ErrSessionInvalid
+	var invalid *sessions.ErrSessionInvalid
 	if err := stale.Save(w, r); !errors.As(err, &invalid) || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("stale save did not reject revocation: %v", err)
 	}
@@ -205,7 +206,7 @@ func TestCookieSessionEndClearsRequestCache(t *testing.T) {
 	if err := s.End(httptest.NewRecorder(), r); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Get(r, s.Name)
+	loaded, err := sessions.Get(r, s.Name)
 	if err != nil || !loaded.IsNew || loaded.ID == id || len(loaded.Data) != 0 {
 		t.Fatalf("ended cookie session remained cached: %+v, %v", loaded, err)
 	}

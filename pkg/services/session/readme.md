@@ -1,12 +1,12 @@
 # Sessions
 
-HyperServer provides cookie and SQLite session stores. Attach a `SessionManager` to each request before using `session.Get` or `session.New`. See [config-template.yaml](../../../config-template.yaml) for `http.session` configuration.
+The `session` package defines session values, storage contracts, and request handling. The optional [stores package](stores) provides cookie and SQLite implementations. Attach a `SessionManager` to each request before using `session.Get` or `session.New`. See [config-template.yaml](../../../config-template.yaml) for `http.session` configuration.
 
 ## Storage and limits
 
 `CookieStore` puts session data in a signed JWT cookie. Signing prevents modification but does not encrypt the contents. Do not store passwords, recovery tokens, credentials, or other secrets in cookie sessions.
 
-`SQLiteStore` stores session data in SQLite. Its signed cookie contains a session ID and token metadata, not session data. Authentication requires SQLite sessions because cookie-only sessions cannot revoke captured cookies.
+`SQLiteStore` stores session data in SQLite. Its signed cookie contains a session ID and token metadata, not session data. Authentication requires a store that supports revocable rotation, such as SQLite. Cookie-only sessions cannot revoke captured cookies.
 
 Both stores use JSON encoded in URL-safe base64. Only that format is supported. `Session.Data` accepts JSON-compatible values. Loaded numbers use `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read those values into the expected type.
 
@@ -55,12 +55,23 @@ The [cleanup command](../../../cmd/cleanup) removes expired SQLite sessions and 
 
 ## Ownership and extension
 
-Create a manager with `NewSessionManager(ctx, cfg)` before serving requests. It validates configuration, copies session mappings, and initializes each selected provider once. Requests reuse those providers. Unselected providers do not open storage. Failed setup returns an error, closes acquired resources, and allows a fresh construction attempt.
+For built-in providers, call `stores.NewSessionManager(ctx, cfg)` before serving requests. It validates configuration, copies session mappings, and initializes each selected provider once. Requests reuse those providers. Unselected providers do not open storage. Failed setup returns an error, closes acquired resources, and allows a fresh construction attempt.
 
 Each SQLite store owns its pool and prepares its table and expiration index in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
 
-The reference application calls `ApplicationServer.InitializeSessions(ctx)` after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. `ApplicationServer.Shutdown()` closes session providers after HTTP requests drain. If you construct a manager or SQLite store directly, call its `Close()` after its consumers stop. A closed manager must not be reused.
+The reference application's [session setup](../../../cmd/web/sessions.go) supplies the manager after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. `ApplicationServer.Shutdown()` closes the supplied manager after HTTP requests drain. If you use a manager or SQLite store outside that container, call its `Close()` after its consumers stop. Give each resource one owner. A closed manager must not be reused.
 
 Retrieved sessions are cached in the request context. Do not share their mutable data across concurrent requests. Set manager mappings before serving requests, not while requests are active.
 
-Custom stores implement `SessionStore`. Stores supporting revocable rotation also implement `RotatingStore`. Providers with owned resources implement `io.Closer`. Provider selection currently requires wiring the implementation into `NewSessionManager`. Replaceable serialization remains [roadmap](../../../roadmap.md) work.
+Custom stores implement `SessionStore`. Stores supporting revocable rotation also implement `RotatingStore`. Providers with owned resources implement `io.Closer`. Supply factories directly without importing the built-in providers:
+
+```go
+manager, err := session.NewSessionManager(ctx,
+    map[string]string{"default": "custom", "auth-user-session": "custom"},
+    map[string]session.StoreFactory{"custom": openMySessionStore},
+)
+```
+
+`openMySessionStore` must accept `context.Context` and return `(session.SessionStore, error)`. It must release partial resources on failure. The manager owns successful results, closes them in reverse initialization order, and closes each selected provider only once. Provider names are case-insensitive. Session names are case-sensitive. A named selection overrides `default`. Unknown selections and ambiguous provider names fail before any factory runs.
+
+Providers can use `NewSession` to create an unsaved value and `LoadSession` to decode existing data. Providers remain responsible for identity and expiration checks. Replaceable serialization remains [roadmap](../../../roadmap.md) work.

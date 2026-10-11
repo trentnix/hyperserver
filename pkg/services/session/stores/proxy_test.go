@@ -1,4 +1,4 @@
-package session
+package stores
 
 import (
 	"crypto/tls"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
+	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func TestSessionCookiesUseVerifiedHTTPS(t *testing.T) {
@@ -29,7 +30,7 @@ func TestSessionCookiesUseVerifiedHTTPS(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					var store SessionStore = setupCookieStore(t)
+					var store sessions.SessionStore = setupCookieStore(t)
 					if provider == "sqlite" {
 						store = revocationStore(t)
 					}
@@ -42,7 +43,7 @@ func TestSessionCookiesUseVerifiedHTTPS(t *testing.T) {
 					}
 					w := httptest.NewRecorder()
 					proxy(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						s := newSession(store, "test-session")
+						s := sessions.NewSession(store, "test-session")
 						var err error
 						switch action {
 						case "save":

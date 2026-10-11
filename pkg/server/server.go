@@ -143,24 +143,6 @@ func (s *ApplicationServer) InitializeDatabase(ctx context.Context) error {
 	return nil
 }
 
-// InitializeSessions prepares selected providers before modules and requests use
-// them. It preserves an already supplied manager. Call serially during startup,
-// after resolving relative storage paths. Failed initialization can be retried.
-func (s *ApplicationServer) InitializeSessions(ctx context.Context) error {
-	if s.SessionManager != nil {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	manager, err := session.NewSessionManager(ctx, s.Config)
-	if err != nil {
-		return err
-	}
-	s.SessionManager = manager
-	return nil
-}
-
 // initContentManager prepares this application's rendering defaults and callbacks.
 func (s *ApplicationServer) initContentManager() {
 	contentManager := content_services.NewContentManager()

@@ -34,10 +34,9 @@ const (
 	SessionContextKey contextKey = "auth-user"
 )
 
-// newSession returns a new Session instance with the specified session name serialized
-// to the specified session store. newSession is intended for use only within the
-// session package by a session store implementation.
-func newSession(s SessionStore, name string) *Session {
+// NewSession creates an empty, unsaved session for a store implementation.
+// Request handlers should use New to also cache the session in the request.
+func NewSession(s SessionStore, name string) *Session {
 	sessionID := uuid.New().String()
 	session := Session{
 		ID:    sessionID,
@@ -50,9 +49,9 @@ func newSession(s SessionStore, name string) *Session {
 	return &session
 }
 
-// loadSession takes existing session data and creates a Session instance with the provided
-// values
-func loadSession(id string, name string, expiration time.Time, s SessionStore, value string) (*Session, error) {
+// LoadSession restores a store's encoded session data using bounded JSON decoding.
+// Providers must validate identity and expiration before calling it.
+func LoadSession(id string, name string, expiration time.Time, s SessionStore, value string) (*Session, error) {
 	session := Session{
 		ID:        id,
 		Name:      name,
@@ -61,7 +60,7 @@ func loadSession(id string, name string, expiration time.Time, s SessionStore, v
 		IsNew:     false,
 	}
 
-	if len(value) > maxEncodedSessionSize {
+	if len(value) > MaxEncodedSessionSize {
 		return nil, ErrSessionTooLarge
 	}
 	byteValue, base64DecodeErr := base64.URLEncoding.Strict().DecodeString(value)
@@ -143,7 +142,7 @@ func (s *Session) End(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	clear(s.Data)
-	*s = *newSession(s.Store, s.Name)
+	*s = *NewSession(s.Store, s.Name)
 	return setCachedSession(r, s)
 }
 

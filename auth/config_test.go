@@ -29,10 +29,7 @@ func TestValidateAuthConfig(t *testing.T) {
 		{"unknown disabled provider", func(c *config.Config) { c.Auth.Services["missing"] = map[string]string{"enabled": "false"} }, ""},
 		{"invalid enable flag", func(c *config.Config) { c.Auth.Services["custom"]["enabled"] = "perhaps" }, "enabled"},
 		{"no active provider", func(c *config.Config) { c.Auth.Services["custom"]["enabled"] = "false" }, "at least one enabled"},
-		{"missing session default", func(c *config.Config) { c.HTTP.Session.Types = nil }, "types.default"},
-		{"cookie authentication", func(c *config.Config) { c.HTTP.Session.Types["auth-user-session"] = "cookieStore" }, "session revocation"},
-		{"cookie fallback", func(c *config.Config) { delete(c.HTTP.Session.Types, "auth-user-session") }, "session revocation"},
-		{"SQLite fallback", func(c *config.Config) { c.HTTP.Session.Types = map[string]string{"default": "SQLITESTORE"} }, ""},
+		{"no session configuration", func(c *config.Config) { c.HTTP.Session.Types = nil }, ""},
 		{"disabled auth", func(c *config.Config) { *c = config.Config{} }, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

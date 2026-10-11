@@ -13,6 +13,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 type moduleProvider struct {
@@ -33,12 +34,32 @@ func (p *moduleProvider) Routes(routes *routing.Routes) error {
 }
 
 func moduleConfig() config.Config {
-	cfg := config.Config{
+	return config.Config{
 		Auth: config.AuthConfig{Enabled: true, JwtKey: "test-key", VerificationTokenExpiration: time.Hour,
 			ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"custom": {"enabled": "true"}}},
 	}
-	cfg.HTTP.Session.Types = map[string]string{"default": "sqliteStore"}
-	return cfg
+}
+
+type moduleSessionStore struct{ session.SessionStore }
+
+func (moduleSessionStore) IsEnabled() bool { return true }
+
+type moduleRotatingStore struct {
+	moduleSessionStore
+	session.RotatingStore
+}
+
+func moduleSessions(t *testing.T, types map[string]string) *session.SessionManager {
+	t.Helper()
+	manager, err := session.NewSessionManager(t.Context(), types, map[string]session.StoreFactory{
+		"custom": func(context.Context) (session.SessionStore, error) { return moduleRotatingStore{}, nil },
+		"cookie": func(context.Context) (session.SessionStore, error) { return moduleSessionStore{}, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { manager.Close() })
+	return manager
 }
 
 func TestModuleOwnsAuthenticationSetup(t *testing.T) {
@@ -54,6 +75,7 @@ func TestModuleOwnsAuthenticationSetup(t *testing.T) {
 			t.Fatal(err)
 		}
 		module := descriptor.New()
+		app.SessionManager = moduleSessions(t, map[string]string{"default": "custom"})
 		if err := module.Init(context.Background(), app); err != nil {
 			t.Fatal(err)
 		}
@@ -111,6 +133,7 @@ func TestModuleRejectsProviderRouteConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	app.Web.HandleFunc("GET /provider", func(http.ResponseWriter, *http.Request) {})
+	app.SessionManager = moduleSessions(t, map[string]string{"default": "custom"})
 	module := auth.Module([]auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
 	if err := module.Init(context.Background(), app); err != nil {
 		t.Fatal(err)
@@ -118,5 +141,76 @@ func TestModuleRejectsProviderRouteConflict(t *testing.T) {
 	err = module.Routes(routing.NewRoutes(app.Web))
 	if err == nil || !strings.Contains(err.Error(), `auth service "custom"`) || !strings.Contains(err.Error(), "conflicts") {
 		t.Fatalf("provider conflict = %v", err)
+	}
+}
+
+func TestModuleRequiresSelectedStoreRotation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		types map[string]string
+		valid bool
+	}{
+		{"custom fallback", map[string]string{"default": "custom"}, true},
+		{"custom override", map[string]string{"default": "cookie", "auth-user-session": "custom"}, true},
+		{"cookie fallback", map[string]string{"default": "cookie"}, false},
+		{"cookie override", map[string]string{"default": "custom", "auth-user-session": "cookie"}, false},
+		{"missing selection", map[string]string{}, false},
+		{"missing manager", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app, err := server.NewApplicationServer(moduleConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.types != nil {
+				app.SessionManager = moduleSessions(t, tc.types)
+			}
+			module := auth.Module([]auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+			err = module.Init(t.Context(), app)
+			if tc.valid && err != nil {
+				t.Fatal(err)
+			}
+			if !tc.valid && (err == nil || !strings.Contains(err.Error(), "session revocation")) {
+				t.Fatalf("initialization error = %v, want session revocation requirement", err)
+			}
+		})
+	}
+}
+
+func TestModuleValidatesInjectedSessions(t *testing.T) {
+	for _, configuredDefault := range []string{"", "sqliteStore"} {
+		for _, tc := range []struct {
+			name  string
+			types map[string]string
+			want  string
+		}{
+			{"default", map[string]string{"default": "custom"}, ""},
+			{"named sessions", map[string]string{"auth-user-session": "custom", session.AuthSession: "cookie"}, ""},
+			{"missing redirect session", map[string]string{"auth-user-session": "custom"}, "authentication requires a redirect session"},
+			{"missing identity session", map[string]string{session.AuthSession: "cookie"}, "authentication requires session revocation"},
+		} {
+			t.Run(fmt.Sprintf("config default=%q/%s", configuredDefault, tc.name), func(t *testing.T) {
+				cfg := moduleConfig()
+				cfg.HTTP.Session.Types = nil
+				if configuredDefault != "" {
+					cfg.HTTP.Session.Types = map[string]string{"default": configuredDefault}
+				}
+				app, err := server.NewApplicationServer(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				app.SessionManager = moduleSessions(t, tc.types)
+				module := auth.Module([]auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+
+				err = module.Init(t.Context(), app)
+				if tc.want == "" {
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("initialization error = %v, want %q", err, tc.want)
+				}
+			})
+		}
 	}
 }

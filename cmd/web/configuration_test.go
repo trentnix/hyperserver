@@ -11,6 +11,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
@@ -90,7 +91,7 @@ mail:
 	if err := newAccountSetup(app).Initialize(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := app.InitializeSessions(t.Context()); err != nil {
+	if err := initializeSessions(t.Context(), app); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.InitializeMail(); err != nil {
@@ -112,7 +113,7 @@ mail:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := s.Store.(*session.SQLiteStore); !ok {
+	if _, ok := s.Store.(*stores.SQLiteStore); !ok {
 		t.Fatalf("session provider = %T, want SQLite", s.Store)
 	}
 	if err := s.Save(httptest.NewRecorder(), r); err != nil {

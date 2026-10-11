@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"context"
@@ -11,10 +11,11 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
-func sessionTestApplication(t *testing.T) *ApplicationServer {
+func sessionTestApplication(t *testing.T) *server.ApplicationServer {
 	t.Helper()
 	db, err := database.Setup("sqlite3", filepath.Join(t.TempDir(), "accounts.db"))
 	if err != nil {
@@ -27,7 +28,7 @@ func sessionTestApplication(t *testing.T) *ApplicationServer {
 	c.HTTP.Session.Stores = map[string]map[string]string{"sqliteStore": {
 		"enabled": "true", "connection": filepath.Join(t.TempDir(), "sessions.db"), "sessiontable": "sessions",
 	}}
-	s := &ApplicationServer{Config: c, Database: db}
+	s := &server.ApplicationServer{Config: c, Database: db}
 	t.Cleanup(func() {
 		if err := s.Shutdown(); err != nil {
 			t.Error(err)
@@ -38,13 +39,13 @@ func sessionTestApplication(t *testing.T) *ApplicationServer {
 
 func TestApplicationOwnsSessionResources(t *testing.T) {
 	first, second := sessionTestApplication(t), sessionTestApplication(t)
-	for _, s := range []*ApplicationServer{first, second} {
-		if err := s.InitializeSessions(context.Background()); err != nil {
+	for _, s := range []*server.ApplicationServer{first, second} {
+		if err := initializeSessions(context.Background(), s); err != nil {
 			t.Fatal(err)
 		}
 	}
 	manager := first.SessionManager
-	if err := first.InitializeSessions(context.Background()); err != nil || first.SessionManager != manager {
+	if err := initializeSessions(context.Background(), first); err != nil || first.SessionManager != manager {
 		t.Fatal("repeated initialization replaced the manager:", err)
 	}
 	r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), first.SessionManager)
@@ -78,10 +79,21 @@ func TestApplicationSessionSetupCanRetry(t *testing.T) {
 	s := sessionTestApplication(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := s.InitializeSessions(ctx); !errors.Is(err, context.Canceled) || s.SessionManager != nil {
+	if err := initializeSessions(ctx, s); !errors.Is(err, context.Canceled) || s.SessionManager != nil {
 		t.Fatalf("canceled setup: %v, manager=%v", err, s.SessionManager)
 	}
-	if err := s.InitializeSessions(context.Background()); err != nil {
+	if err := initializeSessions(context.Background(), s); err != nil {
 		t.Fatal("retry after canceled setup:", err)
+	}
+}
+
+func TestApplicationRejectsUnknownSessionProvider(t *testing.T) {
+	app, err := server.NewApplicationServer(config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Config.HTTP.Session.Types = map[string]string{"default": "unknown"}
+	if err := initializeSessions(t.Context(), app); err == nil || app.SessionManager != nil {
+		t.Fatal("invalid session initialization succeeded")
 	}
 }

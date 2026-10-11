@@ -1,4 +1,4 @@
-package session
+package stores
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func TestSQLiteSessionRotation(t *testing.T) {
@@ -13,7 +15,7 @@ func TestSQLiteSessionRotation(t *testing.T) {
 		t.Run(map[bool]string{false: "new", true: "existing"}[existing], func(t *testing.T) {
 			store := revocationStore(t)
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			original := newSession(store, "authentication")
+			original := sessions.NewSession(store, "authentication")
 			if existing {
 				original, r = savedSession(t, store)
 			}
@@ -111,7 +113,7 @@ func TestSQLiteRotationFailurePreservesSession(t *testing.T) {
 }
 
 func TestCookieSessionCannotRotate(t *testing.T) {
-	s := newSession(&CookieStore{}, "authentication")
+	s := sessions.NewSession(&CookieStore{}, "authentication")
 	w := httptest.NewRecorder()
 	if err := s.Rotate(w, httptest.NewRequest(http.MethodGet, "/", nil), nil); err == nil || len(w.Result().Cookies()) != 0 {
 		t.Fatal("cookie-only store accepted revocable rotation")
@@ -124,7 +126,7 @@ func TestSQLiteConcurrentRotation(t *testing.T) {
 	original, request := savedSession(t, store)
 	start := make(chan struct{})
 	type result struct {
-		session *Session
+		session *sessions.Session
 		writer  *httptest.ResponseRecorder
 		err     error
 	}

@@ -18,15 +18,99 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	auth_services "github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+type emailSessionStore struct{ session.SessionStore }
+
+func (emailSessionStore) IsEnabled() bool { return true }
+func (s emailSessionStore) Get(_ *http.Request, name string) (*session.Session, error) {
+	return session.NewSession(s, name), nil
+}
+
+type emailIdentityStore struct {
+	emailSessionStore
+	session.RotatingStore
+}
+
+func emailSessions(t *testing.T, types map[string]string) *session.SessionManager {
+	t.Helper()
+	manager, err := session.NewSessionManager(t.Context(), types, map[string]session.StoreFactory{
+		"memory":   func(context.Context) (session.SessionStore, error) { return emailSessionStore{}, nil },
+		"identity": func(context.Context) (session.SessionStore, error) { return emailIdentityStore{}, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { manager.Close() })
+	return manager
+}
+
+func TestEmailAuthModuleRequiresFlashSession(t *testing.T) {
+	for _, selection := range []string{"missing", "named", "default"} {
+		t.Run(selection, func(t *testing.T) {
+			cfg := config.Config{Auth: config.AuthConfig{
+				Enabled: true, JwtKey: "test-key", VerificationTokenExpiration: time.Hour,
+				ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"email": {"enabled": "true"}},
+			}}
+			app, err := server.NewApplicationServer(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			app.AccountRepository = &emailAccountRepository{}
+			layouts := fstest.MapFS{"layout.html": {Data: []byte(`{{renderPartial .PartialName .}}`)}}
+			app.ContentManager.AddPageLayout(layouts, "layout.html")
+			app.ContentManager.AddHtmxLayout(layouts, "layout.html")
+			types := map[string]string{"auth-user-session": "identity", session.AuthSession: "memory"}
+			switch selection {
+			case "named":
+				types["hs-message-session"] = "memory"
+			case "default":
+				types["default"] = "memory"
+			}
+			app.SessionManager = emailSessions(t, types)
+			module := auth_services.Module([]auth_services.Descriptor{{Name: "email", New: func() auth_services.AuthService { return new(EmailAuthService) }}}).New()
+
+			err = module.Init(t.Context(), app)
+			if selection == "missing" {
+				var missing *session.ErrSessionStoreNotFound
+				if !errors.As(err, &missing) || !strings.Contains(err.Error(), "flash") {
+					t.Fatalf("initialization error = %v, want missing flash session", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := module.Routes(routing.NewRoutes(app.Web)); err != nil {
+				t.Fatal(err)
+			}
+
+			for _, htmx := range []bool{false, true} {
+				r := httptest.NewRequest(http.MethodGet, "/auth/login/email", nil)
+				if htmx {
+					r.Header.Set("HX-Request", "true")
+				}
+				r = session.AddSessionManagerToRequestContext(r, app.SessionManager)
+				w := httptest.NewRecorder()
+				app.Web.ServeHTTP(w, r)
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `name="password"`) {
+					t.Fatalf("login response (HTMX=%t) = %d %q, want a login form", htmx, w.Code, w.Body.String())
+				}
+			}
+		})
+	}
+}
 
 type failingAuthMessageStore struct {
 	session.SessionStore
@@ -46,7 +130,7 @@ func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
 	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
 	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
 	cfg.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}}
-	manager, err := session.NewSessionManager(context.Background(), cfg)
+	manager, err := stores.NewSessionManager(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,6 +243,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 				}},
 				AccountRepository: &emailAccountRepository{},
 				ContentManager:    &content.ContentManagerService{},
+				SessionManager:    emailSessions(t, map[string]string{"default": "memory"}),
 			}
 			service := &EmailAuthService{TemplateFS: os.DirFS(root)}
 			initErr := service.Init(app)
@@ -206,6 +291,7 @@ func TestEmailAuthInitAccountRepository(t *testing.T) {
 				}},
 				// A supplied repository needs no SQL pool and must not be queried during initialization.
 				ContentManager: content.NewContentManager(),
+				SessionManager: emailSessions(t, map[string]string{"default": "memory"}),
 			}
 			reader := &emailAccountRepository{}
 			if scenario == "supplied" {

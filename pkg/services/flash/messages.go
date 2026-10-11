@@ -5,6 +5,7 @@
 package flash
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/components/messages"
@@ -23,6 +24,15 @@ const (
 // String returns the underlying string value.
 func (s SessionKey) String() string {
 	return string(s)
+}
+
+// ValidateSessionManager checks that flash messages have a selected store.
+// Call during startup. It does not read or write session data.
+func ValidateSessionManager(manager *session.SessionManager) error {
+	if _, err := manager.Store(messagesSession.String()); err != nil {
+		return fmt.Errorf("flash messages require session %q: %w", messagesSession, err)
+	}
+	return nil
 }
 
 // newMessage creates a new instance of a Message

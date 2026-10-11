@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"context"
@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func TestApplicationsResolveIndependentStoragePaths(t *testing.T) {
-	var apps []*ApplicationServer
+	var apps []*server.ApplicationServer
 	for range 2 {
 		cfg := config.Config{
 			App:      config.AppConfig{WorkingDirectory: t.TempDir()},
@@ -26,7 +27,7 @@ func TestApplicationsResolveIndependentStoragePaths(t *testing.T) {
 		cfg.HTTP.Session.Stores = map[string]map[string]string{"sqliteStore": {
 			"enabled": "true", "connection": "sessions.db", "sessiontable": "sessions",
 		}}
-		app, err := NewApplicationServer(cfg)
+		app, err := server.NewApplicationServer(cfg)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -38,7 +39,7 @@ func TestApplicationsResolveIndependentStoragePaths(t *testing.T) {
 		if err := app.InitializeDatabase(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if err := app.InitializeSessions(context.Background()); err != nil {
+		if err := initializeSessions(context.Background(), app); err != nil {
 			t.Fatal(err)
 		}
 		app.Database.SetMaxIdleConns(0)

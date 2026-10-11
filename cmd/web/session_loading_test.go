@@ -12,6 +12,7 @@ import (
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -101,7 +102,7 @@ func TestHTTPProtectedRouteSessionExpiry(t *testing.T) {
 					t.Fatal("login did not issue an authentication cookie")
 				}
 				key := []byte(h.app.Config.HTTP.Session.JwtKey)
-				claims := &session.SessionClaims{}
+				claims := &stores.SessionClaims{}
 				if _, err := jwt.ParseWithClaims(authCookie.Value, claims, func(*jwt.Token) (any, error) { return key, nil }); err != nil {
 					t.Fatal(err)
 				}
@@ -158,7 +159,7 @@ func TestHTTPSessionLoading(t *testing.T) {
 					if strings.HasPrefix(outcome, "expired") {
 						expires = time.Now().Add(-time.Hour)
 					}
-					claims := session.SessionClaims{
+					claims := stores.SessionClaims{
 						ID: "stored-session", Purpose: "session", Value: encoded,
 						RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(expires)},
 					}
@@ -327,7 +328,7 @@ func TestHTTPLoginRedirectSessionFailure(t *testing.T) {
 								t.Fatal(err)
 							}
 						} else {
-							claims := session.SessionClaims{ID: redirect.ID, Purpose: "session", Value: "invalid base64!", RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
+							claims := stores.SessionClaims{ID: redirect.ID, Purpose: "session", Value: "invalid base64!", RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
 							cookie.Value, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(h.app.Config.HTTP.Session.JwtKey))
 							if err != nil {
 								t.Fatal(err)

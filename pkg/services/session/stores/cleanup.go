@@ -1,4 +1,4 @@
-package session
+package stores
 
 import (
 	"context"
@@ -12,13 +12,8 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
-
-// ExpiredSessionMaintenance is an optional session-provider capability. A batch
-// deletes at most limit expired sessions, preserves live sessions, and honors ctx.
-type ExpiredSessionMaintenance interface {
-	DeleteExpired(ctx context.Context, limit int) (int64, error)
-}
 
 // CleanupExpired removes one bounded batch from each selected server-side store.
 // It opens maintenance storage without creating tables or requiring signing keys.
@@ -64,7 +59,7 @@ func cleanupStore(ctx context.Context, c *config.Config, name string, limit int)
 		return 0, err
 	}
 	if !enabled {
-		return 0, NewErrStoreDisabled(nil)
+		return 0, sessions.NewErrStoreDisabled(nil)
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, err
@@ -84,7 +79,7 @@ func cleanupStore(ctx context.Context, c *config.Config, name string, limit int)
 	return maintenance.DeleteExpired(ctx, limit)
 }
 
-func openMaintenance(ctx context.Context, name string, options map[string]string, directory string) (ExpiredSessionMaintenance, func() error, error) {
+func openMaintenance(ctx context.Context, name string, options map[string]string, directory string) (sessions.ExpiredSessionMaintenance, func() error, error) {
 	switch name {
 	case strings.ToLower(cookieStoreName):
 		return nil, nil, nil

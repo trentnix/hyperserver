@@ -1,4 +1,4 @@
-package session
+package stores
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func TestCleanupExpiredRejectsInvalidLimit(t *testing.T) {
@@ -164,7 +165,7 @@ func TestSQLiteSaveAndEndAfterCleanup(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	var invalid *ErrSessionInvalid
+	var invalid *sessions.ErrSessionInvalid
 	if err := original.Save(w, r); !errors.As(err, &invalid) || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("stale save accepted: %v", err)
 	}
@@ -198,7 +199,7 @@ func TestSQLiteConcurrentSaveAndEnd(t *testing.T) {
 		}()
 		close(start)
 		saveErr, endErr := <-saved, <-ended
-		var invalid *ErrSessionInvalid
+		var invalid *sessions.ErrSessionInvalid
 		if saveErr != nil && !errors.As(saveErr, &invalid) {
 			t.Fatal("concurrent save:", saveErr)
 		}
@@ -235,7 +236,7 @@ func TestSQLiteCleanupDuringSave(t *testing.T) {
 			if err != nil || (count == 1) != expired {
 				t.Fatalf("concurrent cleanup = %d, %v", count, err)
 			}
-			var invalid *ErrSessionInvalid
+			var invalid *sessions.ErrSessionInvalid
 			if saveErr != nil && (!expired || !errors.As(saveErr, &invalid)) {
 				t.Fatal("concurrent save:", saveErr)
 			}

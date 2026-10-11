@@ -17,9 +17,17 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
+
+type initSessionStore struct {
+	session.SessionStore
+	session.RotatingStore
+}
+
+func (initSessionStore) IsEnabled() bool { return true }
 
 func TestAuthManagerInitUsesAccountRepository(t *testing.T) {
 	// Initialization must preserve the supplied reader without calling it.
@@ -30,6 +38,13 @@ func TestAuthManagerInitUsesAccountRepository(t *testing.T) {
 		ContentManager:    content.NewContentManager(),
 	}
 	manager := &AuthManager{Services: &Registry{}}
+	var err error
+	app.SessionManager, err = session.NewSessionManager(t.Context(), map[string]string{"default": "custom"}, map[string]session.StoreFactory{
+		"custom": func(context.Context) (session.SessionStore, error) { return initSessionStore{}, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := manager.Init(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +94,7 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 		},
 	}}
 	manager.accounts = usersqlite.NewAccountRepository(db)
-	sessions, err := session.NewSessionManager(context.Background(), cfg)
+	sessions, err := stores.NewSessionManager(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

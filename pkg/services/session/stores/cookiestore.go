@@ -1,4 +1,4 @@
-package session
+package stores
 
 import (
 	"errors"
@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
+	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 type (
@@ -60,7 +61,7 @@ func NewCookieStore(c *config.Config) (*CookieStore, error) {
 
 // Get returns a stored session or a new session if the cookie is missing or expired.
 // Invalid cookies and decoding failures return an error without a session.
-func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
+func (c *CookieStore) Get(r *http.Request, name string) (*sessions.Session, error) {
 	jwtValue := ""
 
 	// check the request for a cookie
@@ -71,23 +72,23 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 
 	if cookie == nil {
 		// if there is no cookie, return an empty session
-		return newSession(c, name), nil
+		return sessions.NewSession(c, name), nil
 	}
-	if err := validateSessionCookie(cookie); err != nil {
-		return nil, NewErrInvalidToken(err)
+	if err := validateCookie(cookie); err != nil {
+		return nil, sessions.NewErrInvalidToken(err)
 	}
 
 	// return the decoded Session data
 	claimsData, sessionError := parseSessionJWT(jwtValue, c.JwtKey)
 	if errors.Is(sessionError, jwt.ErrTokenExpired) {
-		return newSession(c, name), nil
+		return sessions.NewSession(c, name), nil
 	}
 	if sessionError != nil {
 		return nil, sessionError
 	}
 
 	// the session exists - overwrite the ID with the session data that was extracted from the cookie
-	existingSession, loadErr := loadSession(claimsData.ID, name, claimsData.ExpiresAtTime(), c, claimsData.Value)
+	existingSession, loadErr := sessions.LoadSession(claimsData.ID, name, claimsData.ExpiresAtTime(), c, claimsData.Value)
 	if loadErr != nil {
 		return nil, loadErr
 	}
@@ -97,16 +98,16 @@ func (c *CookieStore) Get(r *http.Request, name string) (*Session, error) {
 
 // New creates an empty (new) session. An error will not be returned but the return
 // requires an error to implement the SessionStore interface
-func (c *CookieStore) New(r *http.Request, name string) (*Session, error) {
-	return newSession(c, name), nil
+func (c *CookieStore) New(r *http.Request, name string) (*sessions.Session, error) {
+	return sessions.NewSession(c, name), nil
 }
 
 // Save encodes the session into a signed JWT and writes an HTTP cookie.
 // The payload is not encrypted and must not contain secrets. Cookies larger than
 // MaxCookieSize are rejected. Call Save before writing response headers or a body.
-func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Session) error {
+func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *sessions.Session) error {
 	if len(c.JwtKey) == 0 {
-		return NewErrSessionKeyInvalid(fmt.Errorf("the JWT key is not set"))
+		return sessions.NewErrSessionKeyInvalid(fmt.Errorf("the JWT key is not set"))
 	}
 
 	// create a token with just the session (and expiration)
@@ -138,7 +139,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(c.JwtKey)
 	if err != nil {
-		return NewErrSessionKeyInvalid(err)
+		return sessions.NewErrSessionKeyInvalid(err)
 	}
 
 	cookieAge := int(c.CookieLifetime / time.Second)
@@ -153,7 +154,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   cookieAge,
 	}
-	if err := validateSessionCookie(cookie); err != nil {
+	if err := validateCookie(cookie); err != nil {
 		return err
 	}
 	http.SetCookie(w, cookie)
@@ -162,8 +163,8 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 }
 
 // End expires the browser cookie. It cannot revoke copies of a signed cookie.
-func (c *CookieStore) End(w http.ResponseWriter, r *http.Request, session *Session) error {
-	ExpireCookie(w, r, session.Name)
+func (c *CookieStore) End(w http.ResponseWriter, r *http.Request, session *sessions.Session) error {
+	sessions.ExpireCookie(w, r, session.Name)
 	return nil
 }
 

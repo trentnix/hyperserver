@@ -1,4 +1,4 @@
-package session
+package stores
 
 import (
 	"context"
@@ -78,11 +78,11 @@ func TestSessionManagerIsolationAndReuse(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { second.Close() })
-			one, err := first.getStore("anything")
+			one, err := first.Store("anything")
 			if err != nil {
 				t.Fatal(err)
 			}
-			two, err := second.getStore("anything")
+			two, err := second.Store("anything")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,11 +99,11 @@ func TestSessionManagerIsolationAndReuse(t *testing.T) {
 			firstConfig.HTTP.Session.Stores["sqliteStore"]["connection"] = "/missing/sessions.db"
 			firstConfig.HTTP.Session.JwtKey = "changed"
 			for _, name := range []string{"anything", "alias"} {
-				if got, err := first.getStore(name); err != nil || got != one {
+				if got, err := first.Store(name); err != nil || got != one {
 					t.Fatal("manager did not reuse its original provider")
 				}
 			}
-			if got, err := first.getStore("cookie"); err != nil || got == one {
+			if got, err := first.Store("cookie"); err != nil || got == one {
 				t.Fatal("named provider did not override the default")
 			}
 			if got, err := one.Get(request, value.Name); err != nil || got.ID != value.ID {
@@ -180,7 +180,7 @@ func TestSessionInitializationFailureAndRetry(t *testing.T) {
 				t.Fatal("retry failed:", err)
 			}
 			defer manager.Close()
-			store, err := manager.getStore("test")
+			store, err := manager.Store("test")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -197,11 +197,11 @@ func TestUnselectedSessionProvidersStayInactive(t *testing.T) {
 		t.Fatal("unselected SQLite provider was opened:", err)
 	}
 	defer m.Close()
-	if len(m.stores) != 1 || len(m.closers) != 0 {
+	if store, err := m.Store("anything"); err != nil || !store.IsEnabled() {
 		t.Fatal("manager initialized unselected providers")
 	}
 	m, err = NewSessionManager(context.Background(), &config.Config{})
-	if err != nil || len(m.stores) != 0 {
+	if err != nil {
 		t.Fatal("empty session configuration requires providers:", err)
 	}
 	defer m.Close()

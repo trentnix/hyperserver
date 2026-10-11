@@ -11,6 +11,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -88,7 +89,7 @@ func identityTestSessionManager(t *testing.T, store string) *session.SessionMana
 		"sqliteStore": {"enabled": "true", "connection": filepath.Join(t.TempDir(), "sessions.db"), "sessiontable": "session"},
 	}
 	cfg.HTTP.Session.Types = map[string]string{"default": store}
-	manager, err := session.NewSessionManager(t.Context(), cfg)
+	manager, err := stores.NewSessionManager(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

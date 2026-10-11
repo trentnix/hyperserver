@@ -30,7 +30,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -209,7 +209,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.ValidateConfig(cfg); err != nil {
+	if err := stores.ValidateConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
 	db, err := database.Setup(cfg.Database.Driver, cfg.Database.Connection)
@@ -235,7 +235,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 		t.Fatal(err)
 	}
 	app.Database, app.Mail = db, mailClient
-	if err := app.InitializeSessions(context.Background()); err != nil {
+	if err := initializeSessions(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

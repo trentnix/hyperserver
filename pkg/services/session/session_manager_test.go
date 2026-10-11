@@ -5,110 +5,139 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 )
 
-func TestManagerRejectsMissingSelection(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		types map[string]string
-	}{
-		{"unknown named store", map[string]string{"user": "missing", "default": "cookieStore"}},
-		{"unknown default store", map[string]string{"default": "missing"}},
-		{"empty named store", map[string]string{"user": "", "default": "cookieStore"}},
-		{"empty default store", map[string]string{"default": ""}},
-		{"missing default", map[string]string{"other": "cookieStore"}},
-		{"no selections", nil},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := validSessionConfig()
-			cfg.HTTP.Session.Types = tc.types
-			manager, err := NewSessionManager(context.Background(), cfg)
-			if manager != nil || err == nil {
-				t.Fatalf("NewSessionManager = %v, %v, want nil and an error", manager, err)
-			}
-		})
-	}
+type managerTestStore struct {
+	SessionStore
+	enabled bool
+	close   func() error
 }
 
-func TestGetStoreSelectsCookieStore(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		types map[string]string
-	}{
-		{"named store", map[string]string{"user": "cookieStore", "default": "cookieStore"}},
-		{"default fallback", map[string]string{"default": "cookieStore"}},
-		{"case insensitive provider", map[string]string{"user": "COOKIESTORE", "default": "cookieStore"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := validSessionConfig()
-			cfg.HTTP.Session.Types = tc.types
-			manager, err := NewSessionManager(context.Background(), cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { manager.Close() })
-			store, err := manager.getStore("user")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if cookie, ok := store.(*CookieStore); !ok || !cookie.IsEnabled() {
-				t.Fatalf("getStore = %T, want enabled CookieStore", store)
-			}
-		})
-	}
+func (s *managerTestStore) IsEnabled() bool { return s.enabled }
+func (s *managerTestStore) Close() error    { return s.close() }
+func (s *managerTestStore) Get(_ *http.Request, name string) (*Session, error) {
+	return NewSession(s, name), nil
 }
 
-func TestManagerRejectsDisabledStore(t *testing.T) {
-	cfg := validSessionConfig()
-	cfg.HTTP.Session.Stores["cookiestore"]["enabled"] = "false"
-	manager, err := NewSessionManager(context.Background(), cfg)
-	if manager != nil || err == nil {
-		t.Fatalf("NewSessionManager = %v, %v, want nil and an error", manager, err)
+func TestManagerOwnsSelectedProviders(t *testing.T) {
+	var events []string
+	store := func(name string) StoreFactory {
+		return func(context.Context) (SessionStore, error) {
+			events = append(events, "open "+name)
+			return &managerTestStore{enabled: true, close: func() error { events = append(events, "close "+name); return nil }}, nil
+		}
 	}
-}
-
-func TestSessionOperationsRejectUnknownStore(t *testing.T) {
-	for name, operation := range map[string]func(*http.Request, string) (*Session, error){"Get": Get, "New": New} {
-		t.Run(name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			r = AddSessionManagerToRequestContext(r, &SessionManager{Types: map[string]string{"default": "missing"}})
-			session, err := operation(r, "user")
-			var notFound *ErrSessionStoreNotFound
-			if session != nil || !errors.As(err, &notFound) {
-				t.Fatalf("%s = %v, %v, want nil and ErrSessionStoreNotFound", name, session, err)
-			}
-		})
-	}
-}
-
-func TestGetDoesNotCacheLoadFailures(t *testing.T) {
-	cfg := validSessionConfig()
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.AddCookie(&http.Cookie{Name: "user", Value: "invalid.jwt.token"})
-	manager, err := NewSessionManager(context.Background(), cfg)
+	types := map[string]string{"default": "B", "named": "a", "alias": "A"}
+	factories := map[string]StoreFactory{"b": store("b"), "a": store("a"), "unused": store("unused")}
+	m, err := NewSessionManager(t.Context(), types, factories)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { manager.Close() })
-	r = AddSessionManagerToRequestContext(r, manager)
+	types["default"] = "unused"
+	delete(factories, "a")
+	r := AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), m)
+	first, err := Get(r, "named")
+	if err != nil {
+		t.Fatal(err)
+	}
+	alias, err := m.Store("alias")
+	if err != nil || first.Store != alias {
+		t.Fatal("aliases did not reuse the initialized store", err)
+	}
+	fallback, err := m.Store("anything")
+	if err != nil || fallback == alias {
+		t.Fatal("default provider selection was lost", err)
+	}
 	for range 2 {
-		s, err := Get(r, "user")
-		if s != nil || err == nil {
-			t.Fatalf("Get = %v, %v, want nil and a load error", s, err)
-		}
-		if getCachedSession(r, "user") != nil {
-			t.Fatal("failed load cached a replacement session")
+		if err := m.Close(); err != nil {
+			t.Fatal(err)
 		}
 	}
+	if want := []string{"open a", "open b", "close b", "close a"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("lifecycle = %v, want %v", events, want)
+	}
+}
 
-	// A later successful read can create and cache a session on the same request.
-	r.Header.Del("Cookie")
-	s, err := Get(r, "user")
-	if err != nil || s == nil || !s.IsNew {
-		t.Fatalf("Get after removing invalid cookie = %v, %v", s, err)
+func TestManagerRejectsInvalidSelectionsBeforeSetup(t *testing.T) {
+	factory := func(context.Context) (SessionStore, error) {
+		t.Fatal("invalid selections started a provider")
+		return nil, nil
 	}
-	if cached, err := Get(r, "user"); err != nil || cached != s {
-		t.Fatalf("successful load was not cached: %v", err)
+	for _, tc := range []struct {
+		name      string
+		types     map[string]string
+		factories map[string]StoreFactory
+	}{
+		{"unknown", map[string]string{"default": "a", "named": "unknown"}, map[string]StoreFactory{"a": factory}},
+		{"empty selection", map[string]string{"default": ""}, map[string]StoreFactory{"a": factory}},
+		{"duplicate provider", nil, map[string]StoreFactory{"a": factory, "A": factory}},
+		{"nil factory", nil, map[string]StoreFactory{"a": nil}},
+		{"empty provider", nil, map[string]StoreFactory{"": factory}},
+		{"whitespace provider", nil, map[string]StoreFactory{" a": factory}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if m, err := NewSessionManager(t.Context(), tc.types, tc.factories); m != nil || err == nil {
+				t.Fatalf("manager = %v, %v", m, err)
+			}
+		})
+	}
+}
+
+func TestManagerRollsBackProviderFailures(t *testing.T) {
+	failure, closeFailure := errors.New("setup failed"), errors.New("close failed")
+	for _, reason := range []string{"error", "nil store", "disabled", "canceled during setup", "canceled before setup"} {
+		t.Run(reason, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			var opened, closed []string
+			factories := map[string]StoreFactory{}
+			for _, name := range []string{"a", "b", "c"} {
+				factories[name] = func(context.Context) (SessionStore, error) {
+					opened = append(opened, name)
+					if name == "b" {
+						switch reason {
+						case "error":
+							return nil, failure
+						case "nil store":
+							return nil, nil
+						case "canceled during setup":
+							cancel()
+						}
+					}
+					return &managerTestStore{enabled: name != "b" || reason != "disabled", close: func() error { closed = append(closed, name); return closeFailure }}, nil
+				}
+			}
+			if reason == "canceled before setup" {
+				cancel()
+			}
+			m, err := NewSessionManager(ctx, map[string]string{"default": "a", "second": "b", "third": "c"}, factories)
+			if err == nil || m != nil {
+				t.Fatalf("manager = %v, %v", m, err)
+			}
+			if ctx.Err() != nil && !errors.Is(err, context.Canceled) {
+				t.Fatal("lost cancellation", err)
+			}
+			if reason == "canceled before setup" {
+				if len(opened) != 0 {
+					t.Fatal("canceled setup initialized a provider")
+				}
+				return
+			}
+			if !reflect.DeepEqual(opened, []string{"a", "b"}) {
+				t.Fatal("continued after failed setup", opened)
+			}
+			want := []string{"a"}
+			if reason == "disabled" || reason == "canceled during setup" {
+				want = []string{"b", "a"}
+			}
+			if !reflect.DeepEqual(closed, want) || !errors.Is(err, closeFailure) {
+				t.Fatalf("rollback = %v, %v", closed, err)
+			}
+			if reason == "error" && !errors.Is(err, failure) {
+				t.Fatal("lost initialization error", err)
+			}
+		})
 	}
 }
