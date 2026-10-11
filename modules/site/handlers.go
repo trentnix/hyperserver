@@ -75,7 +75,7 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleMessage renders message as text escaped by the page template.
-func (m *SiteModule) HandleMessage(w http.ResponseWriter, r *http.Request, message string) {
+func (m *pageRenderer) HandleMessage(w http.ResponseWriter, r *http.Request, message string) {
 	if message == "" {
 		message = "(no message)"
 	}
@@ -134,7 +134,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 }
 
 // NotFound handles the /404 endpoint by displaying the "NotFound" page
-func (m *SiteModule) NotFound(w http.ResponseWriter, r *http.Request) {
+func (m *pageRenderer) NotFound(w http.ResponseWriter, r *http.Request) {
 	notFound := content.NewManagedContent(r, m.contentManager)
 	notFound.PartialName = notFoundPagePartialName
 	notFound.AddContent(siteModuleTemplatesFS, notFoundPageTemplate)

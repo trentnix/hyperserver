@@ -106,10 +106,10 @@ func TestSiteWithoutMailReportsDeliveryFailure(t *testing.T) {
 	}
 }
 
-func TestSiteNotificationLoaderSelection(t *testing.T) {
-	for _, mode := range []string{"disabled", "session", "custom"} {
+func TestSiteLeavesNotificationSelectionToApplication(t *testing.T) {
+	for _, mode := range []string{"unconfigured", "custom"} {
 		t.Run(mode, func(t *testing.T) {
-			app, err := server.NewApplicationServer(config.Config{App: config.AppConfig{RenderNotifications: mode != "disabled"}})
+			app, err := server.NewApplicationServer(config.Config{App: config.AppConfig{RenderNotifications: true}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -125,9 +125,9 @@ func TestSiteNotificationLoaderSelection(t *testing.T) {
 				t.Fatal(err)
 			}
 			load := app.ContentManager.LoadNotifications
-			if mode == "disabled" {
+			if mode == "unconfigured" {
 				if load != nil {
-					t.Fatal("disabled notifications installed a loader")
+					t.Fatal("module initialization installed a notification loader")
 				}
 				return
 			}
@@ -135,9 +135,6 @@ func TestSiteNotificationLoaderSelection(t *testing.T) {
 				t.Fatal("enabled notifications did not install a loader")
 			}
 			_, err = load(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
-			if mode == "session" && err == nil {
-				t.Fatal("session loader silently accepted a missing session manager")
-			}
 			if mode == "custom" && (err != nil || !customCalled) {
 				t.Fatal("site replaced the application's notification loader")
 			}

@@ -20,7 +20,7 @@ The example includes no JavaScript or HTMX download. The fragment response demon
 
 ## Composition
 
-- [app.go](app.go) selects the greeting module explicitly. `handlers.Setup` initializes it, checks its routes, and registers its shutdown hook. Other modules imported into the same process do not become active in this application.
+- [app.go](app.go) explicitly selects the greeting layouts with `pages.ConfigureRendering`, then selects the greeting module. Application overrides go between rendering setup and module initialization. `handlers.Setup` initializes the module, checks its routes, and registers its shutdown hook. Other modules imported into the same process do not become active in this application.
 - [pages/module.go](pages/module.go) self-registers a factory and owns its routes and embedded templates. Each application gets a fresh module and content manager.
 - [main.go](main.go) selects the loopback listener and HTTP settings. `ApplicationServer.Run` handles serving and cleanup. Interrupting the process drains requests before application cleanup. `-shutdown-timeout` defaults to `10s`. If draining fails, the command closes connections and exits without closing services beneath active handlers.
 

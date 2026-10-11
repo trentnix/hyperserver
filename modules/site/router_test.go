@@ -31,6 +31,9 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 		return models.NewContactRepository(ctx, db)
 	}, nil).New().(*SiteModule)
 	t.Cleanup(func() { s.Shutdown() })
+	if err := ConfigureRendering(s.ContentManager, s.Config.Auth.Enabled); err != nil {
+		t.Fatal(err)
+	}
 	if err := m.Init(context.Background(), s); err != nil {
 		t.Fatal(err)
 	}

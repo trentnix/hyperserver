@@ -11,13 +11,35 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/examples/stateless/pages"
 	site "github.com/trentnix/hyperserver/modules/site"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
+	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
+
+func TestCompetingRenderingPoliciesFailInEitherOrder(t *testing.T) {
+	siteDefaults := func(cm *contentservice.ContentManagerService) error { return site.ConfigureRendering(cm, false) }
+	for _, policies := range [][]func(*contentservice.ContentManagerService) error{
+		{siteDefaults, pages.ConfigureRendering},
+		{pages.ConfigureRendering, siteDefaults},
+	} {
+		cm := contentservice.NewContentManager()
+		if err := policies[0](cm); err != nil {
+			t.Fatal(err)
+		}
+		layout := cm.Layouts[contentservice.PageType][0].Path
+		if err := policies[1](cm); err == nil {
+			t.Fatal("competing rendering policies accepted")
+		}
+		if got := cm.Layouts[contentservice.PageType]; len(got) != 1 || got[0].Path != layout {
+			t.Fatal("rejected policy changed layouts")
+		}
+	}
+}
 
 // These integration tests include the reference site's SQLite storage.
 func TestApplicationSelectsOnlyItsModule(t *testing.T) {
@@ -70,6 +92,9 @@ func TestApplicationRunsBesideReferenceSite(t *testing.T) {
 			reference.OnShutdown("database", func(context.Context) error { return db.Close() })
 			newContacts := func(ctx context.Context) (site.ContactRepository, error) {
 				return models.NewContactRepository(ctx, db)
+			}
+			if err := site.ConfigureRendering(reference.ContentManager, false); err != nil {
+				t.Fatal(err)
 			}
 			modules, err := handlers.Initialize(context.Background(), reference, []handlers.Descriptor{site.Module(newContacts, nil)}, nil)
 			if err != nil {

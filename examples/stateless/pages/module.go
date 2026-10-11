@@ -36,9 +36,16 @@ func (p *pages) Init(_ context.Context, app *server.ApplicationServer) error {
 		return fmt.Errorf("hello requires a content manager")
 	}
 	p.contentManager = app.ContentManager
-	p.contentManager.AddPageLayout(helloModuleTemplatesFS, "templates/page.html")
-	p.contentManager.AddHtmxLayout(helloModuleTemplatesFS, "templates/fragment.html")
 	return nil
+}
+
+// ConfigureRendering selects the greeting application's shared layouts.
+// Call before application overrides and module initialization.
+func ConfigureRendering(cm *contentservice.ContentManagerService) error {
+	return cm.ApplyDefaults("hello", func(cm *contentservice.ContentManagerService) {
+		cm.RegisterLayouts(contentservice.PageType, helloModuleTemplatesFS, "templates/page.html")
+		cm.RegisterLayouts(contentservice.HtmxType, helloModuleTemplatesFS, "templates/fragment.html")
+	})
 }
 
 func (p *pages) Routes(routes *routing.Routes) error {

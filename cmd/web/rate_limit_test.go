@@ -232,11 +232,13 @@ func TestApplicationHandlerRejectsInvalidRateLimit(t *testing.T) {
 	}
 }
 
-// Only Warn is implemented: diagnostics at any other level fail the test.
+// Capture warnings and ignore the informational startup summary.
 type ratePolicyWarningLogger struct {
 	logger.Logger
 	warnings []map[string]any
 }
+
+func (*ratePolicyWarningLogger) Info(string, ...logger.Field) {}
 
 func (l *ratePolicyWarningLogger) Warn(message string, fields ...logger.Field) {
 	entry := map[string]any{"message": message}

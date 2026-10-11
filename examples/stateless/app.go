@@ -21,6 +21,9 @@ func newApplication(ctx context.Context, name string) (*server.ApplicationServer
 	// Imports make modules discoverable. This application explicitly selects its
 	// own module so unrelated imports in the same process cannot add routes.
 	catalog := []handlers.Descriptor{pages.Module()}
+	if err := pages.ConfigureRendering(app.ContentManager); err != nil {
+		return nil, errors.Join(err, app.Shutdown())
+	}
 	if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
 		return nil, errors.Join(err, app.Shutdown())
 	}

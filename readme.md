@@ -118,12 +118,18 @@ if err != nil {
     return err
 }
 
+if err := site.ConfigureRendering(app.ContentManager, app.Config.Auth.Enabled); err != nil {
+    return err
+}
+
 if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
     return err
 }
 ```
 
 `handlers.Setup` resolves dependencies, initializes modules, checks route registrations, and registers reverse-order cleanup with the application. Pass a configured `*routing.Routes` instead of nil to supply route defaults. Failed setup closes initialized modules, but any registered routes remain in the mux. Discard the failed application. A nil catalog selects no modules. The lower-level `handlers.Initialize` remains available when callers need to manage routes and module cleanup themselves.
+
+After successful module setup, the reference application logs module names and advertised capability providers in initialization order, plus explicit provider selections. Authentication reports its initialized providers in catalog order. Application setup reports the actual account-repository type, selected session-provider names, and whether mail uses SMTP or an application-supplied client. These diagnostics identify selections, not service health. They exclude configuration values and connection details. Unchosen provider modules still appear if they remain in the selected catalog.
 
 `contactStore` implements `site.ContactRepository`. The application prepares the store and closes it after requests drain. This direct wiring does not require a separate provider module.
 
@@ -198,6 +204,21 @@ See the [complete storage-provider example](pkg/handlers/example_test.go). Modul
 ### Files and templates
 
 The site and authentication modules embed their templates and static assets. A built binary does not need the repository beside it. Rebuild to apply changes to bundled assets.
+
+Application setup selects shared rendering defaults before module initialization. The reference application's [rendering setup](cmd/web/rendering.go) calls `site.ConfigureRendering` for layouts, navigation, response handlers, and redirect URLs. It selects `flash.GetNotifications` only when `app.renderNotifications` is enabled. The stateless application calls `pages.ConfigureRendering` for its layouts. Module initialization does not install either policy.
+
+Apply overrides after selecting defaults and before serving. For example:
+
+```go
+if err := site.ConfigureRendering(app.ContentManager, app.Config.Auth.Enabled); err != nil {
+    return err
+}
+app.ContentManager.AuthURL = "/auth/login"
+app.ContentManager.LoadNotifications = nil // no session-backed notifications
+app.ContentManager.RegisterLayouts(contentservice.PageType, layoutFiles, "layouts/page.html")
+```
+
+Rendering helpers use `ContentManagerService.ApplyDefaults(owner, configure)` to select one shared policy. Selecting a second policy, including selecting the same one twice, returns an error before changing settings. Ordinary field assignments and template registration remain available for application overrides. The guard prevents competing helper selections, not arbitrary writes by module code. Modules must leave application-wide settings to setup.
 
 Rendering accepts explicit filesystems. A layout and its page content can come from different modules. Supply an `embed.FS`, `os.DirFS` rooted at an absolute directory, or another `fs.FS`:
 

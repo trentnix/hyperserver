@@ -4,8 +4,10 @@
 package content
 
 import (
+	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
@@ -18,6 +20,8 @@ type (
 
 	// ContentManagerService groups templates by response type and supplies response callbacks.
 	ContentManagerService struct {
+		defaultsOwner string
+
 		// Layouts maps response types to outer template files.
 		Layouts map[string][]TemplatePath
 		// Contents maps response types to page and fragment template files.
@@ -61,6 +65,24 @@ type (
 		LoadNotifications func(http.ResponseWriter, *http.Request) ([]messages.Notification, error)
 	}
 )
+
+// ApplyDefaults selects one owner for shared rendering defaults before serving.
+// Applications must call it before applying their explicit field or template overrides.
+// A second selection, even by the same owner, fails without calling configure.
+// configure must only assign rendering settings, not acquire resources or perform I/O.
+// Direct field assignments remain available for application overrides.
+func (c *ContentManagerService) ApplyDefaults(owner string, configure func(*ContentManagerService)) error {
+	if c == nil || strings.TrimSpace(owner) == "" || configure == nil {
+		return fmt.Errorf("rendering defaults require a content manager, owner, and configuration function")
+	}
+	if c.defaultsOwner != "" {
+		return fmt.Errorf("rendering defaults already owned by %q, cannot select %q", c.defaultsOwner, owner)
+	}
+
+	c.defaultsOwner = owner
+	configure(c)
+	return nil
+}
 
 const (
 	// PageType should be used when an entire page is rendered

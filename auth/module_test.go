@@ -1,8 +1,10 @@
 package auth_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,9 +16,50 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+func TestAuthenticationProviderDiagnostics(t *testing.T) {
+	for _, mode := range []string{"enabled", "disabled", "failure"} {
+		t.Run(mode, func(t *testing.T) {
+			cfg := moduleConfig()
+			cfg.Auth.Enabled = mode != "disabled"
+			cfg.Auth.Services["custom"]["password"] = "private-provider-secret"
+			cfg.Auth.JwtKey = "private-signing-secret"
+			app, err := server.NewApplicationServer(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var accounts user.AccountRepository = &struct{ user.AccountRepository }{}
+			if mode == "failure" {
+				accounts = nil
+			}
+			sessions := moduleSessions(t, map[string]string{"default": "custom"})
+			module := auth.Module(accounts, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+			var output bytes.Buffer
+			var log logger.Logger = logger.NewSlogLogger(slog.NewTextHandler(&output, nil))
+			err = module.Init(logger.Set(t.Context(), &log), app)
+			if mode == "failure" {
+				if err == nil || output.Len() != 0 {
+					t.Fatalf("failed setup emitted success: error=%v log=%s", err, output.String())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "providers=[custom]"
+			if mode == "disabled" {
+				want = "providers=[]"
+			}
+			if !strings.Contains(output.String(), want) || strings.Contains(output.String(), "private-") {
+				t.Fatalf("incorrect provider diagnostics: %s", output.String())
+			}
+		})
+	}
+}
 
 type moduleProvider struct {
 	auth.AuthService

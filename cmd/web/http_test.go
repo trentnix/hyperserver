@@ -242,6 +242,9 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) (
 		t.Fatal(err)
 	}
 	logs := &capturedLogs{}
+	if err := configureRendering(app.ApplicationServer); err != nil {
+		t.Fatal(err)
+	}
 	l := &testLogger{logs: logs}
 	if catalogFactory == nil {
 		catalogFactory = func(app *application) ([]handlers.Descriptor, error) {

@@ -34,7 +34,7 @@ func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
 // Callers must remove secrets from err before passing it and must not also log it.
 // Pass nil for errors already logged in sanitized form. No session is required.
 // Status codes outside 400–599 become 500. Call before writing a response.
-func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
+func (m *pageRenderer) HandleError(w http.ResponseWriter, r *http.Request, message string, err error, httpStatus int) {
 	if httpStatus < 400 || httpStatus > 599 {
 		httpStatus = http.StatusInternalServerError
 	}
@@ -47,7 +47,7 @@ func (m *SiteModule) HandleError(w http.ResponseWriter, r *http.Request, message
 	m.renderError(w, r, []messages.Notification{messages.NewNotification(message, messages.NotificationTypeError)}, httpStatus)
 }
 
-func (m *SiteModule) renderError(w http.ResponseWriter, r *http.Request, notifications []messages.Notification, status int) {
+func (m *pageRenderer) renderError(w http.ResponseWriter, r *http.Request, notifications []messages.Notification, status int) {
 	// Error responses must still render when notification storage is unavailable.
 	cm := *m.contentManager
 	cm.LoadNotifications = nil

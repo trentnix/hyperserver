@@ -120,10 +120,15 @@ func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
 				selections = map[string]string{"storage": "two"}
 			}
 			app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
-			err := SetupHandlers(context.Background(), app, nil, catalog, selections)
+			logs := &capturedLogs{}
+			app.Config.Database.Connection = "private-connection-secret"
+			err := SetupHandlers(context.Background(), app, &testLogger{logs: logs}, catalog, selections)
 			if mode != "selected" {
 				if err == nil || len(steps) != 0 {
 					t.Fatalf("invalid graph: error=%v steps=%v", err, steps)
+				}
+				if strings.Contains(logs.String(), "Modules initialized") {
+					t.Fatal("failed initialization logged a success summary")
 				}
 				return
 			}
@@ -134,6 +139,14 @@ func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
 			if strings.Join(steps, ",") != want {
 				t.Fatalf("initialization order=%v", steps)
 			}
+			for _, want := range []string{"Modules initialized", "modules [two consumer one]", "capabilityProviders [storage=two pages=consumer storage=one]", "providerSelections map[storage:two]"} {
+				if !strings.Contains(logs.String(), want) {
+					t.Fatalf("startup summary missing %q: %s", want, logs.String())
+				}
+			}
+			if strings.Contains(logs.String(), "private-connection-secret") {
+				t.Fatal("startup summary logged configuration secrets")
+			}
 		})
 	}
 }
@@ -141,6 +154,61 @@ func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
 type registrationModule struct {
 	bind        func(*routing.Routes)
 	initialized bool
+}
+
+type multipleProviderModule struct {
+	orderedModule
+	selected *[]string
+}
+
+func (m *multipleProviderModule) Capabilities() map[string]any {
+	if m.name == "two" {
+		return map[string]any{"storage": m, "secondary": m}
+	}
+	return map[string]any{"storage": m}
+}
+
+func (m *multipleProviderModule) BindDependencies(d handlers.Dependencies) error {
+	if m.name != "consumer" {
+		return nil
+	}
+	providers, err := handlers.GetDependencies[*multipleProviderModule](d, "storage")
+	if err != nil {
+		return err
+	}
+	for _, provider := range providers {
+		*m.selected = append(*m.selected, provider.name)
+	}
+	return nil
+}
+
+func TestStartupSummaryPreservesMultipleProviderOrder(t *testing.T) {
+	var steps, selected []string
+	factory := func(name string) func() handlers.Handler {
+		return func() handlers.Handler {
+			return &multipleProviderModule{orderedModule: orderedModule{name: name, steps: &steps}, selected: &selected}
+		}
+	}
+	catalog := []handlers.Descriptor{
+		{Name: "consumer", New: factory("consumer"), Requires: []handlers.Requirement{{Capability: "storage", Multiple: true}}},
+		{Name: "one", New: factory("one"), Provides: []string{"storage"}, Requires: []handlers.Requirement{{Capability: "secondary"}}},
+		{Name: "two", New: factory("two"), Provides: []string{"storage", "secondary"}},
+	}
+	app, err := server.NewApplicationServer(config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Shutdown()
+	logs := &capturedLogs{}
+	if err := SetupHandlers(t.Context(), app, &testLogger{logs: logs}, catalog, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(selected, ",") != "one,two" {
+		t.Fatalf("binding order changed from catalog order: %v", selected)
+	}
+	if !strings.Contains(logs.String(), "modules [two one consumer]") {
+		t.Fatalf("summary omitted initialization order: %s", logs.String())
+	}
 }
 
 func (m *registrationModule) Init(context.Context, *server.ApplicationServer) error {

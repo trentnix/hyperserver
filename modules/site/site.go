@@ -6,16 +6,13 @@ package module_site
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
-	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 type (
@@ -27,18 +24,23 @@ type (
 
 	// SiteModule contains all of the data required to implement the site module
 	SiteModule struct {
+		pageRenderer
 		AppName string
 		// NewContacts prepares this module's contact storage. Applications must
 		// supply the factory before initialization.
 		NewContacts func(context.Context) (ContactRepository, error)
 
 		contacts            ContactRepository
-		contentManager      *content_services.ContentManagerService
 		mailClient          *messaging.MailClient
 		registrationEnabled bool
 		rateLimit           *config.ModuleRateLimitConfig
 	}
 )
+
+// pageRenderer implements shared responses without requiring a live site module.
+type pageRenderer struct {
+	contentManager *content_services.ContentManagerService
+}
 
 const (
 	module                           = "module_site"
@@ -84,8 +86,8 @@ func Module(newContacts func(context.Context) (ContactRepository, error), mail *
 	}}
 }
 
-// Init validates required services, prepares contact storage, and configures the
-// site's rendering. It does not initialize or close borrowed application services.
+// Init validates required services and prepares contact storage. It does not change
+// shared rendering settings or initialize or close borrowed application services.
 func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) error {
 	if s.Config == nil {
 		return fmt.Errorf("site requires application configuration")
@@ -110,30 +112,7 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 
 	m.contacts = contacts
 	m.contentManager = s.ContentManager
-	if s.Config.App.RenderNotifications && m.contentManager.LoadNotifications == nil {
-		m.contentManager.LoadNotifications = flash.GetNotifications
-	}
 	m.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
-	m.contentManager.AddPageLayout(siteModuleTemplatesFS, pageLayoutTemplate)
-	m.contentManager.AddHtmxLayout(siteModuleTemplatesFS, partialLayoutTemplate)
-	m.contentManager.AddPageComponent(siteModuleTemplatesFS, navComponentTemplate)
-	m.contentManager.AddPageComponent(siteModuleTemplatesFS, notificationsComponentTemplate)
-	m.contentManager.AddPageComponent(siteModuleTemplatesFS, consoleMessagesComponentTemplate)
-	authEnabled := s.Config.Auth.Enabled
-	m.contentManager.BuildLayoutData = func(r *http.Request) any {
-		return struct {
-			AuthEnabled   bool
-			Authenticated bool
-		}{authEnabled, user.GetUserFromContext(r.Context()) != nil}
-	}
-
-	m.contentManager.HomeURL = homeURL
-	m.contentManager.AuthURL = authURL
-	m.contentManager.ErrorURL = errorURL
-	m.contentManager.NotFoundURL = notFoundURL
-	m.contentManager.HandleMessage = m.HandleMessage
-	m.contentManager.HandleError = m.HandleError
-	m.contentManager.HandleNotFound = m.NotFound
 
 	return nil
 }

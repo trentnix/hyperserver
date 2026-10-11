@@ -75,6 +75,10 @@ func prepareHTTP(ctx context.Context, s *application, accounts *reference.Accoun
 	if err := s.initializeDatabase(ctx); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare application database: %w", err)
 	}
+	mailProvider := "application-supplied"
+	if s.Mail == nil {
+		mailProvider = "smtp"
+	}
 	if err := initializeMail(s); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare mail: %w", err)
 	}
@@ -90,6 +94,9 @@ func prepareHTTP(ctx context.Context, s *application, accounts *reference.Accoun
 		return nil, nil, fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l := logger.NewSlogLogger(nil)
+	if err := configureRendering(s.ApplicationServer); err != nil {
+		return nil, nil, err
+	}
 	catalog, err := siteModules(s, s.Config.FilePath(contactDirectory))
 	if err != nil {
 		return nil, nil, err
@@ -99,6 +106,7 @@ func prepareHTTP(ctx context.Context, s *application, accounts *reference.Accoun
 	if err := SetupHandlers(ctx, s.ApplicationServer, l, catalog, nil); err != nil {
 		return nil, nil, fmt.Errorf("failed to set up the registered handlers: %w", err)
 	}
+	logServiceProviders(l, s, mailProvider)
 
 	handler, err := applicationHandler(s, l)
 	if err != nil {

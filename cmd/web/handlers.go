@@ -20,7 +20,33 @@ func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.
 	if err != nil {
 		return err
 	}
-	return handlers.Setup(ctx, s, routes, catalog, providers)
+	// Resolve for diagnostics, but initialize the original catalog so multiple
+	// providers retain their declared binding order, not initialization order.
+	resolved, err := handlers.Resolve(catalog, providers)
+	if err != nil {
+		return err
+	}
+	if log != nil {
+		ctx = logger.Set(ctx, &log)
+	}
+	if err := handlers.Setup(ctx, s, routes, catalog, providers); err != nil {
+		return err
+	}
+
+	if log != nil {
+		var modules, capabilities []string
+		for _, module := range resolved {
+			modules = append(modules, module.Name)
+			for _, capability := range module.Provides {
+				capabilities = append(capabilities, capability+"="+module.Name)
+			}
+		}
+		log.Info("Modules initialized",
+			logger.Field{Key: "modules", Value: modules},
+			logger.Field{Key: "capabilityProviders", Value: capabilities},
+			logger.Field{Key: "providerSelections", Value: providers})
+	}
+	return nil
 }
 
 // applicationRoutes selects defaults without allocating shared request counters.

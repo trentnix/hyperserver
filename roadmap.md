@@ -99,7 +99,7 @@ The included site module exercises framework features in the local development a
 
 ### Application setup
 
-Keep application decisions in one setup path, in one file or a small group of related files. The following describes the target boundary. Application setup owns optional services. The site module still installs shared rendering policy during initialization.
+Keep application decisions in one setup path, in one file or a small group of related files. Application setup owns optional services and explicitly selects shared rendering defaults. Modules do not install application-wide rendering policy during initialization.
 
 The web and cleanup commands already load configuration once and pass it to consumers. Keep configuration file and environment access there, with provider validation operating on supplied settings. [Configuration and provider defaults](readme.md#configuration) describe current selection and replacement behavior.
 
@@ -122,21 +122,23 @@ Imports make modules discoverable. Setup must select modules or deliberately sel
 
 #### Reference application
 
-Keep the setup entry in [cmd/web/main.go](cmd/web/main.go), with module selection in [site_modules.go](cmd/web/site_modules.go) and route defaults in [handlers.go](cmd/web/handlers.go):
+Keep the setup entry in [cmd/web/main.go](cmd/web/main.go), with module selection in [site_modules.go](cmd/web/site_modules.go), rendering choices in [rendering.go](cmd/web/rendering.go), and route defaults in [handlers.go](cmd/web/handlers.go):
 
 1. Load settings and command-line options once. Resolve resource paths and validate selections before opening services.
 2. Prepare the services required by the site and configured authentication features. The default setup uses SQLite accounts and sessions, SQLite or file-based contacts, and the configured mail sender. Supply these services to their consumers outside the core container.
-3. Explicitly select the site's shared rendering defaults, including layouts, navigation data, notification loading, error handlers, and redirect URLs. Apply application overrides before serving. Modules still own their page templates and routes. Competing owners of a single setting must produce an error, not depend on module order.
+3. Select the site's shared rendering defaults and optional notification loader, then apply application overrides before module initialization. `ApplyDefaults` rejects a second shared policy before changing settings. Modules still own their page templates and routes.
 4. Initialize the selected modules with `handlers.Setup`. Assemble the HTTP stack in `applicationHandler`: request logging, security headers, proxy verification, HSTS, optional shared rate limits, origin checks, session or identity loading, and route dispatch. Supply the listener and HTTP server to `app.Run`.
 
 An optional-service helper can assemble a cohesive default setup. Its call and overrides must be visible here. Replacing account storage must change provider selection and wiring, not the renderer, core lifecycle, or unrelated modules.
+
+Successful module setup logs module names and capability providers in resolved order, plus explicit provider selections. Authentication reports initialized providers. Application setup reports the account-repository type, session providers, and mail source without configuration values or connection details.
 
 #### Stateless application
 
 Keep settings and HTTP setup in [examples/stateless/main.go](examples/stateless/main.go) and module assembly in [app.go](examples/stateless/app.go):
 
 1. Read the application name, loopback port, and shutdown timeout from flags. No configuration file or optional service setup is required.
-2. Create the core runtime and select only `pages.Module()`. The greeting module owns its templates. No notification loader, account service, session manager, storage provider, or mail client is supplied.
+2. Create the core runtime, select `pages.ConfigureRendering` for shared layouts, and load only `pages.Module()`. The greeting module owns its templates. No notification loader, account service, session manager, storage provider, or mail client is supplied.
 3. Use `handlers.Setup` for modules and routes. Wrap the router with security headers, configure HTTP timeouts, and use `app.Run` for serving and cleanup.
 
 #### Resource ownership and scope

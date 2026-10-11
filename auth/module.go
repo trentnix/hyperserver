@@ -8,6 +8,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -59,6 +60,13 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 				return fmt.Errorf("auth.registerRequiresVerification for auth service %q: %w", provider.AuthType(), err)
 			}
 		}
+	}
+	if log := logger.Get(ctx); log != nil && *log != nil {
+		var providers []string
+		for _, provider := range registry.Services() {
+			providers = append(providers, provider.AuthType())
+		}
+		(*log).Info("Authentication providers initialized", logger.Field{Key: "providers", Value: providers})
 	}
 	return nil
 }
