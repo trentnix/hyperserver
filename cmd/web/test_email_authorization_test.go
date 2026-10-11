@@ -27,7 +27,7 @@ func TestHTTPTestEmailAuthorization(t *testing.T) {
 				if tc.authenticated {
 					u := h.seedUser(t, "person@example.invalid")
 					u.Verified, u.VerificationRequired = tc.verified, tc.verificationRequired
-					if err := u.Update(context.Background(), h.app.Database); err != nil {
+					if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 						t.Fatal(err)
 					}
 					h.establishSession(t, u)

@@ -14,7 +14,6 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/routing"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestHTTPDefaultBodyLimits(t *testing.T) {
@@ -197,7 +196,7 @@ func TestHTTPFormLimits(t *testing.T) {
 		h.assertRowCount(t, "user", 1)
 		h.assertRowCount(t, "usertoken", 0)
 		h.assertRowCount(t, "hyperserver_contact_submission", 0)
-		stored, err := user.GetUserByID(h.app.Database, u.ID)
+		stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil || stored.Password != u.Password || stored.SessionVersion != u.SessionVersion {
 			t.Fatal("rejected form changed account credentials")
 		}

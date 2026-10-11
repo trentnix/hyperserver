@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestHTTPVerificationRecoveryNavigation(t *testing.T) {
@@ -113,7 +112,7 @@ func TestHTTPVerificationRequiresConfirmation(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
-		before, err := user.GetUserByEmail(h.app.Database, registrationForm().Get("email"))
+		before, err := h.app.AccountRepository.GetByEmail(t.Context(), registrationForm().Get("email"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,7 +132,7 @@ func TestHTTPVerificationRequiresConfirmation(t *testing.T) {
 						}
 					}
 				}
-				stored, err := user.GetUserByID(h.app.Database, before.ID)
+				stored, err := h.app.AccountRepository.GetByID(t.Context(), before.ID)
 				if err != nil || *stored != *before {
 					t.Fatalf("%s changed the account: %v", method, err)
 				}
@@ -172,7 +171,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
 				if failure == "insert" {
 					// Prepare the schema without registering an account or sending mail.
-					_, _ = user.GetUserByEmail(h.app.Database, "person@example.invalid")
+					_, _ = h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid")
 					if _, err := h.app.Database.Exec(`CREATE TRIGGER fail_verification BEFORE INSERT ON usertoken BEGIN SELECT RAISE(ABORT, 'failed insertion'); END`); err != nil {
 						t.Fatal(err)
 					}
@@ -196,7 +195,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 					if _, err := h.app.Database.Exec(statement); err != nil {
 						t.Fatal(err)
 					}
-					before, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
+					before, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid")
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -206,7 +205,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 						if !strings.Contains(w.Body.String(), "Verification failed") || w.Header().Get("HX-Redirect") != "" {
 							t.Fatal("storage failure returned verification success")
 						}
-						stored, err := user.GetUserByID(h.app.Database, before.ID)
+						stored, err := h.app.AccountRepository.GetByID(t.Context(), before.ID)
 						if err != nil || *stored != *before {
 							t.Fatalf("failed verification changed account: %v", err)
 						}
@@ -235,12 +234,12 @@ func TestHTTPVerificationRejectsPreviousEmailAddress(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
 		oldLink := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
-		u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
+		u, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid")
 		if err != nil {
 			t.Fatal(err)
 		}
 		u.Email = "new@example.invalid"
-		if err := u.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
 		for _, htmx := range []bool{false, true} {
@@ -249,7 +248,7 @@ func TestHTTPVerificationRejectsPreviousEmailAddress(t *testing.T) {
 				t.Fatal("old address link verified the new address")
 			}
 		}
-		stored, err := user.GetUserByID(h.app.Database, u.ID)
+		stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil || stored.Verified {
 			t.Fatalf("old link verified account: %v", err)
 		}

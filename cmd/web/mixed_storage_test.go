@@ -12,7 +12,6 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestHTTPMixedStorage(t *testing.T) {
@@ -26,7 +25,7 @@ func TestHTTPMixedStorage(t *testing.T) {
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatalf("SQL-backed registration failed: %d %s", w.Code, w.Body.String())
 		}
-		account, err := user.GetUserByEmail(h.app.Database, registrationForm().Get("email"))
+		account, err := h.app.AccountRepository.GetByEmail(t.Context(), registrationForm().Get("email"))
 		if err != nil {
 			t.Fatal(err)
 		}

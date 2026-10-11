@@ -14,7 +14,7 @@ func TestPrepareDatabaseIndependentDatabases(t *testing.T) {
 	first, second := userTestDB(t), userTestDB(t)
 	for _, db := range []*sqlx.DB{first, second} {
 		u := &User{Email: "person@example.invalid"}
-		if err := u.Create(context.Background(), db); err != nil {
+		if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
 		token := &AuthToken{UserId: u.ID, TokenHash: "stored-hash", ExpiresAt: time.Now().Add(time.Hour), Type: resetTokenType}
@@ -25,7 +25,7 @@ func TestPrepareDatabaseIndependentDatabases(t *testing.T) {
 		if err := PrepareDatabase(context.Background(), db); err != nil {
 			t.Fatal("repeated setup:", err)
 		}
-		stored, err := GetUserByID(db, u.ID)
+		stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 		if err != nil || stored.Email != u.Email {
 			t.Fatalf("account after repeated setup = %v, %v", stored, err)
 		}
@@ -89,20 +89,19 @@ func TestAccountOperationsDoNotPrepareDatabase(t *testing.T) {
 		run  func(*sqlx.DB) error
 	}{
 		{"lookup by ID", func(db *sqlx.DB) error {
-			_, err := GetUserByID(db, "missing")
+			_, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), "missing")
 			return err
 		}},
 		{"lookup by email", func(db *sqlx.DB) error {
-			_, err := GetUserByEmail(db, "person@example.invalid")
+			_, err := NewSQLiteAccountRepository(db).GetByEmail(t.Context(), "person@example.invalid")
 			return err
 		}},
 		{"create", func(db *sqlx.DB) error {
-			return (&User{Email: "person@example.invalid"}).Create(context.Background(), db)
+			return NewSQLiteAccountRepository(db).Create(context.Background(), &User{Email: "person@example.invalid"})
 		}},
 		{"update", func(db *sqlx.DB) error {
-			return (&User{ID: "missing", Email: "person@example.invalid"}).Update(context.Background(), db)
+			return NewSQLiteAccountRepository(db).Update(context.Background(), &User{ID: "missing", Email: "person@example.invalid"})
 		}},
-		{"delete", func(db *sqlx.DB) error { return (&User{ID: "missing"}).Delete(db) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := unpreparedUserTestDB(t)

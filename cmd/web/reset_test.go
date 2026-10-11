@@ -49,7 +49,7 @@ func TestHTTPResetPasswordPolicy(t *testing.T) {
 						t.Fatalf("accepted password did not consume token: %v", err)
 					}
 					assertRedirectResponse(t, w, "/login", htmx)
-					stored, err := user.GetUserByID(h.app.Database, u.ID)
+					stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 					wantPassword := "TestPassword1!"
 					if requireNew {
 						wantPassword = "NewPassword1!"
@@ -139,7 +139,7 @@ func TestHTTPResetConsumesExactTokenAndRejectsReplay(t *testing.T) {
 			}
 			h.assertNoTokenExposure(t, w, presented.Token)
 		}
-		stored, err := user.GetUserByID(h.app.Database, u.ID)
+		stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil || !password.CheckPasswordHash("NewPassword1!", stored.Password) {
 			t.Fatalf("replay changed the password: %v", err)
 		}

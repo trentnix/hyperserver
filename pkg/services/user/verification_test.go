@@ -16,7 +16,7 @@ func verificationFixture(t *testing.T) (*sqlx.DB, *User, *AuthVerificationToken,
 	t.Helper()
 	db := userTestDB(t)
 	u := &User{Email: "person@example.invalid", Password: "original hash", VerificationRequired: true, RegistrationAuthType: "email"}
-	if err := u.Create(context.Background(), db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
 	key := []byte("test-verification-key")
@@ -53,7 +53,7 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if err := second.Create(db); err != nil {
 		t.Fatal(err)
 	}
-	before, err := GetUserByID(db, u.ID)
+	before, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if err != nil || verified == nil || !verified.Verified {
 		t.Fatalf("verification failed: %v", err)
 	}
-	stored, err := GetUserByID(db, u.ID)
+	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			before, err := GetUserByID(db, u.ID)
+			before, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if failure != "missing account" && err != nil {
 				t.Fatal(err)
 			}
@@ -155,7 +155,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				t.Fatal("verification succeeded despite failure")
 			}
 			if failure != "missing account" {
-				stored, err := GetUserByID(db, u.ID)
+				stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 				if err != nil || *stored != *before {
 					t.Fatalf("failed verification changed the account: %v", err)
 				}
@@ -224,7 +224,7 @@ func TestVerifyConcurrentRedemption(t *testing.T) {
 			t.Fatal(ctx.Err())
 		}
 	}
-	stored, err := GetUserByID(db, u.ID)
+	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if successes != 1 || err != nil || !stored.Verified || stored.SessionVersion != u.SessionVersion+1 {
 		t.Fatalf("concurrent verification: successes=%d, lookup error=%v", successes, err)
 	}
@@ -257,7 +257,7 @@ func TestSQLiteAccountRepositoryVerifyRejectsInvalidInput(t *testing.T) {
 			if got, err := repository.Verify(context.Background(), authorization); got != nil || err == nil {
 				t.Fatalf("invalid verification succeeded: %v, %v", got, err)
 			}
-			stored, err := GetUserByID(db, u.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || *stored != *before {
 				t.Fatalf("invalid verification changed storage: %v", err)
 			}
@@ -274,7 +274,7 @@ func TestVerifyCancellationAndExpiryDuringContention(t *testing.T) {
 			db, u, token, _ := verificationFixture(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			before, err := GetUserByID(db, u.ID)
+			before, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -346,7 +346,7 @@ func TestVerifyCancellationAndExpiryDuringContention(t *testing.T) {
 					t.Fatalf("verification error=%v, want ErrTokenExpired", outcome.err)
 				}
 			}
-			stored, err := GetUserByID(db, u.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || *stored != *before {
 				t.Fatalf("failed verification changed the account: %v", err)
 			}
@@ -449,7 +449,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := &User{Email: "other@example.invalid"}
-	if err := other.Create(context.Background(), db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(context.Background(), other); err != nil {
 		t.Fatal(err)
 	}
 	otherToken, err := NewAuthVerificationToken(other, key, time.Hour)
@@ -490,7 +490,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), otherToken.Token, key); err != nil {
 		t.Fatalf("email change revoked another account's token: %v", err)
 	}
-	stored, err := GetUserByID(db, u.ID)
+	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil || stored.Verified {
 		t.Fatalf("revoked link verified the account: %v", err)
 	}
@@ -510,7 +510,7 @@ func TestEmailChangeRevocationRollsBack(t *testing.T) {
 	for _, failure := range []string{"delete", "update", "commit", "email conflict"} {
 		t.Run(failure, func(t *testing.T) {
 			db, u, token, key := verificationFixture(t)
-			before, err := GetUserByID(db, u.ID)
+			before, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -528,7 +528,7 @@ func TestEmailChangeRevocationRollsBack(t *testing.T) {
 				}
 			case "email conflict":
 				other := &User{Email: "changed@example.invalid"}
-				if err := other.Create(context.Background(), db); err != nil {
+				if err := NewSQLiteAccountRepository(db).Create(context.Background(), other); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -546,7 +546,7 @@ func TestEmailChangeRevocationRollsBack(t *testing.T) {
 			if *u != attempt {
 				t.Fatal("failed email change mutated the receiver")
 			}
-			stored, err := GetUserByID(db, u.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || *stored != *before {
 				t.Fatalf("failed email change mutated the account: %v", err)
 			}

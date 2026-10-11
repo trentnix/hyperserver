@@ -37,7 +37,7 @@ func TestHTTPResetResponseFloor(t *testing.T) {
 							email = "unknown@example.invalid"
 						} else if account == "other provider" {
 							u.RegistrationAuthType = "other"
-							if err := u.Update(context.Background(), h.app.Database); err != nil {
+							if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 								t.Fatal(err)
 							}
 						}

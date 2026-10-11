@@ -64,7 +64,7 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 		t.Fatal(err)
 	}
 	u := &user.User{Email: "lookup@example.invalid", Password: "unchanged", VerificationRequired: true, RegistrationAuthType: "lookup-test"}
-	if err := u.Create(context.Background(), db); err != nil {
+	if err := user.NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{}
@@ -141,7 +141,7 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			stored, err := user.GetUserByID(db, account.ID)
+			stored, err := user.NewSQLiteAccountRepository(db).GetByID(t.Context(), account.ID)
 			if err != nil || stored.Verified || !stored.UpdatedAt.Equal(account.UpdatedAt) {
 				t.Fatalf("failed lookup changed the account: %+v, %v", stored, err)
 			}
@@ -155,7 +155,7 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 				t.Fatalf("verification retry failed: %d %s", w.Code, w.Body.String())
 			}
-			stored, err = user.GetUserByID(db, account.ID)
+			stored, err = user.NewSQLiteAccountRepository(db).GetByID(t.Context(), account.ID)
 			if err != nil || !stored.Verified {
 				t.Fatalf("retry did not verify the account: %+v, %v", stored, err)
 			}
@@ -364,7 +364,7 @@ func TestResetStopsOnTokenLookupFailure(t *testing.T) {
 				if _, err := user.ValidateResetToken(context.Background(), manager.accounts, token.Token, []byte(manager.verificationJwtKey)); err != nil {
 					t.Fatalf("failed lookup invalidated the token: %v", err)
 				}
-				stored, err := user.GetUserByID(db, account.ID)
+				stored, err := user.NewSQLiteAccountRepository(db).GetByID(t.Context(), account.ID)
 				if err != nil || stored.Password != account.Password || !stored.UpdatedAt.Equal(account.UpdatedAt) {
 					t.Fatalf("failed lookup changed the account: %+v, %v", stored, err)
 				}

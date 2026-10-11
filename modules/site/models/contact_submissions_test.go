@@ -53,7 +53,7 @@ func TestContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 				t.Fatal(err)
 			}
 			account := &user.User{Email: submission.Email}
-			if err := account.Create(ctx, db); err != nil {
+			if err := user.NewSQLiteAccountRepository(db).Create(ctx, account); err != nil {
 				t.Fatal(err)
 			}
 
@@ -72,7 +72,7 @@ func TestContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 			if stored.Id != submission.Id || stored.Message != submission.Message || !stored.CreatedAt.Equal(submission.CreatedAt) {
 				t.Fatalf("stored submission changed: %+v", stored)
 			}
-			if _, err := user.GetUserByID(db, account.ID); err != nil {
+			if _, err := user.NewSQLiteAccountRepository(db).GetByID(t.Context(), account.ID); err != nil {
 				t.Fatal("site initialization affected account storage:", err)
 			}
 		})
@@ -151,10 +151,10 @@ func TestContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	account := &user.User{Email: "person@example.invalid", Password: "stored hash", Verified: true}
-	if err := account.Create(ctx, db); err != nil {
+	if err := user.NewSQLiteAccountRepository(db).Create(ctx, account); err != nil {
 		t.Fatal(err)
 	}
-	before, err := user.GetUserByID(db, account.ID)
+	before, err := user.NewSQLiteAccountRepository(db).GetByID(t.Context(), account.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T) {
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatal("schema failure closed the shared pool:", err)
 	}
-	stored, err := user.GetUserByID(db, account.ID)
+	stored, err := user.NewSQLiteAccountRepository(db).GetByID(t.Context(), account.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T) {
 	if err := db.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'hyperserver_contact_submission'`); err != nil || count != 0 {
 		t.Fatalf("failed setup created a contact table: count = %d, error = %v", count, err)
 	}
-	if err := (&user.User{Email: "another@example.invalid"}).Create(ctx, db); err != nil {
+	if err := user.NewSQLiteAccountRepository(db).Create(ctx, &user.User{Email: "another@example.invalid"}); err != nil {
 		t.Fatal("account writes failed after site setup failure:", err)
 	}
 

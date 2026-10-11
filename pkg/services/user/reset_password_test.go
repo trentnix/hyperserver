@@ -14,7 +14,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	db := userTestDB(t)
 	ctx := context.Background()
 	u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-	if err := u.Create(ctx, db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
 	key := []byte("test-signing-key")
@@ -29,7 +29,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 		}
 		tokens = append(tokens, token)
 	}
-	original, err := GetUserByID(db, u.ID)
+	original, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), tokens[1].Token, key, "replayed hash"); !errors.As(err, &missing) {
 		t.Fatalf("replay error = %v, want ErrTokenNotFound", err)
 	}
-	stored, err := GetUserByID(db, u.ID)
+	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 			db := userTestDB(t)
 			ctx := context.Background()
 			u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-			if err := u.Create(ctx, db); err != nil {
+			if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
 				t.Fatal(err)
 			}
 			key := []byte("test-signing-key")
@@ -136,7 +136,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 				cancel()
 			}
 			before := *u
-			storedBefore, lookupErr := GetUserByID(db, token.UserId)
+			storedBefore, lookupErr := NewSQLiteAccountRepository(db).GetByID(t.Context(), token.UserId)
 			if failure != "missing account" && lookupErr != nil {
 				t.Fatal(lookupErr)
 			}
@@ -151,7 +151,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 				t.Error("failed reset changed the caller's account")
 			}
 			if failure != "missing account" {
-				stored, err := GetUserByID(db, token.UserId)
+				stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), token.UserId)
 				if err != nil || *stored != *storedBefore {
 					t.Fatalf("failed reset changed stored account: %v", err)
 				}
@@ -178,7 +178,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-	if err := u.Create(ctx, db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
 	key := []byte("test-signing-key")
@@ -242,7 +242,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 			}
 		}
 	}
-	stored, err := GetUserByID(db, u.ID)
+	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if successes != 1 || err != nil || stored.Password != winningHash || stored.SessionVersion != u.SessionVersion+1 {
 		t.Fatalf("concurrent reset: successes=%d, lookup error=%v", successes, err)
 	}
@@ -293,7 +293,7 @@ func TestSQLiteAccountRepositoryResetRejectsInvalidInput(t *testing.T) {
 			if err := repository.ResetPassword(context.Background(), candidate, authorization, hash); err == nil || attempt != before {
 				t.Fatalf("invalid reset succeeded or changed its account: %v", err)
 			}
-			stored, err := GetUserByID(db, u.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || *stored != *u {
 				t.Fatalf("invalid reset changed storage: %v", err)
 			}
@@ -387,7 +387,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-			if err := u.Create(ctx, db); err != nil {
+			if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
 				t.Fatal(err)
 			}
 			key := []byte("test-signing-key")
@@ -463,7 +463,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 			if *u != before {
 				t.Error("failed reset changed the caller's account")
 			}
-			stored, err := GetUserByID(db, u.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || stored.Password != before.Password {
 				t.Fatalf("failed reset changed the password: %v", err)
 			}
@@ -478,7 +478,7 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 	db := userTestDB(t)
 	ctx := context.Background()
 	u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-	if err := u.Create(ctx, db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
 	key := []byte("test-signing-key")
@@ -491,13 +491,13 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 	}
 	verified := *u
 	verified.Verified = true
-	if err := verified.Update(ctx, db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Update(ctx, &verified); err != nil {
 		t.Fatal(err)
 	}
 	if err := u.ResetPassword(ctx, NewSQLiteAccountRepository(db), token.Token, key, "new hash"); err != nil {
 		t.Fatal(err)
 	}
-	stored, err := GetUserByID(db, u.ID)
+	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil || !stored.Verified || stored.Password != "new hash" {
 		t.Fatalf("reset lost the independent verification change: %v", err)
 	}
@@ -505,10 +505,10 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 		t.Fatal("reset paired stale account fields with a current session version")
 	}
 	u.Email = "profile-edit@example.invalid"
-	if err := u.Update(ctx, db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Update(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	stored, err = GetUserByID(db, u.ID)
+	stored, err = NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil || !stored.Verified || stored.Password != "new hash" {
 		t.Fatalf("profile update after reset lost the verification change: %v", err)
 	}

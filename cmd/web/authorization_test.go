@@ -69,14 +69,14 @@ func TestHTTPAuthorization(t *testing.T) {
 		check(http.StatusNoContent)
 
 		owner.Verified, owner.VerificationRequired = false, true
-		if err := owner.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), owner); err != nil {
 			t.Fatal(err)
 		}
 		// Account-security changes revoke existing sessions.
 		h.establishSession(t, owner)
 		check(http.StatusForbidden) // This policy also requires account verification.
 		owner.Verified = true
-		if err := owner.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), owner); err != nil {
 			t.Fatal(err)
 		}
 		h.establishSession(t, owner)

@@ -161,6 +161,50 @@ func TestSQLiteAccountRepositoryCreateFailure(t *testing.T) {
 	}
 }
 
+func TestSQLiteAccountRepositoryLookupCancellationWhileWaiting(t *testing.T) {
+	for _, by := range []string{"ID", "email"} {
+		t.Run(by, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				db := userTestDB(t)
+				repository := NewSQLiteAccountRepository(db)
+				lookup := repository.GetByID
+				if by == "email" {
+					lookup = repository.GetByEmail
+				}
+				// Hold the only connection so the lookup must wait for its context.
+				connection, err := db.Conn(t.Context())
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer connection.Close()
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+
+				var account *User
+				result := make(chan error, 1)
+				go func() {
+					var err error
+					account, err = lookup(ctx, "waiting")
+					result <- err
+				}()
+				synctest.Wait()
+				select {
+				case err := <-result:
+					t.Fatalf("lookup did not wait for the connection: %v", err)
+				default:
+				}
+
+				cancel()
+				err = <-result
+				var notFound *ErrUserNotFound
+				if account != nil || !errors.Is(err, context.Canceled) || errors.As(err, &notFound) {
+					t.Fatalf("canceled lookup = %v, %v, want nil account and context.Canceled", account, err)
+				}
+			})
+		})
+	}
+}
+
 func TestSQLiteAccountRepositoryCreateCancellationWhileWaiting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		db := userTestDB(t)

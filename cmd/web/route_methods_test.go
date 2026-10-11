@@ -69,10 +69,10 @@ func TestHTTPReadRequestsDoNotSendMail(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
 				u := h.seedUser(t, "read-only@example.invalid")
 				u.Verified, u.VerificationRequired = false, true
-				if err := u.Update(context.Background(), h.app.Database); err != nil {
+				if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 					t.Fatal(err)
 				}
-				u, err := user.GetUserByID(h.app.Database, u.ID)
+				u, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -137,7 +137,7 @@ func TestHTTPResetRequiresPasswordSubmission(t *testing.T) {
 			h.assertRowCount(t, "usertoken", 1)
 		}
 		h.request(http.MethodPost, path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, true)
-		stored, err := user.GetUserByID(h.app.Database, u.ID)
+		stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil || !password.CheckPasswordHash("NewPassword1!", stored.Password) {
 			t.Fatalf("password submission did not reset credentials: %v", err)
 		}

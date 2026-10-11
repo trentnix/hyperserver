@@ -61,7 +61,7 @@ func TestOpenSQLiteTokenMaintenance(t *testing.T) {
 func TestTokenCleanupBatches(t *testing.T) {
 	db := userTestDB(t)
 	u := &User{Email: "cleanup@example.invalid"}
-	if err := u.Create(context.Background(), db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
 	for i := range 5 {
@@ -162,7 +162,7 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 			db := userTestDB(t)
 			db.SetMaxOpenConns(4)
 			u := &User{Email: "redeem@example.invalid", Password: "original", RegistrationAuthType: "email"}
-			if err := u.Create(context.Background(), db); err != nil {
+			if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
 			key := []byte("cleanup-test-key")
@@ -201,7 +201,7 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 			if err := db.Get(&remaining, `SELECT count(*) FROM usertoken`); err != nil || remaining != 0 {
 				t.Fatalf("tokens remained: %d, %v", remaining, err)
 			}
-			stored, err := GetUserByID(db, u.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || (purpose == resetTokenType && stored.Password != "new hash") || (purpose == verificationTokenType && !stored.Verified) {
 				t.Fatalf("account operation failed: %+v, %v", stored, err)
 			}

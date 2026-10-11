@@ -339,12 +339,12 @@ func TestHTTPRegistration(t *testing.T) {
 	for _, htmx := range []bool{false, true} {
 		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
-				if _, err := user.GetUserByEmail(h.app.Database, "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+				if _, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
 					t.Fatalf("expected an empty database, got %v", err)
 				}
 				w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), htmx)
 				assertRedirectResponse(t, w, "/login", htmx)
-				u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
+				u, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -371,10 +371,10 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "existing@example.invalid")
 		u.Verified, u.VerificationRequired = false, true
-		if err := u.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
-		u, err := user.GetUserByID(h.app.Database, u.ID)
+		u, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -480,7 +480,7 @@ func TestHTTPRegistrationWithoutVerification(t *testing.T) {
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatal("registration without verification failed")
 		}
-		u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
+		u, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid")
 		if err != nil || u.NeedsVerification() || len(h.mail.snapshot()) != 0 {
 			t.Fatal("optional verification blocked the account or attempted delivery")
 		}
@@ -513,7 +513,7 @@ func TestHTTPRegistrationCanRecoverFromMailFailure(t *testing.T) {
 		link = mailLink(t, h.mail.snapshot()[1], "/auth/verify")
 		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
 		h.request(http.MethodPost, "/auth/verify", link.Query(), false)
-		u, err := user.GetUserByEmail(h.app.Database, "person@example.invalid")
+		u, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid")
 		if err != nil || !u.Verified {
 			t.Fatal("account did not recover after successful resend")
 		}
@@ -539,7 +539,7 @@ func TestHTTPRegistrationMailFailure(t *testing.T) {
 				if len(h.mail.snapshot()) != i+1 {
 					t.Fatalf("mail attempts = %d, want %d", len(h.mail.snapshot()), i+1)
 				}
-				u, err := user.GetUserByEmail(h.app.Database, form.Get("email"))
+				u, err := h.app.AccountRepository.GetByEmail(t.Context(), form.Get("email"))
 				if err != nil {
 					t.Fatalf("account should remain available after delivery failure: %v", err)
 				}
@@ -648,7 +648,7 @@ func TestHTTPConcurrentRegistration(t *testing.T) {
 			if successes != 1 || duplicates != 1 {
 				t.Fatalf("concurrent registrations: successes=%d, duplicates=%d, want one of each", successes, duplicates)
 			}
-			u, err := user.GetUserByEmail(h.app.Database, email)
+			u, err := h.app.AccountRepository.GetByEmail(t.Context(), email)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -682,7 +682,7 @@ func TestHTTPVerificationUpdatesExistingAccount(t *testing.T) {
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatal("could not register the test account")
 		}
-		u, err := user.GetUserByEmail(h.app.Database, registrationForm().Get("email"))
+		u, err := h.app.AccountRepository.GetByEmail(t.Context(), registrationForm().Get("email"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -691,7 +691,7 @@ func TestHTTPVerificationUpdatesExistingAccount(t *testing.T) {
 		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 			t.Fatal("verification did not succeed")
 		}
-		updated, err := user.GetUserByID(h.app.Database, u.ID)
+		updated, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -855,7 +855,7 @@ func TestHTTPResetRequestEmailsInstructions(t *testing.T) {
 		h.request(http.MethodPost, nativeAction, url.Values{
 			"password": {"ReplacementPassword1!"}, "passwordMatch": {"ReplacementPassword1!"},
 		}, false)
-		stored, err := user.GetUserByID(h.app.Database, nativeUserID)
+		stored, err := h.app.AccountRepository.GetByID(t.Context(), nativeUserID)
 		if err != nil || !password.CheckPasswordHash("ReplacementPassword1!", stored.Password) {
 			t.Fatal("ordinary reset form submission did not update the password")
 		}
@@ -866,7 +866,7 @@ func TestHTTPVerificationResendEmailsInstructions(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "verify@example.invalid")
 		u.Verified, u.VerificationRequired = false, true
-		if err := u.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
 		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
@@ -891,7 +891,7 @@ func TestHTTPVerificationResendEmailsInstructions(t *testing.T) {
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 		w = h.request(http.MethodPost, "/auth/verify", link.Query(), true)
 		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
-		verified, err := user.GetUserByID(h.app.Database, u.ID)
+		verified, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil || !verified.Verified {
 			t.Fatal("emailed link did not verify the account")
 		}
@@ -915,10 +915,10 @@ func TestHTTPResetAcknowledgmentDoesNotRevealAccountState(t *testing.T) {
 					u := h.seedUser(t, "existing@example.invalid")
 					u.Verified, u.VerificationRequired = tc.verified, true
 					u.RegistrationAuthType = tc.authType
-					if err := u.Update(context.Background(), h.app.Database); err != nil {
+					if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 						t.Fatal(err)
 					}
-					u, err := user.GetUserByID(h.app.Database, u.ID)
+					u, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -972,7 +972,7 @@ func TestHTTPResetAcknowledgmentDoesNotRevealAccountState(t *testing.T) {
 					}
 					h.assertRowCount(t, "user", 1)
 					h.assertRowCount(t, "usertoken", wantAttempts)
-					stored, err := user.GetUserByID(h.app.Database, u.ID)
+					stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 					if err != nil || *stored != *u {
 						t.Fatal("reset request changed the account")
 					}
@@ -1027,7 +1027,7 @@ func TestHTTPResetMailFailureAcknowledgment(t *testing.T) {
 					if !strings.Contains(h.logs.String(), "password reset instructions could not be sent") {
 						t.Fatal("delivery failure was not logged")
 					}
-					stored, err := user.GetUserByID(h.app.Database, u.ID)
+					stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 					if err != nil || *stored != *u {
 						t.Fatal("failed reset request changed the account")
 					}
@@ -1045,7 +1045,7 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 		}
 		u := h.seedUser(t, "resend@example.invalid")
 		u.Verified, u.VerificationRequired = false, true
-		if err := u.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
 		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
@@ -1078,13 +1078,13 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 				}
 			}
 		}
-		stored, err := user.GetUserByID(h.app.Database, u.ID)
+		stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil || stored.Verified {
 			t.Fatal("resend failure verified the account")
 		}
 		before := len(h.mail.snapshot())
 		u.Verified = true
-		if err := u.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
 		h.establishSession(t, u)
@@ -1093,7 +1093,7 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 			t.Error("verified account caused another email")
 		}
 		u.Verified, u.RegistrationAuthType = false, "missing-provider"
-		if err := u.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
 		h.establishSession(t, u)
@@ -1106,8 +1106,8 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 
 func TestHTTPRegistrationRejectsInvalidForm(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
-		// Initialize the schema so row counts detect writes to either table.
-		if _, err := user.GetUserByEmail(h.app.Database, "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+		// Confirm the account store is empty before submitting invalid forms.
+		if _, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
 			t.Fatalf("expected an empty database, got %v", err)
 		}
 		for _, htmx := range []bool{false, true} {
@@ -1161,10 +1161,10 @@ func (h *httpHarness) seedUser(t *testing.T, email string) *user.User {
 		t.Fatal(err)
 	}
 	u := &user.User{Email: email, Password: hash, Verified: true, RegistrationAuthType: "email"}
-	if err := u.Create(context.Background(), h.app.Database); err != nil {
+	if err := h.app.AccountRepository.Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	u, err = user.GetUserByEmail(h.app.Database, email)
+	u, err = h.app.AccountRepository.GetByEmail(t.Context(), email)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1173,7 +1173,7 @@ func (h *httpHarness) seedUser(t *testing.T, email string) *user.User {
 
 func (h *httpHarness) assertUserUnchanged(t *testing.T, original *user.User) {
 	t.Helper()
-	got, err := user.GetUserByID(h.app.Database, original.ID)
+	got, err := h.app.AccountRepository.GetByID(t.Context(), original.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1212,10 +1212,10 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
 		u.Verified, u.VerificationRequired = false, true
-		if err := u.Update(context.Background(), h.app.Database); err != nil {
+		if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
-		u, err := user.GetUserByID(h.app.Database, u.ID)
+		u, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1311,7 +1311,7 @@ func TestHTTPResetRejectsInvalidPassword(t *testing.T) {
 		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatal("corrected reset form did not succeed")
 		}
-		updated, err := user.GetUserByID(h.app.Database, u.ID)
+		updated, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1350,7 +1350,7 @@ func TestHTTPChangeRejectsInvalidPassword(t *testing.T) {
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Your password has been changed.") {
 			t.Fatal("corrected password-change form did not succeed")
 		}
-		updated, err := user.GetUserByID(h.app.Database, u.ID)
+		updated, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 		if err != nil {
 			t.Fatal(err)
 		}

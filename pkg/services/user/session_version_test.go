@@ -8,10 +8,10 @@ import (
 func TestPrepareDatabaseAddsSessionVersion(t *testing.T) {
 	db := userTestDB(t)
 	u := &User{Email: "legacy@example.invalid", Password: "preserved"}
-	if err := u.Create(context.Background(), db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	u, err := GetUserByID(db, u.ID)
+	u, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +22,7 @@ func TestPrepareDatabaseAddsSessionVersion(t *testing.T) {
 		if err := PrepareDatabase(context.Background(), db); err != nil {
 			t.Fatal(err)
 		}
-		stored, err := GetUserByID(db, u.ID)
+		stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 		if err != nil || *stored != *u {
 			t.Fatalf("account changed during session version setup: %+v, %v", stored, err)
 		}
@@ -34,7 +34,7 @@ func TestAccountChangesAdvanceSessionVersion(t *testing.T) {
 		t.Run(field, func(t *testing.T) {
 			db := userTestDB(t)
 			u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-			if err := u.Create(context.Background(), db); err != nil {
+			if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
 			switch field {
@@ -56,7 +56,7 @@ func TestAccountChangesAdvanceSessionVersion(t *testing.T) {
 			if field == "unchanged" {
 				want = 1
 			}
-			stored, err := GetUserByID(db, u.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || stored.SessionVersion != want || u.SessionVersion != want {
 				t.Fatalf("version = %d, want %d: %v", u.SessionVersion, want, err)
 			}
@@ -69,10 +69,10 @@ func TestSQLiteAccountRepositoryChangePassword(t *testing.T) {
 		t.Run(outcome, func(t *testing.T) {
 			db := userTestDB(t)
 			u := &User{Email: "password@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-			if err := u.Create(context.Background(), db); err != nil {
+			if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
-			u, err := GetUserByID(db, u.ID)
+			u, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -104,7 +104,7 @@ func TestSQLiteAccountRepositoryChangePassword(t *testing.T) {
 			if (err == nil) != (outcome == "success") {
 				t.Fatalf("password change error = %v", err)
 			}
-			stored, err := GetUserByID(db, original.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), original.ID)
 			if err != nil {
 				t.Fatal(err)
 			}

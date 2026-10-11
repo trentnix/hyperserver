@@ -17,7 +17,7 @@ func TestTokenPurposeStorage(t *testing.T) {
 		t.Run(purpose, func(t *testing.T) {
 			db := userTestDB(t)
 			u := &User{Email: "person@example.invalid"}
-			if err := u.Create(context.Background(), db); err != nil {
+			if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
 			key := []byte("test-signing-key")
@@ -92,7 +92,7 @@ func TestTokenPurposeStorage(t *testing.T) {
 func TestTokensCannotSubstituteForEachOther(t *testing.T) {
 	db := userTestDB(t)
 	u := &User{Email: "person@example.invalid", Password: "unchanged", VerificationRequired: true}
-	if err := u.Create(context.Background(), db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
 	key := []byte("test-signing-key")
@@ -119,7 +119,7 @@ func TestTokensCannotSubstituteForEachOther(t *testing.T) {
 	if got, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), reset.Token, key); err == nil || got != nil {
 		t.Error("reset token passed stored verification-token validation")
 	}
-	stored, err := GetUserByID(db, u.ID)
+	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil || stored.Verified || stored.Password != u.Password {
 		t.Fatal("wrong-purpose token changed the account")
 	}
@@ -233,7 +233,7 @@ func TestVerifyRejectsUnboundOrExpiredSignedTokens(t *testing.T) {
 			if got, err := Verify(context.Background(), NewSQLiteAccountRepository(db), raw, key); err == nil || got != nil {
 				t.Fatal("invalid signed verification token accepted")
 			}
-			stored, err := GetUserByID(db, u.ID)
+			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || stored.Verified {
 				t.Fatalf("invalid token verified account: %v", err)
 			}
@@ -658,7 +658,7 @@ func TestValidateTokenExpiryDuringLookup(t *testing.T) {
 func TestLegacyStoredResetTokenRejected(t *testing.T) {
 	db := userTestDB(t)
 	u := &User{Email: "person@example.invalid"}
-	if err := u.Create(context.Background(), db); err != nil {
+	if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
 	key := []byte("test-signing-key")
@@ -686,7 +686,7 @@ func TestTokenRejectsUnsupportedPurpose(t *testing.T) {
 		t.Run(purpose, func(t *testing.T) {
 			db := userTestDB(t)
 			u := &User{Email: "person@example.invalid"}
-			if err := u.Create(context.Background(), db); err != nil {
+			if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := newAuthToken(&User{ID: "test-user"}, []byte("test-key"), time.Hour, purpose); err == nil {

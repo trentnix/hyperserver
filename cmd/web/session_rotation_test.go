@@ -48,7 +48,7 @@ func TestHTTPAuthenticationRotation(t *testing.T) {
 				u := h.seedUser(t, "rotate@example.invalid")
 				if operation == "verification" {
 					u.Verified, u.VerificationRequired = false, true
-					if err := u.Update(context.Background(), h.app.Database); err != nil {
+					if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -126,7 +126,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 			runHTTPScenario(t, func(h *httpHarness) {
 				u := h.seedUser(t, "verification-rotation@example.invalid")
 				u.Verified, u.VerificationRequired = false, true
-				if err := u.Update(context.Background(), h.app.Database); err != nil {
+				if err := h.app.AccountRepository.Update(context.Background(), u); err != nil {
 					t.Fatal(err)
 				}
 				h.establishSession(t, u)
@@ -150,7 +150,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 				if len(w.Result().Cookies()) != 0 || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
 					t.Fatal("failed renewal issued cookies or redirected")
 				}
-				stored, err := user.GetUserByID(h.app.Database, u.ID)
+				stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 				if err != nil || !stored.Verified || stored.SessionVersion != u.SessionVersion+1 {
 					t.Fatalf("session failure rolled back verification: %+v, %v", stored, err)
 				}
@@ -229,7 +229,7 @@ func TestHTTPPasswordChangesRevokeAllSessions(t *testing.T) {
 				} else {
 					h.request(http.MethodPost, "/auth/change/email", url.Values{"oldPassword": {"TestPassword1!"}, "newPassword": {"NewPassword1!"}, "newPasswordMatch": {"NewPassword1!"}}, true)
 				}
-				stored, err := user.GetUserByID(h.app.Database, u.ID)
+				stored, err := h.app.AccountRepository.GetByID(t.Context(), u.ID)
 				if err != nil || (stored.SessionVersion == u.SessionVersion) != failed {
 					t.Fatalf("wrong account version after password operation: %+v, %v", stored, err)
 				}
@@ -280,7 +280,7 @@ func TestHTTPAuthenticationRejectsOldSessionVersions(t *testing.T) {
 					}
 				} else if scenario == "stale login snapshot" {
 					updated := *u
-					if err := updated.ChangePassword(context.Background(), h.app.Database, "different hash"); err != nil {
+					if err := h.app.AccountRepository.ChangePassword(context.Background(), &updated, "different hash"); err != nil {
 						t.Fatal(err)
 					}
 					// Credentials were checked before the password changed.
