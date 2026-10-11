@@ -1,6 +1,6 @@
 # HyperServer
 
-HyperServer is an experimental Go framework for server-rendered web applications with first-class HTMX support. The goal is high performance and low overhead, with code that stays straightforward to read, extend, and maintain.
+HyperServer is an experimental Go framework for server-rendered web applications with first-class HTMX support. It aims to handle recurring web application infrastructure so developers can focus on application features using familiar Go handlers and HTML templates.
 
 ## Project status
 
@@ -30,6 +30,8 @@ Session data uses JSON, limited to 64 KiB before base64 encoding. Cookies are li
 Some services require other framework services and cannot be replaced independently. Modules can declare dependencies for ordered initialization. Shared application services and module cleanup still need explicit wiring.
 
 ## Direction
+
+Provide a working default setup for common application needs, including authentication, sessions, mail, forms, and response handling. Components must be replaceable without requiring every application to assemble its infrastructure from scratch. High performance, low overhead, and readable code are design goals.
 
 Keep the core focused on rendering and HTMX, with replaceable services and self-registering modules. Preserve Go's `net/http` model, prefer the standard library, and keep dependencies small. Use maintained security implementations rather than custom cryptography. Storage and serialization must be independently replaceable. Applications can use ordinary forms or depend on HTMX.
 

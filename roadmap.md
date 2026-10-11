@@ -2,7 +2,9 @@
 
 ## Purpose and status
 
-HyperServer is an experimental Go framework for server-rendered web applications with first-class HTMX support. High performance, low overhead, and readable code are design goals that require measurement.
+HyperServer is an experimental Go framework for server-rendered web applications with first-class HTMX support. Its purpose is to handle recurring web application infrastructure so developers can focus on application features using familiar Go handlers and HTML templates.
+
+Provide a working default setup with replaceable components, without requiring every application to assemble its infrastructure from scratch. Keep code straightforward to read and maintain. High performance and low overhead are design goals that require measurement.
 
 This document defines the intended architecture and implementation order. Planned capabilities are requirements, not claims about the current implementation. Treat the API as experimental and use `v0.x` releases while its contracts evolve.
 
@@ -59,6 +61,8 @@ JWT signing and validation use `golang-jwt/jwt/v5`. Separately evaluate whether 
 After each replacement, inspect the dependency graph to confirm what disappeared. An optional provider can still add module dependencies. Reduce maintenance and complexity, not just the number of entries in `go.mod`.
 
 ## Target user experience
+
+Developers must be able to select the services they need and use a documented setup that supplies common security controls, request handling, and lifecycle management. Building a feature must not require learning unrelated provider APIs or copying framework setup code. Applications still own their business rules, access policies, secrets, and deployment settings.
 
 A representative interaction follows this flow:
 
@@ -219,6 +223,7 @@ Exit when these known blockers have regression coverage and the reference applic
 
 ### Phase 2: Lifecycle and module composition
 
+- Provide shared module composition and HTTP lifecycle helpers so applications do not copy initialization, route checks, rollback, request draining, or cleanup. Preserve explicit module selection, configurable deadlines, and direct `net/http` use.
 - Extend the catalog and per-application instances with capability-based provider selection, dependency ordering, route validation, and declared dependency access.
 - Return startup errors, validate required storage connectivity with deadlines, and remove shared mutable runtime state.
 - Handle `SIGINT` and `SIGTERM`, drain requests, and close owned resources. Test startup rollback and shutdown deadlines.
@@ -270,6 +275,6 @@ Exit when a clean environment can deploy, operate, recover, and restore the refe
 
 ### Phase 7: Validate framework usability
 
-Extend the second application introduced in Phase 2 to validate provider replacement. Use both applications to remove remaining coupling, document extension contracts, and decide which APIs can stabilize. Choose a project license and publish a security-reporting policy before inviting outside adoption.
+Keep the stateless example small. Build a separate application outside this repository using the documented default setup, supplied services, and security defaults. Implement a persistent feature with full-page and HTMX responses without copying reference-application infrastructure, then validate provider replacement. Use these applications to remove remaining coupling, document extension contracts, and decide which APIs can stabilize. Choose a project license and publish a security-reporting policy before inviting outside adoption.
 
-Exit when multiple applications validate the core, unused services stay inactive, and compatibility and deprecation policies are explicit.
+Exit when the documented setup supports a working application without duplicated infrastructure, unused services stay inactive, and compatibility and deprecation policies are explicit.
