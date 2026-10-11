@@ -652,6 +652,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 			a.renderVerificationRequest(w, r, true, "Unable to send verification instructions. Please try again later.", http.StatusServiceUnavailable)
 			return
 		}
+
 		origin, err := util.BuildPublicURL(r, a.httpConfig, "", nil)
 		if err == nil {
 			err = sender.SendVerificationEmail(r.Context(), authUser, *origin)
@@ -663,6 +664,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
+
 	a.renderVerificationRequest(w, r, authUser.NeedsVerification(), "Verification email sent. Please check your email for instructions.", http.StatusOK)
 }
 

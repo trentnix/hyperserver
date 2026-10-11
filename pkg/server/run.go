@@ -60,6 +60,7 @@ func (s *ApplicationServer) Run(ctx context.Context, prepare func(context.Contex
 	if httpServer == nil || listener == nil {
 		return fmt.Errorf("preparation must return an HTTP server and listener")
 	}
+
 	err = ServeHTTP(ctx, httpServer, listener, timeout)
 	drained = !errors.Is(err, ErrHTTPDrainIncomplete)
 	return err
@@ -99,6 +100,7 @@ func ServeHTTP(ctx context.Context, s *http.Server, listener net.Listener, timeo
 	case err = <-done:
 	case <-ctx.Done():
 	}
+
 	// Active requests need a drain budget independent of the canceled run context.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

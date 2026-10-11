@@ -36,6 +36,7 @@ func NewFileContactRepository(ctx context.Context, directory string) (*FileConta
 	if directory == "" {
 		return nil, fmt.Errorf("a contact directory must be specified")
 	}
+
 	directory, err := filepath.Abs(directory)
 	if err != nil {
 		return nil, err
@@ -43,6 +44,7 @@ func NewFileContactRepository(ctx context.Context, directory string) (*FileConta
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, fmt.Errorf("prepare contact directory: %w", err)
 	}
+
 	probe, err := os.CreateTemp(directory, ".contact-probe-*")
 	if err != nil {
 		return nil, fmt.Errorf("check contact directory: %w", err)
@@ -63,6 +65,7 @@ func NewFileContactRepository(ctx context.Context, directory string) (*FileConta
 	if linkErr != nil {
 		return nil, fmt.Errorf("check contact file publication: %w", linkErr)
 	}
+
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -88,6 +91,7 @@ func (repository *FileContactRepository) Create(ctx context.Context, submission 
 	if !IsValidEmail(submission.Email) {
 		return NewErrInvalidEmail(fmt.Errorf("failed to create a new contact_submission record"))
 	}
+
 	created := *submission
 	created.Id = uuid.New().String()
 	created.CreatedAt = time.Now()
@@ -98,18 +102,21 @@ func (repository *FileContactRepository) Create(ctx context.Context, submission 
 	}
 	defer os.Remove(file.Name())
 	defer file.Close()
+
 	if err := json.NewEncoder(file).Encode(&created); err != nil {
 		return err
 	}
 	if err := file.Close(); err != nil {
 		return err
 	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if err := os.Link(file.Name(), filepath.Join(repository.directory, created.Id+".json")); err != nil {
 		return fmt.Errorf("publish contact file: %w", err)
 	}
+
 	*submission = created
 	return nil
 }

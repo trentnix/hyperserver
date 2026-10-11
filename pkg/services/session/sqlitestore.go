@@ -90,6 +90,7 @@ func NewSQLiteStore(ctx context.Context, c *config.Config) (*SQLiteStore, error)
 	if strings.TrimSpace(sqliteStore.connectionString) == "" || strings.TrimSpace(sqliteStore.tableName) == "" {
 		return nil, ErrSQLiteStoreNotConfigured
 	}
+
 	connection, err := database.ResolveConnection(sqliteDriver, sqliteStore.connectionString, c.App.WorkingDirectory)
 	if err != nil {
 		return nil, err
@@ -174,6 +175,7 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	if s.db == nil {
 		return ErrDatabaseNotConfigured
 	}
+
 	cookie, err := s.sessionCookie(session, requestinfo.IsHTTPS(r))
 	if err != nil {
 		return err
@@ -181,6 +183,7 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *Sess
 	if err := s.save(r.Context(), session); err != nil {
 		return err
 	}
+
 	http.SetCookie(w, cookie)
 	return nil
 }
@@ -301,10 +304,12 @@ func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *Sessi
 	if session == nil || session.ID == "" {
 		return NewErrSessionInvalid(nil)
 	}
+
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", s.tableName)
 	if _, err := s.db.ExecContext(r.Context(), query, session.ID); err != nil {
 		return err
 	}
+
 	ExpireCookie(w, r, session.Name)
 	return nil
 }

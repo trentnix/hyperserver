@@ -13,6 +13,7 @@ func ResolveConnection(driver, connection, directory string) (string, error) {
 	if driver != "sqlite3" || connection == "" {
 		return connection, nil
 	}
+
 	name, query, hasQuery := strings.Cut(connection, "?")
 	if name == "" {
 		return connection, nil
@@ -24,6 +25,7 @@ func ResolveConnection(driver, connection, directory string) (string, error) {
 	if name == ":memory:" || name == "file::memory:" || (strings.HasPrefix(name, "file:") && options.Get("mode") == "memory") {
 		return connection, nil
 	}
+
 	isURI := strings.HasPrefix(name, "file:")
 	if isURI {
 		uri, err := url.Parse(name)
@@ -42,6 +44,7 @@ func ResolveConnection(driver, connection, directory string) (string, error) {
 			return connection, nil
 		}
 	}
+
 	if !filepath.IsAbs(name) {
 		name = filepath.Join(directory, name)
 	}
@@ -49,6 +52,7 @@ func ResolveConnection(driver, connection, directory string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if isURI {
 		name = (&url.URL{Scheme: "file", Path: filepath.ToSlash(name)}).String()
 	}

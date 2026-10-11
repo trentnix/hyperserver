@@ -49,6 +49,7 @@ func NewApplicationServer(cfg config.Config) (*ApplicationServer, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("application configuration: %w", err)
 	}
+
 	cfg = cfg.Clone()
 	s := &ApplicationServer{Config: &cfg, Web: http.NewServeMux()}
 	s.initContentManager()
@@ -88,6 +89,7 @@ func (s *ApplicationServer) ShutdownContext(ctx context.Context) error {
 		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 	}
+
 	var err error
 	hooks := s.shutdownHooks
 	s.shutdownHooks = nil
@@ -96,6 +98,7 @@ func (s *ApplicationServer) ShutdownContext(ctx context.Context) error {
 			err = errors.Join(err, fmt.Errorf("shutdown %q: %w", hooks[i].name, closeErr))
 		}
 	}
+
 	if s.SessionManager != nil {
 		err = errors.Join(err, s.SessionManager.Close())
 	}
@@ -113,11 +116,13 @@ func (s *ApplicationServer) InitializeDatabase(ctx context.Context) error {
 	if s.Database != nil {
 		return nil
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	connection, err := database.ResolveConnection(s.Config.Database.Driver, s.Config.Database.Connection, s.Config.App.WorkingDirectory)
 	if err != nil {
 		return err
@@ -133,6 +138,7 @@ func (s *ApplicationServer) InitializeDatabase(ctx context.Context) error {
 	if err != nil {
 		return errors.Join(fmt.Errorf("connect application database: %w", err), db.Close())
 	}
+
 	s.Database = db
 	return nil
 }
@@ -144,6 +150,7 @@ func (s *ApplicationServer) InitializeSessions(ctx context.Context) error {
 	if s.SessionManager != nil {
 		return nil
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	manager, err := session.NewSessionManager(ctx, s.Config)
@@ -173,6 +180,7 @@ func (s *ApplicationServer) InitializeMail() error {
 	if s.Mail != nil {
 		return nil
 	}
+
 	client, err := messaging.NewMailClient(s.Config)
 	if err != nil {
 		return err

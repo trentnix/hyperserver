@@ -46,6 +46,7 @@ func GetDependency[T any](dependencies Dependencies, capability string) (T, erro
 	if len(values) != 1 {
 		return zero, fmt.Errorf("capability %q has multiple providers: use GetDependencies", capability)
 	}
+
 	value, ok := values[0].(T)
 	if !ok {
 		return zero, fmt.Errorf("capability %q: provider type %T does not satisfy %v", capability, values[0], reflect.TypeFor[T]())
@@ -61,6 +62,7 @@ func GetDependencies[T any](dependencies Dependencies, capability string) ([]T, 
 	if !ok {
 		return nil, fmt.Errorf("undeclared capability %q", capability)
 	}
+
 	var result []T
 	for _, value := range values {
 		service, ok := value.(T)
@@ -100,10 +102,12 @@ func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []De
 		ctx, cancel = context.WithTimeout(ctx, defaultInitializationTimeout)
 		defer cancel()
 	}
+
 	modules, err := Instantiate(plan.modules)
 	if err != nil {
 		return nil, err
 	}
+
 	// Detect missing hooks before any module starts I/O.
 	for i, d := range plan.modules {
 		if _, ok := modules[i].(DependencyBinder); len(d.Requires) > 0 && !ok {
@@ -121,12 +125,14 @@ func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []De
 			instances = nil
 		}
 	}()
+
 	published := make(map[string]map[string]any)
 	for i, module := range modules {
 		d := plan.modules[i]
 		if err := ctx.Err(); err != nil {
 			return result, fmt.Errorf("initialize module %q: %w", d.Name, err)
 		}
+
 		dependencies := Dependencies{values: make(map[string][]any)}
 		for _, requirement := range d.Requires {
 			dependencies.values[requirement.Capability] = nil
@@ -139,6 +145,7 @@ func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []De
 				return result, fmt.Errorf("bind module %q dependencies: %w", d.Name, err)
 			}
 		}
+
 		if err := ctx.Err(); err != nil {
 			return result, fmt.Errorf("initialize module %q: %w", d.Name, err)
 		}
@@ -146,6 +153,7 @@ func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []De
 			return result, fmt.Errorf("initialize module %q: %w", d.Name, err)
 		}
 		result = append(result, Instance{Name: d.Name, Handler: module})
+
 		if err := ctx.Err(); err != nil {
 			return result, fmt.Errorf("initialize module %q: %w", d.Name, err)
 		}

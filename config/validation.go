@@ -16,6 +16,7 @@ func (c Config) Validate() error {
 	if timeout := c.App.InitializationTimeout; timeout != nil && *timeout <= 0 {
 		return fmt.Errorf("app.initializationTimeout must be positive")
 	}
+
 	origin, err := ParsePublicOrigin(c.HTTP.PublicOrigin)
 	if err != nil {
 		return err
@@ -26,6 +27,7 @@ func (c Config) Validate() error {
 	if len(c.HTTP.TrustedProxies) > 0 && origin == nil {
 		return fmt.Errorf("http.publicOrigin is required when http.trustedProxies is configured")
 	}
+
 	if c.HTTP.HSTSMaxAge < 0 {
 		return fmt.Errorf("http.hstsMaxAge must not be negative")
 	}
@@ -36,6 +38,7 @@ func (c Config) Validate() error {
 	} else if c.HTTP.TLS.Certificate != "" || c.HTTP.TLS.Key != "" {
 		return fmt.Errorf("http.tls.enabled must be true when TLS certificate or key files are configured")
 	}
+
 	for _, item := range []struct {
 		name  string
 		limit RateLimitConfig
@@ -56,6 +59,7 @@ func (c Config) Validate() error {
 			return fmt.Errorf("%s.maxClients must be positive", item.name)
 		}
 	}
+
 	if c.Auth.ResetMinimumResponseTime < 0 {
 		return fmt.Errorf("auth.resetMinimumResponseTime must not be negative")
 	}
@@ -65,6 +69,7 @@ func (c Config) Validate() error {
 	if _, err := c.App.SiteRateLimit.ClientCapacity(); err != nil {
 		return fmt.Errorf("app.siteRateLimit.%w", err)
 	}
+
 	if c.Auth.Enabled {
 		if err := ValidateSigningKey("auth.jwtKey", c.Auth.JwtKey); err != nil {
 			return err

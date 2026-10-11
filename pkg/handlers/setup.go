@@ -31,6 +31,7 @@ func Setup(ctx context.Context, app *server.ApplicationServer, routes *routing.R
 		ctx, cancel = context.WithTimeout(ctx, *timeout)
 		defer cancel()
 	}
+
 	if routes == nil {
 		routes = routing.NewRoutes(app.Web)
 	}
@@ -47,6 +48,7 @@ func Setup(ctx context.Context, app *server.ApplicationServer, routes *routing.R
 			err = errors.Join(err, Close(context.WithoutCancel(ctx), modules))
 		}
 	}()
+
 	for _, module := range modules {
 		if err := ctx.Err(); err != nil {
 			return err

@@ -247,6 +247,7 @@ func (m *smtpSender) Send(ctx context.Context, email MailMessage) (err error) {
 		}
 		smtpConn = tlsConn
 	}
+
 	client, err := smtp.NewClient(smtpConn, cfg.Hostname)
 	if err != nil {
 		return err
@@ -262,12 +263,14 @@ func (m *smtpSender) Send(ctx context.Context, email MailMessage) (err error) {
 			}
 		}
 	}
+
 	if ok, _ := client.Extension("AUTH"); !ok {
 		return errors.New("smtp: server doesn't support AUTH")
 	}
 	if err := client.Auth(smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Hostname)); err != nil {
 		return err
 	}
+
 	if err := client.Mail(smtpMailbox(from)); err != nil {
 		return err
 	}
@@ -294,6 +297,7 @@ func (m *smtpSender) Send(ctx context.Context, email MailMessage) (err error) {
 	if err := writer.Close(); err != nil {
 		return err
 	}
+
 	// A later error does not prove the message was rejected. Do not retry here.
 	if err := client.Quit(); err != nil {
 		return err

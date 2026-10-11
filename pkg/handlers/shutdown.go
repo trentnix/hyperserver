@@ -25,6 +25,7 @@ func Close(ctx context.Context, modules []Instance) error {
 		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 	}
+
 	var result error
 	for i := len(modules) - 1; i >= 0; i-- {
 		module := modules[i]

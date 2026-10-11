@@ -46,6 +46,7 @@ func ParseWithOptions(r *http.Request, options ParseOptions) *ParseError {
 	if len(r.URL.RawQuery) > MaxQueryBytes {
 		return &ParseError{http.StatusRequestEntityTooLarge, "Form data is too large"}
 	}
+
 	contentType := r.Header.Get("Content-Type")
 	if contentType != "" {
 		mediaType, _, err := mime.ParseMediaType(contentType)
@@ -58,6 +59,7 @@ func ParseWithOptions(r *http.Request, options ParseOptions) *ParseError {
 	} else if r.ContentLength != 0 {
 		return &ParseError{http.StatusUnsupportedMediaType, "Expected a URL-encoded form"}
 	}
+
 	if err := r.ParseForm(); err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {

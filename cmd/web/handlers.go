@@ -38,6 +38,7 @@ func applicationRoutes(mux *http.ServeMux, cfg config.HTTPConfig, log logger.Log
 			}
 		}
 	}
+
 	limit := cfg.DefaultRateLimit
 	if !limit.Enabled {
 		return routes, nil

@@ -29,10 +29,12 @@ func GetConfig() (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
+
 		cfg, err := readConfig(bytes.NewReader(data), os.Environ())
 		if err != nil {
 			return Config{}, fmt.Errorf("%s: %w", path, err)
 		}
+
 		if !filepath.IsAbs(cfg.App.WorkingDirectory) {
 			cfg.App.WorkingDirectory, err = filepath.Abs(filepath.Join(filepath.Dir(path), cfg.App.WorkingDirectory))
 			if err != nil {
@@ -137,6 +139,7 @@ func readConfig(reader io.Reader, environment []string) (Config, error) {
 			return Config{}, err
 		}
 	}
+
 	for _, entry := range environment {
 		name, value, _ := strings.Cut(entry, "=")
 		if suffix, ok := strings.CutPrefix(name, "HYPERSERVER_"); ok {
@@ -144,6 +147,7 @@ func readConfig(reader io.Reader, environment []string) (Config, error) {
 			values[key] = yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
 		}
 	}
+
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)
@@ -154,6 +158,7 @@ func readConfig(reader io.Reader, environment []string) (Config, error) {
 			return Config{}, err
 		}
 	}
+
 	if err := c.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -196,6 +201,7 @@ func assignSetting(c *Config, fields map[string]any, key string, node yaml.Node)
 	if key == "http.ratelimit" || strings.HasPrefix(key, "http.ratelimit.") {
 		return errors.New("http.rateLimit is ambiguous. Use http.defaultRateLimit for inherited settings or http.sharedRateLimit for an aggregate budget")
 	}
+
 	for name, destination := range fields {
 		if strings.EqualFold(key, name) {
 			return decodeSetting(name, node, destination)
@@ -204,6 +210,7 @@ func assignSetting(c *Config, fields map[string]any, key string, node yaml.Node)
 			return nil
 		}
 	}
+
 	for _, group := range []struct {
 		prefix string
 		values *map[string]string
@@ -246,6 +253,7 @@ func assignSetting(c *Config, fields map[string]any, key string, node yaml.Node)
 		} else if len(parts) != 1 {
 			break
 		}
+
 		var value string
 		if err := decodeSetting(key, node, &value); err != nil {
 			return err

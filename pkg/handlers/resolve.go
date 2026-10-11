@@ -29,6 +29,7 @@ func resolve(descriptors []Descriptor, selections map[string]string) (*resolutio
 	if err := validateDescriptors(descriptors); err != nil {
 		return nil, err
 	}
+
 	providers := make(map[string][]int)
 	for i, d := range descriptors {
 		for _, capability := range d.Provides {
@@ -74,6 +75,7 @@ func resolve(descriptors []Descriptor, selections map[string]string) (*resolutio
 				}
 				return nil, fmt.Errorf("module %q requires capability %q: select one provider from %s", d.Name, requirement.Capability, strings.Join(names, ", "))
 			}
+
 			for _, provider := range matches {
 				bindings[d.Name][requirement.Capability] = append(bindings[d.Name][requirement.Capability], descriptors[provider].Name)
 				if !slices.Contains(dependencies[i], provider) {
@@ -100,6 +102,7 @@ func resolve(descriptors []Descriptor, selections map[string]string) (*resolutio
 		case visited:
 			return nil
 		}
+
 		state[i] = visiting
 		path = append(path, descriptors[i].Name)
 		for _, dependency := range dependencies[i] {
@@ -107,6 +110,7 @@ func resolve(descriptors []Descriptor, selections map[string]string) (*resolutio
 				return err
 			}
 		}
+
 		path = path[:len(path)-1]
 		state[i] = visited
 		ordered = append(ordered, cloneDescriptor(descriptors[i]))
@@ -130,6 +134,7 @@ func validateDescriptors(descriptors []Descriptor) error {
 			return fmt.Errorf("duplicate module %q", d.Name)
 		}
 		names[d.Name] = true
+
 		provided := make(map[string]bool)
 		for _, capability := range d.Provides {
 			if !validName(capability) || provided[capability] {
@@ -137,6 +142,7 @@ func validateDescriptors(descriptors []Descriptor) error {
 			}
 			provided[capability] = true
 		}
+
 		required := make(map[string]bool)
 		for _, requirement := range d.Requires {
 			if !validName(requirement.Capability) || required[requirement.Capability] {

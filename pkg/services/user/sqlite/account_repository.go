@@ -258,6 +258,7 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 	if err != nil {
 		return err
 	}
+
 	err = tx.GetContext(ctx, &updated.SessionVersion, `SELECT session_version FROM user WHERE id = ?`, user.ID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return accounts.NewErrUserNotFound(sql.ErrNoRows)
@@ -268,9 +269,11 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 	if count == 0 {
 		return accounts.NewErrUserChanged(nil)
 	}
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+
 	user.UpdatedAt = updated.UpdatedAt
 	user.SessionVersion = updated.SessionVersion
 	return nil

@@ -55,11 +55,13 @@ func NewSessionManager(ctx context.Context, c *config.Config) (*SessionManager, 
 	if err := ValidateConfig(c); err != nil {
 		return nil, err
 	}
+
 	m := &SessionManager{Types: maps.Clone(c.HTTP.Session.Types), stores: make(map[string]SessionStore)}
 	selected := make(map[string]bool)
 	for _, name := range m.Types {
 		selected[strings.ToLower(name)] = true
 	}
+
 	for _, name := range slices.Sorted(maps.Keys(selected)) {
 		var store SessionStore
 		var err error

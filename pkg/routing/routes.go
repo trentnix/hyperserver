@@ -129,6 +129,7 @@ func (r *Routes) register(pattern string, handler http.Handler) {
 		limiter, _ := ratelimit.New("route "+pattern, *r.ratePolicy)
 		handler = limiter.Handler(handler)
 	}
+
 	if err := registerHandler(r.mux, pattern, handler); err != nil {
 		r.state.err = err
 		return

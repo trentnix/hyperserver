@@ -28,10 +28,12 @@ func CleanupExpired(ctx context.Context, c *config.Config, limit int) (count int
 	if limit < 1 {
 		return 0, fmt.Errorf("session cleanup limit must be positive")
 	}
+
 	selected := make(map[string]bool)
 	for _, name := range c.HTTP.Session.Types {
 		selected[strings.ToLower(name)] = true
 	}
+
 	for _, name := range slices.Sorted(maps.Keys(selected)) {
 		n, batchErr := cleanupStore(ctx, c, name, limit)
 		count += n
@@ -56,6 +58,7 @@ func cleanupStore(ctx context.Context, c *config.Config, name string, limit int)
 	if !found {
 		return 0, fmt.Errorf("selected session store %q is not configured", name)
 	}
+
 	enabled, err := config.ProviderEnabled("http.session.stores."+name+".enabled", options["enabled"])
 	if err != nil {
 		return 0, err
@@ -66,6 +69,7 @@ func cleanupStore(ctx context.Context, c *config.Config, name string, limit int)
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
+
 	maintenance, closeStore, err := openMaintenance(ctx, name, options, c.App.WorkingDirectory)
 	if err != nil {
 		return 0, err
@@ -76,6 +80,7 @@ func cleanupStore(ctx context.Context, c *config.Config, name string, limit int)
 	if maintenance == nil {
 		return 0, nil
 	}
+
 	return maintenance.DeleteExpired(ctx, limit)
 }
 
@@ -104,6 +109,7 @@ func openSQLiteMaintenance(ctx context.Context, options map[string]string) (*SQL
 	if strings.TrimSpace(options["connection"]) == "" || strings.TrimSpace(options["sessiontable"]) == "" {
 		return nil, ErrSQLiteStoreNotConfigured
 	}
+
 	db, err := database.Setup(sqliteDriver, options["connection"])
 	if err != nil {
 		return nil, err

@@ -60,6 +60,7 @@ func (s *AccountStorage) RegisterProvider(name string, provider AccountProvider)
 	if _, exists := s.providers[name]; name == "sqlite" || exists {
 		return fmt.Errorf("account provider %q is already registered", name)
 	}
+
 	if s.providers == nil {
 		s.providers = make(map[string]AccountProvider)
 	}
@@ -75,6 +76,7 @@ func (s *AccountStorage) Open(ctx context.Context, pool *sqlx.DB) (user.AccountR
 	if !s.config.Auth.Enabled {
 		return nil, nil, nil
 	}
+
 	name, provider, err := accountProvider(s.config, pool, s.providers)
 	if err != nil {
 		return nil, nil, err
@@ -85,6 +87,7 @@ func (s *AccountStorage) Open(ctx context.Context, pool *sqlx.DB) (user.AccountR
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
+
 	repository, cleanup, err := provider.Open(ctx, maps.Clone(s.config.Auth.AccountStorage.Options))
 	if err == nil {
 		err = ctx.Err()
@@ -105,6 +108,7 @@ func initializeSQLiteAccounts(ctx context.Context, pool *sqlx.DB, options map[st
 	if err := usersqlite.ValidateOptions(options); err != nil {
 		return nil, nil, err
 	}
+
 	repository := usersqlite.NewAccountRepository(pool)
 	if err := repository.Initialize(ctx); err != nil {
 		return nil, nil, err
@@ -117,6 +121,7 @@ func accountProvider(cfg *config.Config, pool *sqlx.DB, providers map[string]Acc
 	if name == "" {
 		name = "sqlite"
 	}
+
 	if name == "sqlite" {
 		return name, AccountProvider{
 			Open: func(ctx context.Context, options map[string]string) (user.AccountRepository, func() error, error) {
@@ -133,6 +138,7 @@ func accountProvider(cfg *config.Config, pool *sqlx.DB, providers map[string]Acc
 			},
 		}, nil
 	}
+
 	provider, ok := providers[name]
 	if !ok {
 		return name, AccountProvider{}, fmt.Errorf("auth.accountStorage.provider: unknown provider %q", name)
@@ -163,6 +169,7 @@ func cleanupAccountTokens(ctx context.Context, cfg *config.Config, limit int, pr
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
+
 	name, provider, err := accountProvider(cfg, nil, providers)
 	if err != nil {
 		return 0, err
@@ -170,6 +177,7 @@ func cleanupAccountTokens(ctx context.Context, cfg *config.Config, limit int, pr
 	if provider.OpenMaintenance == nil {
 		return 0, fmt.Errorf("account provider %q does not support token maintenance", name)
 	}
+
 	maintenance, closeStore, err := provider.OpenMaintenance(ctx, maps.Clone(cfg.Auth.AccountStorage.Options))
 	if closeStore != nil {
 		defer func() { err = errors.Join(err, closeStore()) }()
@@ -183,5 +191,6 @@ func cleanupAccountTokens(ctx context.Context, cfg *config.Config, limit int, pr
 	if maintenance == nil {
 		return 0, fmt.Errorf("account provider %q returned no token maintenance", name)
 	}
+
 	return maintenance.DeleteExpiredTokens(ctx, limit)
 }

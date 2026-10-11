@@ -137,6 +137,7 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 	if err != nil {
 		return nil, fmt.Errorf("http.hstsMaxAge: %w", err)
 	}
+
 	loadSession := session.WithSessionManager(s.SessionManager)
 	if s.Config.Auth.Enabled {
 		loadSession = authmiddleware.LoadSessionManagement(s.AccountRepository, s.SessionManager)
@@ -152,6 +153,7 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 		}
 		handler = limiter.Handler(handler)
 	}
+
 	handler = proxy(hsts(handler))
 	handler = middleware.SecurityHeaders(referenceContentSecurityPolicy)(handler)
 	return middleware.LoggerMiddleware(l)(handler), nil
