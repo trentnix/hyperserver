@@ -41,6 +41,8 @@ Use the Go version declared in [go.mod](go.mod), which also controls CI. SQLite 
 
 Start with [cmd/web](cmd/web) for application composition, [modules/site](modules/site) for the reference application, and [pkg](pkg) for framework components and services.
 
+For a smaller starting point, run `go run ./examples/stateless` and open http://127.0.0.1:8082. The [stateless greeting application](examples/stateless/readme.md) uses its own module and embedded templates without a configuration file, database, sessions, authentication, or mail.
+
 The development [site module owns the diagnostic and sample routes](modules/site/router.go). Production applications must not import it. Omitting it does not resolve the framework's outstanding security issues.
 
 `POST /test-email` allows logged-in users who have completed any required account verification. Other users receive 403, and no mail is sent.
