@@ -3,14 +3,14 @@ package auth
 import (
 	"net/http"
 
+	"github.com/trentnix/hyperserver/auth/identity"
 	"github.com/trentnix/hyperserver/pkg/components/content"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // GetVerificationRequest displays account verification status and a resend form.
 // Signed-in users can access it before verifying their email. GET never sends mail.
 func (a *AuthManager) GetVerificationRequest(w http.ResponseWriter, r *http.Request) {
-	u, err := user.GetAuthenticatedUser(r, a.accounts)
+	u, err := identity.GetAuthenticatedUser(r, a.accounts)
 	if err != nil {
 		logVerificationFailure(r, "verification account lookup failed")
 		a.contentManager.HandleError(w, r, "Unable to load your verification status. Please try again later.", nil, http.StatusInternalServerError)

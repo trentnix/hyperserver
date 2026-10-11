@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/trentnix/hyperserver/auth/identity"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -57,7 +58,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 				logout, _ := h.app.Web.Handler(httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
 				h.app.Web.Handle("POST /logout-observed", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					logout.ServeHTTP(w, r)
-					u, err := user.GetAuthenticatedUser(r, h.app.AccountRepository)
+					u, err := identity.GetAuthenticatedUser(r, h.app.AccountRepository)
 					if err != nil {
 						t.Fatal(err)
 					}

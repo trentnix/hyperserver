@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth/identity"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -21,7 +22,7 @@ func (h *httpHarness) establishSession(t *testing.T, u *user.User) {
 	t.Helper()
 	r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.SessionManager)
 	w := httptest.NewRecorder()
-	if err := user.SetAuthenticatedUser(w, r, u); err != nil {
+	if err := identity.SetAuthenticatedUser(w, r, u); err != nil {
 		t.Fatal(err)
 	}
 	base, _ := url.Parse(h.baseURL)

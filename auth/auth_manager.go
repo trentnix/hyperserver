@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth/identity"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
@@ -275,7 +276,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setAuthenticatedUserErr := user.SetAuthenticatedUser(w, r, u)
+	setAuthenticatedUserErr := identity.SetAuthenticatedUser(w, r, u)
 	if setAuthenticatedUserErr != nil {
 		logger.LogRequestError(r, setAuthenticatedUserErr)
 		util.HttpError(w, r, "There was an internal error when trying to login", nil, http.StatusInternalServerError)
@@ -312,7 +313,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout ends a session for any logged-in user
 func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
-	logoutErr := user.LogoutAuthenticatedUser(w, r)
+	logoutErr := identity.LogoutAuthenticatedUser(w, r)
 	if logoutErr != nil {
 		logger.LogRequestError(r, logoutErr)
 		util.HttpError(w, r, "There was an error trying to log out", nil, http.StatusInternalServerError)
@@ -629,7 +630,7 @@ func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 // SendVerificationRequest processes a user verification request by sending verification
 // instructions to the user
 func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Request) {
-	authUser, err := user.GetAuthenticatedUser(r, a.accounts)
+	authUser, err := identity.GetAuthenticatedUser(r, a.accounts)
 	if err != nil {
 		logVerificationFailure(r, "verification account lookup failed")
 		a.contentManager.HandleError(w, r, "Unable to send verification instructions. Please try again later.", nil, http.StatusInternalServerError)
@@ -706,7 +707,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 
 	verificationErrMsg := "Verification failed: unable to verify your user account."
 
-	authenticatedUser, err := user.GetAuthenticatedUser(r, a.accounts)
+	authenticatedUser, err := identity.GetAuthenticatedUser(r, a.accounts)
 	if err != nil {
 		logVerificationFailure(r, "verification account lookup failed")
 		util.HttpError(w, r, "Unable to verify your account. Please try again later.", nil, http.StatusInternalServerError)
@@ -736,7 +737,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 
 	if authenticatedUser != nil {
 		if authenticatedUser.ID == verifiedUser.ID {
-			if err := user.SetAuthenticatedUser(w, r, verifiedUser); err != nil {
+			if err := identity.SetAuthenticatedUser(w, r, verifiedUser); err != nil {
 				logger.LogRequestError(r, err)
 				util.HttpError(w, r, "Your account was verified, but the session could not be renewed. Please log in again.", nil, http.StatusInternalServerError)
 				return

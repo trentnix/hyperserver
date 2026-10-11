@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/trentnix/hyperserver/auth/identity"
 	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
@@ -129,7 +130,7 @@ func getAuthenticatedUser(r *http.Request, accounts user.AccountRepository) (*us
 
 	u := user.GetUserFromContext(ctx)
 	if u == nil {
-		u, err := user.GetAuthenticatedUser(r, accounts)
+		u, err := identity.GetAuthenticatedUser(r, accounts)
 		if err != nil {
 			return nil, err
 		}

@@ -1,4 +1,4 @@
-// Package user stores accounts and account tokens and connects users to sessions.
+// Package user defines accounts, account tokens, and their persistence contract.
 // Applications supply an initialized AccountRepository for persistence.
 // Password resets and email verification consume their exact stored token
 // atomically with the account change.

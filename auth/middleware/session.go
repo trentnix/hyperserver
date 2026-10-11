@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/trentnix/hyperserver/auth/identity"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -22,7 +23,7 @@ func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionMa
 				logger.LogRequestError(r, authUserErr)
 				var invalidToken *session.ErrInvalidToken
 				if errors.As(authUserErr, &invalidToken) {
-					user.ClearAuthenticationCookie(w, r)
+					identity.ClearAuthenticationCookie(w, r)
 					util.HttpError(w, r, "Invalid session cookie", nil, http.StatusBadRequest)
 					return
 				}
@@ -41,7 +42,7 @@ func loadAuthenticatedUser(r *http.Request, accounts user.AccountRepository) (*h
 		return r, database.NewErrDatabaseUnavailable(nil)
 	}
 
-	u, err := user.GetAuthenticatedUser(r, accounts)
+	u, err := identity.GetAuthenticatedUser(r, accounts)
 
 	var notFoundErr *user.ErrUserNotFound
 	if err != nil && !errors.As(err, &notFoundErr) {

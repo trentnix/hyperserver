@@ -199,6 +199,8 @@ Use narrow repositories for operations such as finding a user or creating an acc
 
 Authentication uses [AccountRepository](pkg/services/user/account_repository.go) for account and token operations. `auth.accountStorage` selects a provider registered with the application. SQLite borrows the shared pool. Other providers can supply a close function for owned resources. Automatic module discovery and dependency resolution remain separate startup work.
 
+[Session-backed identity](auth/identity/session.go) handles login, logout, and account lookup from a session. The account package does not import session storage.
+
 Expired-record maintenance is a separate provider capability. Maintenance setup opens storage without creating or migrating tables. Commands invoke maintenance without interpreting database settings.
 
 Specify missing-value errors, uniqueness, concurrency, expiration, and durability where the consumer depends on them. Express transactions or compare-and-swap as required capabilities when necessary. Reject unsupported guarantees instead of silently weakening them.

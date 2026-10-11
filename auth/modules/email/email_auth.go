@@ -18,6 +18,7 @@ import (
 	"time"
 
 	auth_services "github.com/trentnix/hyperserver/auth"
+	"github.com/trentnix/hyperserver/auth/identity"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
@@ -801,7 +802,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	changeForm.NewPassword = ""
 	changeForm.NewPasswordMatch = ""
 	*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
-	user.ClearAuthenticationCookie(w, r)
+	identity.ClearAuthenticationCookie(w, r)
 	changeForm.AddSuccessMessage("Your password has been changed. Please log in again.")
 
 	err = change.Render(w, r)

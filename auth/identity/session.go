@@ -1,10 +1,13 @@
-package user
+// Package identity connects accounts to authenticated browser sessions.
+// Attach a session manager to requests before using session-backed operations.
+package identity
 
 import (
 	"errors"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 const (
@@ -21,7 +24,7 @@ func ClearAuthenticationCookie(w http.ResponseWriter, r *http.Request) {
 // SetAuthenticatedUser rotates the session and records the account's session version.
 // Call after authenticating credentials or granting new privileges. The account
 // must be freshly loaded or saved. Session management must be attached to r.
-func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error {
+func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *user.User) error {
 	if u == nil || u.ID == "" {
 		return errors.New("The specified user is not specified. The user's ID must be set.")
 	}
@@ -37,12 +40,12 @@ func SetAuthenticatedUser(w http.ResponseWriter, r *http.Request, u *User) error
 	if err := s.Rotate(w, r, map[string]any{userSessionKey: u.ID, userSessionVersionKey: u.SessionVersion}); err != nil {
 		return err
 	}
-	*r = *AddUserToRequestContext(r, u)
+	*r = *user.AddUserToRequestContext(r, u)
 	return nil
 }
 
 // LogoutAuthenticatedUser ends the user session and clears the request's user.
-// SQLite revokes stored sessions. Cookie-only stores cannot revoke captured cookies.
+// Revocation follows the session provider's guarantees.
 func LogoutAuthenticatedUser(w http.ResponseWriter, r *http.Request) error {
 	s, err := session.Get(r, userSessionKey)
 	if err != nil {
@@ -53,15 +56,15 @@ func LogoutAuthenticatedUser(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	*r = *r.WithContext(ClearUserFromContext(r.Context()))
+	*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
 	return nil
 }
 
 // GetAuthenticatedUser loads the session's account through accounts, unless the
 // request already has an authenticated user. Account reads use the request context.
-func GetAuthenticatedUser(r *http.Request, accounts AccountRepository) (*User, error) {
+func GetAuthenticatedUser(r *http.Request, accounts user.AccountRepository) (*user.User, error) {
 	// first check the request context
-	u := GetUserFromContext(r.Context())
+	u := user.GetUserFromContext(r.Context())
 	if u != nil {
 		return u, nil
 	}
