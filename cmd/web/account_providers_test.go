@@ -15,9 +15,9 @@ import (
 )
 
 func accountProviderApplication(name string) *accountSetupHarness {
-	return newAccountSetup(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{
+	return newAccountSetup(testApplicationWithPool(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{
 		Enabled: true, AccountStorage: config.AccountStorageConfig{Provider: name},
-	}}})
+	}}}, nil))
 }
 
 func TestAccountProviderSelection(t *testing.T) {
@@ -109,10 +109,8 @@ func TestAccountProviderExplicitSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertAccountRepositoryReady(t, s.app.AccountRepository)
-	// Remove the application's ownership temporarily to check that account setup
-	// did not register a second owner for the borrowed pool.
+	// The test owns this pool. Account setup must not acquire ownership.
 	pool := s.app.Database
-	s.app.Database = nil
 	if err := s.app.Shutdown(); err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +238,7 @@ func TestAccountProviderOwnershipAndIsolation(t *testing.T) {
 	closeErr := errors.New("provider close failed")
 	closed := make(map[*accountSetupHarness]bool)
 	for _, s := range []*accountSetupHarness{first, second} {
-		s.app.Database = accountSetupTestDB(t)
+		s.app.ownDatabase(accountSetupTestDB(t))
 		if err := s.RegisterProvider("custom", reference.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 			return &suppliedAccountRepository{}, func() error {
 				if err := s.app.Database.Ping(); err != nil {

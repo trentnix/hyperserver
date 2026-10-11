@@ -17,7 +17,6 @@ import (
 	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
-	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
@@ -118,13 +117,13 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := s.Config.ResolvePaths(); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.InitializeDatabase(context.Background()); err != nil {
+		if err := s.initializeDatabase(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.InitializeMail(); err != nil {
 			t.Fatal(err)
 		}
-		if err := initializeSessions(context.Background(), s); err != nil {
+		if err := initializeSessions(context.Background(), s.ApplicationServer); err != nil {
 			t.Fatal(err)
 		}
 		if err := initializeAccounts(context.Background(), s, reference.NewAccountStorage(s.Config)); err != nil {
@@ -137,7 +136,11 @@ func TestStartupHelperProcess(t *testing.T) {
 		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {
 			t.Fatalf("account tables before handler initialization = %d, auth enabled = %t", tables, s.Config.Auth.Enabled)
 		}
-		if err := SetupHandlers(context.Background(), s, nil, handlers.Registered(), nil); err != nil {
+		catalog, err := siteModules(s.Database, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := SetupHandlers(context.Background(), s.ApplicationServer, nil, catalog, nil); err != nil {
 			t.Fatal(err)
 		}
 		_, pattern := s.Web.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil))
@@ -174,13 +177,13 @@ func TestStartupHelperProcess(t *testing.T) {
 }
 
 // These subprocess scenarios exercise the reference application's services.
-func newStartupApplication(t *testing.T) *server.ApplicationServer {
+func newStartupApplication(t *testing.T) *application {
 	t.Helper()
 	cfg, err := config.GetConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := server.NewApplicationServer(cfg)
+	s, err := newApplication(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

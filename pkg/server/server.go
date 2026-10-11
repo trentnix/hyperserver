@@ -10,9 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -26,8 +24,6 @@ type (
 	ApplicationServer struct {
 		Config *config.Config
 
-		// Database is owned by the application. Modules borrow it and must not close it.
-		Database *sqlx.DB
 		// AccountRepository supplies authentication's account and token operations.
 		// An application-supplied repository must be ready to use. Its supplier owns
 		// any resources not already owned by the application.
@@ -57,14 +53,14 @@ func NewApplicationServer(cfg config.Config) (*ApplicationServer, error) {
 }
 
 // Shutdown runs registered cleanup, then closes session providers
-// and the application database with a ten-second cooperative deadline. Call serially
+// with a ten-second cooperative deadline. Call serially
 // after draining requests and stopping other consumers. Borrowing modules must not call it.
 func (s *ApplicationServer) Shutdown() error {
 	return s.ShutdownContext(context.Background())
 }
 
 // OnShutdown registers application-owned cleanup during startup. Hooks run once,
-// in reverse registration order, before session and database services
+// in reverse registration order, before session services
 // close. Call serially, registering providers before consumers. Hooks must honor ctx.
 // A nil function is ignored.
 func (s *ApplicationServer) OnShutdown(name string, close func(context.Context) error) {
@@ -102,45 +98,7 @@ func (s *ApplicationServer) ShutdownContext(ctx context.Context) error {
 	if s.SessionManager != nil {
 		err = errors.Join(err, s.SessionManager.Close())
 	}
-	if s.Database != nil {
-		err = errors.Join(err, s.Database.Close())
-	}
 	return errors.Join(err, ctx.Err())
-}
-
-// InitializeDatabase opens and checks the application-owned pool with a startup
-// deadline. Call only when a consumer needs it, before initializing that consumer.
-// A supplied pool is preserved. Failed setup leaves Database unset and can be retried.
-// Call serially during startup, before serving requests.
-func (s *ApplicationServer) InitializeDatabase(ctx context.Context) error {
-	if s.Database != nil {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	connection, err := database.ResolveConnection(s.Config.Database.Driver, s.Config.Database.Connection, s.Config.App.WorkingDirectory)
-	if err != nil {
-		return err
-	}
-	db, err := database.Setup(s.Config.Database.Driver, connection)
-	if err != nil {
-		return err
-	}
-	err = db.PingContext(ctx)
-	if err == nil {
-		err = ctx.Err()
-	}
-	if err != nil {
-		return errors.Join(fmt.Errorf("connect application database: %w", err), db.Close())
-	}
-
-	s.Database = db
-	return nil
 }
 
 // initContentManager prepares this application's rendering defaults and callbacks.

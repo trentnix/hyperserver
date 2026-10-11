@@ -1,9 +1,6 @@
 package server
 
 import (
-	"context"
-	"database/sql"
-	"database/sql/driver"
 	"errors"
 	"io"
 	"net/http"
@@ -12,10 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"testing/synctest"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3" // Only tests that open SQLite need its driver.
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
@@ -72,7 +67,7 @@ func TestStatelessApplication(t *testing.T) {
 			t.Fatal("stateless rendering set a cookie or lost response variation")
 		}
 	}
-	if app.Database != nil || app.SessionManager != nil || app.AccountRepository != nil || app.Mail != nil {
+	if app.SessionManager != nil || app.AccountRepository != nil || app.Mail != nil {
 		t.Fatal("stateless application activated an optional service")
 	}
 }
@@ -116,20 +111,8 @@ func TestOptionalServicesInitializeExplicitly(t *testing.T) {
 	if err != nil {
 		t.Fatal("unused services prevented construction:", err)
 	}
-	if err := app.InitializeDatabase(context.Background()); err == nil || app.Database != nil {
-		t.Fatal("invalid database initialization succeeded")
-	}
 	if err := app.InitializeMail(); err == nil || app.Mail != nil {
 		t.Fatal("invalid mail initialization succeeded")
-	}
-	app.Config.Database = config.DatabaseConfig{Driver: "sqlite3", Connection: ":memory:"}
-	if err := app.InitializeDatabase(context.Background()); err != nil {
-		t.Fatal("database retry:", err)
-	}
-	db := app.Database
-	app.Config.Database.Driver = "unused-after-initialization"
-	if err := app.InitializeDatabase(context.Background()); err != nil || app.Database != db {
-		t.Fatal("repeated initialization replaced the pool:", err)
 	}
 	app.Config.Mail.Timeout = 0
 	app.Config.Mail.FromAddress = "test@example.invalid"
@@ -146,95 +129,5 @@ func TestOptionalServicesInitializeExplicitly(t *testing.T) {
 	}
 	if err := app.Shutdown(); err != nil {
 		t.Fatal(err)
-	}
-	if err := db.Ping(); err == nil {
-		t.Fatal("shutdown left the application-owned pool open")
-	}
-}
-
-// A test driver exposes deadlines and connection cleanup without a remote database.
-type startupDriver struct{ connection *startupConnection }
-
-func (d startupDriver) Open(string) (driver.Conn, error) { return d.connection, nil }
-
-type startupConnection struct {
-	ping   func(context.Context) error
-	closed bool
-}
-
-func (c *startupConnection) Prepare(string) (driver.Stmt, error) { return nil, errors.New("unused") }
-func (c *startupConnection) Begin() (driver.Tx, error)           { return nil, errors.New("unused") }
-func (c *startupConnection) Ping(ctx context.Context) error      { return c.ping(ctx) }
-func (c *startupConnection) Close() error {
-	c.closed = true
-	return nil
-}
-
-func TestDatabaseInitializationCleanup(t *testing.T) {
-	want := errors.New("database unavailable")
-	conn := &startupConnection{ping: func(ctx context.Context) error {
-		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 10*time.Second {
-			t.Error("database setup has no bounded deadline")
-		}
-		return want
-	}}
-	name := t.TempDir()
-	sql.Register(name, startupDriver{conn})
-	app, err := NewApplicationServer(config.Config{Database: config.DatabaseConfig{Driver: name}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := app.InitializeDatabase(context.Background()); !errors.Is(err, want) || app.Database != nil || !conn.closed {
-		t.Fatalf("failed setup: error=%v pool=%v closed=%t", err, app.Database, conn.closed)
-	}
-}
-
-func TestDatabaseCancellationAfterPing(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	conn := &startupConnection{ping: func(context.Context) error {
-		cancel()
-		return nil
-	}}
-	name := t.TempDir()
-	sql.Register(name, startupDriver{conn})
-	app, err := NewApplicationServer(config.Config{Database: config.DatabaseConfig{Driver: name}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := app.InitializeDatabase(ctx); !errors.Is(err, context.Canceled) || !conn.closed || app.Database != nil {
-		t.Fatalf("cancellation after ping: error=%v closed=%t pool=%v", err, conn.closed, app.Database)
-	}
-}
-
-func TestDatabaseInitializationCancellation(t *testing.T) {
-	for _, duration := range []time.Duration{0, time.Second, 10 * time.Second} {
-		t.Run(duration.String(), func(t *testing.T) {
-			name := t.TempDir()
-			synctest.Test(t, func(t *testing.T) {
-				conn := &startupConnection{ping: func(ctx context.Context) error {
-					<-ctx.Done()
-					return ctx.Err()
-				}}
-				sql.Register(name, startupDriver{conn})
-				app, err := NewApplicationServer(config.Config{Database: config.DatabaseConfig{Driver: name}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				ctx, cancel := context.WithTimeout(context.Background(), duration)
-				defer cancel()
-				if duration == 10*time.Second {
-					ctx = context.Background() // Exercise the initializer's own deadline.
-				}
-				started := time.Now()
-				err = app.InitializeDatabase(ctx)
-				if !errors.Is(err, context.DeadlineExceeded) || time.Since(started) != duration || app.Database != nil {
-					t.Fatalf("canceled setup: duration=%s error=%v pool=%v", time.Since(started), err, app.Database)
-				}
-				if conn.closed != (duration > 0) {
-					t.Fatal("setup opened a canceled connection or failed to close an acquired connection")
-				}
-			})
-		})
 	}
 }

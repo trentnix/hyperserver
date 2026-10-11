@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -76,7 +75,7 @@ mail:
 	t.Setenv("HYPERSERVER_AUTH_ACCOUNTSTORAGE_PROVIDER", "unknown")
 	t.Setenv("HYPERSERVER_MAIL_FROMADDRESS", "invalid")
 	t.Setenv("HYPERSERVER_MAIL_TIMEOUT", "-1s")
-	app, err := server.NewApplicationServer(cfg)
+	app, err := newApplication(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,13 +84,13 @@ mail:
 			t.Error(err)
 		}
 	})
-	if err := app.InitializeDatabase(t.Context()); err != nil {
+	if err := app.initializeDatabase(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err := newAccountSetup(app).Initialize(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := initializeSessions(t.Context(), app); err != nil {
+	if err := initializeSessions(t.Context(), app.ApplicationServer); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.InitializeMail(); err != nil {

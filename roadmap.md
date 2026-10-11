@@ -114,7 +114,7 @@ Account-provider selection and opening belong to [reference application setup](i
 
 Keep `ApplicationServer` as the core runtime passed to module initialization, not a catalog of every service an application might use. Application setup can hold related services in a typed struct and supply them through module options or constructors. Dependencies supplied by other modules use the existing declared-capability resolver. Each dependency must have one source. Do not add a service locator or another registration framework.
 
-Shared SQL helpers do not import database drivers. SQLite providers register their own driver, and the stateless application builds and tests without CGO. The core container's SQL-pool and mail fields remain separate removal work.
+Shared SQL helpers do not import database drivers. SQLite providers register their own driver, and the stateless application builds and tests without CGO. The reference application owns its SQL pool and supplies contact storage explicitly. The core and stateless application do not import SQL-pool code. Mail, session, and account-service fields remain in the core container.
 
 Imports make modules discoverable. Setup must select modules or deliberately select the registered catalog. Registration alone must not activate routes or acquire resources.
 

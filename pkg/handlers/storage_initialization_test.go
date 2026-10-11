@@ -7,6 +7,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -16,7 +17,7 @@ import (
 func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 	for _, failed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ready", true: "schema failure"}[failed], func(t *testing.T) {
-			app, err := server.NewApplicationServer(config.Config{Database: config.DatabaseConfig{Driver: "sqlite3", Connection: ":memory:"}})
+			app, err := server.NewApplicationServer(config.Config{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -25,13 +26,15 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			if err := app.InitializeDatabase(t.Context()); err != nil {
+			db, err := database.Setup("sqlite3", ":memory:")
+			if err != nil {
 				t.Fatal(err)
 			}
-			app.Database.SetMaxOpenConns(1)
+			app.OnShutdown("database", func(context.Context) error { return db.Close() })
+			db.SetMaxOpenConns(1)
 			if failed {
 				// A conflicting index prevents account table creation.
-				if _, err := app.Database.Exec(`CREATE TABLE unrelated (id INTEGER); CREATE INDEX user ON unrelated(id)`); err != nil {
+				if _, err := db.Exec(`CREATE TABLE unrelated (id INTEGER); CREATE INDEX user ON unrelated(id)`); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -43,7 +46,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					if _, ok := ctx.Deadline(); !ok {
 						t.Error("storage setup has no deadline")
 					}
-					repository := usersqlite.NewAccountRepository(app.Database)
+					repository := usersqlite.NewAccountRepository(db)
 					setupErr = repository.Initialize(ctx)
 					if setupErr != nil {
 						return setupErr
@@ -74,7 +77,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					}
 					// The consumer can build its own repository on the same borrowed pool.
 					var err error
-					contacts, err = models.NewContactRepository(ctx, app.Database)
+					contacts, err = models.NewContactRepository(ctx, db)
 					return err
 				},
 			})
@@ -103,13 +106,13 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					t.Fatal("consumer schema setup affected accounts:", err)
 				}
 			}
-			if err := app.Database.PingContext(t.Context()); err != nil {
+			if err := db.PingContext(t.Context()); err != nil {
 				t.Fatal("module initialization closed the borrowed pool:", err)
 			}
 			if err := app.Shutdown(); err != nil {
 				t.Fatal(err)
 			}
-			if err := app.Database.PingContext(t.Context()); err == nil {
+			if err := db.PingContext(t.Context()); err == nil {
 				t.Fatal("application shutdown left its pool open")
 			}
 		})

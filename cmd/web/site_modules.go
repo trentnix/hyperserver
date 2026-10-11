@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 
+	"github.com/jmoiron/sqlx"
+
 	// Register the reference application's email authentication provider.
 	_ "github.com/trentnix/hyperserver/auth/modules/email"
 
@@ -16,12 +18,12 @@ import (
 
 // siteModules snapshots imports and configures the reference site's factory.
 // The directory belongs to this application, not the process-wide catalog.
-func siteModules(directory string) ([]handlers.Descriptor, error) {
+func siteModules(db *sqlx.DB, directory string) ([]handlers.Descriptor, error) {
 	catalog := handlers.Registered()
-	if directory == "" {
-		return catalog, nil
-	}
 	newContacts := func(ctx context.Context) (site.ContactRepository, error) {
+		if directory == "" {
+			return models.NewContactRepository(ctx, db)
+		}
 		return models.NewFileContactRepository(ctx, directory)
 	}
 	return handlers.Replace(catalog, site.Module(newContacts))

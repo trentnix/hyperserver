@@ -4,12 +4,11 @@ import (
 	"context"
 
 	"github.com/trentnix/hyperserver/internal/reference"
-	"github.com/trentnix/hyperserver/pkg/server"
 )
 
 // initializeAccounts supplies account storage before its consumers initialize.
 // A supplied repository keeps its existing owner and bypasses provider selection.
-func initializeAccounts(ctx context.Context, app *server.ApplicationServer, accounts *reference.AccountStorage) error {
+func initializeAccounts(ctx context.Context, app *application, accounts *reference.AccountStorage) error {
 	if app.AccountRepository != nil {
 		return nil
 	}

@@ -18,10 +18,10 @@ import (
 
 type accountSetupHarness struct {
 	*reference.AccountStorage
-	app *server.ApplicationServer
+	app *application
 }
 
-func newAccountSetup(app *server.ApplicationServer) *accountSetupHarness {
+func newAccountSetup(app *application) *accountSetupHarness {
 	return &accountSetupHarness{AccountStorage: reference.NewAccountStorage(app.Config), app: app}
 }
 
@@ -30,12 +30,12 @@ func (s *accountSetupHarness) Initialize(ctx context.Context) error {
 }
 
 func TestInitializeAccountsDisabled(t *testing.T) {
-	s := newAccountSetup(&server.ApplicationServer{Config: &config.Config{}})
+	s := newAccountSetup(testApplicationWithPool(&server.ApplicationServer{Config: &config.Config{}}, nil))
 	if err := s.Initialize(context.Background()); err != nil {
 		t.Fatal("disabled auth required a database:", err)
 	}
 
-	s.app.Database = accountSetupTestDB(t)
+	s.app.ownDatabase(accountSetupTestDB(t))
 	if err := s.Initialize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestInitializeAccountsDeadline(t *testing.T) {
 					ctx, cancel = context.WithTimeout(ctx, timeout)
 					defer cancel()
 				}
-				s := newAccountSetup(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: db})
+				s := newAccountSetup(testApplicationWithPool(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}}, db))
 				start := time.Now()
 				if err := s.Initialize(ctx); !errors.Is(err, context.DeadlineExceeded) {
 					t.Fatalf("setup deadline error = %v", err)
@@ -91,10 +91,10 @@ func TestInitializeAccountsDeadline(t *testing.T) {
 func TestInitializeAccountsPreservesSuppliedRepository(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		repository := &suppliedAccountRepository{}
-		s := newAccountSetup(&server.ApplicationServer{
+		s := newAccountSetup(testApplicationWithPool(&server.ApplicationServer{
 			Config:            &config.Config{Auth: config.AuthConfig{Enabled: enabled}},
 			AccountRepository: repository,
-		})
+		}, nil))
 		if err := s.Initialize(context.Background()); err != nil {
 			t.Fatal("supplied repository required a database:", err)
 		}
@@ -111,7 +111,7 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 	for _, scenario := range []string{"missing pool", "closed pool", "canceled", "schema conflict"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := accountSetupTestDB(t)
-			s := newAccountSetup(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: db})
+			s := newAccountSetup(testApplicationWithPool(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}}, db))
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			switch scenario {
@@ -164,8 +164,8 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 }
 
 func TestApplicationOwnsAccountPool(t *testing.T) {
-	first := newAccountSetup(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: accountSetupTestDB(t)})
-	second := newAccountSetup(&server.ApplicationServer{Config: first.app.Config, Database: accountSetupTestDB(t)})
+	first := newAccountSetup(testApplicationWithPool(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}}, accountSetupTestDB(t)))
+	second := newAccountSetup(testApplicationWithPool(&server.ApplicationServer{Config: first.app.Config}, accountSetupTestDB(t)))
 	for _, s := range []*accountSetupHarness{first, second} {
 		if err := s.Initialize(context.Background()); err != nil {
 			t.Fatal(err)

@@ -16,7 +16,7 @@ import (
 
 func TestHTTPMixedStorage(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "contacts")
-	catalog, err := siteModules(directory)
+	catalog, err := siteModules(nil, directory)
 	if err != nil {
 		t.Fatal(err)
 	}

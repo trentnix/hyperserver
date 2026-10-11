@@ -29,8 +29,8 @@ type (
 	// SiteModule contains all of the data required to implement the site module
 	SiteModule struct {
 		AppName string
-		// NewContacts optionally selects and prepares this module's contact storage.
-		// Set it before initialization. A nil factory uses the shared SQLite pool.
+		// NewContacts prepares this module's contact storage. Applications must
+		// supply the factory before initialization.
 		NewContacts func(context.Context) (ContactRepository, error)
 
 		contacts            ContactRepository
@@ -76,8 +76,8 @@ func init() {
 	handlers.Register(Module(nil))
 }
 
-// Module describes the site with an optional contact-storage factory. Nil selects
-// SQLite using the application's pool. The factory runs during Init, not registration.
+// Module describes the site with an application-supplied contact-storage factory.
+// The factory runs during Init, not registration. A nil factory prevents initialization.
 // Applications own shared services and any connections supplied by the factory.
 func Module(newContacts func(context.Context) (ContactRepository, error)) handlers.Descriptor {
 	return handlers.Descriptor{Name: "site", New: func() handlers.Handler {
@@ -95,13 +95,10 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 		return fmt.Errorf("site requires a content manager")
 	}
 
-	var contacts ContactRepository
-	var err error
-	if m.NewContacts != nil {
-		contacts, err = m.NewContacts(ctx)
-	} else {
-		contacts, err = models.NewContactRepository(ctx, s.Database)
+	if m.NewContacts == nil {
+		return fmt.Errorf("site requires a contact-storage factory")
 	}
+	contacts, err := m.NewContacts(ctx)
 	if err != nil {
 		return err
 	}

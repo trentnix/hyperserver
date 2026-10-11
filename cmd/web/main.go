@@ -42,7 +42,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	app, err := server.NewApplicationServer(cfg)
+	app, err := newApplication(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,14 +53,14 @@ func main() {
 }
 
 // run delegates serving and resource ownership to the shared application lifecycle.
-func run(ctx context.Context, s *server.ApplicationServer, accounts *reference.AccountStorage, contactDirectory string) error {
+func run(ctx context.Context, s *application, accounts *reference.AccountStorage, contactDirectory string) error {
 	return s.Run(ctx, func(ctx context.Context) (*http.Server, net.Listener, error) {
 		return prepareHTTP(ctx, s, accounts, contactDirectory)
 	})
 }
 
 // prepareHTTP selects the reference application's services, modules, and HTTP stack.
-func prepareHTTP(ctx context.Context, s *server.ApplicationServer, accounts *reference.AccountStorage, contactDirectory string) (*http.Server, net.Listener, error) {
+func prepareHTTP(ctx context.Context, s *application, accounts *reference.AccountStorage, contactDirectory string) (*http.Server, net.Listener, error) {
 	address, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port)
 	if err != nil {
 		return nil, nil, err
@@ -73,7 +73,7 @@ func prepareHTTP(ctx context.Context, s *server.ApplicationServer, accounts *ref
 
 	// The reference site's contact storage uses this pool. Mail is used by its
 	// sample routes and the email authentication provider. Neither is a core requirement.
-	if err := s.InitializeDatabase(ctx); err != nil {
+	if err := s.initializeDatabase(ctx); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare application database: %w", err)
 	}
 	if err := s.InitializeMail(); err != nil {
@@ -84,24 +84,24 @@ func prepareHTTP(ctx context.Context, s *server.ApplicationServer, accounts *ref
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := initializeSessions(ctx, s); err != nil {
+	if err := initializeSessions(ctx, s.ApplicationServer); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare session storage: %w", err)
 	}
 	if err := initializeAccounts(ctx, s, accounts); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l := logger.NewSlogLogger(nil)
-	catalog, err := siteModules(s.Config.FilePath(contactDirectory))
+	catalog, err := siteModules(s.Database, s.Config.FilePath(contactDirectory))
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// attach routes and their handlers to the router
-	if err := SetupHandlers(ctx, s, l, catalog, nil); err != nil {
+	if err := SetupHandlers(ctx, s.ApplicationServer, l, catalog, nil); err != nil {
 		return nil, nil, fmt.Errorf("failed to set up the registered handlers: %w", err)
 	}
 
-	handler, err := applicationHandler(s, l)
+	handler, err := applicationHandler(s.ApplicationServer, l)
 	if err != nil {
 		return nil, nil, err
 	}

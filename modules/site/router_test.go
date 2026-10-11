@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
@@ -20,13 +21,15 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 		Config:         &config.Config{Auth: config.AuthConfig{Enabled: true, RegistrationEnabled: true}},
 		ContentManager: content_services.NewContentManager(),
 	}
-	m := Module(nil).New().(*SiteModule)
 	db, err := sqlx.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	db.SetMaxOpenConns(1)
-	s.Database = db
+	s.OnShutdown("database", func(context.Context) error { return db.Close() })
+	m := Module(func(ctx context.Context) (ContactRepository, error) {
+		return models.NewContactRepository(ctx, db)
+	}).New().(*SiteModule)
 	t.Cleanup(func() { s.Shutdown() })
 	if err := m.Init(context.Background(), s); err != nil {
 		t.Fatal(err)

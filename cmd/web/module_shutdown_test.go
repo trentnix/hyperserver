@@ -31,7 +31,7 @@ func (m *lifecycleModule) Shutdown(ctx context.Context) error { return m.close(c
 func TestSetupHandlersOwnsModuleCleanup(t *testing.T) {
 	for _, mode := range []string{"success", "route error", "route conflict"} {
 		t.Run(mode, func(t *testing.T) {
-			app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux(), Database: shutdownTestDB(t)}
+			app := testApplicationWithPool(&server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}, shutdownTestDB(t))
 			t.Cleanup(func() { _ = app.Shutdown() })
 			var steps, closed []string
 			routeErr, closeErr := errors.New("routes failed"), errors.New("cleanup failed")
@@ -66,7 +66,7 @@ func TestSetupHandlersOwnsModuleCleanup(t *testing.T) {
 				{Name: "provider", New: func() handlers.Handler { return provider }, Provides: []string{"storage"}},
 			}
 			ctx, cancel := context.WithCancel(context.Background())
-			err := SetupHandlers(ctx, app, nil, catalog, nil)
+			err := SetupHandlers(ctx, app.ApplicationServer, nil, catalog, nil)
 			cancel()
 			if mode == "success" {
 				if err != nil || len(closed) != 0 {

@@ -47,7 +47,7 @@ func TestModuleOwnsSiteSetup(t *testing.T) {
 		if err := module.Init(ctx, app); err != nil {
 			t.Fatal(err)
 		}
-		if app.Database != nil || app.Mail != nil || app.SessionManager != nil || app.ContentManager != contentManager {
+		if app.Mail != nil || app.SessionManager != nil || app.ContentManager != contentManager {
 			t.Fatal("module initialized or replaced an application service")
 		}
 		if err := module.Routes(routing.NewRoutes(app.Web)); err != nil {

@@ -27,7 +27,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
-	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session/stores"
@@ -44,7 +43,7 @@ func runHTTPScenario(t *testing.T, scenario func(*httpHarness), configure ...fun
 // Browser scenarios need room for download, startup, checks, and process cleanup.
 func runHTTPScenarioWithTimeout(t *testing.T, timeout time.Duration, scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
-	runHTTPScenarioWithCatalog(t, timeout, handlers.Registered(), scenario, configure...)
+	runHTTPScenarioWithCatalog(t, timeout, nil, scenario, configure...)
 }
 
 func runHTTPScenarioWithCatalog(t *testing.T, timeout time.Duration, catalog []handlers.Descriptor, scenario func(*httpHarness), configure ...func(*config.Config)) {
@@ -149,7 +148,7 @@ func (l *capturedLogs) String() string {
 
 type httpHarness struct {
 	baseURL string
-	app     *server.ApplicationServer
+	app     *application
 	handler http.Handler
 	mail    *fakeMailSender
 	cookies http.CookieJar
@@ -158,7 +157,7 @@ type httpHarness struct {
 
 func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
-	return newHTTPHarnessWithCatalog(t, handlers.Registered(), configure...)
+	return newHTTPHarnessWithCatalog(t, nil, configure...)
 }
 
 func testTemplateFile(t *testing.T, name string) content.TemplatePath {
@@ -212,15 +211,20 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 	if err := stores.ValidateConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
-	db, err := database.Setup(cfg.Database.Driver, cfg.Database.Connection)
+	app, err := newApplication(*cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
+		if err := app.Shutdown(); err != nil {
 			t.Error(err)
 		}
 	})
+	db, err := database.Setup(cfg.Database.Driver, cfg.Database.Connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.ownDatabase(db)
 	if err := db.Ping(); err != nil {
 		t.Fatal(err)
 	}
@@ -230,32 +234,29 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 	if err != nil {
 		t.Fatal(err)
 	}
-	app, err := server.NewApplicationServer(*cfg)
-	if err != nil {
+	app.Mail = mailClient
+	if err := initializeSessions(context.Background(), app.ApplicationServer); err != nil {
 		t.Fatal(err)
 	}
-	app.Database, app.Mail = db, mailClient
-	if err := initializeSessions(context.Background(), app); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.SessionManager.Close(); err != nil {
-			t.Error(err)
-		}
-	})
 	if err := initializeAccounts(context.Background(), app, reference.NewAccountStorage(app.Config)); err != nil {
 		t.Fatal(err)
 	}
 	logs := &capturedLogs{}
 	l := &testLogger{logs: logs}
-	if err := SetupHandlers(context.Background(), app, l, catalog, nil); err != nil {
+	if catalog == nil {
+		catalog, err = siteModules(db, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SetupHandlers(context.Background(), app.ApplicationServer, l, catalog, nil); err != nil {
 		t.Fatal(err)
 	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := applicationHandler(app, l)
+	handler, err := applicationHandler(app.ApplicationServer, l)
 	if err != nil {
 		t.Fatal(err)
 	}

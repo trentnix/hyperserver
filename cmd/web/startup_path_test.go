@@ -12,7 +12,6 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/reference"
-	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -54,7 +53,7 @@ func checkStartupStoragePaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app, err := server.NewApplicationServer(cfg)
+	app, err := newApplication(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

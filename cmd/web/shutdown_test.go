@@ -21,6 +21,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -95,16 +96,19 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	releaseRequest := func() { releaseOnce.Do(func() { close(release) }) }
 	var activeSession *session.Session
 	moduleClosed := false
-	s.OnShutdown("test module", func(context.Context) error {
-		if activeSession == nil && os.Getenv("HS_STARTUP_TEST_HELPER") != "shutdown-timeout" {
-			t.Error("module closed before active request drained")
-		}
-		if err := s.Database.Ping(); err != nil {
-			t.Error("module closed after its shared pool:", err)
-		}
-		moduleClosed = true
-		return nil
-	})
+	var steps []string
+	handlers.Register(handlers.Descriptor{Name: "shutdown-test", New: func() handlers.Handler {
+		return &lifecycleModule{orderedModule: orderedModule{steps: &steps}, close: func(context.Context) error {
+			if activeSession == nil && os.Getenv("HS_STARTUP_TEST_HELPER") != "shutdown-timeout" {
+				t.Error("module closed before active request drained")
+			}
+			if err := s.Database.Ping(); err != nil {
+				t.Error("module closed after its shared pool:", err)
+			}
+			moduleClosed = true
+			return nil
+		}}
+	}})
 	s.Web.HandleFunc("POST /test-shutdown", func(w http.ResponseWriter, r *http.Request) {
 		defer close(handlerFinished)
 		if (r.TLS != nil) != secure {
@@ -269,7 +273,7 @@ func shutdownTestDB(t *testing.T) *sqlx.DB {
 
 func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	db := shutdownTestDB(t)
-	owner := &server.ApplicationServer{Database: db}
+	owner := testApplicationWithPool(&server.ApplicationServer{}, db)
 	if err := usersqlite.PrepareDatabase(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +363,7 @@ func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
 	for _, failure := range []string{"listen address", "mail setup", "TLS files", "session setup", "account setup"} {
 		t.Run(failure, func(t *testing.T) {
 			db := shutdownTestDB(t)
-			s := &server.ApplicationServer{Database: db, Config: &config.Config{}}
+			s := testApplicationWithPool(&server.ApplicationServer{Config: &config.Config{}}, db)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			switch failure {
@@ -404,7 +408,7 @@ func TestRunRejectsInvalidShutdownTimeout(t *testing.T) {
 			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "http.shutdownTimeout must be positive") {
 				t.Fatalf("configuration validation = %v", err)
 			}
-			app := &server.ApplicationServer{Config: cfg, Database: shutdownTestDB(t)}
+			app := testApplicationWithPool(&server.ApplicationServer{Config: cfg}, shutdownTestDB(t))
 			if err := run(context.Background(), app, reference.NewAccountStorage(app.Config), ""); err == nil || !strings.Contains(err.Error(), "http.shutdownTimeout must be positive") {
 				t.Fatalf("startup validation = %v", err)
 			}

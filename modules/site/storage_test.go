@@ -70,3 +70,18 @@ func TestSiteChecksRequirementsBeforeOpeningStorage(t *testing.T) {
 		}
 	}
 }
+
+func TestSiteRequiresExplicitContactStorage(t *testing.T) {
+	app, err := server.NewApplicationServer(config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	module := Module(nil).New().(*SiteModule)
+	err = module.Init(t.Context(), app)
+	if err == nil || err.Error() != "site requires a contact-storage factory" {
+		t.Fatalf("missing factory: %v", err)
+	}
+	if module.contacts != nil || module.contentManager != nil {
+		t.Fatal("failed initialization installed site state")
+	}
+}

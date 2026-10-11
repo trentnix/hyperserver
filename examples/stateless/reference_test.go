@@ -12,6 +12,8 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	site "github.com/trentnix/hyperserver/modules/site"
+	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -55,17 +57,21 @@ func TestApplicationRunsBesideReferenceSite(t *testing.T) {
 		t.Run(map[bool]string{true: "stop site", false: "stop hello"}[stopSite], func(t *testing.T) {
 			t.Chdir(t.TempDir())
 			reference, err := server.NewApplicationServer(config.Config{
-				App:      config.AppConfig{Name: "Reference site"},
-				Database: config.DatabaseConfig{Driver: "sqlite3", Connection: ":memory:"},
+				App: config.AppConfig{Name: "Reference site"},
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = reference.Shutdown() })
-			if err := reference.InitializeDatabase(context.Background()); err != nil {
+			db, err := database.Setup("sqlite3", ":memory:")
+			if err != nil {
 				t.Fatal(err)
 			}
-			modules, err := handlers.Initialize(context.Background(), reference, []handlers.Descriptor{site.Module(nil)}, nil)
+			reference.OnShutdown("database", func(context.Context) error { return db.Close() })
+			newContacts := func(ctx context.Context) (site.ContactRepository, error) {
+				return models.NewContactRepository(ctx, db)
+			}
+			modules, err := handlers.Initialize(context.Background(), reference, []handlers.Descriptor{site.Module(newContacts)}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -107,7 +113,7 @@ func TestApplicationRunsBesideReferenceSite(t *testing.T) {
 			}
 			check(survivor)
 			if !stopSite {
-				if err := reference.Database.Ping(); err != nil {
+				if err := db.Ping(); err != nil {
 					t.Fatal("stateless shutdown closed the site's database:", err)
 				}
 			}
