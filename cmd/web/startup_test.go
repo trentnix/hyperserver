@@ -33,7 +33,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		}
 		os.Args = append(os.Args, "-contact-directory", path)
 		main()
-	case "shutdown", "shutdown-tls":
+	case "shutdown", "shutdown-tls", "shutdown-timeout":
 		checkRunShutdown(t, os.Getenv("HS_STARTUP_TEST_HELPER") == "shutdown-tls")
 	case "signals":
 		runSignalTestHelper(t)
@@ -57,6 +57,17 @@ func TestStartupHelperProcess(t *testing.T) {
 	case "listen-failure":
 		s := newStartupApplication(t)
 		closed := 0
+		moduleClosed := 0
+		var steps []string
+		handlers.Register(handlers.Descriptor{Name: "owned-test-module", New: func() handlers.Handler {
+			return &lifecycleModule{orderedModule: orderedModule{name: "owned", steps: &steps}, close: func(context.Context) error {
+				moduleClosed++
+				if closed != 0 {
+					t.Error("account provider closed before module")
+				}
+				return s.Database.Ping()
+			}}
+		}})
 		s.Config.Auth.AccountStorage.Provider = "custom"
 		if err := s.RegisterAccountProvider("custom", server.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
 			repository := user.NewSQLiteAccountRepository(s.Database)
@@ -79,8 +90,8 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := run(context.Background(), s, ""); err == nil || !strings.Contains(err.Error(), "address already in use") {
 			t.Fatalf("listen failure = %v", err)
 		}
-		if closed != 1 {
-			t.Fatalf("listen failure called account cleanup %d times, want 1", closed)
+		if closed != 1 || moduleClosed != 1 {
+			t.Fatalf("listen failure cleanup calls: accounts=%d modules=%d", closed, moduleClosed)
 		}
 		if err := s.Database.Ping(); err == nil {
 			t.Fatal("listen failure left the application's pool open")

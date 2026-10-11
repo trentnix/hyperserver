@@ -49,6 +49,8 @@ type (
 		// Applications supply shared services. Modules must not initialize or close
 		// borrowed services. Open and validate owned storage before returning success.
 		// Honor ctx for initialization I/O. Do not retain it for request-time operations.
+		// On failure, release partially acquired resources before returning the error.
+		// Implement ShutdownHandler to release owned resources after successful Init.
 		Init(context.Context, *server.ApplicationServer) error
 	}
 )

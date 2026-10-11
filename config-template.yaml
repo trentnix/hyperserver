@@ -34,6 +34,9 @@ http:
   # Maximum wait for another request on a keep-alive connection.
   # Zero uses readTimeout.
   idleTimeout: "2m"
+  # Time for active HTTP requests to finish after the listener stops accepting requests.
+  # Defaults to 10s and must be positive. Module cleanup has a separate deadline.
+  shutdownTimeout: "10s"
   # Inherited default for routes registered through routing.Routes.
   # Modules and handlers can override it or explicitly select no route limit.
   defaultRateLimit:

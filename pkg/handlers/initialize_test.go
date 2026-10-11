@@ -156,7 +156,7 @@ func TestInitializeRejectsInvalidPublications(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), `module "provider"`) {
 				t.Fatalf("error = %v", err)
 			}
-			if len(instances) != 1 || instances[0].Name != "provider" {
+			if len(instances) != 0 {
 				t.Fatalf("initialized instances = %v", instances)
 			}
 		})
@@ -316,11 +316,7 @@ func TestInitializeStopsOnFailureAndCancellation(t *testing.T) {
 			if strings.Join(steps, ",") != wantSteps {
 				t.Fatalf("steps = %v", steps)
 			}
-			wantCount := 0
-			if phase == "cancel init" || phase == "cancel publication" {
-				wantCount = 1
-			}
-			if len(instances) != wantCount {
+			if len(instances) != 0 {
 				t.Fatalf("initialized instances = %v", instances)
 			}
 		})
@@ -390,7 +386,7 @@ func TestInitializeOptionalProviderFailureStopsConsumer(t *testing.T) {
 				if !errors.Is(err, cause) || len(instances) != 0 {
 					t.Fatalf("instances = %v, error = %v", instances, err)
 				}
-			} else if !strings.Contains(err.Error(), `bind module "consumer"`) || len(instances) != 1 || instances[0].Name != "provider" {
+			} else if !strings.Contains(err.Error(), `bind module "consumer"`) || len(instances) != 0 {
 				t.Fatalf("instances = %v, error = %v", instances, err)
 			}
 		})
@@ -420,12 +416,12 @@ func TestGetDependenciesRejectsPartialResults(t *testing.T) {
 	consumer.Requires = []handlers.Requirement{{Capability: "storage", Multiple: true}}
 	catalog = append(catalog, consumer)
 	instances, err := handlers.Initialize(context.Background(), nil, catalog, nil)
-	if err == nil || len(instances) != 2 {
+	if err == nil || len(instances) != 0 {
 		t.Fatalf("instances = %v, error = %v", instances, err)
 	}
 }
 
-func TestInitializePreservesCompletedInstancesOnLaterFailure(t *testing.T) {
+func TestInitializeReturnsNoInstancesOnLaterFailure(t *testing.T) {
 	cause := errors.New("initialization failed")
 	for _, canceled := range []bool{false, true} {
 		t.Run(fmt.Sprintf("canceled=%t", canceled), func(t *testing.T) {
@@ -450,7 +446,7 @@ func TestInitializePreservesCompletedInstancesOnLaterFailure(t *testing.T) {
 			if canceled {
 				wantErr = context.Canceled
 			}
-			if !errors.Is(err, wantErr) || len(instances) != 1 || instances[0].Name != "first" {
+			if !errors.Is(err, wantErr) || len(instances) != 0 {
 				t.Fatalf("instances = %v, error = %v", instances, err)
 			}
 		})

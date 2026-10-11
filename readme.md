@@ -87,6 +87,9 @@ modules, err := handlers.Initialize(ctx, app, catalog, nil)
 if err != nil {
     return err
 }
+app.OnShutdown("modules", func(ctx context.Context) error {
+    return handlers.Close(ctx, modules)
+})
 routes := routing.NewRoutes(app.Web)
 for _, module := range modules {
     if err := module.Routes(routes); err != nil {
@@ -143,7 +146,24 @@ app:
 
 `HYPERSERVER_APP_INITIALIZATIONTIMEOUT` overrides the file. The budget covers all module initialization, not each module separately, and an earlier parent deadline wins. Database, account, and session setup retain their separate ten-second limits. The initializer itself does not read configuration.
 
-See the [complete storage-provider example](pkg/handlers/example_test.go). Modules without declared dependencies can keep using `Init` alone. Existing application-supplied services still arrive through `ApplicationServer`. `Initialize` does not bind routes or close resources. On failure it returns the modules whose `Init` succeeded so the application can clean them up. Automatic module cleanup remains pending.
+### Module cleanup
+
+A module that owns resources can implement `Shutdown(context.Context) error`. Modules without owned resources need no shutdown hook. `handlers.Initialize` rolls back completed modules when startup fails. A failing `Init` must release its own partially acquired resources. Factories and dependency-binding hooks must not acquire resources.
+
+After initialization succeeds, register `handlers.Close` with `app.OnShutdown`, as shown above. Call `app.Shutdown()` on later startup errors and after requests drain. The reference application's `SetupHandlers` handles module rollback on route errors and registers cleanup on success. Cleanup runs consumers before providers, leaves borrowed services open, and reports all errors. Repeated cleanup calls do not rerun module hooks.
+
+`Shutdown()` gives cleanup ten seconds. `ShutdownContext(ctx)` accepts a different deadline. Modules must honor cancellation and stop their background work before returning. Cleanup cannot interrupt code that ignores context or context-free storage close functions.
+
+The reference application handles `SIGINT` and `SIGTERM`, stops accepting requests, and gives active requests `http.shutdownTimeout` to finish. The setting defaults to `10s` and must be positive. To allow longer requests to drain:
+
+```yaml
+http:
+  shutdownTimeout: 30s
+```
+
+`HYPERSERVER_HTTP_SHUTDOWNTIMEOUT` overrides the file. The setting controls HTTP draining only, not normal request duration or the separate module-cleanup deadline. After requests drain, the application closes modules, account providers, session providers, and the shared database. If draining times out, it closes HTTP connections and exits with an error without closing services underneath running handlers. A second signal forces exit. Applications that use hijacked connections must manage those connections separately.
+
+See the [complete storage-provider example](pkg/handlers/example_test.go). Modules without declared dependencies can keep using `Init` alone. Existing application-supplied services still arrive through `ApplicationServer`. `Initialize` does not bind routes. On failure, it closes completed modules and returns no instances.
 
 ### Route registration errors
 

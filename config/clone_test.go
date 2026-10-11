@@ -9,7 +9,7 @@ import (
 func TestConfigClone(t *testing.T) {
 	timeout := time.Minute
 	original := Config{
-		HTTP: HTTPConfig{PublicOrigin: "https://example.com", TrustedProxies: []string{"127.0.0.1/32"}},
+		HTTP: HTTPConfig{PublicOrigin: "https://example.com", TrustedProxies: []string{"127.0.0.1/32"}, ShutdownTimeout: &timeout},
 		Auth: AuthConfig{
 			Services:       map[string]map[string]string{"email": {"enabled": "true"}, "unset": nil},
 			AccountStorage: AccountStorageConfig{Provider: "custom", Options: map[string]string{"bucket": "users"}},
@@ -22,6 +22,7 @@ func TestConfigClone(t *testing.T) {
 
 	for name, mutate := range map[string]func(*Config){
 		"initialization timeout":   func(c *Config) { *c.App.InitializationTimeout = time.Second },
+		"shutdown timeout":         func(c *Config) { *c.HTTP.ShutdownTimeout = time.Second },
 		"scalar":                   func(c *Config) { c.App.Name = "changed" },
 		"proxy slice":              func(c *Config) { c.HTTP.TrustedProxies[0] = "192.0.2.0/24" },
 		"session mapping":          func(c *Config) { c.HTTP.Session.Types["default"] = "sqliteStore" },

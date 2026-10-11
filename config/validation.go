@@ -10,6 +10,9 @@ import (
 
 // Validate checks shared settings. Provider packages validate their own options.
 func (c Config) Validate() error {
+	if timeout := c.HTTP.ShutdownTimeout; timeout != nil && *timeout <= 0 {
+		return fmt.Errorf("http.shutdownTimeout must be positive")
+	}
 	if timeout := c.App.InitializationTimeout; timeout != nil && *timeout <= 0 {
 		return fmt.Errorf("app.initializationTimeout must be positive")
 	}

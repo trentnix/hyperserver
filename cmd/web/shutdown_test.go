@@ -33,6 +33,18 @@ func TestRunDrainsRequestsBeforeClosingPool(t *testing.T) {
 	}
 }
 
+func TestRunPreservesServicesWhenDrainingTimesOut(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
+	output, err := runStartupProcess(t, yaml, "shutdown-timeout", "HYPERSERVER_HTTP_SHUTDOWNTIMEOUT=1s")
+	if err != nil || !strings.Contains(string(output), "drain timeout ownership passed") {
+		t.Fatalf("drain timeout: error=%v output=%s", err, output)
+	}
+}
+
 func testRunDrainsRequestsBeforeClosingPool(t *testing.T, scheme string) {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
@@ -76,10 +88,23 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	}
 	defer transport.CloseIdleConnections()
 	started, release := make(chan struct{}), make(chan struct{})
+	handlerFinished := make(chan struct{})
 	var releaseOnce sync.Once
 	releaseRequest := func() { releaseOnce.Do(func() { close(release) }) }
 	var activeSession *session.Session
+	moduleClosed := false
+	s.OnShutdown("test module", func(context.Context) error {
+		if activeSession == nil && os.Getenv("HS_STARTUP_TEST_HELPER") != "shutdown-timeout" {
+			t.Error("module closed before active request drained")
+		}
+		if err := s.Database.Ping(); err != nil {
+			t.Error("module closed after its shared pool:", err)
+		}
+		moduleClosed = true
+		return nil
+	})
 	s.Web.HandleFunc("POST /test-shutdown", func(w http.ResponseWriter, r *http.Request) {
+		defer close(handlerFinished)
 		if (r.TLS != nil) != secure {
 			t.Error("request TLS state does not match the listener configuration")
 		}
@@ -159,6 +184,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 		response <- err
 	}()
 	awaitSignal(t, started)
+	shutdownStarted := time.Now()
 	cancel()
 
 	// Wait for shutdown to stop accepting connections while the request is held.
@@ -182,9 +208,36 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	if err := s.Database.Ping(); err != nil {
 		t.Fatal("run closed the pool before its active request finished:", err)
 	}
+	if os.Getenv("HS_STARTUP_TEST_HELPER") == "shutdown-timeout" {
+		select {
+		case err := <-done:
+			if !errors.Is(err, errHTTPDrainIncomplete) || !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatal("unexpected shutdown error:", err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("run ignored configured HTTP drain deadline")
+		}
+		if elapsed := time.Since(shutdownStarted); elapsed < *s.Config.HTTP.ShutdownTimeout {
+			t.Fatalf("draining stopped after %v, before configured timeout %v", elapsed, *s.Config.HTTP.ShutdownTimeout)
+		}
+		if moduleClosed || s.Database.Ping() != nil {
+			t.Fatal("run closed shared services while a handler was still running")
+		}
+		releaseRequest()
+		awaitSignal(t, handlerFinished)
+		// The production process exits here. The test owns cleanup after its handler stops.
+		if err := s.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintln(stdout, "drain timeout ownership passed")
+		return
+	}
 	releaseRequest()
 	awaitResult(t, response)
 	awaitResult(t, done)
+	if !moduleClosed {
+		t.Fatal("run did not close the module")
+	}
 	if err := s.Database.Ping(); err == nil {
 		t.Fatal("run returned without closing the application's pool")
 	}
@@ -244,7 +297,7 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- serveHTTP(ctx, s, closing) }()
+	go func() { done <- serveHTTP(ctx, s, closing, 10*time.Second) }()
 	t.Cleanup(func() {
 		cancel()
 		releaseRequest()
@@ -337,9 +390,80 @@ func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
 func TestServeHTTPReturnsListenerFailure(t *testing.T) {
 	want := errors.New("accept failed")
 	listener := &failedListener{err: want}
-	if err := serveHTTP(context.Background(), &http.Server{}, listener); !errors.Is(err, want) {
+	if err := serveHTTP(context.Background(), &http.Server{}, listener, time.Second); !errors.Is(err, want) {
 		t.Fatalf("serve error = %v, want %v", err, want)
 	}
+}
+
+func TestRunRejectsInvalidShutdownTimeout(t *testing.T) {
+	for _, timeout := range []time.Duration{0, -time.Second} {
+		t.Run(timeout.String(), func(t *testing.T) {
+			cfg := &config.Config{HTTP: config.HTTPConfig{ShutdownTimeout: &timeout}}
+			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "http.shutdownTimeout must be positive") {
+				t.Fatalf("configuration validation = %v", err)
+			}
+			app := &server.ApplicationServer{Config: cfg, Database: shutdownTestDB(t)}
+			if err := run(context.Background(), app, ""); err == nil || !strings.Contains(err.Error(), "http.shutdownTimeout must be positive") {
+				t.Fatalf("startup validation = %v", err)
+			}
+			if app.Database.Ping() == nil {
+				t.Fatal("invalid timeout left the application pool open")
+			}
+		})
+	}
+}
+
+func TestServeHTTPDrainDeadline(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	releaseRequest := func() { once.Do(func() { close(release) }) }
+	defer releaseRequest()
+	requestContext := make(chan context.Context, 1)
+	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(finished)
+		requestContext <- r.Context()
+		close(started)
+		<-release // Deliberately ignore cancellation to prove shutdown stays bounded.
+	})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- serveHTTP(ctx, s, listener, 30*time.Millisecond) }()
+	client := &http.Client{Timeout: 3 * time.Second}
+	defer client.CloseIdleConnections()
+	response := make(chan error, 1)
+	go func() {
+		res, err := client.Get("http://" + listener.Addr().String())
+		if res != nil {
+			res.Body.Close()
+		}
+		response <- err
+	}()
+	awaitSignal(t, started)
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, errHTTPDrainIncomplete) || !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal("drain timeout error:", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("shutdown ignored drain deadline")
+	}
+	awaitSignal(t, (<-requestContext).Done())
+	select {
+	case err := <-response:
+		if err == nil {
+			t.Error("client connection remained open after forced close")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("client connection did not close")
+	}
+	releaseRequest()
+	awaitSignal(t, finished)
 }
 
 type failedListener struct {

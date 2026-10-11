@@ -11,6 +11,10 @@ func (c Config) Clone() Config {
 	c.HTTP.TrustedProxies = slices.Clone(c.HTTP.TrustedProxies)
 	c.HTTP.Session.Types = maps.Clone(c.HTTP.Session.Types)
 	c.HTTP.Session.Stores = cloneOptions(c.HTTP.Session.Stores)
+	if c.HTTP.ShutdownTimeout != nil {
+		timeout := *c.HTTP.ShutdownTimeout
+		c.HTTP.ShutdownTimeout = &timeout
+	}
 	c.Auth.Services = cloneOptions(c.Auth.Services)
 	c.Auth.AccountStorage.Options = maps.Clone(c.Auth.AccountStorage.Options)
 	if c.App.InitializationTimeout != nil {

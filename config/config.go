@@ -27,6 +27,7 @@ type (
 		ReadTimeout      time.Duration   // Maximum time to read a request, including its body.
 		WriteTimeout     time.Duration   // Maximum time to write a response.
 		IdleTimeout      time.Duration   // Maximum wait for another request on a keep-alive connection.
+		ShutdownTimeout  *time.Duration  // HTTP request-drain budget. Nil defaults to 10s. If set, must be positive.
 		DefaultRateLimit RateLimitConfig // Inherited per-route policy. Module and handler policies replace it.
 		SharedRateLimit  RateLimitConfig // Optional aggregate per-client budget. Route overrides do not bypass it.
 		// TLS enables direct HTTPS using a PEM certificate and private key.

@@ -38,6 +38,7 @@ type (
 		Mail              *messaging.MailClient
 		accountProviders  map[string]AccountProvider
 		closeAccounts     func() error
+		shutdownHooks     []shutdownHook
 	}
 )
 
@@ -56,15 +57,51 @@ func NewApplicationServer(cfg config.Config) (*ApplicationServer, error) {
 	return s, nil
 }
 
-// Shutdown closes account providers, session providers, and the application's
-// database pool. Call serially after draining HTTP requests and stopping other
-// consumers. Borrowing modules must not call it.
+// Shutdown runs registered cleanup, then closes account providers, session providers,
+// and the application database with a ten-second cooperative deadline. Call serially
+// after draining requests and stopping other consumers. Borrowing modules must not call it.
 func (s *ApplicationServer) Shutdown() error {
+	return s.ShutdownContext(context.Background())
+}
+
+// OnShutdown registers application-owned cleanup during startup. Hooks run once,
+// in reverse registration order, before account, session, and database services
+// close. Call serially, registering providers before consumers. Hooks must honor ctx.
+// A nil function is ignored.
+func (s *ApplicationServer) OnShutdown(name string, close func(context.Context) error) {
+	if close == nil {
+		return
+	}
+	s.shutdownHooks = append(s.shutdownHooks, shutdownHook{name: name, close: close})
+}
+
+type shutdownHook struct {
+	name  string
+	close func(context.Context) error
+}
+
+// ShutdownContext runs cleanup after requests and other consumers have stopped.
+// It uses ctx's deadline, or ten seconds if none is set. Cleanup is cooperative:
+// context-free provider close functions cannot be interrupted. All hooks are
+// attempted even after an error or cancellation. Call serially, never during requests.
+func (s *ApplicationServer) ShutdownContext(ctx context.Context) error {
+	if _, bounded := ctx.Deadline(); !bounded {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
 	var err error
+	hooks := s.shutdownHooks
+	s.shutdownHooks = nil
+	for i := len(hooks) - 1; i >= 0; i-- {
+		if closeErr := errors.Join(hooks[i].close(ctx), ctx.Err()); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("shutdown %q: %w", hooks[i].name, closeErr))
+		}
+	}
 	if s.closeAccounts != nil {
 		closeAccounts := s.closeAccounts
 		s.closeAccounts = nil
-		err = closeAccounts()
+		err = errors.Join(err, closeAccounts())
 	}
 	if s.SessionManager != nil {
 		err = errors.Join(err, s.SessionManager.Close())
@@ -72,7 +109,7 @@ func (s *ApplicationServer) Shutdown() error {
 	if s.Database != nil {
 		err = errors.Join(err, s.Database.Close())
 	}
-	return err
+	return errors.Join(err, ctx.Err())
 }
 
 // InitializeDatabase opens and checks the application-owned pool with a startup

@@ -40,6 +40,8 @@ func GetConfig() (Config, error) {
 func defaultConfig() Config {
 	var c Config
 	c.HTTP.ListenHost = "127.0.0.1"
+	shutdownTimeout := 10 * time.Second
+	c.HTTP.ShutdownTimeout = &shutdownTimeout
 	c.HTTP.DefaultRateLimit = RateLimitConfig{Requests: 20, Window: time.Minute, MaxClients: 4096}
 	c.HTTP.SharedRateLimit = RateLimitConfig{Requests: 120, Window: time.Minute, MaxClients: 4096}
 	c.Auth.RateLimit = &ModuleRateLimitConfig{MaxClients: 4096}
@@ -62,6 +64,7 @@ func configFields(c *Config) map[string]any {
 		"http.readTimeout":                  &c.HTTP.ReadTimeout,
 		"http.writeTimeout":                 &c.HTTP.WriteTimeout,
 		"http.idleTimeout":                  &c.HTTP.IdleTimeout,
+		"http.shutdownTimeout":              c.HTTP.ShutdownTimeout,
 		"http.defaultRateLimit.enabled":     &c.HTTP.DefaultRateLimit.Enabled,
 		"http.defaultRateLimit.requests":    &c.HTTP.DefaultRateLimit.Requests,
 		"http.defaultRateLimit.window":      &c.HTTP.DefaultRateLimit.Window,

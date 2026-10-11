@@ -111,7 +111,7 @@ func TestServeHTTPWithTLS(t *testing.T) {
 	})}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- serveHTTP(ctx, server, listener) }()
+	go func() { done <- serveHTTP(ctx, server, listener, 10*time.Second) }()
 	t.Cleanup(func() {
 		cancel()
 		select {

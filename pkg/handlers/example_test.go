@@ -66,6 +66,7 @@ func ExampleInitialize() {
 	if err != nil {
 		panic(err)
 	}
+	defer handlers.Close(context.Background(), modules)
 
 	mux := http.NewServeMux()
 	routes := routing.NewRoutes(mux)

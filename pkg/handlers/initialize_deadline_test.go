@@ -62,7 +62,7 @@ func TestInitializeUsesOneDeadline(t *testing.T) {
 				if elapsed := time.Since(started); elapsed != test.want {
 					t.Fatalf("elapsed = %v, want %v", elapsed, test.want)
 				}
-				if len(instances) != 1 || instances[0].Name != "first" {
+				if len(instances) != 0 {
 					t.Fatalf("initialized modules = %v", instances)
 				}
 			})
@@ -78,7 +78,7 @@ func TestInitializeRejectsSuccessAfterDeadline(t *testing.T) {
 		})
 		provider.Provides = []string{"storage"}
 		instances, err := handlers.Initialize(context.Background(), nil, []handlers.Descriptor{provider}, nil)
-		if !errors.Is(err, context.DeadlineExceeded) || len(instances) != 1 {
+		if !errors.Is(err, context.DeadlineExceeded) || len(instances) != 0 {
 			t.Fatalf("instances = %v, error = %v", instances, err)
 		}
 	})

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -82,11 +83,11 @@ type Instance struct {
 // and initializes modules in dependency order. It checks cancellation between steps.
 // The whole initialization uses ctx's deadline, or ten seconds if it has none.
 // Init must honor ctx for storage setup and other I/O. Cancellation is cooperative.
-// It does not bind routes or close resources. Applications still own shared services
-// and failure cleanup. Modules must clean up resources they acquire on failed Init.
-// On failure, the returned instances contain every module whose Init succeeded,
-// including a module that subsequently failed to publish its capabilities.
-func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []Descriptor, selections map[string]string) ([]Instance, error) {
+// On failure, it closes completed modules with a fresh cleanup deadline and returns
+// no instances. Modules must clean up resources they acquire on failed Init.
+// On success, call Close after requests drain, before closing shared services.
+// Route binding and application-owned services remain the caller's responsibility.
+func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []Descriptor, selections map[string]string) (instances []Instance, err error) {
 	plan, err := resolve(catalog, selections)
 	if err != nil {
 		return nil, err
@@ -114,6 +115,12 @@ func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []De
 	}
 
 	result := make([]Instance, 0, len(modules))
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, Close(context.WithoutCancel(ctx), result))
+			instances = nil
+		}
+	}()
 	published := make(map[string]map[string]any)
 	for i, module := range modules {
 		d := plan.modules[i]

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
@@ -50,10 +51,23 @@ func main() {
 	}
 }
 
-// run owns the application pool and closes it after requests have drained,
-// including when initialization or listening fails.
+// run closes application resources after requests drain, including on startup
+// failure. If draining times out, main exits without closing services underneath
+// handlers that might still be running.
 func run(ctx context.Context, s *server.ApplicationServer, contactDirectory string) (err error) {
-	defer func() { err = errors.Join(err, s.Shutdown()) }()
+	defer func() {
+		if !errors.Is(err, errHTTPDrainIncomplete) {
+			err = errors.Join(err, s.Shutdown())
+		}
+	}()
+
+	shutdownTimeout := 10 * time.Second
+	if timeout := s.Config.HTTP.ShutdownTimeout; timeout != nil {
+		shutdownTimeout = *timeout
+		if shutdownTimeout <= 0 {
+			return fmt.Errorf("http.shutdownTimeout must be positive")
+		}
+	}
 
 	address, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port)
 	if err != nil {
@@ -115,7 +129,7 @@ func run(ctx context.Context, s *server.ApplicationServer, contactDirectory stri
 		return err
 	}
 	fmt.Printf("Starting server at %s\n", listener.Addr())
-	return serveHTTP(ctx, server, listener)
+	return serveHTTP(ctx, server, listener, shutdownTimeout)
 }
 
 // applicationHandler logs requests and sets browser security headers, then verifies
@@ -153,9 +167,13 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 	return middleware.LoggerMiddleware(l)(handler), nil
 }
 
-// serveHTTP stops accepting requests on cancellation and waits for handlers to
-// finish before returning. The caller can then close their shared dependencies.
-func serveHTTP(ctx context.Context, s *http.Server, listener net.Listener) error {
+var errHTTPDrainIncomplete = errors.New("HTTP shutdown did not finish draining requests; shared services left open until process exit")
+
+// serveHTTP stops accepting requests, then gives handlers a separate drain budget.
+// On timeout it closes connections and returns errHTTPDrainIncomplete. Close cannot
+// stop handlers that ignore cancellation, so callers must not close their services.
+// Hijacked connections are application-owned and require their own shutdown path.
+func serveHTTP(ctx context.Context, s *http.Server, listener net.Listener, timeout time.Duration) error {
 	defer listener.Close()
 	done := make(chan error, 1)
 	go func() {
@@ -172,7 +190,12 @@ func serveHTTP(ctx context.Context, s *http.Server, listener net.Listener) error
 	case <-ctx.Done():
 	}
 	// Do not reuse the canceled context: active requests still need their pool.
-	shutdownErr := s.Shutdown(context.Background())
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	shutdownErr := s.Shutdown(shutdownCtx)
+	if shutdownErr != nil {
+		shutdownErr = errors.Join(errHTTPDrainIncomplete, shutdownErr, s.Close())
+	}
 	if err == nil {
 		err = <-done
 	}
