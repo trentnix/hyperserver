@@ -47,6 +47,13 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Build and test stateless application without CGO
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          go build ./examples/stateless/...
+          go test -count=1 -timeout=5m ./pkg/database ./examples/stateless/...
+
       - name: Test HTMX and native forms in Firefox
         env:
           HS_TEST_FIREFOX: firefox

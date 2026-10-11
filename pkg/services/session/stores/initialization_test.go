@@ -165,7 +165,8 @@ func TestSessionInitializationFailureAndRetry(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer db.Close()
-				if exists, err := database.TableExists(db.DB, "sessions"); err != nil || exists {
+				var count int
+				if err := db.GetContext(t.Context(), &count, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`); err != nil || count != 0 {
 					t.Fatal("failed setup left a partial schema:", err)
 				}
 				if _, err := db.Exec("DROP TABLE sessions_expiration"); err != nil {

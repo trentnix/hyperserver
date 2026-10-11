@@ -15,6 +15,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3" // Only tests that open SQLite need its driver.
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"

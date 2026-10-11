@@ -27,9 +27,9 @@ The example includes no JavaScript or HTMX download. The fragment response demon
 The templates are embedded. A built executable can run from an empty directory without the repository beside it:
 
 ```sh
-go build -o ./tmp/stateless ./examples/stateless
+CGO_ENABLED=0 go build -o ./tmp/stateless ./examples/stateless
 ```
 
-The tests run the greeting application beside the reference site's module in one process, check independent rendering and shutdown, and verify that stateless requests activate no optional services or cookies. The reference-site test uses its own SQLite database. Broader replacement-provider tests remain separate work.
+The tests verify rendering, startup, shutdown, and that stateless requests activate no optional services or cookies. With CGO enabled, additional tests run the greeting application beside the reference site's module using an isolated SQLite database. Run `CGO_ENABLED=0 go test ./examples/stateless/...` to test the stateless application independently. Broader replacement-provider tests remain separate work.
 
-This is a local composition example, not a production deployment template. Its use of the shared application container does not remove optional service packages from the Go dependency graph.
+This is a local composition example, not a production deployment template. It does not import a SQLite driver. The shared application container still brings in SQL-pool and other optional service packages.
