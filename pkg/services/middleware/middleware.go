@@ -1,8 +1,6 @@
-// Package middleware composes net/http handlers for logging, sessions,
-// authentication, and application-defined authorization.
-// ChainMiddleware runs the last supplied middleware first. Authentication helpers
-// require database, content-manager, and session dependencies to be configured.
-// RequireAuthorization evaluates policy without loading identity or sessions.
+// Package middleware composes net/http handlers for logging, browser security,
+// and application-defined authorization without loading identity or sessions.
+// ChainMiddleware runs the last supplied middleware first.
 package middleware
 
 import "net/http"

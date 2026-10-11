@@ -1,3 +1,5 @@
+// Package middleware loads authenticated users and guards routes using account
+// and session services. Applications supply initialized dependencies.
 package middleware
 
 import (

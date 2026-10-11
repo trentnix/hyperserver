@@ -7,7 +7,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-func ExampleRequireAuthorization() {
+func Example() {
 	// This policy allows users to view their own account after required verification.
 	// Applications can instead query their own permission or ownership storage.
 	canViewAccount := func(r *http.Request) (bool, error) {

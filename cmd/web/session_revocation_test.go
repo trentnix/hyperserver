@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/trentnix/hyperserver/pkg/services/middleware"
+	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -40,7 +40,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 					t.Fatal(err)
 				}
 				called := false
-				h.app.Web.Handle("GET /revocation-protected", middleware.RequireAuthentication(h.app.AccountRepository, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.app.Web.Handle("GET /revocation-protected", authmiddleware.RequireAuthentication(h.app.AccountRepository, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
 					u := user.GetUserFromContext(r.Context())
 					if u == nil || u.ID != account.ID {

@@ -8,19 +8,20 @@ import (
 	"time"
 )
 
-func TestPresentationPackagesDoNotImportStorage(t *testing.T) {
+func TestCorePackagesDoNotImportStorage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
-	// Inspect production imports, not test dependencies. Forms and templates must
-	// remain usable without loading account, session, mail, or SQL implementations.
+	// Inspect production imports, not test dependencies. Rendering, forms, and
+	// general HTTP middleware must not load optional service implementations.
 	cmd := exec.CommandContext(ctx, "go", "list", "-deps",
 		"github.com/trentnix/hyperserver/pkg/components/content",
 		"github.com/trentnix/hyperserver/pkg/components/form",
 		"github.com/trentnix/hyperserver/pkg/services/content",
+		"github.com/trentnix/hyperserver/pkg/services/middleware",
 	)
-	output, err := cmd.Output()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("inspect presentation dependencies: %v", err)
+		t.Fatalf("inspect core dependencies: %v\n%s", err, output)
 	}
 	for _, dependency := range strings.Fields(string(output)) {
 		for _, forbidden := range []string{
@@ -36,8 +37,11 @@ func TestPresentationPackagesDoNotImportStorage(t *testing.T) {
 			"database/sql",
 			"net/smtp",
 		} {
-			if dependency == forbidden || strings.HasPrefix(dependency, forbidden+"/") {
-				t.Errorf("presentation imports optional dependency %s", dependency)
+			// Match whole provider trees, but only the named standard-library packages.
+			// UUID's sql/driver support alone does not load database/sql or a provider.
+			providerPackage := strings.HasPrefix(forbidden, "github.com/") && strings.HasPrefix(dependency, forbidden+"/")
+			if dependency == forbidden || providerPackage {
+				t.Errorf("core imports optional dependency %s", dependency)
 			}
 		}
 	}

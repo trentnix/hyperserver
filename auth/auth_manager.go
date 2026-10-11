@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
@@ -23,7 +24,6 @@ import (
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
-	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
@@ -101,10 +101,10 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 			return fmt.Errorf("auth.rateLimit.%w", err)
 		}
 		anonymous := func(handler http.Handler) http.Handler {
-			return noStore(middleware.RequireAnonymous(a.accounts, a.contentManager)(handler))
+			return noStore(authmiddleware.RequireAnonymous(a.accounts, a.contentManager)(handler))
 		}
 		authenticated := func(handler http.Handler) http.Handler {
-			return noStore(middleware.RequireAuthentication(a.accounts, a.contentManager)(handler))
+			return noStore(authmiddleware.RequireAuthentication(a.accounts, a.contentManager)(handler))
 		}
 		mutations, err := mux.WithRateLimit(ratelimit.Policy{Requests: 20, Window: time.Minute, MaxClients: maxClients})
 		if err != nil {

@@ -23,7 +23,7 @@ High performance is a design goal, not an established benchmark result. Passing 
 
 Authentication requires SQLite sessions. Login and account verification rotate the session ID. Password reset or change signs out all devices. Cookie-only sessions are available for non-authentication data.
 
-Applications define access rules through [route-level authorization policies](pkg/services/middleware/authorization_example_test.go), separate from authentication. Policies can inspect the loaded identity and route values. Denial returns 403, and policy failures return 500 without exposing the error, for both ordinary and HTMX requests.
+Applications define access rules through [route-level authorization policies](auth/middleware/authorization_example_test.go), separate from authentication. Policies can inspect the loaded identity and route values. Denial returns 403, and policy failures return 500 without exposing the error, for both ordinary and HTMX requests.
 
 Session data uses JSON, limited to 64 KiB before base64 encoding. Cookies are limited to 4 KiB including their name and attributes. Cookie-store data is signed, not encrypted, and must not contain secrets. See the [session guide](pkg/services/session/readme.md) for supported values and typed reads.
 
@@ -65,7 +65,7 @@ Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(c
 
 If draining fails, Run closes connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. Signal handling stays in the command. See the [stateless example](examples/stateless/main.go) for a complete runner. Applications managing HTTP themselves can use `server.ServeHTTP` and call `Shutdown()` after requests drain.
 
-`middleware.WithSessionManager` attaches sessions without requiring authentication or account storage. `LoadSessionManagement` also loads the authenticated user and requires account storage. The reference application chooses between them using `auth.enabled`.
+`pkg/services/middleware` provides logging, security headers, handler composition, and application-defined authorization without importing account or session storage. Use `session.WithSessionManager` to attach sessions without loading an identity. Import `auth/middleware` as `authmiddleware` for `LoadSessionManagement`, `RequireAuthentication`, and `RequireAnonymous`. `LoadSessionManagement` attaches sessions and loads the authenticated user. The reference application chooses session-only or authenticated loading using `auth.enabled`.
 
 ### Module registration
 

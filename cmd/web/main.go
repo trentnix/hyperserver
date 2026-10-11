@@ -16,12 +16,14 @@ import (
 	"strings"
 	"syscall"
 
+	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func main() {
@@ -133,9 +135,9 @@ func applicationHandler(s *server.ApplicationServer, l logger.Logger) (http.Hand
 	if err != nil {
 		return nil, fmt.Errorf("http.hstsMaxAge: %w", err)
 	}
-	loadSession := middleware.WithSessionManager(s.SessionManager)
+	loadSession := session.WithSessionManager(s.SessionManager)
 	if s.Config.Auth.Enabled {
-		loadSession = middleware.LoadSessionManagement(s.AccountRepository, s.SessionManager)
+		loadSession = authmiddleware.LoadSessionManagement(s.AccountRepository, s.SessionManager)
 	}
 	handler := middleware.ChainMiddleware(s.Web,
 		loadSession,

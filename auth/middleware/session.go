@@ -11,27 +11,11 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// WithSessionManager attaches the application's session manager without loading
-// an identity or requiring account storage. A missing manager returns HTTP 500.
-func WithSessionManager(s *session.SessionManager) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var sessionManagerErr error
-			r, sessionManagerErr = loadSessionManager(r, s)
-			if sessionManagerErr != nil {
-				util.HttpError(w, r, "There was an error loading the session manager", sessionManagerErr, http.StatusInternalServerError)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // LoadSessionManagement attaches the session manager, then loads the authenticated
 // user into the request context. It requires non-nil account-reader and session dependencies.
 func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return WithSessionManager(s)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return session.WithSessionManager(s)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var authUserErr error
 			r, authUserErr = loadAuthenticatedUser(r, accounts)
 			if authUserErr != nil {
@@ -51,16 +35,7 @@ func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionMa
 	}
 }
 
-// loadSessionManager loads the specified Sessionmanager into the specified request's context
-func loadSessionManager(r *http.Request, s *session.SessionManager) (*http.Request, error) {
-	if s != nil {
-		return session.AddSessionManagerToRequestContext(r, s), nil
-	}
-
-	return r, session.NewErrSessionManagerNotFound(nil)
-}
-
-// loadUser loads any authenticated user into the specified request's context
+// loadAuthenticatedUser loads any authenticated user into the specified request's context
 func loadAuthenticatedUser(r *http.Request, accounts user.AccountRepository) (*http.Request, error) {
 	if accounts == nil {
 		return r, database.NewErrDatabaseUnavailable(nil)

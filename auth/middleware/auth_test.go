@@ -64,48 +64,8 @@ func TestSessionMiddlewareMissingDependencies(t *testing.T) {
 			if w.Code != http.StatusInternalServerError {
 				t.Fatalf("status = %d, want 500", w.Code)
 			}
-			if got, err := loadSessionManager(r, nil); got != r || err == nil {
-				t.Fatal("missing session manager did not preserve the request and return an error")
-			}
 			if got, err := loadAuthenticatedUser(r, nil); got != r || err == nil {
 				t.Fatal("missing database did not preserve the request and return an error")
-			}
-		})
-	}
-}
-
-func TestWithSessionManager(t *testing.T) {
-	for _, present := range []bool{false, true} {
-		t.Run(map[bool]string{false: "missing", true: "present"}[present], func(t *testing.T) {
-			var manager *session.SessionManager
-			if present {
-				manager = &session.SessionManager{}
-			}
-			called := false
-			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			w := httptest.NewRecorder()
-			WithSessionManager(manager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				called = true
-				if session.GetSessionManager(r) != manager {
-					t.Error("wrong session manager attached")
-				}
-				if user.GetUserFromContext(r.Context()) != nil {
-					t.Error("session-only middleware loaded an identity")
-				}
-				w.WriteHeader(http.StatusNoContent)
-			})).ServeHTTP(w, r)
-			want := http.StatusInternalServerError
-			if present {
-				want = http.StatusNoContent
-			}
-			if called != present || w.Code != want {
-				t.Fatalf("called = %t, status = %d", called, w.Code)
-			}
-			if session.GetSessionManager(r) != nil {
-				t.Error("middleware changed the original request")
-			}
-			if len(w.Result().Cookies()) != 0 {
-				t.Error("attaching the manager issued a cookie")
 			}
 		})
 	}
