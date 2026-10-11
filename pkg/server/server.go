@@ -111,20 +111,3 @@ func (s *ApplicationServer) initContentManager() {
 	contentManager.Configure(s.Config)
 	s.ContentManager = contentManager
 }
-
-// InitializeMail creates the mail client when an application needs mail operations.
-// It preserves a supplied client and does not contact the delivery service.
-// Construction does not guarantee configured delivery. Consumers that require
-// delivery must also call Mail.ValidateConfig at startup. Call serially before requests.
-func (s *ApplicationServer) InitializeMail() error {
-	if s.Mail != nil {
-		return nil
-	}
-
-	client, err := messaging.NewMailClient(s.Config)
-	if err != nil {
-		return err
-	}
-	s.Mail = client
-	return nil
-}

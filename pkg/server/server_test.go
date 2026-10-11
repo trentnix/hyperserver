@@ -1,7 +1,6 @@
 package server
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,11 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
-	"github.com/trentnix/hyperserver/pkg/services/messaging"
 )
 
 func TestStatelessApplication(t *testing.T) {
@@ -101,33 +98,5 @@ func TestApplicationsOwnConfiguration(t *testing.T) {
 		if app.Config.HTTP.Session.Types["default"] != "cookieStore" {
 			t.Fatal("source mutation changed application configuration")
 		}
-	}
-}
-
-func TestOptionalServicesInitializeExplicitly(t *testing.T) {
-	cfg := config.Config{Database: config.DatabaseConfig{Driver: "unknown"}, Mail: config.MailConfig{Timeout: -time.Second}}
-	cfg.HTTP.Session.Types = map[string]string{"default": "unknown"}
-	app, err := NewApplicationServer(cfg)
-	if err != nil {
-		t.Fatal("unused services prevented construction:", err)
-	}
-	if err := app.InitializeMail(); err == nil || app.Mail != nil {
-		t.Fatal("invalid mail initialization succeeded")
-	}
-	app.Config.Mail.Timeout = 0
-	app.Config.Mail.FromAddress = "test@example.invalid"
-	if err := app.InitializeMail(); err != nil {
-		t.Fatal("mail retry:", err)
-	}
-	mail := app.Mail
-	app.Config.Mail.Timeout = -time.Second
-	if err := app.InitializeMail(); err != nil || app.Mail != mail {
-		t.Fatal("repeated initialization replaced the client:", err)
-	}
-	if !errors.Is(mail.ValidateConfig(), messaging.ErrMailUnavailable) {
-		t.Fatal("unconfigured mail reported available delivery")
-	}
-	if err := app.Shutdown(); err != nil {
-		t.Fatal(err)
 	}
 }

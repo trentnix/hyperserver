@@ -76,7 +76,7 @@ func prepareHTTP(ctx context.Context, s *application, accounts *reference.Accoun
 	if err := s.initializeDatabase(ctx); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare application database: %w", err)
 	}
-	if err := s.InitializeMail(); err != nil {
+	if err := initializeMail(s.ApplicationServer); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare mail: %w", err)
 	}
 

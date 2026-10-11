@@ -120,7 +120,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := s.initializeDatabase(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.InitializeMail(); err != nil {
+		if err := initializeMail(s.ApplicationServer); err != nil {
 			t.Fatal(err)
 		}
 		if err := initializeSessions(context.Background(), s.ApplicationServer); err != nil {
