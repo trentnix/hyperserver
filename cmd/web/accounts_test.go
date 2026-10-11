@@ -92,9 +92,9 @@ func TestInitializeAccountsPreservesSuppliedRepository(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		repository := &suppliedAccountRepository{}
 		s := newAccountSetup(testApplicationWithPool(&server.ApplicationServer{
-			Config:            &config.Config{Auth: config.AuthConfig{Enabled: enabled}},
-			AccountRepository: repository,
+			Config: &config.Config{Auth: config.AuthConfig{Enabled: enabled}},
 		}, nil))
+		s.app.AccountRepository = repository
 		if err := s.Initialize(context.Background()); err != nil {
 			t.Fatal("supplied repository required a database:", err)
 		}

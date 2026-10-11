@@ -99,11 +99,11 @@ The included site module exercises framework features in the local development a
 
 ### Application setup
 
-Keep application decisions in one setup path, in one file or a small group of related files. The following describes the target boundary. Optional services still live on `ApplicationServer`, and the site module currently installs shared rendering policy during initialization.
+Keep application decisions in one setup path, in one file or a small group of related files. The following describes the target boundary. The session manager still lives on `ApplicationServer`, and the site module currently installs shared rendering policy during initialization.
 
 The web and cleanup commands already load configuration once and pass it to consumers. Keep configuration file and environment access there, with provider validation operating on supplied settings. [Configuration and provider defaults](readme.md#configuration) describe current selection and replacement behavior.
 
-Account-provider selection and opening belong to [reference application setup](internal/reference/accounts.go), which uses configuration without depending on a server instance. Web startup supplies the repository and registers shutdown cleanup. The cleanup command opens and closes maintenance storage independently. The core does not import the account-storage implementation. Removing the repository field and remaining optional-service construction from the core remains separate work.
+Account-provider selection and opening belong to [reference application setup](internal/reference/accounts.go), which uses configuration without depending on a server instance. Web startup supplies the repository and registers shutdown cleanup. The cleanup command opens and closes maintenance storage independently. The core has no account-repository field or account-package dependency. Setup supplies the repository to the auth manager, email provider, and request middleware. Session ownership remains separate work.
 
 | Owner | Responsibility |
 | --- | --- |
@@ -114,7 +114,7 @@ Account-provider selection and opening belong to [reference application setup](i
 
 Keep `ApplicationServer` as the core runtime passed to module initialization, not a catalog of every service an application might use. Application setup can hold related services in a typed struct and supply them through module options or constructors. Dependencies supplied by other modules use the existing declared-capability resolver. Each dependency must have one source. Do not add a service locator or another registration framework.
 
-Shared SQL helpers do not import database drivers. SQLite providers register their own driver, and the stateless application builds and tests without CGO. The reference application owns its SQL pool and supplies contact storage explicitly. The reference application owns its mail client and supplies it to the site and email-auth factories. The core and stateless application import neither SQL-pool code nor mail code. Session and account-service fields remain in the core container.
+Shared SQL helpers do not import database drivers. SQLite providers register their own driver, and the stateless application builds and tests without CGO. The reference application owns its SQL pool and supplies contact storage explicitly. The reference application owns its mail client and supplies it to the site and email-auth factories. The core and stateless application import no SQL-pool, mail, or account code. The session-manager field remains in the core container.
 
 Imports make modules discoverable. Setup must select modules or deliberately select the registered catalog. Registration alone must not activate routes or acquire resources.
 

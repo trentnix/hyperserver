@@ -67,12 +67,22 @@ const (
 	authEndpoint = "/auth/login"
 )
 
-// Init processes the initialization of the AuthManager handler
+// NewAuthManager supplies the account repository used by authentication handlers.
+// The caller owns the repository and must prepare it before Init. When authentication
+// is enabled, set Services before initialization. Construction performs no I/O.
+func NewAuthManager(accounts user.AccountRepository) *AuthManager {
+	return &AuthManager{accounts: accounts}
+}
+
+// Init validates dependencies and configures authentication handlers.
 func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error {
 	if s.Config.Auth.Enabled && a.Services == nil {
 		return errors.New("authentication requires an application-owned provider registry")
 	}
 	if s.Config.Auth.Enabled {
+		if a.accounts == nil {
+			return errors.New("authentication requires an account repository")
+		}
 		store, err := s.SessionManager.Store("auth-user-session")
 		if err != nil {
 			return fmt.Errorf("authentication requires session revocation: %w", err)
@@ -86,7 +96,6 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 	}
 
 	a.Enabled = s.Config.Auth.Enabled
-	a.accounts = s.AccountRepository
 	a.httpConfig = s.Config.HTTP
 	a.rateLimit = s.Config.Auth.RateLimit
 

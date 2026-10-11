@@ -74,9 +74,9 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 
 Prepare storage in application setup, before initializing its consumers. The reference application owns its SQL pool in [application.go](cmd/web/application.go) and registers pool cleanup with `OnShutdown` before account and contact setup. The core has no SQL-pool field. The reference application checks SQL connectivity with a ten-second deadline. SQL drivers must be imported by the application or its storage providers.
 
-Supply an initialized `AccountRepository` and, when needed, a `SessionManager` through application-owned setup. Use `stores.NewSessionManager(ctx, cfg)` for the built-in session providers or supply custom factories as shown in [Sessions](pkg/services/session/readme.md#ownership-and-extension).
+Prepare an account repository in application setup and pass it to `auth.Module(accounts, providers)`, `email.Provider(accounts, mailClient)`, and authentication middleware. The core has no account-repository field. Supply a `SessionManager` on the core when needed. Use `stores.NewSessionManager(ctx, cfg)` for the built-in session providers or supply custom factories as shown in [Sessions](pkg/services/session/readme.md#ownership-and-extension).
 
-For SMTP, construct a sender with `smtp.NewSender(cfg.Mail)` from [`pkg/services/messaging/smtp`](pkg/services/messaging/smtp/smtp.go), then pass it to `messaging.NewMailClientWithSender`. The core has no mail-client field. Pass the client to `site.Module(newContacts, mailClient)` and `email.Provider(mailClient)` from [`auth/modules/email`](auth/modules/email/email_auth.go). [Reference mail setup](cmd/web/mail.go) and [module wiring](cmd/web/site_modules.go) show the wiring. Construction does not contact SMTP, and consumers that require delivery must validate configuration. After preparing services, use `handlers.Setup` for module initialization, route binding, and cleanup registration.
+For SMTP, construct a sender with `smtp.NewSender(cfg.Mail)` from [`pkg/services/messaging/smtp`](pkg/services/messaging/smtp/smtp.go), then pass it to `messaging.NewMailClientWithSender`. The core has no mail-client field. Pass the client to `site.Module(newContacts, mailClient)` and `email.Provider(accounts, mailClient)` from [`auth/modules/email`](auth/modules/email/email_auth.go). [Reference mail setup](cmd/web/mail.go) and [module wiring](cmd/web/site_modules.go) show the wiring. Construction does not contact SMTP, and consumers that require delivery must validate configuration. After preparing services, use `handlers.Setup` for module initialization, route binding, and cleanup registration.
 
 `app.Run(ctx, prepare)` owns serving and application cleanup. The preparation function receives the context and returns a configured `*http.Server`, a `net.Listener`, and an error. It selects services and modules but must not start serving. Run closes resources on startup failure and drains requests before cleanup on cancellation. `http.shutdownTimeout` controls draining, with a `10s` default.
 
@@ -110,8 +110,8 @@ if err != nil {
     return err
 }
 
-providers := []auth.Descriptor{email.Provider(mailClient)}
-catalog, err = handlers.Replace(catalog, auth.Module(providers))
+providers := []auth.Descriptor{email.Provider(accounts, mailClient)}
+catalog, err = handlers.Replace(catalog, auth.Module(accounts, providers))
 if err != nil {
     return err
 }
@@ -129,9 +129,9 @@ if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
 
 Modules own their registration, internal setup, requirement checks, and routes. Applications select modules, supply shared services, and coordinate startup and shutdown. Modules must not initialize or close borrowed services. A configurable module can expose a descriptor constructor: the site's `site.Module(newContacts, mailClient)` requires a contact-storage factory and accepts an optional mail client. The reference application selects SQLite or file storage in [site_modules.go](cmd/web/site_modules.go).
 
-Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth module creates its own manager and enabled providers, validates verification configuration during `Init`, and binds manager and provider routes during `Routes`. Initialize its required services first, as shown in [the reference startup](cmd/web/main.go). For an explicit provider catalog, replace the default module with `auth.Module(providers)` using `handlers.Replace`. An empty explicit catalog never falls back to imports. Adding a descriptor does not activate it in applications already running.
+Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth module creates its own manager and enabled providers, validates verification configuration during `Init`, and binds manager and provider routes during `Routes`. Initialize its required services first, as shown in [the reference startup](cmd/web/main.go). For an explicit provider catalog, replace the default module with `auth.Module(accounts, providers)` using `handlers.Replace`. An empty explicit catalog never falls back to imports. Adding a descriptor does not activate it in applications already running.
 
-The example's explicit provider list selects only email authentication. Import discovery still works, but the imported email descriptor has no mail client. Applications must configure the descriptor to enable delivery. [Reference module setup](cmd/web/site_modules.go) replaces the email descriptor in a snapshot while preserving other discovered providers.
+The example uses the same initialized `accounts` repository for the auth manager and email provider. Its explicit provider list selects only email authentication. Import discovery still works, but applications must supply accounts to the auth module and configure each provider's dependencies before activation. [Reference module setup](cmd/web/site_modules.go) replaces the email descriptor in a snapshot while preserving other discovered providers.
 
 ### Module dependencies
 
@@ -226,17 +226,16 @@ In the reference application, `auth.accountStorage.provider` selects account per
 
 Account models, token operations, and storage contracts live in [`user`](pkg/services/user). The SQLite implementation lives in [`user/sqlite`](pkg/services/user/sqlite). Import that provider when constructing `sqlite.NewAccountRepository(pool)` directly. The repository borrows the pool and must be initialized before use.
 
-Applications supply an initialized `user.AccountRepository`. For a borrowed SQLite pool:
+Applications supply an initialized `user.AccountRepository` to their auth factories and middleware. For a borrowed SQLite pool:
 
 ```go
-repository := sqlite.NewAccountRepository(app.Database)
-if err := repository.Initialize(ctx); err != nil {
+accounts := sqlite.NewAccountRepository(pool)
+if err := accounts.Initialize(ctx); err != nil {
     return err
 }
-app.AccountRepository = repository
 ```
 
-If a repository owns resources, register its cleanup with `app.OnShutdown` before initializing its consumers. Borrowed pools keep their existing owner. Other providers implement the same account contract without changing the core server.
+Pass `accounts` to the factories shown in [Module registration](#module-registration). If a repository owns resources, register its cleanup with `app.OnShutdown` before initializing its consumers. Borrowed pools keep their existing owner. Other providers implement the same account contract without changing the core server.
 
 The reference application's setup also supports named factories. In the web command, register replacements before initialization:
 
@@ -265,7 +264,7 @@ auth:
       connection: your-provider-connection
 ```
 
-Reference provider registrations belong to one setup instance. Names are case-sensitive, and `sqlite` is reserved. Supplying `app.AccountRepository` directly bypasses selection and initialization. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
+Reference provider registrations belong to one setup instance. Names are case-sensitive, and `sqlite` is reserved. Supplying `AccountRepository` on the reference application's [setup struct](cmd/web/application.go) bypasses selection and initialization. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
 
 `OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/account_repository.go) capability, an optional close function, and an error. It must not create or migrate tables. The cleanup command calls `reference.CleanupAccountTokens(ctx, cfg, limit)` without constructing a server or `AccountStorage`. Provider selection is shared with web startup. If setup registers custom providers, its `CleanupTokens` method uses those registrations through the same maintenance implementation. Each batch closes acquired resources, even when opening or deletion fails. A missing capability returns an error rather than silently skipping cleanup. Applications that already hold a repository implementing `TokenMaintenance` can call `DeleteExpiredTokens` directly.
 

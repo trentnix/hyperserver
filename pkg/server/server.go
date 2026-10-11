@@ -13,7 +13,6 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -23,14 +22,10 @@ type (
 	ApplicationServer struct {
 		Config *config.Config
 
-		// AccountRepository supplies authentication's account and token operations.
-		// An application-supplied repository must be ready to use. Its supplier owns
-		// any resources not already owned by the application.
-		AccountRepository user.AccountRepository
-		Web               *http.ServeMux
-		ContentManager    *content_services.ContentManagerService
-		SessionManager    *session.SessionManager
-		shutdownHooks     []shutdownHook
+		Web            *http.ServeMux
+		ContentManager *content_services.ContentManagerService
+		SessionManager *session.SessionManager
+		shutdownHooks  []shutdownHook
 	}
 )
 

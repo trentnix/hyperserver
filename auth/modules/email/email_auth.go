@@ -156,15 +156,16 @@ const (
 
 // init makes the provider discoverable without creating application state.
 func init() {
-	auth_services.Register(Provider(nil))
+	auth_services.Register(Provider(nil, nil))
 }
 
-// Provider describes email authentication with an application-supplied mail client.
+// Provider supplies email authentication with an initialized account repository
+// and a mail client. The application owns both dependencies.
 // A nil client leaves delivery unavailable. Registration that requires verification
 // rejects unavailable delivery during module initialization.
-func Provider(mail *messaging.MailClient) auth_services.Descriptor {
+func Provider(accounts user.AccountRepository, mail *messaging.MailClient) auth_services.Descriptor {
 	return auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
-		return &EmailAuthService{mailClient: mail}
+		return &EmailAuthService{accounts: accounts, mailClient: mail}
 	}}
 }
 
@@ -176,14 +177,13 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the email auth service is not enabled"))
 	}
 
-	if s.AccountRepository == nil {
+	if a.accounts == nil {
 		return auth_services.NewErrEmailAuthServiceInit(errors.New("the account repository is not configured"))
 	}
 	if err := flash.ValidateSessionManager(s.SessionManager); err != nil {
 		return fmt.Errorf("initialize email authentication: %w", err)
 	}
 
-	a.accounts = s.AccountRepository
 	a.config = s.Config
 	a.contentManager = s.ContentManager
 

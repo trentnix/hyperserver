@@ -72,7 +72,7 @@ func TestHTTPProxyRateLimits(t *testing.T) {
 }
 
 func TestInvalidProxyMetadataPrecedesApplicationWork(t *testing.T) {
-	app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
+	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
 	configureTestProxy(app.Config)
 	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 10}
 	handler, err := applicationHandler(app, &testLogger{logs: &capturedLogs{}})

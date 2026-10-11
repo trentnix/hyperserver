@@ -180,7 +180,7 @@ func TestApplicationRoutesRejectInvalidDefault(t *testing.T) {
 }
 
 func TestGlobalRateLimitPrecedesSessionLoading(t *testing.T) {
-	app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
+	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
 	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 10}
 	logs := &capturedLogs{}
 	handler, err := applicationHandler(app, &testLogger{logs: logs})
@@ -224,7 +224,7 @@ func TestApplicationHandlerRejectsInvalidRateLimit(t *testing.T) {
 		{Enabled: true, Requests: 1, MaxClients: 10},
 		{Enabled: true, Requests: 1, Window: time.Minute},
 	} {
-		app := &server.ApplicationServer{Config: &config.Config{HTTP: config.HTTPConfig{SharedRateLimit: limit}}, Web: http.NewServeMux()}
+		app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{HTTP: config.HTTPConfig{SharedRateLimit: limit}}, Web: http.NewServeMux()}}
 		handler, err := applicationHandler(app, &testLogger{logs: &capturedLogs{}})
 		if handler != nil || err == nil || !strings.Contains(err.Error(), "http.sharedRateLimit") {
 			t.Fatalf("handler=%v error=%v", handler, err)

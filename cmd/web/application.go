@@ -11,6 +11,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // application owns the reference site's services outside the core runtime.
@@ -19,6 +20,9 @@ type application struct {
 	// Database can be borrowed. Use ownDatabase to transfer cleanup to this application.
 	Database *sqlx.DB
 	Mail     *messaging.MailClient
+	// AccountRepository must be ready before modules and middleware use it.
+	// A supplied repository keeps its existing owner.
+	AccountRepository user.AccountRepository
 }
 
 func newApplication(cfg config.Config) (*application, error) {

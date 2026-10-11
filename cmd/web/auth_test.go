@@ -15,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 type setupAuthService struct {
@@ -105,7 +106,7 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 			}
 			app.SessionManager = manager
 			t.Cleanup(func() { app.Shutdown() })
-			err = SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(catalog)}, nil)
+			err = SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(&struct{ user.AccountRepository }{}, catalog)}, nil)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
 					t.Fatalf("error = %v, routed = %t, want %q without routes", err, provider.routed, tc.want)

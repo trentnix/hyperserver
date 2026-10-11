@@ -136,7 +136,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {
 			t.Fatalf("account tables before handler initialization = %d, auth enabled = %t", tables, s.Config.Auth.Enabled)
 		}
-		catalog, err := siteModules(s.Database, s.Mail, "")
+		catalog, err := siteModules(s, "")
 		if err != nil {
 			t.Fatal(err)
 		}

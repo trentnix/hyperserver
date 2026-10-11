@@ -17,7 +17,7 @@ func TestCoreDoesNotImportOptionalImplementations(t *testing.T) {
 	}
 	for _, dependency := range strings.Fields(string(output)) {
 		for _, forbidden := range []string{
-			"github.com/trentnix/hyperserver/pkg/services/user/sqlite",
+			"github.com/trentnix/hyperserver/pkg/services/user",
 			"github.com/trentnix/hyperserver/internal/reference",
 			"github.com/trentnix/hyperserver/pkg/services/messaging",
 		} {

@@ -33,11 +33,11 @@ func TestAuthManagerInitUsesAccountRepository(t *testing.T) {
 	// Initialization must preserve the supplied reader without calling it.
 	reader := &struct{ user.AccountRepository }{}
 	app := &server.ApplicationServer{
-		Config:            &config.Config{Auth: config.AuthConfig{Enabled: true}},
-		AccountRepository: reader,
-		ContentManager:    content.NewContentManager(),
+		Config:         &config.Config{Auth: config.AuthConfig{Enabled: true}},
+		ContentManager: content.NewContentManager(),
 	}
-	manager := &AuthManager{Services: &Registry{}}
+	manager := NewAuthManager(reader)
+	manager.Services = &Registry{}
 	var err error
 	app.SessionManager, err = session.NewSessionManager(t.Context(), map[string]string{"default": "custom"}, map[string]session.StoreFactory{
 		"custom": func(context.Context) (session.SessionStore, error) { return initSessionStore{}, nil },

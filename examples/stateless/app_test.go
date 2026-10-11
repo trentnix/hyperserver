@@ -56,7 +56,7 @@ func TestStatelessApplication(t *testing.T) {
 			}
 		}
 	}
-	if app.SessionManager != nil || app.AccountRepository != nil {
+	if app.SessionManager != nil {
 		t.Fatal("stateless application activated an optional service")
 	}
 	entries, err := os.ReadDir(directory)

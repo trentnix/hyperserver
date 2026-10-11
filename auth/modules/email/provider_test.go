@@ -12,7 +12,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 )
 
-func TestProviderSuppliesMail(t *testing.T) {
+func TestProviderSuppliesDependencies(t *testing.T) {
 	client, err := messaging.NewMailClientWithSender("sender@example.invalid", accountMailSender(func(context.Context, messaging.MailMessage) error {
 		t.Fatal("provider setup attempted delivery")
 		return nil
@@ -20,21 +20,27 @@ func TestProviderSuppliesMail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	descriptor := Provider(client)
+	accounts := &emailAccountRepository{}
+	descriptor := Provider(accounts, client)
 	first, second := descriptor.New().(*EmailAuthService), descriptor.New().(*EmailAuthService)
-	if descriptor.Name != AuthTypeEmail || first == second || first.mailClient != client || second.mailClient != client {
-		t.Fatal("provider did not create independent instances with the supplied client")
+	if descriptor.Name != AuthTypeEmail || first == second {
+		t.Fatal("provider did not create independent instances")
 	}
-	other := Provider(nil).New().(*EmailAuthService)
+	if first.mailClient != client || second.mailClient != client || first.accounts != accounts || second.accounts != accounts {
+		t.Fatal("provider did not retain its supplied dependencies")
+	}
+	other := Provider(nil, nil).New().(*EmailAuthService)
 	second.mailClient = nil
-	if first.mailClient != client || other.mailClient != nil {
-		t.Fatal("provider instances share mutable mail selection")
+	second.accounts = nil
+	if first.mailClient != client || first.accounts != accounts || other.mailClient != nil || other.accounts != nil {
+		t.Fatal("provider instances share mutable dependency selection")
 	}
 
 	for _, registered := range auth_services.Registered() {
 		if registered.Name == AuthTypeEmail {
-			if registered.New().(*EmailAuthService).mailClient != nil {
-				t.Fatal("application mail escaped into the import catalog")
+			provider := registered.New().(*EmailAuthService)
+			if provider.mailClient != nil || provider.accounts != nil {
+				t.Fatal("application dependencies escaped into the import catalog")
 			}
 			return
 		}
@@ -62,7 +68,7 @@ func TestProviderMailRequirements(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			app.AccountRepository = &emailAccountRepository{}
+			accounts := &emailAccountRepository{}
 			app.SessionManager = emailSessions(t, map[string]string{"default": "memory", "auth-user-session": "identity"})
 			var client *messaging.MailClient
 			if test.supplied {
@@ -74,7 +80,7 @@ func TestProviderMailRequirements(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			module := auth_services.Module([]auth_services.Descriptor{Provider(client)}).New()
+			module := auth_services.Module(accounts, []auth_services.Descriptor{Provider(accounts, client)}).New()
 			err = module.Init(t.Context(), app)
 			if test.required && !test.supplied {
 				if !errors.Is(err, messaging.ErrMailUnavailable) {

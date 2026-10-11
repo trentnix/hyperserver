@@ -112,7 +112,7 @@ func TestHTTPBrowserSecurityHeaders(t *testing.T) {
 }
 
 func TestSecurityHeadersPrecedeRejections(t *testing.T) {
-	app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
+	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
 	configureTestProxy(app.Config)
 	app.Config.HTTP.HSTSMaxAge = 86400
 	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 2, Window: time.Minute, MaxClients: 10}

@@ -18,7 +18,7 @@ import (
 func TestHTTPMixedStorage(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "contacts")
 	catalog := func(app *application) ([]handlers.Descriptor, error) {
-		return siteModules(nil, app.Mail, directory)
+		return siteModules(app, directory)
 	}
 	runHTTPScenarioWithCatalog(t, 30*time.Second, catalog, func(h *httpHarness) {
 		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)

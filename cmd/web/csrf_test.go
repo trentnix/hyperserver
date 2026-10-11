@@ -94,7 +94,7 @@ func (*csrfUnreadBody) Close() error { return nil }
 
 func TestCSRFRejectsBeforeSessionLoading(t *testing.T) {
 	// Missing storage and session services would fail if CSRF checks ran too late.
-	app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
+	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
 	app.Web.HandleFunc("POST /mutation", func(http.ResponseWriter, *http.Request) {
 		t.Fatal("rejected request reached its handler")
 	})

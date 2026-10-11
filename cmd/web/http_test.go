@@ -245,7 +245,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) (
 	l := &testLogger{logs: logs}
 	if catalogFactory == nil {
 		catalogFactory = func(app *application) ([]handlers.Descriptor, error) {
-			return siteModules(app.Database, app.Mail, "")
+			return siteModules(app, "")
 		}
 	}
 	catalog, err := catalogFactory(app)
@@ -259,7 +259,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) (
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := applicationHandler(app.ApplicationServer, l)
+	handler, err := applicationHandler(app, l)
 	if err != nil {
 		t.Fatal(err)
 	}
