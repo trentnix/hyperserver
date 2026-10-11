@@ -36,8 +36,6 @@ type (
 		ContentManager    *content_services.ContentManagerService
 		SessionManager    *session.SessionManager
 		Mail              *messaging.MailClient
-		accountProviders  map[string]AccountProvider
-		closeAccounts     func() error
 		shutdownHooks     []shutdownHook
 	}
 )
@@ -57,7 +55,7 @@ func NewApplicationServer(cfg config.Config) (*ApplicationServer, error) {
 	return s, nil
 }
 
-// Shutdown runs registered cleanup, then closes account providers, session providers,
+// Shutdown runs registered cleanup, then closes session providers
 // and the application database with a ten-second cooperative deadline. Call serially
 // after draining requests and stopping other consumers. Borrowing modules must not call it.
 func (s *ApplicationServer) Shutdown() error {
@@ -65,7 +63,7 @@ func (s *ApplicationServer) Shutdown() error {
 }
 
 // OnShutdown registers application-owned cleanup during startup. Hooks run once,
-// in reverse registration order, before account, session, and database services
+// in reverse registration order, before session and database services
 // close. Call serially, registering providers before consumers. Hooks must honor ctx.
 // A nil function is ignored.
 func (s *ApplicationServer) OnShutdown(name string, close func(context.Context) error) {
@@ -97,11 +95,6 @@ func (s *ApplicationServer) ShutdownContext(ctx context.Context) error {
 		if closeErr := errors.Join(hooks[i].close(ctx), ctx.Err()); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("shutdown %q: %w", hooks[i].name, closeErr))
 		}
-	}
-	if s.closeAccounts != nil {
-		closeAccounts := s.closeAccounts
-		s.closeAccounts = nil
-		err = errors.Join(err, closeAccounts())
 	}
 	if s.SessionManager != nil {
 		err = errors.Join(err, s.SessionManager.Close())

@@ -23,6 +23,7 @@ import (
 
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -242,7 +243,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalog []handlers.Descriptor, conf
 			t.Error(err)
 		}
 	})
-	if err := app.InitializeAccounts(context.Background()); err != nil {
+	if err := initializeAccounts(context.Background(), app, reference.NewAccountStorage(app.Config)); err != nil {
 		t.Fatal(err)
 	}
 	logs := &capturedLogs{}

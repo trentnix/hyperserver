@@ -1,14 +1,72 @@
-package server
+package reference
 
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+func TestCleanupAccountTokensWithoutApplication(t *testing.T) {
+	for _, scenario := range []string{"disabled", "invalid limit", "canceled", "unknown provider", "missing storage", "explicit SQLite"} {
+		t.Run(scenario, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "accounts.db")
+			cfg := &config.Config{
+				Auth:     config.AuthConfig{Enabled: true},
+				Database: config.DatabaseConfig{Driver: "sqlite3", Connection: path},
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			limit := 1
+			switch scenario {
+			case "disabled":
+				cfg.Auth.Enabled = false
+				cfg.Auth.AccountStorage.Provider = "unknown"
+			case "invalid limit":
+				limit = 0
+			case "canceled":
+				cancel()
+			case "unknown provider":
+				cfg.Auth.AccountStorage.Provider = "unknown"
+			case "explicit SQLite":
+				cfg.Auth.AccountStorage.Provider = "sqlite"
+			}
+
+			count, err := CleanupAccountTokens(ctx, cfg, limit)
+			if count != 0 || (err != nil) != (scenario != "disabled") {
+				t.Fatalf("cleanup: count=%d, error=%v", count, err)
+			}
+			if scenario == "canceled" && !errors.Is(err, context.Canceled) {
+				t.Fatal("lost cancellation:", err)
+			}
+			if scenario == "unknown provider" && !strings.Contains(err.Error(), "unknown provider") {
+				t.Fatal("configuration did not select the provider:", err)
+			}
+			if scenario == "missing storage" || scenario == "explicit SQLite" {
+				// SQLite can create an empty file when opening a connection, but
+				// maintenance must not prepare the missing account schema.
+				if !strings.Contains(err.Error(), "no such table: usertoken") {
+					t.Fatal("maintenance unexpectedly initialized account schema:", err)
+				}
+			} else if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatalf("maintenance created storage: %v", err)
+			}
+		})
+	}
+}
+
+func accountProviderApplication(name string) *AccountStorage {
+	return NewAccountStorage(&config.Config{Auth: config.AuthConfig{
+		Enabled: true, AccountStorage: config.AccountStorageConfig{Provider: name},
+	}})
+}
 
 type tokenMaintenanceFunc func(context.Context, int) (int64, error)
 
@@ -21,7 +79,7 @@ func TestAccountMaintenanceLifecycle(t *testing.T) {
 	for _, scenario := range []string{"success", "open failure", "delete failure", "close failure", "nil maintenance", "canceled before open", "canceled after open", "unsupported", "disabled", "invalid limit"} {
 		t.Run(scenario, func(t *testing.T) {
 			s := accountProviderApplication("custom")
-			s.Config.Auth.AccountStorage.Options = map[string]string{"connection": "custom-storage"}
+			s.config.Auth.AccountStorage.Options = map[string]string{"connection": "custom-storage"}
 			type contextKey struct{}
 			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "maintenance"))
 			defer cancel()
@@ -72,15 +130,15 @@ func TestAccountMaintenanceLifecycle(t *testing.T) {
 			case "unsupported":
 				provider.OpenMaintenance = nil
 			case "disabled":
-				s.Config.Auth.Enabled = false
+				s.config.Auth.Enabled = false
 			case "invalid limit":
 				limit = 0
 			}
-			if err := s.RegisterAccountProvider("custom", provider); err != nil {
+			if err := s.RegisterProvider("custom", provider); err != nil {
 				t.Fatal(err)
 			}
 
-			count, err := s.CleanupAccountTokens(ctx, limit)
+			count, err := s.CleanupTokens(ctx, limit)
 			wantOpen, wantDelete, wantCount := 1, 0, int64(0)
 			switch scenario {
 			case "success", "close failure":
@@ -106,36 +164,10 @@ func TestAccountMaintenanceLifecycle(t *testing.T) {
 					t.Fatalf("lost error %v: %v", expected, err)
 				}
 			}
-			if s.AccountRepository != nil || s.Config.Auth.AccountStorage.Options["connection"] != "custom-storage" {
-				t.Fatal("maintenance changed runtime repository or configuration")
-			}
-			if err := s.Shutdown(); err != nil || closes != wantOpen {
-				t.Fatal("shutdown repeated maintenance cleanup:", err)
+			if s.config.Auth.AccountStorage.Options["connection"] != "custom-storage" {
+				t.Fatal("maintenance changed configuration")
 			}
 		})
-	}
-}
-
-type maintainedAccount struct {
-	user.AccountRepository
-	user.TokenMaintenance
-}
-
-func TestAccountMaintenanceSuppliedRepository(t *testing.T) {
-	s := accountProviderApplication("unregistered")
-	s.AccountRepository = &suppliedAccountRepository{}
-	if _, err := s.CleanupAccountTokens(context.Background(), 1); err == nil {
-		t.Fatal("unsupported supplied repository silently skipped cleanup")
-	}
-	calls := 0
-	s.AccountRepository = &maintainedAccount{TokenMaintenance: tokenMaintenanceFunc(func(context.Context, int) (int64, error) {
-		calls++
-		return 1, nil
-	})}
-	closed := false
-	s.closeAccounts = func() error { closed = true; return nil }
-	if count, err := s.CleanupAccountTokens(context.Background(), 1); count != 1 || err != nil || calls != 1 || closed {
-		t.Fatalf("supplied repository: count=%d, error=%v, calls=%d, closed=%t", count, err, calls, closed)
 	}
 }
 
@@ -143,7 +175,7 @@ func TestAccountMaintenanceRetry(t *testing.T) {
 	s := accountProviderApplication("custom")
 	opens, closes := 0, 0
 	openErr := errors.New("temporary open failure")
-	if err := s.RegisterAccountProvider("custom", AccountProvider{
+	if err := s.RegisterProvider("custom", AccountProvider{
 		Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 			t.Fatal("maintenance called runtime initialization")
 			return nil, nil, nil
@@ -159,16 +191,16 @@ func TestAccountMaintenanceRetry(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if count, err := s.CleanupAccountTokens(context.Background(), 1); count != 0 || !errors.Is(err, openErr) || closes != 1 {
+	if count, err := s.CleanupTokens(context.Background(), 1); count != 0 || !errors.Is(err, openErr) || closes != 1 {
 		t.Fatalf("failed attempt: count=%d, error=%v, closes=%d", count, err, closes)
 	}
 	for range 2 {
-		if count, err := s.CleanupAccountTokens(context.Background(), 1); count != 1 || err != nil {
+		if count, err := s.CleanupTokens(context.Background(), 1); count != 1 || err != nil {
 			t.Fatalf("subsequent batch: count=%d, error=%v", count, err)
 		}
 	}
-	if opens != 3 || closes != 1 || s.AccountRepository != nil {
-		t.Fatalf("maintenance retained stale state: opens=%d, closes=%d, repository=%v", opens, closes, s.AccountRepository)
+	if opens != 3 || closes != 1 {
+		t.Fatalf("maintenance retained stale state: opens=%d, closes=%d", opens, closes)
 	}
 }
 
@@ -178,7 +210,7 @@ func TestAccountMaintenanceDeadline(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				s := accountProviderApplication("custom")
 				closes, deletes := 0, 0
-				if err := s.RegisterAccountProvider("custom", AccountProvider{
+				if err := s.RegisterProvider("custom", AccountProvider{
 					Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 						t.Fatal("maintenance initialized runtime storage")
 						return nil, nil, nil
@@ -199,7 +231,7 @@ func TestAccountMaintenanceDeadline(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 				defer cancel()
 				start := time.Now()
-				count, err := s.CleanupAccountTokens(ctx, 1)
+				count, err := s.CleanupTokens(ctx, 1)
 				wantDeletes := 0
 				if stage == "delete" {
 					wantDeletes = 1
@@ -209,42 +241,5 @@ func TestAccountMaintenanceDeadline(t *testing.T) {
 				}
 			})
 		})
-	}
-}
-
-func TestAccountMaintenanceBorrowsInitializedSQLitePool(t *testing.T) {
-	s := accountProviderApplication("sqlite")
-	s.Database = accountSetupTestDB(t)
-	ctx := context.Background()
-	if err := s.InitializeAccounts(ctx); err != nil {
-		t.Fatal(err)
-	}
-	assertAccountRepositoryReady(t, s.AccountRepository)
-	account, err := s.AccountRepository.GetByEmail(ctx, "ready@example.invalid")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AccountRepository.InsertToken(ctx, user.TokenMetadata{
-		AccountID: account.ID, TokenHash: "expired-hash", Purpose: "auth-reset", ExpiresAt: time.Now().Add(-time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	// Supplied storage must take precedence over configuration, without reopening it.
-	s.Config.Auth.AccountStorage.Provider = "unregistered"
-	if count, err := s.CleanupAccountTokens(ctx, 1); count != 1 || err != nil {
-		t.Fatalf("borrowed cleanup: count=%d, error=%v", count, err)
-	}
-	if _, err := s.AccountRepository.GetToken(ctx, "stored-hash", "auth-reset"); err != nil {
-		t.Fatal("maintenance closed the shared pool or deleted the live token:", err)
-	}
-	var missing *user.ErrTokenNotFound
-	if _, err := s.AccountRepository.GetToken(ctx, "expired-hash", "auth-reset"); !errors.As(err, &missing) {
-		t.Fatal("expired token remained:", err)
-	}
-	if err := s.Shutdown(); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Database.Ping(); err == nil {
-		t.Fatal("application shutdown left the shared pool open")
 	}
 }

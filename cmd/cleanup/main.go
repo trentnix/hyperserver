@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -49,8 +49,7 @@ func cleanup(ctx context.Context, cfg *config.Config, limit int) (sessions, toke
 	if limit < 1 {
 		return 0, 0, fmt.Errorf("cleanup batch size must be positive")
 	}
-	app := &server.ApplicationServer{Config: cfg}
-	tokens, tokenErr := app.CleanupAccountTokens(ctx, limit)
+	tokens, tokenErr := reference.CleanupAccountTokens(ctx, cfg, limit)
 	sessions, sessionErr := session.CleanupExpired(ctx, cfg, limit)
 	return sessions, tokens, errors.Join(tokenErr, sessionErr)
 }

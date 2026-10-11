@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"context"
@@ -10,31 +10,46 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
+type accountSetupHarness struct {
+	*reference.AccountStorage
+	app *server.ApplicationServer
+}
+
+func newAccountSetup(app *server.ApplicationServer) *accountSetupHarness {
+	return &accountSetupHarness{AccountStorage: reference.NewAccountStorage(app.Config), app: app}
+}
+
+func (s *accountSetupHarness) Initialize(ctx context.Context) error {
+	return initializeAccounts(ctx, s.app, s.AccountStorage)
+}
+
 func TestInitializeAccountsDisabled(t *testing.T) {
-	s := &ApplicationServer{Config: &config.Config{}}
-	if err := s.InitializeAccounts(context.Background()); err != nil {
+	s := newAccountSetup(&server.ApplicationServer{Config: &config.Config{}})
+	if err := s.Initialize(context.Background()); err != nil {
 		t.Fatal("disabled auth required a database:", err)
 	}
 
-	s.Database = accountSetupTestDB(t)
-	if err := s.InitializeAccounts(context.Background()); err != nil {
+	s.app.Database = accountSetupTestDB(t)
+	if err := s.Initialize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if s.AccountRepository != nil {
+	if s.app.AccountRepository != nil {
 		t.Fatal("disabled auth created a repository")
 	}
 	var count int
-	if err := s.Database.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'table'`); err != nil || count != 0 {
+	if err := s.app.Database.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'table'`); err != nil || count != 0 {
 		t.Fatalf("disabled auth created tables: count = %d, error = %v", count, err)
 	}
 }
 
 func TestInitializeAccountsDeadline(t *testing.T) {
-	for _, timeout := range []time.Duration{accountSetupTimeout, time.Second} {
+	for _, timeout := range []time.Duration{10 * time.Second, time.Second} {
 		t.Run(timeout.String(), func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				db := accountSetupTestDB(t)
@@ -45,29 +60,29 @@ func TestInitializeAccountsDeadline(t *testing.T) {
 				}
 				defer conn.Close()
 				ctx := context.Background()
-				if timeout < accountSetupTimeout {
+				if timeout < 10*time.Second {
 					var cancel context.CancelFunc
 					ctx, cancel = context.WithTimeout(ctx, timeout)
 					defer cancel()
 				}
-				s := &ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: db}
+				s := newAccountSetup(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: db})
 				start := time.Now()
-				if err := s.InitializeAccounts(ctx); !errors.Is(err, context.DeadlineExceeded) {
+				if err := s.Initialize(ctx); !errors.Is(err, context.DeadlineExceeded) {
 					t.Fatalf("setup deadline error = %v", err)
 				}
 				if elapsed := time.Since(start); elapsed != timeout {
 					t.Fatalf("setup waited %s, want %s", elapsed, timeout)
 				}
-				if s.AccountRepository != nil {
+				if s.app.AccountRepository != nil {
 					t.Fatal("failed setup published a repository")
 				}
 				if err := conn.Close(); err != nil {
 					t.Fatal(err)
 				}
-				if err := s.InitializeAccounts(context.Background()); err != nil {
+				if err := s.Initialize(context.Background()); err != nil {
 					t.Fatal("retry after deadline:", err)
 				}
-				assertAccountRepositoryReady(t, s.AccountRepository)
+				assertAccountRepositoryReady(t, s.app.AccountRepository)
 			})
 		})
 	}
@@ -76,14 +91,14 @@ func TestInitializeAccountsDeadline(t *testing.T) {
 func TestInitializeAccountsPreservesSuppliedRepository(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		repository := &suppliedAccountRepository{}
-		s := &ApplicationServer{
+		s := newAccountSetup(&server.ApplicationServer{
 			Config:            &config.Config{Auth: config.AuthConfig{Enabled: enabled}},
 			AccountRepository: repository,
-		}
-		if err := s.InitializeAccounts(context.Background()); err != nil {
+		})
+		if err := s.Initialize(context.Background()); err != nil {
 			t.Fatal("supplied repository required a database:", err)
 		}
-		if s.AccountRepository != repository {
+		if s.app.AccountRepository != repository {
 			t.Fatal("initialization replaced the supplied repository")
 		}
 	}
@@ -96,12 +111,12 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 	for _, scenario := range []string{"missing pool", "closed pool", "canceled", "schema conflict"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := accountSetupTestDB(t)
-			s := &ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: db}
+			s := newAccountSetup(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: db})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			switch scenario {
 			case "missing pool":
-				s.Database = nil
+				s.app.Database = nil
 			case "closed pool":
 				if err := db.Close(); err != nil {
 					t.Fatal(err)
@@ -115,9 +130,9 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 				}
 			}
 
-			err := s.InitializeAccounts(ctx)
-			if err == nil || s.AccountRepository != nil {
-				t.Fatalf("failed setup: error = %v, repository = %v", err, s.AccountRepository)
+			err := s.Initialize(ctx)
+			if err == nil || s.app.AccountRepository != nil {
+				t.Fatalf("failed setup: error = %v, repository = %v", err, s.app.AccountRepository)
 			}
 			var unavailable *database.ErrDatabaseUnavailable
 			if scenario == "missing pool" && !errors.As(err, &unavailable) {
@@ -130,7 +145,7 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 			if scenario == "closed pool" {
 				db = accountSetupTestDB(t)
 			}
-			s.Database = db
+			s.app.Database = db
 			var count int
 			if err := db.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`); err != nil || count != 0 {
 				t.Fatalf("failed setup left account tables or closed the pool: count = %d, error = %v", count, err)
@@ -140,40 +155,40 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := s.InitializeAccounts(context.Background()); err != nil {
+			if err := s.Initialize(context.Background()); err != nil {
 				t.Fatal("retry after failure:", err)
 			}
-			assertAccountRepositoryReady(t, s.AccountRepository)
+			assertAccountRepositoryReady(t, s.app.AccountRepository)
 		})
 	}
 }
 
 func TestApplicationOwnsAccountPool(t *testing.T) {
-	first := &ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: accountSetupTestDB(t)}
-	second := &ApplicationServer{Config: first.Config, Database: accountSetupTestDB(t)}
-	for _, s := range []*ApplicationServer{first, second} {
-		if err := s.InitializeAccounts(context.Background()); err != nil {
+	first := newAccountSetup(&server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{Enabled: true}}, Database: accountSetupTestDB(t)})
+	second := newAccountSetup(&server.ApplicationServer{Config: first.app.Config, Database: accountSetupTestDB(t)})
+	for _, s := range []*accountSetupHarness{first, second} {
+		if err := s.Initialize(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		assertAccountRepositoryReady(t, s.AccountRepository)
+		assertAccountRepositoryReady(t, s.app.AccountRepository)
 	}
-	repository := first.AccountRepository
-	if err := first.InitializeAccounts(context.Background()); err != nil || first.AccountRepository != repository {
+	repository := first.app.AccountRepository
+	if err := first.Initialize(context.Background()); err != nil || first.app.AccountRepository != repository {
 		t.Fatal("repeated initialization replaced the repository:", err)
 	}
-	if err := first.Database.Ping(); err != nil {
+	if err := first.app.Database.Ping(); err != nil {
 		t.Fatal("initialization closed the shared pool:", err)
 	}
-	if err := first.Shutdown(); err != nil {
+	if err := first.app.Shutdown(); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Database.Ping(); err == nil {
+	if err := first.app.Database.Ping(); err == nil {
 		t.Fatal("shutdown left the shared pool open")
 	}
 	if _, err := repository.GetByEmail(context.Background(), "ready@example.invalid"); err == nil {
 		t.Fatal("repository remained usable after its pool closed")
 	}
-	if _, err := second.AccountRepository.GetByEmail(context.Background(), "ready@example.invalid"); err != nil {
+	if _, err := second.app.AccountRepository.GetByEmail(context.Background(), "ready@example.invalid"); err != nil {
 		t.Fatal("shutdown affected another application's repository:", err)
 	}
 }

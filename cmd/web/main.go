@@ -18,6 +18,7 @@ import (
 
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -45,20 +46,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := run(ctx, app, *contactDirectory); err != nil {
+	accounts := reference.NewAccountStorage(app.Config)
+	if err := run(ctx, app, accounts, *contactDirectory); err != nil {
 		log.Fatal(err)
 	}
 }
 
 // run delegates serving and resource ownership to the shared application lifecycle.
-func run(ctx context.Context, s *server.ApplicationServer, contactDirectory string) error {
+func run(ctx context.Context, s *server.ApplicationServer, accounts *reference.AccountStorage, contactDirectory string) error {
 	return s.Run(ctx, func(ctx context.Context) (*http.Server, net.Listener, error) {
-		return prepareHTTP(ctx, s, contactDirectory)
+		return prepareHTTP(ctx, s, accounts, contactDirectory)
 	})
 }
 
 // prepareHTTP selects the reference application's services, modules, and HTTP stack.
-func prepareHTTP(ctx context.Context, s *server.ApplicationServer, contactDirectory string) (*http.Server, net.Listener, error) {
+func prepareHTTP(ctx context.Context, s *server.ApplicationServer, accounts *reference.AccountStorage, contactDirectory string) (*http.Server, net.Listener, error) {
 	address, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port)
 	if err != nil {
 		return nil, nil, err
@@ -85,7 +87,7 @@ func prepareHTTP(ctx context.Context, s *server.ApplicationServer, contactDirect
 	if err := s.InitializeSessions(ctx); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare session storage: %w", err)
 	}
-	if err := s.InitializeAccounts(ctx); err != nil {
+	if err := initializeAccounts(ctx, s, accounts); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare account storage: %w", err)
 	}
 	l := logger.NewSlogLogger(nil)

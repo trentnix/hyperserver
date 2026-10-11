@@ -50,7 +50,10 @@ func TestWaitForBrowser(t *testing.T) {
 				}
 
 				started := time.Now()
-				err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second)
+				readyAfter, err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second)
+				if readyAfter != tc.readyAfter {
+					t.Fatalf("readiness observed after %s, want %s", readyAfter, tc.readyAfter)
+				}
 				if tc.wantErr == "" {
 					if err != nil {
 						t.Fatal(err)
@@ -72,7 +75,7 @@ func TestWaitForBrowserAlreadyFinished(t *testing.T) {
 		close(ready)
 		result := make(chan string, 1)
 		result <- "PASS"
-		if err := waitForBrowser(ready, result, make(chan struct{}), time.Second, time.Second); err != nil {
+		if _, err := waitForBrowser(ready, result, make(chan struct{}), time.Second, time.Second); err != nil {
 			t.Fatal(err)
 		}
 	}

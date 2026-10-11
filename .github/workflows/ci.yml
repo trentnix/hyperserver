@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      browser_diagnostics:
+        description: Repeat the standalone Firefox diagnostic test ten times
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,10 +22,14 @@ jobs:
     name: Tests, vet, and race checks
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash # Enable pipefail so tee cannot hide a failed test command.
     env:
       CGO_ENABLED: '1' # Required by SQLite and the race detector.
       GOTOOLCHAIN: local
       GOFLAGS: -mod=readonly
+      HS_TEST_BROWSER_ARTIFACTS: ${{ runner.temp }}/browser-diagnostics
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,9 +53,36 @@ jobs:
           HS_TEST_FIREFOX: firefox
           TMPDIR: ${{ runner.temp }} # Keep profiles visible to browsers that isolate /tmp.
         run: |
-          firefox --version
+          mkdir -p "$HS_TEST_BROWSER_ARTIFACTS"
+          {
+            uname -a
+            cat /etc/os-release
+            printenv ImageOS ImageVersion || true
+            command -v firefox
+            readlink -f "$(command -v firefox)"
+            firefox --version
+          } | tee "$HS_TEST_BROWSER_ARTIFACTS/environment.txt"
           # Allow download, 30s startup, 15s checks, and cleanup inside the 75s scenario limit.
-          go test -count=1 -timeout=3m ./cmd/web -run '^TestBrowser(SiteErrors|NativeCredentialForms|ErrorReporting)$'
+          go test -v -count=1 -timeout=3m ./cmd/web -run '^TestBrowser(SiteErrors|NativeCredentialForms|ErrorReporting)$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/tests.log"
+
+      - name: Repeat standalone browser diagnostics
+        if: ${{ !cancelled() && inputs.browser_diagnostics }}
+        env:
+          HS_TEST_FIREFOX: firefox
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          mkdir -p "$HS_TEST_BROWSER_ARTIFACTS"
+          # A failed attempt keeps the step failed. This is not a retry policy.
+          go test -v -count=10 -timeout=7m ./cmd/web -run '^TestBrowserErrorReporting$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/repeated-tests.log"
+
+      - name: Upload browser diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-diagnostics-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/browser-diagnostics
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Test with race detector
         env:

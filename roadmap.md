@@ -103,6 +103,8 @@ Keep application decisions in one setup path, in one file or a small group of re
 
 The web and cleanup commands already load configuration once and pass it to consumers. Keep configuration file and environment access there, with provider validation operating on supplied settings. [Configuration and provider defaults](readme.md#configuration) describe current selection and replacement behavior.
 
+Account-provider selection and opening belong to [reference application setup](internal/reference/accounts.go), which uses configuration without depending on a server instance. Web startup supplies the repository and registers shutdown cleanup. The cleanup command opens and closes maintenance storage independently. The core does not import the account-storage implementation. Removing the repository field and remaining optional-service construction from the core remains separate work.
+
 | Owner | Responsibility |
 | --- | --- |
 | Application setup | Loads configuration once, selects modules and providers, supplies shared services, chooses middleware order and shared rendering policy, and assigns resource ownership. |
@@ -197,7 +199,7 @@ Replacement contracts must describe behavior consumers need. SQLite, PostgreSQL,
 
 Use narrow repositories for operations such as finding a user or creating an account. Framework services can use smaller key/value or blob contracts when those match their needs. Do not introduce a universal database or query API.
 
-Authentication uses [AccountRepository](pkg/services/user/account_repository.go) for account and token operations. `auth.accountStorage` selects a provider registered with the application. SQLite borrows the shared pool. Other providers can supply a close function for owned resources. Automatic module discovery and dependency resolution remain separate startup work.
+Authentication uses [AccountRepository](pkg/services/user/account_repository.go) for account and token operations. The reference application's `auth.accountStorage` selects a provider registered with its setup. SQLite borrows the shared pool. Web startup registers cleanup for owned resources before consumers initialize. Other applications supply their chosen repository directly. Automatic module discovery and dependency resolution remain separate startup work.
 
 [Session-backed identity](auth/identity/session.go) handles login, logout, and account lookup from a session. Account models, token operations, and storage contracts do not import session storage or database backends. The [SQLite provider](pkg/services/user/sqlite/account_repository.go) owns SQL, schema preparation, token cleanup, and transactions. Session-provider separation and removing optional providers from the core container remain open.
 

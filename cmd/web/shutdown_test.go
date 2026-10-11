@@ -19,6 +19,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -141,7 +142,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- run(ctx, s, "")
+		done <- run(ctx, s, reference.NewAccountStorage(s.Config), "")
 	}()
 	defer func() {
 		cancel()
@@ -378,7 +379,7 @@ func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
 			case "session setup":
 				cancel()
 			}
-			if err := run(ctx, s, ""); err == nil {
+			if err := run(ctx, s, reference.NewAccountStorage(s.Config), ""); err == nil {
 				t.Fatal("invalid initialization succeeded")
 			}
 			if err := db.Ping(); err == nil {
@@ -404,7 +405,7 @@ func TestRunRejectsInvalidShutdownTimeout(t *testing.T) {
 				t.Fatalf("configuration validation = %v", err)
 			}
 			app := &server.ApplicationServer{Config: cfg, Database: shutdownTestDB(t)}
-			if err := run(context.Background(), app, ""); err == nil || !strings.Contains(err.Error(), "http.shutdownTimeout must be positive") {
+			if err := run(context.Background(), app, reference.NewAccountStorage(app.Config), ""); err == nil || !strings.Contains(err.Error(), "http.shutdownTimeout must be positive") {
 				t.Fatalf("startup validation = %v", err)
 			}
 			if app.Database.Ping() == nil {

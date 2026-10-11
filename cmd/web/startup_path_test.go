@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -61,7 +62,8 @@ func checkStartupStoragePaths(t *testing.T) {
 	// Inspect storage after initialization, then stop before module setup/listening.
 	checked := errors.New("storage checked")
 	app.Config.Auth.AccountStorage.Provider = "path-check"
-	if err := app.RegisterAccountProvider("path-check", server.AccountProvider{
+	accounts := reference.NewAccountStorage(app.Config)
+	if err := accounts.RegisterProvider("path-check", reference.AccountProvider{
 		Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
 			first, err := app.Database.Conn(ctx)
 			if err != nil {
@@ -95,7 +97,7 @@ func checkStartupStoragePaths(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err = run(context.Background(), app, "")
+	err = run(context.Background(), app, accounts, "")
 	if os.Getenv("HS_STARTUP_TEST_HELPER") == "invalid-working-directory" {
 		if err == nil || !strings.Contains(err.Error(), "app.workingDirectory") || app.Database != nil || app.Mail != nil || app.SessionManager != nil {
 			t.Fatalf("invalid working directory acquired services or returned the wrong error: %v", err)

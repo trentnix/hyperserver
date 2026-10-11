@@ -72,7 +72,7 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 
 `server.NewApplicationServer(cfg)` accepts a `config.Config` and returns `(*ApplicationServer, error)`. It validates shared settings, copies the configuration including nested maps and pointers, and creates the router and content manager. Changes to the source configuration do not change the application. Configure services before serving requests. Construction does not read configuration files or initialize database, session, authentication, or mail services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
 
-Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, `InitializeAccounts(ctx)`, and `InitializeMail()` only for services the application needs, before initializing their consumers. The database initializer checks connectivity with a ten-second deadline. Mail initialization does not contact SMTP, and consumers that require delivery must validate its configuration. The reference application explicitly initializes services for its site and authentication features, then uses `handlers.Setup` for module initialization, route binding, and cleanup registration.
+Call `InitializeDatabase(ctx)`, `InitializeSessions(ctx)`, and `InitializeMail()` only for services the application needs, before initializing their consumers. Supply an initialized `AccountRepository` through application-owned setup. The database initializer checks connectivity with a ten-second deadline. Mail initialization does not contact SMTP, and consumers that require delivery must validate its configuration. The reference application explicitly initializes services for its site and authentication features, then uses `handlers.Setup` for module initialization, route binding, and cleanup registration.
 
 `app.Run(ctx, prepare)` owns serving and application cleanup. The preparation function receives the context and returns a configured `*http.Server`, a `net.Listener`, and an error. It selects services and modules but must not start serving. Run closes resources on startup failure and drains requests before cleanup on cancellation. `http.shutdownTimeout` controls draining, with a `10s` default.
 
@@ -208,25 +208,38 @@ Direct `http.ServeMux.Handle` calls retain Go's panic behavior. Panics in module
 
 ### Account storage
 
-`auth.accountStorage.provider` selects account persistence, separate from the login providers under `auth.services`. Empty or omitted selects `sqlite`, which uses the application-owned `database.connection`. SQLite accepts no `auth.accountStorage.options`. Unknown provider names stop startup when authentication is enabled.
+In the reference application, `auth.accountStorage.provider` selects account persistence, separate from the login providers under `auth.services`. Empty or omitted selects `sqlite`, which uses the application-owned `database.connection`. SQLite accepts no `auth.accountStorage.options`. Unknown provider names stop startup when authentication is enabled. The web and cleanup commands share this selection code in [reference account setup](internal/reference/accounts.go), not in the core server.
 
 Account models, token operations, and storage contracts live in [`user`](pkg/services/user). The SQLite implementation lives in [`user/sqlite`](pkg/services/user/sqlite). Import that provider when constructing `sqlite.NewAccountRepository(pool)` directly. The repository borrows the pool and must be initialized before use.
 
-Applications can register another provider before calling `InitializeAccounts`:
+Applications supply an initialized `user.AccountRepository`. For a borrowed SQLite pool:
 
 ```go
-if err := app.RegisterAccountProvider("company", server.AccountProvider{
+repository := sqlite.NewAccountRepository(app.Database)
+if err := repository.Initialize(ctx); err != nil {
+    return err
+}
+app.AccountRepository = repository
+```
+
+If a repository owns resources, register its cleanup with `app.OnShutdown` before initializing its consumers. Borrowed pools keep their existing owner. Other providers implement the same account contract without changing the core server.
+
+The reference application's setup also supports named factories. In the web command, register replacements before initialization:
+
+```go
+accounts := reference.NewAccountStorage(app.Config)
+if err := accounts.RegisterProvider("company", reference.AccountProvider{
     Open: openCompanyAccounts,
     OpenMaintenance: openCompanyTokenMaintenance, // Optional. Opens existing storage only.
 }); err != nil {
     return err
 }
-if err := app.InitializeAccounts(ctx); err != nil {
+if err := initializeAccounts(ctx, app, accounts); err != nil {
     return err
 }
 ```
 
-The application supplies the factories in [AccountProvider](pkg/server/accounts.go). `Open` receives the startup context and a copy of the configured options. It returns an initialized `user.AccountRepository`, an optional close function for resources it owns, and an error. HyperServer calls close after failed setup or during shutdown after requests drain. Borrowed pools must not be closed by the provider.
+This `internal/reference` helper uses configuration, not a server instance. Provider factories receive the startup context and a copy of the configured options. `accounts.Open(ctx, pool)` returns an initialized repository and its optional cleanup function. Failed opens release partial acquisitions. The web command's [initializeAccounts](cmd/web/accounts.go) supplies the repository and registers its cleanup. Cleanup runs after consumers stop and before the shared pool closes.
 
 Select the registered name and its options in configuration:
 
@@ -238,9 +251,9 @@ auth:
       connection: your-provider-connection
 ```
 
-Provider registrations belong to one application. Names are case-sensitive, and `sqlite` is reserved. Supplying `app.AccountRepository` directly bypasses selection and initialization. The supplier must initialize that repository and close any resources the application does not already own. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
+Reference provider registrations belong to one setup instance. Names are case-sensitive, and `sqlite` is reserved. Supplying `app.AccountRepository` directly bypasses selection and initialization. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
 
-`OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/account_repository.go) capability, an optional close function, and an error. It must not create or migrate tables. `CleanupAccountTokens` opens this capability, runs one batch, and closes its resources even when opening or deletion fails. An initialized repository can also implement `TokenMaintenance` directly. A missing capability returns an error rather than silently skipping cleanup.
+`OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/account_repository.go) capability, an optional close function, and an error. It must not create or migrate tables. The cleanup command calls `reference.CleanupAccountTokens(ctx, cfg, limit)` without constructing a server or `AccountStorage`. Provider selection is shared with web startup. If setup registers custom providers, its `CleanupTokens` method uses those registrations through the same maintenance implementation. Each batch closes acquired resources, even when opening or deletion fails. A missing capability returns an error rather than silently skipping cleanup. Applications that already hold a repository implementing `TokenMaintenance` can call `DeleteExpiredTokens` directly.
 
 ### Logging
 
@@ -487,6 +500,10 @@ go test -race ./...
 The [CI workflow](.github/workflows/ci.yml) runs these checks on pushes and pull requests. See [AGENTS.md](AGENTS.md) for working agreements and regression-test guidance.
 
 CI also tests error responses in headless Firefox. Run `HS_TEST_FIREFOX=firefox go test -count=1 ./cmd/web -run '^TestBrowserSiteErrors$'` locally with Firefox installed. The test downloads the HTMX version pinned in the site layout and checks its integrity hash. Ordinary Go test runs skip this browser test.
+
+CI saves browser diagnostics for seven days, including readiness timing, [Firefox process-launch logs](https://firefox-source-docs.mozilla.org/xpcom/logging.html), and available crash reports. On failure, it captures live process state and probes the test server before stopping Firefox. Whole browser profiles are not uploaded. Reports can contain synthetic test data. Set `HS_TEST_BROWSER_ARTIFACTS` to a directory to retain diagnostics locally.
+
+To investigate intermittent startup failures, manually run the CI workflow with `browser_diagnostics` enabled. It repeats the standalone `TestBrowserErrorReporting` test ten times with fresh profiles. Any failed attempt keeps the run failed. Startup and check deadlines remain 30 and 15 seconds.
 
 ## Feedback
 

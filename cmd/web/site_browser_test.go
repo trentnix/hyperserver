@@ -145,7 +145,8 @@ func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan s
 	browser := os.Getenv("HS_TEST_FIREFOX")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	logPath := filepath.Join(t.TempDir(), "firefox.log")
+	artifacts := browserArtifactDirectory(t)
+	logPath := filepath.Join(artifacts, "firefox.log")
 	logFile, err := os.Create(logPath)
 	if err != nil {
 		t.Fatal(err)
@@ -153,10 +154,15 @@ func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan s
 	defer logFile.Close()
 	profile := t.TempDir()
 	cmd := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, url)
+	// Log process startup, not HTTP headers or credential form values.
+	cmd.Env = append(os.Environ(), "MOZ_LOG=timestamp,sync,ChildProcessLifecycle:5",
+		"MOZ_LOG_FILE="+filepath.Join(artifacts, "process-launch"))
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 2 * time.Second
-	t.Logf("Browser executable: %s\nArguments: %q\nTMPDIR: %s\nStartup limit: 30s\nCheck limit: 15s", cmd.Path, cmd.Args, os.TempDir())
+	metadata := fmt.Sprintf("Test: %s\nBrowser executable: %s\nArguments: %q\nTMPDIR: %s\nStartup limit: 30s\nCheck limit: 15s\n", t.Name(), cmd.Path, cmd.Args, os.TempDir())
+	t.Log(metadata)
+	writeBrowserArtifact(t, artifacts, "launch.txt", metadata)
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start browser: %v\n%s", err, browserDiagnostics(profile, logPath, logs()))
 	}
@@ -171,19 +177,27 @@ func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan s
 	defer func() {
 		cancel()
 		<-exited
+		writeBrowserArtifact(t, artifacts, "after-stop.txt", fmt.Sprintf("Browser PID: %d\nElapsed: %s\nBrowser exit: %v\n%s\n%s",
+			cmd.Process.Pid, time.Since(started), exitErr, browserProcessSnapshot(), browserDiagnostics(profile, logPath, logs())))
+		preserveBrowserCrashes(t, profile, artifacts)
 	}()
 
-	if err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second); err != nil {
-		// Reap the process before reading its final output and exit status.
-		cancel()
-		<-exited
-		t.Fatalf("%v\nElapsed: %s\nBrowser exit: %v\n%s", err, time.Since(started), exitErr, browserDiagnostics(profile, logPath, logs()))
+	readyAfter, err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second)
+	timing := fmt.Sprintf("Browser PID: %d\nReadiness observed after: %s (zero means not observed)\nElapsed: %s\nResult: %v\n", cmd.Process.Pid, readyAfter, time.Since(started), err)
+	writeBrowserArtifact(t, artifacts, "timing.txt", timing)
+	t.Log(timing)
+	if err != nil {
+		// Inspect the live processes before cancellation destroys the evidence.
+		diagnostics := browserFailureSnapshot(url, profile, logPath, logs())
+		writeBrowserArtifact(t, artifacts, "before-stop.txt", diagnostics)
+		t.Fatalf("%v\n%s", err, diagnostics)
 	}
 }
 
 // Readiness means the page's JavaScript has started, not just that Firefox exists.
 // Time spent starting the browser and loading the page does not consume check time.
-func waitForBrowser(ready <-chan struct{}, result <-chan string, exited <-chan struct{}, startupTimeout, checkTimeout time.Duration) error {
+func waitForBrowser(ready <-chan struct{}, result <-chan string, exited <-chan struct{}, startupTimeout, checkTimeout time.Duration) (time.Duration, error) {
+	started := time.Now()
 	startup := time.NewTimer(startupTimeout)
 	defer startup.Stop()
 	select {
@@ -191,34 +205,35 @@ func waitForBrowser(ready <-chan struct{}, result <-chan string, exited <-chan s
 		startup.Stop()
 	case report := <-result:
 		if report != "PASS" {
-			return fmt.Errorf("browser checks failed before readiness was observed: %s", report)
+			return 0, fmt.Errorf("browser checks failed before readiness was observed: %s", report)
 		}
 		// Both channels can be ready when a fast test completes. Accept success
 		// only if the page has also reported readiness.
 		select {
 		case <-ready:
-			return nil
+			return time.Since(started), nil
 		default:
-			return fmt.Errorf("browser reported success before JavaScript reported readiness")
+			return 0, fmt.Errorf("browser reported success before JavaScript reported readiness")
 		}
 	case <-exited:
-		return fmt.Errorf("browser exited during startup, before JavaScript reported readiness")
+		return 0, fmt.Errorf("browser exited during startup, before JavaScript reported readiness")
 	case <-startup.C:
-		return fmt.Errorf("browser startup timed out after %s, before JavaScript reported readiness", startupTimeout)
+		return 0, fmt.Errorf("browser startup timed out after %s, before JavaScript reported readiness", startupTimeout)
 	}
 
+	readyAfter := time.Since(started)
 	checks := time.NewTimer(checkTimeout)
 	defer checks.Stop()
 	select {
 	case report := <-result:
 		if report != "PASS" {
-			return fmt.Errorf("browser checks failed: %s", report)
+			return readyAfter, fmt.Errorf("browser checks failed: %s", report)
 		}
-		return nil
+		return readyAfter, nil
 	case <-exited:
-		return fmt.Errorf("browser exited during checks, after JavaScript reported readiness")
+		return readyAfter, fmt.Errorf("browser exited during checks, after JavaScript reported readiness")
 	case <-checks.C:
-		return fmt.Errorf("browser checks timed out after %s, after JavaScript reported readiness", checkTimeout)
+		return readyAfter, fmt.Errorf("browser checks timed out after %s, after JavaScript reported readiness", checkTimeout)
 	}
 }
 

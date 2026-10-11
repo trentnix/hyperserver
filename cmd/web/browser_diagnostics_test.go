@@ -33,6 +33,9 @@ window.addEventListener("unhandledrejection", event => {
 // tests use a standalone mux, and middleware can reject requests before logging.
 func browserDiagnosticHandler(next http.Handler, result chan<- string, logs *capturedLogs) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /test/diagnostics/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /test/diagnostics/errors.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript")
 		io.WriteString(w, browserErrorScript)
@@ -69,6 +72,11 @@ func TestBrowserDiagnosticHandler(t *testing.T) {
 		w.WriteHeader(http.StatusAccepted)
 	})
 	handler := browserDiagnosticHandler(next, result, logs)
+	health := httptest.NewRecorder()
+	handler.ServeHTTP(health, httptest.NewRequest(http.MethodGet, "/test/diagnostics/health", nil))
+	if health.Code != http.StatusNoContent || len(result) != 0 {
+		t.Fatalf("health probe affected the browser result: status=%d, results=%d", health.Code, len(result))
+	}
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/form?secret=query-secret", strings.NewReader("body-secret")))
 	if w.Code != http.StatusAccepted || strings.Contains(logs.String(), "secret") {
@@ -91,6 +99,33 @@ func TestBrowserDiagnosticHandler(t *testing.T) {
 	}
 	if report := <-result; report != "JavaScript error: script failed" {
 		t.Fatalf("report=%q", report)
+	}
+}
+
+func TestBrowserServerProbe(t *testing.T) {
+	for _, status := range []int{http.StatusNoContent, http.StatusServiceUnavailable, http.StatusFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/test/diagnostics/health" || r.URL.RawQuery != "" {
+					t.Errorf("unexpected probe target: %s", r.URL)
+				}
+				w.Header().Set("Location", "/must-not-follow")
+				w.WriteHeader(status)
+			}))
+			defer server.Close()
+			if got := probeBrowserServer(server.URL + "/test?secret=value"); got != fmt.Sprintf("%d %s", status, http.StatusText(status)) {
+				t.Fatal("unexpected probe result:", got)
+			}
+			server.Close()
+			if got := probeBrowserServer(server.URL); !strings.Contains(got, "connect") {
+				t.Fatal("closed server appeared healthy:", got)
+			}
+		})
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-r.Context().Done() }))
+	defer server.Close()
+	if got := probeBrowserServer(server.URL); !strings.Contains(got, "context deadline exceeded") {
+		t.Fatal("stalled probe did not time out:", got)
 	}
 }
 
