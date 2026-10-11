@@ -1,4 +1,4 @@
-package user
+package sqlite
 
 import (
 	"context"
@@ -10,17 +10,18 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/database"
+	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestSQLiteAccountRepositoryInitialize(t *testing.T) {
 	db := unpreparedUserTestDB(t)
-	repository := NewSQLiteAccountRepository(db)
+	repository := NewAccountRepository(db)
 	assertNoAccountTables(t, db)
 	ctx := context.Background()
 	if err := repository.Initialize(ctx); err != nil {
 		t.Fatal(err)
 	}
-	account := &User{Email: "initialized@example.invalid", Password: "hash"}
+	account := &accounts.User{Email: "initialized@example.invalid", Password: "hash"}
 	if err := repository.Create(ctx, account); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +29,7 @@ func TestSQLiteAccountRepositoryInitialize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadata := TokenMetadata{AccountID: account.ID, TokenHash: "stored-hash", Purpose: resetTokenType, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	metadata := accounts.TokenMetadata{AccountID: account.ID, TokenHash: "stored-hash", Purpose: accounts.ResetTokenPurpose, ExpiresAt: time.Now().UTC().Add(time.Hour)}
 	if err := repository.InsertToken(ctx, metadata); err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +54,8 @@ func TestSQLiteAccountRepository(t *testing.T) {
 	for _, by := range []string{"ID", "email"} {
 		t.Run(by, func(t *testing.T) {
 			db := userTestDB(t)
-			reader := NewSQLiteAccountRepository(db)
-			account := &User{Email: "reader@example.invalid", Password: "hash", Verified: true, VerificationRequired: true, RegistrationAuthType: "email"}
+			reader := NewAccountRepository(db)
+			account := &accounts.User{Email: "reader@example.invalid", Password: "hash", Verified: true, VerificationRequired: true, RegistrationAuthType: "email"}
 			if err := reader.Create(context.Background(), account); err != nil {
 				t.Fatal(err)
 			}
@@ -73,7 +74,7 @@ func TestSQLiteAccountRepository(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(stored, again) || stored == again {
 				t.Fatal("reads must return independent account values:", err)
 			}
-			var notFound *ErrUserNotFound
+			var notFound *accounts.ErrUserNotFound
 			if got, err := lookup(context.Background(), "absent"); got != nil || !errors.As(err, &notFound) {
 				t.Fatalf("missing account = %v, %v", got, err)
 			}
@@ -100,14 +101,14 @@ func TestSQLiteAccountRepositoryCreateFailure(t *testing.T) {
 	for _, scenario := range []string{"duplicate", "nil pool", "closed pool", "canceled", "write failure"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := userTestDB(t)
-			repository := NewSQLiteAccountRepository(db)
-			account := &User{Email: "new@example.invalid", Password: "new hash", VerificationRequired: true}
+			repository := NewAccountRepository(db)
+			account := &accounts.User{Email: "new@example.invalid", Password: "new hash", VerificationRequired: true}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			var existing *User
+			var existing *accounts.User
 			switch scenario {
 			case "duplicate":
-				u := &User{Email: account.Email, Password: "original hash", Verified: true}
+				u := &accounts.User{Email: account.Email, Password: "original hash", Verified: true}
 				if err := repository.Create(ctx, u); err != nil {
 					t.Fatal(err)
 				}
@@ -117,7 +118,7 @@ func TestSQLiteAccountRepositoryCreateFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "nil pool":
-				repository = NewSQLiteAccountRepository(nil)
+				repository = NewAccountRepository(nil)
 			case "closed pool":
 				if err := db.Close(); err != nil {
 					t.Fatal(err)
@@ -162,7 +163,7 @@ func TestSQLiteAccountRepositoryLookupCancellationWhileWaiting(t *testing.T) {
 		t.Run(by, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				db := userTestDB(t)
-				repository := NewSQLiteAccountRepository(db)
+				repository := NewAccountRepository(db)
 				lookup := repository.GetByID
 				if by == "email" {
 					lookup = repository.GetByEmail
@@ -176,7 +177,7 @@ func TestSQLiteAccountRepositoryLookupCancellationWhileWaiting(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 
-				var account *User
+				var account *accounts.User
 				result := make(chan error, 1)
 				go func() {
 					var err error
@@ -192,7 +193,7 @@ func TestSQLiteAccountRepositoryLookupCancellationWhileWaiting(t *testing.T) {
 
 				cancel()
 				err = <-result
-				var notFound *ErrUserNotFound
+				var notFound *accounts.ErrUserNotFound
 				if account != nil || !errors.Is(err, context.Canceled) || errors.As(err, &notFound) {
 					t.Fatalf("canceled lookup = %v, %v, want nil account and context.Canceled", account, err)
 				}
@@ -212,10 +213,10 @@ func TestSQLiteAccountRepositoryCreateCancellationWhileWaiting(t *testing.T) {
 		defer connection.Close()
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		account := &User{Email: "waiting@example.invalid"}
+		account := &accounts.User{Email: "waiting@example.invalid"}
 		before := *account
 		result := make(chan error, 1)
-		go func() { result <- NewSQLiteAccountRepository(db).Create(ctx, account) }()
+		go func() { result <- NewAccountRepository(db).Create(ctx, account) }()
 		synctest.Wait()
 		select {
 		case err := <-result:
@@ -237,9 +238,9 @@ func TestSQLiteAccountRepositoryCreateCancellationWhileWaiting(t *testing.T) {
 }
 
 func TestSQLiteAccountRepositoryRequiresPreparedStorage(t *testing.T) {
-	for _, reader := range []*SQLiteAccountRepository{NewSQLiteAccountRepository(nil), NewSQLiteAccountRepository(unpreparedUserTestDB(t))} {
-		for _, lookup := range []func(context.Context, string) (*User, error){reader.GetByID, reader.GetByEmail} {
-			var notFound *ErrUserNotFound
+	for _, reader := range []*AccountRepository{NewAccountRepository(nil), NewAccountRepository(unpreparedUserTestDB(t))} {
+		for _, lookup := range []func(context.Context, string) (*accounts.User, error){reader.GetByID, reader.GetByEmail} {
+			var notFound *accounts.ErrUserNotFound
 			if got, err := lookup(context.Background(), "account"); got != nil || err == nil || errors.As(err, &notFound) {
 				t.Fatalf("unavailable storage treated as missing account: %v, %v", got, err)
 			}
@@ -249,8 +250,8 @@ func TestSQLiteAccountRepositoryRequiresPreparedStorage(t *testing.T) {
 
 func TestSQLiteAccountRepositoryConcurrentPasswordChanges(t *testing.T) {
 	db := userTestDB(t)
-	repository := NewSQLiteAccountRepository(db)
-	u := &User{Email: "change@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
+	repository := NewAccountRepository(db)
+	u := &accounts.User{Email: "change@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
 	if err := repository.Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +260,7 @@ func TestSQLiteAccountRepositoryConcurrentPasswordChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := *u
-	accounts := [2]User{before, before}
+	accounts := [2]accounts.User{before, before}
 	hashes := [2]string{"first hash", "second hash"}
 	var results [2]error
 	var workers sync.WaitGroup
@@ -301,8 +302,8 @@ func TestSQLiteAccountRepositoryConcurrentPasswordChanges(t *testing.T) {
 func TestSQLiteAccountRepositoryChangePasswordCancellationWhileWaiting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		db := userTestDB(t)
-		repository := NewSQLiteAccountRepository(db)
-		u := &User{Email: "change@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
+		repository := NewAccountRepository(db)
+		u := &accounts.User{Email: "change@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
 		if err := repository.Create(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
@@ -344,7 +345,7 @@ func TestSQLiteAccountRepositoryChangePasswordCancellationWhileWaiting(t *testin
 func TestSQLiteAccountRepositoryUpdateCancellationWhileWaiting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		db, u, token, key := verificationFixture(t)
-		repository := NewSQLiteAccountRepository(db)
+		repository := NewAccountRepository(db)
 		storedBefore, err := repository.GetByID(context.Background(), u.ID)
 		if err != nil {
 			t.Fatal(err)
@@ -379,7 +380,7 @@ func TestSQLiteAccountRepositoryUpdateCancellationWhileWaiting(t *testing.T) {
 		if err != nil || *stored != *storedBefore {
 			t.Fatalf("canceled update changed the stored account: %v", err)
 		}
-		if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), token.Token, key); err != nil {
+		if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token, key); err != nil {
 			t.Fatalf("canceled update revoked the verification token: %v", err)
 		}
 	})

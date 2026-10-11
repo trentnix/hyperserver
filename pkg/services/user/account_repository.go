@@ -5,6 +5,20 @@ import (
 	"time"
 )
 
+const (
+	// ResetTokenPurpose identifies a password-reset token in account storage.
+	ResetTokenPurpose = "auth-reset"
+	// VerificationTokenPurpose identifies an email-verification token in account storage.
+	VerificationTokenPurpose = "auth-verification"
+)
+
+// TokenMaintenance is an optional account-provider capability, separate from
+// AccountRepository. A batch deletes at most limit expired tokens. Implementations
+// must honor cancellation, preserve live tokens, and report the deleted count.
+type TokenMaintenance interface {
+	DeleteExpiredTokens(ctx context.Context, limit int) (int64, error)
+}
+
 // AccountRepository stores accounts for authentication. Reads of missing accounts
 // must return ErrUserNotFound. Other failures must remain errors. Implementations
 // must honor cancellation and support concurrent calls. Successful reads must

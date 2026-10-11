@@ -1,4 +1,4 @@
-package user
+package sqlite
 
 import (
 	"context"
@@ -8,24 +8,25 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/database"
+	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestPrepareDatabaseIndependentDatabases(t *testing.T) {
 	first, second := userTestDB(t), userTestDB(t)
 	for _, db := range []*sqlx.DB{first, second} {
-		u := &User{Email: "person@example.invalid"}
-		if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
+		u := &accounts.User{Email: "person@example.invalid"}
+		if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
-		token := &AuthToken{UserId: u.ID, TokenHash: "stored-hash", ExpiresAt: time.Now().Add(time.Hour), Type: resetTokenType}
-		if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
+		token := &accounts.AuthToken{UserId: u.ID, TokenHash: "stored-hash", ExpiresAt: time.Now().Add(time.Hour), Type: accounts.ResetTokenPurpose}
+		if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 
 		if err := PrepareDatabase(context.Background(), db); err != nil {
 			t.Fatal("repeated setup:", err)
 		}
-		stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+		stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 		if err != nil || stored.Email != u.Email {
 			t.Fatalf("account after repeated setup = %v, %v", stored, err)
 		}
@@ -89,26 +90,26 @@ func TestAccountOperationsDoNotPrepareDatabase(t *testing.T) {
 		run  func(*sqlx.DB) error
 	}{
 		{"lookup by ID", func(db *sqlx.DB) error {
-			_, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), "missing")
+			_, err := NewAccountRepository(db).GetByID(t.Context(), "missing")
 			return err
 		}},
 		{"lookup by email", func(db *sqlx.DB) error {
-			_, err := NewSQLiteAccountRepository(db).GetByEmail(t.Context(), "person@example.invalid")
+			_, err := NewAccountRepository(db).GetByEmail(t.Context(), "person@example.invalid")
 			return err
 		}},
 		{"create", func(db *sqlx.DB) error {
-			return NewSQLiteAccountRepository(db).Create(context.Background(), &User{Email: "person@example.invalid"})
+			return NewAccountRepository(db).Create(context.Background(), &accounts.User{Email: "person@example.invalid"})
 		}},
 		{"update", func(db *sqlx.DB) error {
-			return NewSQLiteAccountRepository(db).Update(context.Background(), &User{ID: "missing", Email: "person@example.invalid"})
+			return NewAccountRepository(db).Update(context.Background(), &accounts.User{ID: "missing", Email: "person@example.invalid"})
 		}},
 		{"create token", func(db *sqlx.DB) error {
-			return NewSQLiteAccountRepository(db).InsertToken(t.Context(), TokenMetadata{
-				AccountID: "missing", TokenHash: "hash", Purpose: resetTokenType, ExpiresAt: time.Now().Add(time.Hour),
+			return NewAccountRepository(db).InsertToken(t.Context(), accounts.TokenMetadata{
+				AccountID: "missing", TokenHash: "hash", Purpose: accounts.ResetTokenPurpose, ExpiresAt: time.Now().Add(time.Hour),
 			})
 		}},
 		{"lookup token", func(db *sqlx.DB) error {
-			_, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), "hash", resetTokenType)
+			_, err := NewAccountRepository(db).GetToken(t.Context(), "hash", accounts.ResetTokenPurpose)
 			return err
 		}},
 	} {

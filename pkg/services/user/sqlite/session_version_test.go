@@ -1,17 +1,19 @@
-package user
+package sqlite
 
 import (
 	"context"
 	"testing"
+
+	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestPrepareDatabaseAddsSessionVersion(t *testing.T) {
 	db := userTestDB(t)
-	u := &User{Email: "legacy@example.invalid", Password: "preserved"}
-	if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
+	u := &accounts.User{Email: "legacy@example.invalid", Password: "preserved"}
+	if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	u, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+	u, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +24,7 @@ func TestPrepareDatabaseAddsSessionVersion(t *testing.T) {
 		if err := PrepareDatabase(context.Background(), db); err != nil {
 			t.Fatal(err)
 		}
-		stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+		stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 		if err != nil || *stored != *u {
 			t.Fatalf("account changed during session version setup: %+v, %v", stored, err)
 		}
@@ -33,8 +35,8 @@ func TestAccountChangesAdvanceSessionVersion(t *testing.T) {
 	for _, field := range []string{"password", "email", "verified", "verification required", "provider", "unchanged"} {
 		t.Run(field, func(t *testing.T) {
 			db := userTestDB(t)
-			u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-			if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
+			u := &accounts.User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
+			if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
 			switch field {
@@ -49,14 +51,14 @@ func TestAccountChangesAdvanceSessionVersion(t *testing.T) {
 			case "provider":
 				u.RegistrationAuthType = "another-provider"
 			}
-			if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); err != nil {
+			if err := NewAccountRepository(db).Update(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
 			want := int64(2)
 			if field == "unchanged" {
 				want = 1
 			}
-			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+			stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || stored.SessionVersion != want || u.SessionVersion != want {
 				t.Fatalf("version = %d, want %d: %v", u.SessionVersion, want, err)
 			}
@@ -68,11 +70,11 @@ func TestSQLiteAccountRepositoryChangePassword(t *testing.T) {
 	for _, outcome := range []string{"success", "stale password", "stale provider", "stale version", "storage failure", "canceled", "empty hash", "missing account"} {
 		t.Run(outcome, func(t *testing.T) {
 			db := userTestDB(t)
-			u := &User{Email: "password@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-			if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
+			u := &accounts.User{Email: "password@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
+			if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
-			u, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+			u, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,11 +102,11 @@ func TestSQLiteAccountRepositoryChangePassword(t *testing.T) {
 				u.ID = "missing"
 			}
 			before := *u
-			err = NewSQLiteAccountRepository(db).ChangePassword(ctx, u, hash)
+			err = NewAccountRepository(db).ChangePassword(ctx, u, hash)
 			if (err == nil) != (outcome == "success") {
 				t.Fatalf("password change error = %v", err)
 			}
-			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), original.ID)
+			stored, err := NewAccountRepository(db).GetByID(t.Context(), original.ID)
 			if err != nil {
 				t.Fatal(err)
 			}

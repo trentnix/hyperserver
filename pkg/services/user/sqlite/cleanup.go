@@ -1,4 +1,4 @@
-package user
+package sqlite
 
 import (
 	"context"
@@ -9,20 +9,14 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-// TokenMaintenance is an optional account-provider capability, separate from
-// AccountRepository. A batch deletes at most limit expired tokens. Implementations
-// must honor cancellation, preserve live tokens, and report the deleted count.
-type TokenMaintenance interface {
-	DeleteExpiredTokens(ctx context.Context, limit int) (int64, error)
-}
-
-// OpenSQLiteTokenMaintenance opens existing account storage for maintenance.
+// OpenTokenMaintenance opens existing account storage for maintenance.
 // It does not create or migrate tables. The caller must call the returned close
 // function after the batch. Failed setup closes any pool it opened.
-func OpenSQLiteTokenMaintenance(ctx context.Context, cfg config.DatabaseConfig, options map[string]string) (TokenMaintenance, func() error, error) {
-	if err := ValidateSQLiteAccountOptions(options); err != nil {
+func OpenTokenMaintenance(ctx context.Context, cfg config.DatabaseConfig, options map[string]string) (accounts.TokenMaintenance, func() error, error) {
+	if err := ValidateOptions(options); err != nil {
 		return nil, nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -38,7 +32,7 @@ func OpenSQLiteTokenMaintenance(ctx context.Context, cfg config.DatabaseConfig, 
 	if err := db.PingContext(ctx); err != nil {
 		return nil, nil, errors.Join(err, db.Close())
 	}
-	return NewSQLiteAccountRepository(db), db.Close, nil
+	return NewAccountRepository(db), db.Close, nil
 }
 
 // DeleteExpiredTokens removes at most limit expired account tokens and returns

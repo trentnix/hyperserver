@@ -26,14 +26,10 @@ type (
 	}
 )
 
-const (
-	resetTokenType = "auth-reset"
-)
-
 // NewAuthResetToken creates a reset token and its hash.
 // Store its Metadata with AccountRepository.InsertToken before sending the link.
 func NewAuthResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthResetToken, error) {
-	authToken, err := newAuthToken(u, jwtKey, expiration, resetTokenType)
+	authToken, err := newAuthToken(u, jwtKey, expiration, ResetTokenPurpose)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +40,7 @@ func NewAuthResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthR
 // ValidateResetToken checks the signature, reset purpose, stored hash, and expiry,
 // then returns the account. jwtKey is the account-token signing key. It does not consume the token.
 func ValidateResetToken(ctx context.Context, accounts AccountRepository, tokenString string, jwtKey []byte) (*User, error) {
-	return validateToken(ctx, accounts, tokenString, jwtKey, resetTokenType)
+	return validateToken(ctx, accounts, tokenString, jwtKey, ResetTokenPurpose)
 }
 
 // ResetPassword validates the signed reset token and asks accounts to atomically
@@ -62,7 +58,7 @@ func (u *User) ResetPassword(ctx context.Context, accounts AccountRepository, to
 		return errors.New("a password hash is required")
 	}
 
-	claims, err := parseAuthToken(token, jwtKey, resetTokenType)
+	claims, err := parseAuthToken(token, jwtKey, ResetTokenPurpose)
 	if err != nil {
 		return err
 	}

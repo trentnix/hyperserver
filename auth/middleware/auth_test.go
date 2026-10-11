@@ -9,6 +9,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 func TestAuthMiddlewareMissingDependencies(t *testing.T) {
@@ -20,7 +21,7 @@ func TestAuthMiddlewareMissingDependencies(t *testing.T) {
 			t.Run(name+"/"+missing, func(t *testing.T) {
 				// A cached user avoids database I/O if a missing return lets execution continue.
 				r := user.AddUserToRequestContext(httptest.NewRequest(http.MethodGet, "/private", nil), &user.User{ID: "user", Verified: true})
-				var db user.AccountRepository = user.NewSQLiteAccountRepository(&sqlx.DB{})
+				var db user.AccountRepository = usersqlite.NewAccountRepository(&sqlx.DB{})
 				cm := &content.ContentManagerService{HandleError: func(http.ResponseWriter, *http.Request, string, error, int) {
 					t.Error("authentication continued after a dependency error")
 				}}
@@ -48,7 +49,7 @@ func TestAuthMiddlewareMissingDependencies(t *testing.T) {
 func TestSessionMiddlewareMissingDependencies(t *testing.T) {
 	for _, missing := range []string{"database", "session manager", "both"} {
 		t.Run(missing, func(t *testing.T) {
-			var db user.AccountRepository = user.NewSQLiteAccountRepository(&sqlx.DB{})
+			var db user.AccountRepository = usersqlite.NewAccountRepository(&sqlx.DB{})
 			manager := &session.SessionManager{}
 			if missing == "database" || missing == "both" {
 				db = nil

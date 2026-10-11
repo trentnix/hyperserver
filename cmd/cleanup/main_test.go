@@ -15,7 +15,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
-	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 func cleanupFixture(t *testing.T) (*config.Config, *sqlx.DB, *sqlx.DB) {
@@ -31,7 +31,7 @@ func cleanupFixture(t *testing.T) (*config.Config, *sqlx.DB, *sqlx.DB) {
 		return db
 	}
 	accounts, sessions := open(accountPath), open(sessionPath)
-	if err := user.PrepareDatabase(context.Background(), accounts); err != nil {
+	if err := usersqlite.PrepareDatabase(context.Background(), accounts); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sessions.Exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY, expires_at TIMESTAMP)`); err != nil {

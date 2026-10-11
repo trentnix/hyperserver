@@ -11,6 +11,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 func TestOptionalServicesUseLoadedConfiguration(t *testing.T) {
@@ -98,7 +99,7 @@ mail:
 	if app.ContentManager.AppName != "loaded-name" {
 		t.Fatal("rendering did not use the loaded application name")
 	}
-	if _, ok := app.AccountRepository.(*user.SQLiteAccountRepository); !ok {
+	if _, ok := app.AccountRepository.(*usersqlite.AccountRepository); !ok {
 		t.Fatalf("account provider = %T, want SQLite", app.AccountRepository)
 	}
 	var notFound *user.ErrUserNotFound

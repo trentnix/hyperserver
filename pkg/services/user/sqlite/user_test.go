@@ -1,4 +1,4 @@
-package user
+package sqlite
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/database"
+	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func userTestDB(t *testing.T) *sqlx.DB {
@@ -37,54 +38,54 @@ func unpreparedUserTestDB(t *testing.T) *sqlx.DB {
 
 func TestSQLiteAccountRepositoryGetByEmail(t *testing.T) {
 	db := userTestDB(t)
-	u := &User{Email: "person@example.invalid"}
-	if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
+	u := &accounts.User{Email: "person@example.invalid"}
+	if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	got, err := NewSQLiteAccountRepository(db).GetByEmail(context.Background(), u.Email)
+	got, err := NewAccountRepository(db).GetByEmail(context.Background(), u.Email)
 	if err != nil || got.ID != u.ID {
 		t.Fatalf("account lookup = %v, %v", got, err)
 	}
-	if _, err := NewSQLiteAccountRepository(db).GetByEmail(context.Background(), "unknown@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := NewAccountRepository(db).GetByEmail(context.Background(), "unknown@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("unknown account error = %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := NewSQLiteAccountRepository(db).GetByEmail(ctx, u.Email); !errors.Is(err, context.Canceled) {
+	if _, err := NewAccountRepository(db).GetByEmail(ctx, u.Email); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled lookup error = %v", err)
 	}
-	if _, err := NewSQLiteAccountRepository(nil).GetByEmail(context.Background(), u.Email); err == nil {
+	if _, err := NewAccountRepository(nil).GetByEmail(context.Background(), u.Email); err == nil {
 		t.Fatal("missing database did not fail")
 	}
-	if _, err := NewSQLiteAccountRepository(db).GetByEmail(context.Background(), ""); err == nil {
+	if _, err := NewAccountRepository(db).GetByEmail(context.Background(), ""); err == nil {
 		t.Fatal("empty email did not fail")
 	}
 }
 
 func TestCreateRejectsStaleRegistration(t *testing.T) {
 	db := userTestDB(t)
-	if _, err := NewSQLiteAccountRepository(db).GetByEmail(t.Context(), "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := NewAccountRepository(db).GetByEmail(t.Context(), "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("initial account lookup = %v, want no rows", err)
 	}
 	// Both callers saw an unused email. One finishes before the other persists.
-	winner := &User{Email: "person@example.invalid", Password: "winning hash", Verified: true}
-	loser := &User{Email: winner.Email, Password: "losing hash", VerificationRequired: true}
-	if err := NewSQLiteAccountRepository(db).Create(context.Background(), winner); err != nil {
+	winner := &accounts.User{Email: "person@example.invalid", Password: "winning hash", Verified: true}
+	loser := &accounts.User{Email: winner.Email, Password: "losing hash", VerificationRequired: true}
+	if err := NewAccountRepository(db).Create(context.Background(), winner); err != nil {
 		t.Fatal(err)
 	}
-	original, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), winner.ID)
+	original, err := NewAccountRepository(db).GetByID(t.Context(), winner.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	before := *loser
 	var duplicate *database.ErrRecordAlreadyExists
-	if err := NewSQLiteAccountRepository(db).Create(context.Background(), loser); !errors.As(err, &duplicate) {
+	if err := NewAccountRepository(db).Create(context.Background(), loser); !errors.As(err, &duplicate) {
 		t.Errorf("stale registration error = %v, want duplicate email", err)
 	}
 	if *loser != before {
 		t.Error("failed creation changed the caller's user")
 	}
-	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), winner.ID)
+	stored, err := NewAccountRepository(db).GetByID(t.Context(), winner.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,16 +96,16 @@ func TestCreateRejectsStaleRegistration(t *testing.T) {
 
 func TestUpdateRejectsMissingUser(t *testing.T) {
 	db := userTestDB(t)
-	u := &User{ID: "missing-id", Email: "person@example.invalid", Password: "hash"}
+	u := &accounts.User{ID: "missing-id", Email: "person@example.invalid", Password: "hash"}
 	before := *u
-	var missing *ErrUserNotFound
-	if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); !errors.As(err, &missing) {
+	var missing *accounts.ErrUserNotFound
+	if err := NewAccountRepository(db).Update(context.Background(), u); !errors.As(err, &missing) {
 		t.Errorf("missing account error = %v, want ErrUserNotFound", err)
 	}
 	if *u != before {
 		t.Error("failed update changed the caller's user")
 	}
-	if _, err := NewSQLiteAccountRepository(db).GetByEmail(t.Context(), u.Email); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := NewAccountRepository(db).GetByEmail(t.Context(), u.Email); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("updating a missing account created one: %v", err)
 	}
 }
@@ -112,25 +113,25 @@ func TestUpdateRejectsMissingUser(t *testing.T) {
 func TestUpdateUsesID(t *testing.T) {
 	db := userTestDB(t)
 	ctx := context.Background()
-	u := &User{Email: "before@example.invalid", Password: "original hash"}
-	if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
+	u := &accounts.User{Email: "before@example.invalid", Password: "original hash"}
+	if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
 	id, createdAt := u.ID, u.CreatedAt
 	u.Email = "after@example.invalid"
 	u.Password = "updated hash"
 	u.Verified = true
-	if err := NewSQLiteAccountRepository(db).Update(ctx, u); err != nil {
+	if err := NewAccountRepository(db).Update(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), id)
+	stored, err := NewAccountRepository(db).GetByID(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stored.Email != u.Email || stored.Password != u.Password || !stored.Verified || !stored.CreatedAt.Equal(createdAt) {
 		t.Error("update did not preserve identity and apply the changes")
 	}
-	if _, err := NewSQLiteAccountRepository(db).GetByEmail(t.Context(), "before@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := NewAccountRepository(db).GetByEmail(t.Context(), "before@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("old email still exists: %v", err)
 	}
 	var count int
@@ -140,7 +141,7 @@ func TestUpdateUsesID(t *testing.T) {
 	if _, err := db.ExecContext(ctx, "DELETE FROM user WHERE id = ?", u.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := NewSQLiteAccountRepository(db).Update(ctx, u); !errors.Is(err, sql.ErrNoRows) {
+	if err := NewAccountRepository(db).Update(ctx, u); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("updating a deleted user = %v, want not found", err)
 	}
 }
@@ -148,17 +149,17 @@ func TestUpdateUsesID(t *testing.T) {
 func TestUpdateRejectsEmailConflict(t *testing.T) {
 	db := userTestDB(t)
 	ctx := context.Background()
-	first := &User{Email: "first@example.invalid", Password: "first hash"}
-	second := &User{Email: "second@example.invalid", Password: "second hash"}
-	for _, u := range []*User{first, second} {
-		if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
+	first := &accounts.User{Email: "first@example.invalid", Password: "first hash"}
+	second := &accounts.User{Email: "second@example.invalid", Password: "second hash"}
+	for _, u := range []*accounts.User{first, second} {
+		if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 			t.Fatal(err)
 		}
 	}
 	first.Email = second.Email
 	before := *first
 	var duplicate *database.ErrRecordAlreadyExists
-	if err := NewSQLiteAccountRepository(db).Update(ctx, first); !errors.As(err, &duplicate) {
+	if err := NewAccountRepository(db).Update(ctx, first); !errors.As(err, &duplicate) {
 		t.Fatalf("email conflict = %v, want duplicate email", err)
 	}
 	if *first != before {
@@ -168,7 +169,7 @@ func TestUpdateRejectsEmailConflict(t *testing.T) {
 		{first.ID, "first@example.invalid", "first hash"},
 		{second.ID, "second@example.invalid", "second hash"},
 	} {
-		stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), tc.id)
+		stored, err := NewAccountRepository(db).GetByID(t.Context(), tc.id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -181,33 +182,33 @@ func TestUpdateRejectsEmailConflict(t *testing.T) {
 func TestUserWritesRejectInvalidInput(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		u    *User
+		u    *accounts.User
 	}{
 		{"nil user", nil},
-		{"empty user", &User{}},
-		{"id without email", &User{ID: "existing-id"}},
+		{"empty user", &accounts.User{}},
+		{"id without email", &accounts.User{ID: "existing-id"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := userTestDB(t)
-			if err := NewSQLiteAccountRepository(db).Create(context.Background(), tc.u); err == nil {
+			if err := NewAccountRepository(db).Create(context.Background(), tc.u); err == nil {
 				t.Error("Create accepted invalid input")
 			}
-			if err := NewSQLiteAccountRepository(db).Update(context.Background(), tc.u); err == nil {
+			if err := NewAccountRepository(db).Update(context.Background(), tc.u); err == nil {
 				t.Error("Update accepted invalid input")
 			}
 		})
 	}
 	t.Run("identified user cannot be created", func(t *testing.T) {
 		db := userTestDB(t)
-		u := &User{ID: "existing-id", Email: "person@example.invalid"}
-		if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err == nil {
+		u := &accounts.User{ID: "existing-id", Email: "person@example.invalid"}
+		if err := NewAccountRepository(db).Create(context.Background(), u); err == nil {
 			t.Error("Create accepted an existing ID")
 		}
 	})
 	t.Run("email alone cannot select an update target", func(t *testing.T) {
 		db := userTestDB(t)
-		u := &User{Email: "person@example.invalid"}
-		if err := NewSQLiteAccountRepository(db).Update(context.Background(), u); err == nil {
+		u := &accounts.User{Email: "person@example.invalid"}
+		if err := NewAccountRepository(db).Update(context.Background(), u); err == nil {
 			t.Error("Update accepted a missing ID")
 		}
 	})
@@ -220,9 +221,9 @@ func TestUserWritesPropagateFailures(t *testing.T) {
 				db := userTestDB(t)
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
-				u := &User{Email: "person@example.invalid", Password: "hash"}
+				u := &accounts.User{Email: "person@example.invalid", Password: "hash"}
 				if operation == "update" {
-					if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
+					if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -240,9 +241,9 @@ func TestUserWritesPropagateFailures(t *testing.T) {
 				}
 				var err error
 				if operation == "create" {
-					err = NewSQLiteAccountRepository(target).Create(ctx, u)
+					err = NewAccountRepository(target).Create(ctx, u)
 				} else {
-					err = NewSQLiteAccountRepository(target).Update(ctx, u)
+					err = NewAccountRepository(target).Update(ctx, u)
 				}
 				if err == nil {
 					t.Fatal("write failure was ignored")

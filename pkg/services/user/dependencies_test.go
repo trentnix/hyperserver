@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestAccountPackageDoesNotImportSessions(t *testing.T) {
+func TestAccountPackageDoesNotImportBackends(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", "list", "-deps", "github.com/trentnix/hyperserver/pkg/services/user")
@@ -17,9 +17,16 @@ func TestAccountPackageDoesNotImportSessions(t *testing.T) {
 		t.Fatalf("inspect account dependencies: %v\n%s", err, output)
 	}
 	for _, dependency := range strings.Fields(string(output)) {
-		const sessions = "github.com/trentnix/hyperserver/pkg/services/session"
-		if dependency == sessions || strings.HasPrefix(dependency, sessions+"/") {
-			t.Errorf("account package imports session implementation %s", dependency)
+		for _, backend := range []string{
+			"github.com/trentnix/hyperserver/pkg/services/session",
+			"github.com/trentnix/hyperserver/pkg/services/user/sqlite",
+			"github.com/trentnix/hyperserver/pkg/database",
+			"github.com/jmoiron/sqlx",
+			"github.com/mattn/go-sqlite3",
+		} {
+			if dependency == backend || strings.HasPrefix(dependency, backend+"/") {
+				t.Errorf("account package imports backend %s", dependency)
+			}
 		}
 	}
 }

@@ -1,20 +1,22 @@
-package user
+package sqlite
 
 import (
 	"context"
 	"errors"
 	"testing"
 	"time"
+
+	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 	for _, change := range []string{"password change", "password reset", "password update", "email", "provider", "verified", "verification required", "verification token", "changed back"} {
 		t.Run(change, func(t *testing.T) {
 			db := userTestDB(t)
-			repository := NewSQLiteAccountRepository(db)
+			repository := NewAccountRepository(db)
 			ctx := context.Background()
-			u := &User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
-			if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
+			u := &accounts.User{Email: "person@example.invalid", Password: "old hash", RegistrationAuthType: "email"}
+			if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 				t.Fatal(err)
 			}
 			stale := *u
@@ -22,25 +24,25 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 			var err error
 			switch change {
 			case "password change":
-				err = NewSQLiteAccountRepository(db).ChangePassword(ctx, u, "new hash")
+				err = NewAccountRepository(db).ChangePassword(ctx, u, "new hash")
 			case "password reset":
-				token, tokenErr := NewAuthResetToken(u, key, time.Hour)
+				token, tokenErr := accounts.NewAuthResetToken(u, key, time.Hour)
 				if tokenErr != nil {
 					t.Fatal(tokenErr)
 				}
-				if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
+				if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 				err = u.ResetPassword(ctx, repository, token.Token, key, "new hash")
 			case "verification token":
-				token, tokenErr := NewAuthVerificationToken(u, key, time.Hour)
+				token, tokenErr := accounts.NewAuthVerificationToken(u, key, time.Hour)
 				if tokenErr != nil {
 					t.Fatal(tokenErr)
 				}
-				if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
+				if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
-				u, err = Verify(ctx, NewSQLiteAccountRepository(db), token.Token, key)
+				u, err = accounts.Verify(ctx, NewAccountRepository(db), token.Token, key)
 			default:
 				switch change {
 				case "password update":
@@ -63,15 +65,15 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			current, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+			current, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			token, err := NewAuthVerificationToken(current, key, time.Hour)
+			token, err := accounts.NewAuthVerificationToken(current, key, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
+			if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 
@@ -80,24 +82,24 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 			for _, email := range []string{stale.Email, "profile-edit@example.invalid"} {
 				stale.Email = email
 				before := stale
-				var changed *ErrUserChanged
+				var changed *accounts.ErrUserChanged
 				if err := repository.Update(ctx, &stale); !errors.As(err, &changed) {
 					t.Fatalf("stale update error = %v, want ErrUserChanged", err)
 				}
 				if stale != before {
 					t.Fatal("rejected update changed the caller's snapshot")
 				}
-				stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+				stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 				if err != nil || *stored != *current {
 					t.Fatalf("rejected update changed the stored account: %v", err)
 				}
-				if _, err := ValidateVerificationToken(context.Background(), NewSQLiteAccountRepository(db), token.Token, key); err != nil {
+				if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token, key); err != nil {
 					t.Fatalf("rejected update revoked a verification token: %v", err)
 				}
 			}
 
 			// Reload and reapply only the intended edit, not the stale snapshot.
-			fresh, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+			fresh, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,7 +107,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 			if err := repository.Update(ctx, fresh); err != nil {
 				t.Fatalf("fresh update failed: %v", err)
 			}
-			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+			stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -120,16 +122,16 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 
 func TestConcurrentUpdatesRejectStaleSnapshot(t *testing.T) {
 	db := userTestDB(t)
-	repository := NewSQLiteAccountRepository(db)
+	repository := NewAccountRepository(db)
 	db.SetMaxOpenConns(2)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	u := &User{Email: "person@example.invalid", Password: "original hash", RegistrationAuthType: "email"}
-	if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
+	u := &accounts.User{Email: "person@example.invalid", Password: "original hash", RegistrationAuthType: "email"}
+	if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
 	type result struct {
-		account User
+		account accounts.User
 		err     error
 	}
 	start := make(chan struct{})
@@ -145,14 +147,14 @@ func TestConcurrentUpdatesRejectStaleSnapshot(t *testing.T) {
 	}
 	close(start)
 	var successes int
-	var winner User
+	var winner accounts.User
 	for range 2 {
 		outcome := <-results
 		if outcome.err == nil {
 			successes++
 			winner = outcome.account
 		} else {
-			var changed *ErrUserChanged
+			var changed *accounts.ErrUserChanged
 			if !errors.As(outcome.err, &changed) {
 				t.Errorf("competing update error = %v, want ErrUserChanged", outcome.err)
 			}
@@ -161,7 +163,7 @@ func TestConcurrentUpdatesRejectStaleSnapshot(t *testing.T) {
 			}
 		}
 	}
-	stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+	stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil || successes != 1 || stored.Email != winner.Email || stored.Password != u.Password || stored.SessionVersion != 2 {
 		t.Fatalf("concurrent updates: successes=%d stored=%+v error=%v", successes, stored, err)
 	}
@@ -170,11 +172,11 @@ func TestConcurrentUpdatesRejectStaleSnapshot(t *testing.T) {
 func TestUpdateRejectsIncorrectSecurityVersion(t *testing.T) {
 	db := userTestDB(t)
 	ctx := context.Background()
-	u := &User{Email: "person@example.invalid", Password: "original hash"}
-	if err := NewSQLiteAccountRepository(db).Create(ctx, u); err != nil {
+	u := &accounts.User{Email: "person@example.invalid", Password: "original hash"}
+	if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	original, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+	original, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,11 +185,11 @@ func TestUpdateRejectsIncorrectSecurityVersion(t *testing.T) {
 		attempt.SessionVersion = version
 		attempt.Email = "changed@example.invalid"
 		before := attempt
-		var changed *ErrUserChanged
-		if err := NewSQLiteAccountRepository(db).Update(ctx, &attempt); !errors.As(err, &changed) {
+		var changed *accounts.ErrUserChanged
+		if err := NewAccountRepository(db).Update(ctx, &attempt); !errors.As(err, &changed) {
 			t.Fatalf("version %d: error=%v, want ErrUserChanged", version, err)
 		}
-		stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
+		stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 		if err != nil || *stored != *original || attempt != before {
 			t.Fatalf("version %d: rejected update changed account state: %v", version, err)
 		}

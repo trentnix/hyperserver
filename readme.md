@@ -210,6 +210,8 @@ Direct `http.ServeMux.Handle` calls retain Go's panic behavior. Panics in module
 
 `auth.accountStorage.provider` selects account persistence, separate from the login providers under `auth.services`. Empty or omitted selects `sqlite`, which uses the application-owned `database.connection`. SQLite accepts no `auth.accountStorage.options`. Unknown provider names stop startup when authentication is enabled.
 
+Account models, token operations, and storage contracts live in [`user`](pkg/services/user). The SQLite implementation lives in [`user/sqlite`](pkg/services/user/sqlite). Import that provider when constructing `sqlite.NewAccountRepository(pool)` directly. The repository borrows the pool and must be initialized before use.
+
 Applications can register another provider before calling `InitializeAccounts`:
 
 ```go
@@ -238,7 +240,7 @@ auth:
 
 Provider registrations belong to one application. Names are case-sensitive, and `sqlite` is reserved. Supplying `app.AccountRepository` directly bypasses selection and initialization. The supplier must initialize that repository and close any resources the application does not already own. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
 
-`OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/cleanup.go) capability, an optional close function, and an error. It must not create or migrate tables. `CleanupAccountTokens` opens this capability, runs one batch, and closes its resources even when opening or deletion fails. An initialized repository can also implement `TokenMaintenance` directly. A missing capability returns an error rather than silently skipping cleanup.
+`OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/account_repository.go) capability, an optional close function, and an error. It must not create or migrate tables. `CleanupAccountTokens` opens this capability, runs one batch, and closes its resources even when opening or deletion fails. An initialized repository can also implement `TokenMaintenance` directly. A missing capability returns an error rather than silently skipping cleanup.
 
 ### Logging
 

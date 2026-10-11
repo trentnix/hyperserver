@@ -19,6 +19,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 // Use subprocesses to isolate startup exits, working directories, and registries.
@@ -70,7 +71,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		}})
 		s.Config.Auth.AccountStorage.Provider = "custom"
 		if err := s.RegisterAccountProvider("custom", server.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
-			repository := user.NewSQLiteAccountRepository(s.Database)
+			repository := usersqlite.NewAccountRepository(s.Database)
 			if err := repository.Initialize(ctx); err != nil {
 				return nil, nil, err
 			}

@@ -10,6 +10,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
@@ -42,7 +43,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					if _, ok := ctx.Deadline(); !ok {
 						t.Error("storage setup has no deadline")
 					}
-					repository := user.NewSQLiteAccountRepository(app.Database)
+					repository := usersqlite.NewAccountRepository(app.Database)
 					setupErr = repository.Initialize(ctx)
 					if setupErr != nil {
 						return setupErr

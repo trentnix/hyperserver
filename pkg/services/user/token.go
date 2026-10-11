@@ -44,10 +44,10 @@ func newAuthToken(u *User, jwtKey []byte, expiration time.Duration, tokenType st
 	if len(jwtKey) == 0 {
 		return nil, NewErrJwtKeyNotSet(errNewToken)
 	}
-	if tokenType != resetTokenType && tokenType != verificationTokenType {
+	if tokenType != ResetTokenPurpose && tokenType != VerificationTokenPurpose {
 		return nil, NewErrToken(errors.New("invalid token purpose"))
 	}
-	if tokenType == verificationTokenType && u.Email == "" {
+	if tokenType == VerificationTokenPurpose && u.Email == "" {
 		return nil, NewErrToken(errors.New("verification requires an email address"))
 	}
 
@@ -66,7 +66,7 @@ func newAuthToken(u *User, jwtKey []byte, expiration time.Duration, tokenType st
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
-	if tokenType == verificationTokenType {
+	if tokenType == VerificationTokenPurpose {
 		claims.Email = u.Email
 	}
 
@@ -111,7 +111,7 @@ func parseAuthToken(tokenString string, jwtKey []byte, purpose string) (*Verific
 	if !token.Valid || claims.Id == "" || claims.Purpose != purpose {
 		return nil, NewErrToken(errors.New("invalid token claims"))
 	}
-	if purpose == verificationTokenType && claims.Email == "" {
+	if purpose == VerificationTokenPurpose && claims.Email == "" {
 		return nil, NewErrToken(errors.New("verification token has no email address"))
 	}
 	return claims, nil
@@ -150,7 +150,7 @@ func validateToken(ctx context.Context, accounts AccountRepository, tokenString 
 	if account == nil || account.ID != claims.Id {
 		return nil, NewErrUserNotFound(nil)
 	}
-	if tokenType == verificationTokenType && account.Email != claims.Email {
+	if tokenType == VerificationTokenPurpose && account.Email != claims.Email {
 		return nil, NewErrToken(errors.New("verification address no longer matches the account"))
 	}
 

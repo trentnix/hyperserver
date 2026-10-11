@@ -15,15 +15,11 @@ type (
 	}
 )
 
-const (
-	verificationTokenType = "auth-verification"
-)
-
 // NewAuthVerificationToken creates a distinct token bound to u.ID and u.Email.
 // Store its Metadata with AccountRepository.InsertToken before sending the link.
 // Other tokens remain valid.
 func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthVerificationToken, error) {
-	authToken, err := newAuthToken(u, jwtKey, expiration, verificationTokenType)
+	authToken, err := newAuthToken(u, jwtKey, expiration, VerificationTokenPurpose)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +30,7 @@ func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) 
 // ValidateVerificationToken checks a signed verification token against its stored
 // hash, purpose, expiry, and current email address. It does not consume the token.
 func ValidateVerificationToken(ctx context.Context, accounts AccountRepository, tokenString string, jwtKey []byte) (*User, error) {
-	return validateToken(ctx, accounts, tokenString, jwtKey, verificationTokenType)
+	return validateToken(ctx, accounts, tokenString, jwtKey, VerificationTokenPurpose)
 }
 
 // Verify validates the signed verification token and asks accounts to atomically
@@ -45,7 +41,7 @@ func Verify(ctx context.Context, accounts AccountRepository, verificationToken s
 		return nil, errors.New("the account repository is not configured")
 	}
 
-	claims, err := parseAuthToken(verificationToken, jwtKey, verificationTokenType)
+	claims, err := parseAuthToken(verificationToken, jwtKey, VerificationTokenPurpose)
 	if err != nil {
 		return nil, err
 	}

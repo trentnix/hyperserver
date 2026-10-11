@@ -1,4 +1,4 @@
-package user
+package sqlite
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestOpenSQLiteTokenMaintenance(t *testing.T) {
@@ -28,7 +29,7 @@ func TestOpenSQLiteTokenMaintenance(t *testing.T) {
 			case "unavailable":
 				cfg.Connection = filepath.Join(t.TempDir(), "missing", "accounts.db")
 			}
-			maintenance, closeStore, err := OpenSQLiteTokenMaintenance(ctx, cfg, options)
+			maintenance, closeStore, err := OpenTokenMaintenance(ctx, cfg, options)
 			if scenario != "success" {
 				if err == nil || maintenance != nil || closeStore != nil {
 					t.Fatalf("failed opening returned resources: %v, %v", maintenance, err)
@@ -42,7 +43,7 @@ func TestOpenSQLiteTokenMaintenance(t *testing.T) {
 				t.Fatal("opening failed:", err)
 			}
 			t.Cleanup(func() { _ = closeStore() })
-			repository := maintenance.(*SQLiteAccountRepository)
+			repository := maintenance.(*AccountRepository)
 			assertNoAccountTables(t, repository.db)
 			if _, err := maintenance.DeleteExpiredTokens(ctx, 1); err == nil {
 				t.Fatal("maintenance accepted missing schema")
@@ -60,22 +61,22 @@ func TestOpenSQLiteTokenMaintenance(t *testing.T) {
 
 func TestTokenCleanupBatches(t *testing.T) {
 	db := userTestDB(t)
-	u := &User{Email: "cleanup@example.invalid"}
-	if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
+	u := &accounts.User{Email: "cleanup@example.invalid"}
+	if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
 	for i := range 5 {
-		token := &AuthToken{UserId: u.ID, TokenHash: fmt.Sprint(i), Type: resetTokenType,
+		token := &accounts.AuthToken{UserId: u.ID, TokenHash: fmt.Sprint(i), Type: accounts.ResetTokenPurpose,
 			ExpiresAt: time.Now().Add(-time.Hour).In(time.FixedZone("offset", (i-2)*3600))}
 		if i%2 == 0 {
-			token.Type = verificationTokenType
+			token.Type = accounts.VerificationTokenPurpose
 		}
-		if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
+		if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	live := &AuthToken{UserId: u.ID, TokenHash: "live", Type: verificationTokenType, ExpiresAt: time.Now().Add(time.Hour)}
-	if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), live.Metadata()); err != nil {
+	live := &accounts.AuthToken{UserId: u.ID, TokenHash: "live", Type: accounts.VerificationTokenPurpose, ExpiresAt: time.Now().Add(time.Hour)}
+	if err := NewAccountRepository(db).InsertToken(t.Context(), live.Metadata()); err != nil {
 		t.Fatal(err)
 	}
 	// Existing databases receive the cleanup index without losing their tokens.
@@ -96,7 +97,7 @@ func TestTokenCleanupBatches(t *testing.T) {
 			t.Fatalf("batch deleted %d, %v, want %d", count, err, want)
 		}
 	}
-	stored, err := NewSQLiteAccountRepository(db).GetToken(t.Context(), live.TokenHash, verificationTokenType)
+	stored, err := NewAccountRepository(db).GetToken(t.Context(), live.TokenHash, accounts.VerificationTokenPurpose)
 	if err != nil || stored.AccountID != u.ID || !stored.ExpiresAt.Equal(live.ExpiresAt) {
 		t.Fatalf("cleanup changed live token: %+v, %v", stored, err)
 	}
@@ -157,24 +158,24 @@ func TestTokenCleanupFailures(t *testing.T) {
 }
 
 func TestTokenCleanupDuringRedemption(t *testing.T) {
-	for _, purpose := range []string{resetTokenType, verificationTokenType} {
+	for _, purpose := range []string{accounts.ResetTokenPurpose, accounts.VerificationTokenPurpose} {
 		t.Run(purpose, func(t *testing.T) {
 			db := userTestDB(t)
 			db.SetMaxOpenConns(4)
-			u := &User{Email: "redeem@example.invalid", Password: "original", RegistrationAuthType: "email"}
-			if err := NewSQLiteAccountRepository(db).Create(context.Background(), u); err != nil {
+			u := &accounts.User{Email: "redeem@example.invalid", Password: "original", RegistrationAuthType: "email"}
+			if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
 			key := []byte("cleanup-test-key")
-			token, err := newAuthToken(u, key, time.Hour, purpose)
+			token, err := newTestToken(u, key, time.Hour, purpose)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
+			if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
-			expired := &AuthToken{UserId: u.ID, TokenHash: "expired", ExpiresAt: time.Now().Add(-time.Hour), Type: purpose}
-			if err := NewSQLiteAccountRepository(db).InsertToken(t.Context(), expired.Metadata()); err != nil {
+			expired := &accounts.AuthToken{UserId: u.ID, TokenHash: "expired", ExpiresAt: time.Now().Add(-time.Hour), Type: purpose}
+			if err := NewAccountRepository(db).InsertToken(t.Context(), expired.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 
@@ -182,10 +183,10 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 			redeemed := make(chan error, 1)
 			go func() {
 				<-start
-				if purpose == resetTokenType {
-					redeemed <- u.ResetPassword(context.Background(), NewSQLiteAccountRepository(db), token.Token, key, "new hash")
+				if purpose == accounts.ResetTokenPurpose {
+					redeemed <- u.ResetPassword(context.Background(), NewAccountRepository(db), token.Token, key, "new hash")
 				} else {
-					_, err := Verify(context.Background(), NewSQLiteAccountRepository(db), token.Token, key)
+					_, err := accounts.Verify(context.Background(), NewAccountRepository(db), token.Token, key)
 					redeemed <- err
 				}
 			}()
@@ -201,8 +202,8 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 			if err := db.Get(&remaining, `SELECT count(*) FROM usertoken`); err != nil || remaining != 0 {
 				t.Fatalf("tokens remained: %d, %v", remaining, err)
 			}
-			stored, err := NewSQLiteAccountRepository(db).GetByID(t.Context(), u.ID)
-			if err != nil || (purpose == resetTokenType && stored.Password != "new hash") || (purpose == verificationTokenType && !stored.Verified) {
+			stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
+			if err != nil || (purpose == accounts.ResetTokenPurpose && stored.Password != "new hash") || (purpose == accounts.VerificationTokenPurpose && !stored.Verified) {
 				t.Fatalf("account operation failed: %+v, %v", stored, err)
 			}
 		})

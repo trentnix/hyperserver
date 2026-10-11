@@ -10,6 +10,7 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 const accountSetupTimeout = 10 * time.Second
@@ -87,10 +88,10 @@ func (s *ApplicationServer) InitializeAccounts(ctx context.Context) error {
 }
 
 func (s *ApplicationServer) initializeSQLiteAccounts(ctx context.Context, options map[string]string) (user.AccountRepository, func() error, error) {
-	if err := user.ValidateSQLiteAccountOptions(options); err != nil {
+	if err := usersqlite.ValidateOptions(options); err != nil {
 		return nil, nil, err
 	}
-	repository := user.NewSQLiteAccountRepository(s.Database)
+	repository := usersqlite.NewAccountRepository(s.Database)
 	if err := repository.Initialize(ctx); err != nil {
 		return nil, nil, err
 	}
@@ -112,7 +113,7 @@ func (s *ApplicationServer) accountProvider() (string, AccountProvider, error) {
 				if err != nil {
 					return nil, nil, err
 				}
-				return user.OpenSQLiteTokenMaintenance(ctx, cfg, options)
+				return usersqlite.OpenTokenMaintenance(ctx, cfg, options)
 			},
 		}, nil
 	}
