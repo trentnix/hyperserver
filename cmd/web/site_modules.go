@@ -14,8 +14,9 @@ import (
 	site "github.com/trentnix/hyperserver/modules/site"
 )
 
-// siteModules snapshots imports and supplies the reference application's storage
-// and mail dependencies without changing the process-wide catalogs.
+// siteModules deliberately selects the registered catalogs and supplies the
+// application's accounts, sessions, contact storage, and mail to their consumers.
+// Configuring these factories does not change the process-wide catalogs.
 func siteModules(app *application, directory string) ([]handlers.Descriptor, error) {
 	catalog := handlers.Registered()
 	db := app.Database

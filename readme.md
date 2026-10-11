@@ -27,7 +27,7 @@ Applications define access rules through [route-level authorization policies](au
 
 Session data uses JSON, limited to 64 KiB before base64 encoding. Cookies are limited to 4 KiB including their name and attributes. Cookie-store data is signed, not encrypted, and must not contain secrets. See the [session guide](pkg/services/session/readme.md) for supported values and typed reads.
 
-Some services require other framework services and cannot be replaced independently. Modules can declare dependencies for ordered initialization. Shared application services and module cleanup still need explicit wiring.
+Applications supply optional services through typed constructors. Modules can declare dependencies on other modules for ordered initialization. Application setup owns shared services and their cleanup.
 
 ## Direction
 
@@ -137,6 +137,10 @@ The example uses the same initialized `accounts` repository and `sessions` manag
 
 ### Module dependencies
 
+Give each dependency one source. Pass application-owned services through typed constructors, as in `auth.Module(accounts, sessions, providers)`. If another module supplies a service, declare it in `Requires` and read it through `BindDependencies`. Do not also declare a requirement for a service already supplied by a constructor. A module that supports both sources must select one in its descriptor constructor, not silently overwrite a supplied service during binding.
+
+`ApplicationServer` supplies the core configuration, router, and renderer, not optional services. Request middleware attaches the application's selected session manager and authenticated identity to requests. Handlers use that request state without selecting or opening another provider.
+
 Descriptors can declare `Provides: []string{"post-storage"}` and `Requires: []handlers.Requirement{{Capability: "post-storage"}}`. Capability and module names are case-sensitive. `handlers.Initialize` validates the catalog before invoking factories, then binds dependencies and initializes providers before consumers. Missing requirements, ambiguous providers, duplicate names, invalid metadata, and dependency cycles return errors. Use `handlers.Resolve` to check metadata without creating modules.
 
 If several modules provide a required capability, select one by module name:
@@ -176,7 +180,7 @@ app:
 
 A module that owns resources can implement `Shutdown(context.Context) error`. Modules without owned resources need no shutdown hook. `handlers.Initialize` rolls back completed modules when startup fails. A failing `Init` must release its own partially acquired resources. Factories and dependency-binding hooks must not acquire resources.
 
-After initialization succeeds, register `handlers.Close` with `app.OnShutdown`, as shown above. Call `app.Shutdown()` on later startup errors and after requests drain. The reference application's `SetupHandlers` handles module rollback on route errors and registers cleanup on success. Cleanup runs consumers before providers, leaves borrowed services open, and reports all errors. Repeated cleanup calls do not rerun module hooks.
+`handlers.Setup` registers module cleanup with `app.OnShutdown`. If you use `handlers.Initialize` directly, register `handlers.Close` yourself. Call `app.Shutdown()` on later startup errors and after requests drain. Cleanup runs consumers before providers, leaves borrowed services open, and reports all errors. Repeated cleanup calls do not rerun module hooks.
 
 `Shutdown()` gives cleanup ten seconds. `ShutdownContext(ctx)` accepts a different deadline. Modules must honor cancellation and stop their background work before returning. Cleanup cannot interrupt code that ignores context or context-free storage close functions.
 
@@ -189,7 +193,7 @@ http:
 
 `HYPERSERVER_HTTP_SHUTDOWNTIMEOUT` overrides the file. The setting controls HTTP draining only, not normal request duration or the separate module-cleanup deadline. After requests drain, the application closes modules, account providers, session providers, and the shared database. If draining times out, it closes HTTP connections and exits with an error without closing services underneath running handlers. A second signal forces exit. Applications that use hijacked connections must manage those connections separately.
 
-See the [complete storage-provider example](pkg/handlers/example_test.go). Modules without declared dependencies can keep using `Init` alone. Existing application-supplied services still arrive through `ApplicationServer`. `Initialize` does not bind routes. On failure, it closes completed modules and returns no instances.
+See the [complete storage-provider example](pkg/handlers/example_test.go). Modules with only constructor-supplied dependencies need no binding hook. `Initialize` does not bind routes. On failure, it closes completed modules and returns no instances.
 
 ### Files and templates
 

@@ -11,8 +11,45 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/server"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
+
+func TestEmptyModuleSelectionDoesNotUseImports(t *testing.T) {
+	if len(handlers.Registered()) == 0 {
+		t.Fatal("test requires imported modules to be discoverable")
+	}
+	for _, selection := range []struct {
+		name    string
+		catalog []handlers.Descriptor
+	}{
+		{name: "nil"},
+		{name: "empty", catalog: []handlers.Descriptor{}},
+	} {
+		t.Run(selection.name, func(t *testing.T) {
+			app, err := server.NewApplicationServer(config.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := app.Shutdown(); err != nil {
+					t.Error(err)
+				}
+			})
+			if err := handlers.Setup(t.Context(), app, nil, selection.catalog, nil); err != nil {
+				t.Fatal(err)
+			}
+
+			response := httptest.NewRecorder()
+			app.Web.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("unselected module bound a route: status=%d", response.Code)
+			}
+		})
+	}
+}
 
 func TestStatelessApplication(t *testing.T) {
 	directory := t.TempDir()
