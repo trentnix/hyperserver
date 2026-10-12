@@ -87,7 +87,8 @@ type VerificationEmailSender interface {
 }
 
 // AuthService provides the HTTP steps for authentication and account management.
-// Providers write form errors themselves and return operation results to AuthManager.
+// Providers own form responses. Account operations report persistence and delivery
+// results independently of rendering. Login returns an account for session creation.
 type AuthService interface {
 	// Routes binds any provider-specific routes after initialization.
 	// Registration errors must stop startup before accepting traffic.
@@ -111,27 +112,26 @@ type AuthService interface {
 
 	// GetRegister renders the provider's registration form.
 	GetRegister(http.ResponseWriter, *http.Request)
-	// Register processes registration and reports whether the handler can continue with success.
-	// A false result does not guarantee that no account was created.
-	Register(http.ResponseWriter, *http.Request) bool
+	// Register processes registration and writes its response, including any redirect.
+	// Delivery or rendering can fail after the account has been created.
+	Register(http.ResponseWriter, *http.Request)
 
 	// GetResetRequest renders the recovery-request form.
 	GetResetRequest(http.ResponseWriter, *http.Request)
 	// ResetRequest must give valid submissions the same HTTP acknowledgment for
 	// known, unknown, and ineligible accounts, including storage or delivery failures.
-	// The returned result is internal and must not change that acknowledgment.
-	ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool
+	ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration)
 	// GetReset renders the reset form after AuthManager validates token.
 	GetReset(w http.ResponseWriter, r *http.Request, token string)
 	// Reset must revalidate and consume the exact token atomically with the credential
 	// change. AuthManager's earlier validation does not prevent concurrent reuse.
-	// Return true only after both changes commit.
-	Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNewCredentials bool) bool
+	// After commit, clear the request's cached identity before writing the success response.
+	Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNewCredentials bool)
 
 	// GetChange renders the credential-change form for the authenticated account.
 	GetChange(w http.ResponseWriter, r *http.Request)
-	// Change checks existing credentials and applies their replacement.
-	Change(w http.ResponseWriter, r *http.Request, u *user.User) bool
+	// Change checks existing credentials, applies their replacement, and writes the response.
+	Change(w http.ResponseWriter, r *http.Request, u *user.User)
 }
 
 // Register adds a factory description without creating or initializing a provider.

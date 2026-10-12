@@ -243,10 +243,9 @@ func (s *lookupTestAuthService) GetReset(w http.ResponseWriter, r *http.Request,
 	s.calls++
 	w.WriteHeader(http.StatusNoContent)
 }
-func (s *lookupTestAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNew bool) bool {
+func (s *lookupTestAuthService) Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNew bool) {
 	s.calls++
 	w.WriteHeader(http.StatusNoContent)
-	return false
 }
 
 type tokenLookupRepository struct {

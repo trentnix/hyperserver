@@ -360,12 +360,12 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 // Register validates input, creates an account, and sends verification instructions
-// when required. It writes form errors and returns false on failure. Delivery failure
+// when required. It owns the response, including the success redirect. Delivery failure
 // can occur after the account has been created, leaving it available for verification resend.
-func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool {
+func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
 		auth_services.RegistrationUnavailable(w, r)
-		return false
+		return
 	}
 
 	register := content.NewManagedContent(r, a.contentManager)
@@ -377,19 +377,18 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 	errMessage, err := form.ParseAndValidate(r, registerForm)
 	if err != nil {
 		form.HandleFormError(w, r, register, registerForm, errMessage, err)
-		return false
+		return
 	}
 
-	// if there are any validation errors, handle them and return an error.
 	if registerForm.HasErrors() {
 		form.HandleFormError(w, r, register, registerForm, "", nil)
-		return false
+		return
 	}
 
 	registrationErr, userMessage := auth_services.ProcessRegistration(r.Context(), a.accounts, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
 	if registrationErr != nil {
 		form.HandleFormError(w, r, register, registerForm, userMessage, registrationErr)
-		return false
+		return
 	}
 
 	if a.config.Auth.RegisterRequiresVerification {
@@ -401,7 +400,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		createdUser, err := a.accounts.GetByEmail(r.Context(), registerForm.Email)
 		if err != nil || createdUser == nil {
 			form.HandleFormError(w, r, register, registerForm, deliveryFailure, errors.New("verification account lookup failed"))
-			return false
+			return
 		}
 
 		origin, err := util.BuildPublicURL(r, a.config.HTTP, "", nil)
@@ -410,11 +409,18 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) bool
 		}
 		if err != nil {
 			form.HandleFormError(w, r, register, registerForm, deliveryFailure, errors.New("verification email delivery failed"))
-			return false
+			return
 		}
 	}
 
-	return true
+	successMessage := "You have been successfully registered"
+	if a.config.Auth.RegisterRequiresVerification {
+		successMessage = "You have been successfully registered. Check your email for verification instructions."
+	}
+	if err := flash.AddSuccessNotification(w, r, successMessage); err != nil {
+		logger.LogRequestError(r, err)
+	}
+	util.RedirectToURL(w, r, a.contentManager.AuthURL)
 }
 
 // ValidateVerification checks delivery configuration without attempting delivery.
@@ -535,8 +541,8 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 // ResetRequest uses the same acknowledgment for eligible, unknown, and failed requests.
 // The acknowledgment confirms receipt of the request, not delivery of an email.
 // Valid requests have a minimum response time, not an additional processing timeout.
-// The returned delivery result must not change the acknowledgment.
-func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) bool {
+// Delivery and rendering errors do not change the completed storage operations.
+func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) {
 	respondAfter := time.Now().Add(a.config.Auth.ResetMinimumResponseTime)
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetRequestFormPartial
@@ -548,13 +554,12 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	errMessage, err := form.ParseAndValidate(r, resetRequestForm)
 	if err != nil {
 		form.HandleFormError(w, r, reset, resetRequestForm, errMessage, err)
-		return false
+		return
 	}
 
-	// if there are any validation errors, handle them and return an error.
 	if resetRequestForm.HasErrors() {
 		form.HandleFormError(w, r, reset, resetRequestForm, "", nil)
-		return false
+		return
 	}
 
 	u, err := a.accounts.GetByEmail(r.Context(), resetRequestForm.Email)
@@ -569,7 +574,6 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 			err = a.sendResetEmail(r.Context(), u, tokenExpiration, *link)
 		}
 	}
-	delivered := err == nil && u != nil && u.RegistrationAuthType == AuthTypeEmail
 	if err != nil {
 		// Provider errors can contain the token or email body. Log only the failure.
 		if l := logger.Get(r.Context()); l != nil {
@@ -580,7 +584,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if err := waitForResetResponse(r.Context(), respondAfter); err != nil {
-		return false
+		return
 	}
 
 	resetRequestForm.Email = ""
@@ -594,10 +598,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 			"Unable to display the email authorization service reset request form",
 			err,
 			http.StatusInternalServerError)
-		return false
 	}
-
-	return delivered
 }
 
 // GetReset serves the password reset page with the resetPasswordForm form
@@ -639,7 +640,7 @@ func (a *EmailAuthService) Reset(
 	u *user.User,
 	token string,
 	requireNewCredentials bool,
-) bool {
+) {
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetPasswordFormPartial
 	reset.AddContent(a.TemplateFS, emailResetPasswordFormTemplate)
@@ -655,7 +656,7 @@ func (a *EmailAuthService) Reset(
 			resetForm,
 			"Unable to reset your password due to an internal error",
 			user.NewErrUserNotSpecified(fmt.Errorf("reset failed")))
-		return false
+		return
 	}
 
 	resetForm.ActionUrl = emailResetPath + "?" + url.Values{"token": {token}}.Encode()
@@ -663,13 +664,12 @@ func (a *EmailAuthService) Reset(
 	errMessage, err := form.ParseAndValidate(r, resetForm)
 	if err != nil {
 		form.HandleFormError(w, r, reset, resetForm, errMessage, err)
-		return false
+		return
 	}
 
-	// if there are any validation errors, handle them and return an error.
 	if resetForm.HasErrors() {
 		form.HandleFormError(w, r, reset, resetForm, "", nil)
-		return false
+		return
 	}
 
 	if requireNewCredentials {
@@ -681,7 +681,7 @@ func (a *EmailAuthService) Reset(
 				resetForm,
 				"The provided password has been recently used. For security reasons, a new password is required.",
 				nil)
-			return false
+			return
 		}
 	}
 
@@ -691,7 +691,7 @@ func (a *EmailAuthService) Reset(
 	if err != nil {
 		// the password could not be hashed
 		form.HandleFormError(w, r, reset, resetForm, genericResetErrMsg, err)
-		return false
+		return
 	}
 
 	err = u.ResetPassword(r.Context(), a.accounts, token, []byte(a.config.Auth.JwtKey), hashedPassword)
@@ -704,10 +704,14 @@ func (a *EmailAuthService) Reset(
 			resetForm,
 			genericResetErrMsg,
 			fmt.Errorf("error updating a user's password during reset: %w", err))
-		return false
+		return
 	}
 
-	return true
+	*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
+	if err := flash.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site."); err != nil {
+		logger.LogRequestError(r, err)
+	}
+	util.RedirectToURL(w, r, a.contentManager.AuthURL)
 }
 
 // GetChange serves the password change page with the changePasswordForm form
@@ -739,7 +743,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 
 // Change authenticates the specified user and, if authentication succeeds and a new
 // password meets the password complexity criteria, changes the user's password to a new value.
-func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *user.User) bool {
+func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *user.User) {
 	changeErrMsg := "unable to change your password"
 
 	change := content.NewManagedContent(r, a.contentManager)
@@ -758,19 +762,18 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 			changeForm,
 			"Unable to change your password due to an internal error",
 			user.NewErrUserNotSpecified(fmt.Errorf("change failed")))
-		return false
+		return
 	}
 
 	errMessage, err := form.ParseAndValidate(r, changeForm)
 	if err != nil {
 		form.HandleFormError(w, r, change, changeForm, errMessage, err)
-		return false
+		return
 	}
 
-	// if there are any validation errors, handle them and return an error.
 	if changeForm.HasErrors() {
 		form.HandleFormError(w, r, change, changeForm, "", nil)
-		return false
+		return
 	}
 
 	if u.Password != "" && !password.CheckPasswordHash(changeForm.OldPassword, u.Password) {
@@ -782,7 +785,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 			changeForm,
 			"The provided password is incorrect",
 			nil)
-		return false
+		return
 	}
 
 	hashedPassword, err := password.HashPassword(changeForm.NewPassword)
@@ -795,7 +798,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 			changeForm,
 			changeErrMsg,
 			fmt.Errorf("Unable to hash the NewPassword value"))
-		return false
+		return
 	}
 
 	err = a.accounts.ChangePassword(r.Context(), u, hashedPassword)
@@ -808,7 +811,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 			changeForm,
 			changeErrMsg,
 			fmt.Errorf("Unable to save the updated password: %w", err))
-		return false
+		return
 	}
 
 	changeForm.OldPassword = ""
@@ -826,8 +829,5 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 			"The password was updated, but there was an error displaying the change form.",
 			err,
 			http.StatusInternalServerError)
-		return false
 	}
-
-	return true
 }

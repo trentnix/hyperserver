@@ -47,9 +47,8 @@ type (
 		verificationJwtKey   string
 		resetTokenExpiration time.Duration
 
-		resetRequiresNewCredentials  bool
-		registrationEnabled          bool
-		registerRequiresVerification bool
+		resetRequiresNewCredentials bool
+		registrationEnabled         bool
 	}
 )
 
@@ -111,7 +110,6 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 
 	a.resetRequiresNewCredentials = s.Config.Auth.ResetRequiresNewCredentials
 	a.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
-	a.registerRequiresVerification = s.Config.Auth.RegisterRequiresVerification
 
 	return nil
 }
@@ -392,22 +390,7 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	registrationSuccessful := (*authService).Register(w, r)
-	if !registrationSuccessful {
-		return
-	}
-
-	successMessage := "You have been successfully registered"
-	if a.registerRequiresVerification {
-		successMessage = "You have been successfully registered. Check your email for verification instructions."
-	}
-
-	err := flash.AddSuccessNotification(w, r, successMessage)
-	if err != nil {
-		logger.LogRequestError(r, err)
-	}
-
-	util.RedirectToURL(w, r, a.contentManager.AuthURL)
+	(*authService).Register(w, r)
 }
 
 // ProcessRegistration hashes credentials and inserts a new account.
@@ -470,7 +453,7 @@ func (a *AuthManager) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // ResetRequest delegates a recovery request to the selected authentication provider.
-// The provider writes the acknowledgment. Its delivery result does not change the response.
+// The provider writes the acknowledgment independently of the delivery result.
 func (a *AuthManager) ResetRequest(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
@@ -532,7 +515,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 	(*authService).GetReset(w, r, token)
 }
 
-// Reset delegates token redemption and redirects only after the provider commits.
+// Reset validates the token before delegating redemption and the response to the provider.
 func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 	if err := form.Parse(r); err != nil {
 		util.HttpError(w, r, err.Error(), nil, err.StatusCode)
@@ -582,17 +565,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resetSuccessful := (*authService).Reset(w, r, u, token, a.resetRequiresNewCredentials)
-	if resetSuccessful {
-		*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
-		// redirect the user to the auth page
-		err := flash.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site.")
-		if err != nil {
-			logger.LogRequestError(r, err)
-		}
-
-		util.RedirectToURL(w, r, a.contentManager.AuthURL)
-	}
+	(*authService).Reset(w, r, u, token, a.resetRequiresNewCredentials)
 }
 
 // getAuthService returns the authService specified by authType (if it is loaded)

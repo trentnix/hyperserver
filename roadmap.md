@@ -192,6 +192,8 @@ Storage setup runs during initialization, before consumers and routes become act
 
 ### Rendering and HTMX responses
 
+Auth mutation handlers own their complete HTTP response. Account and token operations report storage or delivery errors separately. A notification or rendering failure does not undo a committed account change.
+
 A handler response result can describe full-page or fragment rendering, validation errors, redirects, notifications, out-of-band updates, client events, retargeting, and reswapping. Keep direct `http.Handler` use available for downloads, streaming, and specialized responses.
 
 The response dispatcher owns HTTP and HTMX decisions. The renderer produces HTML. HTMX response headers are not processed on 3xx responses, so redirect handling must select the appropriate response behavior. [HTMX response documentation](https://htmx.org/docs/#response-headers)

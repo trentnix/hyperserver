@@ -198,7 +198,8 @@ func TestDisabledRegistration(t *testing.T) {
 			t.Errorf("registration form returned %d %q, want 403 and an explanation", w.Code, w.Body.String())
 		}
 		w = httptest.NewRecorder()
-		if service.Register(w, r) || w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
+		service.Register(w, r)
+		if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
 			t.Errorf("registration submission returned %d %q, want 403 and an explanation", w.Code, w.Body.String())
 		}
 	}
@@ -398,7 +399,10 @@ func TestRegisterUsesAccountRepository(t *testing.T) {
 		}},
 		contentManager: content.NewContentManager(),
 	}
-	if !service.Register(httptest.NewRecorder(), r) || calls != 1 {
+	service.contentManager.AuthURL = "/login"
+	w := httptest.NewRecorder()
+	service.Register(w, r)
+	if calls != 1 || w.Code != http.StatusSeeOther || w.Header().Get("Location") != service.contentManager.AuthURL {
 		t.Fatalf("registration bypassed the account repository: calls=%d", calls)
 	}
 }
@@ -449,17 +453,20 @@ func TestChangeUsesAccountRepository(t *testing.T) {
 			// No SQL pool: password changes must use the supplied repository.
 			service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, accounts: accounts, contentManager: cm}
 			w := httptest.NewRecorder()
-			changed := service.Change(w, r, account)
+			service.Change(w, r, account)
 			wantCalls := 1
 			if scenario == "wrong password" || scenario == "invalid confirmation" {
 				wantCalls = 0
 			}
-			if calls != wantCalls || changed != (scenario == "success") {
-				t.Fatalf("changed=%t, repository calls=%d, want %d", changed, calls, wantCalls)
+			if calls != wantCalls {
+				t.Fatalf("repository calls=%d, want %d", calls, wantCalls)
 			}
 
 			if scenario == "success" {
 				cookies := w.Result().Cookies()
+				if account.SessionVersion != before.SessionVersion+1 || !password.CheckPasswordHash(form.Get("newPassword"), account.Password) {
+					t.Fatal("successful change did not preserve the committed credentials")
+				}
 				if user.GetUserFromContext(r.Context()) != nil || len(cookies) != 1 || cookies[0].MaxAge != -1 || !strings.Contains(w.Body.String(), "Your password has been changed. Please log in again.") {
 					t.Fatalf("successful change did not clear authentication and render confirmation: %s", w.Body.String())
 				}
@@ -503,14 +510,19 @@ func TestResetUsesAccountRepository(t *testing.T) {
 			cm := content.NewContentManager()
 			cm.AddHtmxLayout(fstest.MapFS{"partial.html": &fstest.MapFile{Data: []byte(`{{renderPartial .PartialName .}}`)}}, "partial.html")
 			// No SQL pool: reset submission must use the supplied repository.
+			cm.AuthURL = "/login"
 			service := &EmailAuthService{
 				TemplateFS: emailAuthTemplatesFS,
 				accounts:   accounts, contentManager: cm,
 				config: &config.Config{Auth: config.AuthConfig{JwtKey: key}},
 			}
 			w := httptest.NewRecorder()
-			if got := service.Reset(w, r, account, token.Token, false); got == fail || calls != 1 {
-				t.Fatalf("reset success=%t, repository calls=%d", got, calls)
+			service.Reset(w, r, account, token.Token, false)
+			if calls != 1 {
+				t.Fatalf("repository calls=%d, want 1", calls)
+			}
+			if !fail && (w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != cm.AuthURL) {
+				t.Fatalf("successful reset did not redirect: %d %v", w.Code, w.Header())
 			}
 			if fail && (!strings.Contains(w.Body.String(), "Unable to reset password") || strings.Contains(w.Body.String(), "private storage failure")) {
 				t.Fatalf("failed reset rendered an incorrect error: %s", w.Body.String())
