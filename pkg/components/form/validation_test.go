@@ -216,11 +216,12 @@ func TestValidateReplacesFieldErrors(t *testing.T) {
 	}
 }
 
-func TestValidateInvalidForm(t *testing.T) {
+func TestValidateNilForm(t *testing.T) {
 	var nilForm *testForm
-	for _, value := range []any{nil, nilForm, testForm{}, 42, new(int), &struct{}{}} {
-		if err := Validate(value); err == nil {
-			t.Errorf("Validate(%T) accepted an invalid form", value)
+	for _, value := range []ValidationForm{nil, nilForm} {
+		var invalid *ErrInvalidForm
+		if err := Validate(value); !errors.As(err, &invalid) {
+			t.Errorf("Validate(%T) = %v, want ErrInvalidForm", value, err)
 		}
 	}
 }

@@ -5,7 +5,7 @@ import hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 // BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 
-// ErrInvalidForm indicates the form was not passed by reference
+// ErrInvalidForm indicates a missing or unsupported form value.
 type ErrInvalidForm struct {
 	*BaseError
 }

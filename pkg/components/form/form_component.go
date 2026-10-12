@@ -5,49 +5,25 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-
-	"github.com/trentnix/hyperserver/pkg/components/messages"
 )
 
 type (
-	// FormComponent defines an interface for a form that is rendered to a requestor
-	FormComponent interface {
+	// ValidationForm checks input and records validation results. It does not
+	// require HTTP binding, messages, or template-facing accessors.
+	ValidationForm interface {
 		// Validate checks input without changing form state or application data.
 		Validate() FieldErrors
-		// IsValidated reports whether validation ran, not whether the form is valid.
-		IsValidated() bool
 		// SetValidated records whether validation ran.
 		SetValidated(bool)
-
-		// GetFieldErrors returns errors for a named field.
-		GetFieldErrors(string) []string
-		// GetAllFieldErrors returns errors across all fields.
-		GetAllFieldErrors() []string
 		// SetFieldErrors records field errors from a validation result.
 		SetFieldErrors(FieldErrors)
-		// HasFieldErrors reports whether a named field has errors.
-		HasFieldErrors(string) bool
+	}
 
-		// GetSuccessMessages returns form-level success messages.
-		GetSuccessMessages() []messages.Message
-		// GetErrorMessages returns form-level errors, excluding field errors.
-		GetErrorMessages() []messages.Message
-		// GetInfoMessages returns informational messages.
-		GetInfoMessages() []messages.Message
-		// HasErrorMessages checks only form-level errors.
-		HasErrorMessages() bool
-		// HasErrors checks both field and form-level errors.
-		HasErrors() bool
-
-		// SetMessages replaces the form-level messages.
-		SetMessages([]messages.Message)
-		// AddErrorMessage records a form-level error.
-		AddErrorMessage(string)
-		// AddSuccessMessage records a successful operation.
-		AddSuccessMessage(string)
-		// AddMessage records an informational message.
-		AddMessage(string)
-
+	// FormComponent supplies the binding and validation used by ParseAndValidate.
+	// Embed Form for the standard error storage and template helpers, or supply
+	// those methods independently. Rendering does not require this interface.
+	FormComponent interface {
+		ValidationForm
 		// Bind allows a form to populate its fields from an http.Request
 		Bind(*http.Request) error
 	}
@@ -60,24 +36,32 @@ const (
 	FormKey contextKey = "form"
 )
 
-// Validate records the field errors returned by f.Validate. f must be a pointer
-// to a struct implementing FormComponent. Field validation failures do not produce
-// a returned error. Call HasErrors after a nil return before processing the form.
-func Validate(f any) error {
-	// Ensure f is a pointer to a struct
-	val := reflect.ValueOf(f)
-	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
-		return NewErrInvalidForm(fmt.Errorf("The form being validated should be passed as a reference and not by value."))
+// Validate records the field errors returned by f.Validate. Nil forms are rejected.
+// Field validation failures do not produce a returned error. Check the recorded
+// field errors before processing the form.
+func Validate(f ValidationForm) error {
+	if isNilForm(f) {
+		return NewErrInvalidForm(fmt.Errorf("the form must not be nil"))
 	}
 
-	if formComponent, ok := f.(FormComponent); ok {
-		formComponent.SetFieldErrors(formComponent.Validate())
-		formComponent.SetValidated(true)
-	} else {
-		return NewErrFormComponentInterfaceNotImplemented(fmt.Errorf("The specified form does not implement the FormComponent interface."))
-	}
-
+	f.SetFieldErrors(f.Validate())
+	f.SetValidated(true)
 	return nil
+}
+
+// An interface can hold a typed nil. Inspect only nil-capable kinds so valid
+// value implementations do not need a particular representation.
+func isNilForm(f ValidationForm) bool {
+	if f == nil {
+		return true
+	}
+	value := reflect.ValueOf(f)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // AddFormToContext takes the specified form and saves a pointer to the form to
@@ -126,16 +110,20 @@ func GetFormFromContext(ctx context.Context) (any, error) {
 // ParseAndValidate parses request data with the default field limits, binds f,
 // and records validation errors. Use ParseAndValidateWithOptions for other limits.
 // The returned message and error describe parsing, binding, or form-setup failures.
-// A nil error does not mean the input is valid: callers must also check f.HasErrors().
+// A nil error does not mean the input is valid: callers must check recorded errors
+// (for forms embedding Form, call HasErrors).
 func ParseAndValidate(r *http.Request, f FormComponent) (string, error) {
 	return ParseAndValidateWithOptions(r, f, ParseOptions{})
 }
 
 // ParseAndValidateWithOptions parses and validates with explicit field limits.
-// Callers must still check f.HasErrors after a nil error.
+// Callers must still check recorded errors after a nil error.
 func ParseAndValidateWithOptions(r *http.Request, f FormComponent, options ParseOptions) (string, error) {
 	if err := ParseWithOptions(r, options); err != nil {
 		return err.Error(), err
+	}
+	if isNilForm(f) {
+		return "Unable to validate form data", NewErrInvalidForm(fmt.Errorf("the form must not be nil"))
 	}
 
 	if err := f.Bind(r); err != nil {

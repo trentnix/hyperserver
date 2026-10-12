@@ -78,34 +78,39 @@ func TestHTTPMessageEscaping(t *testing.T) {
 }
 
 func TestHTTPFormMessageEscaping(t *testing.T) {
+	type messageForm interface {
+		AddErrorMessage(string)
+		AddSuccessMessage(string)
+		AddMessage(string)
+	}
 	runHTTPScenario(t, func(h *httpHarness) {
 		for _, tc := range []struct {
 			name, path, partial string
-			newForm             func() form.FormComponent
+			newForm             func() messageForm
 		}{
 			{
 				"login", "auth/modules/email/templates/html/partials/login-form.html", "auth.partial.email.login.form",
-				func() form.FormComponent { return &email.LoginForm{} },
+				func() messageForm { return &email.LoginForm{} },
 			},
 			{
 				"register", "auth/modules/email/templates/html/partials/register-form.html", "auth.partial.email.register.form",
-				func() form.FormComponent { return &email.RegisterForm{} },
+				func() messageForm { return &email.RegisterForm{} },
 			},
 			{
 				"reset-request", "auth/modules/email/templates/html/partials/reset-request.html", "auth.partial.email.reset.request.form",
-				func() form.FormComponent { return &email.ResetPasswordRequestForm{} },
+				func() messageForm { return &email.ResetPasswordRequestForm{} },
 			},
 			{
 				"reset-password", "auth/modules/email/templates/html/partials/reset-password.html", "auth.partial.email.reset.password.form",
-				func() form.FormComponent { return &email.ResetPasswordForm{} },
+				func() messageForm { return &email.ResetPasswordForm{} },
 			},
 			{
 				"change-password", "auth/modules/email/templates/html/partials/change-password.html", "auth.partial.email.change.password.form",
-				func() form.FormComponent { return &email.ChangePasswordForm{} },
+				func() messageForm { return &email.ChangePasswordForm{} },
 			},
 			{
 				"contact", "modules/site/templates/html/partials/contact-form.html", "site.partial.contact.form",
-				func() form.FormComponent { return &site.ContactForm{} },
+				func() messageForm { return &site.ContactForm{} },
 			},
 		} {
 			h.app.Web.HandleFunc("GET /test/form-messages/"+tc.name, func(w http.ResponseWriter, r *http.Request) {

@@ -11,6 +11,12 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
+// ErrorForm accepts a form-level error for rendering. Binding and validation are
+// not required. The template determines which fields and accessors it needs.
+type ErrorForm interface {
+	AddErrorMessage(string)
+}
+
 // HandleFormError is a generic handler to render the specified content with the specified form
 // to display the specified error. ParseError returns a plain-text rejection
 // without rendering submitted values. Other errors are logged before rendering.
@@ -18,7 +24,7 @@ func HandleFormError(
 	w http.ResponseWriter,
 	r *http.Request,
 	c *content.Content,
-	f FormComponent,
+	f ErrorForm,
 	formErrorMessage string,
 	e error,
 ) {

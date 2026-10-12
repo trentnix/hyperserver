@@ -27,6 +27,24 @@ func renderTemplateFile(t *testing.T, name, text string) (fs.FS, string) {
 
 type failingTemplateData struct{ err error }
 
+func TestTemplateRenderingDoesNotLoadNotifications(t *testing.T) {
+	cm := contentservice.NewContentManager()
+	cm.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+		t.Fatal("template rendering must not call the notification loader")
+		return nil, nil
+	}
+	c := NewManagedContent(httptest.NewRequest(http.MethodGet, "/", nil), cm)
+	c.Notifications = []messages.Notification{messages.NewNotification("<provided>", messages.NotificationTypeSuccess)}
+	c.AddContent(renderTemplateFile(t, "notifications.html", `{{range .Notifications}}{{.Message}}{{end}}`))
+	body, err := c.render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body.String() != "&lt;provided&gt;" {
+		t.Fatalf("rendered notifications = %q", body.String())
+	}
+}
+
 func TestManagedContentLayoutData(t *testing.T) {
 	cm := contentservice.NewContentManager()
 	cm.BuildLayoutData = func(r *http.Request) any {

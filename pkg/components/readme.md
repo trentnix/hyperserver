@@ -163,6 +163,10 @@ For browser console messages, use `flash.AddSystemDebugMessage`, `flash.AddSyste
 
 Embed `form.Form` to store field errors and form-level messages. Implement `Bind` and `Validate` to satisfy `form.FormComponent`. Validation uses ordinary Go checks, not struct tags.
 
+`FormComponent` requires only `Bind`, `Validate`, `SetFieldErrors`, and `SetValidated`. `form.Validate` accepts `ValidationForm`, without HTTP binding. `ParseAndValidate` and `Validate` reject nil forms but accept any implementation of their interfaces, including value wrappers around shared form state. `HandleFormError` accepts an `ErrorForm` with only `AddErrorMessage`.
+
+Applications can supply their own form storage and template accessors without implementing unused message methods. Check recorded errors before changing application data. Forms embedding `Form` can call `HasErrors`.
+
 For example, a contact form can define its rules alongside its fields:
 
 ```go

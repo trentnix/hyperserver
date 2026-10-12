@@ -200,6 +200,8 @@ The response dispatcher owns HTTP and HTMX decisions. The renderer produces HTML
 
 [HTMX helpers](pkg/components/htmx/htmx.go) provide request classification and response metadata for rendering and redirects.
 
+Form contracts separate binding and validation from error presentation. The content manager remains a concrete setup object with separate layout, notification, and response callbacks. The dispatcher loads notifications before template execution. Templates receive message values, not session-storage helpers.
+
 Parse reusable template sets at startup or controlled development reload. Use `html/template` with trusted templates and escaped data. Restrict `template.HTML` to reviewed trust boundaries. [Go template documentation](https://pkg.go.dev/html/template)
 
 ## Storage and serialization
@@ -294,7 +296,7 @@ Exit when two independent servers can run and stop in one process without affect
 
 - Form validation uses explicit checks and field errors, with shared password rules and tested email acceptance.
 - Reuse parsed template sets. Keep session mutation outside template execution.
-- Narrow form and content-manager interfaces around callers. Remove redundant error wrappers and pointers to interfaces, and use error-last return values. Keep distinct security operations explicit.
+- Remove redundant error wrappers and pointers to interfaces, and use error-last return values. Keep distinct security operations explicit.
 - Build the representative form workflow with full-page and HTMX requests, inline errors, notifications, redirects, and out-of-band updates.
 - Test escaping and response behavior against the supported HTMX version, including validation-error status handling.
 - Establish rendering and middleware benchmarks. Publish a concise example of progressive enhancement.
