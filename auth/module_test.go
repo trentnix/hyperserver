@@ -62,11 +62,11 @@ func TestAuthenticationProviderDiagnostics(t *testing.T) {
 }
 
 type moduleProvider struct {
-	auth.AuthService
 	name string
 }
 
 func (*moduleProvider) AuthType() string { return "custom" }
+func (*moduleProvider) IsLoaded() bool   { return true }
 func (p *moduleProvider) Init(app *server.ApplicationServer) error {
 	p.name = app.Config.App.Name
 	return nil
@@ -140,6 +140,42 @@ func TestModuleOwnsAuthenticationSetup(t *testing.T) {
 		if pattern != "POST /auth/logout" {
 			t.Fatalf("manager routes not bound: %q", pattern)
 		}
+	}
+}
+
+// minimalProvider needs no standard credential forms or custom route hook.
+type minimalProvider struct {
+	initialized bool
+}
+
+func (*minimalProvider) AuthType() string { return "custom" }
+func (p *minimalProvider) IsLoaded() bool { return p.initialized }
+func (p *minimalProvider) Init(*server.ApplicationServer) error {
+	p.initialized = true
+	return nil
+}
+
+func TestModuleWithoutRegistrationOrCustomRoutes(t *testing.T) {
+	cfg := moduleConfig()
+	cfg.Auth.RegistrationEnabled = true
+	cfg.Auth.RegisterRequiresVerification = true
+	app, err := server.NewApplicationServer(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &minimalProvider{}
+	sessions := moduleSessions(t, map[string]string{"default": "custom"})
+	module := auth.Module(&struct{ user.AccountRepository }{}, sessions, []auth.Descriptor{
+		{Name: "custom", New: func() auth.AuthService { return provider }},
+	}).New()
+	if err := module.Init(t.Context(), app); err != nil {
+		t.Fatal(err)
+	}
+	if !provider.initialized {
+		t.Fatal("provider was not initialized")
+	}
+	if err := module.Routes(routing.NewRoutes(app.Web)); err != nil {
+		t.Fatal(err)
 	}
 }
 

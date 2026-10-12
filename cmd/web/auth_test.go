@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"html/template"
 	"net/http"
 	"strings"
 	"testing"
@@ -33,7 +34,10 @@ type setupSessionStore struct {
 
 func (setupSessionStore) IsEnabled() bool { return true }
 
-func (*setupAuthService) AuthType() string { return "custom" }
+func (*setupAuthService) AuthType() string                               { return "custom" }
+func (*setupAuthService) GetRegisterButton() template.HTML               { return "" }
+func (*setupAuthService) GetRegister(http.ResponseWriter, *http.Request) {}
+func (*setupAuthService) Register(http.ResponseWriter, *http.Request)    {}
 func (s *setupAuthService) Init(*server.ApplicationServer) error {
 	s.initialized = true
 	return s.initErr

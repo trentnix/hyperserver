@@ -51,7 +51,8 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		if err := provider.Init(app); err != nil {
 			return fmt.Errorf("initialize auth service %q: %w", provider.AuthType(), err)
 		}
-		if app.Config.Auth.RegistrationEnabled && app.Config.Auth.RegisterRequiresVerification {
+		_, registers := provider.(RegistrationHandler)
+		if registers && app.Config.Auth.RegistrationEnabled && app.Config.Auth.RegisterRequiresVerification {
 			validator, ok := provider.(VerificationConfigValidator)
 			if !ok {
 				return fmt.Errorf("auth.registerRequiresVerification requires a verification mechanism for auth service %q", provider.AuthType())
@@ -76,7 +77,11 @@ func (m *module) Routes(routes *routing.Routes) error {
 		return err
 	}
 	for _, provider := range m.manager.Services.Services() {
-		if err := provider.Routes(routes); err != nil {
+		binder, ok := provider.(ProviderRoutes)
+		if !ok {
+			continue
+		}
+		if err := binder.Routes(routes); err != nil {
 			return fmt.Errorf("register auth service %q routes: %w", provider.AuthType(), err)
 		}
 		if err := routes.Err(); err != nil {

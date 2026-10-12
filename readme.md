@@ -141,6 +141,8 @@ Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth mo
 
 The example uses the same initialized `accounts` repository and `sessions` manager for the auth manager and email provider. Its explicit provider list selects only email authentication. Import discovery still works, but applications must supply accounts and sessions to the auth module and configure each provider's dependencies before activation. [Reference module setup](cmd/web/site_modules.go) replaces the email descriptor in a snapshot while preserving other discovered providers.
 
+`auth.AuthService` requires only `AuthType`, `Init`, and `IsLoaded`. Add `LoginHandler`, `RegistrationHandler`, `ResetHandler`, or `ChangeHandler` for the workflows a provider supports. A login-only provider needs no registration or password-reset stubs. The manager shows only supported login and registration choices and rejects unsupported provider workflows with 404. If no provider supports registration, the registration page reports that registration is unavailable. Verification configuration is required only for registration-capable providers when registration and required verification are enabled. Implement `ProviderRoutes` only when a provider needs extra routes.
+
 ### Module dependencies
 
 Give each dependency one source. Pass application-owned services through typed constructors, as in `auth.Module(accounts, sessions, providers)`. If another module supplies a service, declare it in `Requires` and read it through `BindDependencies`. Do not also declare a requirement for a service already supplied by a constructor. A module that supports both sources must select one in its descriptor constructor, not silently overwrite a supplied service during binding.

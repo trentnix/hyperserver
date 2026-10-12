@@ -306,7 +306,7 @@ Exit when the workflow uses shared response handling, passes HTTP tests, and has
 ### Phase 4: Persistence and serialization contracts
 
 - Extract repositories, required storage capabilities, and serializers from actual consumers.
-- Separate authentication-provider operations from HTTP and lifecycle handling. Providers implement only the account capabilities they supply.
+- Authentication providers expose only their supported HTTP workflows, separately from initialization and optional custom routes. Extract account operations from HTTP handling next, keeping form responses and session changes in the handlers.
 - Carry request cancellation through account lookup and storage calls instead of replacing it with background contexts.
 - Evaluate replacing `sqlx` with `database/sql` inside the extracted repositories.
 - Implement in-memory and SQLite adapters, then validate PostgreSQL and one suitable non-relational adapter.

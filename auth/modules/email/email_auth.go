@@ -23,7 +23,6 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
@@ -239,13 +238,6 @@ func (a *EmailAuthService) prepareTemplates() error {
 		prepared[name] = templates
 	}
 	a.templates = prepared
-	return nil
-}
-
-// Routes is implemented to fulfill the AuthService interface but is not supported by
-// the EmailAuthService implementation
-func (a *EmailAuthService) Routes(mux *routing.Routes) error {
-	// none needed for EmailAuthService
 	return nil
 }
 

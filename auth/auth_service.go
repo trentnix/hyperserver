@@ -86,36 +86,54 @@ type VerificationEmailSender interface {
 	SendVerificationEmail(context.Context, *user.User, url.URL) error
 }
 
-// AuthService provides the HTTP steps for authentication and account management.
-// Providers own form responses. Account operations report persistence and delivery
-// results independently of rendering. Login returns an account for session creation.
+// AuthService identifies and initializes an authentication provider. Providers
+// implement the HTTP capabilities they support separately.
 type AuthService interface {
-	// Routes binds any provider-specific routes after initialization.
-	// Registration errors must stop startup before accepting traffic.
-	Routes(*routing.Routes) error
 	// Init configures the provider using application-owned services.
 	Init(*server.ApplicationServer) error
 	// IsLoaded reports whether the provider is available for selection.
 	IsLoaded() bool
 	// AuthType returns the provider's route and configuration identifier.
 	AuthType() string
+}
 
+// ProviderRoutes optionally binds provider-specific routes after initialization.
+// Registration errors stop startup before accepting traffic.
+type ProviderRoutes interface {
+	Routes(*routing.Routes) error
+}
+
+// LoginHandler supplies login pages and credential submission handling.
+// Login returns an account for the manager to establish its authenticated session.
+type LoginHandler interface {
+	AuthType() string
 	// GetLoginButton returns trusted HTML linking to the provider's login form.
 	GetLoginButton() template.HTML
-	// GetRegisterButton returns trusted HTML linking to registration, or an empty value when unavailable.
-	GetRegisterButton() template.HTML
-
 	// GetLogin renders the provider's login form.
 	GetLogin(http.ResponseWriter, *http.Request)
-	// Login authenticates submitted credentials and returns the account, or nil on failure.
+	// Login returns the authenticated account without committing response headers
+	// or writing a body. The manager creates the session and writes the success redirect.
+	// When Login returns nil, the provider must write the complete response,
+	// including a failure response or a redirect that continues authentication.
 	Login(http.ResponseWriter, *http.Request) *user.User
+}
 
+// RegistrationHandler supplies account registration. Providers without this
+// capability are omitted from registration choices, even when registration is enabled.
+type RegistrationHandler interface {
+	AuthType() string
+	// GetRegisterButton returns trusted HTML linking to registration.
+	GetRegisterButton() template.HTML
 	// GetRegister renders the provider's registration form.
 	GetRegister(http.ResponseWriter, *http.Request)
 	// Register processes registration and writes its response, including any redirect.
 	// Delivery or rendering can fail after the account has been created.
 	Register(http.ResponseWriter, *http.Request)
+}
 
+// ResetHandler supplies the request and redemption steps for credential recovery.
+// The manager validates its reset token before delegating redemption.
+type ResetHandler interface {
 	// GetResetRequest renders the recovery-request form.
 	GetResetRequest(http.ResponseWriter, *http.Request)
 	// ResetRequest must give valid submissions the same HTTP acknowledgment for
@@ -127,7 +145,10 @@ type AuthService interface {
 	// change. AuthManager's earlier validation does not prevent concurrent reuse.
 	// After commit, clear the request's cached identity before writing the success response.
 	Reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNewCredentials bool)
+}
 
+// ChangeHandler supplies credential changes for an authenticated account.
+type ChangeHandler interface {
 	// GetChange renders the credential-change form for the authenticated account.
 	GetChange(w http.ResponseWriter, r *http.Request)
 	// Change checks existing credentials, applies their replacement, and writes the response.

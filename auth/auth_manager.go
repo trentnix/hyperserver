@@ -205,7 +205,16 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	var loginHTML []template.HTML
 
-	authServices := a.Services.Loaded()
+	var authServices []LoginHandler
+	for _, service := range a.Services.Loaded() {
+		if handler, ok := service.(LoginHandler); ok {
+			authServices = append(authServices, handler)
+		}
+	}
+	if len(authServices) == 0 {
+		http.NotFound(w, r)
+		return
+	}
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
 		c.PartialName = authLoginDefaultPartial
@@ -239,7 +248,16 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 
 	var loginHTML []template.HTML
 
-	authServices := a.Services.Loaded()
+	var authServices []RegistrationHandler
+	for _, service := range a.Services.Loaded() {
+		if handler, ok := service.(RegistrationHandler); ok {
+			authServices = append(authServices, handler)
+		}
+	}
+	if len(authServices) == 0 {
+		RegistrationUnavailable(w, r)
+		return
+	}
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
 		c.PartialName = authRegisterDefaultPartial
@@ -275,9 +293,9 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to login.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+	authService, ok := a.getAuthService(authType).(LoginHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -292,9 +310,9 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to login.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+	authService, ok := a.getAuthService(authType).(LoginHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -383,9 +401,9 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "Register unavailable: the specified auth service was found.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+	authService, ok := a.getAuthService(authType).(RegistrationHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -405,9 +423,9 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "Register unavailable: the specified auth service was found.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+	authService, ok := a.getAuthService(authType).(RegistrationHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -462,9 +480,9 @@ func (a *AuthManager) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+	authService, ok := a.getAuthService(authType).(ResetHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -480,9 +498,9 @@ func (a *AuthManager) ResetRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+	authService, ok := a.getAuthService(authType).(ResetHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -495,6 +513,12 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
 		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		return
+	}
+
+	authService, ok := a.getAuthService(authType).(ResetHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -525,12 +549,6 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
-		return
-	}
-
 	authService.GetReset(w, r, token)
 }
 
@@ -544,6 +562,12 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 	authType := r.PathValue("authType")
 	if authType == "" {
 		a.contentManager.HandleError(w, r, "No authorization service was specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
+		return
+	}
+
+	authService, ok := a.getAuthService(authType).(ResetHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -578,12 +602,6 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to reset authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
-		return
-	}
-
 	authService.Reset(w, r, u, token, a.resetRequiresNewCredentials)
 }
 
@@ -608,9 +626,9 @@ func (a *AuthManager) GetChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to change authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+	authService, ok := a.getAuthService(authType).(ChangeHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -625,9 +643,9 @@ func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService := a.getAuthService(authType)
-	if authService == nil {
-		a.contentManager.HandleError(w, r, "No authorization service was found. Unable to change authentication.", NewErrAuthServiceNotFound(nil, authType), http.StatusInternalServerError)
+	authService, ok := a.getAuthService(authType).(ChangeHandler)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
 

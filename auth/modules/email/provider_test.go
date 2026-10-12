@@ -13,6 +13,14 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
+var (
+	_ auth_services.AuthService         = (*EmailAuthService)(nil)
+	_ auth_services.LoginHandler        = (*EmailAuthService)(nil)
+	_ auth_services.RegistrationHandler = (*EmailAuthService)(nil)
+	_ auth_services.ResetHandler        = (*EmailAuthService)(nil)
+	_ auth_services.ChangeHandler       = (*EmailAuthService)(nil)
+)
+
 func TestProviderSuppliesDependencies(t *testing.T) {
 	client, err := messaging.NewMailClientWithSender("sender@example.invalid", accountMailSender(func(context.Context, messaging.MailMessage) error {
 		t.Fatal("provider setup attempted delivery")

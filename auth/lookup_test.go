@@ -239,6 +239,14 @@ type lookupTestAuthService struct {
 
 func (*lookupTestAuthService) AuthType() string { return "lookup-test" }
 func (*lookupTestAuthService) IsLoaded() bool   { return true }
+func (s *lookupTestAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
+	s.calls++
+	w.WriteHeader(http.StatusNoContent)
+}
+func (s *lookupTestAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, expiration time.Duration) {
+	s.calls++
+	w.WriteHeader(http.StatusNoContent)
+}
 func (s *lookupTestAuthService) GetReset(w http.ResponseWriter, r *http.Request, token string) {
 	s.calls++
 	w.WriteHeader(http.StatusNoContent)
