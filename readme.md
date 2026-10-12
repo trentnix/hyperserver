@@ -393,6 +393,12 @@ Prefer a finite limit. Direct registration on the underlying `http.ServeMux` byp
 
 [Form parsing](pkg/components/form/request.go) limits decoded field names and values to 16 KiB and encoded query strings to 64 KiB. `ParseWithOptions` and `ParseAndValidateWithOptions` accept an explicit field limit or `UnlimitedFields: true`. These options do not change body or query limits. Account and contact forms return 413 for oversized input, 400 for malformed forms, and 415 for unsupported encodings. JSON and multipart handlers use their own parsers under the route's body limit.
 
+Forms embed `form.Form` and implement `Bind(*http.Request) error` and `Validate() form.FieldErrors`. Validation uses ordinary Go checks, not struct tags. `FieldErrors` maps field names to plain-text messages. `ParseAndValidate` records those errors, and callers must check `HasErrors()` before changing data or sending mail. See [contact validation](modules/site/contact.go) and [account validation](auth/modules/email/form_validation.go).
+
+Account forms use the [password package's rules](auth/password/password.go). Required fields reject empty strings without trimming input. `form.ValidEmail` uses `net/mail` for address syntax and `golang.org/x/net/idna` for internationalized labels and encoded domain-length limits. Ordinary ASCII labels allow internal double hyphens, while internationalized labels retain IDNA's stricter rules. Quoted local parts, single-label domains, and IP literals are supported without changing the submitted address. Display names, comments outside quotes, surrounding whitespace, control characters, and malformed domains are rejected.
+
+Email syntax checks do not establish deliverability.
+
 Redirects accept local paths beginning with a single `/`, including queries and fragments. Absolute URLs are not accepted, even for the same host. Ordinary requests receive HTTP 303, and HTMX requests receive HTTP 200 with `HX-Redirect`. Invalid login destinations fall back to the configured home path, then `/` if that path is also invalid.
 
 ### Rate limiting

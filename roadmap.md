@@ -47,12 +47,9 @@ An external package needs to earn its place. Check who maintains it, what depend
 
 Keeping dependencies down also limits exposure to supply-chain attacks. That preference does not justify writing our own cryptography or password hashing. Use established, maintained implementations for that work.
 
-Logging uses `log/slog` behind the [logging contract](pkg/services/logger/logger.go). [Configuration loading](config/load.go) applies explicit defaults, YAML settings, and environment overrides before validation. Continue reducing dependencies in this order. Replace the behavior HyperServer needs, not the full libraries.
+Logging uses `log/slog` behind the [logging contract](pkg/services/logger/logger.go). [Configuration loading](config/load.go) applies explicit defaults, YAML settings, and environment overrides before validation. [Form validation](pkg/components/form/validation.go) uses explicit methods and field errors instead of a third-party tag engine. Auth forms use the [password package's rules](auth/password/password.go). Replace the behavior HyperServer needs, not the full libraries.
 
-| Dependency | Planned change |
-| --- | --- |
-| `go-playground/validator` | Use explicit form validation and field errors. Define email acceptance and test existing rules. Do not build another tag-driven validation engine. |
-| `jmoiron/sqlx` | Evaluate `database/sql` during repository extraction. Prefer explicit queries and scanning where the added repetition is manageable. |
+Evaluate replacing `jmoiron/sqlx` with `database/sql` during repository extraction. Prefer explicit queries and scanning where the added repetition is manageable.
 
 Keep `golang.org/x/crypto/bcrypt` and a maintained SQLite driver. Use established tooling such as `golang-migrate` for versioned migrations, which can run separately during deployment. Keep `google/uuid` unless opaque identifiers meet the application's needs and the storage and compatibility costs justify changing formats.
 
@@ -291,7 +288,7 @@ Exit when two independent servers can run and stop in one process without affect
 
 ### Phase 3: Rendering and reference workflow
 
-- Replace tag-driven form validation with explicit validation and field errors. Share password rules between forms and account operations.
+- Form validation uses explicit checks and field errors, with shared password rules and tested email acceptance.
 - Implement response dispatch and reusable template sets. Consolidate duplicate HTMX helpers and keep session mutation outside template execution.
 - Narrow form and content-manager interfaces around callers. Remove redundant error wrappers and pointers to interfaces, and use error-last return values. Keep distinct security operations explicit.
 - Build the representative form workflow with full-page and HTMX requests, inline errors, notifications, redirects, and out-of-band updates.

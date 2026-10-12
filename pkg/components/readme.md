@@ -161,68 +161,107 @@ For browser console messages, use `flash.AddSystemDebugMessage`, `flash.AddSyste
 
 ## form Package
 
-The `Form` component, defined in the **form** package, streamlines form validation, error handling, and rendering for custom forms.
+Embed `form.Form` to store field errors and form-level messages. Implement `Bind` and `Validate` to satisfy `form.FormComponent`. Validation uses ordinary Go checks, not struct tags.
 
-See below for an example of a user registration form:
+For example, a contact form can define its rules alongside its fields:
 
 ```go
-RegisterForm struct {
-  Email         string `validate:"required,email"`
-  Password      string `validate:"required,password"`
-  PasswordMatch string `validate:"required,password,eqfield=Password"`
-  form.Form
+type ContactForm struct {
+    Name    string
+    Email   string
+    Message string
+
+    form.Form
+}
+
+func (f *ContactForm) Bind(r *http.Request) error {
+    f.Name = r.FormValue("name")
+    f.Email = r.FormValue("email")
+    f.Message = r.FormValue("message")
+    return nil
+}
+
+func (f *ContactForm) Validate() form.FieldErrors {
+    errors := make(form.FieldErrors)
+    if f.Name == "" {
+        errors["Name"] = []string{form.RequiredMessage}
+    }
+    if f.Email == "" {
+        errors["Email"] = []string{form.RequiredMessage}
+    } else if !form.ValidEmail(f.Email) {
+        errors["Email"] = []string{form.EmailMessage}
+    }
+    if f.Message == "" {
+        errors["Message"] = []string{form.RequiredMessage}
+    }
+    return errors
 }
 ```
 
-Embedding `form.Form` ensures your form implements the `form.FormComponent` interface.
+`Validate` returns plain-text messages keyed by Go field name. It must not change form state or application data. A nil or empty map means no field failed validation. See [account validation](../../auth/modules/email/form_validation.go) for forms that share password rules with account operations.
 
 ### Rendering a Form
 
-A `Form` is rendered in a `Content` instance:
+A `Content` instance renders the form. These examples use a configured `contentManager` and the `templateFiles` filesystem described above:
 
 ```go
-register := content.NewManagedContent(r)
-register.AddContent(templateFiles, "templates/forms/register-form.html")
-register.Data = &RegisterForm{}
-err := register.Render(w, r)
+page := content.NewManagedContent(r, contentManager)
+page.PartialName = "contact-form"
+page.AddContent(templateFiles, "templates/forms/contact-form.html")
+page.Data = &ContactForm{}
+if err := page.Render(w, r); err != nil {
+    contentManager.HandleError(w, r, "Unable to render the contact form", err, http.StatusInternalServerError)
+}
 ```
 
 ### Validate a Form
 
-To validate a form and render any errors:
+In the POST handler, parse and validate before saving data or sending mail. `ParseAndValidate` enforces form limits, calls `Bind`, and records the errors returned by `Validate`. A nil returned error does not mean the form is valid. Callers must also check `HasErrors()`:
 
 ```go
-r.ParseForm();
-registerForm := &RegisterForm{
-  Email:         r.FormValue("email"),
-  Password:      r.FormValue("password"),
-  PasswordMatch: r.FormValue("passwordMatch"),
+page := content.NewManagedContent(r, contentManager)
+page.PartialName = "contact-form"
+page.AddContent(templateFiles, "templates/forms/contact-form.html")
+contactForm := &ContactForm{}
+
+message, err := form.ParseAndValidate(r, contactForm)
+if err != nil {
+    form.HandleFormError(w, r, page, contactForm, message, err)
+    return
 }
 
-if err := form.Validate(registerForm); err != nil {
-  register := content.NewManagedContent(r)
-  register.AddContent(templateFiles, "templates/forms/register-form.html")
-
-  content.HandleFormError(w, r, register, registerForm, "The registration form could not be validated", err)
-  return
+if contactForm.HasErrors() {
+    form.HandleFormError(w, r, page, contactForm, "", nil)
+    return
 }
+
+// Save the validated submission and handle the operation's result here.
 ```
 
-`content.HandleFormError` is an error handler that will re-render the form with any errors. If an error instance is specified, the error will be logged.
+`form.HandleFormError` renders field and form-level errors. Parsing failures return the parser's HTTP status without rendering submitted values. Other supplied errors are logged before rendering. Render all messages through `html/template` to escape their contents.
 
 ### Form HTML Template
 
-The form template used in the previous example code can be seen below:
+The example template defines the `contact-form` partial and displays errors beside each field:
 
 ```html
+{{template "contact-form" .}}
+
+{{define "contact-form"}}
 {{ with .Data }}
-    <form id="register-form"
-          class="auth-email-form"
-          hx-post="/auth/register/email"
+    <form id="contact-form"
+          method="post"
+          action="/contact"
+          hx-post="/contact"
           hx-target="this"
           hx-swap="outerHTML"
           hx-trigger="submit">
         
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" value="{{ .Name }}"
+               required {{ if .HasFieldErrors "Name" }} aria-invalid="true" {{ end }}>
+        {{template "field-errors" (.GetFieldErrors "Name")}}
+
         <label for="email">Email</label>
         <input type="email" id="email"
                name="email"
@@ -230,23 +269,12 @@ The form template used in the previous example code can be seen below:
                required {{ if .HasFieldErrors "Email" }} aria-invalid="true" {{ end }}>
         {{template "field-errors" (.GetFieldErrors "Email")}}
 
-        <label for="password">Password</label>
-        <input type="password" id="password"
-               name="password"
-               value="{{ .Password }}"
-               required
-               {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
-        {{template "field-errors" (.GetFieldErrors "Password")}}
+        <label for="message">Message</label>
+        <textarea id="message" name="message"
+                  required {{ if .HasFieldErrors "Message" }} aria-invalid="true" {{ end }}>{{ .Message }}</textarea>
+        {{template "field-errors" (.GetFieldErrors "Message")}}
 
-        <label for="passwordMatch">Confirm Password</label>
-        <input type="password" id="passwordMatch" 
-               name="passwordMatch" 
-               value="{{ .PasswordMatch }}" 
-               required 
-               {{ if .HasFieldErrors "PasswordMatch" }} class="input-error" {{ end }}>
-        {{template "field-errors" (.GetFieldErrors "PasswordMatch")}}
-
-        <button type="submit">Register</button>
+        <button type="submit">Send message</button>
         
         {{ if .HasErrorMessages }}
             <div class="form-messages"><ul>{{ range .GetErrorMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>
@@ -255,8 +283,9 @@ The form template used in the previous example code can be seen below:
         {{ end }}
     </form>
 {{ else }}
-    <div>Unable to display registration details.</div>
+    <div>Unable to display the contact form.</div>
 {{ end }}
+{{end}}
 
 {{define "field-errors"}}
     {{- range .}}

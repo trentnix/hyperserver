@@ -12,9 +12,9 @@ import (
 // ContactForm binds the development site's contact submission fields.
 type (
 	ContactForm struct {
-		Name    string `validate:"required"`
-		Email   string `validate:"required,email"`
-		Message string `validate:"required"`
+		Name    string
+		Email   string
+		Message string
 
 		form.Form
 	}
@@ -25,7 +25,24 @@ const (
 	contactFormTemplate = "templates/html/partials/contact-form.html"
 )
 
-// Bind populates the RegisterForm fields from the request.
+// Validate checks the required contact fields and email address.
+func (cf *ContactForm) Validate() form.FieldErrors {
+	errors := make(form.FieldErrors)
+	if cf.Name == "" {
+		errors["Name"] = []string{form.RequiredMessage}
+	}
+	if cf.Email == "" {
+		errors["Email"] = []string{form.RequiredMessage}
+	} else if !form.ValidEmail(cf.Email) {
+		errors["Email"] = []string{form.EmailMessage}
+	}
+	if cf.Message == "" {
+		errors["Message"] = []string{form.RequiredMessage}
+	}
+	return errors
+}
+
+// Bind populates the contact fields from the request.
 func (cf *ContactForm) Bind(r *http.Request) error {
 	cf.Name = r.FormValue("name")
 	cf.Email = r.FormValue("email")

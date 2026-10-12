@@ -1113,35 +1113,42 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 }
 
 func TestHTTPRegistrationRejectsInvalidForm(t *testing.T) {
-	runHTTPScenario(t, func(h *httpHarness) {
-		// Confirm the account store is empty before submitting invalid forms.
-		if _, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
-			t.Fatalf("expected an empty database, got %v", err)
-		}
-		for _, htmx := range []bool{false, true} {
-			for _, tc := range []struct {
-				name, email, password, confirmation, message string
-			}{
-				{"mismatch", "person@example.invalid", "TestPassword1!", "DifferentPassword1!", "Passwords do not match."},
-				{"weak password", "person@example.invalid", "short", "short", "Password values must contain at least 8 characters"},
-				{"invalid email", "not-an-email", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
-				{"missing email", "", "TestPassword1!", "TestPassword1!", "This field is required."},
-				{"missing password", "person@example.invalid", "", "", "This field is required."},
-				{"missing confirmation", "person@example.invalid", "TestPassword1!", "", "This field is required."},
-			} {
-				t.Run(fmt.Sprintf("%s/htmx=%v", tc.name, htmx), func(t *testing.T) {
-					form := url.Values{"email": {tc.email}, "password": {tc.password}, "passwordMatch": {tc.confirmation}}
-					w := h.request(http.MethodPost, "/auth/register/email", form, htmx)
-					assertFormRejected(t, w, tc.message)
-					h.assertRowCount(t, "user", 0)
-					h.assertRowCount(t, "usertoken", 0)
-					if len(h.mail.snapshot()) != 0 {
-						t.Fatal("invalid registration attempted mail delivery")
-					}
-				})
-			}
-		}
-	})
+	for _, htmx := range []bool{false, true} {
+		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
+			runHTTPScenario(t, func(h *httpHarness) {
+				// Confirm the account store is empty before submitting invalid forms.
+				if _, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
+					t.Fatalf("expected an empty database, got %v", err)
+				}
+				for _, tc := range []struct {
+					name, email, password, confirmation, message string
+				}{
+					{"mismatch", "person@example.invalid", "TestPassword1!", "DifferentPassword1!", "Passwords do not match."},
+					{"weak password", "person@example.invalid", "short", "short", "Password values must contain at least 8 characters"},
+					{"invalid email", "not-an-email", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
+					{"domain slash", "person@foo/bar.com", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
+					{"domain leading hyphen", "person@-example.com", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
+					{"domain trailing hyphen", "person@example-.com", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
+					{"display name", "Person <person@example.invalid>", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
+					{"email line break", "person@example.invalid\r\nBcc: other@example.invalid", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
+					{"missing email", "", "TestPassword1!", "TestPassword1!", "This field is required."},
+					{"missing password", "person@example.invalid", "", "", "This field is required."},
+					{"missing confirmation", "person@example.invalid", "TestPassword1!", "", "This field is required."},
+				} {
+					t.Run(tc.name, func(t *testing.T) {
+						form := url.Values{"email": {tc.email}, "password": {tc.password}, "passwordMatch": {tc.confirmation}}
+						w := h.request(http.MethodPost, "/auth/register/email", form, htmx)
+						assertFormRejected(t, w, tc.message)
+						h.assertRowCount(t, "user", 0)
+						h.assertRowCount(t, "usertoken", 0)
+						if len(h.mail.snapshot()) != 0 {
+							t.Fatal("invalid registration attempted mail delivery")
+						}
+					})
+				}
+			})
+		})
+	}
 }
 
 func assertFormRejected(t *testing.T, w *httptest.ResponseRecorder, message string) {
@@ -1193,27 +1200,105 @@ func (h *httpHarness) assertUserUnchanged(t *testing.T, original *user.User) {
 	}
 }
 
-func TestHTTPLoginAndResetRequestRejectInvalidEmail(t *testing.T) {
-	runHTTPScenario(t, func(h *httpHarness) {
-		// A legacy account with an invalid address proves validation stops both
-		// authentication and reset-token creation before using the stored account.
-		u := h.seedUser(t, "not-an-email")
-		for _, path := range []string{"/auth/login/email", "/auth/reset/request/email"} {
-			t.Run(path, func(t *testing.T) {
-				w := h.request(http.MethodPost, path, url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
-				assertFormRejected(t, w, "Enter a valid email address.")
-				if !strings.Contains(w.Body.String(), `hx-post="`+path+`"`) {
-					t.Error("validation response does not preserve the form submission URL")
-				}
-				h.assertUserUnchanged(t, u)
-				h.assertRowCount(t, "usertoken", 0)
+func TestHTTPEmailSpellingPreserved(t *testing.T) {
+	for _, email := range []string{
+		`"person"@example.invalid`,
+		`"first last"@example.invalid`,
+		`"first..last"@example.invalid`,
+		"person@" + strings.Repeat("界", 22) + ".invalid",
+		"person@xn--koy" + strings.Repeat("a", 21) + ".invalid",
+		"person@ab--cd.invalid",
+		"person@r3---sn.invalid",
+		"person@ab--cd.例え.invalid",
+		"person@例え.ab--cd.invalid",
+		"person@ab--cd.xn--r8jz45g.invalid",
+	} {
+		for _, htmx := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/htmx=%t", email, htmx), func(t *testing.T) {
+				runHTTPScenario(t, func(h *httpHarness) {
+					registration := registrationForm()
+					registration.Set("email", email)
+					w := h.request(http.MethodPost, "/auth/register/email", registration, htmx)
+					assertRedirectResponse(t, w, "/login", htmx)
+					u, err := h.app.AccountRepository.GetByEmail(t.Context(), email)
+					if err != nil || u.Email != email {
+						t.Fatalf("registration did not preserve the submitted email: %v", err)
+					}
+					mail := h.mail.snapshot()
+					if len(mail) != 1 || mail[0].To != email {
+						t.Fatal("verification mail did not use the stored account address")
+					}
+
+					w = h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {email}}, htmx)
+					if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Password reset request received.") {
+						t.Fatal("reset request rejected the submitted email")
+					}
+					mail = h.mail.snapshot()
+					if len(mail) != 2 || mail[1].To != email || mail[1].Subject != "Reset your password" {
+						t.Fatal("reset mail did not use the stored account address")
+					}
+					link := mailLink(t, mail[1], "/auth/reset/email")
+					resetUser, err := user.ValidateResetToken(t.Context(), h.app.AccountRepository, link.Query().Get("token"), []byte(h.app.Config.Auth.JwtKey))
+					if err != nil || resetUser.ID != u.ID {
+						t.Fatalf("reset token did not identify the account: %v", err)
+					}
+
+					w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {email}, "password": {"TestPassword1!"}}, htmx)
+					assertRedirectResponse(t, w, "/auth/request/verify", htmx)
+				})
 			})
 		}
-		w := h.request(http.MethodGet, "/auth/change/email", nil, true)
-		if w.Header().Get("HX-Redirect") != "/login" {
-			t.Error("invalid login granted access to an authenticated route")
+	}
+}
+
+func TestHTTPLoginAndResetRequestRejectInvalidEmail(t *testing.T) {
+	for _, tc := range []struct{ name, email string }{
+		{"missing domain", "not-an-email"},
+		{"slash", "person@foo/bar.com"},
+		{"leading hyphen", "person@-example.com"},
+		{"trailing hyphen", "person@example-.com"},
+		{"empty label", "person@ab--cd..example"},
+		{"invalid Punycode", "person@ab--cd.xn--a"},
+		{"Unicode leading hyphen", "person@ab--cd.-é"},
+		{"Unicode trailing hyphen", "person@ab--cd.é-"},
+		{"Unicode double hyphen", "person@ab--cd.ab--é"},
+		{"encoded leading hyphen", "person@ab--cd.xn----bga"},
+		{"encoded trailing hyphen", "person@ab--cd.xn----9fa"},
+		{"encoded double hyphen", "person@ab--cd.xn--ab---epa"},
+		{"invalid bidi", "person@ab--cd.אa"},
+		{"encoded label overflow", "person@" + strings.Repeat("界", 58) + ".example"},
+		{"encoded domain overflow", "person@" + strings.Repeat(strings.Repeat("界", 57)+".", 3) + strings.Repeat("界", 56)},
+	} {
+		for _, htmx := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/htmx=%t", tc.name, htmx), func(t *testing.T) {
+				runHTTPScenario(t, func(h *httpHarness) {
+					registration := registrationForm()
+					registration.Set("email", tc.email)
+					w := h.request(http.MethodPost, "/auth/register/email", registration, htmx)
+					assertFormRejected(t, w, "Enter a valid email address.")
+					h.assertRowCount(t, "user", 0)
+					if len(h.mail.snapshot()) != 0 {
+						t.Fatal("invalid registration attempted mail delivery")
+					}
+
+					// Seed a legacy account to prove validation blocks valid credentials
+					// and reset-token creation before using the stored account.
+					u := h.seedUser(t, tc.email)
+					for _, path := range []string{"/auth/login/email", "/auth/reset/request/email"} {
+						w := h.request(http.MethodPost, path, url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, htmx)
+						assertFormRejected(t, w, "Enter a valid email address.")
+						if !strings.Contains(w.Body.String(), `hx-post="`+path+`"`) {
+							t.Error("validation response does not preserve the form submission URL")
+						}
+						h.assertUserUnchanged(t, u)
+						h.assertRowCount(t, "usertoken", 0)
+					}
+					w = h.request(http.MethodGet, "/auth/change/email", nil, htmx)
+					assertRedirectResponse(t, w, "/login", htmx)
+				})
+			})
 		}
-	})
+	}
 }
 
 func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {

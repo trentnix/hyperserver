@@ -12,6 +12,8 @@ import (
 type (
 	// FormComponent defines an interface for a form that is rendered to a requestor
 	FormComponent interface {
+		// Validate checks input without changing form state or application data.
+		Validate() FieldErrors
 		// IsValidated reports whether validation ran, not whether the form is valid.
 		IsValidated() bool
 		// SetValidated records whether validation ran.
@@ -22,7 +24,7 @@ type (
 		// GetAllFieldErrors returns errors across all fields.
 		GetAllFieldErrors() []string
 		// SetFieldErrors records field errors from a validation result.
-		SetFieldErrors(error)
+		SetFieldErrors(FieldErrors)
 		// HasFieldErrors reports whether a named field has errors.
 		HasFieldErrors(string) bool
 
@@ -58,29 +60,19 @@ const (
 	FormKey contextKey = "form"
 )
 
-// Validate records struct-tag validation errors on f, which must be a pointer
+// Validate records the field errors returned by f.Validate. f must be a pointer
 // to a struct implementing FormComponent. Field validation failures do not produce
 // a returned error. Call HasErrors after a nil return before processing the form.
 func Validate(f any) error {
-	validate := NewValidator()
-
 	// Ensure f is a pointer to a struct
 	val := reflect.ValueOf(f)
 	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
 		return NewErrInvalidForm(fmt.Errorf("The form being validated should be passed as a reference and not by value."))
 	}
 
-	// Extract the concrete struct value and validate
-	structValue := val.Elem().Interface()
-	err := validate.Validate(structValue)
-
-	// Check if f implements FormComponent
 	if formComponent, ok := f.(FormComponent); ok {
-		// Use the FormComponent methods to set validation state
+		formComponent.SetFieldErrors(formComponent.Validate())
 		formComponent.SetValidated(true)
-		if err != nil {
-			formComponent.SetFieldErrors(err)
-		}
 	} else {
 		return NewErrFormComponentInterfaceNotImplemented(fmt.Errorf("The specified form does not implement the FormComponent interface."))
 	}

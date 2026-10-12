@@ -53,7 +53,7 @@ type (
 
 	// LoginForm defines the fields used when logging in via email/password
 	LoginForm struct {
-		Email    string `validate:"required,email"`
+		Email    string
 		Password string
 
 		form.Form
@@ -61,33 +61,33 @@ type (
 
 	// RegisterForm binds an email address and matching passwords for account creation.
 	RegisterForm struct {
-		Email         string `validate:"required,email"`
-		Password      string `validate:"required,password"`
-		PasswordMatch string `validate:"required,password,eqfield=Password"`
+		Email         string
+		Password      string
+		PasswordMatch string
 
 		form.Form
 	}
 
 	// ResetPasswordRequestForm defines the fields used when requesting to reset a user's password
 	ResetPasswordRequestForm struct {
-		Email string `validate:"required,email"`
+		Email string
 
 		form.Form
 	}
 
 	// ResetPasswordForm defines the fields used when resetting the password
 	ResetPasswordForm struct {
-		Password      string `validate:"required,password"`
-		PasswordMatch string `validate:"required,password,eqfield=Password"`
+		Password      string
+		PasswordMatch string
 
 		form.Form
 	}
 
 	// ChangePasswordForm binds the current password and matching replacement passwords.
 	ChangePasswordForm struct {
-		OldPassword      string `validate:"required"`
-		NewPassword      string `validate:"required,password,nefield=OldPassword"`
-		NewPasswordMatch string `validate:"required,password,eqfield=NewPassword"`
+		OldPassword      string
+		NewPassword      string
+		NewPasswordMatch string
 
 		form.Form
 	}

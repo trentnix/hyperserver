@@ -133,6 +133,8 @@ type bindingProbe struct {
 
 func (f *bindingProbe) Bind(*http.Request) error { f.bound = true; return nil }
 
+func (f *bindingProbe) Validate() FieldErrors { return nil }
+
 func TestParseAndValidateDefaultsAndOverrides(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

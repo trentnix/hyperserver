@@ -1,17 +1,12 @@
 // Package form binds HTTP input and records field and form-level validation errors.
-// Embed Form in an application form and implement FormComponent.Bind. After
+// Embed Form in an application form and implement Bind and Validate. After
 // ParseAndValidate returns without an error, check HasErrors before changing data.
 // Message strings are plain text. Render them through html/template for escaping.
 package form
 
-import (
-	"fmt"
+import "github.com/trentnix/hyperserver/pkg/components/messages"
 
-	"github.com/go-playground/validator/v10"
-	"github.com/trentnix/hyperserver/pkg/components/messages"
-)
-
-// Form is an implementation of the FormComponent interface
+// Form holds validation state and messages. Applications supply binding and validation.
 type Form struct {
 	isValidated bool
 	messages    []messages.Message
@@ -52,42 +47,9 @@ func (f *Form) GetAllFieldErrors() []string {
 	return allErrors
 }
 
-// SetFieldErrors parses the specified field-level validation errors and adds them to the fieldErrors map
-func (f *Form) SetFieldErrors(err error) {
-	ves, ok := err.(validator.ValidationErrors)
-	if !ok {
-		return
-	}
-
-	for _, ve := range ves {
-		var message string
-
-		// Provide better error messages depending on the failed validation tag
-		// This should be expanded as you use additional tags in your validation
-		switch ve.Tag() {
-		case "required":
-			message = "This field is required."
-		case "email":
-			message = "Enter a valid email address."
-		case "password":
-			message = "Password values must contain at least 8 characters, one letter, one number, and one special character"
-		case "eqfield":
-			message = "Passwords do not match."
-		case "nefield":
-			message = "New passwords must be different from the previous password."
-		case "gte":
-			message = fmt.Sprintf("Must be greater than or equal to %v.", ve.Param())
-		default:
-			message = "Invalid value."
-		}
-
-		// Add the error
-		if f.fieldErrors == nil {
-			f.fieldErrors = make(map[string][]string)
-		}
-
-		f.fieldErrors[ve.Field()] = append(f.fieldErrors[ve.Field()], message)
-	}
+// SetFieldErrors replaces field errors without changing form-level messages.
+func (f *Form) SetFieldErrors(errors FieldErrors) {
+	f.fieldErrors = errors
 }
 
 // HasFieldErrors returns true if the specified field has errors
