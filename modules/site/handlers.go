@@ -30,7 +30,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	homepage := content.NewManagedContent(r, m.contentManager)
 	homepage.PartialName = homePagePartialName
-	homepage.AddContent(siteModuleTemplatesFS, homePageTemplate)
+	homepage.Templates = m.templates[homePageTemplate]
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -45,7 +45,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 	login.PartialName = loginPagePartialName
 	login.Title = "Login"
 
-	login.AddContent(siteModuleTemplatesFS, loginPageTemplate)
+	login.Templates = m.templates[loginPageTemplate]
 
 	err := login.Render(w, r)
 	if err != nil {
@@ -65,7 +65,7 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 	register.PartialName = registerPagePartialName
 	register.Title = "Register"
 
-	register.AddContent(siteModuleTemplatesFS, registerPageTemplate)
+	register.Templates = m.templates[registerPageTemplate]
 
 	err := register.Render(w, r)
 	if err != nil {
@@ -82,7 +82,7 @@ func (m *pageRenderer) HandleMessage(w http.ResponseWriter, r *http.Request, mes
 
 	messagePage := content.NewManagedContent(r, m.contentManager)
 	messagePage.PartialName = messagePagePartialName
-	messagePage.AddContent(siteModuleTemplatesFS, messagePageTemplate)
+	messagePage.Templates = m.templates[messagePageTemplate]
 	messagePage.Data = message
 	err := messagePage.Render(w, r)
 	if err != nil {
@@ -114,7 +114,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 
 	page := content.NewManagedContent(r, m.contentManager)
 	page.PartialName = homePagePartialName
-	page.AddContent(siteModuleTemplatesFS, homePageTemplate)
+	page.Templates = m.templates[homePageTemplate]
 	page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
 	// save the updated counter value in the session
@@ -137,7 +137,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 func (m *pageRenderer) NotFound(w http.ResponseWriter, r *http.Request) {
 	notFound := content.NewManagedContent(r, m.contentManager)
 	notFound.PartialName = notFoundPagePartialName
-	notFound.AddContent(siteModuleTemplatesFS, notFoundPageTemplate)
+	notFound.Templates = m.templates[notFoundPageTemplate]
 	notFound.Data = fmt.Sprintf("The resource you requested was not found: %s", r.URL.Path)
 	notFound.Title = "Resource Not Found"
 	notFound.ResponseStatusCode = http.StatusNotFound

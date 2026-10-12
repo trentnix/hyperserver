@@ -22,6 +22,11 @@ type (
 	ContentManagerService struct {
 		defaultsOwner string
 
+		// PrepareTemplates optionally prepares shared response templates at startup.
+		// Module setup calls it after application overrides and before module Init.
+		// It must not acquire services or mutate response callbacks. Return parsing errors.
+		PrepareTemplates func() error
+
 		// Layouts maps response types to outer template files.
 		Layouts map[string][]TemplatePath
 		// Contents maps response types to page and fragment template files.

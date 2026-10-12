@@ -27,7 +27,7 @@ func (a *AuthManager) GetVerificationRequest(w http.ResponseWriter, r *http.Requ
 func (a *AuthManager) renderVerificationRequest(w http.ResponseWriter, r *http.Request, needsVerification bool, message string, status int) {
 	c := content.NewManagedContent(r, a.contentManager)
 	c.PartialName = "auth.page.verification.request"
-	c.AddContent(authModuleTemplatesFS, "templates/html/pages/verification-request.html")
+	c.Templates = a.templates["templates/html/pages/verification-request.html"]
 	c.Headers = map[string]string{"Content-Type": "text/html; charset=utf-8"}
 	c.ResponseStatusCode = status
 	c.Data = struct {

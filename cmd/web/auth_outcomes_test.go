@@ -12,6 +12,7 @@ import (
 
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -73,10 +74,17 @@ func TestHTTPAuthCommitsSurviveNotificationFailure(t *testing.T) {
 }
 
 func TestHTTPAuthCommitsSurviveRenderingFailure(t *testing.T) {
+	brokenRendering := func(app *application) ([]handlers.Descriptor, error) {
+		// Valid syntax, but form data cannot supply this field during execution.
+		files := fstest.MapFS{"failure.html": {Data: []byte(`prefix{{.Data.NonexistentField}}`)}}
+		app.ContentManager.RegisterLayouts("page", files, "failure.html")
+		app.ContentManager.RegisterLayouts("htmx", files, "failure.html")
+		return siteModules(app, "")
+	}
 	for _, operation := range []string{"registration", "reset request", "change"} {
 		for _, htmx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", operation, htmx), func(t *testing.T) {
-				runHTTPScenario(t, func(h *httpHarness) {
+				runHTTPScenarioWithCatalog(t, 30*time.Second, brokenRendering, func(h *httpHarness) {
 					path, fields := "/auth/register/email", registrationForm()
 					var account *user.User
 					switch operation {
@@ -95,9 +103,6 @@ func TestHTTPAuthCommitsSurviveRenderingFailure(t *testing.T) {
 						fields = url.Values{"oldPassword": {"TestPassword1!"}, "newPassword": {"NewPassword1!"}, "newPasswordMatch": {"NewPassword1!"}}
 					}
 
-					files := fstest.MapFS{}
-					h.app.ContentManager.AddPageComponent(files, "missing.html")
-					h.app.ContentManager.AddHtmxComponent(files, "missing.html")
 					w := h.request(http.MethodPost, path, fields, htmx)
 					if w.Code != http.StatusInternalServerError || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
 						t.Fatalf("render failure response: %d %v", w.Code, w.Header())

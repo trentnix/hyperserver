@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
@@ -22,6 +24,99 @@ type setupModule struct {
 }
 
 func (m *setupModule) Routes(routes *routing.Routes) error { return m.routes(routes) }
+
+func TestSetupPreparesSharedTemplatesBeforeModules(t *testing.T) {
+	for _, mode := range []string{"success", "failure", "already canceled", "canceled during preparation"} {
+		t.Run(mode, func(t *testing.T) {
+			app, err := server.NewApplicationServer(config.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			cause := errors.New("template preparation failed")
+			var calls []string
+			app.ContentManager.PrepareTemplates = func() error {
+				calls = append(calls, "prepare")
+				if app.ContentManager.HomeURL != "/override" {
+					t.Fatal("preparation ran before overrides")
+				}
+				if mode == "failure" {
+					return cause
+				}
+				if mode == "canceled during preparation" {
+					cancel()
+				}
+				return nil
+			}
+			app.ContentManager.HomeURL = "/override"
+			module := &setupModule{routes: func(*routing.Routes) error { calls = append(calls, "routes"); return nil }}
+			module.init = func(context.Context) error { calls = append(calls, "init"); return nil }
+			module.close = func(context.Context) error { return nil }
+			catalog := []handlers.Descriptor{{Name: "test", New: func() handlers.Handler {
+				calls = append(calls, "factory")
+				return module
+			}}}
+			if mode == "already canceled" {
+				cancel()
+			}
+			err = handlers.Setup(ctx, app, nil, catalog, nil)
+			want := "prepare"
+			switch mode {
+			case "success":
+				want = "prepare,factory,init,routes"
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "failure":
+				if !errors.Is(err, cause) {
+					t.Fatalf("lost preparation error: %v", err)
+				}
+			default:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("lost cancellation: %v", err)
+				}
+				if mode == "already canceled" {
+					want = ""
+				}
+			}
+			if got := strings.Join(calls, ","); got != want {
+				t.Fatalf("calls=%s, want %s", got, want)
+			}
+			if err := app.Shutdown(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestModuleTemplateFailureRollsBackStartup(t *testing.T) {
+	app, err := server.NewApplicationServer(config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := 0
+	provider := &setupModule{routes: func(*routing.Routes) error { t.Fatal("routes bound after template failure"); return nil }}
+	provider.provide = func() map[string]any { return map[string]any{"ready": provider} }
+	provider.close = func(context.Context) error { closed++; return nil }
+	consumer := &setupModule{}
+	consumer.init = func(context.Context) error {
+		_, err := content.PrepareTemplates(app.ContentManager, content.TemplatePath{FS: fstest.MapFS{"broken.html": {Data: []byte("{{if}}")}}, Path: "broken.html"})
+		return err
+	}
+	catalog := []handlers.Descriptor{
+		{Name: "provider", Provides: []string{"ready"}, New: func() handlers.Handler { return provider }},
+		{Name: "consumer", Requires: []handlers.Requirement{{Capability: "ready"}}, New: func() handlers.Handler { return consumer }},
+	}
+	err = handlers.Setup(t.Context(), app, nil, catalog, nil)
+	var parseErr *content.ErrParsingTemplates
+	if !errors.As(err, &parseErr) || closed != 1 {
+		t.Fatalf("error=%v closed=%d", err, closed)
+	}
+	if err := app.Shutdown(); err != nil || closed != 1 {
+		t.Fatalf("repeated cleanup: error=%v closed=%d", err, closed)
+	}
+}
 
 func TestSetupOwnsRoutesAndCleanup(t *testing.T) {
 	for _, mode := range []string{"defaults", "custom routes", "route error", "route conflict", "canceled route"} {

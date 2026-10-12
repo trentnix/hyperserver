@@ -57,10 +57,10 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 	if !contact.IsHtmx() {
 		contact.PartialName = contactPagePartialName
 		contact.Title = "Contact Us"
-		contact.AddContents(siteModuleTemplatesFS, contactPageTemplate, contactFormTemplate)
+		contact.Templates = m.templates[contactPageTemplate]
 	} else {
 		contact.PartialName = contactFormPartialName
-		contact.AddContent(siteModuleTemplatesFS, contactFormTemplate)
+		contact.Templates = m.templates[contactFormTemplate]
 	}
 	contact.Data = &ContactForm{}
 
@@ -81,10 +81,10 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	if !contact.IsHtmx() {
 		contact.PartialName = contactPagePartialName
 		contact.Title = "Contact Us"
-		contact.AddContents(siteModuleTemplatesFS, contactPageTemplate, contactFormTemplate)
+		contact.Templates = m.templates[contactPageTemplate]
 	} else {
 		contact.PartialName = contactFormPartialName
-		contact.AddContent(siteModuleTemplatesFS, contactFormTemplate)
+		contact.Templates = m.templates[contactFormTemplate]
 	}
 
 	// process a contact submission

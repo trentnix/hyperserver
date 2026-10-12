@@ -72,6 +72,8 @@ Prepared sets include the manager's layouts, content, and components at preparat
 
 Parsing errors stop initialization when the module returns the preparation error. Data-dependent execution errors still occur during rendering. Output remains buffered until every selected template, including out-of-band fragments, succeeds.
 
+The reference site and stateless example both use prepared sets. Shared response handlers can install `ContentManagerService.PrepareTemplates`. `handlers.Setup` calls that callback after application overrides and before module initialization. If an application invokes shared handlers without `handlers.Setup`, it must call the preparation callback itself before serving requests. Preparation does not change response callbacks, load notifications, or open application services.
+
 #### Rendering benchmark
 
 Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem -count=3`. The benchmark renders an in-memory layout, a named partial, and escaped input into a buffer. It excludes HTTP delivery, notification storage, and preparation time.

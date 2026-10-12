@@ -192,6 +192,22 @@ func TestHTTPSiteErrorRenderFailure(t *testing.T) {
 				for _, kind := range []string{"page", "htmx"} {
 					h.app.ContentManager.Layouts[kind] = []content.TemplatePath{testTemplateFile(t, path)}
 				}
+				// Reprepare explicitly before any request uses the changed layout.
+				prepareErr := h.app.ContentManager.PrepareTemplates()
+				if failure != "execution failure" {
+					if prepareErr == nil {
+						t.Fatal("preparation accepted missing or invalid templates")
+					}
+					w := httptest.NewRecorder()
+					h.app.ContentManager.HandleError(w, httptest.NewRequest(http.MethodGet, "/", nil), "Not allowed", nil, http.StatusForbidden)
+					if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "Not allowed") {
+						t.Fatal("failed preparation replaced the working templates")
+					}
+					return
+				}
+				if prepareErr != nil {
+					t.Fatal(prepareErr)
+				}
 				h.app.Web.HandleFunc("GET /test/broken-error-page", func(w http.ResponseWriter, r *http.Request) {
 					h.app.ContentManager.HandleError(w, r, "Not allowed", nil, http.StatusForbidden)
 				})

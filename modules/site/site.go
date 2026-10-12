@@ -9,6 +9,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
@@ -40,6 +41,7 @@ type (
 // pageRenderer implements shared responses without requiring a live site module.
 type pageRenderer struct {
 	contentManager *content_services.ContentManagerService
+	templates      map[string]*content.Templates
 }
 
 const (
@@ -86,7 +88,7 @@ func Module(newContacts func(context.Context) (ContactRepository, error), mail *
 	}}
 }
 
-// Init validates required services and prepares contact storage. It does not change
+// Init validates required services and prepares templates and contact storage. It does not change
 // shared rendering settings or initialize or close borrowed application services.
 func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) error {
 	if s.Config == nil {
@@ -99,6 +101,28 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	if m.NewContacts == nil {
 		return fmt.Errorf("site requires a contact-storage factory")
 	}
+	m.contentManager = s.ContentManager
+	if err := m.prepareTemplates(); err != nil {
+		return err
+	}
+	for _, name := range []string{
+		homePageTemplate,
+		loginPageTemplate,
+		registerPageTemplate,
+		contactPageTemplate,
+		contactFormTemplate,
+	} {
+		files := []content.TemplatePath{{FS: siteModuleTemplatesFS, Path: name}}
+		if name == contactPageTemplate {
+			files = append(files, content.TemplatePath{FS: siteModuleTemplatesFS, Path: contactFormTemplate})
+		}
+		templates, err := content.PrepareTemplates(m.contentManager, files...)
+		if err != nil {
+			return fmt.Errorf("prepare site template %s: %w", name, err)
+		}
+		m.templates[name] = templates
+	}
+
 	contacts, err := m.NewContacts(ctx)
 	if err != nil {
 		return err
@@ -111,7 +135,6 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	m.rateLimit = s.Config.App.SiteRateLimit
 
 	m.contacts = contacts
-	m.contentManager = s.ContentManager
 	m.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
 
 	return nil

@@ -95,6 +95,9 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 					http.Error(w, message, status)
 				},
 			}}
+			if err := manager.prepareTemplates(); err != nil {
+				t.Fatal(err)
+			}
 			r := httptest.NewRequest(http.MethodPost, "/auth/request/verify", nil)
 			if tc.provider != "" {
 				r = user.AddUserToRequestContext(r, &user.User{

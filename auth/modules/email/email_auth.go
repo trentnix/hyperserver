@@ -43,6 +43,7 @@ type (
 		sessions          *session.SessionManager
 		config            *config.Config
 		contentManager    *content_services.ContentManagerService
+		templates         map[string]*content.Templates
 		mailClient        *messaging.MailClient
 		verificationEmail *template.Template
 		resetEmail        *template.Template
@@ -218,6 +219,26 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", registerButtonTemplate))
 	}
 
+	return a.prepareTemplates()
+}
+
+func (a *EmailAuthService) prepareTemplates() error {
+	prepared := make(map[string]*content.Templates)
+	for _, name := range []string{
+		emailLoginFormTemplate,
+		emailRegisterFormTemplate,
+		emailResetRequestFormTemplate,
+		emailResetPasswordFormTemplate,
+		emailChangePasswordFormTemplate,
+		"templates/html/partials/registration-pending.html",
+	} {
+		templates, err := content.PrepareTemplates(a.contentManager, content.TemplatePath{FS: a.TemplateFS, Path: name})
+		if err != nil {
+			return fmt.Errorf("prepare email auth template %s: %w", name, err)
+		}
+		prepared[name] = templates
+	}
+	a.templates = prepared
 	return nil
 }
 
@@ -258,7 +279,7 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	login := content.NewManagedContent(r, a.contentManager)
 	login.PartialName = emailLoginFormPartial
-	login.AddContent(a.TemplateFS, emailLoginFormTemplate)
+	login.Templates = a.templates[emailLoginFormTemplate]
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
 
@@ -292,7 +313,7 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.User {
 	login := content.NewManagedContent(r, a.contentManager)
 	login.PartialName = emailLoginFormPartial
-	login.AddContent(a.TemplateFS, emailLoginFormTemplate)
+	login.Templates = a.templates[emailLoginFormTemplate]
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
 
@@ -337,7 +358,7 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 
 	register := content.NewManagedContent(r, a.contentManager)
 	register.PartialName = emailRegisterFormPartial
-	register.AddContent(a.TemplateFS, emailRegisterFormTemplate)
+	register.Templates = a.templates[emailRegisterFormTemplate]
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
@@ -370,7 +391,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 
 	register := content.NewManagedContent(r, a.contentManager)
 	register.PartialName = emailRegisterFormPartial
-	register.AddContent(a.TemplateFS, emailRegisterFormTemplate)
+	register.Templates = a.templates[emailRegisterFormTemplate]
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
@@ -394,8 +415,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 	if a.config.Auth.RegisterRequiresVerification {
 		// The account already exists. Offer sign-in instead of another registration.
 		register.PartialName = "auth.partial.email.registration.pending"
-		register.Contents = nil
-		register.AddContent(a.TemplateFS, "templates/html/partials/registration-pending.html")
+		register.Templates = a.templates["templates/html/partials/registration-pending.html"]
 		const deliveryFailure = "Your account was created, but we could not send the verification email. You can sign in to request another email. Protected pages remain unavailable until you verify your address."
 		createdUser, err := a.accounts.GetByEmail(r.Context(), registerForm.Email)
 		if err != nil || createdUser == nil {
@@ -514,7 +534,7 @@ func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, exp
 func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetRequestFormPartial
-	reset.AddContent(a.TemplateFS, emailResetRequestFormTemplate)
+	reset.Templates = a.templates[emailResetRequestFormTemplate]
 
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
@@ -546,7 +566,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	respondAfter := time.Now().Add(a.config.Auth.ResetMinimumResponseTime)
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetRequestFormPartial
-	reset.AddContent(a.TemplateFS, emailResetRequestFormTemplate)
+	reset.Templates = a.templates[emailResetRequestFormTemplate]
 
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
@@ -615,7 +635,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetPasswordFormPartial
-	reset.AddContent(a.TemplateFS, emailResetPasswordFormTemplate)
+	reset.Templates = a.templates[emailResetPasswordFormTemplate]
 
 	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
@@ -643,7 +663,7 @@ func (a *EmailAuthService) Reset(
 ) {
 	reset := content.NewManagedContent(r, a.contentManager)
 	reset.PartialName = emailResetPasswordFormPartial
-	reset.AddContent(a.TemplateFS, emailResetPasswordFormTemplate)
+	reset.Templates = a.templates[emailResetPasswordFormTemplate]
 
 	resetForm := &ResetPasswordForm{}
 	reset.Data = resetForm
@@ -723,7 +743,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 
 	change := content.NewManagedContent(r, a.contentManager)
 	change.PartialName = emailChangePasswordFormPartial
-	change.AddContent(a.TemplateFS, emailChangePasswordFormTemplate)
+	change.Templates = a.templates[emailChangePasswordFormTemplate]
 
 	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
@@ -748,7 +768,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 
 	change := content.NewManagedContent(r, a.contentManager)
 	change.PartialName = emailChangePasswordFormPartial
-	change.AddContent(a.TemplateFS, emailChangePasswordFormTemplate)
+	change.Templates = a.templates[emailChangePasswordFormTemplate]
 
 	changeForm := &ChangePasswordForm{}
 	change.Data = changeForm

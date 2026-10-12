@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -54,6 +55,47 @@ func emailSessions(t *testing.T, types map[string]string) *session.SessionManage
 	}
 	t.Cleanup(func() { manager.Close() })
 	return manager
+}
+
+func TestEmailFormsUseStartupTemplates(t *testing.T) {
+	cm := content.NewContentManager()
+	layouts := fstest.MapFS{"layout.html": {Data: []byte(`{{renderPartial .PartialName .}}`)}}
+	cm.AddPageLayout(layouts, "layout.html")
+	cm.AddHtmxLayout(layouts, "layout.html")
+	cm.HandleError = func(_ http.ResponseWriter, _ *http.Request, message string, err error, _ int) {
+		t.Fatalf("form failed: %s: %v", message, err)
+	}
+	sessions := emailSessions(t, map[string]string{"default": "memory"})
+	service := Provider(&emailAccountRepository{}, sessions, nil).New().(*EmailAuthService)
+	app := &server.ApplicationServer{ContentManager: cm, Config: &config.Config{Auth: config.AuthConfig{
+		Enabled: true, RegistrationEnabled: true, JwtKey: "test-key",
+		Services: map[string]map[string]string{"email": {"enabled": "true"}},
+	}}}
+	if err := service.Init(app); err != nil {
+		t.Fatal(err)
+	}
+	// Neither the first request nor later requests may reopen the selected files.
+	service.TemplateFS = fstest.MapFS{}
+	for name, handler := range map[string]http.HandlerFunc{
+		"login": service.GetLogin, "registration": service.GetRegister,
+		"reset request": service.GetResetRequest, "change": service.GetChange,
+		"reset": func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") },
+	} {
+		for _, htmx := range []bool{false, true} {
+			for range 2 {
+				r := httptest.NewRequest(http.MethodGet, "/", nil)
+				if htmx {
+					r.Header.Set("HX-Request", "true")
+				}
+				r = session.AddSessionManagerToRequestContext(r, sessions)
+				w := httptest.NewRecorder()
+				handler(w, r)
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "<form") {
+					t.Fatalf("%s htmx=%t: status=%d body=%s", name, htmx, w.Code, w.Body.String())
+				}
+			}
+		}
+	}
 }
 
 func TestEmailAuthModuleRequiresFlashSession(t *testing.T) {
@@ -136,6 +178,9 @@ func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = manager.Close() })
 	service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, config: cfg, contentManager: content.NewContentManager()}
+	if err := service.prepareTemplates(); err != nil {
+		t.Fatal(err)
+	}
 	handlers := map[string]http.HandlerFunc{
 		"login": service.GetLogin, "registration": service.GetRegister, "reset request": service.GetResetRequest,
 		"reset": func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") }, "change": service.GetChange,
@@ -213,6 +258,8 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 		{name: "invalid verification", path: emailVerificationTemplate, template: "{{if}}"},
 		{name: "missing reset", path: emailResetTemplate},
 		{name: "invalid reset", path: emailResetTemplate, template: "{{if}}"},
+		{name: "missing login form", path: emailLoginFormTemplate},
+		{name: "invalid registration form", path: emailRegisterFormTemplate, template: "{{if}}"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -222,6 +269,13 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 				emailRegisterButtonTemplateName: "Register",
 				emailVerificationTemplate:       "Verify {{.Name}}: {{.URL}}",
 				emailResetTemplate:              "Reset {{.Name}}: {{.URL}}",
+			}
+			for _, name := range []string{emailLoginFormTemplate, emailRegisterFormTemplate, emailResetRequestFormTemplate, emailResetPasswordFormTemplate, emailChangePasswordFormTemplate, "templates/html/partials/registration-pending.html"} {
+				data, err := fs.ReadFile(emailAuthTemplatesFS, name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				files[name] = string(data)
 			}
 			if tc.template != "" {
 				files[tc.path] = tc.template
@@ -249,7 +303,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 			initErr := service.Init(app)
 			cause := errors.Unwrap(initErr)
 			want := filepath.Base(tc.path)
-			if cause == nil || !strings.Contains(cause.Error(), want) {
+			if cause == nil || (!strings.Contains(initErr.Error(), want) && !strings.Contains(cause.Error(), want)) {
 				t.Fatalf("Init error = %v, cause = %v, want %s failure", initErr, cause, want)
 			}
 		})
@@ -349,6 +403,9 @@ func TestLoginUsesAccountRepository(t *testing.T) {
 			cm := content.NewContentManager()
 			cm.AddHtmxLayout(fstest.MapFS{"partial.html": &fstest.MapFile{Data: []byte(`{{renderPartial .PartialName .}}`)}}, "partial.html")
 			service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, accounts: reader, contentManager: cm}
+			if err := service.prepareTemplates(); err != nil {
+				t.Fatal(err)
+			}
 			form := url.Values{"email": {account.Email}, "password": {"TestPassword1!"}}
 			if scenario == "wrong password" {
 				form.Set("password", "WrongPassword1!")
@@ -452,6 +509,9 @@ func TestChangeUsesAccountRepository(t *testing.T) {
 			cm.AddHtmxLayout(fstest.MapFS{"partial.html": &fstest.MapFile{Data: []byte(`{{renderPartial .PartialName .}}`)}}, "partial.html")
 			// No SQL pool: password changes must use the supplied repository.
 			service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, accounts: accounts, contentManager: cm}
+			if err := service.prepareTemplates(); err != nil {
+				t.Fatal(err)
+			}
 			w := httptest.NewRecorder()
 			service.Change(w, r, account)
 			wantCalls := 1
@@ -515,6 +575,9 @@ func TestResetUsesAccountRepository(t *testing.T) {
 				TemplateFS: emailAuthTemplatesFS,
 				accounts:   accounts, contentManager: cm,
 				config: &config.Config{Auth: config.AuthConfig{JwtKey: key}},
+			}
+			if err := service.prepareTemplates(); err != nil {
+				t.Fatal(err)
 			}
 			w := httptest.NewRecorder()
 			service.Reset(w, r, account, token.Token, false)

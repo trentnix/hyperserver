@@ -43,6 +43,7 @@ type (
 		httpConfig     config.HTTPConfig
 		rateLimit      *config.ModuleRateLimitConfig
 		contentManager *content_services.ContentManagerService
+		templates      map[string]*content.Templates
 
 		verificationJwtKey   string
 		resetTokenExpiration time.Duration
@@ -111,6 +112,26 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 	a.resetRequiresNewCredentials = s.Config.Auth.ResetRequiresNewCredentials
 	a.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
 
+	return a.prepareTemplates()
+}
+
+func (a *AuthManager) prepareTemplates() error {
+	prepared := make(map[string]*content.Templates)
+	for _, name := range []string{
+		authLoginDefaultTemplate,
+		authLoginSelectionTemplate,
+		authRegisterDefaultTemplate,
+		authRegisterSelectionTemplate,
+		authVerifyTemplate,
+		"templates/html/pages/verification-request.html",
+	} {
+		templates, err := content.PrepareTemplates(a.contentManager, content.TemplatePath{FS: authModuleTemplatesFS, Path: name})
+		if err != nil {
+			return fmt.Errorf("prepare auth template %s: %w", name, err)
+		}
+		prepared[name] = templates
+	}
+	a.templates = prepared
 	return nil
 }
 
@@ -188,7 +209,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
 		c.PartialName = authLoginDefaultPartial
-		c.AddContent(authModuleTemplatesFS, authLoginDefaultTemplate)
+		c.Templates = a.templates[authLoginDefaultTemplate]
 		c.Data = "/auth/login/" + authServices[0].AuthType()
 	} else {
 		c.PartialName = authLoginSelectionPartial
@@ -196,7 +217,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 			loginHTML = append(loginHTML, service.GetLoginButton())
 		}
 
-		c.AddContent(authModuleTemplatesFS, authLoginSelectionTemplate)
+		c.Templates = a.templates[authLoginSelectionTemplate]
 		c.Data = loginHTML
 	}
 
@@ -222,7 +243,7 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	if len(authServices) == 1 {
 		// there is only 1 auth service - display the default
 		c.PartialName = authRegisterDefaultPartial
-		c.AddContent(authModuleTemplatesFS, authRegisterDefaultTemplate)
+		c.Templates = a.templates[authRegisterDefaultTemplate]
 		c.Data = "/auth/register/" + authServices[0].AuthType()
 	} else {
 		c.PartialName = authRegisterSelectionPartial
@@ -230,7 +251,7 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 			loginHTML = append(loginHTML, service.GetRegisterButton())
 		}
 
-		c.AddContent(authModuleTemplatesFS, authRegisterSelectionTemplate)
+		c.Templates = a.templates[authRegisterSelectionTemplate]
 		c.Data = loginHTML
 	}
 
@@ -679,7 +700,7 @@ func (a *AuthManager) GetVerify(w http.ResponseWriter, r *http.Request) {
 
 	c := content.NewManagedContent(r, a.contentManager)
 	c.PartialName = "auth.page.verify"
-	c.AddContent(authModuleTemplatesFS, authVerifyTemplate)
+	c.Templates = a.templates[authVerifyTemplate]
 	c.Data = verificationToken
 	if err := c.Render(w, r); err != nil {
 		a.contentManager.HandleError(w, r, "Unable to display the verification form.", err, http.StatusInternalServerError)

@@ -9,8 +9,9 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 )
 
-// Setup initializes the selected modules, binds their routes, and registers their
-// cleanup with app. Shared services must be ready before calling Setup. A nil
+// Setup prepares shared response templates, initializes the selected modules,
+// binds their routes, and registers their cleanup with app. Shared services and
+// application rendering overrides must be ready before calling Setup. A nil
 // routes value uses app.Web with the standard route defaults. A nil catalog loads
 // no modules. Use Registered explicitly to select the import catalog.
 //
@@ -37,6 +38,14 @@ func Setup(ctx context.Context, app *server.ApplicationServer, routes *routing.R
 	}
 	if err := routes.Err(); err != nil {
 		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if cm := app.ContentManager; cm != nil && cm.PrepareTemplates != nil {
+		if err := cm.PrepareTemplates(); err != nil {
+			return fmt.Errorf("prepare shared response templates: %w", err)
+		}
 	}
 
 	modules, err := Initialize(ctx, app, catalog, selections)

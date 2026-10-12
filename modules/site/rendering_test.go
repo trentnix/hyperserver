@@ -75,6 +75,9 @@ func TestSiteRenderingDoesNotNeedAnInitializedModule(t *testing.T) {
 	if err := ConfigureRendering(cm, false); err != nil {
 		t.Fatal(err)
 	}
+	if err := cm.PrepareTemplates(); err != nil {
+		t.Fatal(err)
+	}
 	w := httptest.NewRecorder()
 	cm.HandleError(w, httptest.NewRequest(http.MethodGet, "/", nil), "public failure", nil, http.StatusServiceUnavailable)
 	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "public failure") {
