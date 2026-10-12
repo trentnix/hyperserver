@@ -101,7 +101,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 			r,
 			contact,
 			contactForm,
-			"The login form could not be validated",
+			"The contact form could not be validated",
 			err)
 		return
 	}
@@ -125,9 +125,9 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contactForm.Name = r.FormValue("")
-	contactForm.Email = r.FormValue("")
-	contactForm.Message = r.FormValue("")
+	contactForm.Name = ""
+	contactForm.Email = ""
+	contactForm.Message = ""
 	contactForm.AddSuccessMessage("Your message has been submitted.")
 
 	// render the success response

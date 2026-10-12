@@ -338,6 +338,8 @@ For an HTMX response that must not swap content, set `page.HTMX.Response = &htmx
 
 Notification loading can change cookies before rendering. A template failure leaves response content unwritten, but does not undo notification retrieval or application changes. A delivery error can occur after part of the body was sent. Direct `http.Handler` and `http.ResponseWriter` use remains available for streaming, downloads, and other specialized responses.
 
+The [contact form](modules/site/templates/html/partials/contact-form.html) demonstrates ordinary `method="post" action="/contact"` submission alongside HTMX. Validation and storage failures redisplay escaped input. Successful writes clear the form and show an acknowledgment without a redirect. The [workflow tests](cmd/web/form_workflow_test.go) cover both modes, storage failure and retry, and registration/login redirects. Native browser submission is also tested without HTMX.
+
 ### Notifications
 
 Message values in `pkg/components/messages` need no session service. Applications can supply `Content.Notifications` directly or set `ContentManagerService.LoadNotifications` before serving requests. A nil loader skips retrieval. Loader errors stop rendering.

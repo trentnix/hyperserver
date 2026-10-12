@@ -3,14 +3,14 @@
     <div class="container">
         {{ with .Data }}
         <h3><span>Contact Me</span></h3>
-        <form id="contactForm" class="contact-form" hx-post="/contact" hx-target="#contact" hx-swap="outerHTML" hx-trigger="submit">
+        <form id="contactForm" class="contact-form" method="post" action="/contact" hx-post="/contact" hx-target="#contact" hx-swap="outerHTML" hx-trigger="submit">
             <div class="form-group">
                 <label for="name">Name</label>
                 <input id="name" type="text" name="name" autocomplete="name" value="{{ .Name }}" required {{ if .HasFieldErrors "Name" }} class="input-error" {{ end }}>
                 {{ template "site.partial.contact.form.field_errors" (.GetFieldErrors "Name") }}
             </div>
             <div class="form-group">
-                <label for="name">Email</label>
+                <label for="email">Email</label>
                 <input type="email" id="email" name="email" value="{{ .Email }}" required {{ if .HasFieldErrors "Email" }} class="input-error" {{ end }}>
                 {{ template "site.partial.contact.form.field_errors" (.GetFieldErrors "Email") }}
             </div>

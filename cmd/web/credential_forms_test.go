@@ -49,7 +49,7 @@ func TestHTTPCredentialFormActions(t *testing.T) {
 
 // Exercise the browser's native submission with real rendered forms, but no HTMX.
 // Submission handlers inspect transport only. HTTP tests cover account operations.
-func TestBrowserNativeCredentialForms(t *testing.T) {
+func TestBrowserNativeForms(t *testing.T) {
 	if os.Getenv("HS_TEST_FIREFOX") == "" {
 		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
 	}
@@ -60,6 +60,7 @@ func TestBrowserNativeCredentialForms(t *testing.T) {
 			fields url.Values
 			body   string
 		}{
+			{path: "/contact", fields: url.Values{"name": {"Native visitor"}, "email": {"native@example.invalid"}, "message": {"Native & ordinary submission"}}},
 			{path: "/auth/login/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}}},
 			{path: "/auth/register/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}, "passwordMatch": {secret}}},
 			{path: "/auth/change/email", fields: url.Values{"oldPassword": {secret}, "newPassword": {secret}, "newPasswordMatch": {secret}}},
@@ -114,7 +115,10 @@ func TestBrowserNativeCredentialForms(t *testing.T) {
   for (const input of form.querySelectorAll("input")) {
     if (input.type === "email") input.value = "native@example.invalid";
     if (input.type === "password") input.value = "Native&A+B1!";
+    if (input.name === "name") input.value = "Native visitor";
   }
+  const message = form.querySelector("textarea[name=message]");
+  if (message) message.value = "Native & ordinary submission";
   form.requestSubmit();
 });`)
 		})
