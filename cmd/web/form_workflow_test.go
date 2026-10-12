@@ -67,13 +67,16 @@ func TestHTTPContactWorkflow(t *testing.T) {
 					"message": {"<script>workflow</script>\nKeep this text & punctuation."},
 					"":        {"unexpected-empty-key-value"},
 				}
-				w = h.request(http.MethodPost, "/contact", fields, htmx)
-				assertContactForm(t, w, htmx, fields)
-				assertFormRejected(t, w, "Enter a valid email address.")
-				if strings.Contains(w.Body.String(), "Your message has been submitted.") {
-					t.Fatal("invalid submission reported success")
+				for _, email := range []string{"not-an-email", "test@a", "first.last@a", `"first.last@internal"@a`} {
+					fields.Set("email", email)
+					w = h.request(http.MethodPost, "/contact", fields, htmx)
+					assertContactForm(t, w, htmx, fields)
+					assertFormRejected(t, w, "Enter a valid email address.")
+					if strings.Contains(w.Body.String(), "Your message has been submitted.") {
+						t.Fatal("invalid submission reported success")
+					}
+					h.assertRowCount(t, "hyperserver_contact_submission", 0)
 				}
-				h.assertRowCount(t, "hyperserver_contact_submission", 0)
 
 				// Disable only this isolated test database's contact table.
 				if _, err := h.app.Database.Exec(`ALTER TABLE hyperserver_contact_submission RENAME TO unavailable_contact`); err != nil {

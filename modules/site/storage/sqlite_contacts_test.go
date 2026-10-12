@@ -1,4 +1,4 @@
-package models
+package storage
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
@@ -26,7 +27,7 @@ func contactTestDB(t *testing.T) *sqlx.DB {
 	return db
 }
 
-func TestContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
+func TestSQLiteContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		siteFirst bool
@@ -42,11 +43,11 @@ func TestContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			repository, err := NewContactRepository(ctx, db)
+			repository, err := NewSQLiteContactRepository(ctx, db)
 			if err != nil {
 				t.Fatal(err)
 			}
-			submission := ContactSubmission{Name: "Test person", Email: "person@example.invalid", Message: "Hello"}
+			submission := models.ContactSubmission{Name: "Test person", Email: "person@example.invalid", Message: "Hello"}
 			if err := repository.Create(ctx, &submission); err != nil {
 				t.Fatal(err)
 			}
@@ -59,14 +60,14 @@ func TestContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 			}
 
 			// A later consumer prepares only its own schema and borrows the same pool.
-			second, err := NewContactRepository(ctx, db)
+			second, err := NewSQLiteContactRepository(ctx, db)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if repository.db != db || second.db != db {
 				t.Fatal("repositories did not retain the supplied pool")
 			}
-			var stored ContactSubmission
+			var stored models.ContactSubmission
 			if err := db.Get(&stored, `SELECT * FROM hyperserver_contact_submission WHERE id = ?`, submission.Id); err != nil {
 				t.Fatal(err)
 			}
@@ -80,35 +81,35 @@ func TestContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 	}
 }
 
-func TestContactRepositorySetupFailureLeavesPoolOpen(t *testing.T) {
+func TestSQLiteContactRepositorySetupFailureLeavesPoolOpen(t *testing.T) {
 	db := contactTestDB(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if repository, err := NewContactRepository(ctx, db); repository != nil || !errors.Is(err, context.Canceled) {
+	if repository, err := NewSQLiteContactRepository(ctx, db); repository != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled setup = %v, %v", repository, err)
 	}
 	if err := db.Ping(); err != nil {
 		t.Fatal("failed initialization closed the borrowed pool:", err)
 	}
-	if _, err := NewContactRepository(context.Background(), db); err != nil {
+	if _, err := NewSQLiteContactRepository(context.Background(), db); err != nil {
 		t.Fatal("retry after cancellation:", err)
 	}
-	if repository, err := NewContactRepository(context.Background(), nil); repository != nil || err == nil {
+	if repository, err := NewSQLiteContactRepository(context.Background(), nil); repository != nil || err == nil {
 		t.Fatalf("nil database setup = %v, %v", repository, err)
 	}
 }
 
-func TestContactRepositoryCreateFailures(t *testing.T) {
+func TestSQLiteContactRepositoryCreateFailures(t *testing.T) {
 	for _, failure := range []string{"invalid email", "canceled request", "storage failure", "missing schema"} {
 		t.Run(failure, func(t *testing.T) {
 			db := contactTestDB(t)
-			repository, err := NewContactRepository(context.Background(), db)
+			repository, err := NewSQLiteContactRepository(context.Background(), db)
 			if err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			submission := ContactSubmission{Email: "person@example.invalid", Message: "Hello"}
+			submission := models.ContactSubmission{Email: "person@example.invalid", Message: "Hello"}
 			switch failure {
 			case "invalid email":
 				submission.Email = "invalid"
@@ -145,7 +146,22 @@ func TestContactRepositoryCreateFailures(t *testing.T) {
 	}
 }
 
-func TestContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T) {
+func TestSQLiteContactRepositoryRejectsNilSubmission(t *testing.T) {
+	db := contactTestDB(t)
+	repository, err := NewSQLiteContactRepository(t.Context(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.Create(t.Context(), nil); err == nil {
+		t.Fatal("nil submission succeeded")
+	}
+	var count int
+	if err := db.Get(&count, `SELECT count(*) FROM hyperserver_contact_submission`); err != nil || count != 0 {
+		t.Fatalf("nil submission persisted data: count=%d, error=%v", count, err)
+	}
+}
+
+func TestSQLiteContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T) {
 	db := contactTestDB(t)
 	ctx := context.Background()
 	if err := usersqlite.PrepareDatabase(ctx, db); err != nil {
@@ -163,7 +179,7 @@ func TestContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T) {
 	if _, err := db.Exec(`CREATE INDEX hyperserver_contact_submission ON user(email)`); err != nil {
 		t.Fatal(err)
 	}
-	if repository, err := NewContactRepository(ctx, db); repository != nil || err == nil {
+	if repository, err := NewSQLiteContactRepository(ctx, db); repository != nil || err == nil {
 		t.Fatalf("conflicting schema setup = %v, %v, want no repository and an error", repository, err)
 	}
 
@@ -188,11 +204,11 @@ func TestContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T) {
 	if _, err := db.Exec(`DROP INDEX hyperserver_contact_submission`); err != nil {
 		t.Fatal(err)
 	}
-	repository, err := NewContactRepository(ctx, db)
+	repository, err := NewSQLiteContactRepository(ctx, db)
 	if err != nil {
 		t.Fatal("retry after resolving the schema conflict:", err)
 	}
-	if err := repository.Create(ctx, &ContactSubmission{Email: account.Email, Message: "Retry succeeded"}); err != nil {
+	if err := repository.Create(ctx, &models.ContactSubmission{Email: account.Email, Message: "Retry succeeded"}); err != nil {
 		t.Fatal(err)
 	}
 }

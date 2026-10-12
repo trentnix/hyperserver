@@ -2,6 +2,7 @@ package module_site
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/components/content"
@@ -33,13 +34,24 @@ func (cf *ContactForm) Validate() form.FieldErrors {
 	}
 	if cf.Email == "" {
 		errors["Email"] = []string{form.RequiredMessage}
-	} else if !form.ValidEmail(cf.Email) {
+	} else if !validContactEmail(cf.Email) {
 		errors["Email"] = []string{form.EmailMessage}
 	}
 	if cf.Message == "" {
 		errors["Message"] = []string{form.RequiredMessage}
 	}
 	return errors
+}
+
+func validContactEmail(value string) bool {
+	if !form.ValidEmail(value) {
+		return false
+	}
+
+	// Public contact addresses must have a dotted domain name, not an IP literal.
+	// Include the Unicode separators recognized by IDNA domain validation.
+	domain := value[strings.LastIndexByte(value, '@')+1:]
+	return !strings.HasPrefix(domain, "[") && strings.ContainsAny(domain, ".\u3002\uff0e\uff61")
 }
 
 // Bind populates the contact fields from the request.

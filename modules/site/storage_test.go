@@ -8,8 +8,14 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
+)
+
+var (
+	_ ContactRepository = (*storage.SQLiteContactRepository)(nil)
+	_ ContactRepository = (*storage.FileContactRepository)(nil)
 )
 
 func TestSiteInitializesFileStorageWithoutSQL(t *testing.T) {
@@ -22,7 +28,7 @@ func TestSiteInitializesFileStorageWithoutSQL(t *testing.T) {
 		if got != ctx {
 			t.Fatal("module did not propagate its initialization context")
 		}
-		return models.NewFileContactRepository(got, filepath.Join(t.TempDir(), "contacts"))
+		return storage.NewFileContactRepository(got, filepath.Join(t.TempDir(), "contacts"))
 	}}
 	if err := module.Init(ctx, app); err != nil {
 		t.Fatal(err)

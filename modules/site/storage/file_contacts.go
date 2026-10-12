@@ -1,4 +1,4 @@
-package models
+package storage
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/trentnix/hyperserver/modules/site/models"
 )
 
 // FileContactRepository stores one JSON file per contact submission. It owns no
@@ -81,15 +82,15 @@ func NewFileContactRepository(ctx context.Context, directory string) (*FileConta
 // Publication uses a hard link, so the filesystem must support hard links. The
 // caller's submission is unchanged on failure. Cancellation after publication
 // does not undo the write. This does not guarantee durability across power loss.
-func (repository *FileContactRepository) Create(ctx context.Context, submission *ContactSubmission) error {
+func (repository *FileContactRepository) Create(ctx context.Context, submission *models.ContactSubmission) error {
 	if submission == nil {
 		return fmt.Errorf("a contact submission must be specified")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !IsValidEmail(submission.Email) {
-		return NewErrInvalidEmail(fmt.Errorf("failed to create a new contact_submission record"))
+	if !models.IsValidEmail(submission.Email) {
+		return models.NewErrInvalidEmail(fmt.Errorf("failed to create a new contact_submission record"))
 	}
 
 	created := *submission

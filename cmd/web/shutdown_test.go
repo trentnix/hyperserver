@@ -21,6 +21,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -282,7 +283,7 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	if err := usersqlite.PrepareDatabase(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}
-	repository, err := models.NewContactRepository(context.Background(), db)
+	repository, err := storage.NewSQLiteContactRepository(context.Background(), db)
 	if err != nil {
 		t.Fatal(err)
 	}

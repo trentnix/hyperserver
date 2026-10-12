@@ -7,6 +7,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -39,7 +40,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 				}
 			}
 			var accounts user.AccountRepository
-			var contacts *models.ContactRepository
+			var contacts *storage.SQLiteContactRepository
 			var setupErr error
 			provider := dependencyDescriptor("accounts", &dependencyModule{
 				init: func(ctx context.Context) error {
@@ -77,7 +78,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					}
 					// The consumer can build its own repository on the same borrowed pool.
 					var err error
-					contacts, err = models.NewContactRepository(ctx, db)
+					contacts, err = storage.NewSQLiteContactRepository(ctx, db)
 					return err
 				},
 			})

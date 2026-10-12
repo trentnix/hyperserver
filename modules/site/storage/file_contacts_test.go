@@ -1,4 +1,4 @@
-package models
+package storage
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/trentnix/hyperserver/modules/site/models"
 )
 
 type failingContactFile struct {
@@ -71,7 +73,7 @@ func TestFileContactRepositoryIOFailures(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						var created ContactSubmission
+						var created models.ContactSubmission
 						if err := json.Unmarshal(data, &created); err != nil {
 							t.Fatal(err)
 						}
@@ -85,7 +87,7 @@ func TestFileContactRepositoryIOFailures(t *testing.T) {
 				}
 				return wrapped, nil
 			}
-			submission := ContactSubmission{Id: "original", Name: "Person", Email: "person@example.invalid", Message: "Hello", CreatedAt: time.Unix(1, 0)}
+			submission := models.ContactSubmission{Id: "original", Name: "Person", Email: "person@example.invalid", Message: "Hello", CreatedAt: time.Unix(1, 0)}
 			before := submission
 			if err := repository.Create(context.Background(), &submission); !errors.Is(err, want) {
 				t.Fatalf("Create error = %v, want %v", err, want)
@@ -123,12 +125,12 @@ func TestFileContactRepositoryConcurrentWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	const count = 8
-	submissions := make([]ContactSubmission, count)
+	submissions := make([]models.ContactSubmission, count)
 	errors := make([]error, count)
 	var work sync.WaitGroup
 	for i := range submissions {
 		work.Go(func() {
-			submissions[i] = ContactSubmission{Name: "Person", Email: "person@example.invalid", Message: "Hello <world>"}
+			submissions[i] = models.ContactSubmission{Name: "Person", Email: "person@example.invalid", Message: "Hello <world>"}
 			errors[i] = repository.Create(context.Background(), &submissions[i])
 		})
 	}
@@ -141,7 +143,7 @@ func TestFileContactRepositoryConcurrentWrites(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var stored ContactSubmission
+		var stored models.ContactSubmission
 		if err := json.Unmarshal(data, &stored); err != nil {
 			t.Fatal(err)
 		}
@@ -173,7 +175,7 @@ func TestFileContactRepositoryFailures(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			submission := &ContactSubmission{Email: "person@example.invalid"}
+			submission := &models.ContactSubmission{Email: "person@example.invalid"}
 			switch name {
 			case "nil submission":
 				submission = nil
@@ -186,7 +188,7 @@ func TestFileContactRepositoryFailures(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			var before ContactSubmission
+			var before models.ContactSubmission
 			if submission != nil {
 				before = *submission
 			}

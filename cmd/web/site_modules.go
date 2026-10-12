@@ -6,7 +6,7 @@ import (
 	"github.com/trentnix/hyperserver/auth"
 	email "github.com/trentnix/hyperserver/auth/modules/email"
 
-	"github.com/trentnix/hyperserver/modules/site/models"
+	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 
 	// Diagnostic and sample routes belong to this module, not the framework.
@@ -22,9 +22,9 @@ func siteModules(app *application, directory string) ([]handlers.Descriptor, err
 	db := app.Database
 	newContacts := func(ctx context.Context) (site.ContactRepository, error) {
 		if directory == "" {
-			return models.NewContactRepository(ctx, db)
+			return storage.NewSQLiteContactRepository(ctx, db)
 		}
-		return models.NewFileContactRepository(ctx, directory)
+		return storage.NewFileContactRepository(ctx, directory)
 	}
 	catalog, err := handlers.Replace(catalog, site.Module(newContacts, app.Mail))
 	if err != nil {
