@@ -2,9 +2,7 @@
 // Apply response metadata before writing a response body.
 package htmx
 
-import (
-	"net/http"
-)
+import "net/http"
 
 const (
 	// HeaderBoosted names the request header indicating an hx-boost request.
@@ -43,7 +41,7 @@ const (
 )
 
 type (
-	// Request contains data that HTMX provides during requests
+	// Request contains the HTMX request headers.
 	Request struct {
 		Enabled        bool
 		Boosted        bool
@@ -54,7 +52,7 @@ type (
 		Prompt         string
 	}
 
-	// Response contain data that the server can communicate back to HTMX
+	// Response contains server-selected HTMX response metadata.
 	Response struct {
 		PushURL            string
 		Refresh            bool
@@ -64,7 +62,9 @@ type (
 		Trigger            string
 		TriggerAfterSwap   string
 		TriggerAfterSettle string
-		NoContent          bool
+
+		// NoContent makes Apply commit HTTP 204 after setting the headers.
+		NoContent bool
 	}
 )
 
@@ -73,10 +73,10 @@ func NewResponse() *Response {
 	return &Response{}
 }
 
-// GetRequest extracts HTMX data from the request
+// GetRequest reads HTMX request headers. Boolean headers must equal "true".
 func GetRequest(r *http.Request) Request {
 	return Request{
-		Enabled:        r.Header.Get(HeaderRequest) == "true",
+		Enabled:        IsHtmxRequest(r),
 		Boosted:        r.Header.Get(HeaderBoosted) == "true",
 		Trigger:        r.Header.Get(HeaderTrigger),
 		TriggerName:    r.Header.Get(HeaderTriggerName),
@@ -86,7 +86,9 @@ func GetRequest(r *http.Request) Request {
 	}
 }
 
-// Apply applies data from a Response to a server response
+// Apply sets nonempty metadata headers, preserving unrelated headers and fields
+// left unset. NoContent commits HTTP 204. Otherwise, Apply leaves the status and
+// body unwritten. The caller must decide whether the request supports HTMX.
 func (r Response) Apply(w http.ResponseWriter) {
 	if r.PushURL != "" {
 		w.Header().Set(HeaderPushURL, r.PushURL)

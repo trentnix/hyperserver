@@ -198,6 +198,8 @@ Auth mutation handlers own their complete HTTP response. Account and token opera
 
 The response dispatcher owns HTTP and HTMX decisions. The renderer produces HTML. HTMX response headers are not processed on 3xx responses, so redirect handling must select the appropriate response behavior. [HTMX response documentation](https://htmx.org/docs/#response-headers)
 
+[HTMX helpers](pkg/components/htmx/htmx.go) provide request classification and response metadata for rendering and redirects.
+
 Parse reusable template sets at startup or controlled development reload. Use `html/template` with trusted templates and escaped data. Restrict `template.HTML` to reviewed trust boundaries. [Go template documentation](https://pkg.go.dev/html/template)
 
 ## Storage and serialization
@@ -291,7 +293,7 @@ Exit when two independent servers can run and stop in one process without affect
 ### Phase 3: Rendering and reference workflow
 
 - Form validation uses explicit checks and field errors, with shared password rules and tested email acceptance.
-- Implement response dispatch and reusable template sets. Consolidate duplicate HTMX helpers and keep session mutation outside template execution.
+- Reuse parsed template sets. Keep session mutation outside template execution.
 - Narrow form and content-manager interfaces around callers. Remove redundant error wrappers and pointers to interfaces, and use error-last return values. Keep distinct security operations explicit.
 - Build the representative form workflow with full-page and HTMX requests, inline errors, notifications, redirects, and out-of-band updates.
 - Test escaping and response behavior against the supported HTMX version, including validation-error status handling.

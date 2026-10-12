@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 )
 
 // SafeRedirectURL selects a local destination, then fallback, then "/".
@@ -39,9 +41,9 @@ func SafeRedirectURL(destination, fallback string) string {
 func RedirectToURL(w http.ResponseWriter, r *http.Request, redirectURL string) {
 	redirectURL = SafeRedirectURL(redirectURL, "/")
 	w.Header().Set("Cache-Control", "no-store")
-	AddVary(w.Header(), "HX-Request")
-	if r.Header.Get("HX-Request") == "true" {
-		w.Header().Set("HX-Redirect", redirectURL)
+	AddVary(w.Header(), htmx.HeaderRequest)
+	if htmx.IsHtmxRequest(r) {
+		w.Header().Set(htmx.HeaderRedirect, redirectURL)
 		w.WriteHeader(http.StatusOK)
 	} else {
 		w.Header().Set("Location", redirectURL)
