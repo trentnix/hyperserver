@@ -166,7 +166,7 @@ func (m *Sender) Send(ctx context.Context, email messaging.MailMessage) (err err
 	}
 
 	if ctxLogger := logger.Get(ctx); ctxLogger != nil {
-		(*ctxLogger).Info("Sent email", logger.Field{Key: "to", Value: email.To})
+		ctxLogger.Info("Sent email", logger.Field{Key: "to", Value: email.To})
 	} else {
 		log.Printf("Sent email to=%s", email.To)
 	}

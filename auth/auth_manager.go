@@ -260,7 +260,7 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	(*authService).GetLogin(w, r)
+	authService.GetLogin(w, r)
 }
 
 // Login starts the login process for the given AuthService (specified by authType)
@@ -277,7 +277,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u := (*authService).Login(w, r)
+	u := authService.Login(w, r)
 	if u == nil {
 		return
 	}
@@ -368,7 +368,7 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	(*authService).GetRegister(w, r)
+	authService.GetRegister(w, r)
 }
 
 // Register starts the registration process for the given AuthService (specified by authType)
@@ -390,27 +390,25 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).Register(w, r)
+	authService.Register(w, r)
 }
 
 // ProcessRegistration hashes credentials and inserts a new account.
 // It does not update an existing account or send verification mail. The returned
 // message is suitable for the registration form when an error occurs.
-func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, uname string, pw string, authType string, verificationRequired bool) (error, string) {
+func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, uname string, pw string, authType string, verificationRequired bool) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return NewErrUserRegistration(uname, err), "There was an error creating a user account"
+		return "There was an error creating a user account", NewErrUserRegistration(uname, err)
 	}
 	if accounts == nil {
-		return NewErrUserRegistration(uname, database.NewErrDatabaseUnavailable(nil)), "There was an error creating a user account"
+		return "There was an error creating a user account", NewErrUserRegistration(uname, database.NewErrDatabaseUnavailable(nil))
 	}
 
 	var err error
 	if pw != "" {
 		pw, err = password.HashPassword(pw)
 		if err != nil {
-			// the password could not be hashed
-			registrationErr := NewErrUserRegistration(uname, err)
-			return registrationErr, "There was an error creating a user account"
+			return "There was an error creating a user account", NewErrUserRegistration(uname, err)
 		}
 	}
 
@@ -426,12 +424,12 @@ func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, u
 	if err != nil {
 		registrationErr := NewErrUserRegistration(uname, err)
 		if errors.Is(err, user.ErrEmailAlreadyExists) {
-			return registrationErr, "The specified user is already registered"
+			return "The specified user is already registered", registrationErr
 		}
-		return registrationErr, "There was an error creating a user account"
+		return "There was an error creating a user account", registrationErr
 	}
 
-	return nil, ""
+	return "", nil
 }
 
 // GetResetRequest renders the reset request page to the user using the specified AuthService
@@ -449,7 +447,7 @@ func (a *AuthManager) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).GetResetRequest(w, r)
+	authService.GetResetRequest(w, r)
 }
 
 // ResetRequest delegates a recovery request to the selected authentication provider.
@@ -467,7 +465,7 @@ func (a *AuthManager) ResetRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).ResetRequest(w, r, a.resetTokenExpiration)
+	authService.ResetRequest(w, r, a.resetTokenExpiration)
 }
 
 // GetReset starts the authentication reset process for the specified AuthService implementation.
@@ -512,7 +510,7 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).GetReset(w, r, token)
+	authService.GetReset(w, r, token)
 }
 
 // Reset validates the token before delegating redemption and the response to the provider.
@@ -565,15 +563,15 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).Reset(w, r, u, token, a.resetRequiresNewCredentials)
+	authService.Reset(w, r, u, token, a.resetRequiresNewCredentials)
 }
 
 // getAuthService returns the authService specified by authType (if it is loaded)
-func (a *AuthManager) getAuthService(authType string) *AuthService {
+func (a *AuthManager) getAuthService(authType string) AuthService {
 	authServices := a.Services.Loaded()
 	for _, service := range authServices {
-		if authType == service.AuthType() && service.IsLoaded() {
-			return &service
+		if authType == service.AuthType() {
+			return service
 		}
 	}
 
@@ -595,7 +593,7 @@ func (a *AuthManager) GetChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).GetChange(w, r)
+	authService.GetChange(w, r)
 }
 
 // Change directs an auth modification attempt to the correct AuthService instance
@@ -618,7 +616,7 @@ func (a *AuthManager) Change(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	(*authService).Change(w, r, u)
+	authService.Change(w, r, u)
 }
 
 // SendVerificationRequest processes a user verification request by sending verification
@@ -639,7 +637,7 @@ func (a *AuthManager) SendVerificationRequest(w http.ResponseWriter, r *http.Req
 		authService := a.getAuthService(authUser.RegistrationAuthType)
 		var sender VerificationEmailSender
 		if authService != nil {
-			sender, _ = (*authService).(VerificationEmailSender)
+			sender, _ = authService.(VerificationEmailSender)
 		}
 		if sender == nil {
 			logVerificationFailure(r, "verification email provider is unavailable")

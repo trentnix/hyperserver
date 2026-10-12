@@ -20,6 +20,41 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
+type providerSelectionService struct {
+	AuthService
+	name   string
+	loaded bool
+}
+
+func (s *providerSelectionService) AuthType() string { return s.name }
+func (s *providerSelectionService) IsLoaded() bool   { return s.loaded }
+
+func TestGetAuthService(t *testing.T) {
+	first := &providerSelectionService{name: "first", loaded: true}
+	second := &providerSelectionService{name: "second", loaded: true}
+	unloaded := &providerSelectionService{name: "unloaded"}
+	manager := &AuthManager{Services: &Registry{services: []AuthService{first, unloaded, second}}}
+	for _, tc := range []struct {
+		name string
+		want AuthService
+	}{
+		{"first", first},
+		{"second", second},
+		{"unloaded", nil},
+		{"missing", nil},
+		{"", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := manager.getAuthService(tc.name); got != tc.want {
+				t.Fatalf("provider = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	if got := (&AuthManager{}).getAuthService("first"); got != nil {
+		t.Fatalf("missing registry returned %v", got)
+	}
+}
+
 type verificationTestAuthService struct {
 	AuthService
 	calls int
@@ -184,7 +219,7 @@ func TestVerificationRejectsMissingOrMalformedForm(t *testing.T) {
 }
 
 func TestRegistrationReportsDatabaseFailure(t *testing.T) {
-	err, message := ProcessRegistration(context.Background(), nil, "person@example.invalid", "", "email", true)
+	message, err := ProcessRegistration(context.Background(), nil, "person@example.invalid", "", "email", true)
 	var unavailable *database.ErrDatabaseUnavailable
 	if !errors.As(err, &unavailable) || message != "There was an error creating a user account" {
 		t.Fatalf("database failure = (%v, %q), want database unavailable and creation failure", err, message)
@@ -198,7 +233,7 @@ func TestRegistrationHonorsCancellation(t *testing.T) {
 		t.Fatal("canceled registration reached storage")
 		return nil
 	}}
-	err, message := ProcessRegistration(ctx, accounts, "person@example.invalid", "TestPassword1!", "email", true)
+	message, err := ProcessRegistration(ctx, accounts, "person@example.invalid", "TestPassword1!", "email", true)
 	if !errors.Is(err, context.Canceled) || message != "There was an error creating a user account" {
 		t.Fatalf("canceled registration = (%v, %q)", err, message)
 	}
@@ -209,7 +244,7 @@ func TestRegistrationHashFailureDoesNotCreateAccount(t *testing.T) {
 		t.Fatal("password hashing failure reached storage")
 		return nil
 	}}
-	err, message := ProcessRegistration(context.Background(), accounts, "person@example.invalid", strings.Repeat("a", 73), "email", true)
+	message, err := ProcessRegistration(context.Background(), accounts, "person@example.invalid", strings.Repeat("a", 73), "email", true)
 	if err == nil || message != "There was an error creating a user account" {
 		t.Fatalf("password hashing failure = (%v, %q)", err, message)
 	}
@@ -260,9 +295,15 @@ func TestRegistrationUsesAccountRepository(t *testing.T) {
 				}
 				return tc.failure
 			}}
-			err, message := ProcessRegistration(ctx, accounts, "person@example.invalid", tc.password, "email", true)
+			message, err := ProcessRegistration(ctx, accounts, "person@example.invalid", tc.password, "email", true)
 			if calls != 1 || !errors.Is(err, tc.failure) || message != tc.message {
 				t.Fatalf("registration: calls=%d, error=%v, message=%q", calls, err, message)
+			}
+			if tc.failure != nil {
+				var registrationErr *ErrUserRegistration
+				if !errors.As(err, &registrationErr) {
+					t.Fatalf("registration failure lost its error type: %v", err)
+				}
 			}
 		})
 	}

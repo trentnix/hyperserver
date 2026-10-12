@@ -40,7 +40,7 @@ func TestRateLimiterDiagnostics(t *testing.T) {
 		for _, ip := range []string{"192.0.2.1:1", "192.0.2.1:2", "192.0.2.2:1"} {
 			r := httptest.NewRequest("POST", "/private-token?email=private-account", strings.NewReader("private-password"))
 			r.RemoteAddr = ip
-			r = r.WithContext(logger.Set(r.Context(), &log))
+			r = r.WithContext(logger.Set(r.Context(), log))
 			handler.ServeHTTP(httptest.NewRecorder(), r)
 		}
 		if len(capture.entries) != 2 {

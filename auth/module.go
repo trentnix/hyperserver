@@ -61,12 +61,12 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 			}
 		}
 	}
-	if log := logger.Get(ctx); log != nil && *log != nil {
+	if log := logger.Get(ctx); log != nil {
 		var providers []string
 		for _, provider := range registry.Services() {
 			providers = append(providers, provider.AuthType())
 		}
-		(*log).Info("Authentication providers initialized", logger.Field{Key: "providers", Value: providers})
+		log.Info("Authentication providers initialized", logger.Field{Key: "providers", Value: providers})
 	}
 	return nil
 }

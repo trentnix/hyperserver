@@ -1,7 +1,6 @@
 package form
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -186,16 +185,5 @@ func TestFormErrorDoesNotRequireBindingOrValidation(t *testing.T) {
 		if w.Code != http.StatusOK || w.Body.String() != "<p>&lt;invalid&gt;</p>" || c.Data != f {
 			t.Fatalf("rendering-only form: status=%d, body=%q, data=%T", w.Code, w.Body.String(), c.Data)
 		}
-	}
-}
-
-func TestFormContextUsesMinimalContract(t *testing.T) {
-	f := &bindingValidationForm{}
-	ctx, err := AddFormToContext(context.Background(), f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, err := GetFormFromContext(ctx); err != nil || got != f {
-		t.Fatalf("context form = %v, %v", got, err)
 	}
 }

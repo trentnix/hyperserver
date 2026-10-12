@@ -96,8 +96,8 @@ func (l *Limiter) Handler(next http.Handler) http.Handler {
 			w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
 			w.Header().Set("Cache-Control", "no-store")
 
-			if log := logger.Get(r.Context()); log != nil && *log != nil {
-				(*log).Warn("Request rate limited",
+			if log := logger.Get(r.Context()); log != nil {
+				log.Warn("Request rate limited",
 					logger.Field{Key: "limiter", Value: l.name},
 					logger.Field{Key: "reason", Value: reason},
 					logger.Field{Key: "requests", Value: l.policy.Requests},

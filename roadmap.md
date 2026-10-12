@@ -296,7 +296,7 @@ Exit when two independent servers can run and stop in one process without affect
 
 - Form validation uses explicit checks and field errors, with shared password rules and tested email acceptance.
 - Reuse parsed template sets. Keep session mutation outside template execution.
-- Remove redundant error wrappers and pointers to interfaces, and use error-last return values. Keep distinct security operations explicit.
+- Pass interfaces directly and return errors last. Keep error types that callers need and distinct security operations explicit.
 - Build the representative form workflow with full-page and HTMX requests, inline errors, notifications, redirects, and out-of-band updates.
 - Test escaping and response behavior against the supported HTMX version, including validation-error status handling.
 - Establish rendering and middleware benchmarks. Publish a concise example of progressive enhancement.

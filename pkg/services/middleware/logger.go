@@ -16,7 +16,7 @@ func LoggerMiddleware(l logger.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestId := getRequestIdentifier()
 			ctx := context.WithValue(r.Context(), logger.RequestIDKey, requestId)
-			ctx = logger.Set(ctx, &l)
+			ctx = logger.Set(ctx, l)
 
 			// add request-specific fields if needed
 			reqLogger := l.With(

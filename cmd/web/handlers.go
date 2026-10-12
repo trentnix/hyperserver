@@ -27,7 +27,7 @@ func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.
 		return err
 	}
 	if log != nil {
-		ctx = logger.Set(ctx, &log)
+		ctx = logger.Set(ctx, log)
 	}
 	if err := handlers.Setup(ctx, s, routes, catalog, providers); err != nil {
 		return err

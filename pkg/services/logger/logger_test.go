@@ -24,6 +24,32 @@ func (l *recordingLogger) Error(message string, fields ...Field) {
 	l.fields = append(l.fields, fields...)
 }
 
+func TestContextLogger(t *testing.T) {
+	parent := context.Background()
+	if Get(parent) != nil {
+		t.Fatal("empty context returned a logger")
+	}
+	first := &recordingLogger{}
+	var selected Logger = first
+	ctx := Set(parent, selected)
+	selected = &recordingLogger{}
+	if Get(ctx) != first || Get(parent) != nil {
+		t.Fatal("context did not retain its logger independently of the caller")
+	}
+
+	child := Set(ctx, selected)
+	if Get(child) != selected || Get(ctx) != first {
+		t.Fatal("child context changed its parent's logger")
+	}
+	if Get(Set(child, nil)) != nil || Get(child) != selected {
+		t.Fatal("clearing a logger did not leave the parent unchanged")
+	}
+	wrongType := context.WithValue(parent, LoggerContextKey, "not a logger")
+	if Get(wrongType) != nil {
+		t.Fatal("wrong context value returned a logger")
+	}
+}
+
 func TestLogRequestErrorWithoutLogger(t *testing.T) {
 	err := errors.New("test failure")
 	LogRequestError(nil, err)
@@ -31,7 +57,7 @@ func TestLogRequestErrorWithoutLogger(t *testing.T) {
 	LogRequestError(r, err)
 	LogRequestError(r.WithContext(Set(r.Context(), nil)), err)
 	var missing Logger
-	LogRequestError(r.WithContext(Set(r.Context(), &missing)), err)
+	LogRequestError(r.WithContext(Set(r.Context(), missing)), err)
 }
 
 func TestLogRequestError(t *testing.T) {
@@ -39,7 +65,7 @@ func TestLogRequestError(t *testing.T) {
 	var l Logger = recorded
 	r := httptest.NewRequest("POST", "/test", nil)
 	ctx := context.WithValue(r.Context(), RequestIDKey, "request-123")
-	r = r.WithContext(Set(ctx, &l))
+	r = r.WithContext(Set(ctx, l))
 	LogRequestError(r, nil)
 	if len(recorded.messages) != 0 || len(recorded.fields) != 0 {
 		t.Fatal("nil error produced a log entry")

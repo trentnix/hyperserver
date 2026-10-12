@@ -14,7 +14,7 @@ type (
 )
 
 const (
-	// LoggerContextKey identifies a *Logger stored in a context.
+	// LoggerContextKey identifies a Logger stored in a context.
 	LoggerContextKey = contextKey("logger")
 	// RequestIDKey identifies the tracing ID assigned by request logging middleware.
 	RequestIDKey = contextKey("requestID")
@@ -40,18 +40,18 @@ type Field struct {
 	Value interface{}
 }
 
-// Set adds the specified logger to the specified context.Context and returns it
-func Set(ctx context.Context, l *Logger) context.Context {
+// Set returns a context containing l. A nil logger clears an inherited logger.
+func Set(ctx context.Context, l Logger) context.Context {
+	if l == nil {
+		// WithValue rejects a nil value. Use an empty value to mask a parent logger.
+		return context.WithValue(ctx, LoggerContextKey, struct{}{})
+	}
 	return context.WithValue(ctx, LoggerContextKey, l)
 }
 
-// Get retrieves the logger instance from the specified context
-func Get(ctx context.Context) *Logger {
-	logger, ok := ctx.Value(LoggerContextKey).(*Logger)
-	if !ok || logger == nil {
-		return nil
-	}
-
+// Get returns the context's logger, or nil when none is set.
+func Get(ctx context.Context) Logger {
+	logger, _ := ctx.Value(LoggerContextKey).(Logger)
 	return logger
 }
 
@@ -63,7 +63,7 @@ func LogRequestError(r *http.Request, err error) {
 		return
 	}
 	requestLogger := Get(r.Context())
-	if requestLogger == nil || *requestLogger == nil {
+	if requestLogger == nil {
 		return
 	}
 
@@ -77,10 +77,9 @@ func LogRequestError(r *http.Request, err error) {
 	// join messages with a separator (e.g., " -> ") to show the chain.
 	errMessage := strings.Join(msgs, " -> ")
 
-	ctxLogger := *requestLogger
 	requestID, _ := r.Context().Value(RequestIDKey).(string)
 
-	errorLogger := ctxLogger.With(
+	errorLogger := requestLogger.With(
 		Field{Key: string(RequestIDKey), Value: requestID},
 		Field{Key: "method", Value: r.Method},
 		Field{Key: "path", Value: r.URL.Path},

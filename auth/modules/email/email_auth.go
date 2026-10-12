@@ -385,7 +385,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	registrationErr, userMessage := auth_services.ProcessRegistration(r.Context(), a.accounts, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
+	userMessage, registrationErr := auth_services.ProcessRegistration(r.Context(), a.accounts, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
 	if registrationErr != nil {
 		form.HandleFormError(w, r, register, registerForm, userMessage, registrationErr)
 		return
@@ -577,7 +577,7 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		// Provider errors can contain the token or email body. Log only the failure.
 		if l := logger.Get(r.Context()); l != nil {
-			(*l).Error("password reset instructions could not be sent")
+			l.Error("password reset instructions could not be sent")
 		} else {
 			log.Print("password reset instructions could not be sent")
 		}
