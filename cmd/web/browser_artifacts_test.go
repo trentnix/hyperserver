@@ -48,22 +48,42 @@ func browserProcessSnapshot() string {
 		{"ps", "-eo", "pid,ppid,stat,pcpu,pmem,rss,etimes,comm", "--forest"},
 		{"free", "-m"},
 	} {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		cmd.WaitDelay = 100 * time.Millisecond
-		output, err := cmd.CombinedOutput()
-		cancel()
-		fmt.Fprintf(&report, "%s (error: %v):\n%s\n", strings.Join(args, " "), err, output)
+		report.WriteString(browserCommandSnapshot(args...))
 	}
 	return report.String()
 }
 
-func browserFailureSnapshot(pageURL, profile, logPath, requests string) string {
+func browserCommandSnapshot(args ...string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.WaitDelay = 100 * time.Millisecond
+	output, err := cmd.CombinedOutput()
+	return fmt.Sprintf("%s (error: %v):\n%s\n", strings.Join(args, " "), err, output)
+}
+
+func browserWaitSnapshot(pid int) string {
+	if runtime.GOOS != "linux" {
+		return "Browser thread waits and I/O counters: available only on Linux\n"
+	}
+	// Collect the browser parent's threads, without arguments or environments.
+	// wchan identifies a sleeping thread's kernel wait location when permitted.
+	threads := browserCommandSnapshot("ps", "-L", "-p", fmt.Sprint(pid), "-o", "pid,lwp,stat,wchan:32,comm")
+	path := fmt.Sprintf("/proc/%d/io", pid)
+	counters, err := os.ReadFile(path)
+	// A process can exit during capture, and the runner can restrict /proc access.
+	// Keep those errors in the report without replacing the original test failure.
+	return fmt.Sprintf("Browser thread waits:\n%s\nBrowser process I/O counters, %s (error: %v):\n%s\n", threads, path, err, counters)
+}
+
+func browserFailureSnapshot(pid int, pageURL, profile, logPath, requests string) string {
 	// Capture processes first. The independent probe must not replace the browser's
 	// traffic history or make a failed browser check pass.
+	captured := time.Now()
+	waits := browserWaitSnapshot(pid)
 	processes := browserProcessSnapshot()
-	return fmt.Sprintf("Captured before browser cancellation at %s\n%s\nIndependent server probe: %s\n%s",
-		time.Now().Format(time.RFC3339Nano), processes, probeBrowserServer(pageURL), browserDiagnostics(profile, logPath, requests))
+	return fmt.Sprintf("Captured before browser cancellation at %s\n%s\n%s\nIndependent server probe: %s\n%s",
+		captured.Format(time.RFC3339Nano), waits, processes, probeBrowserServer(pageURL), browserDiagnostics(profile, logPath, requests))
 }
 
 func probeBrowserServer(pageURL string) string {
@@ -250,11 +270,33 @@ func TestBrowserFailureArtifacts(t *testing.T) {
 	if !processRow.MatchString(before) || processRow.MatchString(after) {
 		t.Fatalf("browser must be alive before capture and reaped afterward\nbefore:\n%s\nafter:\n%s", before, after)
 	}
-	for _, want := range []string{"Captured before browser cancellation", "Independent server probe:", "GET /original-browser-request"} {
+	for _, want := range []string{
+		"Captured before browser cancellation",
+		"Independent server probe:",
+		"GET /original-browser-request",
+		"Browser thread waits:",
+		"WCHAN",
+		"/proc/" + pid[1] + "/io (error: <nil>)",
+		"read_bytes:",
+		"write_bytes:",
+	} {
 		if !strings.Contains(before, want) {
 			t.Errorf("failure snapshot missing %q", want)
 		}
 	}
 	read("launch.txt")
 	read("firefox.log")
+}
+
+func TestBrowserWaitSnapshotUnavailableProcess(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("checks Linux process diagnostics")
+	}
+	// This value exceeds Linux's maximum PID, so it cannot select a live process.
+	report := browserWaitSnapshot(2147483647)
+	for _, want := range []string{"Browser thread waits:", "exit status", "/proc/2147483647/io", "no such file or directory"} {
+		if !strings.Contains(report, want) {
+			t.Errorf("snapshot missing %q:\n%s", want, report)
+		}
+	}
 }

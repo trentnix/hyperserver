@@ -54,10 +54,13 @@ func TestPreparedTemplatesConcurrentRequests(t *testing.T) {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			fragment := i%2 == 0
-			if fragment {
+			if i%2 == 0 {
 				r.Header.Set("HX-Request", "true")
 			}
+			if i%4 < 2 {
+				r.Header.Set("HX-History-Restore-Request", "true")
+			}
+			fragment := i%4 == 2
 			c := NewManagedContent(r, cm)
 			c.Templates, c.PartialName, c.Title = prepared, "body", "Title"
 			c.Data = fmt.Sprintf("<request %d>", i)

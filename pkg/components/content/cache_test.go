@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
@@ -46,7 +47,7 @@ func TestRenderCacheHeaders(t *testing.T) {
 				if got := header.Values("Cache-Control"); !reflect.DeepEqual(got, tc.wantCache) {
 					t.Errorf("Cache-Control = %q, want %q", got, tc.wantCache)
 				}
-				if got, want := header.Values("Vary"), []string{"Accept-Encoding", "Origin", "HX-Request"}; !reflect.DeepEqual(got, want) {
+				if got, want := header.Values("Vary"), []string{"Accept-Encoding", "Origin", "HX-Request", "HX-History-Restore-Request"}; !reflect.DeepEqual(got, want) {
 					t.Errorf("Vary = %q, want %q", got, want)
 				}
 			}
@@ -73,21 +74,64 @@ func TestRenderCacheableRepresentations(t *testing.T) {
 	cm := contentservice.NewContentManager()
 	cm.AddPageLayout(renderTemplateFile(t, "page.html", "<html><body>Public page</body></html>"))
 	cm.AddHtmxLayout(renderTemplateFile(t, "fragment.html", "<p>Public fragment</p>"))
-	for _, htmx := range []bool{false, true} {
-		r := httptest.NewRequest(http.MethodGet, "/same-url", nil)
-		want := "<html><body>Public page</body></html>"
-		if htmx {
-			r.Header.Set("HX-Request", "true")
-			want = "<p>Public fragment</p>"
-		}
-		c := NewManagedContent(r, cm)
-		c.Headers = map[string]string{"Cache-Control": "public, max-age=60"}
-		w := httptest.NewRecorder()
-		if err := c.Render(w, r); err != nil {
-			t.Fatal(err)
-		}
-		if w.Body.String() != want || w.Result().Header.Get("Vary") != "HX-Request" || w.Result().Header.Get("Cache-Control") != "public, max-age=60" {
-			t.Fatalf("incorrect cacheable representation: %v %q", w.Result().Header, w.Body.String())
-		}
+	for _, tc := range []struct {
+		name     string
+		request  string
+		restore  string
+		fragment bool
+	}{
+		{"page", "", "", false},
+		{"fragment", "true", "", true},
+		{"history with HX-Request", "true", "true", false},
+		{"history without HX-Request", "", "true", false},
+		{"false history header", "true", "false", true},
+		{"noncanonical history header", "true", "TRUE", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/same-url", nil)
+			r.Header.Set("HX-Request", tc.request)
+			r.Header.Set("HX-History-Restore-Request", tc.restore)
+			want := "<html><body>Public page</body></html>"
+			if tc.fragment {
+				want = "<p>Public fragment</p>"
+			}
+			c := NewManagedContent(r, cm)
+			if c.IsHtmx() != tc.fragment {
+				t.Fatal("incorrect response classification")
+			}
+			c.HTMX.Response = &htmx.Response{PushURL: "/next"}
+			c.Headers = map[string]string{"Cache-Control": "public, max-age=60"}
+			w := httptest.NewRecorder()
+			if err := c.Render(w, r); err != nil {
+				t.Fatal(err)
+			}
+			if w.Body.String() != want || w.Result().Header.Get("Vary") != "HX-Request" || w.Result().Header.Get("Cache-Control") != "public, max-age=60" {
+				t.Fatalf("incorrect cacheable representation: %v %q", w.Result().Header, w.Body.String())
+			}
+			if got, want := w.Result().Header.Values("Vary"), []string{"HX-Request", "HX-History-Restore-Request"}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("Vary = %q, want %q", got, want)
+			}
+			if (w.Header().Get("HX-Push-Url") != "") != tc.fragment {
+				t.Fatal("fragment metadata applied to the wrong representation")
+			}
+		})
+	}
+}
+
+func TestHistoryRestoreIgnoresFragmentDirectives(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/page", nil)
+	r.Header.Set("HX-Request", "true")
+	r.Header.Set("HX-History-Restore-Request", "true")
+	// Render must use the actual request, not the classification at construction.
+	c := NewContent(nil)
+	c.AddContent(renderTemplateFile(t, "page.html", "<html>Restored</html>"))
+	c.HTMX.Response = &htmx.Response{NoContent: true, Trigger: "ignored", Retarget: "#ignored"}
+	c.OutOfBand = []string{"missing-fragment"}
+	w := httptest.NewRecorder()
+	if err := c.Render(w, r); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || w.Body.String() != "<html>Restored</html>" || w.Header().Get("HX-Trigger") != "" || w.Header().Get("HX-Retarget") != "" {
+		t.Fatalf("history response = %d %v %q", w.Code, w.Header(), w.Body.String())
 	}
 }

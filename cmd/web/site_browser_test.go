@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha512"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -23,16 +20,15 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// TestBrowserSiteErrors needs Firefox and network access for the integrity-checked
-// HTMX version in the site layout. CI enables it with HS_TEST_FIREFOX=firefox.
+// TestBrowserSiteErrors uses the site's embedded HTMX asset.
+// CI enables it with HS_TEST_FIREFOX=firefox.
 func TestBrowserSiteErrors(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
 	}
 	runHTTPScenarioWithTimeout(t, 75*time.Second, func(h *httpHarness) {
-		// Render the real layout, changing only HTMX's URL to a local copy. The
-		// browser still checks the layout's integrity attribute when loading it.
+		// Render the real layout and retain the local HTMX URL and integrity check.
 		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.SessionManager)
 		page := content.NewManagedContent(r, h.app.ContentManager)
 		page.PartialName = "test.browser.errors"
@@ -43,15 +39,11 @@ func TestBrowserSiteErrors(t *testing.T) {
 		if err := page.Render(w, r); err != nil {
 			t.Fatal(err)
 		}
-		html, htmx := localBrowserHTMX(t, w.Body.String())
+		html := browserTestPage(w.Body.String())
 
 		h.app.Web.HandleFunc("GET /test/browser", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			io.WriteString(w, html)
-		})
-		h.app.Web.HandleFunc("GET /test/browser/htmx.js", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/javascript")
-			w.Write(htmx)
 		})
 		h.app.Web.HandleFunc("GET /test/browser/run.js", func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, filepath.Join(h.app.Config.App.WorkingDirectory, "modules/site/testdata/error-responses.js"))
@@ -133,17 +125,9 @@ func TestBrowserSiteErrors(t *testing.T) {
 	})
 }
 
-// Keep browser tests on the site's pinned HTMX version and retain its integrity check.
-func localBrowserHTMX(t *testing.T, html string) (string, []byte) {
-	t.Helper()
-	match := regexp.MustCompile(`<script src="(https://unpkg.com/htmx.org@[^"\s]+)"\s+integrity="sha384-([^"]+)"`).FindStringSubmatch(html)
-	if len(match) != 3 {
-		t.Fatal("site layout must pin HTMX with a SHA-384 integrity hash")
-	}
-	script := downloadBrowserHTMX(t, match[1], match[2])
-	html = strings.Replace(html, match[1], "/test/browser/htmx.js", 1)
-	html = strings.Replace(html, "<head>", `<head><script src="/test/diagnostics/errors.js"></script>`, 1)
-	return html, script
+// Install error reporting before application scripts without changing their URLs.
+func browserTestPage(html string) string {
+	return strings.Replace(html, "<head>", `<head><script src="/test/diagnostics/errors.js"></script>`, 1)
 }
 
 func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan string, logs func() string) {
@@ -194,7 +178,7 @@ func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan s
 	t.Log(timing)
 	if err != nil {
 		// Inspect the live processes before cancellation destroys the evidence.
-		diagnostics := browserFailureSnapshot(url, profile, logPath, logs())
+		diagnostics := browserFailureSnapshot(cmd.Process.Pid, url, profile, logPath, logs())
 		writeBrowserArtifact(t, artifacts, "before-stop.txt", diagnostics)
 		t.Fatalf("%v\n%s", err, diagnostics)
 	}
@@ -251,26 +235,4 @@ func browserDiagnostics(profile, logPath, requests string) string {
 	}
 	output, logErr := os.ReadFile(logPath)
 	return fmt.Sprintf("Profile: %s\nProfile entries (read error: %v): %v\nBrowser output (read error: %v):\n%s\nHTTP requests:\n%s", profile, profileErr, names, logErr, output, requests)
-}
-
-func downloadBrowserHTMX(t *testing.T, url, integrity string) []byte {
-	t.Helper()
-	client := &http.Client{Timeout: 10 * time.Second}
-	response, err := client.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("HTMX download: %s", response.Status)
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-	if err != nil {
-		t.Fatal(err)
-	}
-	digest := sha512.Sum384(data)
-	if base64.StdEncoding.EncodeToString(digest[:]) != integrity {
-		t.Fatal("HTMX download does not match the site layout's integrity hash")
-	}
-	return data
 }

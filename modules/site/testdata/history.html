@@ -1,0 +1,9 @@
+{{define "test.browser.history"}}
+<section id="history-page" data-page="{{.Data}}">
+  <h1>Page {{.Data}}</h1>
+  <a id="push-page" href="/test/history/b" hx-get="/test/history/b" hx-target="main" hx-swap="innerHTML settle:0">Push B</a>
+  <a id="replace-page" href="/test/history/c" hx-get="/test/history/c" hx-target="main" hx-swap="innerHTML settle:0">Replace C</a>
+  <a id="protected-page" href="/test/history/d" hx-get="/test/history/d" hx-target="main" hx-swap="innerHTML settle:0">Protected page</a>
+</section>
+<script src="/test/history-run.js" defer></script>
+{{end}}

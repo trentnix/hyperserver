@@ -35,14 +35,16 @@ func SafeRedirectURL(destination, fallback string) string {
 	return "/"
 }
 
-// RedirectToURL sends a 303 Location redirect for ordinary requests or a 200
-// HX-Redirect response for HTMX. Redirects do not replay mutation bodies.
+// RedirectToURL sends a 303 Location redirect for ordinary and history-restoration
+// requests or a 200 HX-Redirect response for other HTMX requests.
+// Redirects do not replay mutation bodies.
 // Invalid destinations fall back to "/". No response body is rendered.
 func RedirectToURL(w http.ResponseWriter, r *http.Request, redirectURL string) {
 	redirectURL = SafeRedirectURL(redirectURL, "/")
 	w.Header().Set("Cache-Control", "no-store")
-	AddVary(w.Header(), htmx.HeaderRequest)
-	if htmx.IsHtmxRequest(r) {
+	AddVary(w.Header(), htmx.HeaderRequest, htmx.HeaderHistoryRestoreRequest)
+	// HTMX's history loader follows HTTP redirects but does not process HX-Redirect.
+	if htmx.IsHtmxRequest(r) && r.Header.Get(htmx.HeaderHistoryRestoreRequest) != "true" {
 		w.Header().Set(htmx.HeaderRedirect, redirectURL)
 		w.WriteHeader(http.StatusOK)
 	} else {

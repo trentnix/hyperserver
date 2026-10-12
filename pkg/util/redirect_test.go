@@ -90,6 +90,28 @@ func TestRedirectPostBecomesGet(t *testing.T) {
 	}
 }
 
+func TestRedirectHistoryRestoration(t *testing.T) {
+	for _, hx := range []string{"", "true"} {
+		for _, restore := range []string{"true", "false", "TRUE"} {
+			r := httptest.NewRequest(http.MethodGet, "/protected", nil)
+			r.Header.Set("HX-Request", hx)
+			r.Header.Set("HX-History-Restore-Request", restore)
+			w := httptest.NewRecorder()
+			RedirectToURL(w, r, "/login")
+			status, header, absent := http.StatusSeeOther, "Location", "HX-Redirect"
+			if hx == "true" && restore != "true" {
+				status, header, absent = http.StatusOK, "HX-Redirect", "Location"
+			}
+			if w.Code != status || w.Header().Get(header) != "/login" || w.Header().Get(absent) != "" || w.Body.Len() != 0 {
+				t.Fatalf("HX-Request=%q restore=%q: %d %v %q", hx, restore, w.Code, w.Header(), w.Body.String())
+			}
+			if got := strings.Join(w.Header().Values("Vary"), ", "); got != "HX-Request, HX-History-Restore-Request" {
+				t.Fatalf("Vary = %q", got)
+			}
+		}
+	}
+}
+
 func FuzzSafeRedirectURL(f *testing.F) {
 	for _, seed := range []string{"/", "/home?x=1#fragment", "//attacker.invalid", "/%2fexample.com", "/%0a", "javascript:alert(1)"} {
 		f.Add(seed, seed)

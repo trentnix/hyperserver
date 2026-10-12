@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/sha512"
+	"encoding/base64"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -31,10 +34,10 @@ func assertBrowserHeaders(t *testing.T, w *httptest.ResponseRecorder) {
 // Changes to the permitted sources or restrictions must receive explicit review.
 func assertReferenceCSP(t *testing.T, policy, page string) {
 	t.Helper()
-	const htmxSource = "https://unpkg.com/htmx.org@2.0.1"
+	const htmxSource = "/js/vendor/htmx/2.0.11/htmx.min.js"
 	want := map[string]string{
 		"default-src":     "'none'",
-		"script-src":      "'self' " + htmxSource,
+		"script-src":      "'self'",
 		"style-src":       "'self' https://fonts.googleapis.com",
 		"font-src":        "https://fonts.gstatic.com",
 		"img-src":         "'self'",
@@ -59,8 +62,38 @@ func assertReferenceCSP(t *testing.T, policy, page string) {
 		t.Errorf("missing CSP directives: %v", want)
 	}
 	if !strings.Contains(page, `<script src="`+htmxSource+`"`) {
-		t.Error("the rendered HTMX script must match the CSP's pinned source")
+		t.Error("the rendered HTMX script must use the pinned local asset")
 	}
+}
+
+func TestHTTPVendoredHTMX(t *testing.T) {
+	runHTTPScenario(t, func(h *httpHarness) {
+		const path = "/js/vendor/htmx/2.0.11/htmx.min.js"
+		const integrity = "sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg"
+		page := h.request(http.MethodGet, "/", nil, false)
+		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `src="`+path+`"`) || !strings.Contains(page.Body.String(), `integrity="`+integrity+`"`) {
+			t.Fatal("page does not pin the local HTMX asset and expected integrity hash")
+		}
+
+		for _, hx := range []bool{false, true} {
+			asset := h.request(http.MethodGet, path, nil, hx)
+			mediaType, _, err := mime.ParseMediaType(asset.Header().Get("Content-Type"))
+			if asset.Code != http.StatusOK || err != nil || mediaType != "text/javascript" && mediaType != "application/javascript" {
+				t.Fatalf("HTMX asset: status=%d, headers=%v", asset.Code, asset.Header())
+			}
+			digest := sha512.Sum384(asset.Body.Bytes())
+			if "sha384-"+base64.StdEncoding.EncodeToString(digest[:]) != integrity {
+				t.Fatal("served HTMX bytes do not match the pinned upstream build")
+			}
+			if asset.Header().Get("Cache-Control") == "no-store" || len(asset.Result().Cookies()) != 0 {
+				t.Fatal("static HTMX asset acquired a page cache policy or session cookie")
+			}
+			head := h.request(http.MethodHead, path, nil, hx)
+			if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("Content-Length") != asset.Header().Get("Content-Length") {
+				t.Fatalf("HTMX HEAD: status=%d, headers=%v", head.Code, head.Header())
+			}
+		}
+	})
 }
 
 func TestHTTPBrowserSecurityHeaders(t *testing.T) {

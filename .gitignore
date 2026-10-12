@@ -16,6 +16,8 @@
 
 # Dependency directories (remove the comment below to include it)
 vendor
+# Browser dependencies are embedded and checked in with the site module.
+!/modules/site/templates/html/js/vendor/
 
 # Go workspace file
 go.work

@@ -50,7 +50,7 @@ func TestBrowserResponseDispatch(t *testing.T) {
 		if err := page.Render(w, r); err != nil {
 			t.Fatal(err)
 		}
-		html, script := localBrowserHTMX(t, w.Body.String())
+		html := browserTestPage(w.Body.String())
 
 		ready := make(chan struct{})
 		result := make(chan string, 1)
@@ -78,10 +78,6 @@ func TestBrowserResponseDispatch(t *testing.T) {
 		h.app.Web.HandleFunc("GET /test/responses", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			io.WriteString(w, html)
-		})
-		h.app.Web.HandleFunc("GET /test/browser/htmx.js", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/javascript")
-			w.Write(script)
 		})
 		h.app.Web.HandleFunc("GET /test/responses/run.js", func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, filepath.Join(h.app.Config.App.WorkingDirectory, "modules/site/testdata/response-dispatch.js"))

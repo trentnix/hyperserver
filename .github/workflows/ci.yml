@@ -69,8 +69,8 @@ jobs:
             readlink -f "$(command -v firefox)"
             firefox --version
           } | tee "$HS_TEST_BROWSER_ARTIFACTS/environment.txt"
-          # Allow download, 30s startup, 15s checks, and cleanup inside the 75s scenario limit.
-          go test -v -count=1 -timeout=5m ./cmd/web -run '^TestBrowser(SiteErrors|NativeCredentialForms|ResponseDispatch|ErrorReporting)$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/tests.log"
+          # Allow 30s startup, 15s checks, and cleanup inside the 75s scenario limit.
+          go test -v -count=1 -timeout=5m ./cmd/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/tests.log"
 
       - name: Repeat standalone browser diagnostics
         if: ${{ !cancelled() && inputs.browser_diagnostics }}

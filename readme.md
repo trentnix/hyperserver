@@ -324,6 +324,8 @@ if err := page.Render(w, r); err != nil {
 
 `TriggerAfterSwap`, `TriggerAfterSettle`, `PushURL`, `ReplaceURL`, and `Refresh` map to their HTMX response headers. These fields are server-selected instructions. Do not copy untrusted request values into them. Ordinary requests ignore `HTMX.Response`.
 
+The reference site embeds and serves [HTMX 2.0.11](modules/site/templates/html/js/vendor/htmx/README.md) locally with an integrity hash and disables local history snapshots. The vendored asset includes its license and update instructions. Back/forward navigation fetches the page again. Requests with `HX-History-Restore-Request: true` render a full page, omit fragment metadata and out-of-band updates, and use ordinary 303 redirects. HTMX follows those redirects while retaining the requested history URL. [Browser tests](cmd/web/history_browser_test.go) cover push, replace, back, forward, and redirects during restoration.
+
 For out-of-band updates, add named templates to the loaded template files and list their names in `page.OutOfBand`. Each template supplies its own `hx-swap-oob` markup:
 
 ```html
@@ -348,7 +350,7 @@ For session-backed notifications, use [flash.GetNotifications](pkg/services/flas
 
 ### Rendered-response caching
 
-`Content.Render` adds `Vary: HX-Request` to pages and fragments without removing existing `Vary` fields. An existing `Vary: *` already covers every request header. Rendered responses default to `Cache-Control: no-store`, including the reference site's personalized navigation and notifications. Static-file handlers are unchanged.
+`Content.Render` adds `HX-Request` and `HX-History-Restore-Request` to `Vary` without removing existing fields. An existing `Vary: *` already covers every request header. Rendered responses default to `Cache-Control: no-store`, including the reference site's personalized navigation and notifications. Static-file handlers are unchanged.
 
 For a public page with no user-specific content, secrets, or session changes, opt into caching before rendering:
 
@@ -406,7 +408,7 @@ Verified proxy information supplies rate-limit client IPs and session-cookie sec
 
 ### Browser request protection
 
-The reference application sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and disables camera, microphone, and geolocation access through `Permissions-Policy`. Its [Content Security Policy](cmd/web/security.go) allows local assets, the pinned HTMX script, and Google Fonts. It blocks inline scripts, `eval`, framing, and cross-origin form submissions. Headers also cover fragments and error responses.
+The reference application sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and disables camera, microphone, and geolocation access through `Permissions-Policy`. Its [Content Security Policy](cmd/web/security.go) allows local scripts and styles, plus Google Fonts. It blocks inline scripts, `eval`, framing, and cross-origin form submissions. Headers also cover fragments and error responses.
 
 The site disables HTMX's [evaluation, fragment scripts, inline indicator styles, and local history cache](https://htmx.org/docs/#config). Put scripts and styles in external files. Console messages render as escaped text and are logged by `site.js`. Other applications must choose a CSP that matches their assets and HTMX features. The optional [SecurityHeaders middleware](pkg/services/middleware/security.go) accepts that policy and must wrap handlers that can reject requests.
 
