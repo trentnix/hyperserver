@@ -1,0 +1,27 @@
+{{define "test.browser.dispatch"}}
+<div id="original-target">Original target</div>
+<div id="untouched">Unrelated content</div>
+<div id="response-editor" data-original="true">Original editor</div>
+<div id="response-notice">Original notice</div>
+<form id="update-form" method="post" action="/test/responses/update" hx-post="/test/responses/update" hx-target="#original-target" hx-swap="innerHTML settle:0">
+  <input name="email" value="person@example.invalid">
+  <input type="hidden" name="status" value="200">
+  <button type="submit">Update</button>
+</form>
+<form id="redirect-form" method="post" action="/test/responses/redirect" hx-post="/test/responses/redirect" hx-target="#original-target">
+  <input type="hidden" name="secret" value="do-not-replay">
+  <button type="submit">Redirect</button>
+</form>
+<script src="/test/responses/run.js" defer></script>
+{{end}}
+
+{{define "test.browser.editor"}}
+<div id="response-editor">
+  <span id="submitted-value">{{.Data.Email}}</span>
+  {{range .Data.GetFieldErrors "Email"}}<p class="field-error">{{.}}</p>{{end}}
+</div>
+{{end}}
+
+{{define "test.browser.notice"}}
+<div id="response-notice" hx-swap-oob="true">{{range .Notifications}}{{.Message}}{{end}}</div>
+{{end}}

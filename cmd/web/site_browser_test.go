@@ -43,14 +43,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 		if err := page.Render(w, r); err != nil {
 			t.Fatal(err)
 		}
-		html := w.Body.String()
-		match := regexp.MustCompile(`<script src="(https://unpkg.com/htmx.org@[^"\s]+)"\s+integrity="sha384-([^"]+)"`).FindStringSubmatch(html)
-		if len(match) != 3 {
-			t.Fatal("site layout must pin HTMX with a SHA-384 integrity hash")
-		}
-		htmx := downloadBrowserHTMX(t, match[1], match[2])
-		html = strings.Replace(html, match[1], "/test/browser/htmx.js", 1)
-		html = strings.Replace(html, "<head>", `<head><script src="/test/diagnostics/errors.js"></script>`, 1)
+		html, htmx := localBrowserHTMX(t, w.Body.String())
 
 		h.app.Web.HandleFunc("GET /test/browser", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -138,6 +131,19 @@ func TestBrowserSiteErrors(t *testing.T) {
 
 		runBrowser(t, server.URL+"/test/browser", ready, result, browserLogs.String)
 	})
+}
+
+// Keep browser tests on the site's pinned HTMX version and retain its integrity check.
+func localBrowserHTMX(t *testing.T, html string) (string, []byte) {
+	t.Helper()
+	match := regexp.MustCompile(`<script src="(https://unpkg.com/htmx.org@[^"\s]+)"\s+integrity="sha384-([^"]+)"`).FindStringSubmatch(html)
+	if len(match) != 3 {
+		t.Fatal("site layout must pin HTMX with a SHA-384 integrity hash")
+	}
+	script := downloadBrowserHTMX(t, match[1], match[2])
+	html = strings.Replace(html, match[1], "/test/browser/htmx.js", 1)
+	html = strings.Replace(html, "<head>", `<head><script src="/test/diagnostics/errors.js"></script>`, 1)
+	return html, script
 }
 
 func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan string, logs func() string) {

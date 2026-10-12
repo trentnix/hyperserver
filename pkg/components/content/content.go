@@ -10,13 +10,11 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
-	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/components/types"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
-	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 type (
@@ -51,6 +49,13 @@ type (
 
 		// ResponseStatusCode stores the HTTP status code that will be returned
 		ResponseStatusCode int
+
+		// RedirectURL selects a local redirect instead of rendering templates.
+		RedirectURL string
+
+		// OutOfBand names templates appended to HTMX responses, in order.
+		// Each template must supply its own hx-swap-oob markup.
+		OutOfBand []string
 
 		HTMX struct {
 			// Request contains the information provided by HTMX about the current request
@@ -173,16 +178,9 @@ func (c *Content) AddLogMessages(messages ...string) {
 	c.LogMessages = append(c.LogMessages, messages...)
 }
 
-// Render parses the selected templates and writes a full page or HTMX fragment.
-// Manager templates precede request-specific templates. Values are escaped by html/template
-// unless marked as trusted content. Template failures leave the status and body unwritten.
-// Content headers are applied only after rendering succeeds. Delivery errors can
-// still follow partial writes. Call before committing the response. For streaming,
-// write directly to the ResponseWriter. HTMX.Response is not applied here.
-// Successful renders merge Vary: HX-Request and default to Cache-Control: no-store.
-// An existing cache policy takes precedence over Content.Headers. Without an
-// existing policy, callers can set Cache-Control in Headers for public or private caching.
-func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
+// render produces escaped HTML without writing an HTTP response or loading notifications.
+// Manager templates precede request-specific templates.
+func (c *Content) render() (*bytes.Buffer, error) {
 	var managerLayouts, managerContents, managerComponents []TemplatePath
 	if c.ContentManager != nil {
 		contentType := content_services.PageType
@@ -196,14 +194,6 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		managerLayouts = c.ContentManager.Layouts[contentType]
 		managerContents = c.ContentManager.Contents[contentType]
 		managerComponents = c.ContentManager.Components[contentType]
-
-		if load := c.ContentManager.LoadNotifications; load != nil {
-			notifications, err := load(w, r)
-			if err != nil {
-				return err
-			}
-			c.Notifications = append(c.Notifications, notifications...)
-		}
 	}
 
 	// merge them into local slices so we don't mutate c.*
@@ -222,7 +212,7 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	templates = append(templates, allContents...)
 	templates = append(templates, allComponents...)
 	if len(templates) == 0 {
-		return NewErrNoTemplates(fmt.Errorf("No templates have been set"))
+		return nil, NewErrNoTemplates(fmt.Errorf("No templates have been set"))
 	}
 
 	rootTemplateName := path.Base(templates[0].Path)
@@ -256,49 +246,33 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 	tmpl = template.New(rootTemplateName).Funcs(funcMap)
 	for _, file := range templates {
 		if file.FS == nil || !fs.ValidPath(file.Path) {
-			return NewErrParsingTemplates(fmt.Errorf("template requires a filesystem and a valid path: %q", file.Path))
+			return nil, NewErrParsingTemplates(fmt.Errorf("template requires a filesystem and a valid path: %q", file.Path))
 		}
 		data, err := fs.ReadFile(file.FS, file.Path)
 		if err != nil {
-			return NewErrParsingTemplates(err)
+			return nil, NewErrParsingTemplates(err)
 		}
 		target := tmpl
 		if name := path.Base(file.Path); name != rootTemplateName {
 			target = tmpl.New(name)
 		}
 		if _, err := target.Parse(string(data)); err != nil {
-			return NewErrParsingTemplates(err)
+			return nil, NewErrParsingTemplates(err)
 		}
 	}
 
 	var body bytes.Buffer
 	err := tmpl.ExecuteTemplate(&body, rootTemplateName, c)
 	if err != nil {
-		return NewErrRenderingTemplates(err)
+		return nil, NewErrRenderingTemplates(err)
 	}
-
-	for k, v := range c.Headers {
-		switch {
-		case strings.EqualFold(k, "Vary"):
-			util.AddVary(w.Header(), v)
-		case strings.EqualFold(k, "Cache-Control"):
-			if w.Header().Get("Cache-Control") == "" {
-				w.Header().Set("Cache-Control", v)
+	if c.IsHtmx() {
+		for _, name := range c.OutOfBand {
+			if err := tmpl.ExecuteTemplate(&body, name, c); err != nil {
+				return nil, NewErrRenderingTemplates(err)
 			}
-		default:
-			w.Header().Set(k, v)
 		}
 	}
-	util.AddVary(w.Header(), htmx.HeaderRequest)
-	if w.Header().Get("Cache-Control") == "" {
-		w.Header().Set("Cache-Control", "no-store")
-	}
-	if c.ResponseStatusCode != 0 && c.ResponseStatusCode != http.StatusOK {
-		w.WriteHeader(c.ResponseStatusCode)
-	}
-	if _, err := body.WriteTo(w); err != nil {
-		return NewErrRenderingTemplates(err)
-	}
 
-	return nil
+	return &body, nil
 }

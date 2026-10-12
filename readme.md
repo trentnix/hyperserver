@@ -301,6 +301,43 @@ The reference application uses [SlogLogger](pkg/services/logger/sloglogger.go) w
 
 Pass a `slog.Handler` to `logger.NewSlogLogger` to choose a writer, text output, levels, source locations, or `ReplaceAttr` redaction. Nil selects the default JSON handler. Application code must not log secrets. The adapter preserves handler redaction and `slog.LogValuer` behavior but does not automatically recognize sensitive fields.
 
+### Response dispatch
+
+`Content` describes a response. `Content.Render(w, r)` selects the page or HTMX templates, loads optional notifications, and renders before writing the status, headers, and body. Existing form-error handling uses the same path. Validation forms use HTTP 200 by default so HTMX displays their errors. Setting `ResponseStatusCode` to 422 requires the application to configure HTMX to swap that response. See [HTMX response handling](https://htmx.org/docs/#response-handling).
+
+Use `pkg/components/htmx` for optional response metadata:
+
+```go
+page := content.NewManagedContent(r, contentManager)
+page.AddContent(templateFiles, "templates/editor.html")
+page.PartialName = "editor"
+page.Data = form
+page.HTMX.Response = &htmx.Response{
+    Trigger:  "saved",
+    Retarget: "#editor",
+    Reswap:   "outerHTML",
+}
+if err := page.Render(w, r); err != nil {
+    // Handle the rendering or delivery error.
+}
+```
+
+`TriggerAfterSwap`, `TriggerAfterSettle`, `PushURL`, `ReplaceURL`, and `Refresh` map to their HTMX response headers. These fields are server-selected instructions. Do not copy untrusted request values into them. Ordinary requests ignore `HTMX.Response`.
+
+For out-of-band updates, add named templates to the loaded template files and list their names in `page.OutOfBand`. Each template supplies its own `hx-swap-oob` markup:
+
+```html
+{{define "notice"}}<div id="notice" hx-swap-oob="true">{{range .Notifications}}{{.Message}}{{end}}</div>{{end}}
+```
+
+`page.OutOfBand = []string{"notice"}` appends that template only for HTMX requests. The main view and extra templates share the same data and notifications. All templates must render successfully before any body is sent.
+
+Set `page.RedirectURL = "/saved"` for an ordinary 303 redirect or an HTMX 200 with `HX-Redirect`. Redirects take precedence over other response fields and skip templates and notification retrieval. Store any notification for the destination explicitly. `util.RedirectToURL` uses the same redirect behavior without constructing content.
+
+For an HTMX response that must not swap content, set `page.HTMX.Response = &htmx.Response{NoContent: true, Trigger: "saved"}`. It sends 204 with the event header and skips templates and notification retrieval. Ordinary requests still render their page. Setting `ResponseStatusCode` to 204 skips the body for both request types. Use `RedirectURL` for redirects, not a 3xx `ResponseStatusCode`.
+
+Notification loading can change cookies before rendering. A template failure leaves response content unwritten, but does not undo notification retrieval or application changes. A delivery error can occur after part of the body was sent. Direct `http.Handler` and `http.ResponseWriter` use remains available for streaming, downloads, and other specialized responses.
+
 ### Notifications
 
 Message values in `pkg/components/messages` need no session service. Applications can supply `Content.Notifications` directly or set `ContentManagerService.LoadNotifications` before serving requests. A nil loader skips retrieval. Loader errors stop rendering.
@@ -545,7 +582,7 @@ go test -race ./...
 
 The [CI workflow](.github/workflows/ci.yml) runs these checks on pushes and pull requests. See [AGENTS.md](AGENTS.md) for working agreements and regression-test guidance.
 
-CI also tests error responses in headless Firefox. Run `HS_TEST_FIREFOX=firefox go test -count=1 ./cmd/web -run '^TestBrowserSiteErrors$'` locally with Firefox installed. The test downloads the HTMX version pinned in the site layout and checks its integrity hash. Ordinary Go test runs skip this browser test.
+CI also tests error responses, native forms, HTMX redirects, retargeting, reswapping, and out-of-band notifications in headless Firefox. Run `HS_TEST_FIREFOX=firefox go test -count=1 -timeout=5m ./cmd/web -run '^TestBrowser(SiteErrors|NativeCredentialForms|ResponseDispatch|ErrorReporting)$'` locally. HTMX tests download the version pinned in the site layout and check its integrity hash. Ordinary Go test runs skip browser tests.
 
 CI saves browser diagnostics for seven days, including readiness timing, [Firefox process-launch logs](https://firefox-source-docs.mozilla.org/xpcom/logging.html), and available crash reports. On failure, it captures live process state and probes the test server before stopping Firefox. Whole browser profiles are not uploaded. Reports can contain synthetic test data. Set `HS_TEST_BROWSER_ARTIFACTS` to a directory to retain diagnostics locally.
 

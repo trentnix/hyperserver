@@ -32,6 +32,10 @@ const (
 	HeaderReplaceURL = "HX-Replace-Url"
 	// HeaderRefresh names the response header that requests a full-page refresh.
 	HeaderRefresh = "HX-Refresh"
+	// HeaderRetarget names the response header selecting a different swap target.
+	HeaderRetarget = "HX-Retarget"
+	// HeaderReswap names the response header overriding the swap method.
+	HeaderReswap = "HX-Reswap"
 	// HeaderTriggerAfterSettle names the response header for events after HTMX settles.
 	HeaderTriggerAfterSettle = "HX-Trigger-After-Settle"
 	// HeaderTriggerAfterSwap names the response header for events after an HTMX swap.
@@ -55,6 +59,8 @@ type (
 		PushURL            string
 		Refresh            bool
 		ReplaceURL         string
+		Retarget           string
+		Reswap             string
 		Trigger            string
 		TriggerAfterSwap   string
 		TriggerAfterSettle string
@@ -99,6 +105,12 @@ func (r Response) Apply(w http.ResponseWriter) {
 	}
 	if r.ReplaceURL != "" {
 		w.Header().Set(HeaderReplaceURL, r.ReplaceURL)
+	}
+	if r.Retarget != "" {
+		w.Header().Set(HeaderRetarget, r.Retarget)
+	}
+	if r.Reswap != "" {
+		w.Header().Set(HeaderReswap, r.Reswap)
 	}
 	if r.NoContent {
 		w.WriteHeader(http.StatusNoContent)

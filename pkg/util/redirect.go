@@ -39,6 +39,7 @@ func SafeRedirectURL(destination, fallback string) string {
 func RedirectToURL(w http.ResponseWriter, r *http.Request, redirectURL string) {
 	redirectURL = SafeRedirectURL(redirectURL, "/")
 	w.Header().Set("Cache-Control", "no-store")
+	AddVary(w.Header(), "HX-Request")
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Redirect", redirectURL)
 		w.WriteHeader(http.StatusOK)
