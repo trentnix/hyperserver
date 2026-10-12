@@ -17,6 +17,21 @@ func TestModuleRequiresRendering(t *testing.T) {
 	}
 }
 
+func TestInitializationRejectsInvalidTemplates(t *testing.T) {
+	for _, kind := range []string{contentservice.PageType, contentservice.HtmxType} {
+		t.Run(kind, func(t *testing.T) {
+			cm := contentservice.NewContentManager()
+			if err := ConfigureRendering(cm); err != nil {
+				t.Fatal(err)
+			}
+			cm.RegisterLayouts(kind, fstest.MapFS{"broken.html": {Data: []byte("{{if}}")}}, "broken.html")
+			if err := Module().New().Init(t.Context(), &server.ApplicationServer{ContentManager: cm}); err == nil {
+				t.Fatal("initialization accepted invalid templates")
+			}
+		})
+	}
+}
+
 func TestInitializationPreservesApplicationLayouts(t *testing.T) {
 	cm := contentservice.NewContentManager()
 	if err := ConfigureRendering(cm); err != nil {

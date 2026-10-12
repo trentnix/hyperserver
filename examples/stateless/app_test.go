@@ -112,7 +112,7 @@ func TestApplicationStartupCancellation(t *testing.T) {
 	}
 }
 
-func TestApplicationRenderFailure(t *testing.T) {
+func TestApplicationUsesPreparedTemplates(t *testing.T) {
 	app, err := newApplication(context.Background(), "Hello")
 	if err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestApplicationRenderFailure(t *testing.T) {
 	}, "broken.html")
 	w := httptest.NewRecorder()
 	app.Web.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
-	if w.Code != http.StatusInternalServerError || w.Body.String() != "Unable to display greeting\n" {
-		t.Fatalf("render failure leaked output: status=%d body=%q", w.Code, w.Body.String())
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Hello, world!") || strings.Contains(w.Body.String(), "private-template-marker") {
+		t.Fatalf("prepared templates changed after startup: status=%d body=%q", w.Code, w.Body.String())
 	}
 }

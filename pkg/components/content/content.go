@@ -1,15 +1,13 @@
 // Package content combines page data and templates into full-page or HTMX responses.
-// Content can render its own templates or use a shared content manager. Templates
-// are currently parsed on each render. Template output is buffered before delivery.
+// Content can use templates prepared at startup or parse explicitly supplied files.
+// Template output is buffered before delivery.
 package content
 
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
-	"path"
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
@@ -31,6 +29,10 @@ type (
 
 		// PartialName is the named template fragment to render from the layout.
 		PartialName string
+
+		// Templates holds reusable page and fragment templates prepared at startup.
+		// When set, request-specific Layouts, Contents, and Components must be empty.
+		Templates *Templates
 
 		// URL of the displayed content - optional
 		URL string
@@ -178,9 +180,8 @@ func (c *Content) AddLogMessages(messages ...string) {
 	c.LogMessages = append(c.LogMessages, messages...)
 }
 
-// render produces escaped HTML without writing an HTTP response or loading notifications.
-// Manager templates precede request-specific templates.
-func (c *Content) render() (*bytes.Buffer, error) {
+// templatePaths combines manager and request templates in rendering order.
+func (c *Content) templatePaths() []TemplatePath {
 	var managerLayouts, managerContents, managerComponents []TemplatePath
 	if c.ContentManager != nil {
 		contentType := content_services.PageType
@@ -211,64 +212,39 @@ func (c *Content) render() (*bytes.Buffer, error) {
 	templates = append(templates, allLayouts...)
 	templates = append(templates, allContents...)
 	templates = append(templates, allComponents...)
-	if len(templates) == 0 {
-		return nil, NewErrNoTemplates(fmt.Errorf("No templates have been set"))
-	}
+	return templates
+}
 
-	rootTemplateName := path.Base(templates[0].Path)
-
-	var tmpl *template.Template
-	funcMap := template.FuncMap{
-		"renderPartial": func(name string, data any) (template.HTML, error) {
-			if name == "" {
-				return "", fmt.Errorf("partial template name was not specified")
-			}
-
-			if tmpl == nil {
-				return "", fmt.Errorf("template parser was not initialized")
-			}
-
-			if tmpl.Lookup(name) == nil {
-				return "", fmt.Errorf("partial template not found: %s", name)
-			}
-
-			var out bytes.Buffer
-			err := tmpl.ExecuteTemplate(&out, name, data)
-			if err != nil {
-				return "", err
-			}
-
-			return template.HTML(out.String()), nil
-		},
-	}
-
-	// parse the templates in the order specified
-	tmpl = template.New(rootTemplateName).Funcs(funcMap)
-	for _, file := range templates {
-		if file.FS == nil || !fs.ValidPath(file.Path) {
-			return nil, NewErrParsingTemplates(fmt.Errorf("template requires a filesystem and a valid path: %q", file.Path))
+// render produces escaped HTML without writing an HTTP response or loading notifications.
+func (c *Content) render() (*bytes.Buffer, error) {
+	var parsed *parsedTemplates
+	if c.Templates != nil {
+		if len(c.Layouts)+len(c.Contents)+len(c.Components) != 0 {
+			return nil, NewErrRenderingTemplates(fmt.Errorf("prepared templates cannot be combined with request template files"))
 		}
-		data, err := fs.ReadFile(file.FS, file.Path)
+		parsed = c.Templates.page
+		if c.IsHtmx() {
+			parsed = c.Templates.fragment
+		}
+		if parsed == nil {
+			return nil, NewErrRenderingTemplates(fmt.Errorf("templates have not been prepared"))
+		}
+	} else {
+		var err error
+		parsed, err = parseTemplates(c.templatePaths())
 		if err != nil {
-			return nil, NewErrParsingTemplates(err)
-		}
-		target := tmpl
-		if name := path.Base(file.Path); name != rootTemplateName {
-			target = tmpl.New(name)
-		}
-		if _, err := target.Parse(string(data)); err != nil {
-			return nil, NewErrParsingTemplates(err)
+			return nil, err
 		}
 	}
 
 	var body bytes.Buffer
-	err := tmpl.ExecuteTemplate(&body, rootTemplateName, c)
+	err := parsed.template.ExecuteTemplate(&body, parsed.root, c)
 	if err != nil {
 		return nil, NewErrRenderingTemplates(err)
 	}
 	if c.IsHtmx() {
 		for _, name := range c.OutOfBand {
-			if err := tmpl.ExecuteTemplate(&body, name, c); err != nil {
+			if err := parsed.template.ExecuteTemplate(&body, name, c); err != nil {
 				return nil, NewErrRenderingTemplates(err)
 			}
 		}

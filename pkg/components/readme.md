@@ -44,7 +44,46 @@ homepage.AddContents(templateFiles, "templates/home-content.html", "templates/ad
 homepage.AddComponents(templateFiles, "templates/footer.html", "templates/admin-components.html")
 ```
 
-*Note*: When serving an HTMX request, layout templates are ignored during rendering.
+The content manager selects page or HTMX layouts according to the request. Layouts added directly to `Content` apply to either response type.
+
+### Reusable templates
+
+Prepare reusable page and fragment templates during module initialization, after the application configures its content manager:
+
+```go
+templates, err := content.PrepareTemplates(cm,
+    content.TemplatePath{FS: templateFiles, Path: "templates/home-content.html"})
+if err != nil {
+    return err
+}
+```
+
+Store `templates` on the module. Each handler creates its own content and supplies request data:
+
+```go
+page := content.NewManagedContent(r, cm)
+page.Templates = templates
+page.PartialName = "home"
+page.Data = data
+err := page.Render(w, r)
+```
+
+Prepared sets include the manager's layouts, content, and components at preparation time. They share parsed templates, not request data or rendered HTML. Do not combine `Templates` with request-specific `AddLayout`, `AddContent`, or `AddComponent` calls. Without `Templates`, those calls still parse files on each render. To apply template changes, prepare new sets during server restart. No automatic file watcher or request-time reload is provided.
+
+Parsing errors stop initialization when the module returns the preparation error. Data-dependent execution errors still occur during rendering. Output remains buffered until every selected template, including out-of-band fragments, succeeds.
+
+#### Rendering benchmark
+
+Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem -count=3`. The benchmark renders an in-memory layout, a named partial, and escaped input into a buffer. It excludes HTTP delivery, notification storage, and preparation time.
+
+Measured on Linux/amd64, Go 1.27.2, AMD Ryzen 9 9950X3D, with 32 logical CPUs available. Values below are medians of three runs on October 12, 2026. These are rendering microbenchmarks, not application throughput estimates.
+
+| Response | Before: parse each render | Prepared | Before allocations | Prepared allocations |
+| --- | ---: | ---: | ---: | ---: |
+| Page | 13,180 ns/op | 1,808 ns/op | 19,354 B / 194 allocs | 1,121 B / 31 allocs |
+| Fragment | 11,640 ns/op | 1,294 ns/op | 18,160 B / 166 allocs | 865 B / 24 allocs |
+
+The retained per-render path measured 13,042 ns/op for pages and 11,505 ns/op for fragments after extraction of the shared parser. Use the benchmark's `per-render` and `prepared` subtests to compare both paths on the same machine.
 
 ### Content.Data
 

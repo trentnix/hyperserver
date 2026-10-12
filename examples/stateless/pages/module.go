@@ -29,6 +29,7 @@ func Module() handlers.Descriptor {
 
 type pages struct {
 	contentManager *contentservice.ContentManagerService
+	templates      *content.Templates
 }
 
 func (p *pages) Init(_ context.Context, app *server.ApplicationServer) error {
@@ -36,6 +37,12 @@ func (p *pages) Init(_ context.Context, app *server.ApplicationServer) error {
 		return fmt.Errorf("hello requires a content manager")
 	}
 	p.contentManager = app.ContentManager
+	templates, err := content.PrepareTemplates(p.contentManager,
+		content.TemplatePath{FS: helloModuleTemplatesFS, Path: "templates/greeting.html"})
+	if err != nil {
+		return fmt.Errorf("prepare greeting templates: %w", err)
+	}
+	p.templates = templates
 	return nil
 }
 
@@ -60,7 +67,7 @@ func (p *pages) greet(w http.ResponseWriter, r *http.Request) {
 	}
 	page := content.NewManagedContent(r, p.contentManager)
 	page.Data = name
-	page.AddContent(helloModuleTemplatesFS, "templates/greeting.html")
+	page.Templates = p.templates
 	if err := page.Render(w, r); err != nil {
 		p.contentManager.HandleError(w, r, "Unable to display greeting", err, http.StatusInternalServerError)
 	}

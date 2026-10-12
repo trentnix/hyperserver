@@ -295,7 +295,7 @@ Exit when two independent servers can run and stop in one process without affect
 ### Phase 3: Rendering and reference workflow
 
 - Form validation uses explicit checks and field errors, with shared password rules and tested email acceptance.
-- Reuse parsed template sets. Keep session mutation outside template execution.
+- The stateless example prepares reusable page and fragment templates at startup. Convert the reference site's shared responses, pages, and authentication handlers next. Keep session mutation outside template execution. See the [rendering benchmark](pkg/components/readme.md#rendering-benchmark) for the measured parsing cost.
 - Pass interfaces directly and return errors last. Keep error types that callers need and distinct security operations explicit.
 - Build the representative form workflow with full-page and HTMX requests, inline errors, notifications, redirects, and out-of-band updates.
 - Test escaping and response behavior against the supported HTMX version, including validation-error status handling.
