@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -40,6 +41,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 				}
 			}
 			var accounts user.AccountRepository
+			var consumerPool *sql.DB
 			var contacts *storage.SQLiteContactRepository
 			var setupErr error
 			provider := dependencyDescriptor("accounts", &dependencyModule{
@@ -55,9 +57,11 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					accounts = repository
 					return nil
 				},
-				provide: func() map[string]any { return map[string]any{"accounts": accounts} },
+				provide: func() map[string]any {
+					return map[string]any{"accounts": accounts, "sqlite-pool": db}
+				},
 			})
-			provider.Provides = []string{"accounts"}
+			provider.Provides = []string{"accounts", "sqlite-pool"}
 			consumer := dependencyDescriptor("contacts", &dependencyModule{
 				bind: func(d handlers.Dependencies) error {
 					if failed {
@@ -70,6 +74,13 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					if bound != accounts {
 						t.Error("consumer received another account repository")
 					}
+					consumerPool, err = handlers.GetDependency[*sql.DB](d, "sqlite-pool")
+					if err != nil {
+						return err
+					}
+					if consumerPool != db {
+						t.Error("consumer received another SQL pool")
+					}
 					return nil
 				},
 				init: func(ctx context.Context) error {
@@ -78,11 +89,14 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					}
 					// The consumer can build its own repository on the same borrowed pool.
 					var err error
-					contacts, err = storage.NewSQLiteContactRepository(ctx, db)
+					contacts, err = storage.NewSQLiteContactRepository(ctx, consumerPool)
 					return err
 				},
 			})
-			consumer.Requires = []handlers.Requirement{{Capability: "accounts"}}
+			consumer.Requires = []handlers.Requirement{
+				{Capability: "accounts"},
+				{Capability: "sqlite-pool"},
+			}
 			instances, err := handlers.Initialize(t.Context(), app, []handlers.Descriptor{consumer, provider}, nil)
 			if failed {
 				if err == nil || setupErr == nil || !errors.Is(err, setupErr) || len(instances) != 0 || contacts != nil {
@@ -100,15 +114,27 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 				if err := accounts.Create(t.Context(), account); err != nil {
 					t.Fatal(err)
 				}
-				if err := contacts.Create(t.Context(), &models.ContactSubmission{Email: account.Email}); err != nil {
+				if err := contacts.Create(t.Context(), &models.ContactSubmission{Email: account.Email, Message: "Shared storage"}); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := accounts.GetByID(t.Context(), account.ID); err != nil {
 					t.Fatal("consumer schema setup affected accounts:", err)
 				}
+
+				// Application-specific queries can use the native pool alongside repositories.
+				var email, message string
+				err = consumerPool.QueryRowContext(t.Context(), `SELECT u.email, c.message
+					FROM user u JOIN hyperserver_contact_submission c ON c.email = u.email
+					WHERE u.id = ?`, account.ID).Scan(&email, &message)
+				if err != nil || email != account.Email || message != "Shared storage" {
+					t.Fatalf("native query: email=%q message=%q error=%v", email, message, err)
+				}
+				if err := handlers.Close(t.Context(), instances); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := db.PingContext(t.Context()); err != nil {
-				t.Fatal("module initialization closed the borrowed pool:", err)
+				t.Fatal("module lifecycle closed the borrowed pool:", err)
 			}
 			if err := app.Shutdown(); err != nil {
 				t.Fatal(err)

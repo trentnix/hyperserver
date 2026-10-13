@@ -266,6 +266,25 @@ if err := accounts.Initialize(ctx); err != nil {
 
 Pass `accounts` to the factories shown in [Module registration](#module-registration). If a repository owns resources, register its cleanup with `app.OnShutdown` before initializing its consumers. Borrowed pools keep their existing owner. Other providers implement the same account contract without changing the core server.
 
+#### Direct backend access
+
+Keep the native client in application setup and pass it to modules that need it. Repositories do not take that access away. For example, the same `pool` used above can serve a reporting query:
+
+```go
+var accountCount int
+if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM user").Scan(&accountCount); err != nil {
+    return err
+}
+```
+
+Use a typed constructor parameter such as `*sql.DB` for application-supplied clients. If another module supplies the client, publish it as a capability, declare the requirement, and retrieve it with `handlers.GetDependency[*sql.DB](d, "sqlite-pool")`. The [shared-pool test](pkg/handlers/storage_initialization_test.go) covers native queries alongside account and contact repositories. Other backends can use their own client types without adding a framework interface.
+
+Application setup owns the clients it supplies and closes them after modules stop. Modules must not close supplied clients. A module that creates its own client owns its cleanup. Modules must still close query results and any dedicated `*sql.Conn` they acquire. Closing a dedicated connection returns it to the pool without closing the pool.
+
+Direct access couples that code to the backend. Direct writes must preserve the affected service's rules, including validation, token invalidation, and session revocation. Sharing a pool does not make separate operations one transaction.
+
+#### Provider selection
+
 The reference application's setup also supports named factories. In the web command, register replacements before initialization:
 
 ```go
