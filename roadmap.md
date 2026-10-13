@@ -307,7 +307,7 @@ Exit when the workflow uses shared response handling, passes HTTP tests, and has
 
 - Extract repositories, required storage capabilities, and serializers from actual consumers.
 - Authentication providers expose only their supported HTTP workflows. The email provider keeps account operations separate from HTTP responses and initialization, within the same package.
-- Carry request cancellation through account lookup and storage calls instead of replacing it with background contexts.
+- Account lookup and storage calls carry the request context. [HTTP lookup tests](cmd/web/account_cancellation_test.go) and [recovery tests](cmd/web/recovery_timing_test.go) cover cancellation while storage or delivery is waiting.
 - Evaluate replacing `sqlx` with `database/sql` inside the extracted repositories.
 - Implement in-memory and SQLite adapters, then validate PostgreSQL and one suitable non-relational adapter.
 - Test transaction scope, uniqueness, concurrency, format migration, and recoverable delivery where required.
