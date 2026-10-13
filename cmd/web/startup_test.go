@@ -72,7 +72,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		s.Config.Auth.AccountStorage.Provider = "custom"
 		accounts := reference.NewAccountStorage(s.Config)
 		if err := accounts.RegisterProvider("custom", reference.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
-			repository := usersqlite.NewAccountRepository(s.Database)
+			repository := usersqlite.NewAccountRepository(s.Database.DB)
 			if err := repository.Initialize(ctx); err != nil {
 				return nil, nil, err
 			}

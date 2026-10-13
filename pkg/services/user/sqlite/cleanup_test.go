@@ -87,7 +87,7 @@ func TestTokenCleanupBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	var indexes int
-	if err := db.Get(&indexes, `SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'usertoken_expiration'`); err != nil || indexes != 1 {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'usertoken_expiration'`).Scan(&indexes); err != nil || indexes != 1 {
 		t.Fatalf("expiration index missing: %d, %v", indexes, err)
 	}
 
@@ -102,7 +102,7 @@ func TestTokenCleanupBatches(t *testing.T) {
 		t.Fatalf("cleanup changed live token: %+v, %v", stored, err)
 	}
 	var count int
-	if err := db.Get(&count, `SELECT count(*) FROM user WHERE id = ?`, u.ID); err != nil || count != 1 {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM user WHERE id = ?`, u.ID).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("cleanup removed account: %d, %v", count, err)
 	}
 }
@@ -149,7 +149,7 @@ func TestTokenCleanupFailures(t *testing.T) {
 			}
 			if failure != "missing table" && failure != "closed database" {
 				var remaining int
-				if err := db.Get(&remaining, `SELECT count(*) FROM usertoken`); err != nil || remaining != 1 {
+				if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM usertoken`).Scan(&remaining); err != nil || remaining != 1 {
 					t.Fatalf("failed cleanup changed storage: %d, %v", remaining, err)
 				}
 			}
@@ -199,7 +199,7 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 				t.Fatalf("concurrent cleanup = %d, %v", count, cleanupErr)
 			}
 			var remaining int
-			if err := db.Get(&remaining, `SELECT count(*) FROM usertoken`); err != nil || remaining != 0 {
+			if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM usertoken`).Scan(&remaining); err != nil || remaining != 0 {
 				t.Fatalf("tokens remained: %d, %v", remaining, err)
 			}
 			stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)

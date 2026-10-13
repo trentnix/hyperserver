@@ -227,7 +227,7 @@ func TestSQLiteAccountRepositoryInsertTokenFailure(t *testing.T) {
 				t.Fatal("failed token insertion returned success")
 			}
 			var count int
-			if err := db.Get(&count, `SELECT count(*) FROM usertoken`); err != nil || count != 1 {
+			if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM usertoken`).Scan(&count); err != nil || count != 1 {
 				t.Fatalf("failed insertion changed stored tokens: count=%d, error=%v", count, err)
 			}
 			stored, err := NewAccountRepository(db).GetToken(t.Context(), original.TokenHash, accounts.VerificationTokenPurpose)
@@ -267,7 +267,7 @@ func TestSQLiteAccountRepositoryInsertTokenCancellationWhileWaiting(t *testing.T
 			t.Fatal(err)
 		}
 		var count int
-		if err := db.Get(&count, `SELECT count(*) FROM usertoken`); err != nil || count != 1 {
+		if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM usertoken`).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("canceled insertion changed stored tokens: count=%d, error=%v", count, err)
 		}
 	})
@@ -301,7 +301,7 @@ func TestSQLiteAccountRepositoryConcurrentTokenInsertion(t *testing.T) {
 		t.Fatalf("concurrent insertion lost token metadata: %v", err)
 	}
 	var count int
-	if err := db.Get(&count, `SELECT count(*) FROM usertoken`); err != nil || count != 2 {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM usertoken`).Scan(&count); err != nil || count != 2 {
 		t.Fatalf("concurrent insertion changed other tokens: count=%d, error=%v", count, err)
 	}
 }
@@ -457,7 +457,7 @@ func TestTokenRejectsUnsupportedPurpose(t *testing.T) {
 				t.Fatalf("unsupported purpose error = %v, want invalid token purpose", err)
 			}
 			var count int
-			if err := db.Get(&count, `SELECT COUNT(*) FROM usertoken`); err != nil || count != 0 {
+			if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM usertoken`).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("unsupported purpose inserted a token: count=%d, error=%v", count, err)
 			}
 		})

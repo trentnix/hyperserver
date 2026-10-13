@@ -2,16 +2,16 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jmoiron/sqlx"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-func verificationFixture(t *testing.T) (*sqlx.DB, *accounts.User, *accounts.AuthVerificationToken, []byte) {
+func verificationFixture(t *testing.T) (*sql.DB, *accounts.User, *accounts.AuthVerificationToken, []byte) {
 	t.Helper()
 	db := userTestDB(t)
 	u := &accounts.User{Email: "person@example.invalid", Password: "original hash", VerificationRequired: true, RegistrationAuthType: "email"}
@@ -183,7 +183,7 @@ func TestVerifyConcurrentRedemption(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	observed, started := observeTokenDeletes(t, db)
-	lock, err := db.BeginTxx(ctx, nil)
+	lock, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestVerifyCancellationAndExpiryDuringContention(t *testing.T) {
 				}
 			}
 			observed, started := observeTokenDeletes(t, db)
-			lock, err := db.BeginTxx(ctx, nil)
+			lock, err := db.BeginTx(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

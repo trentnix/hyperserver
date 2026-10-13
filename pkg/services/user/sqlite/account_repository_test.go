@@ -88,7 +88,7 @@ func TestSQLiteAccountRepository(t *testing.T) {
 		t.Run(by, func(t *testing.T) {
 			db := userTestDB(t)
 			reader := NewAccountRepository(db)
-			account := &accounts.User{Email: "reader@example.invalid", Password: "hash", Verified: true, VerificationRequired: true, RegistrationAuthType: "email"}
+			account := &accounts.User{Email: "reader@example.invalid", Password: "hash", Verified: false, VerificationRequired: true, RegistrationAuthType: "email"}
 			if err := reader.Create(context.Background(), account); err != nil {
 				t.Fatal(err)
 			}
@@ -100,7 +100,7 @@ func TestSQLiteAccountRepository(t *testing.T) {
 				lookup, key = reader.GetByEmail, account.Email
 			}
 			stored, err := lookup(context.Background(), key)
-			if err != nil || stored.ID != account.ID || stored.Email != account.Email || stored.Password != account.Password || !stored.Verified || !stored.VerificationRequired || stored.RegistrationAuthType != "email" || stored.SessionVersion != 1 || stored.CreatedAt.IsZero() || stored.UpdatedAt.IsZero() {
+			if err != nil || stored.ID != account.ID || stored.Email != account.Email || stored.Password != account.Password || stored.Verified || !stored.VerificationRequired || stored.RegistrationAuthType != "email" || stored.SessionVersion != 1 || !stored.CreatedAt.Equal(account.CreatedAt) || !stored.UpdatedAt.Equal(account.UpdatedAt) {
 				t.Fatalf("account fields were lost: %+v, %v", stored, err)
 			}
 			again, err := lookup(context.Background(), key)
@@ -182,7 +182,7 @@ func TestSQLiteAccountRepositoryCreateFailure(t *testing.T) {
 				}
 			} else if scenario != "closed pool" {
 				var count int
-				if err := db.Get(&count, "SELECT count(*) FROM user"); err != nil || count != 0 {
+				if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM user").Scan(&count); err != nil || count != 0 {
 					t.Fatalf("failed insertion left an account: count=%d, error=%v", count, err)
 				}
 			}
@@ -263,7 +263,7 @@ func TestSQLiteAccountRepositoryCreateCancellationWhileWaiting(t *testing.T) {
 			t.Fatal(err)
 		}
 		var count int
-		if err := db.Get(&count, "SELECT count(*) FROM user"); err != nil || count != 0 {
+		if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM user").Scan(&count); err != nil || count != 0 {
 			t.Fatalf("canceled insertion left an account: count=%d, error=%v", count, err)
 		}
 	})

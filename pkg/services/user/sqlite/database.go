@@ -2,9 +2,9 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
 )
@@ -17,7 +17,7 @@ const (
 // PrepareDatabase creates missing account and token tables in a SQLite database.
 // Applications must call it before using account storage. It is safe to call
 // again. Existing accounts receive a session version without changing their credentials.
-func PrepareDatabase(ctx context.Context, db *sqlx.DB) error {
+func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
@@ -25,7 +25,7 @@ func PrepareDatabase(ctx context.Context, db *sqlx.DB) error {
 		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
 	}
 
-	tx, err := db.BeginTxx(ctx, nil)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin account schema setup: %w", err)
 	}
@@ -45,7 +45,7 @@ func PrepareDatabase(ctx context.Context, db *sqlx.DB) error {
 		return fmt.Errorf("create account table: %w", err)
 	}
 	var versionColumn int
-	if err := tx.GetContext(ctx, &versionColumn, `SELECT count(*) FROM pragma_table_info('user') WHERE name = 'session_version'`); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info('user') WHERE name = 'session_version'`).Scan(&versionColumn); err != nil {
 		return fmt.Errorf("check account session version: %w", err)
 	}
 	if versionColumn == 0 {

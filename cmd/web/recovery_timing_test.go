@@ -17,6 +17,8 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/handlers"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 func TestHTTPResetResponseFloor(t *testing.T) {
@@ -284,29 +286,26 @@ func TestHTTPResetTokenStorageCancellation(t *testing.T) {
 			name = "htmx"
 		}
 		t.Run(name, func(t *testing.T) {
-			runHTTPScenario(t, func(h *httpHarness) {
+			gate := &resetCancellationDriver{Driver: &sqlite3.SQLiteDriver{}}
+			catalog := func(app *application) ([]handlers.Descriptor, error) {
+				const driverName = "recovery-cancel-sqlite"
+				sql.Register(driverName, gate)
+				db, err := sql.Open(driverName, app.Config.Database.Connection)
+				if err != nil {
+					return nil, err
+				}
+				app.OnShutdown("instrumented account database", func(context.Context) error { return db.Close() })
+				// The harness already prepared the schema. Supply the instrumented pool before route setup.
+				app.AccountRepository = usersqlite.NewAccountRepository(db)
+				return siteModules(app, "")
+			}
+			runHTTPScenarioWithCatalog(t, 30*time.Second, catalog, func(h *httpHarness) {
 				u := h.seedUser(t, "person@example.invalid")
 				synctest.Test(t, func(t *testing.T) {
 					entered, released := make(chan context.Context), make(chan struct{})
 					release := sync.OnceFunc(func() { close(released) })
 					defer release()
-					const driverName = "recovery-cancel-sqlite"
-					sql.Register(driverName, &resetCancellationDriver{
-						Driver: &sqlite3.SQLiteDriver{}, entered: entered, released: released,
-					})
-					db, err := sql.Open(driverName, h.app.Config.Database.Connection)
-					if err != nil {
-						t.Fatal(err)
-					}
-					// Keep the sqlx object shared by the handlers, but intercept token writes.
-					original := h.app.Database.DB
-					h.app.Database.DB = db
-					defer func() {
-						h.app.Database.DB = original
-						if err := db.Close(); err != nil {
-							t.Error(err)
-						}
-					}()
+					gate.entered, gate.released = entered, released
 					ctx, cancel := context.WithCancel(context.Background())
 					defer cancel()
 					r := httptest.NewRequest(http.MethodPost, "/auth/reset/request/email", strings.NewReader(url.Values{"email": {u.Email}}.Encode())).WithContext(ctx)

@@ -190,7 +190,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 		t.Fatal(err)
 	}
 	observed, started := observeTokenDeletes(t, db)
-	lock, err := db.BeginTxx(ctx, nil)
+	lock, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 				t.Fatal(err)
 			}
 			observed, started := observeTokenDeletes(t, db)
-			lock, err := db.BeginTxx(ctx, nil)
+			lock, err := db.BeginTx(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

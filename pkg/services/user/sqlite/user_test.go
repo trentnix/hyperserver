@@ -7,11 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jmoiron/sqlx"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-func userTestDB(t *testing.T) *sqlx.DB {
+func userTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db := unpreparedUserTestDB(t)
 	if err := PrepareDatabase(context.Background(), db); err != nil {
@@ -20,9 +19,9 @@ func userTestDB(t *testing.T) *sqlx.DB {
 	return db
 }
 
-func unpreparedUserTestDB(t *testing.T) *sqlx.DB {
+func unpreparedUserTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "users.db"))
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "users.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +132,7 @@ func TestUpdateUsesID(t *testing.T) {
 		t.Errorf("old email still exists: %v", err)
 	}
 	var count int
-	if err := db.Get(&count, "SELECT COUNT(*) FROM user"); err != nil || count != 1 {
+	if err := db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM user").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("update created another row: count=%d, error=%v", count, err)
 	}
 	if _, err := db.ExecContext(ctx, "DELETE FROM user WHERE id = ?", u.ID); err != nil {

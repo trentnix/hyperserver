@@ -75,11 +75,11 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := usersqlite.PrepareDatabase(context.Background(), db); err != nil {
+	if err := usersqlite.PrepareDatabase(context.Background(), db.DB); err != nil {
 		t.Fatal(err)
 	}
 	u := &user.User{Email: "lookup@example.invalid", Password: "unchanged", VerificationRequired: true, RegistrationAuthType: "lookup-test"}
-	if err := usersqlite.NewAccountRepository(db).Create(context.Background(), u); err != nil {
+	if err := usersqlite.NewAccountRepository(db.DB).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{}
@@ -93,7 +93,7 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 			http.Error(w, message, status)
 		},
 	}}
-	manager.accounts = usersqlite.NewAccountRepository(db)
+	manager.accounts = usersqlite.NewAccountRepository(db.DB)
 	sessions, err := stores.NewSessionManager(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := usersqlite.NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
+			if err := usersqlite.NewAccountRepository(db.DB).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			newRequest := func() *http.Request {
@@ -156,11 +156,11 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			stored, err := usersqlite.NewAccountRepository(db).GetByID(t.Context(), account.ID)
+			stored, err := usersqlite.NewAccountRepository(db.DB).GetByID(t.Context(), account.ID)
 			if err != nil || stored.Verified || !stored.UpdatedAt.Equal(account.UpdatedAt) {
 				t.Fatalf("failed lookup changed the account: %+v, %v", stored, err)
 			}
-			if _, err := usersqlite.NewAccountRepository(db).GetToken(t.Context(), token.TokenHash, "auth-verification"); err != nil {
+			if _, err := usersqlite.NewAccountRepository(db.DB).GetToken(t.Context(), token.TokenHash, "auth-verification"); err != nil {
 				t.Fatalf("failed lookup consumed the token: %v", err)
 			}
 
@@ -170,7 +170,7 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 			if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 				t.Fatalf("verification retry failed: %d %s", w.Code, w.Body.String())
 			}
-			stored, err = usersqlite.NewAccountRepository(db).GetByID(t.Context(), account.ID)
+			stored, err = usersqlite.NewAccountRepository(db.DB).GetByID(t.Context(), account.ID)
 			if err != nil || !stored.Verified {
 				t.Fatalf("retry did not verify the account: %+v, %v", stored, err)
 			}
@@ -356,7 +356,7 @@ func TestResetStopsOnTokenLookupFailure(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := usersqlite.NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
+				if err := usersqlite.NewAccountRepository(db.DB).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := db.Exec("ALTER TABLE " + table + " RENAME TO unavailable"); err != nil {
@@ -386,7 +386,7 @@ func TestResetStopsOnTokenLookupFailure(t *testing.T) {
 				if _, err := user.ValidateResetToken(context.Background(), manager.accounts, token.Token, []byte(manager.verificationJwtKey)); err != nil {
 					t.Fatalf("failed lookup invalidated the token: %v", err)
 				}
-				stored, err := usersqlite.NewAccountRepository(db).GetByID(t.Context(), account.ID)
+				stored, err := usersqlite.NewAccountRepository(db.DB).GetByID(t.Context(), account.ID)
 				if err != nil || stored.Password != account.Password || !stored.UpdatedAt.Equal(account.UpdatedAt) {
 					t.Fatalf("failed lookup changed the account: %+v, %v", stored, err)
 				}

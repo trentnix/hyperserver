@@ -4,6 +4,7 @@ package reference
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"maps"
@@ -109,7 +110,11 @@ func initializeSQLiteAccounts(ctx context.Context, pool *sqlx.DB, options map[st
 		return nil, nil, err
 	}
 
-	repository := usersqlite.NewAccountRepository(pool)
+	var db *sql.DB
+	if pool != nil {
+		db = pool.DB
+	}
+	repository := usersqlite.NewAccountRepository(db)
 	if err := repository.Initialize(ctx); err != nil {
 		return nil, nil, err
 	}

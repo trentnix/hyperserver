@@ -72,7 +72,7 @@ func testRunDrainsRequestsBeforeClosingPool(t *testing.T, scheme string) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if _, err := usersqlite.NewAccountRepository(db).GetByEmail(t.Context(), "shutdown@example.invalid"); err != nil {
+	if _, err := usersqlite.NewAccountRepository(db.DB).GetByEmail(t.Context(), "shutdown@example.invalid"); err != nil {
 		t.Fatal("shutdown lost the in-flight request's write:", err)
 	}
 }
@@ -123,7 +123,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 		close(started)
 		<-release
 		account := &user.User{Email: "shutdown@example.invalid"}
-		if err := usersqlite.NewAccountRepository(s.Database).Create(r.Context(), account); err != nil {
+		if err := usersqlite.NewAccountRepository(s.Database.DB).Create(r.Context(), account); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -280,7 +280,7 @@ func shutdownTestDB(t *testing.T) *sqlx.DB {
 func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	db := shutdownTestDB(t)
 	owner := testApplicationWithPool(&server.ApplicationServer{}, db)
-	if err := usersqlite.PrepareDatabase(context.Background(), db); err != nil {
+	if err := usersqlite.PrepareDatabase(context.Background(), db.DB); err != nil {
 		t.Fatal(err)
 	}
 	repository, err := storage.NewSQLiteContactRepository(context.Background(), db.DB)
@@ -343,14 +343,14 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 
 	// The account consumer still uses the same pool while the site is stopping.
 	account := &user.User{Email: "before@example.invalid"}
-	if err := usersqlite.NewAccountRepository(db).Create(context.Background(), account); err != nil {
+	if err := usersqlite.NewAccountRepository(db.DB).Create(context.Background(), account); err != nil {
 		t.Fatal(err)
 	}
 	releaseRequest()
 	awaitResult(t, response)
 	awaitResult(t, done)
 	account = &user.User{Email: "after@example.invalid"}
-	if err := usersqlite.NewAccountRepository(db).Create(context.Background(), account); err != nil {
+	if err := usersqlite.NewAccountRepository(db.DB).Create(context.Background(), account); err != nil {
 		t.Fatal("stopping the site closed the account consumer's pool:", err)
 	}
 	var count int

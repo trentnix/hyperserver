@@ -47,7 +47,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					if _, ok := ctx.Deadline(); !ok {
 						t.Error("storage setup has no deadline")
 					}
-					repository := usersqlite.NewAccountRepository(db)
+					repository := usersqlite.NewAccountRepository(db.DB)
 					setupErr = repository.Initialize(ctx)
 					if setupErr != nil {
 						return setupErr

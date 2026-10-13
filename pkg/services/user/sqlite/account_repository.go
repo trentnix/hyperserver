@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
@@ -18,11 +17,25 @@ import (
 
 // AccountRepository stores accounts using an existing SQLite pool.
 // Call Initialize before use. The pool's owner must close it after consumers stop.
-type AccountRepository struct{ db *sqlx.DB }
+type AccountRepository struct{ db *sql.DB }
 
 // NewAccountRepository borrows db. It does not open, initialize, or close storage.
-func NewAccountRepository(db *sqlx.DB) *AccountRepository {
+func NewAccountRepository(db *sql.DB) *AccountRepository {
 	return &AccountRepository{db: db}
+}
+
+// accountColumns and scanAccount must use the same field order.
+const accountColumns = "id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version"
+
+func scanAccount(row *sql.Row) (*accounts.User, error) {
+	var u accounts.User
+	if err := row.Scan(
+		&u.ID, &u.Email, &u.Verified, &u.VerificationRequired,
+		&u.CreatedAt, &u.UpdatedAt, &u.RegistrationAuthType, &u.Password, &u.SessionVersion,
+	); err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 var _ accounts.AccountRepository = (*AccountRepository)(nil)
@@ -54,18 +67,13 @@ func (s *AccountRepository) GetByID(ctx context.Context, id string) (*accounts.U
 		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
-	var u accounts.User
 	if id == "" {
 		return nil, fmt.Errorf("a users.id value must be specified to retrieve a user")
 	}
 
-	query := fmt.Sprintf(`
-        SELECT id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version
-        FROM %s
-        WHERE id = ?
-    `, userTableName)
+	query := `SELECT ` + accountColumns + ` FROM ` + userTableName + ` WHERE id = ?`
 
-	err := s.db.GetContext(ctx, &u, query, id)
+	u, err := scanAccount(s.db.QueryRowContext(ctx, query, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, accounts.NewErrUserNotFound(err)
 	}
@@ -73,7 +81,7 @@ func (s *AccountRepository) GetByID(ctx context.Context, id string) (*accounts.U
 		return nil, err
 	}
 
-	return &u, nil
+	return u, nil
 }
 
 // GetByEmail loads an account by email, or returns [accounts.ErrUserNotFound].
@@ -82,18 +90,13 @@ func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*acco
 		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
 	}
 
-	var user accounts.User
 	if email == "" {
 		return nil, fmt.Errorf("a users.email value must be specified to retrieve a user")
 	}
 
-	query := fmt.Sprintf(`
-        SELECT id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version
-        FROM %s
-        WHERE email = ?
-    `, userTableName)
+	query := `SELECT ` + accountColumns + ` FROM ` + userTableName + ` WHERE email = ?`
 
-	err := s.db.GetContext(ctx, &user, query, email)
+	user, err := scanAccount(s.db.QueryRowContext(ctx, query, email))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, accounts.NewErrUserNotFound(err)
 	}
@@ -101,7 +104,7 @@ func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*acco
 		return nil, err
 	}
 
-	return &user, nil
+	return user, nil
 }
 
 // GetToken reads stored metadata without consuming or checking the expiry of the token.
@@ -156,10 +159,12 @@ func (s *AccountRepository) Create(ctx context.Context, user *accounts.User) err
 
 	query := fmt.Sprintf(`
         INSERT INTO %s (id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password)
-        VALUES (:id, :email, :verified, :verification_required, :created_at, :updated_at, :registration_auth_type, :password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, userTableName)
 
-	if _, err := s.db.NamedExecContext(ctx, query, &created); err != nil {
+	if _, err := s.db.ExecContext(ctx, query,
+		created.ID, created.Email, created.Verified, created.VerificationRequired,
+		created.CreatedAt, created.UpdatedAt, created.RegistrationAuthType, created.Password); err != nil {
 		return accountWriteError(err)
 	}
 	*user = created
@@ -220,7 +225,7 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 	updated := *user
 	updated.UpdatedAt = time.Now()
 
-	tx, err := s.db.BeginTxx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -251,7 +256,15 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
         WHERE id = :id AND session_version = :session_version
     `, userTableName)
 
-	result, err := tx.NamedExecContext(ctx, query, &updated)
+	result, err := tx.ExecContext(ctx, query,
+		sql.Named("email", updated.Email),
+		sql.Named("verified", updated.Verified),
+		sql.Named("verification_required", updated.VerificationRequired),
+		sql.Named("updated_at", updated.UpdatedAt),
+		sql.Named("registration_auth_type", updated.RegistrationAuthType),
+		sql.Named("password", updated.Password),
+		sql.Named("id", updated.ID),
+		sql.Named("session_version", updated.SessionVersion))
 	if err != nil {
 		return accountWriteError(err)
 	}
@@ -260,7 +273,7 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 		return err
 	}
 
-	err = tx.GetContext(ctx, &updated.SessionVersion, `SELECT session_version FROM user WHERE id = ?`, user.ID)
+	err = tx.QueryRowContext(ctx, `SELECT session_version FROM user WHERE id = ?`, user.ID).Scan(&updated.SessionVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		return accounts.NewErrUserNotFound(sql.ErrNoRows)
 	}
@@ -343,7 +356,7 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 		return accounts.NewErrToken(errors.New("invalid reset authorization"))
 	}
 
-	tx, err := s.db.BeginTxx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -356,11 +369,10 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 
 	// Only update the password. Do not overwrite unrelated account changes with
 	// the snapshot used for form validation or the previous-password check.
-	var updated accounts.User
-	err = tx.GetContext(ctx, &updated, `UPDATE `+userTableName+` SET password = ?, updated_at = ?, session_version = session_version + 1
+	updated, err := scanAccount(tx.QueryRowContext(ctx, `UPDATE `+userTableName+` SET password = ?, updated_at = ?, session_version = session_version + 1
 		WHERE id = ? AND password = ? AND registration_auth_type = ?
-		RETURNING id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version`,
-		passwordHash, now, u.ID, u.Password, u.RegistrationAuthType)
+		RETURNING `+accountColumns,
+		passwordHash, now, u.ID, u.Password, u.RegistrationAuthType))
 	if errors.Is(err, sql.ErrNoRows) {
 		return accounts.NewErrToken(errors.New("account changed or no longer exists"))
 	}
@@ -372,7 +384,7 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 		return err
 	}
 
-	*u = updated
+	*u = *updated
 	return nil
 }
 
@@ -386,7 +398,7 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 		return nil, accounts.NewErrToken(errors.New("invalid verification authorization"))
 	}
 
-	tx, err := s.db.BeginTxx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -396,12 +408,11 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 		return nil, err
 	}
 
-	var account accounts.User
-	err = tx.GetContext(ctx, &account, `UPDATE `+userTableName+`
+	account, err := scanAccount(tx.QueryRowContext(ctx, `UPDATE `+userTableName+`
 		SET session_version = session_version + CASE WHEN verified THEN 0 ELSE 1 END,
 		verified = TRUE, updated_at = ? WHERE id = ? AND email = ?
-		RETURNING id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version`,
-		time.Now(), authorization.AccountID, authorization.Email)
+		RETURNING `+accountColumns,
+		time.Now(), authorization.AccountID, authorization.Email))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, accounts.NewErrToken(errors.New("verification address changed or account no longer exists"))
 	}
@@ -413,13 +424,13 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 		return nil, err
 	}
 
-	return &account, nil
+	return account, nil
 }
 
 // deleteTokenAndCheckExpiry deletes the matching token, then checks its stored
 // and signed expiry after acquiring the write lock. The caller must roll back on
 // any error to restore the token.
-func deleteTokenAndCheckExpiry(ctx context.Context, tx *sqlx.Tx, accountID, tokenHash, purpose string, signedExpiry time.Time) error {
+func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, tokenHash, purpose string, signedExpiry time.Time) error {
 	var expiresAt time.Time
 	err := tx.QueryRowContext(ctx, `DELETE FROM `+userTokenTableName+`
 		WHERE user_id = ? AND token_hash = ? AND token_type = ?

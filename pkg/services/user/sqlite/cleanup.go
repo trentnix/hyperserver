@@ -2,11 +2,11 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
@@ -32,13 +32,13 @@ func OpenTokenMaintenance(ctx context.Context, cfg config.DatabaseConfig, option
 	if err := db.PingContext(ctx); err != nil {
 		return nil, nil, errors.Join(err, db.Close())
 	}
-	return NewAccountRepository(db), db.Close, nil
+	return NewAccountRepository(db.DB), db.Close, nil
 }
 
 // DeleteExpiredTokens removes at most limit expired account tokens and returns
 // the deleted count. PrepareDatabase must run first. Tokens that expired during
 // the current second can remain until the next batch. Live tokens are unchanged.
-func DeleteExpiredTokens(ctx context.Context, db *sqlx.DB, limit int) (int64, error) {
+func DeleteExpiredTokens(ctx context.Context, db *sql.DB, limit int) (int64, error) {
 	if limit < 1 {
 		return 0, fmt.Errorf("token cleanup limit must be positive")
 	}

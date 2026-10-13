@@ -2,18 +2,18 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/pkg/database"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestPrepareDatabaseIndependentDatabases(t *testing.T) {
 	first, second := userTestDB(t), userTestDB(t)
-	for _, db := range []*sqlx.DB{first, second} {
+	for _, db := range []*sql.DB{first, second} {
 		u := &accounts.User{Email: "person@example.invalid"}
 		if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 			t.Fatal(err)
@@ -31,7 +31,7 @@ func TestPrepareDatabaseIndependentDatabases(t *testing.T) {
 			t.Fatalf("account after repeated setup = %v, %v", stored, err)
 		}
 		var count int
-		if err := db.Get(&count, `SELECT count(*) FROM usertoken WHERE user_id = ? AND token_hash = ?`, u.ID, token.TokenHash); err != nil || count != 1 {
+		if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM usertoken WHERE user_id = ? AND token_hash = ?`, u.ID, token.TokenHash).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("token after repeated setup: count = %d, error = %v", count, err)
 		}
 	}
@@ -87,28 +87,28 @@ func TestPrepareDatabaseFailures(t *testing.T) {
 func TestAccountOperationsDoNotPrepareDatabase(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		run  func(*sqlx.DB) error
+		run  func(*sql.DB) error
 	}{
-		{"lookup by ID", func(db *sqlx.DB) error {
+		{"lookup by ID", func(db *sql.DB) error {
 			_, err := NewAccountRepository(db).GetByID(t.Context(), "missing")
 			return err
 		}},
-		{"lookup by email", func(db *sqlx.DB) error {
+		{"lookup by email", func(db *sql.DB) error {
 			_, err := NewAccountRepository(db).GetByEmail(t.Context(), "person@example.invalid")
 			return err
 		}},
-		{"create", func(db *sqlx.DB) error {
+		{"create", func(db *sql.DB) error {
 			return NewAccountRepository(db).Create(context.Background(), &accounts.User{Email: "person@example.invalid"})
 		}},
-		{"update", func(db *sqlx.DB) error {
+		{"update", func(db *sql.DB) error {
 			return NewAccountRepository(db).Update(context.Background(), &accounts.User{ID: "missing", Email: "person@example.invalid"})
 		}},
-		{"create token", func(db *sqlx.DB) error {
+		{"create token", func(db *sql.DB) error {
 			return NewAccountRepository(db).InsertToken(t.Context(), accounts.TokenMetadata{
 				AccountID: "missing", TokenHash: "hash", Purpose: accounts.ResetTokenPurpose, ExpiresAt: time.Now().Add(time.Hour),
 			})
 		}},
-		{"lookup token", func(db *sqlx.DB) error {
+		{"lookup token", func(db *sql.DB) error {
 			_, err := NewAccountRepository(db).GetToken(t.Context(), "hash", accounts.ResetTokenPurpose)
 			return err
 		}},
@@ -123,10 +123,10 @@ func TestAccountOperationsDoNotPrepareDatabase(t *testing.T) {
 	}
 }
 
-func assertNoAccountTables(t *testing.T, db *sqlx.DB) {
+func assertNoAccountTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	var count int
-	if err := db.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {

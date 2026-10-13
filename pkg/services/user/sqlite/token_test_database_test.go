@@ -8,14 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
 )
 
 // observeTokenDeletes opens another pool on the fixture database. The signal
 // marks an account-token transaction reaching its DELETE, without changing production code
 // or replacing SQLite's locking and transaction behavior with a mock.
-func observeTokenDeletes(t *testing.T, db *sqlx.DB) (*sqlx.DB, <-chan struct{}) {
+func observeTokenDeletes(t *testing.T, db *sql.DB) (*sql.DB, <-chan struct{}) {
 	t.Helper()
 	var sequence int
 	var name, path string
@@ -25,7 +24,7 @@ func observeTokenDeletes(t *testing.T, db *sqlx.DB) (*sqlx.DB, <-chan struct{}) 
 	started := make(chan struct{}, 2)
 	uri := url.URL{Scheme: "file", Path: path, RawQuery: "_busy_timeout=10000"}
 	connector := &tokenConnector{dsn: uri.String(), started: started}
-	observed := sqlx.NewDb(sql.OpenDB(connector), "sqlite3")
+	observed := sql.OpenDB(connector)
 	observed.SetMaxOpenConns(2)
 	t.Cleanup(func() {
 		if err := observed.Close(); err != nil {
