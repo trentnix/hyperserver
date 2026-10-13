@@ -49,7 +49,9 @@ Keeping dependencies down also limits exposure to supply-chain attacks. That pre
 
 Logging uses `log/slog` behind the [logging contract](pkg/services/logger/logger.go). [Configuration loading](config/load.go) applies explicit defaults, YAML settings, and environment overrides before validation. [Form validation](pkg/components/form/validation.go) uses explicit methods and field errors instead of a third-party tag engine. Auth forms use the [password package's rules](auth/password/password.go). Replace the behavior HyperServer needs, not the full libraries.
 
-Evaluate replacing `jmoiron/sqlx` with `database/sql` during repository extraction. Prefer explicit queries and scanning where the added repetition is manageable.
+Replace `jmoiron/sqlx` with `database/sql` in the built-in SQLite providers. Explicit scanning, query arguments, and transactions cover the current uses. Share account-field scanning in one private helper, not a generic mapper. The tradeoff is maintaining column and argument order. Tests must check every stored field, including distinct timestamps and boolean values.
+
+Convert contacts, accounts, and sessions separately, then change shared pool setup and remove `sqlx`. During the transition, converted providers can borrow the wrapper's underlying `*sql.DB`. Pool ownership, schemas, repository contracts, and transaction boundaries must stay unchanged.
 
 Keep `golang.org/x/crypto/bcrypt` and a maintained SQLite driver. Use established tooling such as `golang-migrate` for versioned migrations, which can run separately during deployment. Keep `google/uuid` unless opaque identifiers meet the application's needs and the storage and compatibility costs justify changing formats.
 
@@ -308,7 +310,7 @@ Exit when the workflow uses shared response handling, passes HTTP tests, and has
 - Extract repositories, required storage capabilities, and serializers from actual consumers.
 - Authentication providers expose only their supported HTTP workflows. The email provider keeps account operations separate from HTTP responses and initialization, within the same package.
 - Account lookup and storage calls carry the request context. [HTTP lookup tests](cmd/web/account_cancellation_test.go) and [recovery tests](cmd/web/recovery_timing_test.go) cover cancellation while storage or delivery is waiting.
-- Evaluate replacing `sqlx` with `database/sql` inside the extracted repositories.
+- Replace `sqlx` with `database/sql` one SQLite provider at a time, then convert shared pool setup and remove the dependency. Preserve field mappings, context cancellation, affected-row checks, and transaction behavior.
 - Implement in-memory and SQLite adapters, then validate PostgreSQL and one suitable non-relational adapter.
 - Test transaction scope, uniqueness, concurrency, format migration, and recoverable delivery where required.
 - Document provider replacement and data migration.
