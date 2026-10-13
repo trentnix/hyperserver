@@ -2,66 +2,36 @@
 
 ## Purpose and status
 
-HyperServer is an experimental Go framework for server-rendered web applications with first-class HTMX support. Its purpose is to handle recurring web application infrastructure so developers can focus on application features using familiar Go handlers and HTML templates.
+HyperServer is an experimental Go framework for server-rendered web applications with first-class HTMX support. It should handle the recurring infrastructure so developers can focus on application features using familiar Go handlers and HTML templates.
 
-Provide a working default setup with replaceable components, without requiring every application to assemble its infrastructure from scratch. Keep code straightforward to read and maintain. High performance and low overhead are design goals that require measurement.
+Provide a working default setup with replaceable services. Developers must not need to learn unrelated libraries or copy security and lifecycle code to build a feature. High performance and low overhead are goals to demonstrate with measurements.
 
-This document defines the intended architecture and implementation order. Planned capabilities are requirements, not claims about the current implementation. Treat the API as experimental and use `v0.x` releases while its contracts evolve.
+HyperServer is not production-ready. Public interfaces remain experimental during `v0.x`. The immediate work is completing storage contracts and serializer replacement, followed by performance and operational validation.
 
-### Current implementation
-
-Phase 0 is complete. Phase 1 is in progress. HyperServer is not ready for public deployment.
-
-[CI](.github/workflows/ci.yml) runs tests, vet, and full-suite race checks. These checks do not establish production readiness or replace a security audit. Rendering has microbenchmarks. Application throughput and latency have not been measured.
-
-| Area | Current state | Remaining work |
-| --- | --- | --- |
-| Startup and modules | [Server construction](pkg/server/server.go) creates only routing and rendering services. Applications initialize optional services explicitly. [Handler](pkg/handlers/handlers.go) and [auth](auth/auth_service.go) catalogs hold factories, with fresh instances per application and local catalogs for tests. [Module initialization](pkg/handlers/initialize.go) resolves dependencies and rolls back completed modules on failure. Bundled assets are embedded, rendering accepts explicit filesystems, and local storage paths resolve without changing the process directory. A [stateless greeting application](examples/stateless/readme.md) exercises these contracts without optional services. Both applications use shared module setup and HTTP lifecycle helpers. | Extend provider replacement coverage in Phase 4. |
-| Shutdown and TLS | The [reference application](cmd/web/main.go) supports direct TLS and an explicitly trusted edge proxy. Verified client IPs and HTTPS state feed rate limits and session cookies. Links use configured addresses. Shutdown drains requests before closing modules in reverse dependency order, then shared services. Drain timeouts force process exit without closing services under active handlers. | Exercise restart and shutdown under load. |
-| Configuration and middleware | Applications own [configuration copies](config/clone.go), database pools, and session providers. [Two-server tests](cmd/web/module_isolation_test.go) cover separate data and sessions, disabled authentication, and shutdown isolation. [Session middleware](pkg/services/session/middleware.go) can attach sessions without account storage. [General middleware](pkg/services/middleware/middleware.go) has no account or session storage dependency. Its [route-level authorization](pkg/services/middleware/authorization.go) evaluates application-defined policies. [Authentication middleware](auth/middleware/auth.go) supplies identity-based guards. The stateless application also runs beside the reference site's module in tests. | Extend isolation coverage as replacement providers are added. |
-| Forms and account writes | [Route registration](pkg/routing/routes.go) applies body limits and inherited per-route rate policies. Handler policies override module and application defaults. Explicit [shared budgets](pkg/ratelimit/limiter.go) apply independently, including an optional application budget before session loading. The [HTTP stack](cmd/web/main.go) uses Go's CSRF protection. The [form parser](pkg/components/form/request.go) checks field sizes before binding. [Account creation and updates](pkg/services/user/sqlite/account_repository.go) use separate operations. Updates reject outdated security versions. | Prevent credential exposure when HTMX is unavailable or forms redisplay. Validate limits under load. |
-| Recovery and verification | [Password reset](pkg/services/user/auth_token_reset.go) and [account verification](pkg/services/user/auth_token_verification.go) use emailed, single-use links. Token consumption and the account change share a transaction. Verification links are bound to the recipient's email address. Admitted reset requests have a minimum response time. Rate limits do not depend on account existence. | Test timing under load. |
-| Mail and sessions | [SMTP delivery](pkg/services/messaging/smtp/smtp.go) has timeouts and cancellation. Authentication uses revocable [SQLite sessions](pkg/services/session/stores/sqlitestore.go), with ID rotation at login and verification. Password reset or change invalidates all account sessions. Each session manager owns its selected providers and closes their pools after requests drain. [Session JSON](pkg/services/session/readme.md) is limited to 64 KiB and cookies to 4 KiB. An explicit [cleanup command](cmd/cleanup) removes expired sessions and account tokens in bounded batches. | Add optional automatic cleanup with application lifecycle management. |
-| Exposure and redirects | The [reference application](cmd/web/main.go) is loopback-only. [Authentication mutations](auth/auth_manager.go) and [site mutations](modules/site/router.go) require POST. Verification and reset links display forms without consuming tokens. [Redirects](pkg/util/redirect.go) accept local paths and use HTTP 303 or HTMX headers without rendering HTML or JavaScript. | Keep development modules out of production applications. |
-| Browser security | The [reference CSP](cmd/web/security.go) blocks inline scripts and evaluation. HTMX uses external scripts and styles, without fragment scripts or local history snapshots. [Security headers](pkg/services/middleware/security.go) cover pages, fragments, and errors. HSTS is opt-in for verified HTTPS. Cookie attributes have HTTP and provider-level tests. | Keep the CSP aligned with application assets and features. |
-| Rendering and tests | Form and site messages are escaped as text. [Page and fragment rendering](pkg/components/content/content.go) completes before sending content headers, status, and body. Rendered responses vary on `HX-Request` and `HX-History-Restore-Request` and default to `no-store`, with explicit cache policies for suitable content. Message values have no storage dependency. Rendering accepts an optional notification loader. Session-backed [flash messages](pkg/services/flash/messages.go) persist category removal and report storage failures. [HandleError](modules/site/error.go) keeps internal details in logs. Failed error-page rendering returns a plain-text 500. Both applications prepare page and fragment templates at startup. The [HTTP harness](cmd/web/http_test.go) uses isolated databases, explicit configuration, and fake mail. | Extend browser workflow coverage. |
+This roadmap defines direction and remaining priorities. The [README](readme.md) documents usage. [Architecture decisions](docs/decisions/readme.md) explain specific choices and their tradeoffs.
 
 ## Design principles
 
-- **Go's foundations.** Keep `http.Handler`, `http.Request`, `http.ResponseWriter`, `context.Context`, and standard middleware interoperable.
-- **Standard library first.** Prefer Go's standard library when it meets requirements with clear, maintainable code. Accept narrower functionality when it improves readability, auditability, operation, and replacement.
-- **Small core, composable services.** Keep rendering and HTMX response handling in the core. Activate authentication, sessions, persistence, caching, and mail through replaceable contracts when required.
-- **Self-registering modules.** Imports register metadata. Each application owns dependency resolution, initialization, routes, and shutdown.
-- **Progressive enhancement as a capability.** Support ordinary navigation and form submissions when an application requires them. Applications can depend on HTMX.
-- **Explicit ownership.** Define framework and provider responsibilities without prescribing application structure or domain models.
-- **Safe defaults and honest outcomes.** Validate required capabilities, surface failures, and make secure behavior the default.
-- **Measured performance.** Require repeatable benchmarks or profiles before claiming an improvement.
-
-Defer broad ORM features, a universal query language, speculative adapters, distributed caches, and a general job system until real requirements justify them.
+- Keep Go's `net/http` model and standard middleware available.
+- Keep the core small. Authentication, sessions, persistence, caching, and mail are replaceable services, activated only when needed.
+- Preserve import-based module discovery, with explicit application-owned configuration and activation.
+- Keep configuration and resource ownership easy to trace from application setup.
+- Separate responsibilities where replacement or ownership requires it. Do not create a package or interface for every component.
+- Provide safe defaults and report failures accurately. Applications still own business rules, access policies, secrets, and deployment choices.
+- Support ordinary navigation and form submissions when an application requires them. Applications can depend on HTMX.
+- Measure performance before adding complexity or claiming improvements.
 
 ### Dependency policy
 
 Prefer the standard library when it does the job. A smaller feature set is acceptable if it keeps HyperServer easier to read and maintain.
 
-An external package needs to earn its place. Check who maintains it, what dependencies it brings, and how much work replacing it would take. Those costs matter alongside the code it saves us.
+An external package must justify its maintenance, transitive dependencies, and replacement cost alongside the code it saves. Fewer dependencies reduce supply-chain exposure, but dependency removal is not a reason to write our own cryptography, password hashing, database drivers, or migration engine.
 
-Keeping dependencies down also limits exposure to supply-chain attacks. That preference does not justify writing our own cryptography or password hashing. Use established, maintained implementations for that work.
-
-Logging uses `log/slog` behind the [logging contract](pkg/services/logger/logger.go). [Configuration loading](config/load.go) applies explicit defaults, YAML settings, and environment overrides before validation. [Form validation](pkg/components/form/validation.go) uses explicit methods and field errors instead of a third-party tag engine. Auth forms use the [password package's rules](auth/password/password.go). Replace the behavior HyperServer needs, not the full libraries.
-
-Replace `jmoiron/sqlx` with `database/sql` in the built-in SQLite providers. Explicit scanning, query arguments, and transactions cover the current uses. Share account-field scanning in one private helper, not a generic mapper. The tradeoff is maintaining column and argument order. Tests must check every stored field, including distinct timestamps and boolean values.
-
-[Contact storage](modules/site/storage/sqlite_contacts.go) and [account storage](pkg/services/user/sqlite/account_repository.go) use `*sql.DB`. Convert sessions next, then change shared pool setup and remove `sqlx`. During the transition, converted providers can borrow the wrapper's underlying `*sql.DB`. Pool ownership, schemas, repository contracts, and transaction boundaries must stay unchanged.
-
-Keep `golang.org/x/crypto/bcrypt` and a maintained SQLite driver. Use established tooling such as `golang-migrate` for versioned migrations, which can run separately during deployment. Keep `google/uuid` unless opaque identifiers meet the application's needs and the storage and compatibility costs justify changing formats.
-
-JWT signing and validation use `golang-jwt/jwt/v5`. Separately evaluate whether server-side sessions and opaque recovery tokens remove the need for JWTs. Do not write a JWT implementation.
-
-After each replacement, inspect the dependency graph to confirm what disappeared. An optional provider can still add module dependencies. Reduce maintenance and complexity, not just the number of entries in `go.mod`.
+Replace only the behavior HyperServer needs, not entire libraries. Keep established security components and inspect the dependency graph after replacements.
 
 ## Target user experience
 
-Developers must be able to select the services they need and use a documented setup that supplies common security controls, request handling, and lifecycle management. Building a feature must not require learning unrelated provider APIs or copying framework setup code. Applications still own their business rules, access policies, secrets, and deployment settings.
+A developer should be able to configure an application, add a self-registering module, and implement a persistent feature without changing framework internals. Replacing a service should change its selection and wiring, not unrelated modules or handlers.
 
 A representative interaction follows this flow:
 
@@ -78,264 +48,111 @@ flowchart LR
     Dispatcher --> HTMX[HTMX response]
 ```
 
-Application operations return outcomes independently of HTTP presentation. Handlers map those outcomes to response results. The dispatcher handles request classification, view selection, redirects, notifications, and HTMX response metadata.
-
-The reference feature must demonstrate a form submission, validation errors that preserve non-secret input, persistence through a replaceable repository, and a successful fragment update or redirect. It must also demonstrate an ordinary form submission as an example of progressive enhancement.
+The representative feature must demonstrate validation with preserved non-secret input, persistence through a replaceable repository, and a successful fragment update or redirect. Keep an ordinary form-submission example to demonstrate progressive enhancement.
 
 ## Intended architecture
 
-### Core and service capabilities
-
-The core provides server lifecycle, module composition, routing, middleware, configuration validation, rendering, response dispatch, error handling, and observability hooks. It must run without database, authentication, session, or mail services.
-
-Providers supply sessions, authentication, caching, repositories, storage, and mail. Applications define authorization policy, which framework hooks enforce where required.
-
-Form binding and input validation are transport helpers. Business validation belongs to application rules. Notifications are response or session data with rendering support.
-
-The code using a cache decides what to cache, how long it can remain valid, and when to refresh or remove it. The cache implementation stores those copies, enforces expiration and size limits, and handles concurrent access. Callers decide how to recover from cache failures. The original data remains the source of truth.
-
-The included site module exercises framework features in the local development application. It owns its diagnostic and sample routes. Production applications must not load development modules. Route inclusion follows module selection, not an application-wide development flag.
-
 ### Application setup
 
-Keep application decisions in one setup path, in one file or a small group of related files. Application setup owns optional services and explicitly selects shared rendering defaults. Modules do not install application-wide rendering policy during initialization.
+Keep application decisions in one setup path, in one file or a small group of related files. Load configuration once. Select modules and providers, supply shared services, choose middleware order and shared rendering policy, and assign resource ownership.
 
-The web and cleanup commands already load configuration once and pass it to consumers. Keep configuration file and environment access there, with provider validation operating on supplied settings. [Configuration and provider defaults](readme.md#configuration) describe current selection and replacement behavior.
+The core coordinates module initialization, route validation, rendering, HTTP serving, and shutdown. It must run without database, authentication, sessions, or mail. Modules own their internal resources, templates, and routes. They must not change another module's configuration or close borrowed resources.
 
-Account-provider selection and opening belong to [reference application setup](internal/reference/accounts.go), which uses configuration without depending on a server instance. Web startup supplies the repository and registers shutdown cleanup. The cleanup command opens and closes maintenance storage independently. The core has no account-repository field or account-package dependency. Setup supplies the repository to the auth manager, email provider, and request middleware.
+Supply application-owned services through typed constructors or options. Dependencies supplied by other modules use declared capabilities. Each dependency must have one source. Do not introduce an unrestricted service locator.
 
-Session setup owns the managers it creates and registers their cleanup through the same lifecycle hooks. Supplied managers keep their existing owner.
-
-| Owner | Responsibility |
-| --- | --- |
-| Application setup | Loads configuration once, selects modules and providers, supplies shared services, chooses middleware order and shared rendering policy, and assigns resource ownership. |
-| Core | Coordinates module initialization, route checks, rendering, HTTP serving, rollback, and shutdown. It must not select or construct optional service implementations. |
-| Module | Validates its supplied dependencies, prepares its internal resources and templates, and binds its routes. It must not change another module's configuration or close borrowed resources. |
-| Service provider | Implements its contract and prepares its own resources from supplied settings. It must not independently load application configuration. |
-
-Keep `ApplicationServer` as the core runtime passed to module initialization, not a catalog of every service an application might use. Application setup can hold related services in a typed struct and supply them through module options or constructors. Dependencies supplied by other modules use the existing declared-capability resolver. Each dependency must have one source. Do not add a service locator or another registration framework.
-
-Shared SQL helpers do not import database drivers. SQLite providers register their own driver, and the stateless application builds and tests without CGO. The reference application owns its SQL pool and supplies contact storage explicitly. The reference application owns its mail client and supplies it to the site and email-auth factories. Accounts, mail, and sessions are supplied through factories and request middleware. The core and stateless application import no SQL-pool, mail, account, or session code.
-
-Imports make modules discoverable. Setup must select modules or deliberately select the registered catalog. Registration alone must not activate routes or acquire resources.
-
-#### Reference application
-
-Keep the setup entry in [cmd/web/main.go](cmd/web/main.go), with module selection in [site_modules.go](cmd/web/site_modules.go), rendering choices in [rendering.go](cmd/web/rendering.go), and route defaults in [handlers.go](cmd/web/handlers.go):
-
-1. Load settings and command-line options once. Resolve resource paths and validate selections before opening services.
-2. Prepare the services required by the site and configured authentication features. The default setup uses SQLite accounts and sessions, SQLite or file-based contacts, and the configured mail sender. Supply these services to their consumers outside the core container.
-3. Select the site's shared rendering defaults and optional notification loader, then apply application overrides before module initialization. `ApplyDefaults` rejects a second shared policy before changing settings. Modules still own their page templates and routes.
-4. Initialize the selected modules with `handlers.Setup`. Assemble the HTTP stack in `applicationHandler`: request logging, security headers, proxy verification, HSTS, optional shared rate limits, origin checks, session or identity loading, and route dispatch. Supply the listener and HTTP server to `app.Run`.
-
-An optional-service helper can assemble a cohesive default setup. Its call and overrides must be visible here. Replacing account storage must change provider selection and wiring, not the renderer, core lifecycle, or unrelated modules.
-
-Successful module setup logs module names and capability providers in resolved order, plus explicit provider selections. Authentication reports initialized providers. Application setup reports the account-repository type, session providers, and mail source without configuration values or connection details.
-
-#### Stateless application
-
-Keep settings and HTTP setup in [examples/stateless/main.go](examples/stateless/main.go) and module assembly in [app.go](examples/stateless/app.go):
-
-1. Read the application name, loopback port, and shutdown timeout from flags. No configuration file or optional service setup is required.
-2. Create the core runtime, select `pages.ConfigureRendering` for shared layouts, and load only `pages.Module()`. The greeting module owns its templates. No notification loader, account service, session manager, storage provider, or mail client is supplied.
-3. Use `handlers.Setup` for modules and routes. Wrap the router with security headers, configure HTTP timeouts, and use `app.Run` for serving and cleanup.
-
-#### Resource ownership and scope
-
-Register cleanup for each successfully returned resource before its consumers initialize. A helper that fails before handing over ownership must release its partial acquisitions. Register each resource with one owner, not both the helper and its caller. `handlers.Setup` registers module cleanup after shared services, so reverse-order shutdown closes modules first. Modules can own repositories while borrowing application-owned connections. Retain startup rollback, request draining, and the rule against closing services under active requests after a drain timeout.
-
-Keep related types and defaults together. Split a package only to remove an unwanted dependency or establish a useful replacement or ownership boundary. Do not require an interface, package, configuration file, or Go module for every component.
-
-The [replacement-provider HTTP test](cmd/web/provider_replacement_test.go) supplies account reads, sessions, contact storage, and mail through application setup without a SQL pool. It covers ordinary and HTMX requests, login and logout, revoked-cookie replay, provider failures, and cleanup ownership. Configuration-precedence, missing-dependency, and application-isolation tests cover the surrounding setup. Import guards and the no-CGO stateless build enforce the core boundary.
-
-These in-memory fixtures prove wiring, not complete storage-provider contracts. Complete alternative storage adapters remain Phase 4 work. Further separation must solve a demonstrated problem.
+Shared helpers can assemble cohesive defaults, but their selection and overrides must remain visible in setup. Keep the stateless example small and independent of optional services. Keep diagnostic and sample routes in development modules, outside production applications.
 
 ### Responsibility boundaries
 
-Each part of HyperServer has a specific job when handling a request:
+These boundaries define architectural ownership.
 
-| Boundary | What it does |
+| Responsibility | What it does |
 | --- | --- |
-| Transport | Reads the HTTP request, enforces request limits, and calls the matching handler. Writes the status, headers, cookies, and HTMX instructions. Keeps internal error details out of public responses. |
-| Application integration | Lets a handler call application code, such as account registration, with the input it needs. The handler turns the returned value or error into a response. HyperServer does not require application code to know how that response is sent. |
-| Persistence integration | Gives services access to operations such as finding a user or saving a session. The selected storage implementation performs the queries or file operations and handles concurrent writes. |
-| Serialization | Encodes values into a format such as JSON and decodes them when read. The code using the serializer chooses the format and defines how older saved data stays readable. |
-| Rendering | Runs the selected page or fragment template with its data and escapes values for HTML output. Returns the HTML body for transport to send. |
+| HTTP handling | Reads and validates request input, enforces request limits and access policy, calls the operation, and writes the response. |
+| Application operations | Apply business rules and decide which changes must succeed together. Return results without choosing HTTP responses or session messages. |
+| Persistence | Performs storage operations and provides the required uniqueness, concurrency, expiration, and durability guarantees. |
+| Serialization | Encodes and decodes stored values. The consuming service chooses the format and compatibility requirements. |
+| Rendering | Produces escaped HTML from prepared templates and data. Response dispatch selects full pages or fragments and applies redirects, notifications, and HTMX instructions. |
 
-The application decides which changes must succeed together. For example, changing a password and consuming its reset token must form one transaction. The storage implementation commits both changes or rolls both back.
-
-A handler's response result connects these parts. It identifies the view and data to render, along with response details such as a redirect or HTMX event.
+A rendering or notification failure must not be mistaken for a failed account change after the storage operation commits. Templates must not perform storage or session mutations.
 
 ### Self-registering modules
 
-Modules register immutable descriptors through package `init()` functions. Registration performs no configuration loading, I/O, route binding, migration, or background work.
+Package `init()` functions register immutable metadata and factories only. The process-wide module catalog describes available modules. Each application selects its modules and owns separate runtime instances. Tests can supply local catalogs. Registration must not acquire resources or activate routes.
 
-Each module owns its internal setup, requirement checks, and route binding. Applications select and configure modules and supply shared services. Modules must not initialize or close borrowed services.
+Initialization must resolve declared dependencies, reject missing required capabilities, ambiguous provider selections, and cycles, initialize providers before consumers, and reject route conflicts before accepting traffic. Missing optional capabilities need defined behavior. Provider failures must not silently disable required behavior.
 
-The process-wide **module catalog** describes available module types, factories, and required, optional, and provided capabilities. Each server snapshots the catalog into a **per-application registry** that owns enabled module instances and their runtime state. Tests can supply local catalogs.
+Initialization and shutdown must use explicit, configurable deadlines. A failing initializer releases its partial acquisitions. On startup failure, close completed modules in reverse dependency order. During shutdown, drain requests before closing consumers and their providers. Every resource has one owner.
 
-Startup must:
+### Storage and serialization
 
-1. Validate module names and select enabled modules.
-2. Resolve required capabilities and explicitly select among competing providers.
-3. Reject unresolved requirements, ambiguous selections, and dependency cycles.
-4. Initialize modules in dependency order using typed dependencies or a resolver limited to declared capabilities.
-5. Validate duplicate or conflicting route patterns and finish route registration before accepting traffic.
+Define narrow repositories near their consumers. Keep backend queries and backend-specific errors in providers. Applications and modules can use backend clients directly or build repositories around shared connections. Do not introduce a universal database or query API.
 
-Multiple providers can advertise the same capability. Configuration selects a provider unless the consumer explicitly accepts several. A missing optional capability must have defined behavior.
+An application can use several storage platforms. Each provider must satisfy its consumer's guarantees. SQLite, PostgreSQL, MongoDB, files, and cloud storage are not interchangeable simply because they can store data.
 
-On startup failure, close completed modules in reverse order. A failing initializer must release partially acquired resources. Module factories perform no I/O. Normal shutdown drains HTTP requests before closing dependent services in reverse order.
+The application operation decides the transaction boundary. Providers must bind participating repository operations to the same transaction. For example, consuming a recovery token and changing the account must succeed together. Do not imply atomicity across unrelated storage platforms.
 
-Descriptors contain a name, factory, and capability requirements and provisions. [Module initialization](pkg/handlers/initialize.go) resolves provider selections, initializes providers, and passes each consumer only its declared dependencies. Consumers read services through their own interfaces. Missing optional services return a zero value or empty slice. Failed or incompatible providers stop startup. Route binding reports pattern conflicts through `Routes.Err()` after initialization and before traffic. Application-owned services arrive through typed constructors, without duplicate capability requirements. [Module dependencies](readme.md#module-dependencies) describes both paths.
+Modules own their storage objects and prepare them before activation. A module borrowing a connection does not own that connection. Services storing encoded values must allow serializer replacement without replacing storage.
 
-Modules can implement `Shutdown(context.Context) error` for owned resources. [Module cleanup](pkg/handlers/shutdown.go) closes consumers before providers and joins errors. The application registers successful modules for shutdown and closes shared services afterward. Cleanup uses a ten-second default or the caller's deadline. Hooks must honor cancellation. Context-free storage close functions cannot be interrupted.
+### Caching and rendering
 
-Storage setup runs during initialization, before consumers and routes become active. Module initialization uses the caller's deadline or a ten-second default for the whole phase. The reference application supplies that deadline through `app.initializationTimeout`. Providers must honor the context and leave borrowed pools open for their owner to close. Tests cover storage failures, deadlines, dependency ordering, and repositories sharing a pool.
+The code using a cache decides what to store, how long it can remain valid, when to refresh or remove it, and how to recover from cache failures. The cache implementation enforces expiration and size limits and handles concurrent access. The original data remains the source of truth.
 
-### Rendering and HTMX responses
+Keep parsed-template reuse independent of a general cache service. HTTP and fragment caches must distinguish full pages, fragments, and personalized responses. User or tenant data must not cross cache boundaries.
 
-Auth mutation handlers own their complete HTTP response. The email provider's [account operations](auth/modules/email/account_operations.go) accept contexts and values without using request, response, session, or notification state. Handlers validate forms and translate operation results into messages, cookies, and redirects. A notification or rendering failure does not undo a committed account change.
+## Remaining priorities
 
-[Content](pkg/components/content/content.go) describes the response. Its [dispatcher](pkg/components/content/response.go) selects page or fragment templates, loads notifications, and sends redirects or rendered HTML with HTMX metadata. Form errors use the same path. Named out-of-band templates render into the same buffer before delivery. Direct `http.Handler` use remains available for downloads, streaming, and specialized responses.
+Work through these priorities in order, using the reference application to validate changes. Security defects take precedence throughout.
 
-The response dispatcher owns HTTP and HTMX decisions. The renderer produces HTML. HTMX response headers are not processed on 3xx responses, so redirect handling must select the appropriate response behavior. [HTMX response documentation](https://htmx.org/docs/#response-headers)
+### 1. Complete storage and serialization contracts
 
-[HTMX helpers](pkg/components/htmx/htmx.go) provide request classification and response metadata for rendering and redirects.
+- Finish replacing `sqlx`: convert SQLite session storage and maintenance, then shared pool setup and test fixtures. Remove the dependency without changing stored formats, pool ownership, or transaction behavior.
+- Specify missing-record, uniqueness, concurrency, expiration, and durability guarantees. Preserve request cancellation and direct backend access. Reject providers that cannot meet required guarantees.
+- Separate session serialization from storage. Test serializer replacement and compatibility with previously saved data without forcing structured repositories to store opaque blobs.
+- Add in-memory adapters and shared contract tests for SQLite. Cover field mappings, affected-row checks, concurrent writes, transaction rollback, and failures. Explicitly configure connection limits, foreign-key enforcement, and lock waits.
+- Define stored-format versions and migration procedures. Reject incompatible schemas during provider startup. Test invalid data, interrupted migrations, and rollback or forward repair.
 
-Form contracts separate binding and validation from error presentation. The content manager remains a concrete setup object with separate layout, notification, and response callbacks. The dispatcher loads notifications before template execution. Templates receive message values, not session-storage helpers.
+Outcome: service contracts describe the behavior a replacement must preserve, and tests establish that behavior independently of the selected implementation.
 
-Parse reusable template sets at startup or controlled development reload. Use `html/template` with trusted templates and escaped data. Restrict `template.HTML` to reviewed trust boundaries. [Go template documentation](https://pkg.go.dev/html/template)
+### 2. Establish performance baselines and add justified caching
 
-## Storage and serialization
+- Benchmark rendering, middleware, sessions, and representative requests. Record workload, environment, latency, allocations, and memory use. Profile before selecting optimizations.
+- For demonstrated consumers, add an optional bounded in-memory cache and a no-op implementation. Define key isolation, freshness, invalidation, concurrent misses, and failure behavior for each integration.
+- Test cached reads after mutations and failures. Verify page, fragment, and personalized-response policies against the deployment's actual HTTP caches.
+- Measure hits, misses, evictions, and errors. Set latency, allocation, memory, and build-size budgets from stable baselines and add repeatable regression checks.
 
-Replacement contracts must describe behavior consumers need. SQLite, PostgreSQL, MongoDB, local files, and cloud storage are candidate providers, not interchangeable guarantees.
+Outcome: performance claims are reproducible, resources remain bounded, and cache behavior has explicit correctness tests. If no consumer needs a cache, defer its implementation rather than inventing one.
 
-### Data access contracts
+### 3. Validate deployment and recovery
 
-Use narrow repositories for operations such as finding a user or creating an account. Framework services can use smaller key/value or blob contracts when those match their needs. Do not introduce a universal database or query API.
+- Add liveness and readiness checks. Readiness must reflect the enabled capabilities needed to serve traffic.
+- Extend request and lifecycle logging with response status, duration, failures, and security audit events. Preserve correlation and redact secrets. Keep metrics and tracing integrations optional.
+- Add dependency vulnerability scanning, reviewed update proposals, and repeatable builds with version and commit metadata.
+- Provide a container or service deployment with documented secrets, TLS/proxy settings, resource limits, migration ownership, and configured resource locations. Use established migration tooling and test deployment from a clean environment.
+- Back up and restore deployed data stores. Verify restored accounts, sessions, and application records, and exercise migration rollback or forward repair.
+- Run load, restart, dependency-failure, and soak tests. Include request and rate limits, recovery-response timing, slow mail, storage outages, failed startup, and shutdown with active requests. A minimum response time does not conceal work that takes longer than that minimum.
+- Run an independent security review before exposing account and recovery flows to public traffic. Preserve HTTP and browser regression coverage as features and assets change.
 
-Authentication uses [AccountRepository](pkg/services/user/account_repository.go) for account and token operations. The reference application's `auth.accountStorage` selects a provider registered with its setup. SQLite borrows the shared pool. Web startup registers cleanup for owned resources before consumers initialize. Other applications supply their chosen repository directly. Automatic module discovery and dependency resolution remain separate startup work.
+Add optional automatic, bounded session and token cleanup. Prevent overlapping runs, report failures, and stop cleanup before storage closes. External scheduling remains sufficient for deployment readiness.
 
-[Session-backed identity](auth/identity/session.go) handles login, logout, and account lookup from a session. Account models, token operations, and storage contracts do not import session storage or database backends. The [SQLite provider](pkg/services/user/sqlite/account_repository.go) owns SQL, schema preparation, token cleanup, and transactions. Session models and the manager accept application-supplied stores without importing the [built-in providers](pkg/services/session/stores). Authentication checks the selected store's rotation capability. Optional services are owned by application setup, outside the core container.
+Outcome: a clean environment can deploy, operate, recover, and restore the application from documented procedures. Readiness applies to the configuration tested. Unused adapters and caches do not block a deployment.
 
-Expired-record maintenance is a separate provider capability. Maintenance setup opens storage without creating or migrating tables. Commands invoke maintenance without interpreting database settings.
+### 4. Prove framework replacement and reuse
 
-Specify missing-value errors, uniqueness, concurrency, expiration, and durability where the consumer depends on them. Express transactions or compare-and-swap as required capabilities when necessary. Reject unsupported guarantees instead of silently weakening them.
+- Run the same contract tests and representative workflow against PostgreSQL and one suitable filesystem, document, or cloud-storage adapter. Keep handlers and application operations unchanged. Document backend requirements and data migration.
+- Build an application outside this repository using documented setup, self-registering modules, supplied services, and security defaults. Implement a persistent feature with full-page and HTMX success and failure paths without copying reference-application infrastructure.
+- Use that application to validate provider and serializer replacement, isolation, and cleanup ownership. Remove coupling revealed by real usage without adding speculative abstractions.
+- Document module and service extension contracts. Stabilize interfaces only when usage supports them, with explicit compatibility and deprecation policies.
+- Choose a project license and publish a security-reporting policy before inviting outside adoption. The maintainer must choose the license.
 
-Applications can use backend clients directly. Framework contracts must not force all storage access through one abstraction.
+Outcome: developers can build an application and replace its services through documented setup. Start with runnable examples and concise instructions, not a scaffolding generator.
 
-Modules can build their own repositories around a shared connection pool. Each module owns its table names and prepares its schema before activation, whether at startup or later. The application owns the pool and closes it only after its consumers stop. Borrowing a pool does not give a module ownership of it.
+## Scope limits and deferred decisions
 
-The reference application creates missing tables from bootstrap schemas, including the site's [schema.sql](modules/site/database/schema.sql). Bootstrap setup does not migrate existing tables.
+Add adapters when applications need them. Defer broad ORM features, a universal query language, distributed caches, and a general job system until demonstrated requirements justify them.
 
-The site's one-method `ContactRepository` accepts [contact models](modules/site/models/contact_submissions.go) without importing storage implementations. [SQLite](modules/site/storage/sqlite_contacts.go) and [file-backed](modules/site/storage/file_contacts.go) contact repositories live in one storage package. [Application setup](cmd/web/site_modules.go) selects the provider. The `-contact-directory` option runs file-backed contacts alongside SQLite accounts. The [mixed-storage test](cmd/web/mixed_storage_test.go) covers both platforms and isolated provider failures. It does not establish a universal storage contract or cross-provider transactions.
+Runtime plugin loading needs a separate design for activation, compatibility, request draining, and replacement. Preserve module registration and ownership boundaries without treating discovery as permission to load or replace code during requests.
 
-Storage implementations must not dictate the serialization format. Services that store encoded values must allow the serializer to be replaced.
+If delivery must survive a restart, add an optional durable delivery service with an atomic outbox and safe retries. Do not promise exactly-once email delivery.
 
-### Transactions and delivery
-
-A provider must bind all repository operations participating in a transaction to the same transaction scope.
-
-Password resets run during the request. `auth.resetMinimumResponseTime` sets the [minimum response time](auth/modules/email/reset_timing.go) for valid submissions, measured from handler entry. It defaults to `2s`, and `0` disables the wait. Fast requests wait for the remaining time, while slower requests finish without an additional wait. The setting adds no processing timeout and does not change `mail.timeout` or request cancellation.
-
-The [timing tests](cmd/web/recovery_timing_test.go) cover account states, delayed storage, and delivery failures with and without HTMX. The response floor is not a constant-time guarantee. Processing that exceeds the configured minimum can still reveal timing differences between accounts. Per-IP rate limits bound admitted requests. Load testing is still needed.
-
-Built-in account email does not require a durable queue or automatic retries across restarts. Account and token records do not track pending delivery. If no email arrives, users can request another reset or sign in to resend verification. The reset acknowledgment confirms receipt, not guaranteed delivery.
-
-If an application requires delivery to survive a restart, provide an optional durable delivery service. Store its outbox record atomically with the relevant account changes and make retries safe. Do not promise exactly-once email delivery.
-
-### Adapter validation
-
-Start with in-memory test adapters and SQLite. Validate the same required behavior with PostgreSQL and one appropriate filesystem, document, or cloud-storage adapter. Run shared contract tests against each provider and document any additional guarantees. Add further adapters when applications need them.
-
-## Caching and performance
-
-Reuse parsed templates and immutable startup metadata first. These optimizations do not require a general cache service. Measure their effect before setting performance targets.
-
-Provide an optional bounded in-memory cache and a no-op implementation for consumers that need caching. Introduce distributed caching only for a demonstrated deployment need.
-
-Every cache integration must define:
-
-- Source of truth, keys, tenant or user isolation, and freshness requirements.
-- Expiration, invalidation triggers, and maximum memory or entry count.
-- Concurrent misses, load failures, and behavior when the cache is unavailable.
-- Hit, miss, eviction, and error measurements appropriate to the integration.
-
-Rendered fragments, repository queries, and authorization data require explicit invalidation. HTTP caches must also distinguish full-page, fragment, and personalized responses where relevant.
-
-Benchmark rendering, middleware, sessions, and representative requests with latency and allocation measurements. Record the workload and environment. Set regression budgets from stable baselines and profile before adding complexity.
-
-## Delivery plan
-
-The phases define implementation order. The active and planned phases list remaining work. Security fixes can interrupt any phase. Keep CI active and use the reference application to validate changes throughout.
-
-### Phase 0: Record decisions (complete)
-
-The roadmap defines the core and replaceable service boundaries. Public APIs are experimental. [Architecture decisions](docs/decisions/readme.md) record module-registration ownership and list unresolved contracts. Record further decisions as those contracts are defined.
-
-### Phase 1: Correctness and security (in progress)
-
-- Give credential forms explicit POST actions, keep secrets out of request logs and redisplayed fields, and prevent caching of credential and token-bearing responses. Test the actual forms with HTMX unavailable.
-- Buffer ordinary rendering before committing a response. Persist flash-message removal and report storage failures. Set `Vary: HX-Request` for page/fragment selection and explicit cache policies for personalized responses.
-- Validate request limits and recovery-response timing under load. A minimum response time does not conceal work that takes longer than that minimum.
-- Keep regression, HTTP integration, and browser coverage for security fixes, including failure, concurrency, and replay cases where applicable.
-
-Exit when these known blockers have regression coverage and the reference application's security controls work through HTTP tests. Passing this phase does not establish complete production readiness.
-
-### Phase 2: Lifecycle and module composition
-
-- Keep both applications on the shared [module setup](pkg/handlers/setup.go) and [HTTP lifecycle](pkg/server/run.go) helpers. Applications select modules, services, middleware, and listeners. The helpers own route checks, rollback, request draining, and cleanup, with configurable deadlines and direct `net/http` access.
-- Extend the catalog and per-application instances with capability-based provider selection, dependency ordering, route validation, and declared dependency access.
-- Return startup errors, validate required storage connectivity with deadlines, and remove shared mutable runtime state.
-- Handle `SIGINT` and `SIGTERM`, drain requests, and close owned resources. Test startup rollback and shutdown deadlines.
-- Allow applications to enable automatic, bounded session and token cleanup. Start cleanup after storage initialization, prevent overlapping runs, report failures, and stop cleanup before closing storage. External scheduling of the cleanup command remains sufficient for production readiness.
-- Use explicit filesystems or embedded assets for templates and migrations. Honor configured migration locations.
-- Keep the [stateless greeting application](examples/stateless/readme.md) independent of reference-site services. Its tests cover page and fragment rendering, coexistence with the reference site, and shutdown isolation. Broader provider replacement belongs to Phase 4.
-
-Exit when two independent servers can run and stop in one process without affecting each other, a stateless application needs no database, sessions, authentication, or mail, and tests cover partial startup, provider ambiguity, route conflicts, and cleanup.
-
-### Phase 3: Rendering and reference workflow
-
-- Form validation uses explicit checks and field errors, with shared password rules and tested email acceptance.
-- Both applications prepare reusable page and fragment templates at startup, after application rendering overrides. Shared response handlers prepare before modules initialize. Keep session mutation outside template execution. See the [rendering benchmark](pkg/components/readme.md#rendering-benchmark) for the measured parsing cost.
-- Pass interfaces directly and return errors last. Keep error types that callers need and distinct security operations explicit.
-- The [reference form tests](cmd/web/form_workflow_test.go) cover ordinary and HTMX contact submissions, preserved input, storage failure and retry, and registration/login redirects. The contact form supports native POST submission. Shared response-dispatch tests cover notifications and out-of-band updates.
-- Browser tests use the same locally served HTMX 2.0.11 asset as the application and cover escaped input, validation responses, redirects, out-of-band updates, and push/replace/back/forward navigation. History restoration renders full pages without local snapshots.
-- Establish rendering and middleware benchmarks. Publish a concise example of progressive enhancement.
-
-Exit when the workflow uses shared response handling, passes HTTP tests, and has a reproducible benchmark baseline.
-
-### Phase 4: Persistence and serialization contracts
-
-- Extract repositories, required storage capabilities, and serializers from actual consumers.
-- Authentication providers expose only their supported HTTP workflows. The email provider keeps account operations separate from HTTP responses and initialization, within the same package.
-- Account lookup and storage calls carry the request context. [HTTP lookup tests](cmd/web/account_cancellation_test.go) and [recovery tests](cmd/web/recovery_timing_test.go) cover cancellation while storage or delivery is waiting.
-- Replace `sqlx` with `database/sql` one SQLite provider at a time, then convert shared pool setup and remove the dependency. Preserve field mappings, context cancellation, affected-row checks, and transaction behavior.
-- Implement in-memory and SQLite adapters, then validate PostgreSQL and one suitable non-relational adapter.
-- Test transaction scope, uniqueness, concurrency, format migration, and recoverable delivery where required.
-- Document provider replacement and data migration.
-
-Exit when a reference workflow passes the same contract and integration tests across different providers without changes to its handler or application operation.
-
-### Phase 5: Caching and performance budgets
-
-- Introduce cache implementations for demonstrated consumers and test isolation, resource bounds, invalidation, and failure behavior.
-- Profile representative workloads and add miss coordination or fragment caching where measurements justify them.
-- Set latency, allocation, memory, and build-size targets from measured baselines.
-
-Exit when claimed improvements are reproducible and regression checks account for measurement noise.
-
-### Phase 6: Deployment and recovery
-
-- Add liveness, readiness, structured request and lifecycle logs, audit events, and optional metrics or tracing hooks.
-- Include build metadata, dependency scanning, update automation, and repeatable release builds.
-- Document TLS/proxy setup, secrets, migrations, backup, restore, and rollback or forward-repair procedures.
-- Provide a container or service deployment and exercise load, dependency failure, restart, and soak tests.
-
-Exit when a clean environment can deploy, operate, recover, and restore the reference application from documented procedures.
-
-### Phase 7: Validate framework usability
-
-Keep the stateless example small. Build a separate application outside this repository using the documented default setup, supplied services, and security defaults. Implement a persistent feature with full-page and HTMX responses without copying reference-application infrastructure, then validate provider replacement. Use these applications to remove remaining coupling, document extension contracts, and decide which APIs can stabilize. Choose a project license and publish a security-reporting policy before inviting outside adoption.
-
-Exit when the documented setup supports a working application without duplicated infrastructure, unused services stay inactive, and compatibility and deprecation policies are explicit.
+Evaluate opaque recovery tokens and session identifiers separately from security fixes. Keep established signing and password-hashing implementations unless a validated replacement design removes the need for them.
