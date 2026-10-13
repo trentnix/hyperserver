@@ -283,7 +283,7 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	if err := usersqlite.PrepareDatabase(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}
-	repository, err := storage.NewSQLiteContactRepository(context.Background(), db)
+	repository, err := storage.NewSQLiteContactRepository(context.Background(), db.DB)
 	if err != nil {
 		t.Fatal(err)
 	}

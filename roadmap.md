@@ -51,7 +51,7 @@ Logging uses `log/slog` behind the [logging contract](pkg/services/logger/logger
 
 Replace `jmoiron/sqlx` with `database/sql` in the built-in SQLite providers. Explicit scanning, query arguments, and transactions cover the current uses. Share account-field scanning in one private helper, not a generic mapper. The tradeoff is maintaining column and argument order. Tests must check every stored field, including distinct timestamps and boolean values.
 
-Convert contacts, accounts, and sessions separately, then change shared pool setup and remove `sqlx`. During the transition, converted providers can borrow the wrapper's underlying `*sql.DB`. Pool ownership, schemas, repository contracts, and transaction boundaries must stay unchanged.
+[Contact storage](modules/site/storage/sqlite_contacts.go) uses `*sql.DB`. Convert accounts and sessions separately, then change shared pool setup and remove `sqlx`. During the transition, converted providers can borrow the wrapper's underlying `*sql.DB`. Pool ownership, schemas, repository contracts, and transaction boundaries must stay unchanged.
 
 Keep `golang.org/x/crypto/bcrypt` and a maintained SQLite driver. Use established tooling such as `golang-migrate` for versioned migrations, which can run separately during deployment. Keep `google/uuid` unless opaque identifiers meet the application's needs and the storage and compatibility costs justify changing formats.
 

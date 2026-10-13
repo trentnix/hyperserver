@@ -78,7 +78,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					}
 					// The consumer can build its own repository on the same borrowed pool.
 					var err error
-					contacts, err = storage.NewSQLiteContactRepository(ctx, db)
+					contacts, err = storage.NewSQLiteContactRepository(ctx, db.DB)
 					return err
 				},
 			})

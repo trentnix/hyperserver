@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/trentnix/hyperserver/auth"
 	email "github.com/trentnix/hyperserver/auth/modules/email"
@@ -19,7 +20,10 @@ import (
 // Configuring these factories does not change the process-wide catalogs.
 func siteModules(app *application, directory string) ([]handlers.Descriptor, error) {
 	catalog := handlers.Registered()
-	db := app.Database
+	var db *sql.DB
+	if app.Database != nil {
+		db = app.Database.DB
+	}
 	newContacts := func(ctx context.Context) (site.ContactRepository, error) {
 		if directory == "" {
 			return storage.NewSQLiteContactRepository(ctx, db)

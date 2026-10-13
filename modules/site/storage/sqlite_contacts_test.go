@@ -2,9 +2,11 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/modules/site/models"
@@ -12,9 +14,9 @@ import (
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
-func contactTestDB(t *testing.T) *sqlx.DB {
+func contactTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "site.db"))
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "site.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,9 +39,10 @@ func TestSQLiteContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := contactTestDB(t)
+			accountPool := sqlx.NewDb(db, "sqlite3")
 			ctx := context.Background()
 			if !tc.siteFirst {
-				if err := usersqlite.PrepareDatabase(ctx, db); err != nil {
+				if err := usersqlite.PrepareDatabase(ctx, accountPool); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -47,15 +50,18 @@ func TestSQLiteContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			submission := models.ContactSubmission{Name: "Test person", Email: "person@example.invalid", Message: "Hello"}
+			submission := models.ContactSubmission{Name: "O'Neil", Email: "person@example.invalid", Message: "Hello'); DROP TABLE user; --"}
 			if err := repository.Create(ctx, &submission); err != nil {
 				t.Fatal(err)
 			}
-			if err := usersqlite.PrepareDatabase(ctx, db); err != nil {
+			if submission.Id == "" || submission.CreatedAt.IsZero() {
+				t.Fatal("successful write did not supply an ID and creation time")
+			}
+			if err := usersqlite.PrepareDatabase(ctx, accountPool); err != nil {
 				t.Fatal(err)
 			}
 			account := &user.User{Email: submission.Email}
-			if err := usersqlite.NewAccountRepository(db).Create(ctx, account); err != nil {
+			if err := usersqlite.NewAccountRepository(accountPool).Create(ctx, account); err != nil {
 				t.Fatal(err)
 			}
 
@@ -68,13 +74,14 @@ func TestSQLiteContactRepositorySharesPoolAndPreservesSchemas(t *testing.T) {
 				t.Fatal("repositories did not retain the supplied pool")
 			}
 			var stored models.ContactSubmission
-			if err := db.Get(&stored, `SELECT * FROM hyperserver_contact_submission WHERE id = ?`, submission.Id); err != nil {
+			if err := db.QueryRowContext(ctx, `SELECT id, name, email, message, created_at FROM hyperserver_contact_submission WHERE id = ?`, submission.Id).
+				Scan(&stored.Id, &stored.Name, &stored.Email, &stored.Message, &stored.CreatedAt); err != nil {
 				t.Fatal(err)
 			}
-			if stored.Id != submission.Id || stored.Message != submission.Message || !stored.CreatedAt.Equal(submission.CreatedAt) {
+			if stored.Id != submission.Id || stored.Name != submission.Name || stored.Email != submission.Email || stored.Message != submission.Message || !stored.CreatedAt.Equal(submission.CreatedAt) {
 				t.Fatalf("stored submission changed: %+v", stored)
 			}
-			if _, err := usersqlite.NewAccountRepository(db).GetByID(t.Context(), account.ID); err != nil {
+			if _, err := usersqlite.NewAccountRepository(accountPool).GetByID(t.Context(), account.ID); err != nil {
 				t.Fatal("site initialization affected account storage:", err)
 			}
 		})
@@ -125,25 +132,79 @@ func TestSQLiteContactRepositoryCreateFailures(t *testing.T) {
 				}
 			}
 			before := submission
-			if err := repository.Create(ctx, &submission); err == nil {
+			err = repository.Create(ctx, &submission)
+			if err == nil {
 				t.Fatal("invalid or failed write succeeded")
+			}
+			if failure == "canceled request" && !errors.Is(err, context.Canceled) {
+				t.Fatalf("canceled write returned %v, want context.Canceled", err)
 			}
 			if submission != before {
 				t.Fatal("failed write changed the caller's submission")
 			}
 			if failure == "missing schema" {
 				var count int
-				if err := db.Get(&count, `SELECT count(*) FROM sqlite_master WHERE name = 'hyperserver_contact_submission'`); err != nil || count != 0 {
+				if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name = 'hyperserver_contact_submission'`).Scan(&count); err != nil || count != 0 {
 					t.Fatalf("request recreated the schema: count = %d, error = %v", count, err)
 				}
 			} else {
 				var count int
-				if err := db.Get(&count, `SELECT count(*) FROM hyperserver_contact_submission`); err != nil || count != 0 {
+				if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM hyperserver_contact_submission`).Scan(&count); err != nil || count != 0 {
 					t.Fatalf("failed write persisted data: count = %d, error = %v", count, err)
 				}
 			}
 		})
 	}
+}
+
+func TestSQLiteContactRepositoryCreateCancellationWhileWaiting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db := contactTestDB(t)
+		repository, err := NewSQLiteContactRepository(t.Context(), db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Hold the only connection so the write must wait for its request context.
+		conn, err := db.Conn(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		submission := models.ContactSubmission{Name: "Waiting", Email: "person@example.invalid", Message: "Not stored"}
+		before := submission
+		result := make(chan error, 1)
+		go func() { result <- repository.Create(ctx, &submission) }()
+		synctest.Wait()
+		select {
+		case err := <-result:
+			t.Fatalf("write did not wait for the connection: %v", err)
+		default:
+		}
+
+		cancel()
+		synctest.Wait()
+		select {
+		case err = <-result:
+		default:
+			// Release a broken implementation before reporting the failure.
+			conn.Close()
+			<-result
+			t.Fatal("request cancellation did not interrupt the write")
+		}
+		if !errors.Is(err, context.Canceled) || submission != before {
+			t.Fatalf("canceled write changed its input or lost cancellation: %v", err)
+		}
+		if err := conn.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		var count int
+		if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM hyperserver_contact_submission`).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("canceled write persisted data: count=%d, error=%v", count, err)
+		}
+	})
 }
 
 func TestSQLiteContactRepositoryRejectsNilSubmission(t *testing.T) {
@@ -156,22 +217,23 @@ func TestSQLiteContactRepositoryRejectsNilSubmission(t *testing.T) {
 		t.Fatal("nil submission succeeded")
 	}
 	var count int
-	if err := db.Get(&count, `SELECT count(*) FROM hyperserver_contact_submission`); err != nil || count != 0 {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM hyperserver_contact_submission`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("nil submission persisted data: count=%d, error=%v", count, err)
 	}
 }
 
 func TestSQLiteContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T) {
 	db := contactTestDB(t)
+	accountPool := sqlx.NewDb(db, "sqlite3")
 	ctx := context.Background()
-	if err := usersqlite.PrepareDatabase(ctx, db); err != nil {
+	if err := usersqlite.PrepareDatabase(ctx, accountPool); err != nil {
 		t.Fatal(err)
 	}
 	account := &user.User{Email: "person@example.invalid", Password: "stored hash", Verified: true}
-	if err := usersqlite.NewAccountRepository(db).Create(ctx, account); err != nil {
+	if err := usersqlite.NewAccountRepository(accountPool).Create(ctx, account); err != nil {
 		t.Fatal(err)
 	}
-	before, err := usersqlite.NewAccountRepository(db).GetByID(t.Context(), account.ID)
+	before, err := usersqlite.NewAccountRepository(accountPool).GetByID(t.Context(), account.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +248,7 @@ func TestSQLiteContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatal("schema failure closed the shared pool:", err)
 	}
-	stored, err := usersqlite.NewAccountRepository(db).GetByID(t.Context(), account.ID)
+	stored, err := usersqlite.NewAccountRepository(accountPool).GetByID(t.Context(), account.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,10 +256,10 @@ func TestSQLiteContactRepositorySchemaFailurePreservesSharedStorage(t *testing.T
 		t.Fatal("schema failure changed the existing account")
 	}
 	var count int
-	if err := db.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'hyperserver_contact_submission'`); err != nil || count != 0 {
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'hyperserver_contact_submission'`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("failed setup created a contact table: count = %d, error = %v", count, err)
 	}
-	if err := usersqlite.NewAccountRepository(db).Create(ctx, &user.User{Email: "another@example.invalid"}); err != nil {
+	if err := usersqlite.NewAccountRepository(accountPool).Create(ctx, &user.User{Email: "another@example.invalid"}); err != nil {
 		t.Fatal("account writes failed after site setup failure:", err)
 	}
 

@@ -2,12 +2,12 @@ package module_site
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/routing"
@@ -21,7 +21,7 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 		Config:         &config.Config{Auth: config.AuthConfig{Enabled: true, RegistrationEnabled: true}},
 		ContentManager: content_services.NewContentManager(),
 	}
-	db, err := sqlx.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
