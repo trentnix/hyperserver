@@ -1161,7 +1161,7 @@ func assertFormRejected(t *testing.T, w *httptest.ResponseRecorder, message stri
 func (h *httpHarness) assertRowCount(t *testing.T, table string, want int) {
 	t.Helper()
 	var count int
-	if err := h.app.Database.Get(&count, "SELECT COUNT(*) FROM "+table); err != nil {
+	if err := h.app.Database.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != want {
@@ -1491,7 +1491,7 @@ func TestHTTPContact(t *testing.T) {
 				t.Fatalf("contact response full page=%v, HTMX=%v", fullPage, htmx)
 			}
 			var count int
-			if err := h.app.Database.Get(&count, "SELECT COUNT(*) FROM hyperserver_contact_submission WHERE email = ? AND message = ?", "person@example.invalid", "Test message"); err != nil {
+			if err := h.app.Database.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM hyperserver_contact_submission WHERE email = ? AND message = ?", "person@example.invalid", "Test message").Scan(&count); err != nil {
 				t.Fatal(err)
 			}
 			if count != i+1 {

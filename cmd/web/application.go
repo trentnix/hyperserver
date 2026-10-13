@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -19,7 +19,7 @@ import (
 type application struct {
 	*server.ApplicationServer
 	// Database can be borrowed. Use ownDatabase to transfer cleanup to this application.
-	Database *sqlx.DB
+	Database *sql.DB
 	Mail     *messaging.MailClient
 	// AccountRepository must be ready before modules and middleware use it.
 	// A supplied repository keeps its existing owner.
@@ -37,7 +37,7 @@ func newApplication(cfg config.Config) (*application, error) {
 }
 
 // ownDatabase transfers pool ownership before its consumers initialize.
-func (s *application) ownDatabase(db *sqlx.DB) {
+func (s *application) ownDatabase(db *sql.DB) {
 	s.Database = db
 	s.OnShutdown("application database", func(context.Context) error { return db.Close() })
 }

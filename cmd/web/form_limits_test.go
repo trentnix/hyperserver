@@ -217,11 +217,12 @@ func TestHTTPContactFieldBoundary(t *testing.T) {
 				t.Fatalf("boundary submission: status=%d body=%s", w.Code, w.Body.String())
 			}
 		}
-		var stored []string
-		if err := h.app.Database.Select(&stored, "SELECT message FROM hyperserver_contact_submission"); err != nil {
+		h.assertRowCount(t, "hyperserver_contact_submission", 2)
+		var matching int
+		if err := h.app.Database.QueryRowContext(t.Context(), "SELECT count(*) FROM hyperserver_contact_submission WHERE message = ?", message).Scan(&matching); err != nil {
 			t.Fatal(err)
 		}
-		if len(stored) != 2 || stored[0] != message || stored[1] != message {
+		if matching != 2 {
 			t.Fatal("accepted contact messages were truncated or not saved")
 		}
 	})

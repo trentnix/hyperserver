@@ -3,11 +3,40 @@
 package database
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3" // This test opens SQLite connections.
 )
+
+func TestSetupDefersConnectionAndSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "database.db")
+	db, err := Setup("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("setup accessed storage: stat error = %v", err)
+	}
+
+	if err := db.PingContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	var tables int
+	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master WHERE type = 'table'").Scan(&tables); err != nil || tables != 0 {
+		t.Fatalf("setup created tables: count = %d, error = %v", tables, err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.PingContext(t.Context()); err == nil {
+		t.Fatal("pool remained usable after its owner closed it")
+	}
+}
 
 func TestResolvedConnectionSurvivesDirectoryChange(t *testing.T) {
 	base := t.TempDir()

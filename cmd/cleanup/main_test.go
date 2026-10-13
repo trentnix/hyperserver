@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,17 +13,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
-func cleanupFixture(t *testing.T) (*config.Config, *sqlx.DB, *sqlx.DB) {
+func cleanupFixture(t *testing.T) (*config.Config, *sql.DB, *sql.DB) {
 	t.Helper()
 	dir := t.TempDir()
 	accountPath, sessionPath := filepath.Join(dir, "accounts.db"), filepath.Join(dir, "sessions.db")
-	open := func(path string) *sqlx.DB {
+	open := func(path string) *sql.DB {
 		db, err := database.Setup("sqlite3", path)
 		if err != nil {
 			t.Fatal(err)
@@ -31,7 +31,7 @@ func cleanupFixture(t *testing.T) (*config.Config, *sqlx.DB, *sqlx.DB) {
 		return db
 	}
 	accounts, sessions := open(accountPath), open(sessionPath)
-	if err := usersqlite.PrepareDatabase(context.Background(), accounts.DB); err != nil {
+	if err := usersqlite.PrepareDatabase(context.Background(), accounts); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sessions.Exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY, expires_at TIMESTAMP)`); err != nil {
@@ -64,9 +64,9 @@ func TestCleanupSeparateStores(t *testing.T) {
 			t.Fatalf("cleanup = (%d, %d, %v), want (%d, %d, nil)", s, a, err, want, want)
 		}
 	}
-	for db, query := range map[*sqlx.DB]string{accounts: "SELECT count(*) FROM usertoken", sessions: "SELECT count(*) FROM sessions"} {
+	for db, query := range map[*sql.DB]string{accounts: "SELECT count(*) FROM usertoken", sessions: "SELECT count(*) FROM sessions"} {
 		var count int
-		if err := db.Get(&count, query); err != nil || count != 1 {
+		if err := db.QueryRowContext(t.Context(), query).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("live rows = %d, %v, want 1", count, err)
 		}
 	}
@@ -86,7 +86,7 @@ func TestCleanupRejectsUnsupportedAccountStorage(t *testing.T) {
 				t.Fatalf("unsupported account cleanup = (%d, %d, %v)", sessions, tokens, err)
 			}
 			var count int
-			if err := accounts.Get(&count, "SELECT count(*) FROM usertoken"); err != nil || count != 4 {
+			if err := accounts.QueryRowContext(t.Context(), "SELECT count(*) FROM usertoken").Scan(&count); err != nil || count != 4 {
 				t.Fatalf("unsupported account cleanup changed SQLite tokens: count=%d, error=%v", count, err)
 			}
 		})
@@ -99,10 +99,14 @@ func TestCleanupPartialFailure(t *testing.T) {
 			cfg, accounts, sessions := cleanupFixture(t)
 			wantSessions, wantTokens := int64(2), int64(2)
 			if failed == "accounts" {
-				accounts.MustExec(`DROP TABLE usertoken`)
+				if _, err := accounts.ExecContext(t.Context(), `DROP TABLE usertoken`); err != nil {
+					t.Fatal(err)
+				}
 				wantTokens = 0
 			} else {
-				sessions.MustExec(`DROP TABLE sessions`)
+				if _, err := sessions.ExecContext(t.Context(), `DROP TABLE sessions`); err != nil {
+					t.Fatal(err)
+				}
 				wantSessions = 0
 			}
 			s, a, err := cleanup(context.Background(), cfg, 2)
@@ -114,7 +118,7 @@ func TestCleanupPartialFailure(t *testing.T) {
 				db, table = sessions, "sessions"
 			}
 			var count int
-			if err := db.Get(&count, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table); err != nil || count != 0 {
+			if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("cleanup recreated missing schema: count=%d, error=%v", count, err)
 			}
 		})
@@ -130,9 +134,9 @@ func TestCleanupDisabledAndUnselectedStores(t *testing.T) {
 	if err != nil || s != 0 || a != 0 {
 		t.Fatalf("inactive cleanup = (%d, %d, %v)", s, a, err)
 	}
-	for db, query := range map[*sqlx.DB]string{accounts: "SELECT count(*) FROM usertoken", sessions: "SELECT count(*) FROM sessions"} {
+	for db, query := range map[*sql.DB]string{accounts: "SELECT count(*) FROM usertoken", sessions: "SELECT count(*) FROM sessions"} {
 		var count int
-		if err := db.Get(&count, query); err != nil || count != 4 {
+		if err := db.QueryRowContext(t.Context(), query).Scan(&count); err != nil || count != 4 {
 			t.Fatalf("inactive storage changed: %d, %v", count, err)
 		}
 	}
@@ -191,7 +195,7 @@ func TestCleanupSessionSelection(t *testing.T) {
 				t.Fatalf("selection result: sessions=%d, tokens=%d, error=%v", sessions, tokens, err)
 			}
 			var remaining int64
-			if err := sessionsDB.Get(&remaining, "SELECT count(*) FROM sessions"); err != nil || remaining != 4-wantDeleted {
+			if err := sessionsDB.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions").Scan(&remaining); err != nil || remaining != 4-wantDeleted {
 				t.Fatalf("unexpected session changes: count=%d, error=%v", remaining, err)
 			}
 		})
@@ -209,7 +213,7 @@ func TestCleanupContinuesAfterSelectedSessionProviderFailure(t *testing.T) {
 				t.Fatalf("independent cleanup: sessions=%d, tokens=%d, error=%v", sessions, tokens, err)
 			}
 			var remaining int
-			if err := sessionsDB.Get(&remaining, "SELECT count(*) FROM sessions"); err != nil || remaining != 2 {
+			if err := sessionsDB.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions").Scan(&remaining); err != nil || remaining != 2 {
 				t.Fatalf("selected store skipped or cleaned twice: count=%d, error=%v", remaining, err)
 			}
 		})
@@ -294,10 +298,10 @@ http:
 				}
 			}
 			var count int
-			if err := sessions.Get(&count, `SELECT count(*) FROM sessions`); err != nil || count != 3 {
+			if err := sessions.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions`).Scan(&count); err != nil || count != 3 {
 				t.Fatalf("command deleted wrong rows: %d, %v", count, err)
 			}
-			if err := accounts.Get(&count, "SELECT count(*) FROM usertoken"); err != nil || count != 4 {
+			if err := accounts.QueryRowContext(t.Context(), "SELECT count(*) FROM usertoken").Scan(&count); err != nil || count != 4 {
 				t.Fatalf("command touched unselected account storage: count=%d, error=%v", count, err)
 			}
 		})

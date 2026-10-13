@@ -104,11 +104,14 @@ func TestHTTPContactWorkflow(t *testing.T) {
 				if !strings.Contains(w.Body.String(), "Your message has been submitted.") || strings.Contains(w.Body.String(), "unexpected-empty-key-value") || strings.Contains(w.Body.String(), "Unable to save your message") {
 					t.Fatal("successful retry did not show success with cleared fields and errors")
 				}
-				var stored []models.ContactSubmission
-				if err := h.app.Database.Select(&stored, "SELECT * FROM hyperserver_contact_submission"); err != nil {
+				h.assertRowCount(t, "hyperserver_contact_submission", 1)
+				var stored models.ContactSubmission
+				err := h.app.Database.QueryRowContext(t.Context(), "SELECT id, name, email, message, created_at FROM hyperserver_contact_submission").
+					Scan(&stored.Id, &stored.Name, &stored.Email, &stored.Message, &stored.CreatedAt)
+				if err != nil {
 					t.Fatal(err)
 				}
-				if len(stored) != 1 || stored[0].Name != fields.Get("name") || stored[0].Email != fields.Get("email") || stored[0].Message != fields.Get("message") || stored[0].Id == "" || stored[0].CreatedAt.IsZero() {
+				if stored.Name != fields.Get("name") || stored.Email != fields.Get("email") || stored.Message != fields.Get("message") || stored.Id == "" || stored.CreatedAt.IsZero() {
 					t.Fatalf("stored submission=%+v", stored)
 				}
 

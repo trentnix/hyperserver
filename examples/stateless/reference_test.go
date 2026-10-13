@@ -91,7 +91,7 @@ func TestApplicationRunsBesideReferenceSite(t *testing.T) {
 			}
 			reference.OnShutdown("database", func(context.Context) error { return db.Close() })
 			newContacts := func(ctx context.Context) (site.ContactRepository, error) {
-				return storage.NewSQLiteContactRepository(ctx, db.DB)
+				return storage.NewSQLiteContactRepository(ctx, db)
 			}
 			if err := site.ConfigureRendering(reference.ContentManager, false); err != nil {
 				t.Fatal(err)

@@ -30,7 +30,7 @@ func TestHTTPMixedStorage(t *testing.T) {
 			t.Fatal(err)
 		}
 		var count int
-		if err := h.app.Database.Get(&count, `SELECT count(*) FROM sqlite_master WHERE name = 'hyperserver_contact_submission'`); err != nil || count != 0 {
+		if err := h.app.Database.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name = 'hyperserver_contact_submission'`).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("file-backed module prepared SQL storage: count=%d, error=%v", count, err)
 		}
 		// Contacts remain usable even when the SQL account table is unavailable.

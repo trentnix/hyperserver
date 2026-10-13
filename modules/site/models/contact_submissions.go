@@ -11,11 +11,11 @@ import (
 type (
 	// ContactSubmission is a contact message persisted by the development site.
 	ContactSubmission struct {
-		Id        string    `db:"id"`
-		Name      string    `db:"name"`
-		Email     string    `db:"email"`
-		Message   string    `db:"message"`
-		CreatedAt time.Time `db:"created_at"`
+		Id        string
+		Name      string
+		Email     string
+		Message   string
+		CreatedAt time.Time
 	}
 
 	// BaseError aliases the shared HyperServer error wrapper.

@@ -72,7 +72,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		s.Config.Auth.AccountStorage.Provider = "custom"
 		accounts := reference.NewAccountStorage(s.Config)
 		if err := accounts.RegisterProvider("custom", reference.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
-			repository := usersqlite.NewAccountRepository(s.Database.DB)
+			repository := usersqlite.NewAccountRepository(s.Database)
 			if err := repository.Initialize(ctx); err != nil {
 				return nil, nil, err
 			}
@@ -130,7 +130,7 @@ func TestStartupHelperProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		var tables int
-		if err := s.Database.Get(&tables, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`); err != nil {
+		if err := s.Database.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`).Scan(&tables); err != nil {
 			t.Fatal(err)
 		}
 		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {

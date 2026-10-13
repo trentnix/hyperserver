@@ -10,7 +10,6 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -151,7 +150,7 @@ func TestShutdownHooksOrderOwnershipAndErrors(t *testing.T) {
 	}
 }
 
-func testApplicationWithPool(core *server.ApplicationServer, db *sqlx.DB) *application {
+func testApplicationWithPool(core *server.ApplicationServer, db *sql.DB) *application {
 	app := &application{ApplicationServer: core}
 	if db != nil {
 		app.ownDatabase(db)

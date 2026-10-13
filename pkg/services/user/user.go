@@ -14,17 +14,17 @@ type (
 	// User is a persisted account, including its authentication provider and verification state.
 	// Password contains the provider's stored password hash, not plaintext.
 	User struct {
-		ID                   string    `db:"id"`
-		Email                string    `db:"email"`
-		Verified             bool      `db:"verified"`
-		VerificationRequired bool      `db:"verification_required"`
-		CreatedAt            time.Time `db:"created_at"`
-		UpdatedAt            time.Time `db:"updated_at"`
-		RegistrationAuthType string    `db:"registration_auth_type"`
-		Password             string    `db:"password"`
+		ID                   string
+		Email                string
+		Verified             bool
+		VerificationRequired bool
+		CreatedAt            time.Time
+		UpdatedAt            time.Time
+		RegistrationAuthType string
+		Password             string
 		// SessionVersion changes when credentials or account access changes.
 		// Callers must preserve the version supplied by account reads and writes.
-		SessionVersion int64 `db:"session_version"`
+		SessionVersion int64
 	}
 
 	contextKey string

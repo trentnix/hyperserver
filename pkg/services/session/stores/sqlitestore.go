@@ -39,11 +39,11 @@ type (
 
 	// SQLiteSession is the database representation of an encoded session.
 	SQLiteSession struct {
-		ID         string    `db:"id"`
-		Session    string    `db:"session"`
-		Expires_at time.Time `db:"expires_at"`
-		Created_at time.Time `db:"created_at"`
-		Updated_at time.Time `db:"updated_at"`
+		ID         string
+		Session    string
+		Expires_at time.Time
+		Created_at time.Time
+		Updated_at time.Time
 	}
 )
 
@@ -99,7 +99,7 @@ func NewSQLiteStore(ctx context.Context, c *config.Config) (*SQLiteStore, error)
 	if err != nil {
 		return nil, err
 	}
-	sqliteStore.db = db.DB
+	sqliteStore.db = db
 	// Keep in-memory databases on one connection and serialize session writes.
 	db.SetMaxOpenConns(1)
 	if err := sqliteStore.configureDatabase(ctx); err != nil {

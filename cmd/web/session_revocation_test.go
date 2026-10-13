@@ -102,7 +102,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 						t.Fatalf("logout failed: %d %s", w.Code, w.Body.String())
 					}
 					var count int
-					if err := h.app.Database.Get(&count, `SELECT count(*) FROM session WHERE id = ?`, claims.ID); err != nil || count != 0 {
+					if err := h.app.Database.QueryRowContext(t.Context(), `SELECT count(*) FROM session WHERE id = ?`, claims.ID).Scan(&count); err != nil || count != 0 {
 						t.Fatalf("logout left its stored session: %d, %v", count, err)
 					}
 				}

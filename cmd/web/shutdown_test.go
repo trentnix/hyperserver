@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/modules/site/models"
@@ -67,12 +67,12 @@ func testRunDrainsRequestsBeforeClosingPool(t *testing.T, scheme string) {
 	}
 
 	// Reopen independently to verify the request committed before its pool closed.
-	db, err := sqlx.Open("sqlite3", path)
+	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if _, err := usersqlite.NewAccountRepository(db.DB).GetByEmail(t.Context(), "shutdown@example.invalid"); err != nil {
+	if _, err := usersqlite.NewAccountRepository(db).GetByEmail(t.Context(), "shutdown@example.invalid"); err != nil {
 		t.Fatal("shutdown lost the in-flight request's write:", err)
 	}
 }
@@ -123,7 +123,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 		close(started)
 		<-release
 		account := &user.User{Email: "shutdown@example.invalid"}
-		if err := usersqlite.NewAccountRepository(s.Database.DB).Create(r.Context(), account); err != nil {
+		if err := usersqlite.NewAccountRepository(s.Database).Create(r.Context(), account); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -262,9 +262,9 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	fmt.Fprintln(stdout, "shutdown ordering passed")
 }
 
-func shutdownTestDB(t *testing.T) *sqlx.DB {
+func shutdownTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "accounts.db"))
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "accounts.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,10 +280,10 @@ func shutdownTestDB(t *testing.T) *sqlx.DB {
 func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	db := shutdownTestDB(t)
 	owner := testApplicationWithPool(&server.ApplicationServer{}, db)
-	if err := usersqlite.PrepareDatabase(context.Background(), db.DB); err != nil {
+	if err := usersqlite.PrepareDatabase(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}
-	repository, err := storage.NewSQLiteContactRepository(context.Background(), db.DB)
+	repository, err := storage.NewSQLiteContactRepository(context.Background(), db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,18 +343,18 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 
 	// The account consumer still uses the same pool while the site is stopping.
 	account := &user.User{Email: "before@example.invalid"}
-	if err := usersqlite.NewAccountRepository(db.DB).Create(context.Background(), account); err != nil {
+	if err := usersqlite.NewAccountRepository(db).Create(context.Background(), account); err != nil {
 		t.Fatal(err)
 	}
 	releaseRequest()
 	awaitResult(t, response)
 	awaitResult(t, done)
 	account = &user.User{Email: "after@example.invalid"}
-	if err := usersqlite.NewAccountRepository(db.DB).Create(context.Background(), account); err != nil {
+	if err := usersqlite.NewAccountRepository(db).Create(context.Background(), account); err != nil {
 		t.Fatal("stopping the site closed the account consumer's pool:", err)
 	}
 	var count int
-	if err := db.Get(&count, `SELECT count(*) FROM hyperserver_contact_submission`); err != nil || count != 1 {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM hyperserver_contact_submission`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("active request did not persist before shutdown: count = %d, error = %v", count, err)
 	}
 	if err := owner.Shutdown(); err != nil {

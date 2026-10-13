@@ -112,7 +112,7 @@ func openSQLiteMaintenance(ctx context.Context, options map[string]string) (*SQL
 	if err := db.PingContext(ctx); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
-	return &SQLiteStore{db: db.DB, tableName: options["sessiontable"]}, nil
+	return &SQLiteStore{db: db, tableName: options["sessiontable"]}, nil
 }
 
 // DeleteExpired removes at most limit expired sessions and returns the deleted count.

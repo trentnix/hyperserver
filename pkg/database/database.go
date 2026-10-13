@@ -3,17 +3,15 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
-
-	"github.com/jmoiron/sqlx"
 )
 
-// Setup opens a sqlx connection pool for driver and connection.
+// Setup opens a SQL connection pool for driver and connection.
 // It does not ping the database, create tables, or seed data. The caller owns the pool.
 // The driver must already be registered through its package import.
-func Setup(driver string, connection string) (*sqlx.DB, error) {
-	// Open the database using sqlx
-	db, err := sqlx.Open(driver, connection)
+func Setup(driver string, connection string) (*sql.DB, error) {
+	db, err := sql.Open(driver, connection)
 	if err != nil {
 		return nil, NewErrDatabaseConfiguration(fmt.Errorf("error opening database file: %w", err))
 	}

@@ -113,7 +113,7 @@ func TestHTTPResetConsumesExactTokenAndRejectsReplay(t *testing.T) {
 		}
 		// Redeem the token other than the one an account-only lookup selects.
 		var selectedHash string
-		if err := h.app.Database.GetContext(t.Context(), &selectedHash, "SELECT token_hash FROM usertoken WHERE user_id = ? AND token_type = ?", u.ID, "auth-reset"); err != nil {
+		if err := h.app.Database.QueryRowContext(t.Context(), "SELECT token_hash FROM usertoken WHERE user_id = ? AND token_type = ?", u.ID, "auth-reset").Scan(&selectedHash); err != nil {
 			t.Fatal(err)
 		}
 		presented, untouched := first, second

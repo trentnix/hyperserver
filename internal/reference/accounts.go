@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -73,7 +72,7 @@ func (s *AccountStorage) RegisterProvider(name string, provider AccountProvider)
 // SQLite borrows pool. Other providers open their own storage.
 // The caller owns the returned cleanup function. Failed opens release acquired
 // resources and can be retried. Disabled authentication returns nil values.
-func (s *AccountStorage) Open(ctx context.Context, pool *sqlx.DB) (user.AccountRepository, func() error, error) {
+func (s *AccountStorage) Open(ctx context.Context, pool *sql.DB) (user.AccountRepository, func() error, error) {
 	if !s.config.Auth.Enabled {
 		return nil, nil, nil
 	}
@@ -105,23 +104,19 @@ func (s *AccountStorage) Open(ctx context.Context, pool *sqlx.DB) (user.AccountR
 	return repository, cleanup, nil
 }
 
-func initializeSQLiteAccounts(ctx context.Context, pool *sqlx.DB, options map[string]string) (user.AccountRepository, func() error, error) {
+func initializeSQLiteAccounts(ctx context.Context, pool *sql.DB, options map[string]string) (user.AccountRepository, func() error, error) {
 	if err := usersqlite.ValidateOptions(options); err != nil {
 		return nil, nil, err
 	}
 
-	var db *sql.DB
-	if pool != nil {
-		db = pool.DB
-	}
-	repository := usersqlite.NewAccountRepository(db)
+	repository := usersqlite.NewAccountRepository(pool)
 	if err := repository.Initialize(ctx); err != nil {
 		return nil, nil, err
 	}
 	return repository, nil, nil
 }
 
-func accountProvider(cfg *config.Config, pool *sqlx.DB, providers map[string]AccountProvider) (string, AccountProvider, error) {
+func accountProvider(cfg *config.Config, pool *sql.DB, providers map[string]AccountProvider) (string, AccountProvider, error) {
 	name := cfg.Auth.AccountStorage.Provider
 	if name == "" {
 		name = "sqlite"

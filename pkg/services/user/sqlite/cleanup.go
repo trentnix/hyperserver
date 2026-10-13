@@ -32,7 +32,7 @@ func OpenTokenMaintenance(ctx context.Context, cfg config.DatabaseConfig, option
 	if err := db.PingContext(ctx); err != nil {
 		return nil, nil, errors.Join(err, db.Close())
 	}
-	return NewAccountRepository(db.DB), db.Close, nil
+	return NewAccountRepository(db), db.Close, nil
 }
 
 // DeleteExpiredTokens removes at most limit expired account tokens and returns

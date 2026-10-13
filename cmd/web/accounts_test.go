@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
 	"testing/synctest"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/database"
@@ -43,7 +43,7 @@ func TestInitializeAccountsDisabled(t *testing.T) {
 		t.Fatal("disabled auth created a repository")
 	}
 	var count int
-	if err := s.app.Database.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'table'`); err != nil || count != 0 {
+	if err := s.app.Database.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table'`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("disabled auth created tables: count = %d, error = %v", count, err)
 	}
 }
@@ -147,7 +147,7 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 			}
 			s.app.Database = db
 			var count int
-			if err := db.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`); err != nil || count != 0 {
+			if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("failed setup left account tables or closed the pool: count = %d, error = %v", count, err)
 			}
 			if scenario == "schema conflict" {
@@ -215,9 +215,9 @@ func assertAccountRepositoryReady(t *testing.T, repository user.AccountRepositor
 	}
 }
 
-func accountSetupTestDB(t *testing.T) *sqlx.DB {
+func accountSetupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "accounts.db"))
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "accounts.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
