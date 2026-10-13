@@ -34,7 +34,7 @@ func TestSQLiteMaintenanceDoesNotInitializeStorage(t *testing.T) {
 		t.Fatal("maintenance accepted missing schema")
 	}
 	var tables int
-	if err := store.db.Get(&tables, "SELECT count(*) FROM sqlite_master WHERE type = 'table'"); err != nil || tables != 0 {
+	if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master WHERE type = 'table'").Scan(&tables); err != nil || tables != 0 {
 		t.Fatalf("maintenance created tables: count=%d, error=%v", tables, err)
 	}
 	if err := store.Close(); err != nil {
@@ -100,7 +100,7 @@ func TestSQLiteCleanupBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := store.db.Get(&count, `SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'sessions_expiration'`); err != nil || count != 1 {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'sessions_expiration'`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("expiration index missing: %d, %v", count, err)
 	}
 }
@@ -146,7 +146,7 @@ func TestSQLiteCleanupFailures(t *testing.T) {
 			}
 			if store.db != nil && failure != "closed database" {
 				var remaining int
-				if err := store.db.Get(&remaining, `SELECT count(*) FROM sessions`); err != nil || remaining != 1 {
+				if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions`).Scan(&remaining); err != nil || remaining != 1 {
 					t.Fatalf("failed cleanup changed storage: %d, %v", remaining, err)
 				}
 			}

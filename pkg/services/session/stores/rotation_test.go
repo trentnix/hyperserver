@@ -34,10 +34,10 @@ func TestSQLiteSessionRotation(t *testing.T) {
 				t.Fatal("rotation did not replace the request cache")
 			}
 			var count int
-			if err := store.db.Get(&count, "SELECT count(*) FROM sessions WHERE id = ?", oldID); err != nil || count != 0 {
+			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions WHERE id = ?", oldID).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("old row survived: %d, %v", count, err)
 			}
-			if err := store.db.Get(&count, "SELECT count(*) FROM sessions WHERE id = ?", unrelated.ID); err != nil || count != 1 {
+			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions WHERE id = ?", unrelated.ID).Scan(&count); err != nil || count != 1 {
 				t.Fatalf("unrelated session changed: %d, %v", count, err)
 			}
 			nextRequest := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -105,7 +105,7 @@ func TestSQLiteRotationFailurePreservesSession(t *testing.T) {
 			if failure == "revoked" {
 				want = 0
 			}
-			if err := store.db.Get(&count, "SELECT count(*) FROM sessions"); err != nil || count != want {
+			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions").Scan(&count); err != nil || count != want {
 				t.Fatalf("failed rotation changed stored rows: %d, %v", count, err)
 			}
 		})
@@ -161,7 +161,7 @@ func TestSQLiteConcurrentRotation(t *testing.T) {
 		}
 	}
 	var count int
-	if err := store.db.Get(&count, `SELECT count(*) FROM sessions`); err != nil || succeeded != 1 || count != 1 {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions`).Scan(&count); err != nil || succeeded != 1 || count != 1 {
 		t.Fatalf("competing rotations: successes=%d, rows=%d, error=%v", succeeded, count, err)
 	}
 }

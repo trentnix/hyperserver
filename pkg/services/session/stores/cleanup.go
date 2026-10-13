@@ -2,6 +2,7 @@ package stores
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"maps"
@@ -9,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	sessions "github.com/trentnix/hyperserver/pkg/services/session"
@@ -112,7 +112,7 @@ func openSQLiteMaintenance(ctx context.Context, options map[string]string) (*SQL
 	if err := db.PingContext(ctx); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
-	return &SQLiteStore{db: db, tableName: options["sessiontable"]}, nil
+	return &SQLiteStore{db: db.DB, tableName: options["sessiontable"]}, nil
 }
 
 // DeleteExpired removes at most limit expired sessions and returns the deleted count.
@@ -126,7 +126,7 @@ func (s *SQLiteStore) DeleteExpired(ctx context.Context, limit int) (int64, erro
 // the deleted count. Like DeleteExpired, it leaves the current second untouched.
 // It uses a caller-owned pool.
 // The session table must already exist. It does not initialize or close the pool.
-func DeleteExpiredSQLiteSessions(ctx context.Context, db *sqlx.DB, table string, limit int) (int64, error) {
+func DeleteExpiredSQLiteSessions(ctx context.Context, db *sql.DB, table string, limit int) (int64, error) {
 	if limit < 1 {
 		return 0, fmt.Errorf("session cleanup limit must be positive")
 	}

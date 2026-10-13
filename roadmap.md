@@ -106,7 +106,7 @@ Work through these priorities in order, using the reference application to valid
 
 ### 1. Complete storage and serialization contracts
 
-- Finish replacing `sqlx`: convert SQLite session storage and maintenance, then shared pool setup and test fixtures. Remove the dependency without changing stored formats, pool ownership, or transaction behavior.
+- Finish replacing `sqlx` in shared pool setup and test fixtures. Remove transitional wrapper access and the dependency without changing stored formats, pool ownership, or transaction behavior.
 - Specify missing-record, uniqueness, concurrency, expiration, and durability guarantees. Preserve request cancellation and direct backend access. Reject providers that cannot meet required guarantees.
 - Separate session serialization from storage. Test serializer replacement and compatibility with previously saved data without forcing structured repositories to store opaque blobs.
 - Add in-memory adapters and shared contract tests for SQLite. Cover field mappings, affected-row checks, concurrent writes, transaction rollback, and failures. Explicitly configure connection limits, foreign-key enforcement, and lock waits.

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
@@ -33,7 +32,7 @@ type (
 		// table that will store sessions
 		tableName string
 		// database connection
-		db *sqlx.DB
+		db *sql.DB
 		// enabled
 		enabled bool
 	}
@@ -100,7 +99,7 @@ func NewSQLiteStore(ctx context.Context, c *config.Config) (*SQLiteStore, error)
 	if err != nil {
 		return nil, err
 	}
-	sqliteStore.db = db
+	sqliteStore.db = db.DB
 	// Keep in-memory databases on one connection and serialize session writes.
 	db.SetMaxOpenConns(1)
 	if err := sqliteStore.configureDatabase(ctx); err != nil {
@@ -258,7 +257,7 @@ func (s *SQLiteStore) Rotate(w http.ResponseWriter, r *http.Request, previous *s
 		return nil, err
 	}
 
-	tx, err := s.db.BeginTxx(r.Context(), nil)
+	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +348,7 @@ func (s *SQLiteStore) configureDatabase(ctx context.Context) error {
 		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", s.db.Driver()))
 	}
 
-	tx, err := s.db.BeginTxx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return database.NewErrDatabase(err)
 	}
@@ -381,7 +380,8 @@ func (s *SQLiteStore) getSessionFromDatabase(ctx context.Context, sessionID stri
 	// Read only a bounded prefix so corrupt oversized rows cannot allocate their
 	// entire payload in Go. loadSession rejects the extra byte before decoding.
 	query := fmt.Sprintf("SELECT id, substr(CAST(session AS BLOB), 1, ?) AS session, expires_at, created_at, updated_at FROM %s WHERE id = ?", s.tableName)
-	err := s.db.GetContext(ctx, &dbSession, query, sessions.MaxEncodedSessionSize+1, sessionID)
+	err := s.db.QueryRowContext(ctx, query, sessions.MaxEncodedSessionSize+1, sessionID).
+		Scan(&dbSession.ID, &dbSession.Session, &dbSession.Expires_at, &dbSession.Created_at, &dbSession.Updated_at)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -436,8 +436,8 @@ func (s *SQLiteStore) create(ctx context.Context, session *SQLiteSession) error 
 	session.Created_at = time.Now()
 	session.Updated_at = session.Created_at
 
-	query := fmt.Sprintf("INSERT INTO %s (id, session, expires_at, updated_at, created_at) VALUES (:id, :session, :expires_at, :created_at, :updated_at)", s.tableName)
-	_, err := s.db.NamedExecContext(ctx, query, session)
+	query := fmt.Sprintf("INSERT INTO %s (id, session, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", s.tableName)
+	_, err := s.db.ExecContext(ctx, query, session.ID, session.Session, session.Expires_at, session.Created_at, session.Updated_at)
 
 	return err
 }
@@ -451,8 +451,8 @@ func (s *SQLiteStore) update(ctx context.Context, session *SQLiteSession) error 
 	session.Updated_at = time.Now()
 
 	// Saving data must not extend stored expiry or recreate a revoked session.
-	query := fmt.Sprintf("UPDATE %s SET session = :session, updated_at = :updated_at WHERE id = :id", s.tableName)
-	result, err := s.db.NamedExecContext(ctx, query, session)
+	query := fmt.Sprintf("UPDATE %s SET session = ?, updated_at = ? WHERE id = ?", s.tableName)
+	result, err := s.db.ExecContext(ctx, query, session.Session, session.Updated_at, session.ID)
 	if err != nil {
 		return err
 	}

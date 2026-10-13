@@ -2,6 +2,7 @@ package stores
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -9,13 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trentnix/hyperserver/pkg/database"
 	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func revocationStore(t *testing.T) *SQLiteStore {
 	t.Helper()
-	db, err := database.Setup("sqlite3", filepath.Join(t.TempDir(), "sessions.db"))
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "sessions.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestSQLiteSessionRevocation(t *testing.T) {
 		t.Fatalf("captured cookie restored a revoked session: %+v, %v", loaded, err)
 	}
 	var count int
-	if err := store.db.Get(&count, `SELECT count(*) FROM sessions WHERE id = ?`, other.ID); err != nil || count != 1 {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions WHERE id = ?`, other.ID).Scan(&count); err != nil || count != 1 {
 		t.Fatal("logout removed an unrelated session", err)
 	}
 
@@ -178,7 +178,7 @@ func TestSQLiteEndFailurePreservesState(t *testing.T) {
 			}
 			if store.db != nil {
 				var count int
-				if err := store.db.Get(&count, `SELECT count(*) FROM sessions WHERE id = ?`, id); err != nil || count != 1 {
+				if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions WHERE id = ?`, id).Scan(&count); err != nil || count != 1 {
 					t.Fatal("failed logout removed the stored session", err)
 				}
 			}

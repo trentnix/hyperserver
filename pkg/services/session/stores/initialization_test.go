@@ -166,7 +166,7 @@ func TestSessionInitializationFailureAndRetry(t *testing.T) {
 				}
 				defer db.Close()
 				var count int
-				if err := db.GetContext(t.Context(), &count, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`); err != nil || count != 0 {
+				if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`).Scan(&count); err != nil || count != 0 {
 					t.Fatal("failed setup left a partial schema:", err)
 				}
 				if _, err := db.Exec("DROP TABLE sessions_expiration"); err != nil {
@@ -221,7 +221,7 @@ func TestSQLiteMemoryPoolKeepsSchema(t *testing.T) {
 	for range 16 {
 		workers.Go(func() {
 			var count int
-			if err := store.db.Get(&count, "SELECT count(*) FROM sessions"); err != nil {
+			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions").Scan(&count); err != nil {
 				t.Error("concurrent request lost the in-memory schema:", err)
 			}
 		})
