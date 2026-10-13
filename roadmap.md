@@ -192,7 +192,7 @@ Storage setup runs during initialization, before consumers and routes become act
 
 ### Rendering and HTMX responses
 
-Auth mutation handlers own their complete HTTP response. Account and token operations report storage or delivery errors separately. A notification or rendering failure does not undo a committed account change.
+Auth mutation handlers own their complete HTTP response. The email provider's [account operations](auth/modules/email/account_operations.go) accept contexts and values without using request, response, session, or notification state. Handlers validate forms and translate operation results into messages, cookies, and redirects. A notification or rendering failure does not undo a committed account change.
 
 [Content](pkg/components/content/content.go) describes the response. Its [dispatcher](pkg/components/content/response.go) selects page or fragment templates, loads notifications, and sends redirects or rendered HTML with HTMX metadata. Form errors use the same path. Named out-of-band templates render into the same buffer before delivery. Direct `http.Handler` use remains available for downloads, streaming, and specialized responses.
 
@@ -306,7 +306,7 @@ Exit when the workflow uses shared response handling, passes HTTP tests, and has
 ### Phase 4: Persistence and serialization contracts
 
 - Extract repositories, required storage capabilities, and serializers from actual consumers.
-- Authentication providers expose only their supported HTTP workflows, separately from initialization and optional custom routes. Extract account operations from HTTP handling next, keeping form responses and session changes in the handlers.
+- Authentication providers expose only their supported HTTP workflows. The email provider keeps account operations separate from HTTP responses and initialization, within the same package.
 - Carry request cancellation through account lookup and storage calls instead of replacing it with background contexts.
 - Evaluate replacing `sqlx` with `database/sql` inside the extracted repositories.
 - Implement in-memory and SQLite adapters, then validate PostgreSQL and one suitable non-relational adapter.

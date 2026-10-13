@@ -14,11 +14,9 @@ import (
 
 	"github.com/trentnix/hyperserver/auth/identity"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
-	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -430,45 +428,6 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authService.Register(w, r)
-}
-
-// ProcessRegistration hashes credentials and inserts a new account.
-// It does not update an existing account or send verification mail. The returned
-// message is suitable for the registration form when an error occurs.
-func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, uname string, pw string, authType string, verificationRequired bool) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "There was an error creating a user account", NewErrUserRegistration(uname, err)
-	}
-	if accounts == nil {
-		return "There was an error creating a user account", NewErrUserRegistration(uname, database.NewErrDatabaseUnavailable(nil))
-	}
-
-	var err error
-	if pw != "" {
-		pw, err = password.HashPassword(pw)
-		if err != nil {
-			return "There was an error creating a user account", NewErrUserRegistration(uname, err)
-		}
-	}
-
-	u := &user.User{
-		Email:                uname,
-		Password:             pw,
-		RegistrationAuthType: authType,
-		VerificationRequired: verificationRequired,
-	}
-
-	// Storage decides which competing registration succeeds.
-	err = accounts.Create(ctx, u)
-	if err != nil {
-		registrationErr := NewErrUserRegistration(uname, err)
-		if errors.Is(err, user.ErrEmailAlreadyExists) {
-			return "The specified user is already registered", registrationErr
-		}
-		return "There was an error creating a user account", registrationErr
-	}
-
-	return "", nil
 }
 
 // GetResetRequest renders the reset request page to the user using the specified AuthService

@@ -5,8 +5,6 @@
 package auth
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -19,7 +17,6 @@ import (
 
 	auth_services "github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/identity"
-	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
@@ -321,20 +318,17 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		return nil
 	}
 
-	// authenticate the user
-	u, err := a.accounts.GetByEmail(r.Context(), loginForm.Email)
-	var notFound *user.ErrUserNotFound
-	if err != nil && !errors.As(err, &notFound) {
+	u, err := a.authenticate(r.Context(), loginForm.Email, loginForm.Password)
+	if errors.Is(err, errInvalidCredentials) {
+		form.HandleFormError(w, r, login, loginForm, "Invalid login/password", nil)
+		return nil
+	}
+	if err != nil {
 		form.HandleFormError(w, r,
 			login,
 			loginForm,
 			"The user specified could not be retrieved from the database",
 			err)
-		return nil
-	}
-
-	if u == nil || u.Password == "" || !password.CheckPasswordHash(loginForm.Password, u.Password) {
-		form.HandleFormError(w, r, login, loginForm, "Invalid login/password", nil)
 		return nil
 	}
 
@@ -409,15 +403,9 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 		register.PartialName = "auth.partial.email.registration.pending"
 		register.Templates = a.templates["templates/html/partials/registration-pending.html"]
 		const deliveryFailure = "Your account was created, but we could not send the verification email. You can sign in to request another email. Protected pages remain unavailable until you verify your address."
-		createdUser, err := a.accounts.GetByEmail(r.Context(), registerForm.Email)
-		if err != nil || createdUser == nil {
-			form.HandleFormError(w, r, register, registerForm, deliveryFailure, errors.New("verification account lookup failed"))
-			return
-		}
-
 		origin, err := util.BuildPublicURL(r, a.config.HTTP, "", nil)
 		if err == nil {
-			err = a.SendVerificationEmail(r.Context(), createdUser, *origin)
+			err = a.sendRegistrationVerification(r.Context(), registerForm.Email, *origin)
 		}
 		if err != nil {
 			form.HandleFormError(w, r, register, registerForm, deliveryFailure, errors.New("verification email delivery failed"))
@@ -438,88 +426,6 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 // ValidateVerification checks delivery configuration without attempting delivery.
 func (a *EmailAuthService) ValidateVerification() error {
 	return a.mailClient.ValidateConfig()
-}
-
-// SendVerificationEmail serves both registration and authenticated resend requests.
-func (a *EmailAuthService) SendVerificationEmail(ctx context.Context, u *user.User, origin url.URL) error {
-	if a.mailClient == nil {
-		return messaging.ErrMailUnavailable
-	}
-
-	if u == nil || u.ID == "" {
-		return errors.New("user not specified for verification email")
-	}
-
-	verificationEndpoint := a.config.Auth.VerificationEndpoint
-	if verificationEndpoint == "" {
-		verificationEndpoint = emailVerifyPath
-	}
-
-	tokenExpiration := a.config.Auth.VerificationTokenExpiration
-	if tokenExpiration <= 0 {
-		tokenExpiration = 24 * time.Hour
-	}
-
-	verificationToken, err := user.NewAuthVerificationToken(u, []byte(a.config.Auth.JwtKey), tokenExpiration)
-	if err != nil {
-		return err
-	}
-
-	verificationURL := url.URL{Scheme: origin.Scheme, Host: origin.Host, Path: verificationEndpoint}
-	verificationURL.RawQuery = url.Values{"token": {verificationToken.Token}}.Encode()
-
-	body, err := a.renderAccountEmail(a.verificationEmail, verificationURL.String())
-	if err != nil {
-		return err
-	}
-
-	if err := a.accounts.InsertToken(ctx, verificationToken.Metadata()); err != nil {
-		return err
-	}
-	return a.mailClient.Compose().
-		To(u.Email).
-		Subject("Verify your account").
-		Body(body).
-		Send(ctx)
-}
-
-func (a *EmailAuthService) renderAccountEmail(t *template.Template, link string) (string, error) {
-	var body bytes.Buffer
-	if err := t.Execute(&body, struct{ Name, URL string }{
-		Name: a.config.App.Name, URL: link,
-	}); err != nil {
-		return "", err
-	}
-
-	return body.String(), nil
-}
-
-func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, expiration time.Duration, link url.URL) error {
-	if a.mailClient == nil {
-		return messaging.ErrMailUnavailable
-	}
-
-	token, err := user.NewAuthResetToken(u, []byte(a.config.Auth.JwtKey), expiration)
-	if err != nil {
-		return err
-	}
-	query := link.Query()
-	query.Set("token", token.Token)
-	link.RawQuery = query.Encode()
-
-	body, err := a.renderAccountEmail(a.resetEmail, link.String())
-	if err != nil {
-		return err
-	}
-
-	if err := a.accounts.InsertToken(ctx, token.Metadata()); err != nil {
-		return err
-	}
-	return a.mailClient.Compose().
-		To(u.Email).
-		Subject("Reset your password").
-		Body(body).
-		Send(ctx)
 }
 
 // GetResetRequest serves the password reset request page with the resetPasswordRequestForm form
@@ -574,17 +480,9 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	u, err := a.accounts.GetByEmail(r.Context(), resetRequestForm.Email)
-	var notFound *user.ErrUserNotFound
-	if errors.As(err, &notFound) {
-		err = nil
-	}
-	if err == nil && u != nil && u.RegistrationAuthType == AuthTypeEmail {
-		var link *url.URL
-		link, err = util.BuildPublicURL(r, a.config.HTTP, emailResetPath, nil)
-		if err == nil {
-			err = a.sendResetEmail(r.Context(), u, tokenExpiration, *link)
-		}
+	link, err := util.BuildPublicURL(r, a.config.HTTP, emailResetPath, nil)
+	if err == nil {
+		err = a.requestPasswordReset(r.Context(), resetRequestForm.Email, tokenExpiration, *link)
 	}
 	if err != nil {
 		// Provider errors can contain the token or email body. Log only the failure.
@@ -684,38 +582,14 @@ func (a *EmailAuthService) Reset(
 		return
 	}
 
-	if requireNewCredentials {
-		if u.Password != "" && password.CheckPasswordHash(resetForm.Password, u.Password) {
-			// the new password is the same as the old, but a new password is required according
-			// to the configuration
-			form.HandleFormError(w, r,
-				reset,
-				resetForm,
-				"The provided password has been recently used. For security reasons, a new password is required.",
-				nil)
-			return
-		}
-	}
-
-	genericResetErrMsg := "Unable to reset password"
-
-	hashedPassword, err := password.HashPassword(resetForm.Password)
-	if err != nil {
-		// the password could not be hashed
-		form.HandleFormError(w, r, reset, resetForm, genericResetErrMsg, err)
+	err = a.resetPassword(r.Context(), u, token, resetForm.Password, requireNewCredentials)
+	if errors.Is(err, errPasswordReused) {
+		form.HandleFormError(w, r, reset, resetForm,
+			"The provided password has been recently used. For security reasons, a new password is required.", nil)
 		return
 	}
-
-	err = u.ResetPassword(r.Context(), a.accounts, token, []byte(a.config.Auth.JwtKey), hashedPassword)
 	if err != nil {
-		// the user could not be updated
-		form.HandleFormError(
-			w,
-			r,
-			reset,
-			resetForm,
-			genericResetErrMsg,
-			fmt.Errorf("error updating a user's password during reset: %w", err))
+		form.HandleFormError(w, r, reset, resetForm, "Unable to reset password", err)
 		return
 	}
 
@@ -788,41 +662,13 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 		return
 	}
 
-	if u.Password != "" && !password.CheckPasswordHash(changeForm.OldPassword, u.Password) {
-		// the old password isn't correct - it is needed to change to a new password
-		form.HandleFormError(
-			w,
-			r,
-			change,
-			changeForm,
-			"The provided password is incorrect",
-			nil)
+	err = a.changePassword(r.Context(), u, changeForm.OldPassword, changeForm.NewPassword)
+	if errors.Is(err, errInvalidCredentials) {
+		form.HandleFormError(w, r, change, changeForm, "The provided password is incorrect", nil)
 		return
 	}
-
-	hashedPassword, err := password.HashPassword(changeForm.NewPassword)
 	if err != nil {
-		// the password could not be hashed
-		form.HandleFormError(
-			w,
-			r,
-			change,
-			changeForm,
-			changeErrMsg,
-			fmt.Errorf("Unable to hash the NewPassword value"))
-		return
-	}
-
-	err = a.accounts.ChangePassword(r.Context(), u, hashedPassword)
-	if err != nil {
-		// the user could not be updated
-		form.HandleFormError(
-			w,
-			r,
-			change,
-			changeForm,
-			changeErrMsg,
-			fmt.Errorf("Unable to save the updated password: %w", err))
+		form.HandleFormError(w, r, change, changeForm, changeErrMsg, err)
 		return
 	}
 
