@@ -14,9 +14,9 @@ const (
 	userTokenTableName = "usertoken"
 )
 
-// PrepareDatabase creates missing account and token tables in a SQLite database.
-// Applications must call it before using account storage. It is safe to call
-// again. Existing accounts receive a session version without changing their credentials.
+// PrepareDatabase creates missing account and token tables and checks the columns
+// required by the repository. Applications must call it before using account
+// storage. Repeated calls preserve data. It does not migrate existing tables.
 func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
@@ -40,19 +40,11 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		registration_auth_type VARCHAR(50),
-		password VARCHAR(255)
+		password VARCHAR(255),
+		session_version INTEGER NOT NULL DEFAULT 1
 	)`)
 	if err != nil {
 		return fmt.Errorf("create account table: %w", err)
-	}
-	var versionColumn int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info('user') WHERE name = 'session_version'`).Scan(&versionColumn); err != nil {
-		return fmt.Errorf("check account session version: %w", err)
-	}
-	if versionColumn == 0 {
-		if _, err := tx.ExecContext(ctx, `ALTER TABLE user ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1`); err != nil {
-			return fmt.Errorf("add account session version: %w", err)
-		}
 	}
 	_, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usertoken (
 		user_id VARCHAR(36),
@@ -65,6 +57,10 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("create account token table: %w", err)
 	}
+	if err := validateAccountColumns(ctx, tx); err != nil {
+		return err
+	}
+
 	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS usertoken_expiration
 		ON usertoken (julianday(expires_at), user_id, token_hash)`)
 	if err != nil {
@@ -72,6 +68,25 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit account schema setup: %w", err)
+	}
+	return nil
+}
+
+// validateAccountColumns compiles read queries without loading account data.
+// Column presence is only one compatibility check, not a stored-format version
+// or a complete check of constraints and existing values.
+func validateAccountColumns(ctx context.Context, tx *sql.Tx) error {
+	for _, query := range []string{
+		"SELECT " + accountColumns + ", email_key FROM user LIMIT 0",
+		"SELECT user_id, token_hash, expires_at, token_type FROM usertoken LIMIT 0",
+	} {
+		rows, err := tx.QueryContext(ctx, query)
+		if err != nil {
+			return fmt.Errorf("check SQLite account schema columns: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close account schema check: %w", err)
+		}
 	}
 	return nil
 }

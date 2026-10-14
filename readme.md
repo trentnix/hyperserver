@@ -255,6 +255,8 @@ In the reference application, `auth.accountStorage.provider` selects account per
 
 Account models, token operations, and storage contracts live in [`user`](pkg/services/user). The SQLite implementation lives in [`user/sqlite`](pkg/services/user/sqlite). Import that provider when constructing `sqlite.NewAccountRepository(pool)` directly. The repository borrows the pool and must be initialized before use.
 
+SQLite account initialization creates missing tables and rejects existing tables that lack required columns. It does not migrate existing tables. Stored-format versions, constraint validation, and migration procedures remain unfinished.
+
 Applications supply an initialized `user.AccountRepository` to their auth factories and middleware. For a borrowed SQLite pool:
 
 ```go

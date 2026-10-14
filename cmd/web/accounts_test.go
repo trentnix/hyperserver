@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 type accountSetupHarness struct {
@@ -161,6 +163,36 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 			assertAccountRepositoryReady(t, s.app.AccountRepository)
 		})
 	}
+}
+
+func TestInitializeAccountsRejectsIncompatibleSchema(t *testing.T) {
+	db := accountSetupTestDB(t)
+	if err := usersqlite.NewAccountRepository(db).Initialize(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(t.Context(), "ALTER TABLE user RENAME COLUMN email_key TO legacy_email_key"); err != nil {
+		t.Fatal(err)
+	}
+	s := newAccountSetup(testApplicationWithPool(&server.ApplicationServer{
+		Config: &config.Config{Auth: config.AuthConfig{Enabled: true}},
+	}, db))
+	t.Cleanup(func() { s.app.Shutdown() })
+
+	err := s.Initialize(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "email_key") || s.app.AccountRepository != nil {
+		t.Fatalf("incompatible schema published a repository: %v, %v", s.app.AccountRepository, err)
+	}
+	if err := db.PingContext(t.Context()); err != nil {
+		t.Fatal("failed setup closed its borrowed pool:", err)
+	}
+
+	if _, err := db.ExecContext(t.Context(), "ALTER TABLE user RENAME COLUMN legacy_email_key TO email_key"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Initialize(t.Context()); err != nil {
+		t.Fatal("retry after repair:", err)
+	}
+	assertAccountRepositoryReady(t, s.app.AccountRepository)
 }
 
 func TestApplicationOwnsAccountPool(t *testing.T) {

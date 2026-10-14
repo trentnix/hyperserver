@@ -7,7 +7,7 @@ import (
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-func TestPrepareDatabaseAddsSessionVersion(t *testing.T) {
+func TestPrepareDatabaseDoesNotMigrateSessionVersion(t *testing.T) {
 	db := userTestDB(t)
 	u := &accounts.User{Email: "legacy@example.invalid", Password: "preserved"}
 	if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
@@ -21,12 +21,16 @@ func TestPrepareDatabaseAddsSessionVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 2 {
-		if err := PrepareDatabase(context.Background(), db); err != nil {
-			t.Fatal(err)
+		if err := PrepareDatabase(context.Background(), db); err == nil {
+			t.Fatal("startup silently migrated the account table")
 		}
-		stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
-		if err != nil || *stored != *u {
-			t.Fatalf("account changed during session version setup: %+v, %v", stored, err)
+		var password string
+		if err := db.QueryRowContext(t.Context(), "SELECT password FROM user WHERE id = ?", u.ID).Scan(&password); err != nil || password != u.Password {
+			t.Fatalf("failed startup changed credentials: %q, %v", password, err)
+		}
+		var count int
+		if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM pragma_table_info('user') WHERE name = 'session_version'").Scan(&count); err != nil || count != 0 {
+			t.Fatalf("failed startup changed schema: count=%d, error=%v", count, err)
 		}
 	}
 }
