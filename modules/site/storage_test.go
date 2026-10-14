@@ -2,8 +2,10 @@ package module_site
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
@@ -55,6 +57,31 @@ func TestSiteRejectsFailedContactProvider(t *testing.T) {
 		if module.contacts != nil {
 			t.Fatal("failed initialization published a contact provider")
 		}
+	}
+}
+
+func TestSiteRejectsIncompatibleSQLiteContacts(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	if _, err := db.ExecContext(t.Context(), "CREATE TABLE hyperserver_contact_submission (id TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	module := &SiteModule{NewContacts: func(ctx context.Context) (ContactRepository, error) {
+		return storage.NewSQLiteContactRepository(ctx, db)
+	}}
+	app := &server.ApplicationServer{Config: &config.Config{}, ContentManager: content.NewContentManager()}
+	if err := module.Init(t.Context(), app); err == nil || !strings.Contains(err.Error(), "missing email") {
+		t.Fatalf("incompatible contact schema did not stop initialization: %v", err)
+	}
+	if module.contacts != nil {
+		t.Fatal("failed initialization published a contact provider")
+	}
+	if err := db.PingContext(t.Context()); err != nil {
+		t.Fatal("failed initialization closed the borrowed pool:", err)
 	}
 }
 

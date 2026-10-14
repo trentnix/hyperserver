@@ -68,6 +68,8 @@ Provider selection uses the same resolved configuration:
 
 To exercise two storage platforms together, run `go run ./cmd/web -contact-directory ./tmp/contacts`. Accounts stay in SQLite, while the site saves contacts as individual JSON files in a private directory. The file provider requires hard-link support. Without this flag, contacts also use SQLite. This is reference-application wiring, not a framework-wide storage setting.
 
+SQLite contact startup checks writable columns, supported types, required email values (`NOT NULL`), and a non-partial unique submission-ID key with binary comparison. Incompatible tables stop site initialization. Setup does not repair existing tables or validate stored records.
+
 ### Application startup
 
 `server.NewApplicationServer(cfg)` accepts a `config.Config` and returns `(*ApplicationServer, error)`. It validates shared settings, copies the configuration including nested maps and pointers, and creates the router and content manager. Changes to the source configuration do not change the application. Configure services before serving requests. Construction does not read configuration files or initialize database, session, authentication, or mail services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
