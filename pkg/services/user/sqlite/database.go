@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -17,8 +18,9 @@ const (
 )
 
 // PrepareDatabase creates missing account and token tables and checks required
-// columns and unique keys. Applications must call it before using account storage.
-// Repeated calls preserve data. It does not migrate existing tables.
+// columns, supported types, nullability, and unique keys. Applications must call it
+// before using account storage. Repeated calls preserve data. It does not migrate
+// existing tables or validate every stored value.
 func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
@@ -86,22 +88,72 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// validateAccountColumns compiles read queries without loading account data.
-// Column presence does not establish compatible types or stored values.
+// validateAccountColumns checks declarations without reading account data.
+// Historically nullable columns remain supported. Required columns must be
+// writable because repository operations supply their values explicitly.
 func validateAccountColumns(ctx context.Context, tx *sql.Tx) error {
-	for _, query := range []string{
-		"SELECT " + accountColumns + ", email_key FROM user LIMIT 0",
-		"SELECT user_id, token_hash, expires_at, token_type FROM usertoken LIMIT 0",
+	for _, column := range []struct {
+		table, name, kind string
+		notNull           bool
+	}{
+		{"user", "id", "text", false},
+		{"user", "email", "text", true},
+		{"user", "email_key", "text", true},
+		{"user", "verified", "boolean", true},
+		{"user", "verification_required", "boolean", true},
+		{"user", "created_at", "timestamp", true},
+		{"user", "updated_at", "timestamp", true},
+		{"user", "registration_auth_type", "text", false},
+		{"user", "password", "text", false},
+		{"user", "session_version", "integer", true},
+		{"usertoken", "user_id", "text", false},
+		{"usertoken", "token_hash", "text", true},
+		{"usertoken", "expires_at", "timestamp", true},
+		{"usertoken", "token_type", "text", true},
 	} {
-		rows, err := tx.QueryContext(ctx, query)
+		var declaredType string
+		var notNull bool
+		var hidden int
+		err := tx.QueryRowContext(ctx, `SELECT type, "notnull", hidden
+			FROM pragma_table_xinfo(?) WHERE name = ? COLLATE NOCASE`, column.table, column.name).
+			Scan(&declaredType, &notNull, &hidden)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("check SQLite account schema columns: missing %s.%s", column.table, column.name)
+		}
 		if err != nil {
 			return fmt.Errorf("check SQLite account schema columns: %w", err)
 		}
-		if err := rows.Close(); err != nil {
-			return fmt.Errorf("close account schema check: %w", err)
+		if hidden != 0 {
+			return fmt.Errorf("incompatible SQLite account schema: %s.%s must be an ordinary writable column", column.table, column.name)
+		}
+		if !compatibleAccountColumnType(declaredType, column.kind) {
+			return fmt.Errorf("incompatible SQLite account schema: %s.%s requires a supported %s type, got %q", column.table, column.name, column.kind, declaredType)
+		}
+		if column.notNull && !notNull {
+			return fmt.Errorf("incompatible SQLite account schema: %s.%s requires NOT NULL", column.table, column.name)
 		}
 	}
 	return nil
+}
+
+// compatibleAccountColumnType follows SQLite's text and integer affinity rules.
+// Timestamps require a declaration the driver decodes into time.Time. Boolean
+// columns support BOOL, BOOLEAN, and integer-affinity declarations.
+func compatibleAccountColumnType(declaredType, kind string) bool {
+	name := strings.ToUpper(declaredType)
+	integer := strings.Contains(name, "INT")
+	switch kind {
+	case "text":
+		return !integer && (strings.Contains(name, "CHAR") || strings.Contains(name, "CLOB") || strings.Contains(name, "TEXT"))
+	case "integer":
+		return integer
+	case "boolean":
+		return integer || name == "BOOL" || name == "BOOLEAN"
+	case "timestamp":
+		return name == "DATE" || name == "DATETIME" || name == "TIMESTAMP"
+	default:
+		return false
+	}
 }
 
 // requireAccountUniqueKey accepts a primary key, UNIQUE constraint, or explicit
