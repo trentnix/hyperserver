@@ -23,8 +23,14 @@ type TokenMaintenance interface {
 // must return ErrUserNotFound. Other failures must remain errors. Implementations
 // must honor cancellation and support concurrent calls. Successful reads must
 // return independent, non-nil User values.
+// Callers must not share mutable User arguments between concurrent operations.
+// Successful writes must be committed and visible to subsequent reads. Providers
+// must document restart and crash durability for their storage configuration.
+// Accounts do not expire. Token redemption must enforce expiry without cleanup.
 type AccountRepository interface {
 	GetByID(context.Context, string) (*User, error)
+	// GetByEmail matches the supplied email exactly, without case folding or trimming.
+	// Create and Update must enforce uniqueness using the same comparison.
 	GetByEmail(context.Context, string) (*User, error)
 	// GetToken reads metadata matching the token hash and purpose without consuming it.
 	// Missing tokens return ErrTokenNotFound. Expired tokens remain readable so the
@@ -48,6 +54,8 @@ type AccountRepository interface {
 	// ID and CreatedAt must stay unchanged. An email change must also revoke the account's
 	// verification tokens. These changes must commit together and preserve other tokens.
 	// Success updates u's UpdatedAt and SessionVersion. Failure must leave u and storage unchanged.
+	// SessionVersion guards security changes, not every edit. Concurrent edits that
+	// leave the version unchanged can overwrite each other.
 	Update(context.Context, *User) error
 	// ChangePassword atomically replaces the password hash and increments SessionVersion
 	// only if the stored password, registration provider, and SessionVersion match u.

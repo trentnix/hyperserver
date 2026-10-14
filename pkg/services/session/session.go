@@ -102,7 +102,11 @@ func (s *Session) Save(w http.ResponseWriter, r *http.Request) error {
 }
 
 // RotatingStore atomically replaces a stored session with a new ID and data.
-// A failure must leave the old session valid and must not issue a cookie.
+// A failure must leave storage unchanged and must not issue a cookie.
+// An expired or revoked stored session must not be rotated. Concurrent rotation
+// of the same stored session must succeed at most once. End must revoke it, and
+// Save must not recreate it after revocation. Implement this capability only when
+// the provider can enforce all these guarantees.
 type RotatingStore interface {
 	Rotate(http.ResponseWriter, *http.Request, *Session, map[string]any) (*Session, error)
 }

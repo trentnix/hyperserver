@@ -130,6 +130,65 @@ func TestSQLiteAccountRepository(t *testing.T) {
 	}
 }
 
+func TestSQLiteAccountRepositoryExactEmailMatching(t *testing.T) {
+	repository := NewAccountRepository(userTestDB(t))
+	for _, email := range []string{"Person@example.invalid", "person@example.invalid"} {
+		account := &accounts.User{Email: email}
+		if err := repository.Create(t.Context(), account); err != nil {
+			t.Fatal(err)
+		}
+		stored, err := repository.GetByEmail(t.Context(), email)
+		if err != nil || stored.ID != account.ID || stored.Email != email {
+			t.Fatalf("exact lookup = %+v, %v", stored, err)
+		}
+		if err := repository.Create(t.Context(), &accounts.User{Email: email}); !errors.Is(err, accounts.ErrEmailAlreadyExists) {
+			t.Fatalf("duplicate email = %v", err)
+		}
+	}
+
+	for _, email := range []string{"PERSON@example.invalid", " person@example.invalid"} {
+		var missing *accounts.ErrUserNotFound
+		if stored, err := repository.GetByEmail(t.Context(), email); stored != nil || !errors.As(err, &missing) {
+			t.Fatalf("nonmatching lookup = %+v, %v", stored, err)
+		}
+	}
+}
+
+func TestSQLiteAccountRepositoryConcurrentCreate(t *testing.T) {
+	db := userTestDB(t)
+	repository := NewAccountRepository(db)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			account := &accounts.User{Email: "shared@example.invalid"}
+			results <- repository.Create(t.Context(), account)
+		}()
+	}
+	close(start)
+
+	var successes, duplicates int
+	for range 2 {
+		err := <-results
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, accounts.ErrEmailAlreadyExists):
+			duplicates++
+		default:
+			t.Errorf("create failed: %v", err)
+		}
+	}
+	if successes != 1 || duplicates != 1 {
+		t.Fatalf("successes = %d, duplicates = %d", successes, duplicates)
+	}
+	var count int
+	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM user").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("stored accounts = %d, %v", count, err)
+	}
+}
+
 func TestSQLiteAccountRepositoryCreateFailure(t *testing.T) {
 	for _, scenario := range []string{"duplicate", "nil pool", "closed pool", "canceled", "write failure"} {
 		t.Run(scenario, func(t *testing.T) {

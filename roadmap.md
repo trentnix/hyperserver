@@ -92,6 +92,8 @@ An application can use several storage platforms. Each provider must satisfy its
 
 The application operation decides the transaction boundary. Providers must bind participating repository operations to the same transaction. For example, consuming a recovery token and changing the account must succeed together. Do not imply atomicity across unrelated storage platforms.
 
+Add cross-repository transaction binding only when a concrete application workflow needs it. Keep existing atomic account operations self-contained.
+
 Modules own their storage objects and prepare them before activation. A module borrowing a connection does not own that connection. Services storing encoded values must allow serializer replacement without replacing storage.
 
 ### Caching and rendering
@@ -106,7 +108,6 @@ Work through these priorities in order, using the reference application to valid
 
 ### 1. Complete storage and serialization contracts
 
-- Specify missing-record, uniqueness, concurrency, expiration, and durability guarantees. Preserve request cancellation. Reject providers that cannot meet required guarantees.
 - Separate session serialization from storage. Test serializer replacement and compatibility with previously saved data without forcing structured repositories to store opaque blobs.
 - Add in-memory adapters and shared contract tests for SQLite. Cover field mappings, affected-row checks, concurrent writes, transaction rollback, and failures. Explicitly configure connection limits, foreign-key enforcement, and lock waits.
 - Define stored-format versions and migration procedures. Reject incompatible schemas during provider startup. Test invalid data, interrupted migrations, and rollback or forward repair.

@@ -88,6 +88,58 @@ func TestSQLiteSessionRevocation(t *testing.T) {
 	}
 }
 
+func TestSQLiteSessionSaveReplacesData(t *testing.T) {
+	store := revocationStore(t)
+	original, r := savedSession(t, store)
+	first, err := store.Get(r, original.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.Get(r.Clone(r.Context()), original.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Data["first"] = "earlier write"
+	if _, exists := second.Data["first"]; exists {
+		t.Fatal("separate reads share session data")
+	}
+	second.Data["second"] = "later write"
+	if err := first.Save(httptest.NewRecorder(), r); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Save(httptest.NewRecorder(), r); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := store.Get(r, original.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Data) != 2 || stored.Data["identity"] != "account" || stored.Data["second"] != "later write" {
+		t.Fatalf("save did not replace the payload: %+v", stored.Data)
+	}
+	if !stored.ExpiresAt.Equal(first.ExpiresAt) {
+		t.Fatal("save changed expiration")
+	}
+}
+
+func TestSQLiteSessionCreateRejectsDuplicateID(t *testing.T) {
+	store := revocationStore(t)
+	original, r := savedSession(t, store)
+	duplicate := sessions.NewSession(store, original.Name)
+	duplicate.ID = original.ID
+	duplicate.Data["identity"] = "replacement"
+	w := httptest.NewRecorder()
+	if err := duplicate.Save(w, r); err == nil || len(w.Result().Cookies()) != 0 {
+		t.Fatalf("duplicate ID save = %v, cookies = %v", err, w.Result().Cookies())
+	}
+
+	stored, err := store.Get(r, original.Name)
+	if err != nil || stored.Data["identity"] != "account" || !stored.ExpiresAt.Equal(original.ExpiresAt) {
+		t.Fatalf("duplicate ID replaced stored data: %+v, %v", stored, err)
+	}
+}
+
 func TestSQLiteStoredExpiration(t *testing.T) {
 	for _, state := range []string{"active", "expired", "zero"} {
 		t.Run(state, func(t *testing.T) {

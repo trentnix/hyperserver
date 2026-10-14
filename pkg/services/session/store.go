@@ -17,15 +17,22 @@ func ExpireCookie(w http.ResponseWriter, r *http.Request, name string) {
 }
 
 // SessionStore loads, creates, saves, and ends named sessions.
-// Callers must check each provider's revocation and persistence guarantees.
+// Implementations must support concurrent requests and use r.Context() for I/O.
+// Session values belong to one request and must not be shared concurrently.
+// Providers must document persistence, concurrent-save, and revocation guarantees.
+// Applications must reject providers that cannot meet their requirements.
 type (
 	SessionStore interface {
 		// Get returns a stored session or a new one when absent or expired.
 		// Invalid cookies, storage failures, and corrupt data return an error.
+		// Expiration must be checked on reads, independently of cleanup. Separate
+		// requests must receive independent session data.
 		Get(r *http.Request, name string) (*Session, error)
 		// New creates an unsaved session with a new ID.
 		New(r *http.Request, name string) (*Session, error)
 		// Save persists a session and writes its cookie before the response body.
+		// Failure must not issue a cookie. Success does not guarantee that the
+		// browser receives it. Saving must not extend an existing session's expiry.
 		Save(w http.ResponseWriter, r *http.Request, session *Session) error
 		// End ends a session according to the provider's revocation guarantees.
 		End(w http.ResponseWriter, r *http.Request, session *Session) error

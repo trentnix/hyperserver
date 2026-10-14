@@ -266,6 +266,14 @@ if err := accounts.Initialize(ctx); err != nil {
 
 Pass `accounts` to the factories shown in [Module registration](#module-registration). If a repository owns resources, register its cleanup with `app.OnShutdown` before initializing its consumers. Borrowed pools keep their existing owner. Other providers implement the same account contract without changing the core server.
 
+#### Storage guarantees
+
+Replacement providers must preserve the [account](pkg/services/user/account_repository.go), [session](pkg/services/session/store.go), and [contact](modules/site/site.go) contracts, not just their method signatures. Accounts use exact, case-sensitive email matching and uniqueness. Account security changes use version checks and atomic writes. Contact creation inserts a new submission on each call. Repeating a request can create another submission.
+
+SQLite writes complete before reporting success. File-backed SQLite data survives normal close and reopen. Crash durability depends on SQLite settings and the filesystem. In-memory databases are temporary. The example file contact provider publishes complete files without overwriting existing records, but does not sync them to disk or promise power-loss durability. Its filesystem calls cannot be interrupted by context cancellation. Applications requiring stronger guarantees must select another provider.
+
+Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
+
 #### Direct backend access
 
 Keep the native client in application setup and pass it to modules that need it. Repositories do not take that access away. For example, the same `pool` used above can serve a reporting query:

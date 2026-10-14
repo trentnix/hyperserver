@@ -19,6 +19,11 @@ import (
 type (
 	// ContactRepository stores a submission and sets its ID and creation time only
 	// after a successful write. Implementations must not close borrowed resources.
+	// Each Create inserts a new record, even for repeated content. Existing records
+	// must not be replaced. Failure must leave the submission unchanged.
+	// Repositories must support concurrent calls with separate submissions and use
+	// ctx for I/O where supported. Providers must document cancellation limits and
+	// restart and crash durability. This contract defines no reads or expiration.
 	ContactRepository interface {
 		Create(context.Context, *models.ContactSubmission) error
 	}

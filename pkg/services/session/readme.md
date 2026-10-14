@@ -16,6 +16,16 @@ Both stores use JSON encoded in URL-safe base64. Only that format is supported. 
 
 These limits apply to each session, not the total size of an HTTP request. Incoming request-header limits are a separate server concern.
 
+## Storage guarantees
+
+Providers serve concurrent requests, but each request owns its mutable session data. SQLite saves replace the entire stored payload. If two requests load the same session and save changes, the later write replaces the earlier data. There is no merge or version check. Do not use session read-modify-write for reliable counters or balances. Cookie-only saves likewise depend on which response the browser applies last.
+
+SQLite creates use unique IDs and reject collisions without replacing existing data. Saving a deleted session fails. Reads reject expired sessions even before cleanup. Saves preserve the original expiration and cannot revive an expired session. Rotation creates a new lifetime and revokes the previous ID atomically. Only one concurrent rotation of a stored session can succeed.
+
+SQLite issues cookies only after successful writes. Persistent database files survive normal close and reopen. Crash durability depends on SQLite settings and the filesystem. In-memory databases do not survive closing their connections. Cookie-only storage has no server-side persistence or revocation. Its data lasts only as long as the browser retains a valid cookie. Neither provider can guarantee delivery of a response cookie.
+
+Storage I/O must use the request context. Cancellation after a completed write does not undo that write. Authentication rejects providers without `RotatingStore` during initialization. Custom implementations must satisfy its revocation and concurrency rules, not merely implement a method with that name.
+
 ## Reading and saving
 
 The following handler increments a counter. `DecodeValue` leaves the destination unchanged when the key is absent and returns an error if the value cannot be decoded into the requested type.
