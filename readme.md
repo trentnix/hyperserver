@@ -278,6 +278,8 @@ SQLite writes complete before reporting success. File-backed SQLite data survive
 
 Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
 
+The built-in SQLite schemas and default session payloads have no format-version markers. Schema declaration checks do not establish that existing records are valid or that a database is safe to upgrade. Versioned migrations are not implemented. The [roadmap](roadmap.md#storage-and-serialization) defines migration ownership and the intended upgrade procedure.
+
 #### SQLite connections
 
 The reference application and built-in session and maintenance providers use the [SQLite pool opener](pkg/database/sqlite/pool.go). Each pool allows one open connection and retains it while idle. Every new or replacement connection enables foreign keys and waits up to 5000 milliseconds for locks. Set `_timeout` or `_busy_timeout` in the connection string to change that wait. Zero disables waiting. Disabling foreign keys is rejected.

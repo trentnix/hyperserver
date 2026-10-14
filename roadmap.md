@@ -96,6 +96,12 @@ Add cross-repository transaction binding only when a concrete application workfl
 
 Modules own their storage objects and prepare them before activation. A module borrowing a connection does not own that connection. Services storing encoded values must allow serializer replacement without replacing storage.
 
+Version schemas by provider-owned table set, not by database. Accounts and contacts need independent migration histories. Each distinct configured session table needs its own history. Start each history at version 1. Existing unversioned storage must pass explicit schema and data checks before an operator adopts that baseline. Startup must reject missing or unsupported versions for existing provider tables without relabeling or repairing them.
+
+Providers supply migrations. Application deployment chooses when to run them, using established tooling. Fresh-store setup and migrations must share the same schema definition. Stop affected writers, including cleanup jobs, back up the data, apply migrations, validate the result, and then start consumers. Failed transactional migrations must roll back. After a committed change, use forward repair or restore a compatible backup. An older application can restart only if it supports the resulting format.
+
+Version serialized payloads separately from table schemas. Format markers must not collide with application data. Readers must reject unknown versions. A format change must explicitly support the previous format or require a conversion. Applications can invalidate sessions instead of converting them, but must preserve durable account and contact records. Custom serializers own their compatibility rules. The file contact provider remains a sample, not a framework-wide file migration service.
+
 ### Caching and rendering
 
 The code using a cache decides what to store, how long it can remain valid, when to refresh or remove it, and how to recover from cache failures. The cache implementation enforces expiration and size limits and handles concurrent access. The original data remains the source of truth.
@@ -108,7 +114,8 @@ Work through these priorities in order, using the reference application to valid
 
 ### 1. Complete storage and serialization contracts
 
-- Define stored-format versions and migration procedures. Reject incompatible schemas during provider startup. Test invalid data, interrupted migrations, and rollback or forward repair.
+- Select migration tooling and implement provider-scoped version checks, beginning with accounts. Cover fresh stores, explicit adoption of unversioned stores, and rejection of unsupported versions before startup changes storage.
+- Add session and contact schema histories, then explicit payload-format compatibility. Test invalid data, interrupted migrations, and rollback or forward repair before supporting an upgrade path.
 
 Outcome: service contracts describe the behavior a replacement must preserve, and tests establish that behavior independently of the selected implementation.
 
