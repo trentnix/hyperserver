@@ -31,7 +31,7 @@
             {{ end }}
 
             <label for="email">Reset Request</label>
-            <input type="email" id="email"
+            <input type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" id="email"
             name="email"
             value="{{ .Email }}"
             placeholder="Enter your email"

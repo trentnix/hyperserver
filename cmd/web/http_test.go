@@ -1253,6 +1253,65 @@ func TestHTTPEmailSpellingPreserved(t *testing.T) {
 	}
 }
 
+func TestHTTPInternationalizedEmailIdentity(t *testing.T) {
+	emailInput := regexp.MustCompile(`<input\b[^>]*\bname="email"[^>]*>`)
+	for _, htmx := range []bool{false, true} {
+		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
+			runHTTPScenario(t, func(h *httpHarness) {
+				for _, path := range []string{"/auth/register/email", "/auth/login/email", "/auth/reset/request/email"} {
+					w := h.request(http.MethodGet, path, nil, htmx)
+					input := emailInput.FindString(w.Body.String())
+					for _, attribute := range []string{`type="text"`, `inputmode="email"`, `autocomplete="username"`, `required`} {
+						if w.Code != http.StatusOK || !strings.Contains(input, attribute) {
+							t.Fatalf("%s email input missing %s: status %d, input %s", path, attribute, w.Code, input)
+						}
+					}
+				}
+
+				const original = "Élodie@bücher.invalid"
+				const equivalent = "élodie@xn--bcher-kva.invalid"
+				registration := registrationForm()
+				registration.Set("email", original)
+				w := h.request(http.MethodPost, "/auth/register/email", registration, htmx)
+				assertRedirectResponse(t, w, "/login", htmx)
+				account, err := h.app.AccountRepository.GetByEmail(t.Context(), equivalent)
+				if err != nil || account == nil || account.Email != original {
+					t.Fatalf("equivalent lookup lost original address: %v", err)
+				}
+
+				registration.Set("email", equivalent)
+				w = h.request(http.MethodPost, "/auth/register/email", registration, htmx)
+				assertFormRejected(t, w, "The specified user is already registered")
+				var count int
+				if err := h.app.Database.QueryRowContext(t.Context(), "SELECT count(*) FROM user").Scan(&count); err != nil || count != 1 {
+					t.Fatalf("equivalent registration created another account: %d, %v", count, err)
+				}
+				mail := h.mail.snapshot()
+				if len(mail) != 1 || mail[0].To != original {
+					t.Fatal("verification mail lost the original address")
+				}
+				verification := mailLink(t, mail[0], "/auth/verify")
+				w = h.request(http.MethodPost, "/auth/verify", verification.Query(), htmx)
+				stored, err := h.app.AccountRepository.GetByID(t.Context(), account.ID)
+				if err != nil || stored == nil || !stored.Verified {
+					t.Fatalf("internationalized account verification failed: %v, status %d", err, w.Code)
+				}
+
+				w = h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {equivalent}}, htmx)
+				if w.Code != http.StatusOK {
+					t.Fatalf("reset request failed: %d", w.Code)
+				}
+				mail = h.mail.snapshot()
+				if len(mail) != 2 || mail[1].To != original {
+					t.Fatal("reset lookup failed or delivery used the comparison address")
+				}
+				w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {equivalent}, "password": {"TestPassword1!"}}, htmx)
+				assertRedirectResponse(t, w, "/", htmx)
+			})
+		})
+	}
+}
+
 func TestHTTPLoginAndResetRequestRejectInvalidEmail(t *testing.T) {
 	for _, tc := range []struct{ name, email string }{
 		{"missing domain", "not-an-email"},

@@ -254,8 +254,84 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 	})
 
 	passwordContract(t, open)
+	emailIdentityContract(t, open)
 	tokenContract(t, open)
 	cancellationContract(t, open)
+}
+
+func emailIdentityContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
+	for _, pair := range [][2]string{
+		{"É@bücher.invalid", "é@xn--bcher-kva.invalid"},
+		{"用户@例え.invalid", "用户@xn--r8jz45g.invalid"},
+		{"Person@bu\u0308cher.invalid", "person@bücher.invalid"},
+	} {
+		t.Run("internationalized email/"+pair[0], func(t *testing.T) {
+			repo := open(t)
+			original := create(t, repo, pair[0])
+			found, err := repo.GetByEmail(t.Context(), pair[1])
+			must(t, err)
+			if found == nil {
+				t.Fatal("equivalent email lookup returned nil")
+			}
+			assertAccount(t, *found, original)
+			duplicate := newAccount(pair[1])
+			before := duplicate
+			if err := repo.Create(t.Context(), &duplicate); !errors.Is(err, user.ErrEmailAlreadyExists) {
+				t.Fatalf("equivalent email accepted: %v", err)
+			}
+			assertAccount(t, duplicate, before)
+
+			other := create(t, repo, "other@example.invalid")
+			other.Email = pair[1]
+			before = other
+			if err := repo.Update(t.Context(), &other); !errors.Is(err, user.ErrEmailAlreadyExists) {
+				t.Fatalf("update to equivalent email accepted: %v", err)
+			}
+			assertAccount(t, other, before)
+			if stored := load(t, repo, other.ID); stored.Email != "other@example.invalid" {
+				t.Fatal("failed update changed stored email")
+			}
+
+			verification := insertToken(t, repo, original.ID, user.VerificationTokenPurpose)
+			changed := original
+			changed.Email = pair[1]
+			must(t, repo.Update(t.Context(), &changed))
+			if changed.SessionVersion != original.SessionVersion {
+				t.Fatal("equivalent spelling revoked account sessions")
+			}
+			assertToken(t, repo, verification)
+			// An authorization containing the original spelling still identifies
+			// this account after the equivalent spelling update.
+			verified, err := redeem(t.Context(), repo, &original, verification)
+			must(t, err)
+			if verified == nil || !verified.Verified || verified.Email != pair[1] {
+				t.Fatalf("verification after equivalent update = %+v", verified)
+			}
+		})
+	}
+
+	t.Run("distinct internationalized domains", func(t *testing.T) {
+		repo := open(t)
+		for _, email := range []string{"person@faß.invalid", "person@fass.invalid", "person@σ.invalid", "person@ς.invalid"} {
+			original := create(t, repo, email)
+			found, err := repo.GetByEmail(t.Context(), email)
+			must(t, err)
+			if found == nil || found.ID != original.ID {
+				t.Fatal("lookup confused distinct domains")
+			}
+		}
+	})
+
+	t.Run("concurrent equivalent domain registrations", func(t *testing.T) {
+		repo := open(t)
+		inputs := [2]user.User{newAccount("É@bücher.invalid"), newAccount("é@xn--bcher-kva.invalid")}
+		errs := concurrent(func(i int) error { return repo.Create(t.Context(), &inputs[i]) })
+		winner := oneSuccess(t, errs)
+		if !errors.Is(errs[1-winner], user.ErrEmailAlreadyExists) {
+			t.Fatalf("duplicate creation error = %v", errs[1-winner])
+		}
+		assertAccount(t, load(t, repo, inputs[winner].ID), inputs[winner])
+	})
 }
 
 func passwordContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
