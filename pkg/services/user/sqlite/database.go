@@ -18,9 +18,9 @@ const (
 )
 
 // PrepareDatabase creates missing account and token tables and checks required
-// columns, supported types, nullability, and unique keys. Applications must call it
-// before using account storage. Repeated calls preserve data. It does not migrate
-// existing tables or validate every stored value.
+// columns, supported types, nullability, unique keys, and the token foreign key.
+// Applications must call it before using account storage. Repeated calls preserve
+// data. It does not migrate existing tables or validate every stored value.
 func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
@@ -76,6 +76,9 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
+	if err := requireTokenForeignKey(ctx, tx); err != nil {
+		return err
+	}
 
 	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS usertoken_expiration
 		ON usertoken (julianday(expires_at), user_id, token_hash)`)
@@ -86,6 +89,56 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("commit account schema setup: %w", err)
 	}
 	return nil
+}
+
+// requireTokenForeignKey checks the single-column relationship that removes
+// tokens when their account is deleted. An omitted parent column is valid only
+// when the account's entire primary key is id.
+func requireTokenForeignKey(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `SELECT "table", "from", "to", on_delete
+		FROM pragma_foreign_key_list('usertoken')
+		GROUP BY id HAVING count(*) = 1`)
+	if err != nil {
+		return fmt.Errorf("check SQLite account token foreign key: %w", err)
+	}
+	defer rows.Close()
+
+	implicitParent := false
+	for rows.Next() {
+		var table, from, onDelete string
+		var to sql.NullString
+		if err := rows.Scan(&table, &from, &to, &onDelete); err != nil {
+			return fmt.Errorf("read SQLite account token foreign key: %w", err)
+		}
+		if !strings.EqualFold(table, "user") || !strings.EqualFold(from, "user_id") || onDelete != "CASCADE" {
+			continue
+		}
+		if to.Valid && strings.EqualFold(to.String, "id") {
+			return nil
+		}
+		if !to.Valid {
+			implicitParent = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read SQLite account token foreign keys: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close SQLite account token foreign key check: %w", err)
+	}
+
+	if implicitParent {
+		var matches bool
+		err := tx.QueryRowContext(ctx, `SELECT count(*) = 1 AND min(name) = 'id' COLLATE NOCASE
+			FROM pragma_table_info('user') WHERE pk > 0`).Scan(&matches)
+		if err != nil {
+			return fmt.Errorf("check SQLite account primary key: %w", err)
+		}
+		if matches {
+			return nil
+		}
+	}
+	return fmt.Errorf("incompatible SQLite account schema: usertoken.user_id requires a foreign key to user(id) with ON DELETE CASCADE")
 }
 
 // validateAccountColumns checks declarations without reading account data.
