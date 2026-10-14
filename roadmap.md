@@ -112,13 +112,7 @@ Keep parsed-template reuse independent of a general cache service. HTTP and frag
 
 Work through these priorities in order, using the reference application to validate changes. Security defects take precedence throughout.
 
-### 1. Complete storage and serialization contracts
-
-- Document the sample contact-file format and its compatibility policy. Test preservation during any supported conversion.
-
-Outcome: service contracts describe the behavior a replacement must preserve, and tests establish that behavior independently of the selected implementation.
-
-### 2. Establish performance baselines and add justified caching
+### 1. Establish performance baselines and add justified caching
 
 - Benchmark rendering, middleware, sessions, and representative requests. Record workload, environment, latency, allocations, and memory use. Profile before selecting optimizations.
 - For demonstrated consumers, add an optional bounded in-memory cache and a no-op implementation. Define key isolation, freshness, invalidation, concurrent misses, and failure behavior for each integration.
@@ -127,7 +121,7 @@ Outcome: service contracts describe the behavior a replacement must preserve, an
 
 Outcome: performance claims are reproducible, resources remain bounded, and cache behavior has explicit correctness tests. If no consumer needs a cache, defer its implementation rather than inventing one.
 
-### 3. Validate deployment and recovery
+### 2. Validate deployment and recovery
 
 - Add liveness and readiness checks. Readiness must reflect the enabled capabilities needed to serve traffic.
 - Extend request and lifecycle logging with response status, duration, failures, and security audit events. Preserve correlation and redact secrets. Keep metrics and tracing integrations optional.
@@ -141,7 +135,7 @@ Add optional automatic, bounded session and token cleanup. Prevent overlapping r
 
 Outcome: a clean environment can deploy, operate, recover, and restore the application from documented procedures. Readiness applies to the configuration tested. Unused adapters and caches do not block a deployment.
 
-### 4. Prove framework replacement and reuse
+### 3. Prove framework replacement and reuse
 
 - Run the same contract tests and representative workflow against PostgreSQL and one suitable filesystem, document, or cloud-storage adapter. Keep handlers and application operations unchanged. Document backend requirements and data migration.
 - Build an application outside this repository using documented setup, self-registering modules, supplied services, and security defaults. Implement a persistent feature with full-page and HTMX success and failure paths without copying reference-application infrastructure.

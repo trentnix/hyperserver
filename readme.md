@@ -66,7 +66,7 @@ Provider selection uses the same resolved configuration:
 | Authentication | Only configured, enabled providers in the selected auth catalog are instantiated when `auth.enabled` is true. Importing a provider alone does not enable it. |
 | Mail | The reference application creates an SMTP sender from `mail` settings unless its `Mail` field already holds a client. Use `messaging.NewMailClientWithSender` for another sender. Incomplete SMTP configuration leaves delivery unavailable, not replaced by another sender. |
 
-To exercise two storage platforms together, run `go run ./cmd/web -contact-directory ./tmp/contacts`. Accounts stay in SQLite, while the site saves contacts as individual JSON files in a private directory. The file provider requires hard-link support. Without this flag, contacts also use SQLite. This is reference-application wiring, not a framework-wide storage setting.
+To exercise two storage platforms together, run `go run ./cmd/web -contact-directory ./tmp/contacts`. Accounts stay in SQLite, while the site saves contacts as individual JSON files in a private directory. See the [contact-file format and compatibility policy](modules/site/storage/readme.md). The file provider requires hard-link support. Without this flag, contacts also use SQLite. This is reference-application wiring, not a framework-wide storage setting.
 
 SQLite contact startup checks writable columns, supported types, required email values (`NOT NULL`), and a non-partial unique submission-ID key with binary comparison. Incompatible tables stop site initialization. Setup does not repair existing tables or validate stored records.
 
