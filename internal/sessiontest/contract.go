@@ -8,17 +8,15 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
-	"testing/synctest"
-	"time"
 
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 // Run checks a server-side store that implements SessionStore and RotatingStore.
 // Each factory call must return isolated, enabled storage with a finite lifetime
-// and register its cleanup with t. Backend-specific failure tests remain separate.
+// and register its cleanup with t. Backend-specific failures, encoded-size limits,
+// and expiry boundaries remain in provider tests, using their serializer and clock.
 func Run(t *testing.T, open func(*testing.T) session.SessionStore) {
 	t.Helper()
 	t.Run("round trip and independent reads", func(t *testing.T) {
@@ -191,25 +189,6 @@ func Run(t *testing.T, open func(*testing.T) session.SessionStore) {
 		}
 	})
 
-	t.Run("expiry", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			store := open(t)
-			s, r := saved(t, store)
-			if !s.ExpiresAt.After(time.Now()) {
-				t.Fatal("new session must have a future expiry")
-			}
-			time.Sleep(time.Until(s.ExpiresAt))
-			if expired := load(t, store, r, s.Name); !expired.IsNew || len(expired.Data) != 0 {
-				t.Fatal("expired session restored identity")
-			}
-			w := httptest.NewRecorder()
-			if next, err := rotating(t, store).Rotate(w, r, s, s.Data); next != nil || err == nil {
-				t.Fatalf("expired rotation = %+v, %v", next, err)
-			}
-			noCookie(t, w)
-		})
-	})
-
 	for _, operation := range []string{"read", "save", "rotate", "end"} {
 		t.Run("canceled "+operation, func(t *testing.T) {
 			store := open(t)
@@ -239,25 +218,23 @@ func Run(t *testing.T, open func(*testing.T) session.SessionStore) {
 	}
 
 	for _, operation := range []string{"save", "rotate"} {
-		for _, value := range []any{make(chan int), strings.Repeat("a", session.MaxSessionDataSize)} {
-			t.Run(operation+" rejects invalid data", func(t *testing.T) {
-				store := open(t)
-				s, r := saved(t, store)
-				w := httptest.NewRecorder()
-				var err error
-				if operation == "save" {
-					s.Data["bad"] = value
-					err = store.Save(w, r, s)
-				} else {
-					_, err = rotating(t, store).Rotate(w, r, s, map[string]any{"bad": value})
-				}
-				if err == nil {
-					t.Fatal("invalid data was accepted")
-				}
-				noCookie(t, w)
-				unchanged(t, store, r, s)
-			})
-		}
+		t.Run(operation+" rejects invalid data", func(t *testing.T) {
+			store := open(t)
+			s, r := saved(t, store)
+			w := httptest.NewRecorder()
+			var err error
+			if operation == "save" {
+				s.Data["bad"] = make(chan int)
+				err = store.Save(w, r, s)
+			} else {
+				_, err = rotating(t, store).Rotate(w, r, s, map[string]any{"bad": make(chan int)})
+			}
+			if err == nil {
+				t.Fatal("invalid data was accepted")
+			}
+			noCookie(t, w)
+			unchanged(t, store, r, s)
+		})
 	}
 }
 

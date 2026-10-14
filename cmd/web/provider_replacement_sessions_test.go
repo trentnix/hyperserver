@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/uuid"
@@ -142,5 +144,32 @@ func TestMemorySessionContract(t *testing.T) {
 		store := &replacementSessionStore{records: make(map[string]replacementSessionRecord)}
 		t.Cleanup(func() { store.Close() })
 		return store
+	})
+}
+
+func TestMemorySessionExpiryBoundary(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := &replacementSessionStore{records: make(map[string]replacementSessionRecord)}
+		t.Cleanup(func() { store.Close() })
+		s := session.NewSession(store, "account")
+		s.Data["identity"] = "account"
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		if err := store.Save(httptest.NewRecorder(), r, s); err != nil {
+			t.Fatal(err)
+		}
+		r.AddCookie(&http.Cookie{Name: s.Name, Value: s.ID})
+
+		time.Sleep(time.Until(s.ExpiresAt))
+		expired, err := store.Get(r, s.Name)
+		if err != nil || expired == nil || !expired.IsNew || len(expired.Data) != 0 {
+			t.Fatalf("expired session restored identity: %+v, %v", expired, err)
+		}
+		w := httptest.NewRecorder()
+		if next, err := store.Rotate(w, r, s, s.Data); next != nil || err == nil {
+			t.Fatalf("expired rotation = %+v, %v", next, err)
+		}
+		if len(w.Header().Values("Set-Cookie")) != 0 {
+			t.Fatal("expired rotation issued a cookie")
+		}
 	})
 }

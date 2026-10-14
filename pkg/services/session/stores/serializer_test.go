@@ -2,7 +2,9 @@ package stores
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,44 @@ import (
 
 	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
+
+// compressedJSONSerializer is a test format whose encoded size differs from
+// the JSON size. Bound expansion separately to avoid an unbounded decoder.
+type compressedJSONSerializer struct{}
+
+func (compressedJSONSerializer) Encode(data map[string]any) ([]byte, error) {
+	encoded, err := (sessions.JSONSerializer{}).Encode(data)
+	if err != nil {
+		return nil, err
+	}
+	var output bytes.Buffer
+	writer := gzip.NewWriter(&output)
+	if _, err := writer.Write(encoded); err != nil {
+		writer.Close()
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func (compressedJSONSerializer) Decode(data []byte) (map[string]any, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	const maxDecodedSize = 2 * sessions.MaxSessionDataSize
+	decoded, err := io.ReadAll(io.LimitReader(reader, maxDecodedSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(decoded) > maxDecodedSize {
+		return nil, errors.New("test serializer expansion limit exceeded")
+	}
+	return (sessions.JSONSerializer{}).Decode(decoded)
+}
 
 // taggedSerializer exercises an alternate wire format without another dependency.
 // Legacy JSON is accepted only when the application explicitly enables it.
@@ -211,6 +251,46 @@ func TestSelectedSerializerConcurrentRequests(t *testing.T) {
 				})
 			}
 			workers.Wait()
+		})
+	}
+}
+
+func TestCompressedSessionUsesEncodedSize(t *testing.T) {
+	for _, kind := range []string{"cookie", "sqlite"} {
+		t.Run(kind, func(t *testing.T) {
+			store := serializerStore(t, kind, compressedJSONSerializer{})
+			s, r := savedSession(t, store)
+			data := map[string]any{"large": strings.Repeat("a", sessions.MaxSessionDataSize)}
+			plain, err := (sessions.JSONSerializer{}).Encode(data)
+			if err != nil || len(plain) <= sessions.MaxSessionDataSize {
+				t.Fatalf("fixture must exceed the limit as JSON: %d, %v", len(plain), err)
+			}
+			encoded, err := (compressedJSONSerializer{}).Encode(data)
+			if err != nil || len(encoded) > sessions.MaxSessionDataSize {
+				t.Fatalf("compressed fixture must fit: %d, %v", len(encoded), err)
+			}
+
+			s.Data = data
+			w := httptest.NewRecorder()
+			if err := store.Save(w, r, s); err != nil {
+				t.Fatal(err)
+			}
+			r = requestWithSessionCookie(t, w)
+			loaded, err := store.Get(r, s.Name)
+			if err != nil || loaded == nil || loaded.Data["large"] != data["large"] {
+				t.Fatalf("compressed round trip = %+v, %v", loaded, err)
+			}
+			if rotator, ok := store.(sessions.RotatingStore); ok {
+				w = httptest.NewRecorder()
+				next, err := rotator.Rotate(w, r, loaded, data)
+				if err != nil || next == nil || next.ID == loaded.ID {
+					t.Fatalf("compressed rotation = %+v, %v", next, err)
+				}
+				got, err := store.Get(requestWithSessionCookie(t, w), s.Name)
+				if err != nil || got == nil || got.Data["large"] != data["large"] {
+					t.Fatalf("compressed rotation lost data: %+v, %v", got, err)
+				}
+			}
 		})
 	}
 }

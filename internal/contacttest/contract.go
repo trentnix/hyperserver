@@ -26,7 +26,8 @@ type Fixture struct {
 
 // Run checks contact creation. Each factory call must provide isolated, ready
 // storage and register cleanup with t. Backend-specific setup, I/O failure,
-// cancellation during I/O, and durability tests remain with the provider.
+// cancellation during I/O, clock accuracy, timestamp precision, and durability
+// tests remain with the provider. Returned timestamps must match stored values.
 func Run(t *testing.T, open func(*testing.T) Fixture) {
 	t.Helper()
 	for _, supplied := range []bool{false, true} {
@@ -38,9 +39,8 @@ func Run(t *testing.T, open func(*testing.T) Fixture) {
 				submission.Id, submission.CreatedAt = "", time.Time{}
 			}
 			before := submission
-			started := time.Now()
 			must(t, fixture.Repository.Create(t.Context(), &submission))
-			assertCreated(t, submission, before, started)
+			assertCreated(t, submission, before)
 			assertRecords(t, fixture, submission)
 
 			stored := submission
@@ -62,9 +62,8 @@ func Run(t *testing.T, open func(*testing.T) Fixture) {
 				second = &fresh
 			}
 			before := *second
-			started := time.Now()
 			must(t, fixture.Repository.Create(t.Context(), second))
-			assertCreated(t, *second, before, started)
+			assertCreated(t, *second, before)
 			if first.Id == second.Id {
 				t.Fatal("repeated content reused a stored ID")
 			}
@@ -107,9 +106,8 @@ func Run(t *testing.T, open func(*testing.T) Fixture) {
 			if failure == "storage failure" {
 				fixture.SetWriteFailure(t, false)
 			}
-			started := time.Now()
 			must(t, fixture.Repository.Create(t.Context(), &submission))
-			assertCreated(t, submission, before, started)
+			assertCreated(t, submission, before)
 			assertRecords(t, fixture, existing, submission)
 		})
 	}
@@ -123,7 +121,6 @@ func Run(t *testing.T, open func(*testing.T) Fixture) {
 		var errs [count]error
 		var work sync.WaitGroup
 		start := make(chan struct{})
-		started := time.Now()
 		for i := range inputs {
 			inputs[i] = exampleSubmission()
 			inputs[i].Name = fmt.Sprintf("Sender %d", i)
@@ -139,7 +136,7 @@ func Run(t *testing.T, open func(*testing.T) Fixture) {
 		work.Wait()
 		for i, err := range errs {
 			must(t, err)
-			assertCreated(t, inputs[i], before[i], started)
+			assertCreated(t, inputs[i], before[i])
 		}
 		assertRecords(t, fixture, append(inputs[:], existing)...)
 	})
@@ -152,13 +149,13 @@ func exampleSubmission() models.ContactSubmission {
 	}
 }
 
-func assertCreated(t *testing.T, got, before models.ContactSubmission, started time.Time) {
+func assertCreated(t *testing.T, got, before models.ContactSubmission) {
 	t.Helper()
 	if got.Id == "" || got.Id == before.Id {
 		t.Fatal("create did not generate a new ID")
 	}
-	if got.CreatedAt.Before(started) || got.CreatedAt.After(time.Now()) {
-		t.Fatalf("creation time %v outside operation", got.CreatedAt)
+	if got.CreatedAt.IsZero() {
+		t.Fatal("create did not supply a creation time")
 	}
 	if got.Name != before.Name || got.Email != before.Email || got.Message != before.Message {
 		t.Fatalf("create changed submitted content: %+v, want %+v", got, before)

@@ -14,10 +14,11 @@ import (
 
 // Run checks an initialized repository. Each factory call must provide isolated
 // storage and register cleanup with t. Backend-specific I/O failures, locking,
-// schema mappings, and durability tests remain with the provider.
+// schema mappings, clock boundaries, timestamp precision, and durability tests
+// remain with the provider. Returned timestamps must match committed values.
 func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 	t.Helper()
-	t.Run("create and independent reads", func(t *testing.T) {
+	t.Run("create and field preservation", func(t *testing.T) {
 		repo := open(t)
 		for _, lookup := range []func(context.Context, string) (*user.User, error){repo.GetByID, repo.GetByEmail} {
 			got, err := lookup(t.Context(), "missing@example.invalid")
@@ -29,9 +30,8 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 
 		original := newAccount("O'Neil.Σ@example.invalid")
 		want := original
-		started := time.Now()
 		must(t, repo.Create(t.Context(), &original))
-		if original.ID == "" || original.SessionVersion != 1 || original.CreatedAt.Before(started) || original.CreatedAt.After(time.Now()) || !original.UpdatedAt.Equal(original.CreatedAt) {
+		if original.ID == "" || original.SessionVersion != 1 || original.CreatedAt.IsZero() || original.UpdatedAt.IsZero() {
 			t.Fatal("create did not supply identity, timestamps, and initial security version")
 		}
 		want.ID, want.CreatedAt, want.UpdatedAt, want.SessionVersion = original.ID, original.CreatedAt, original.UpdatedAt, 1
@@ -42,9 +42,7 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			t.Fatal("successful lookup returned nil")
 		}
 		assertAccount(t, *byEmail, original)
-		byID := load(t, repo, original.ID)
-		byEmail.Password, original.Email = "not saved", "not saved"
-		assertAccount(t, byID, want)
+		original.Email = "not saved"
 		assertAccount(t, load(t, repo, want.ID), want)
 
 		// Exercise both boolean values and a different provider at creation.
@@ -57,6 +55,36 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			t.Fatal("create changed supplied account fields")
 		}
 	})
+
+	for _, by := range []string{"ID", "email"} {
+		t.Run("independent reads/"+by, func(t *testing.T) {
+			repo := open(t)
+			original := create(t, repo, "independent@example.invalid")
+			lookup, key := repo.GetByID, original.ID
+			if by == "email" {
+				lookup, key = repo.GetByEmail, original.Email
+			}
+			first, err := lookup(t.Context(), key)
+			must(t, err)
+			second, err := lookup(t.Context(), key)
+			must(t, err)
+			if first == nil || second == nil || first == second {
+				t.Fatal("reads must return independent, non-nil account pointers")
+			}
+			assertAccount(t, *first, original)
+			assertAccount(t, *second, original)
+
+			first.Email, first.Password = "not-saved@example.invalid", "not saved"
+			assertAccount(t, *second, original)
+			third, err := lookup(t.Context(), key)
+			must(t, err)
+			if third == nil {
+				t.Fatal("successful lookup returned nil")
+			}
+			assertAccount(t, *third, original)
+			assertAccount(t, load(t, repo, original.ID), original)
+		})
+	}
 
 	t.Run("duplicate creation is insert only", func(t *testing.T) {
 		repo := open(t)
@@ -108,9 +136,8 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			if increment {
 				want.SessionVersion++
 			}
-			started := time.Now()
 			must(t, repo.Update(t.Context(), &changed))
-			assertUpdateTime(t, changed.UpdatedAt, started)
+			assertTimestamp(t, changed.UpdatedAt)
 			want.UpdatedAt = changed.UpdatedAt
 			if changed.SessionVersion != want.SessionVersion {
 				t.Fatalf("caller version = %d, want %d", changed.SessionVersion, want.SessionVersion)
@@ -249,11 +276,10 @@ func passwordContract(t *testing.T, open func(*testing.T) user.AccountRepository
 				changed.ID = "missing"
 			}
 			before, want := changed, original
-			started := time.Now()
 			err := repo.ChangePassword(t.Context(), &changed, "new hash")
 			if mismatch == "none" {
 				must(t, err)
-				assertUpdateTime(t, changed.UpdatedAt, started)
+				assertTimestamp(t, changed.UpdatedAt)
 				want.Password, want.UpdatedAt = "new hash", changed.UpdatedAt
 				want.SessionVersion++
 				assertAccount(t, changed, want)
@@ -292,7 +318,7 @@ func load(t *testing.T, repo user.AccountRepository, id string) user.User {
 
 func assertAccount(t *testing.T, got, want user.User) {
 	t.Helper()
-	// SQLite need not preserve a time's location or monotonic clock reading.
+	// Storage need not preserve a time's location or monotonic clock reading.
 	got.CreatedAt, want.CreatedAt = got.CreatedAt.Round(0).UTC(), want.CreatedAt.Round(0).UTC()
 	got.UpdatedAt, want.UpdatedAt = got.UpdatedAt.Round(0).UTC(), want.UpdatedAt.Round(0).UTC()
 	if got != want {
@@ -300,10 +326,10 @@ func assertAccount(t *testing.T, got, want user.User) {
 	}
 }
 
-func assertUpdateTime(t *testing.T, got, started time.Time) {
+func assertTimestamp(t *testing.T, got time.Time) {
 	t.Helper()
-	if got.Before(started) || got.After(time.Now()) {
-		t.Fatalf("update time %v outside operation", got)
+	if got.IsZero() {
+		t.Fatal("operation did not supply a timestamp")
 	}
 }
 

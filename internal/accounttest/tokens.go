@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -41,7 +40,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 	t.Run("concurrent token insert", func(t *testing.T) {
 		repo := open(t)
 		u := create(t, repo, "token@example.invalid")
-		first := user.TokenMetadata{AccountID: u.ID, TokenHash: tokenHash("duplicate"), Purpose: user.ResetTokenPurpose, ExpiresAt: time.Now().Add(time.Hour)}
+		first := user.TokenMetadata{AccountID: u.ID, TokenHash: tokenHash("duplicate"), Purpose: user.ResetTokenPurpose, ExpiresAt: tokenExpiry(time.Hour)}
 		second := first
 		second.Purpose = user.VerificationTokenPurpose
 		tokens := [2]user.TokenMetadata{first, second}
@@ -52,36 +51,6 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 	})
 
 	for _, purpose := range []string{user.ResetTokenPurpose, user.VerificationTokenPurpose} {
-		for _, expiry := range []string{"stored", "signed"} {
-			t.Run(purpose+"/expiry boundary/"+expiry, func(t *testing.T) {
-				synctest.Test(t, func(t *testing.T) {
-					repo := open(t)
-					original := create(t, repo, "expiry@example.invalid")
-					token := insertToken(t, repo, original.ID, purpose)
-					auth := token
-					deadline := token.ExpiresAt
-					if expiry == "stored" {
-						auth.ExpiresAt = deadline.Add(time.Hour)
-					} else {
-						deadline = deadline.Add(-time.Minute)
-						auth.ExpiresAt = deadline
-					}
-					// Advance the virtual clock to the exact deadline, without sleeping in real time.
-					assertToken(t, repo, token)
-					time.Sleep(time.Until(deadline))
-					input := original
-					got, err := redeem(t.Context(), repo, &input, auth)
-					var expired *user.ErrTokenExpired
-					if got != nil || !errors.As(err, &expired) {
-						t.Fatalf("redemption at expiry = %v, %v", got, err)
-					}
-					assertAccount(t, input, original)
-					assertAccount(t, load(t, repo, original.ID), original)
-					assertToken(t, repo, token)
-				})
-			})
-		}
-
 		t.Run(purpose+"/redeem and replay", func(t *testing.T) {
 			repo := open(t)
 			original := create(t, repo, "MixedΣ@example.invalid")
@@ -93,13 +62,12 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			otherToken := insertToken(t, repo, other.ID, purpose)
 			input := original
 			input.Email = "MIXEDς@EXAMPLE.INVALID"
-			started := time.Now()
 			got, err := redeem(t.Context(), repo, &input, token)
 			must(t, err)
 			if got == nil {
 				t.Fatal("redemption returned nil account")
 			}
-			assertUpdateTime(t, got.UpdatedAt, started)
+			assertTimestamp(t, got.UpdatedAt)
 			want := original
 			want.UpdatedAt, want.SessionVersion = got.UpdatedAt, original.SessionVersion+1
 			if purpose == user.ResetTokenPurpose {
@@ -130,9 +98,9 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				repo := open(t)
 				original := create(t, repo, "rollback@example.invalid")
 				other := create(t, repo, "other@example.invalid")
-				token := user.TokenMetadata{AccountID: original.ID, TokenHash: tokenHash("rollback"), Purpose: purpose, ExpiresAt: time.Now().Add(time.Hour)}
+				token := user.TokenMetadata{AccountID: original.ID, TokenHash: tokenHash("rollback"), Purpose: purpose, ExpiresAt: tokenExpiry(time.Hour)}
 				if failure == "stored expiry" {
-					token.ExpiresAt = time.Now().Add(-time.Second)
+					token.ExpiresAt = tokenExpiry(-time.Hour)
 				}
 				if failure == "wrong purpose" {
 					token.Purpose = user.ResetTokenPurpose
@@ -144,11 +112,11 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				// Preliminary lookup must expose expired metadata without consuming it.
 				assertToken(t, repo, token)
 				auth := token
-				auth.Purpose, auth.ExpiresAt = purpose, time.Now().Add(time.Hour)
+				auth.Purpose, auth.ExpiresAt = purpose, tokenExpiry(time.Hour)
 				input := original
 				switch failure {
 				case "signed expiry":
-					auth.ExpiresAt = time.Now().Add(-time.Second)
+					auth.ExpiresAt = tokenExpiry(-time.Hour)
 				case "wrong hash":
 					auth.TokenHash = tokenHash("missing")
 				case "wrong account":
@@ -333,9 +301,15 @@ func cancellationContract(t *testing.T, open func(*testing.T) user.AccountReposi
 
 func tokenHash(value string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(value))) }
 
+// Use whole seconds away from the boundary. Storage-specific tests check finer
+// precision and exact deadlines using the provider's clock.
+func tokenExpiry(offset time.Duration) time.Time {
+	return time.Now().UTC().Truncate(time.Second).Add(offset)
+}
+
 func insertToken(t *testing.T, repo user.AccountRepository, id, purpose string) user.TokenMetadata {
 	t.Helper()
-	token := user.TokenMetadata{AccountID: id, TokenHash: tokenHash(id + purpose), Purpose: purpose, ExpiresAt: time.Now().Add(time.Hour)}
+	token := user.TokenMetadata{AccountID: id, TokenHash: tokenHash(id + purpose), Purpose: purpose, ExpiresAt: tokenExpiry(time.Hour)}
 	must(t, repo.InsertToken(t.Context(), token))
 	return token
 }

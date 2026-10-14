@@ -18,17 +18,28 @@ type memoryRepository struct {
 	mu       sync.Mutex
 	accounts map[string]user.User
 	tokens   map[tokenKey]user.TokenMetadata
+	now      func() time.Time
 }
 
 type tokenKey struct{ account, hash string }
 
 func TestMemoryAccountContract(t *testing.T) {
-	Run(t, func(*testing.T) user.AccountRepository {
-		return &memoryRepository{
-			accounts: make(map[string]user.User),
-			tokens:   make(map[tokenKey]user.TokenMetadata),
-		}
-	})
+	for _, clock := range []string{"local", "coarse remote"} {
+		t.Run(clock, func(t *testing.T) {
+			Run(t, func(*testing.T) user.AccountRepository {
+				now := time.Now
+				if clock == "coarse remote" {
+					// Model a backend clock with second precision and modest skew.
+					now = func() time.Time { return time.Now().Add(-2 * time.Minute).Truncate(time.Second) }
+				}
+				return &memoryRepository{
+					accounts: make(map[string]user.User),
+					tokens:   make(map[tokenKey]user.TokenMetadata),
+					now:      now,
+				}
+			})
+		})
+	}
 }
 
 func (m *memoryRepository) GetByID(ctx context.Context, id string) (*user.User, error) {
@@ -87,7 +98,7 @@ func (m *memoryRepository) Create(ctx context.Context, u *user.User) error {
 
 	created := *u
 	created.ID = uuid.NewString()
-	created.CreatedAt = time.Now()
+	created.CreatedAt = m.now()
 	created.UpdatedAt = created.CreatedAt
 	created.SessionVersion = 1
 	m.accounts[created.ID] = created
@@ -138,7 +149,7 @@ func (m *memoryRepository) Update(ctx context.Context, u *user.User) error {
 
 	updated := *u
 	updated.CreatedAt = stored.CreatedAt
-	updated.UpdatedAt = time.Now()
+	updated.UpdatedAt = m.now()
 	emailChanged := user.EmailKey(stored.Email) != user.EmailKey(u.Email)
 	if emailChanged || stored.Password != u.Password || stored.RegistrationAuthType != u.RegistrationAuthType ||
 		stored.Verified != u.Verified || stored.VerificationRequired != u.VerificationRequired {
@@ -170,7 +181,7 @@ func (m *memoryRepository) ChangePassword(ctx context.Context, u *user.User, has
 		return errors.New("account changed or no longer exists")
 	}
 
-	stored.Password, stored.UpdatedAt = hash, time.Now()
+	stored.Password, stored.UpdatedAt = hash, m.now()
 	stored.SessionVersion++
 	m.accounts[u.ID] = stored
 	u.Password, u.UpdatedAt, u.SessionVersion = stored.Password, stored.UpdatedAt, stored.SessionVersion
@@ -194,7 +205,7 @@ func (m *memoryRepository) ResetPassword(ctx context.Context, u *user.User, auth
 		return user.NewErrToken(errors.New("account changed"))
 	}
 
-	stored.Password, stored.UpdatedAt = hash, time.Now()
+	stored.Password, stored.UpdatedAt = hash, m.now()
 	stored.SessionVersion++
 	m.accounts[u.ID] = stored
 	delete(m.tokens, tokenKey{auth.AccountID, auth.TokenHash})
@@ -219,7 +230,7 @@ func (m *memoryRepository) Verify(ctx context.Context, auth user.VerificationAut
 	if !stored.Verified {
 		stored.SessionVersion++
 	}
-	stored.Verified, stored.UpdatedAt = true, time.Now()
+	stored.Verified, stored.UpdatedAt = true, m.now()
 	m.accounts[stored.ID] = stored
 	delete(m.tokens, tokenKey{auth.AccountID, auth.TokenHash})
 	return &stored, nil
@@ -240,7 +251,7 @@ func (m *memoryRepository) checkToken(id, hash, purpose string, signedExpiry tim
 	if !ok || token.Purpose != purpose {
 		return user.NewErrTokenNotFound(nil)
 	}
-	now := time.Now()
+	now := m.now()
 	if !now.Before(token.ExpiresAt) || !now.Before(signedExpiry) {
 		return user.NewErrTokenExpired(nil)
 	}

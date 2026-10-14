@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/trentnix/hyperserver/internal/contacttest"
 	"github.com/trentnix/hyperserver/modules/site/models"
@@ -62,4 +63,19 @@ func TestSQLiteContactContract(t *testing.T) {
 			},
 		}
 	})
+}
+
+func TestSQLiteContactCreationTime(t *testing.T) {
+	repo, err := NewSQLiteContactRepository(t.Context(), contactTestDB(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	submission := &models.ContactSubmission{Email: "created@example.invalid", CreatedAt: time.Unix(1, 0)}
+	started := time.Now()
+	if err := repo.Create(t.Context(), submission); err != nil {
+		t.Fatal(err)
+	}
+	if submission.CreatedAt.Before(started) || submission.CreatedAt.After(time.Now()) {
+		t.Fatalf("incorrect creation time: %v", submission.CreatedAt)
+	}
 }

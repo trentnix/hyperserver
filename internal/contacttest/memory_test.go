@@ -18,6 +18,7 @@ type memoryRepository struct {
 	mu         sync.Mutex
 	records    []models.ContactSubmission
 	failWrites bool
+	now        func() time.Time
 }
 
 func (m *memoryRepository) Create(ctx context.Context, submission *models.ContactSubmission) error {
@@ -34,27 +35,36 @@ func (m *memoryRepository) Create(ctx context.Context, submission *models.Contac
 	}
 
 	created := *submission
-	created.Id, created.CreatedAt = uuid.NewString(), time.Now()
+	created.Id, created.CreatedAt = uuid.NewString(), m.now()
 	m.records = append(m.records, created)
 	*submission = created
 	return nil
 }
 
 func TestMemoryContactContract(t *testing.T) {
-	Run(t, func(*testing.T) Fixture {
-		repo := &memoryRepository{}
-		return Fixture{
-			Repository: repo,
-			ReadAll: func(*testing.T) []models.ContactSubmission {
-				repo.mu.Lock()
-				defer repo.mu.Unlock()
-				return slices.Clone(repo.records)
-			},
-			SetWriteFailure: func(_ *testing.T, fail bool) {
-				repo.mu.Lock()
-				defer repo.mu.Unlock()
-				repo.failWrites = fail
-			},
-		}
-	})
+	for _, clock := range []string{"local", "coarse remote"} {
+		t.Run(clock, func(t *testing.T) {
+			Run(t, func(*testing.T) Fixture {
+				now := time.Now
+				if clock == "coarse remote" {
+					// Timestamp generation belongs to the backend, not the test process.
+					now = func() time.Time { return time.Now().Add(-2 * time.Minute).Truncate(time.Second) }
+				}
+				repo := &memoryRepository{now: now}
+				return Fixture{
+					Repository: repo,
+					ReadAll: func(*testing.T) []models.ContactSubmission {
+						repo.mu.Lock()
+						defer repo.mu.Unlock()
+						return slices.Clone(repo.records)
+					},
+					SetWriteFailure: func(_ *testing.T, fail bool) {
+						repo.mu.Lock()
+						defer repo.mu.Unlock()
+						repo.failWrites = fail
+					},
+				}
+			})
+		})
+	}
 }
