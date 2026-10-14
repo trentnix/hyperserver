@@ -71,7 +71,8 @@ type Options struct {
 }
 
 // NewSQLiteStore opens an owned pool and prepares the session table before use.
-// Existing tables must have all required columns. Setup does not migrate them.
+// Existing tables must have writable columns with supported types and a unique
+// session-ID key. Setup does not migrate tables or validate stored payloads.
 // Setup honors ctx and closes the pool on failure. The caller must close the store.
 func NewSQLiteStore(ctx context.Context, options Options) (*SQLiteStore, error) {
 	if err := ctx.Err(); err != nil {
@@ -321,8 +322,8 @@ func (s *SQLiteStore) Close() error {
 	return nil
 }
 
-// configureDatabase creates missing storage and checks required columns.
-// Column presence does not establish compatible types or stored values.
+// configureDatabase creates missing storage and checks column declarations and
+// session-ID uniqueness without reading stored values.
 func (s *SQLiteStore) configureDatabase(ctx context.Context) error {
 	createTableSQL := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
@@ -343,21 +344,76 @@ func (s *SQLiteStore) configureDatabase(ctx context.Context) error {
 		return database.NewErrDatabase(err)
 	}
 
-	query := fmt.Sprintf("SELECT id, session, expires_at, created_at, updated_at FROM %s LIMIT 0", quoteIdentifier(s.tableName))
-	rows, err := tx.QueryContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("check SQLite session schema columns in %q: %w", s.tableName, err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close SQLite session schema check: %w", err)
+	if err := validateSessionSchema(ctx, tx, s.tableName); err != nil {
+		return err
 	}
 
-	query = fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (julianday(expires_at), id)", quoteIdentifier(s.tableName+"_expiration"), quoteIdentifier(s.tableName))
+	query := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (julianday(expires_at), id)", quoteIdentifier(s.tableName+"_expiration"), quoteIdentifier(s.tableName))
 	if _, err := tx.ExecContext(ctx, query); err != nil {
 		return database.NewErrDatabase(err)
 	}
 
 	return tx.Commit()
+}
+
+func validateSessionSchema(ctx context.Context, tx *sql.Tx, table string) error {
+	for _, column := range []struct{ name, kind string }{
+		{"id", "text"},
+		{"session", "text"},
+		{"expires_at", "timestamp"},
+		{"created_at", "timestamp"},
+		{"updated_at", "timestamp"},
+	} {
+		var declaredType string
+		var hidden int
+		err := tx.QueryRowContext(ctx, `SELECT type, hidden
+			FROM pragma_table_xinfo(?) WHERE name = ? COLLATE NOCASE`, table, column.name).
+			Scan(&declaredType, &hidden)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("check SQLite session schema columns in %q: missing %s", table, column.name)
+		}
+		if err != nil {
+			return fmt.Errorf("check SQLite session schema columns in %q: %w", table, err)
+		}
+		if hidden != 0 {
+			return fmt.Errorf("incompatible SQLite session schema in %q: %s must be an ordinary writable column", table, column.name)
+		}
+		if !compatibleSessionColumnType(declaredType, column.kind) {
+			return fmt.Errorf("incompatible SQLite session schema in %q: %s requires a supported %s type, got %q", table, column.name, column.kind, declaredType)
+		}
+	}
+
+	// Count all key columns before checking their names so composite and
+	// expression indexes cannot satisfy single-column session-ID uniqueness.
+	var uniqueID bool
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM pragma_index_list(?) AS indexes
+		JOIN pragma_index_xinfo(indexes.name) AS columns
+		WHERE indexes."unique" = 1 AND indexes.partial = 0 AND columns."key" = 1
+		GROUP BY indexes.name
+		HAVING count(*) = 1 AND columns.name = 'id' COLLATE NOCASE AND columns.coll = 'BINARY' COLLATE NOCASE
+	)`, table).Scan(&uniqueID)
+	if err != nil {
+		return fmt.Errorf("check SQLite session unique key in %q: %w", table, err)
+	}
+	if !uniqueID {
+		return fmt.Errorf("incompatible SQLite session schema in %q: id requires a non-partial unique key with BINARY comparison", table)
+	}
+	return nil
+}
+
+// compatibleSessionColumnType follows SQLite's text-affinity rules. Timestamps
+// require an exact declaration the driver decodes into time.Time.
+func compatibleSessionColumnType(declaredType, kind string) bool {
+	name := strings.ToUpper(declaredType)
+	switch kind {
+	case "text":
+		return !strings.Contains(name, "INT") && (strings.Contains(name, "CHAR") || strings.Contains(name, "CLOB") || strings.Contains(name, "TEXT"))
+	case "timestamp":
+		return name == "DATE" || name == "DATETIME" || name == "TIMESTAMP"
+	default:
+		return false
+	}
 }
 
 // getSessionFromDatabase attempts to retrieve the specified session from the database

@@ -69,7 +69,7 @@ Session contracts live in `session`. The built-in implementations live in [`sess
 
 Each SQLite store owns its pool and prepares its table and expiration index in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
 
-Startup rejects session tables missing `id`, `session`, `expires_at`, `created_at`, or `updated_at`. Setup does not alter existing columns or decode stored payloads. Column-type checks, constraint checks, and stored-format versions remain unfinished. Incompatible tables require explicit repair before startup.
+Startup checks writable `id` and `session` columns with text affinity and `expires_at`, `created_at`, and `updated_at` columns declared as `DATE`, `DATETIME`, or `TIMESTAMP`. The table must have a non-partial unique key on `id` alone with binary comparison. Nullable declarations remain supported. Setup does not alter existing columns or validate stored values. Incompatible tables require explicit repair before startup. Stored-format versions and migration procedures remain unfinished.
 
 Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Constructors reject missing or placeholder signing keys and lifetimes shorter than one second. Successful constructors return enabled stores. SQLite also requires a connection string and table name.
 
