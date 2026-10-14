@@ -108,7 +108,7 @@ Work through these priorities in order, using the reference application to valid
 
 ### 1. Complete storage and serialization contracts
 
-- Add in-memory adapters and shared contract tests for SQLite. Cover field mappings, affected-row checks, concurrent writes, transaction rollback, and failures. Explicitly configure connection limits, foreign-key enforcement, and lock waits.
+- Add in-memory account/token and contact adapters and shared contract tests for SQLite. Cover field mappings, affected-row checks, concurrent writes, transaction rollback, and failures. Explicitly configure connection limits, foreign-key enforcement, and lock waits for application, session, and maintenance pools.
 - Define stored-format versions and migration procedures. Reject incompatible schemas during provider startup. Test invalid data, interrupted migrations, and rollback or forward repair.
 
 Outcome: service contracts describe the behavior a replacement must preserve, and tests establish that behavior independently of the selected implementation.

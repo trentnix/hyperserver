@@ -4,8 +4,11 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/trentnix/hyperserver/internal/sessiontest"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -36,6 +39,9 @@ func (s *replacementSessionStore) New(r *http.Request, name string) (*session.Se
 func (s *replacementSessionStore) Get(r *http.Request, name string) (*session.Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := r.Context().Err(); err != nil {
+		return nil, err
+	}
 	if s.closes != 0 {
 		return nil, errors.New("test session store closed")
 	}
@@ -44,6 +50,9 @@ func (s *replacementSessionStore) Get(r *http.Request, name string) (*session.Se
 	}
 	cookie, err := r.Cookie(name)
 	if err == nil {
+		if _, err := uuid.Parse(cookie.Value); err != nil {
+			return nil, session.NewErrInvalidToken(err)
+		}
 		record, ok := s.records[cookie.Value]
 		if ok && record.name == name && time.Now().Before(record.expires) {
 			return session.LoadSession(cookie.Value, name, record.expires, s, record.data, nil)
@@ -69,8 +78,19 @@ func (s *replacementSessionStore) save(w http.ResponseWriter, r *http.Request, v
 	if err != nil {
 		return err
 	}
-	value.ExpiresAt = time.Now().Add(time.Hour)
-	s.records[value.ID] = replacementSessionRecord{name: value.Name, data: encoded, expires: value.ExpiresAt}
+	stored, exists := s.records[value.ID]
+	expires := stored.expires
+	if value.IsNew {
+		if exists {
+			return session.NewErrSessionInvalid(errors.New("session ID already exists"))
+		}
+		expires = time.Now().Add(time.Hour)
+	} else if !exists {
+		return session.NewErrSessionInvalid(errors.New("session was revoked"))
+	}
+
+	s.records[value.ID] = replacementSessionRecord{name: value.Name, data: encoded, expires: expires}
+	value.ExpiresAt = expires
 	value.IsNew = false
 	http.SetCookie(w, &http.Cookie{Name: value.Name, Value: value.ID, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	return nil
@@ -79,6 +99,16 @@ func (s *replacementSessionStore) save(w http.ResponseWriter, r *http.Request, v
 func (s *replacementSessionStore) Rotate(w http.ResponseWriter, r *http.Request, old *session.Session, data map[string]any) (*session.Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := r.Context().Err(); err != nil {
+		return nil, err
+	}
+	if !old.IsNew {
+		stored, exists := s.records[old.ID]
+		if !exists || !time.Now().Before(stored.expires) {
+			return nil, session.NewErrSessionInvalid(nil)
+		}
+	}
+
 	replacement := session.NewSession(s, old.Name)
 	replacement.Data = data
 	if err := s.save(w, r, replacement); err != nil {
@@ -105,4 +135,12 @@ func (s *replacementSessionStore) Close() error {
 	defer s.mu.Unlock()
 	s.closes++
 	return nil
+}
+
+func TestMemorySessionContract(t *testing.T) {
+	sessiontest.Run(t, func(t *testing.T) session.SessionStore {
+		store := &replacementSessionStore{records: make(map[string]replacementSessionRecord)}
+		t.Cleanup(func() { store.Close() })
+		return store
+	})
 }
