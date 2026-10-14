@@ -71,6 +71,7 @@ type Options struct {
 }
 
 // NewSQLiteStore opens an owned pool and prepares the session table before use.
+// Existing tables must have all required columns. Setup does not migrate them.
 // Setup honors ctx and closes the pool on failure. The caller must close the store.
 func NewSQLiteStore(ctx context.Context, options Options) (*SQLiteStore, error) {
 	if err := ctx.Err(); err != nil {
@@ -320,7 +321,8 @@ func (s *SQLiteStore) Close() error {
 	return nil
 }
 
-// configureDatabase prepares the session table and expiration index.
+// configureDatabase creates missing storage and checks required columns.
+// Column presence does not establish compatible types or stored values.
 func (s *SQLiteStore) configureDatabase(ctx context.Context) error {
 	createTableSQL := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
@@ -340,7 +342,17 @@ func (s *SQLiteStore) configureDatabase(ctx context.Context) error {
 	if err != nil {
 		return database.NewErrDatabase(err)
 	}
-	query := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (julianday(expires_at), id)", quoteIdentifier(s.tableName+"_expiration"), quoteIdentifier(s.tableName))
+
+	query := fmt.Sprintf("SELECT id, session, expires_at, created_at, updated_at FROM %s LIMIT 0", quoteIdentifier(s.tableName))
+	rows, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("check SQLite session schema columns in %q: %w", s.tableName, err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close SQLite session schema check: %w", err)
+	}
+
+	query = fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (julianday(expires_at), id)", quoteIdentifier(s.tableName+"_expiration"), quoteIdentifier(s.tableName))
 	if _, err := tx.ExecContext(ctx, query); err != nil {
 		return database.NewErrDatabase(err)
 	}

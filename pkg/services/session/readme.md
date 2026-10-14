@@ -69,6 +69,8 @@ Session contracts live in `session`. The built-in implementations live in [`sess
 
 Each SQLite store owns its pool and prepares its table and expiration index in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
 
+Startup rejects session tables missing `id`, `session`, `expires_at`, `created_at`, or `updated_at`. Setup does not alter existing columns or decode stored payloads. Column-type checks, constraint checks, and stored-format versions remain unfinished. Incompatible tables require explicit repair before startup.
+
 Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Constructors reject missing or placeholder signing keys and lifetimes shorter than one second. Successful constructors return enabled stores. SQLite also requires a connection string and table name.
 
 The reference application's [session setup](../../../cmd/web/sessions.go) supplies the manager after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. Setup registers cleanup for managers it creates. A supplied manager keeps its existing owner unless setup explicitly transfers ownership with `ownSessions`. The core has no session-manager field.
