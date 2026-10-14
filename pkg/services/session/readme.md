@@ -8,7 +8,7 @@ The `session` package defines session values, storage contracts, and request han
 
 `SQLiteStore` stores session data in SQLite. Its signed cookie contains a session ID and token metadata, not session data. Authentication requires a store that supports revocable rotation, such as SQLite. Cookie-only sessions cannot revoke captured cookies.
 
-Both stores default to JSON encoded in URL-safe base64. Each store can select a different [Serializer](serializer.go). `Session.Data` still accepts JSON-compatible values. The JSON serializer restores numbers as `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read values into the expected type. That helper uses JSON conversion independently of the storage format.
+Both stores default to versioned JSON encoded in URL-safe base64. Each store can select a different [Serializer](serializer.go). `Session.Data` still accepts JSON-compatible values. The JSON serializer restores numbers as `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read values into the expected type. That helper uses JSON conversion independently of the storage format.
 
 - `MaxSessionDataSize` limits serialized data to 64 KiB before base64 encoding. Reads reject oversized data before calling the serializer. Saves and rotations reject oversized serializer output before writing storage.
 - `MaxCookieSize` limits each cookie to 4 KiB, including its name and outgoing attributes. JWT and base64 overhead reduce the space available for cookie-store data.
@@ -18,7 +18,7 @@ These limits apply to each session, not the total size of an HTTP request. Incom
 
 ## Storage guarantees
 
-Providers serve concurrent requests, but each request owns its mutable session data. SQLite saves replace the entire stored payload. If two requests load the same session and save changes, the later write replaces the earlier data. There is no merge or version check. Do not use session read-modify-write for reliable counters or balances. Cookie-only saves likewise depend on which response the browser applies last.
+Providers serve concurrent requests, but each request owns its mutable session data. SQLite saves replace the entire stored payload. If two requests load the same session and save changes, the later write replaces the earlier data. There is no merge or stale-write check. Do not use session read-modify-write for reliable counters or balances. Cookie-only saves likewise depend on which response the browser applies last.
 
 SQLite creates use unique IDs and reject collisions without replacing existing data. Saving a deleted session fails. Reads reject expired sessions even before cleanup. Saves preserve the original expiration and cannot revive an expired session. Rotation creates a new lifetime and revokes the previous ID atomically. Only one concurrent rotation of a stored session can succeed.
 
@@ -69,7 +69,7 @@ Session contracts live in `session`. The built-in implementations live in [`sess
 
 Each SQLite store owns its pool and prepares its table, expiration index, and version metadata in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Session-store transactions use `BEGIN IMMEDIATE`, overriding `_txlock`, so concurrent initializations acquire the write lock before inspecting storage. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
 
-Startup checks writable `id` and `session` columns with text affinity and `expires_at`, `created_at`, and `updated_at` columns declared as `DATE`, `DATETIME`, or `TIMESTAMP`. The table must have a non-partial unique key on `id` alone with binary comparison. Nullable declarations remain supported. Each configured table requires clean schema version 1. Setup does not alter existing columns, repair indexes, or validate stored values. Payload-format versioning remains unfinished.
+Startup checks writable `id` and `session` columns with text affinity and `expires_at`, `created_at`, and `updated_at` columns declared as `DATE`, `DATETIME`, or `TIMESTAMP`. The table must have a non-partial unique key on `id` alone with binary comparison. Nullable declarations remain supported. Each configured table requires clean schema version 1. Setup does not alter existing columns, repair indexes, or validate stored values. The selected serializer checks payload formats when sessions are read.
 
 ### SQLite schema migrations
 
@@ -151,6 +151,8 @@ A serializer implements `Encode(map[string]any) ([]byte, error)` and `Decode([]b
 
 Base64 framing, cookie signing, expiration, revocation, and size limits stay outside serialization. Neither selecting a serializer nor encoding data encrypts it. Decode failures return errors rather than new sessions. Encode failures issue no cookie and leave stored data unchanged.
 
-The default payload is a JSON object wrapped in padded URL-safe base64, with no format-version marker. Object keys, including `version` and `data`, belong to the application. SQLite stores that payload in its session table. Cookie-only sessions carry it in signed claims. A custom serializer changes the bytes inside the base64 wrapper, not the wrapper or cookie signing.
+The default payload is `[1,{"key":"value"}]` wrapped in padded URL-safe base64. The array contains the payload version and the application's data object. Object keys, including `version` and `data`, belong to the application. Unknown versions and malformed payloads return errors. Payload versions are independent of database schema versions. SQLite stores the payload in its session table. Cookie-only sessions carry it in signed claims.
 
-A replacement must explicitly read existing data or the application must invalidate those sessions before switching formats. There is no automatic format detection or migration. A replacement can read the previous format and write its new format when a session is next saved. SQLite cookies contain session identifiers rather than stored payloads, so changing the stored payload format does not require changing those cookies.
+The default reader also accepts unversioned JSON objects. Reading leaves storage unchanged. A successful save writes version 1 without changing the session ID or expiration. The four-byte version wrapper counts toward existing limits. If a rewrite exceeds the payload or cookie limit, saving fails without replacing the stored data or issuing a cookie. Reduce the session's data or invalidate the session before retrying. Applications that cannot read version 1 must invalidate affected sessions before rolling back to an older serializer.
+
+A custom serializer owns its format and compatibility rules. The stores do not add a version wrapper to custom output. A replacement must explicitly read existing data or the application must invalidate those sessions before switching formats. SQLite cookies contain session identifiers rather than stored payloads, so changing the stored payload format does not require changing those cookies.

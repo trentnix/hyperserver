@@ -278,7 +278,7 @@ SQLite writes complete before reporting success. File-backed SQLite data survive
 
 Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
 
-Accounts, contacts, and each configured SQLite session table have independent schema versions. Default session payloads have no format-version marker yet. Schema declaration checks do not validate every existing record. The [roadmap](roadmap.md#storage-and-serialization) defines migration ownership and the upgrade procedure.
+Accounts, contacts, and each configured SQLite session table have independent schema versions. Default session payloads have a separate format version and support reading unversioned JSON objects. See [session serialization](pkg/services/session/readme.md#replacing-serialization) for compatibility and size limits. Schema declaration checks do not validate every existing record. The [roadmap](roadmap.md#storage-and-serialization) defines migration ownership and the upgrade procedure.
 
 #### Account schema migrations
 

@@ -47,7 +47,7 @@ func TestHTTPCredentialFormActions(t *testing.T) {
 	}
 }
 
-// Exercise the browser's native submission with real rendered forms, but no HTMX.
+// Exercise native submission and email-field styling with real forms, but no HTMX.
 // Submission handlers inspect transport only. HTTP tests cover account operations.
 func TestBrowserNativeForms(t *testing.T) {
 	if os.Getenv("HS_TEST_FIREFOX") == "" {
@@ -63,6 +63,7 @@ func TestBrowserNativeForms(t *testing.T) {
 			{path: "/contact", fields: url.Values{"name": {"Native visitor"}, "email": {"native@example.invalid"}, "message": {"Native & ordinary submission"}}},
 			{path: "/auth/login/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}}},
 			{path: "/auth/register/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}, "passwordMatch": {secret}}},
+			{path: "/auth/reset/request/email", fields: url.Values{"email": {"native@example.invalid"}}},
 			{path: "/auth/change/email", fields: url.Values{"oldPassword": {secret}, "newPassword": {secret}, "newPasswordMatch": {secret}}},
 			{path: "/auth/logout", fields: url.Values{}},
 		}
@@ -98,9 +99,12 @@ func TestBrowserNativeForms(t *testing.T) {
 		}
 		page := func(w http.ResponseWriter, body string) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			io.WriteString(w, `<!doctype html><html><head><script src="/test/diagnostics/errors.js"></script></head><body>`+body+`<script src="/test/submit.js"></script></body></html>`)
+			// Test local styles without fetching the site's external font import.
+			w.Header().Set("Content-Security-Policy", "default-src 'self'")
+			io.WriteString(w, `<!doctype html><html><head><link rel="stylesheet" href="/css/site.css"><script src="/test/diagnostics/errors.js"></script></head><body>`+body+`<script src="/test/submit.js"></script></body></html>`)
 		}
 		mux := http.NewServeMux()
+		mux.Handle("GET /css/site.css", h.handler)
 		mux.HandleFunc("POST /test/ready", func(w http.ResponseWriter, r *http.Request) {
 			readyOnce.Do(func() { close(ready) })
 			w.WriteHeader(http.StatusNoContent)
@@ -112,8 +116,23 @@ func TestBrowserNativeForms(t *testing.T) {
   if (!ready.ok) throw new Error("Could not report browser readiness");
   if (typeof htmx !== "undefined") throw new Error("HTMX must be unavailable");
   const form = document.querySelector("form");
+  const email = form.querySelector('input[name="email"]');
+  if (email) {
+    const style = getComputedStyle(email);
+    const formStyle = getComputedStyle(form);
+    const width = form.clientWidth - parseFloat(formStyle.paddingLeft) - parseFloat(formStyle.paddingRight);
+    if (style.display !== "block" || style.boxSizing !== "border-box" ||
+        parseFloat(style.paddingLeft) <= 0 || parseFloat(style.marginBottom) <= 0 ||
+        Math.abs(email.getBoundingClientRect().width - width) > 1) {
+      throw new Error(form.id + ": email input lost its full-width field styling");
+    }
+    const password = form.querySelector('input[type="password"]');
+    if (password && Math.abs(email.getBoundingClientRect().height - password.getBoundingClientRect().height) > 1) {
+      throw new Error(form.id + ": email and password field heights differ");
+    }
+  }
   for (const input of form.querySelectorAll("input")) {
-    if (input.type === "email") input.value = "native@example.invalid";
+    if (input.name === "email") input.value = "native@example.invalid";
     if (input.type === "password") input.value = "Native&A+B1!";
     if (input.name === "name") input.value = "Native visitor";
   }

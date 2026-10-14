@@ -262,6 +262,7 @@ label {
 }
 
 input[type="email"],
+input[type="text"][inputmode="email"],
 input[type="password"] {
   display: block;
   width: 100%;

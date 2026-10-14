@@ -58,8 +58,8 @@ func TestSessionJSONRoundTrip(t *testing.T) {
 
 func TestSessionJSONSizeLimits(t *testing.T) {
 	for _, size := range []int{MaxSessionDataSize - 1, MaxSessionDataSize, MaxSessionDataSize + 1} {
-		// The object syntax contributes eight bytes.
-		value := strings.Repeat("a", size-8)
+		// The object syntax and version envelope contribute twelve bytes.
+		value := strings.Repeat("a", size-12)
 		s := &Session{Data: map[string]any{"x": value}}
 		encoded, err := s.EncodedData(nil)
 		if size > MaxSessionDataSize {
@@ -69,7 +69,7 @@ func TestSessionJSONSizeLimits(t *testing.T) {
 		} else if err != nil {
 			t.Fatal(err)
 		}
-		raw := base64.URLEncoding.EncodeToString([]byte(`{"x":"` + value + `"}`))
+		raw := base64.URLEncoding.EncodeToString([]byte(`[1,{"x":"` + value + `"}]`))
 		loaded, err := LoadSession("id", "name", time.Now(), nil, raw, nil)
 		if size > MaxSessionDataSize {
 			if !errors.Is(err, ErrSessionTooLarge) || loaded != nil {
@@ -144,7 +144,7 @@ func TestSessionJSONNesting(t *testing.T) {
 }
 
 func FuzzLoadSession(f *testing.F) {
-	for _, raw := range []string{`{}`, `{"n":9223372036854775807}`, `null`, `{} {}`, "invalid"} {
+	for _, raw := range []string{`{}`, `{"n":9223372036854775807}`, `[1,{}]`, `[2,{}]`, `[1,{"version":2,"data":{}}]`, `null`, `{} {}`, "invalid"} {
 		f.Add(base64.URLEncoding.EncodeToString([]byte(raw)))
 	}
 	f.Fuzz(func(t *testing.T, encoded string) {
@@ -173,8 +173,87 @@ func TestDefaultSerializerStoredFormat(t *testing.T) {
 			t.Fatalf("existing data = %+v, %v", loaded, err)
 		}
 		encoded, err := loaded.EncodedData(serializer)
-		if err != nil || encoded != stored {
-			t.Fatalf("stored format changed: %q, %v", encoded, err)
+		want := base64.URLEncoding.EncodeToString([]byte(`[1,{"n":9223372036854775807,"text":"saved"}]`))
+		if err != nil || encoded != want {
+			t.Fatalf("version 1 encoding = %q, %v", encoded, err)
+		}
+	}
+}
+
+func TestDefaultSerializerPayloadVersions(t *testing.T) {
+	for _, raw := range []string{
+		`{"version":99,"data":{"version":2},"n":9223372036854775807}`,
+		`[1,{"version":99,"data":{"version":2},"n":9223372036854775807}]`,
+		" \n[ 1, {\"version\":99,\"data\":{\"version\":2},\"n\":9223372036854775807} ]\t",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			serializer := JSONSerializer{}
+			values, err := serializer.Decode([]byte(raw))
+			if err != nil || len(values) != 3 || values["version"] != json.Number("99") || values["n"] != json.Number("9223372036854775807") {
+				t.Fatalf("session values = %v, %v", values, err)
+			}
+			nested, ok := values["data"].(map[string]any)
+			if !ok || nested["version"] != json.Number("2") {
+				t.Fatalf("application data key changed: %v", values)
+			}
+			encoded, err := serializer.Encode(values)
+			if err != nil || string(encoded) != `[1,{"data":{"version":2},"n":9223372036854775807,"version":99}]` {
+				t.Fatalf("versioned encoding = %s, %v", encoded, err)
+			}
+			values["version"] = "changed"
+			independent, err := serializer.Decode([]byte(raw))
+			if err != nil || independent["version"] != json.Number("99") {
+				t.Fatalf("decoder reused a map: %v, %v", independent, err)
+			}
+		})
+	}
+	encoded, err := (JSONSerializer{}).Encode(nil)
+	if err != nil || string(encoded) != `[1,{}]` {
+		t.Fatalf("empty encoding = %s, %v", encoded, err)
+	}
+}
+
+func TestDefaultSerializerRejectsInvalidVersions(t *testing.T) {
+	for _, raw := range []string{
+		`[]`, `[1]`, `[1,{},{}]`, `[0,{}]`, `[-1,{}]`, `[2,{}]`,
+		`[null,{}]`, `[true,{}]`, `["1",{}]`, `[1.0,{}]`, `[1e0,{}]`,
+		`[999999999999999999999999,{}]`, `[{},{}]`, `[[1],{}]`,
+		`[1,null]`, `[1,[]]`, `[1,1]`, `[1,"text"]`, `[1,[1,{}]]`,
+		`[1,{}] {}`, `[1,{}] garbage`, `[1,{]`, `[1,{}],`,
+		"\u00a0[1,{}]", "[1,{}]\u00a0", "\u00a0{}", "{}\u00a0",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			encoded := base64.URLEncoding.EncodeToString([]byte(raw))
+			if loaded, err := LoadSession("id", "name", time.Time{}, nil, encoded, nil); loaded != nil || err == nil {
+				t.Fatalf("invalid payload accepted: %+v, %v", loaded, err)
+			}
+		})
+	}
+}
+
+func TestUnversionedPayloadSizeLimit(t *testing.T) {
+	for _, size := range []int{MaxSessionDataSize - 4, MaxSessionDataSize, MaxSessionDataSize + 1} {
+		legacy := `{"x":"` + strings.Repeat("a", size-8) + `"}`
+		encoded := base64.URLEncoding.EncodeToString([]byte(legacy))
+		loaded, err := LoadSession("id", "name", time.Time{}, nil, encoded, nil)
+		if size > MaxSessionDataSize {
+			if loaded != nil || !errors.Is(err, ErrSessionTooLarge) {
+				t.Fatalf("oversized legacy payload: %+v, %v", loaded, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The version envelope counts toward the existing byte limit. A readable
+		// legacy payload can be too large to save without reducing its data.
+		rewritten, err := loaded.EncodedData(nil)
+		if size+4 > MaxSessionDataSize {
+			if rewritten != "" || !errors.Is(err, ErrSessionTooLarge) {
+				t.Fatalf("oversized rewrite = %q, %v", rewritten, err)
+			}
+		} else if err != nil {
+			t.Fatal(err)
 		}
 	}
 }

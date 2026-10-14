@@ -114,7 +114,7 @@ Work through these priorities in order, using the reference application to valid
 
 ### 1. Complete storage and serialization contracts
 
-- Add explicit session payload-format compatibility and document the sample contact-file format. Test invalid data, interrupted conversions, and rollback or forward repair before supporting an upgrade path.
+- Document the sample contact-file format and its compatibility policy. Test preservation during any supported conversion.
 
 Outcome: service contracts describe the behavior a replacement must preserve, and tests establish that behavior independently of the selected implementation.
 
