@@ -17,7 +17,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/session/stores"
+	"github.com/trentnix/hyperserver/pkg/services/session/cookie"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
@@ -82,11 +82,6 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 	if err := usersqlite.NewAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.Config{}
-	cfg.HTTP.Session.JwtKey = strings.Repeat("s", 32)
-	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
-	cfg.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}}
-	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
 	manager := &AuthManager{verificationJwtKey: strings.Repeat("t", 32), contentManager: &content.ContentManagerService{
 		HomeURL: "/", AuthURL: "/login",
 		HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
@@ -94,7 +89,13 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 		},
 	}}
 	manager.accounts = usersqlite.NewAccountRepository(db)
-	sessions, err := stores.NewSessionManager(context.Background(), cfg)
+	sessions, err := session.NewSessionManager(t.Context(), map[string]string{"default": "cookie"}, map[string]session.StoreFactory{
+		"cookie": func(context.Context) (session.SessionStore, error) {
+			return cookie.NewCookieStore(cookie.Options{
+				SigningKey: strings.Repeat("s", 32), TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+			})
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

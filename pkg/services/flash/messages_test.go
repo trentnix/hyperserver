@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/session/stores"
+	"github.com/trentnix/hyperserver/pkg/services/session/cookie"
+	"github.com/trentnix/hyperserver/pkg/services/session/sqlite"
 )
 
 type validationStore struct{ session.SessionStore }
@@ -67,15 +67,19 @@ func messageRequests(t *testing.T) func([]*http.Cookie) *http.Request {
 
 func messageStoreRequests(t *testing.T, provider string) func([]*http.Cookie) *http.Request {
 	t.Helper()
-	cfg := &config.Config{}
-	cfg.HTTP.Session.JwtKey = "message-test-key"
-	cfg.HTTP.Session.TokenAge = time.Hour
-	cfg.HTTP.Session.CookieAge = time.Hour
-	cfg.HTTP.Session.Types = map[string]string{"default": provider}
-	cfg.HTTP.Session.Stores = map[string]map[string]string{provider: {
-		"enabled": "true", "connection": filepath.Join(t.TempDir(), "messages.db"), "sessiontable": "messages",
-	}}
-	manager, err := stores.NewSessionManager(context.Background(), cfg)
+	manager, err := session.NewSessionManager(t.Context(), map[string]string{"default": provider}, map[string]session.StoreFactory{
+		"cookieStore": func(context.Context) (session.SessionStore, error) {
+			return cookie.NewCookieStore(cookie.Options{
+				SigningKey: "message-test-key", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+			})
+		},
+		"sqliteStore": func(ctx context.Context) (session.SessionStore, error) {
+			return sqlite.NewSQLiteStore(ctx, sqlite.Options{
+				Connection: filepath.Join(t.TempDir(), "messages.db"), Table: "messages",
+				SigningKey: "message-test-key", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+			})
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

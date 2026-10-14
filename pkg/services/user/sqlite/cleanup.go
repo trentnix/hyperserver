@@ -7,25 +7,21 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // OpenTokenMaintenance opens existing account storage for maintenance.
-// It does not create or migrate tables. The caller must call the returned close
-// function after the batch. Failed setup closes any pool it opened.
-func OpenTokenMaintenance(ctx context.Context, cfg config.DatabaseConfig, options map[string]string) (accounts.TokenMaintenance, func() error, error) {
-	if err := ValidateOptions(options); err != nil {
-		return nil, nil, err
-	}
+// It does not create files or change the schema. Application setup must resolve
+// connection's path. The caller must call the returned close function after the batch.
+// Failed setup closes any pool it opened.
+func OpenTokenMaintenance(ctx context.Context, connection string) (accounts.TokenMaintenance, func() error, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	if cfg.Driver != "sqlite3" {
-		return nil, nil, errors.New("SQLite account maintenance requires the sqlite3 database driver")
-	}
-	db, err := database.Setup(cfg.Driver, cfg.Connection)
+
+	db, err := sqlitedb.OpenExisting(connection)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -17,8 +17,8 @@ import (
 	"syscall"
 
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
+	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -45,21 +45,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	accounts := reference.NewAccountStorage(app.Config)
+	accounts := setup.NewAccountStorage(app.Config)
 	if err := run(ctx, app, accounts, *contactDirectory); err != nil {
 		log.Fatal(err)
 	}
 }
 
 // run delegates serving and resource ownership to the shared application lifecycle.
-func run(ctx context.Context, s *application, accounts *reference.AccountStorage, contactDirectory string) error {
+func run(ctx context.Context, s *application, accounts *setup.AccountStorage, contactDirectory string) error {
 	return s.Run(ctx, func(ctx context.Context) (*http.Server, net.Listener, error) {
 		return prepareHTTP(ctx, s, accounts, contactDirectory)
 	})
 }
 
 // prepareHTTP selects the reference application's services, modules, and HTTP stack.
-func prepareHTTP(ctx context.Context, s *application, accounts *reference.AccountStorage, contactDirectory string) (*http.Server, net.Listener, error) {
+func prepareHTTP(ctx context.Context, s *application, accounts *setup.AccountStorage, contactDirectory string) (*http.Server, net.Listener, error) {
 	address, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port)
 	if err != nil {
 		return nil, nil, err

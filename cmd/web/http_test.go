@@ -22,14 +22,13 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/auth/password"
+	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -208,7 +207,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) (
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if err := stores.ValidateConfig(cfg); err != nil {
+	if err := setup.ValidateSessionConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
 	app, err := newApplication(*cfg)
@@ -238,7 +237,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) (
 	if err := initializeSessions(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
-	if err := initializeAccounts(context.Background(), app, reference.NewAccountStorage(app.Config)); err != nil {
+	if err := initializeAccounts(context.Background(), app, setup.NewAccountStorage(app.Config)); err != nil {
 		t.Fatal(err)
 	}
 	logs := &capturedLogs{}

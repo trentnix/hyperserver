@@ -8,7 +8,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/trentnix/hyperserver/internal/accounttest"
+	"github.com/trentnix/hyperserver/internal/test/accounttest"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 

@@ -74,7 +74,7 @@ To exercise two storage platforms together, run `go run ./cmd/web -contact-direc
 
 Prepare storage in application setup, before initializing its consumers. The reference application owns its SQL pool in [application.go](cmd/web/application.go) and registers pool cleanup with `OnShutdown` before account and contact setup. The core has no SQL-pool field. The reference application checks SQL connectivity with a ten-second deadline. SQL drivers must be imported by the application or its storage providers.
 
-Prepare accounts and sessions in application setup and pass them to `auth.Module(accounts, sessions, providers)`, `email.Provider(accounts, sessions, mailClient)`, and authentication middleware. The core holds neither service. Use `stores.NewSessionManager(ctx, cfg)` for the built-in session providers or supply custom factories as shown in [Sessions](pkg/services/session/readme.md#ownership-and-extension).
+Prepare accounts and sessions in application setup and pass them to `auth.Module(accounts, sessions, providers)`, `email.Provider(accounts, sessions, mailClient)`, and authentication middleware. The core holds neither service. Supply built-in or custom session providers through factories as shown in [Sessions](pkg/services/session/readme.md#ownership-and-extension). The reference application's [setup](cmd/internal/setup/sessions.go) selects its providers from configuration.
 
 For SMTP, construct a sender with `smtp.NewSender(cfg.Mail)` from [`pkg/services/messaging/smtp`](pkg/services/messaging/smtp/smtp.go), then pass it to `messaging.NewMailClientWithSender`. The core has no mail-client field. Pass the client to `site.Module(newContacts, mailClient)` and `email.Provider(accounts, sessions, mailClient)` from [`auth/modules/email`](auth/modules/email/email_auth.go). [Reference mail setup](cmd/web/mail.go) and [module wiring](cmd/web/site_modules.go) show the wiring. Construction does not contact SMTP, and consumers that require delivery must validate configuration. After preparing services, use `handlers.Setup` for module initialization, route binding, and cleanup registration.
 
@@ -251,7 +251,7 @@ Direct `http.ServeMux.Handle` calls retain Go's panic behavior. Panics in module
 
 ### Account storage
 
-In the reference application, `auth.accountStorage.provider` selects account persistence, separate from the login providers under `auth.services`. Empty or omitted selects `sqlite`, which uses the application-owned `database.connection`. SQLite accepts no `auth.accountStorage.options`. Unknown provider names stop startup when authentication is enabled. The web and cleanup commands share this selection code in [reference account setup](internal/reference/accounts.go), not in the core server.
+In the reference application, `auth.accountStorage.provider` selects account persistence, separate from the login providers under `auth.services`. Empty or omitted selects `sqlite`, which uses the application-owned `database.connection`. SQLite accepts no `auth.accountStorage.options`. Unknown provider names stop startup when authentication is enabled. The web and cleanup commands share this selection code in [reference account setup](cmd/internal/setup/accounts.go), not in the core server.
 
 Account models, token operations, and storage contracts live in [`user`](pkg/services/user). The SQLite implementation lives in [`user/sqlite`](pkg/services/user/sqlite). Import that provider when constructing `sqlite.NewAccountRepository(pool)` directly. The repository borrows the pool and must be initialized before use.
 
@@ -274,6 +274,12 @@ SQLite writes complete before reporting success. File-backed SQLite data survive
 
 Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
 
+#### SQLite connections
+
+The reference application and built-in session and maintenance providers use the [SQLite pool opener](pkg/database/sqlite/pool.go). Each pool allows one open connection and retains it while idle. Every new or replacement connection enables foreign keys and waits up to 5000 milliseconds for locks. Set `_timeout` or `_busy_timeout` in the connection string to change that wait. Zero disables waiting. Disabling foreign keys is rejected.
+
+Cancellation stops a wait for a free pool connection. During a SQLite lock wait, cancellation can be delayed until the lock timeout and return a lock error instead of a context error. Caller-supplied pools retain their owner's settings.
+
 #### Direct backend access
 
 Keep the native client in application setup and pass it to modules that need it. Repositories do not take that access away. For example, the same `pool` used above can serve a reporting query:
@@ -293,11 +299,11 @@ Direct access couples that code to the backend. Direct writes must preserve the 
 
 #### Provider selection
 
-The reference application's setup also supports named factories. In the web command, register replacements before initialization:
+The reference application's [shared setup](cmd/internal/setup) is private to packages under `cmd`. It supports named factories. In the web command, register replacements before initialization:
 
 ```go
-accounts := reference.NewAccountStorage(app.Config)
-if err := accounts.RegisterProvider("company", reference.AccountProvider{
+accounts := setup.NewAccountStorage(app.Config)
+if err := accounts.RegisterProvider("company", setup.AccountProvider{
     Open: openCompanyAccounts,
     OpenMaintenance: openCompanyTokenMaintenance, // Optional. Opens existing storage only.
 }); err != nil {
@@ -308,7 +314,7 @@ if err := initializeAccounts(ctx, app, accounts); err != nil {
 }
 ```
 
-This `internal/reference` helper uses configuration, not a server instance. Provider factories receive the startup context and a copy of the configured options. `accounts.Open(ctx, pool)` returns an initialized repository and its optional cleanup function. Failed opens release partial acquisitions. The web command's [initializeAccounts](cmd/web/accounts.go) supplies the repository and registers its cleanup. Cleanup runs after consumers stop and before the shared pool closes.
+This `cmd/internal/setup` helper uses configuration, not a server instance. Provider factories receive the startup context and a copy of the configured options. `accounts.Open(ctx, pool)` returns an initialized repository and its optional cleanup function. Failed opens release partial acquisitions. The web command's [initializeAccounts](cmd/web/accounts.go) supplies the repository and registers its cleanup. Cleanup runs after consumers stop and before the shared pool closes.
 
 Select the registered name and its options in configuration:
 
@@ -322,7 +328,7 @@ auth:
 
 Reference provider registrations belong to one setup instance. Names are case-sensitive, and `sqlite` is reserved. Supplying `AccountRepository` on the reference application's [setup struct](cmd/web/application.go) bypasses selection and initialization. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
 
-`OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/account_repository.go) capability, an optional close function, and an error. It must not create or migrate tables. The cleanup command calls `reference.CleanupAccountTokens(ctx, cfg, limit)` without constructing a server or `AccountStorage`. Provider selection is shared with web startup. If setup registers custom providers, its `CleanupTokens` method uses those registrations through the same maintenance implementation. Each batch closes acquired resources, even when opening or deletion fails. A missing capability returns an error rather than silently skipping cleanup. Applications that already hold a repository implementing `TokenMaintenance` can call `DeleteExpiredTokens` directly.
+`OpenMaintenance` returns the separate [TokenMaintenance](pkg/services/user/account_repository.go) capability, an optional close function, and an error. It must not create or migrate tables. The cleanup command calls `setup.CleanupAccountTokens(ctx, cfg, limit)` without constructing a server or `AccountStorage`. Provider selection is shared with web startup. If setup registers custom providers, its `CleanupTokens` method uses those registrations through the same maintenance implementation. Each batch closes acquired resources, even when opening or deletion fails. A missing capability returns an error rather than silently skipping cleanup. Applications that already hold a repository implementing `TokenMaintenance` can call `DeleteExpiredTokens` directly.
 
 ### Logging
 
@@ -597,13 +603,15 @@ Clients behind a NAT or an unconfigured proxy share an allowance. Memory capacit
 
 ### Expired-record cleanup
 
-Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration as `cmd/web`. Both commands resolve storage paths from that configuration. Each run deletes at most 100 expired rows from each selected server-side session store and, when authentication is enabled, account-token storage. Storage providers own maintenance setup and pool handling. The tables must already exist. Live records and accounts are unchanged.
+Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration as `cmd/web`. Both commands resolve storage paths from that configuration. Each run deletes at most 100 expired rows from each selected server-side session store and, when authentication is enabled, account-token storage. Storage providers own maintenance setup and pool handling. SQLite database files and tables must already exist. Cleanup does not create missing files or support in-memory databases. Live records and accounts are unchanged.
 
 The supplied command includes the built-in providers. A custom account provider must also be registered in the application's maintenance executable. Unknown providers and missing maintenance capabilities produce an error without falling back to SQLite. Independent session cleanup still runs.
 
 Schedule the command externally for regular cleanup. The server does not run cleanup automatically. The command reports deleted counts and exits with an error if either cleanup fails. Expiration checks still reject expired sessions and tokens before cleanup runs.
 
 ### Checks
+
+Tests live beside the code they exercise. Shared storage contract helpers live in [internal/test](internal/test) and can be used by tests throughout the repository.
 
 From the repository root, run the existing checks with:
 

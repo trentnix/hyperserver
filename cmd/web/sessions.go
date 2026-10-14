@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 )
 
 // initializeSessions prepares selected providers before modules and requests use
@@ -18,7 +18,7 @@ func initializeSessions(ctx context.Context, s *application) error {
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	manager, err := stores.NewSessionManager(ctx, s.Config)
+	manager, err := setup.NewSessionManager(ctx, s.Config)
 	if err != nil {
 		return err
 	}

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -58,11 +57,7 @@ func (s *application) initializeDatabase(ctx context.Context) error {
 		return err
 	}
 
-	connection, err := database.ResolveConnection(s.Config.Database.Driver, s.Config.Database.Connection, s.Config.App.WorkingDirectory)
-	if err != nil {
-		return err
-	}
-	db, err := database.Setup(s.Config.Database.Driver, connection)
+	db, err := openApplicationDatabase(s.Config)
 	if err != nil {
 		return err
 	}

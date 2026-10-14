@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -61,9 +61,11 @@ func checkStartupStoragePaths(t *testing.T) {
 	// Inspect storage after initialization, then stop before module setup/listening.
 	checked := errors.New("storage checked")
 	app.Config.Auth.AccountStorage.Provider = "path-check"
-	accounts := reference.NewAccountStorage(app.Config)
-	if err := accounts.RegisterProvider("path-check", reference.AccountProvider{
+	accounts := setup.NewAccountStorage(app.Config)
+	if err := accounts.RegisterProvider("path-check", setup.AccountProvider{
 		Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
+			// This test needs two physical connections to verify path resolution.
+			app.Database.SetMaxOpenConns(2)
 			first, err := app.Database.Conn(ctx)
 			if err != nil {
 				return nil, nil, err

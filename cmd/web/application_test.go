@@ -175,11 +175,25 @@ func TestApplicationDatabaseInitializationIsExplicitAndRetryable(t *testing.T) {
 		t.Fatal("invalid database initialization succeeded")
 	}
 
+	app.Config.Database = config.DatabaseConfig{Driver: "sqlite3", Connection: ":memory:?_fk=false"}
+	if err := app.initializeDatabase(t.Context()); err == nil || app.Database != nil {
+		t.Fatal("disabled foreign keys accepted")
+	}
+
 	app.Config.Database = config.DatabaseConfig{Driver: "sqlite3", Connection: ":memory:"}
 	if err := app.initializeDatabase(t.Context()); err != nil {
 		t.Fatal("retry:", err)
 	}
 	db := app.Database
+	if db.Stats().MaxOpenConnections != 1 {
+		t.Fatal("SQLite pool must limit open connections")
+	}
+	for pragma, want := range map[string]int{"foreign_keys": 1, "busy_timeout": 5000} {
+		var got int
+		if err := db.QueryRowContext(t.Context(), "PRAGMA "+pragma).Scan(&got); err != nil || got != want {
+			t.Fatalf("%s = %d, %v, want %d", pragma, got, err, want)
+		}
+	}
 	app.Config.Database.Driver = "unused-after-initialization"
 	if err := app.initializeDatabase(t.Context()); err != nil || app.Database != db {
 		t.Fatal("repeated initialization replaced the pool:", err)
@@ -195,14 +209,28 @@ func TestApplicationDatabaseInitializationIsExplicitAndRetryable(t *testing.T) {
 
 func TestApplicationPreservesBorrowedPool(t *testing.T) {
 	db := shutdownTestDB(t)
+	db.SetMaxOpenConns(2)
+	if _, err := db.ExecContext(t.Context(), "PRAGMA foreign_keys = OFF; PRAGMA busy_timeout = 75"); err != nil {
+		t.Fatal(err)
+	}
 	app, err := newApplication(config.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Supplying a pool without transferring ownership leaves cleanup with its owner.
 	app.Database = db
+	app.Config.Database.Driver = "must-not-open"
 	if err := app.initializeDatabase(t.Context()); err != nil || app.Database != db {
 		t.Fatal("initialization replaced a supplied pool:", err)
+	}
+	if db.Stats().MaxOpenConnections != 2 {
+		t.Fatal("initialization changed supplied connection limit")
+	}
+	for pragma, want := range map[string]int{"foreign_keys": 0, "busy_timeout": 75} {
+		var got int
+		if err := db.QueryRowContext(t.Context(), "PRAGMA "+pragma).Scan(&got); err != nil || got != want {
+			t.Fatalf("initialization changed %s: %d, %v", pragma, got, err)
+		}
 	}
 	if err := app.Shutdown(); err != nil {
 		t.Fatal(err)

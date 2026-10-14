@@ -4,38 +4,48 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/trentnix/hyperserver/config"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestOpenSQLiteTokenMaintenance(t *testing.T) {
-	for _, scenario := range []string{"success", "canceled", "unsupported driver", "options", "unavailable"} {
+	for _, scenario := range []string{"success", "missing file", "canceled", "empty connection", "invalid connection", "unavailable", "foreign keys disabled"} {
 		t.Run(scenario, func(t *testing.T) {
-			cfg := config.DatabaseConfig{Driver: "sqlite3", Connection: filepath.Join(t.TempDir(), "accounts.db")}
+			path := filepath.Join(t.TempDir(), "accounts.db")
+			if scenario == "success" {
+				if err := os.WriteFile(path, nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			connection := path + "?_timeout=75"
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			var options map[string]string
 			switch scenario {
 			case "canceled":
 				cancel()
-			case "unsupported driver":
-				cfg.Driver = "other"
-			case "options":
-				options = map[string]string{"connection": "unsupported"}
+			case "empty connection":
+				connection = ""
+			case "invalid connection":
+				connection += "&_busy_timeout=invalid"
 			case "unavailable":
-				cfg.Connection = filepath.Join(t.TempDir(), "missing", "accounts.db")
+				connection = filepath.Join(t.TempDir(), "missing", "accounts.db")
+			case "foreign keys disabled":
+				connection += "&_fk=false"
 			}
-			maintenance, closeStore, err := OpenTokenMaintenance(ctx, cfg, options)
+			maintenance, closeStore, err := OpenTokenMaintenance(ctx, connection)
 			if scenario != "success" {
 				if err == nil || maintenance != nil || closeStore != nil {
 					t.Fatalf("failed opening returned resources: %v, %v", maintenance, err)
 				}
 				if scenario == "canceled" && !errors.Is(err, context.Canceled) {
 					t.Fatal("lost cancellation:", err)
+				}
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Fatalf("failed maintenance created a database: %v", err)
 				}
 				return
 			}
@@ -44,6 +54,15 @@ func TestOpenSQLiteTokenMaintenance(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = closeStore() })
 			repository := maintenance.(*AccountRepository)
+			if repository.db.Stats().MaxOpenConnections != 1 {
+				t.Fatal("maintenance pool must limit open connections")
+			}
+			for pragma, want := range map[string]int{"foreign_keys": 1, "busy_timeout": 75} {
+				var got int
+				if err := repository.db.QueryRowContext(ctx, "PRAGMA "+pragma).Scan(&got); err != nil || got != want {
+					t.Fatalf("%s = %d, %v, want %d", pragma, got, err, want)
+				}
+			}
 			assertNoAccountTables(t, repository.db)
 			if _, err := maintenance.DeleteExpiredTokens(ctx, 1); err == nil {
 				t.Fatal("maintenance accepted missing schema")

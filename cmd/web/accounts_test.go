@@ -9,20 +9,20 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 type accountSetupHarness struct {
-	*reference.AccountStorage
+	*setup.AccountStorage
 	app *application
 }
 
 func newAccountSetup(app *application) *accountSetupHarness {
-	return &accountSetupHarness{AccountStorage: reference.NewAccountStorage(app.Config), app: app}
+	return &accountSetupHarness{AccountStorage: setup.NewAccountStorage(app.Config), app: app}
 }
 
 func (s *accountSetupHarness) Initialize(ctx context.Context) error {

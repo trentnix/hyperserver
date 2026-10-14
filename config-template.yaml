@@ -87,6 +87,7 @@ http:
         # Allow session names to select this provider.
         enabled: "true"
         # SQLite connection for sessions, separate from database.connection.
+        # Foreign keys must stay enabled. _timeout sets the lock wait in milliseconds (default 5000, 0 disables waiting).
         connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
         # Table for stored sessions. Created if it does not exist.
         sessionTable: "session"
@@ -167,6 +168,7 @@ database:
   # Registered SQL driver name. The reference application imports sqlite3.
   driver: "sqlite3"
   # Database file and driver options. Relative SQLite paths use the config directory or app.workingDirectory.
+  # Foreign keys must stay enabled. _timeout sets the lock wait in milliseconds (default 5000, 0 disables waiting).
   connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
   # Unused by the current application and test harness. Tests supply their own connections.
   testConnection: ":memory:?_journal=WAL&_timeout=5000&_fk=true"

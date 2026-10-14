@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/auth/password"
+	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/internal/reference"
 	site "github.com/trentnix/hyperserver/modules/site"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -118,7 +118,7 @@ func newReplacementHTTPHarness(t *testing.T) (*httpHarness, *replacementAccountR
 	}
 
 	// Supplied services bypass unused provider configuration. No SQL pool is opened.
-	if err := initializeAccounts(t.Context(), app, reference.NewAccountStorage(app.Config)); err != nil {
+	if err := initializeAccounts(t.Context(), app, setup.NewAccountStorage(app.Config)); err != nil {
 		t.Fatal(err)
 	}
 	if err := initializeSessions(t.Context(), app); err != nil {

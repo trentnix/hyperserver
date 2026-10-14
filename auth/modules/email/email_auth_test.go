@@ -28,7 +28,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/session/stores"
+	"github.com/trentnix/hyperserver/pkg/services/session/cookie"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -168,11 +168,13 @@ func (s failingAuthMessageStore) End(http.ResponseWriter, *http.Request, *sessio
 
 func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
 	cfg := &config.Config{Auth: config.AuthConfig{Enabled: true, RegistrationEnabled: true}}
-	cfg.HTTP.Session.JwtKey = "message-removal-test-key"
-	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
-	cfg.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
-	cfg.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}}
-	manager, err := stores.NewSessionManager(context.Background(), cfg)
+	manager, err := session.NewSessionManager(t.Context(), map[string]string{"default": "cookie"}, map[string]session.StoreFactory{
+		"cookie": func(context.Context) (session.SessionStore, error) {
+			return cookie.NewCookieStore(cookie.Options{
+				SigningKey: "message-removal-test-key", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+			})
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

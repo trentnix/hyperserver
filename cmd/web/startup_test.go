@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -45,7 +45,7 @@ func TestStartupHelperProcess(t *testing.T) {
 				routes.HandleFunc("GET /contact", func(http.ResponseWriter, *http.Request) {})
 			}}
 		}})
-		err := run(context.Background(), s, reference.NewAccountStorage(s.Config), "")
+		err := run(context.Background(), s, setup.NewAccountStorage(s.Config), "")
 		if err == nil || !strings.Contains(err.Error(), "conflicting-test-module") || !strings.Contains(err.Error(), "conflicts") {
 			t.Fatalf("route conflict = %v", err)
 		}
@@ -70,8 +70,8 @@ func TestStartupHelperProcess(t *testing.T) {
 			}}
 		}})
 		s.Config.Auth.AccountStorage.Provider = "custom"
-		accounts := reference.NewAccountStorage(s.Config)
-		if err := accounts.RegisterProvider("custom", reference.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
+		accounts := setup.NewAccountStorage(s.Config)
+		if err := accounts.RegisterProvider("custom", setup.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
 			repository := usersqlite.NewAccountRepository(s.Database)
 			if err := repository.Initialize(ctx); err != nil {
 				return nil, nil, err
@@ -126,7 +126,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		if err := initializeSessions(context.Background(), s); err != nil {
 			t.Fatal(err)
 		}
-		if err := initializeAccounts(context.Background(), s, reference.NewAccountStorage(s.Config)); err != nil {
+		if err := initializeAccounts(context.Background(), s, setup.NewAccountStorage(s.Config)); err != nil {
 			t.Fatal(err)
 		}
 		var tables int

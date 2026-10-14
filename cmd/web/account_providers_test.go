@@ -8,8 +8,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/internal/reference"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -27,7 +27,7 @@ func TestAccountProviderSelection(t *testing.T) {
 	s.app.Config.Auth.AccountStorage.Options = map[string]string{"connection": "configured"}
 	repository := &suppliedAccountRepository{}
 	calls, closes := 0, 0
-	err := s.RegisterProvider("custom", reference.AccountProvider{Open: func(got context.Context, options map[string]string) (user.AccountRepository, func() error, error) {
+	err := s.RegisterProvider("custom", setup.AccountProvider{Open: func(got context.Context, options map[string]string) (user.AccountRepository, func() error, error) {
 		calls++
 		if got.Value(contextKey{}) != "startup" || options["connection"] != "configured" {
 			t.Fatal("factory lost context or options")
@@ -41,7 +41,7 @@ func TestAccountProviderSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RegisterProvider("unused", reference.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
+	if err := s.RegisterProvider("unused", setup.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 		t.Fatal("unselected factory was called")
 		return nil, nil, nil
 	}}); err != nil {
@@ -71,18 +71,18 @@ func TestAccountProviderRegistration(t *testing.T) {
 	}
 	for _, name := range []string{"", " custom", "custom ", "sqlite"} {
 		s := accountProviderApplication("custom")
-		if err := s.RegisterProvider(name, reference.AccountProvider{Open: factory}); err == nil {
+		if err := s.RegisterProvider(name, setup.AccountProvider{Open: factory}); err == nil {
 			t.Fatalf("invalid or reserved name %q accepted", name)
 		}
 	}
 	s := accountProviderApplication("custom")
-	if err := s.RegisterProvider("custom", reference.AccountProvider{}); err == nil {
+	if err := s.RegisterProvider("custom", setup.AccountProvider{}); err == nil {
 		t.Fatal("nil factory accepted")
 	}
-	if err := s.RegisterProvider("custom", reference.AccountProvider{Open: factory}); err != nil {
+	if err := s.RegisterProvider("custom", setup.AccountProvider{Open: factory}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RegisterProvider("custom", reference.AccountProvider{Open: factory}); err == nil {
+	if err := s.RegisterProvider("custom", setup.AccountProvider{Open: factory}); err == nil {
 		t.Fatal("duplicate factory accepted")
 	}
 }
@@ -145,7 +145,7 @@ func TestAccountProviderFailureCleanupAndRetry(t *testing.T) {
 			defer cancel()
 			calls, closes := 0, 0
 			repository := &suppliedAccountRepository{}
-			if err := s.RegisterProvider("custom", reference.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
+			if err := s.RegisterProvider("custom", setup.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 				calls++
 				cleanup := func() error { closes++; return cleanupErr }
 				if calls > 1 {
@@ -189,7 +189,7 @@ func TestAccountProviderFailureCleanupAndRetry(t *testing.T) {
 
 func TestAccountProviderCanceledBeforeSetup(t *testing.T) {
 	s := accountProviderApplication("custom")
-	if err := s.RegisterProvider("custom", reference.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
+	if err := s.RegisterProvider("custom", setup.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 		t.Fatal("canceled setup called factory")
 		return nil, nil, nil
 	}}); err != nil {
@@ -208,7 +208,7 @@ func TestAccountProviderDeadline(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				s := accountProviderApplication("custom")
 				closed := false
-				if err := s.RegisterProvider("custom", reference.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
+				if err := s.RegisterProvider("custom", setup.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
 					<-ctx.Done()
 					// A late success must be rejected and cleaned up too.
 					return &suppliedAccountRepository{}, func() error { closed = true; return nil }, nil
@@ -239,7 +239,7 @@ func TestAccountProviderOwnershipAndIsolation(t *testing.T) {
 	closed := make(map[*accountSetupHarness]bool)
 	for _, s := range []*accountSetupHarness{first, second} {
 		s.app.ownDatabase(accountSetupTestDB(t))
-		if err := s.RegisterProvider("custom", reference.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
+		if err := s.RegisterProvider("custom", setup.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 			return &suppliedAccountRepository{}, func() error {
 				if err := s.app.Database.Ping(); err != nil {
 					t.Fatal("shared pool closed before account provider:", err)
@@ -284,7 +284,7 @@ func TestAccountSetupRegistersCleanupBeforeConsumers(t *testing.T) {
 				order = append(order, "shared resource")
 				return nil
 			})
-			if err := s.RegisterProvider("custom", reference.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
+			if err := s.RegisterProvider("custom", setup.AccountProvider{Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 				return &suppliedAccountRepository{}, func() error {
 					order = append(order, "accounts")
 					return closeErr

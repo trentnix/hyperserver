@@ -1,6 +1,6 @@
 # Sessions
 
-The `session` package defines session values, storage contracts, and request handling. The optional [stores package](stores) provides cookie and SQLite implementations. Attach a `SessionManager` to each request before using `session.Get` or `session.New`. See [config-template.yaml](../../../config-template.yaml) for `http.session` configuration.
+The `session` package defines session values, storage contracts, and request handling. Optional providers implement [cookie](cookie/store.go) and [SQLite](sqlite/store.go) storage. Attach a `SessionManager` to each request before using `session.Get` or `session.New`. See [config-template.yaml](../../../config-template.yaml) for `http.session` configuration.
 
 ## Storage and limits
 
@@ -65,9 +65,11 @@ The [cleanup command](../../../cmd/cleanup) removes expired SQLite sessions and 
 
 ## Ownership and extension
 
-For built-in providers, call `stores.NewSessionManager(ctx, cfg)` before serving requests. It validates configuration, copies session mappings, and initializes each selected provider once. Requests reuse those providers. Unselected providers do not open storage. Failed setup returns an error, closes acquired resources, and allows a fresh construction attempt.
+Session contracts live in `session`. The built-in implementations live in [`session/sqlite`](sqlite/store.go) and [`session/cookie`](cookie/store.go), following the same layout as `user` and `user/sqlite`. The reference application's [setup](../../../cmd/internal/setup/sessions.go) selects configured providers. Other applications supply factories to `session.NewSessionManager` directly. The manager copies session mappings and initializes each selected provider once. Requests reuse those providers. Unselected providers do not open storage. Failed setup returns an error and closes acquired resources.
 
 Each SQLite store owns its pool and prepares its table and expiration index in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
+
+Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Constructors reject missing or placeholder signing keys and lifetimes shorter than one second. Successful constructors return enabled stores. SQLite also requires a connection string and table name.
 
 The reference application's [session setup](../../../cmd/web/sessions.go) supplies the manager after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. Setup registers cleanup for managers it creates. A supplied manager keeps its existing owner unless setup explicitly transfers ownership with `ownSessions`. The core has no session-manager field.
 
@@ -94,13 +96,30 @@ Pass the same manager to auth factories and `authmiddleware.LoadSessionManagemen
 
 Providers can use `NewSession` to create an unsaved value. Pass the same serializer to `EncodedData` and `LoadSession`. A nil serializer selects JSON. Providers remain responsible for identity and expiration checks.
 
+Maintenance uses the same provider names and session mappings, but separate factories that open existing storage without creating or migrating it:
+
+```go
+count, err := session.CleanupExpired(ctx, sessionTypes,
+    map[string]session.MaintenanceFactory{"custom": openMySessionMaintenance},
+    500,
+)
+```
+
+`openMySessionMaintenance` returns `(session.ExpiredSessionMaintenance, func() error, error)`. Cleanup calls the returned close function even if opening fails. Return a nil maintenance value when no cleanup is needed, as with cookie-only sessions. A missing or nil factory means maintenance is unsupported. Aliases share one batch, unselected factories are not called, and independent providers are still attempted after a failure.
+
 ## Replacing serialization
 
 Set a built-in store's `Serializer` in its factory, before serving requests. For example, supply this factory to `session.NewSessionManager`:
 
 ```go
 openSessions := func(ctx context.Context) (session.SessionStore, error) {
-    store, err := stores.NewSQLiteStore(ctx, cfg)
+    store, err := sqlite.NewSQLiteStore(ctx, sqlite.Options{
+        Connection:     sessionDatabasePath,
+        Table:          "sessions",
+        SigningKey:     sessionSigningKey,
+        TokenLifetime:  24 * time.Hour,
+        CookieLifetime: 24 * time.Hour,
+    })
     if err != nil {
         return nil, err
     }

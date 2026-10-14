@@ -12,7 +12,6 @@ import (
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -102,7 +101,7 @@ func TestHTTPProtectedRouteSessionExpiry(t *testing.T) {
 					t.Fatal("login did not issue an authentication cookie")
 				}
 				key := []byte(h.app.Config.HTTP.Session.JwtKey)
-				claims := &stores.SessionClaims{}
+				claims := &sessionCookieClaims{}
 				if _, err := jwt.ParseWithClaims(authCookie.Value, claims, func(*jwt.Token) (any, error) { return key, nil }); err != nil {
 					t.Fatal(err)
 				}
@@ -159,7 +158,7 @@ func TestHTTPSessionLoading(t *testing.T) {
 					if strings.HasPrefix(outcome, "expired") {
 						expires = time.Now().Add(-time.Hour)
 					}
-					claims := stores.SessionClaims{
+					claims := sessionCookieClaims{
 						ID: "stored-session", Purpose: "session", Value: encoded,
 						RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(expires)},
 					}
@@ -328,7 +327,7 @@ func TestHTTPLoginRedirectSessionFailure(t *testing.T) {
 								t.Fatal(err)
 							}
 						} else {
-							claims := stores.SessionClaims{ID: redirect.ID, Purpose: "session", Value: "invalid base64!", RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
+							claims := sessionCookieClaims{ID: redirect.ID, Purpose: "session", Value: "invalid base64!", RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
 							cookie.Value, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(h.app.Config.HTTP.Session.JwtKey))
 							if err != nil {
 								t.Fatal(err)
@@ -379,4 +378,12 @@ func TestHTTPLoginRedirectSessionFailure(t *testing.T) {
 			})
 		}
 	}
+}
+
+// sessionCookieClaims describes the cookie wire format used by HTTP fixtures.
+type sessionCookieClaims struct {
+	ID      string `json:"id"`
+	Purpose string `json:"purpose"`
+	Value   string `json:"data"`
+	jwt.RegisteredClaims
 }

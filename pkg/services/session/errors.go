@@ -128,36 +128,6 @@ func NewErrTokenKeyNotSet(err error) *ErrTokenKeyNotSet {
 	}
 }
 
-// ErrCookieLifetimeNotSet is used when cookie lifetime is not set
-type ErrCookieLifetimeNotSet struct {
-	*BaseError
-}
-
-// NewErrCookieLifetimeNotSet returns an ErrCookieLifetimeNotSet wrapping err.
-func NewErrCookieLifetimeNotSet(err error) *ErrCookieLifetimeNotSet {
-	return &ErrCookieLifetimeNotSet{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "the lifetime of an HTTP cookie used to store session information is not set",
-		},
-	}
-}
-
-// ErrTokenLifetimeNotSet indicates that a session token lifetime is missing.
-type ErrTokenLifetimeNotSet struct {
-	*BaseError
-}
-
-// NewErrTokenLifetimeNotSet returns an ErrTokenLifetimeNotSet wrapping err.
-func NewErrTokenLifetimeNotSet(err error) *ErrTokenLifetimeNotSet {
-	return &ErrTokenLifetimeNotSet{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "the lifetime of a JWT token used to store session information is not set",
-		},
-	}
-}
-
 // ErrRequestNotSpecified is used when a *http.Request is not specified (is nil)
 type ErrRequestNotSpecified struct {
 	*BaseError

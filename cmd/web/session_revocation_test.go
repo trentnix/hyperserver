@@ -11,7 +11,6 @@ import (
 	"github.com/trentnix/hyperserver/auth/identity"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/session/stores"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -37,7 +36,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 				if captured == nil {
 					t.Fatal("missing authentication cookie")
 				}
-				claims := &stores.SessionClaims{}
+				claims := &sessionCookieClaims{}
 				if _, err := jwt.ParseWithClaims(captured.Value, claims, func(*jwt.Token) (any, error) { return []byte(h.app.Config.HTTP.Session.JwtKey), nil }); err != nil {
 					t.Fatal(err)
 				}

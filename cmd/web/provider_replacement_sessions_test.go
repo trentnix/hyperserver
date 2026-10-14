@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/trentnix/hyperserver/internal/sessiontest"
+	"github.com/trentnix/hyperserver/internal/test/sessiontest"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
