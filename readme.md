@@ -278,13 +278,13 @@ SQLite writes complete before reporting success. File-backed SQLite data survive
 
 Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
 
-Session and contact schemas and default session payloads have no format-version markers yet. Schema declaration checks do not establish that existing records are valid or that a database is safe to upgrade. The [roadmap](roadmap.md#storage-and-serialization) defines migration ownership and the intended upgrade procedure.
+Accounts, contacts, and each configured SQLite session table have independent schema versions. Default session payloads have no format-version marker yet. Schema declaration checks do not validate every existing record. The [roadmap](roadmap.md#storage-and-serialization) defines migration ownership and the upgrade procedure.
 
 #### Account schema migrations
 
-Accounts use the separately installed [golang-migrate v4.20.1 CLI](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1). Migrations are plain SQL files: [up](pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates version 1 and [down](pkg/services/user/sqlite/migrations/000001_accounts.down.sql) removes its tables. Fresh initialization embeds the same up file and creates the schema and version metadata in one transaction. It needs no migration executable.
+Accounts use the separately installed [golang-migrate v4.20.1 CLI](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1). Migrations are plain SQL files: [up](pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates version 1 and [down](pkg/services/user/sqlite/migrations/000001_accounts.down.sql) removes its tables. On first startup, the application creates the SQLite database file if needed. Account initialization executes the embedded up file and records version 1 in one transaction. No migration executable or manual setup is required for a fresh database.
 
-The account-specific `hyperserver_account_version` table records the current version and whether a migration is incomplete (`dirty`). Startup checks this metadata without changing it. Existing unversioned account databases are rejected. Baseline adoption is not implemented yet. Do not add version metadata by hand.
+The account-specific `hyperserver_account_version` table records the current version and whether a migration is incomplete (`dirty`). Later startups check this metadata without changing it. Unversioned account databases have no supported upgrade path. Recreate disposable development databases rather than adding version metadata by hand. Startup never deletes existing storage or automatically runs later migrations.
 
 Install the pinned CLI with its SQLite driver, outside the application's dependency graph. The executable goes in `GOBIN`, or `$(go env GOPATH)/bin` if `GOBIN` is unset. With that directory on `PATH`, run from the repository root against a database with no account tables:
 
@@ -305,6 +305,17 @@ HS_TEST_MIGRATE=migrate go test ./pkg/services/user/sqlite -run '^TestAccountMig
 ```
 
 The command fails if `migrate` is not on `PATH`. You can also set `HS_TEST_MIGRATE` to an absolute executable path. Without `HS_TEST_MIGRATE`, CLI integration tests skip. Schema and version-validation tests still run.
+
+#### Contact and session migrations
+
+Contact storage follows the same first-start and version-check policy as accounts, using [contact migrations](modules/site/database/migrations/000001_contacts.up.sql) and `hyperserver_contact_version`. To run its migrations explicitly:
+
+```sh
+migrate -path modules/site/database/migrations \
+  -database 'sqlite3://file:///absolute/path/database.db?x-migrations-table=hyperserver_contact_version&_foreign_keys=on' up
+```
+
+See [session migrations](pkg/services/session/readme.md#sqlite-schema-migrations) for per-table versions and custom table names. These providers can share a database without sharing version markers. Run each provider's migrations separately.
 
 #### SQLite connections
 

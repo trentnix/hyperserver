@@ -4,13 +4,45 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/database"
+	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+func TestInitializeCreatesVersionedDatabaseFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fresh.db")
+	db, err := sqlitedb.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("database exists before initialization: %v", err)
+	}
+
+	repo := NewAccountRepository(db)
+	if err := repo.Initialize(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("initialization did not create the database:", err)
+	}
+	var version int
+	var dirty bool
+	if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != 1 || dirty {
+		t.Fatalf("initial version = %d, dirty = %t, error = %v", version, dirty, err)
+	}
+	u := &accounts.User{Email: "person@example.invalid"}
+	if err := repo.Create(t.Context(), u); err != nil {
+		t.Fatal("fresh account schema is not usable:", err)
+	}
+}
 
 func TestPrepareDatabaseIndependentDatabases(t *testing.T) {
 	first, second := userTestDB(t), userTestDB(t)

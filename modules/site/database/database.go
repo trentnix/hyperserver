@@ -13,13 +13,15 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database"
 )
 
-//go:embed schema.sql
+//go:embed migrations/000001_contacts.up.sql
 var schema string
 
-// PrepareDatabase creates missing tables and checks the contact column declarations
-// and unique ID key without changing existing data.
+const contactVersionTable = "hyperserver_contact_version"
+
+// PrepareDatabase creates version 1 in fresh contact storage and checks the
+// version, contact column declarations, and unique ID key without changing data.
 // The site owns its table names and schema. The caller owns the borrowed pool.
-// This prepares the current schema only. It does not apply versioned migrations.
+// Existing storage must have clean version 1 metadata. Setup does not migrate it.
 func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("the database is not valid"))
@@ -34,8 +36,8 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("begin site schema setup: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, schema); err != nil {
-		return fmt.Errorf("prepare site schema: %w", err)
+	if err := prepareContactVersion(ctx, tx); err != nil {
+		return err
 	}
 	if err := validateContactSchema(ctx, tx); err != nil {
 		return err
@@ -43,6 +45,49 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit site schema setup: %w", err)
+	}
+	return nil
+}
+
+func prepareContactVersion(ctx context.Context, tx *sql.Tx) error {
+	var objects int
+	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE name COLLATE NOCASE IN
+		('hyperserver_contact_submission', 'hyperserver_contact_version')`).Scan(&objects)
+	if err != nil {
+		return fmt.Errorf("inspect SQLite contact storage: %w", err)
+	}
+	if objects == 0 {
+		if _, err := tx.ExecContext(ctx, schema+`
+			CREATE TABLE hyperserver_contact_version (version uint64, dirty bool);
+			INSERT INTO hyperserver_contact_version VALUES (1, false);`); err != nil {
+			return fmt.Errorf("create SQLite contact schema version 1: %w", err)
+		}
+		return nil
+	}
+	var versionTable bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM sqlite_master
+		WHERE type = 'table' AND name = ? COLLATE NOCASE)`, contactVersionTable).Scan(&versionTable)
+	if err != nil {
+		return fmt.Errorf("inspect SQLite contact schema version: %w", err)
+	}
+	if !versionTable {
+		return fmt.Errorf("unversioned SQLite contact storage: no upgrade path is supported")
+	}
+	var count int
+	var version sql.NullInt64
+	var dirty sql.NullBool
+	err = tx.QueryRowContext(ctx, `SELECT count(*), min(version), min(dirty) FROM hyperserver_contact_version`).Scan(&count, &version, &dirty)
+	if err != nil {
+		return fmt.Errorf("read SQLite contact schema version: %w", err)
+	}
+	if count != 1 || !version.Valid || !dirty.Valid {
+		return fmt.Errorf("invalid SQLite contact schema version: expected one version and dirty flag")
+	}
+	if dirty.Bool {
+		return fmt.Errorf("SQLite contact schema version %d is dirty: explicit migration repair is required", version.Int64)
+	}
+	if version.Int64 != 1 {
+		return fmt.Errorf("unsupported SQLite contact schema version %d: this provider supports version 1", version.Int64)
 	}
 	return nil
 }

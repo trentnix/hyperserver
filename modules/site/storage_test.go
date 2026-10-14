@@ -67,7 +67,11 @@ func TestSiteRejectsIncompatibleSQLiteContacts(t *testing.T) {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
-	if _, err := db.ExecContext(t.Context(), "CREATE TABLE hyperserver_contact_submission (id TEXT)"); err != nil {
+	if _, err := db.ExecContext(t.Context(), `
+		CREATE TABLE hyperserver_contact_submission (id TEXT);
+		CREATE TABLE hyperserver_contact_version (version uint64, dirty bool);
+		INSERT INTO hyperserver_contact_version VALUES (1, false);
+	`); err != nil {
 		t.Fatal(err)
 	}
 	module := &SiteModule{NewContacts: func(ctx context.Context) (ContactRepository, error) {

@@ -102,7 +102,7 @@ func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 		return fmt.Errorf("inspect account schema version: %w", err)
 	}
 	if !hasHistory {
-		return fmt.Errorf("unversioned SQLite account storage: explicit baseline adoption is required before startup")
+		return fmt.Errorf("unversioned SQLite account storage: no upgrade path is supported")
 	}
 	var count int
 	var version sql.NullInt64

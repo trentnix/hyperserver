@@ -96,7 +96,7 @@ Add cross-repository transaction binding only when a concrete application workfl
 
 Modules own their storage objects and prepare them before activation. A module borrowing a connection does not own that connection. Services storing encoded values must allow serializer replacement without replacing storage.
 
-Version schemas by provider-owned table set, not by database. Accounts and contacts need independent migration histories. Each distinct configured session table needs its own history. Start each history at version 1. Existing unversioned storage must pass explicit schema and data checks before an operator adopts that baseline. Startup must reject missing or unsupported versions for existing provider tables without relabeling or repairing them.
+Version schemas by provider-owned table set, not by database. Accounts and contacts need independent migration histories. Each distinct configured session table needs its own history. On first startup, create fresh storage from the initial migration and record version 1. Recreate disposable unversioned development stores. An adoption path is not required. Startup must reject missing or unsupported versions for existing provider tables without relabeling or repairing them.
 
 Providers supply migrations. Application deployment chooses when to run them, using established tooling. Fresh-store setup and migrations must share the same schema definition. Stop affected writers, including cleanup jobs, back up the data, apply migrations, validate the result, and then start consumers. Failed transactional migrations must roll back. After a committed change, use forward repair or restore a compatible backup. An older application can restart only if it supports the resulting format.
 
@@ -114,8 +114,7 @@ Work through these priorities in order, using the reference application to valid
 
 ### 1. Complete storage and serialization contracts
 
-- Add explicit adoption of unversioned account stores into version 1. Validate schema and stored data before recording the baseline. Test preservation, interrupted adoption, and rollback without treating a version marker alone as proof of compatibility.
-- Add session and contact schema histories, then explicit payload-format compatibility. Test invalid data, interrupted migrations, and rollback or forward repair before supporting an upgrade path.
+- Add explicit session payload-format compatibility and document the sample contact-file format. Test invalid data, interrupted conversions, and rollback or forward repair before supporting an upgrade path.
 
 Outcome: service contracts describe the behavior a replacement must preserve, and tests establish that behavior independently of the selected implementation.
 

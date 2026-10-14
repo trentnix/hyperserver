@@ -99,10 +99,7 @@ func TestSQLiteCleanupBatches(t *testing.T) {
 	if err != nil || loaded.ID != live.ID || loaded.Data["identity"] != "account" {
 		t.Fatalf("cleanup changed live session: %+v, %v", loaded, err)
 	}
-	// Setup also adds the index to an existing table without changing its data.
-	if _, err := store.db.Exec(`DROP INDEX sessions_expiration`); err != nil {
-		t.Fatal(err)
-	}
+	// Repeated setup preserves the index and stored sessions.
 	if err := store.configureDatabase(context.Background()); err != nil {
 		t.Fatal(err)
 	}

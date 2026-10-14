@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -72,7 +73,8 @@ type Options struct {
 
 // NewSQLiteStore opens an owned pool and prepares the session table before use.
 // Existing tables must have writable columns with supported types and a unique
-// session-ID key. Setup does not migrate tables or validate stored payloads.
+// session-ID key, with clean version 1 metadata for each configured table.
+// Setup does not migrate tables or validate stored payloads.
 // Setup honors ctx and closes the pool on failure. The caller must close the store.
 func NewSQLiteStore(ctx context.Context, options Options) (*SQLiteStore, error) {
 	if err := ctx.Err(); err != nil {
@@ -85,7 +87,15 @@ func NewSQLiteStore(ctx context.Context, options Options) (*SQLiteStore, error) 
 		return nil, ErrSQLiteStoreNotConfigured
 	}
 
-	db, err := sqlitedb.Open(options.Connection)
+	// Acquire the write lock before inspecting schema or changing session rows.
+	// Deferred transactions can race when several stores initialize an empty DB.
+	path, query, _ := strings.Cut(options.Connection, "?")
+	params, err := url.ParseQuery(query)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SQLite session connection options")
+	}
+	params.Set("_txlock", "immediate")
+	db, err := sqlitedb.Open(path + "?" + params.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -322,35 +332,20 @@ func (s *SQLiteStore) Close() error {
 	return nil
 }
 
-// configureDatabase creates missing storage and checks column declarations and
-// session-ID uniqueness without reading stored values.
+// configureDatabase initializes fresh storage and checks the schema version,
+// column declarations, and session-ID uniqueness without reading stored values.
 func (s *SQLiteStore) configureDatabase(ctx context.Context) error {
-	createTableSQL := fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s (
-			id VARCHAR(36) PRIMARY KEY,
-			session TEXT,
-			expires_at DATETIME,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		);`, quoteIdentifier(s.tableName))
-
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return database.NewErrDatabase(err)
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, createTableSQL)
-	if err != nil {
-		return database.NewErrDatabase(err)
+	if err := prepareSessionVersion(ctx, tx, s.tableName); err != nil {
+		return err
 	}
 
 	if err := validateSessionSchema(ctx, tx, s.tableName); err != nil {
 		return err
-	}
-
-	query := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (julianday(expires_at), id)", quoteIdentifier(s.tableName+"_expiration"), quoteIdentifier(s.tableName))
-	if _, err := tx.ExecContext(ctx, query); err != nil {
-		return database.NewErrDatabase(err)
 	}
 
 	return tx.Commit()

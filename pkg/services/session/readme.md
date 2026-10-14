@@ -67,9 +67,24 @@ The [cleanup command](../../../cmd/cleanup) removes expired SQLite sessions and 
 
 Session contracts live in `session`. The built-in implementations live in [`session/sqlite`](sqlite/store.go) and [`session/cookie`](cookie/store.go), following the same layout as `user` and `user/sqlite`. The reference application's [setup](../../../cmd/internal/setup/sessions.go) selects configured providers. Other applications supply factories to `session.NewSessionManager` directly. The manager copies session mappings and initializes each selected provider once. Requests reuse those providers. Unselected providers do not open storage. Failed setup returns an error and closes acquired resources.
 
-Each SQLite store owns its pool and prepares its table and expiration index in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
+Each SQLite store owns its pool and prepares its table, expiration index, and version metadata in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Session-store transactions use `BEGIN IMMEDIATE`, overriding `_txlock`, so concurrent initializations acquire the write lock before inspecting storage. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
 
-Startup checks writable `id` and `session` columns with text affinity and `expires_at`, `created_at`, and `updated_at` columns declared as `DATE`, `DATETIME`, or `TIMESTAMP`. The table must have a non-partial unique key on `id` alone with binary comparison. Nullable declarations remain supported. Setup does not alter existing columns or validate stored values. Incompatible tables require explicit repair before startup. Stored-format versions and migration procedures remain unfinished.
+Startup checks writable `id` and `session` columns with text affinity and `expires_at`, `created_at`, and `updated_at` columns declared as `DATE`, `DATETIME`, or `TIMESTAMP`. The table must have a non-partial unique key on `id` alone with binary comparison. Nullable declarations remain supported. Each configured table requires clean schema version 1. Setup does not alter existing columns, repair indexes, or validate stored values. Payload-format versioning remains unfinished.
+
+### SQLite schema migrations
+
+First startup executes the [initial migration](sqlite/migrations/000001_sessions.up.sql), substitutes the configured table and index names, and records version 1. Version metadata uses `hyperserver_session_version_<table>`. For example, `sessions` uses `hyperserver_session_version_sessions`. Different tables have independent versions. SQLite's identifier case rules apply to both table and metadata names.
+
+Later migrations run explicitly with the [separately installed CLI](../../../readme.md#account-schema-migrations). For the default `sessions` table, run from the repository root:
+
+```sh
+migrate -path pkg/services/session/sqlite/migrations \
+  -database 'sqlite3://file:///absolute/path/database.db?x-migrations-table=hyperserver_session_version_sessions&_foreign_keys=on' up
+```
+
+For a custom table, make a deployment-local copy of the migration files. Change the quoted `"sessions"` and `"sessions_expiration"` identifiers to your table and index names in the up/down SQL. Set `x-migrations-table` to `hyperserver_session_version_<table>`. If the metadata name needs SQL quoting, include the double quotes in the query parameter value and URL-encode that value. Stop writers and run only one migration process per database at a time.
+
+Missing, malformed, dirty, or unsupported versions stop startup without changing storage. Recreate disposable unversioned development databases. After `down 1`, startup rejects the empty version marker until an explicit `up` recreates the schema.
 
 Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Constructors reject missing or placeholder signing keys and lifetimes shorter than one second. Successful constructors return enabled stores. SQLite also requires a connection string and table name.
 

@@ -16,6 +16,17 @@ const contactSchemaFixture = `CREATE TABLE hyperserver_contact_submission (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
 
+// Version metadata keeps declaration tests focused on schema compatibility.
+func versionedContactTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db := contactTestDB(t)
+	if _, err := db.ExecContext(t.Context(), `CREATE TABLE hyperserver_contact_version (version uint64, dirty bool);
+		INSERT INTO hyperserver_contact_version VALUES (1, false)`); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
 func requireContactSchemaError(t *testing.T, db *sql.DB, want string) {
 	t.Helper()
 	var before string
@@ -43,7 +54,7 @@ func TestSQLiteContactColumnDeclarations(t *testing.T) {
 		{"created_at", "DATETIME"},
 	} {
 		t.Run(column.name+"/missing", func(t *testing.T) {
-			db := contactTestDB(t)
+			db := versionedContactTestDB(t)
 			schema := strings.Replace(contactSchemaFixture, "\n\t"+column.name+" ", "\n\tlegacy_column ", 1)
 			if _, err := db.ExecContext(t.Context(), schema); err != nil {
 				t.Fatal(err)
@@ -62,7 +73,7 @@ func TestSQLiteContactColumnDeclarations(t *testing.T) {
 		}
 		for _, declaredType := range types {
 			t.Run(column.name+"/type/"+declaredType, func(t *testing.T) {
-				db := contactTestDB(t)
+				db := versionedContactTestDB(t)
 				schema := strings.Replace(contactSchemaFixture, column.name+" "+column.declaredType, column.name+" "+declaredType, 1)
 				if _, err := db.ExecContext(t.Context(), schema); err != nil {
 					t.Fatal(err)
@@ -72,7 +83,7 @@ func TestSQLiteContactColumnDeclarations(t *testing.T) {
 		}
 		for _, storage := range []string{"VIRTUAL", "STORED"} {
 			t.Run(column.name+"/generated/"+storage, func(t *testing.T) {
-				db := contactTestDB(t)
+				db := versionedContactTestDB(t)
 				schema := strings.Replace(contactSchemaFixture, "PRIMARY KEY", "UNIQUE", 1)
 				declaration := column.name + " " + column.declaredType
 				schema = strings.Replace(schema, declaration+" DEFAULT CURRENT_TIMESTAMP", declaration, 1)
@@ -87,7 +98,7 @@ func TestSQLiteContactColumnDeclarations(t *testing.T) {
 }
 
 func TestSQLiteContactRequiresNonNullEmail(t *testing.T) {
-	db := contactTestDB(t)
+	db := versionedContactTestDB(t)
 	schema := strings.Replace(contactSchemaFixture, "email VARCHAR(255) NOT NULL", "email VARCHAR(255)", 1)
 	if _, err := db.ExecContext(t.Context(), schema+`; INSERT INTO hyperserver_contact_submission (id, email, message) VALUES ('existing', NULL, 'preserved')`); err != nil {
 		t.Fatal(err)
@@ -117,7 +128,7 @@ func TestSQLiteContactUniqueID(t *testing.T) {
 		{name: "wrong column", index: "CREATE UNIQUE INDEX contact_id ON hyperserver_contact_submission(email)", wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			db := contactTestDB(t)
+			db := versionedContactTestDB(t)
 			schema := strings.Replace(contactSchemaFixture, "PRIMARY KEY", tc.key, 1)
 			if _, err := db.ExecContext(t.Context(), schema); err != nil {
 				t.Fatal(err)
@@ -154,7 +165,7 @@ func TestSQLiteCompatibleContactSchemaRoundTrip(t *testing.T) {
 	for _, timestamp := range []string{"DATE", "datetime", "TIMESTAMP"} {
 		for _, suffix := range []string{"", " WITHOUT ROWID"} {
 			t.Run(timestamp+suffix, func(t *testing.T) {
-				db := contactTestDB(t)
+				db := versionedContactTestDB(t)
 				schema := `CREATE TABLE hyperserver_contact_submission (
 					extra TEXT, MESSAGE CLOB NOT NULL, NAME NCHAR(100) NOT NULL,
 					ID TEXT NOT NULL PRIMARY KEY, EMAIL TEXT NOT NULL, CREATED_AT ` + timestamp + ` NOT NULL
@@ -191,7 +202,7 @@ func TestSQLiteCompatibleContactSchemaRoundTrip(t *testing.T) {
 }
 
 func TestSQLiteContactSchemaFailurePreservesDuplicates(t *testing.T) {
-	db := contactTestDB(t)
+	db := versionedContactTestDB(t)
 	schema := strings.Replace(contactSchemaFixture, "PRIMARY KEY", "", 1)
 	if _, err := db.ExecContext(t.Context(), schema+`;
 		INSERT INTO hyperserver_contact_submission (id, email, message) VALUES

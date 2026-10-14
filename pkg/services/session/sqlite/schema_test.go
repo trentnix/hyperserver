@@ -32,7 +32,17 @@ func sessionSchemaDB(t *testing.T, schema string) (*sql.DB, Options) {
 	if _, err := db.ExecContext(t.Context(), schema); err != nil {
 		t.Fatal(err)
 	}
+	versionSessionFixture(t, db, options.Table)
 	return db, options
+}
+
+// Supply version metadata so declaration tests reach the schema checks.
+func versionSessionFixture(t *testing.T, db *sql.DB, table string) {
+	t.Helper()
+	name := quoteIdentifier(sessionVersionTable(table))
+	if _, err := db.ExecContext(t.Context(), "CREATE TABLE "+name+" (version uint64, dirty bool); INSERT INTO "+name+" VALUES (1, false)"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSQLiteStartupRejectsMissingSessionColumns(t *testing.T) {
@@ -144,6 +154,7 @@ func TestSQLiteSchemaAllowsReorderedAndExtraColumns(t *testing.T) {
 	)`); err != nil {
 		t.Fatal(err)
 	}
+	versionSessionFixture(t, db, options.Table)
 	store, err := NewSQLiteStore(t.Context(), options)
 	if err != nil {
 		t.Fatal("compatible schema rejected:", err)
@@ -156,14 +167,14 @@ func TestSQLiteSchemaAllowsReorderedAndExtraColumns(t *testing.T) {
 	}
 }
 
-func TestSQLiteSchemaBootstrapRollback(t *testing.T) {
+func TestSQLiteSchemaNameConflictAndRetry(t *testing.T) {
 	options := sqliteStoreOptions(filepath.Join(t.TempDir(), "sessions.db"), "sessions")
 	db, err := sqlitedb.Open(options.Connection)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	// A table with the expiration index's name makes the final setup step fail.
+	// An unrelated table occupies the expiration index's name.
 	if _, err := db.ExecContext(t.Context(), "CREATE TABLE sessions_expiration (value TEXT); INSERT INTO sessions_expiration VALUES ('preserved')"); err != nil {
 		t.Fatal(err)
 	}
