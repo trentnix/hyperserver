@@ -8,6 +8,17 @@ import (
 	"testing"
 )
 
+// versionedAccountTestDB supplies metadata for tests of schema declarations.
+// It is not a baseline-adoption path: fixtures deliberately include invalid schemas.
+func versionedAccountTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db := unpreparedUserTestDB(t)
+	if _, err := db.ExecContext(t.Context(), accountVersionSchema+`; INSERT INTO hyperserver_account_version (version, dirty) VALUES (1, false)`); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
 const accountKeyTestSchema = `CREATE TABLE user (
 	id VARCHAR(36) PRIMARY KEY,
 	email VARCHAR(255) NOT NULL,
@@ -66,7 +77,7 @@ func TestAccountSchemaUniqueKeys(t *testing.T) {
 				}
 				schema = strings.Replace(schema, tc.old, tc.change, 1)
 			}
-			db := unpreparedUserTestDB(t)
+			db := versionedAccountTestDB(t)
 			if _, err := db.ExecContext(t.Context(), schema); err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +102,7 @@ func TestAccountSchemaUniqueKeys(t *testing.T) {
 }
 
 func TestAccountKeysWithoutRowID(t *testing.T) {
-	db := unpreparedUserTestDB(t)
+	db := versionedAccountTestDB(t)
 	if _, err := db.ExecContext(t.Context(), accountKeyTestSchema+" WITHOUT ROWID;"+tokenKeyTestSchema+" WITHOUT ROWID"); err != nil {
 		t.Fatal(err)
 	}
@@ -100,10 +111,10 @@ func TestAccountKeysWithoutRowID(t *testing.T) {
 	}
 }
 
-func TestMissingAccountKeyPreservesDataAndRollsBack(t *testing.T) {
-	db := unpreparedUserTestDB(t)
+func TestMissingAccountKeyPreservesData(t *testing.T) {
+	db := versionedAccountTestDB(t)
 	schema := strings.Replace(accountKeyTestSchema, "email_key TEXT NOT NULL UNIQUE", "email_key TEXT NOT NULL", 1)
-	if _, err := db.ExecContext(t.Context(), schema); err != nil {
+	if _, err := db.ExecContext(t.Context(), schema+";"+tokenKeyTestSchema); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(t.Context(), `INSERT INTO user (id, email, email_key, password) VALUES
@@ -119,7 +130,7 @@ func TestMissingAccountKeyPreservesDataAndRollsBack(t *testing.T) {
 	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM user WHERE email_key = 'duplicate'").Scan(&count); err != nil || count != 2 {
 		t.Fatalf("startup changed duplicate records: %d, %v", count, err)
 	}
-	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master WHERE name IN ('usertoken', 'usertoken_expiration')").Scan(&count); err != nil || count != 0 {
+	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master WHERE name = 'usertoken_expiration'").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("failed setup left bootstrap objects: %d, %v", count, err)
 	}
 

@@ -98,10 +98,7 @@ func TestTokenCleanupBatches(t *testing.T) {
 	if err := NewAccountRepository(db).InsertToken(t.Context(), live.Metadata()); err != nil {
 		t.Fatal(err)
 	}
-	// Existing databases receive the cleanup index without losing their tokens.
-	if _, err := db.Exec(`DROP INDEX usertoken_expiration`); err != nil {
-		t.Fatal(err)
-	}
+	// Repeated initialization preserves the cleanup index and stored tokens.
 	if err := PrepareDatabase(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}

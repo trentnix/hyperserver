@@ -29,6 +29,7 @@ jobs:
       CGO_ENABLED: '1' # Required by SQLite and the race detector.
       GOTOOLCHAIN: local
       GOFLAGS: -mod=readonly
+      HS_TEST_MIGRATE: ${{ runner.temp }}/migration-tools/migrate
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,6 +41,11 @@ jobs:
         with:
           go-version-file: go.mod # Keep CI and local builds on the same Go version.
           cache-dependency-path: go.sum
+
+      - name: Install SQLite migration tool
+        env:
+          GOBIN: ${{ runner.temp }}/migration-tools
+        run: go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
 
       - name: Test
         run: go test -count=1 -timeout=5m ./...

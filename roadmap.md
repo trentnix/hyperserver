@@ -114,7 +114,7 @@ Work through these priorities in order, using the reference application to valid
 
 ### 1. Complete storage and serialization contracts
 
-- Select migration tooling and implement provider-scoped version checks, beginning with accounts. Cover fresh stores, explicit adoption of unversioned stores, and rejection of unsupported versions before startup changes storage.
+- Add explicit adoption of unversioned account stores into version 1. Validate schema and stored data before recording the baseline. Test preservation, interrupted adoption, and rollback without treating a version marker alone as proof of compatibility.
 - Add session and contact schema histories, then explicit payload-format compatibility. Test invalid data, interrupted migrations, and rollback or forward repair before supporting an upgrade path.
 
 Outcome: service contracts describe the behavior a replacement must preserve, and tests establish that behavior independently of the selected implementation.

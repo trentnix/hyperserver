@@ -35,7 +35,7 @@ func TestAccountColumnDeclarations(t *testing.T) {
 				continue
 			}
 			t.Run(column.table+"/"+column.name+"/"+change, func(t *testing.T) {
-				db := unpreparedUserTestDB(t)
+				db := versionedAccountTestDB(t)
 				schema := accountKeyTestSchema + ";" + tokenKeyTestSchema
 				old := "\n\t" + column.name + " " + column.declaredType
 				replacement := "\n\t" + column.name + " BLOB"
@@ -93,7 +93,7 @@ func TestCompatibleAccountColumnTypesRoundTrip(t *testing.T) {
 	for _, timestamp := range []string{"TIMESTAMP", "DATETIME", "DATE"} {
 		for _, boolean := range []string{"BOOLEAN", "BOOL", "INTEGER"} {
 			t.Run(timestamp+"/"+boolean, func(t *testing.T) {
-				db := unpreparedUserTestDB(t)
+				db := versionedAccountTestDB(t)
 				schema := accountKeyTestSchema + ";" + tokenKeyTestSchema
 				for _, replacement := range [][2]string{
 					{"VARCHAR(36)", "TEXT"},
@@ -152,7 +152,7 @@ func TestCompatibleAccountColumnTypesRoundTrip(t *testing.T) {
 func TestAccountGeneratedColumnsRejected(t *testing.T) {
 	for _, storage := range []string{"VIRTUAL", "STORED"} {
 		t.Run(storage, func(t *testing.T) {
-			db := unpreparedUserTestDB(t)
+			db := versionedAccountTestDB(t)
 			schema := strings.Replace(accountKeyTestSchema, "password VARCHAR(255)", "password VARCHAR(255) GENERATED ALWAYS AS (email) "+storage, 1)
 			if _, err := db.ExecContext(t.Context(), schema); err != nil {
 				t.Fatal(err)
@@ -165,7 +165,7 @@ func TestAccountGeneratedColumnsRejected(t *testing.T) {
 }
 
 func TestAccountColumnFailurePreservesStorage(t *testing.T) {
-	db := unpreparedUserTestDB(t)
+	db := versionedAccountTestDB(t)
 	schema := strings.Replace(accountKeyTestSchema, "email VARCHAR(255) NOT NULL", "email VARCHAR(255)", 1)
 	if _, err := db.ExecContext(t.Context(), schema); err != nil {
 		t.Fatal(err)

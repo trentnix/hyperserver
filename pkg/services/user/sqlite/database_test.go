@@ -66,9 +66,9 @@ func TestPrepareDatabaseFailures(t *testing.T) {
 			t.Fatal("retry after cancellation:", err)
 		}
 	})
-	t.Run("rollback and retry", func(t *testing.T) {
+	t.Run("name conflict and retry", func(t *testing.T) {
 		db := unpreparedUserTestDB(t)
-		// An index with the token table's name makes the second CREATE fail.
+		// A reserved name already in use must prevent fresh setup.
 		if _, err := db.Exec(`CREATE TABLE existing (id TEXT); CREATE INDEX usertoken ON existing(id)`); err != nil {
 			t.Fatal(err)
 		}
@@ -127,7 +127,7 @@ func TestAccountOperationsDoNotPrepareDatabase(t *testing.T) {
 func assertNoAccountTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	var count int
-	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`).Scan(&count); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken', 'hyperserver_account_version')`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
@@ -200,8 +200,8 @@ func TestInitializeRejectsMissingAccountColumns(t *testing.T) {
 	}
 }
 
-func TestIncompatibleAccountSchemaRollsBackBootstrap(t *testing.T) {
-	db := unpreparedUserTestDB(t)
+func TestIncompatibleAccountSchemaDoesNotCreateMissingTables(t *testing.T) {
+	db := versionedAccountTestDB(t)
 	if _, err := db.ExecContext(t.Context(), "CREATE TABLE usertoken (legacy_value TEXT); INSERT INTO usertoken VALUES ('preserved')"); err != nil {
 		t.Fatal(err)
 	}

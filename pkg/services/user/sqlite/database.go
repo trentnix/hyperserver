@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"errors"
 	"fmt"
 	"slices"
@@ -13,14 +14,23 @@ import (
 )
 
 const (
-	userTableName      = "user"
-	userTokenTableName = "usertoken"
+	userTableName       = "user"
+	userTokenTableName  = "usertoken"
+	accountVersionTable = "hyperserver_account_version"
 )
 
-// PrepareDatabase creates missing account and token tables and checks required
+// accountVersionSchema matches golang-migrate's SQLite version/dirty format.
+// Keep this compatibility boundary in the provider, not the core server.
+const accountVersionSchema = `CREATE TABLE hyperserver_account_version (version uint64, dirty bool)`
+
+//go:embed migrations/000001_accounts.up.sql
+var accountSchemaV1 string
+
+// PrepareDatabase creates version 1 in fresh account storage and checks required
 // columns, supported types, nullability, unique keys, and the token foreign key.
 // Applications must call it before using account storage. Repeated calls preserve
-// data. It does not migrate existing tables or validate every stored value.
+// data. Existing storage must already have supported version metadata. It does
+// not adopt or migrate existing tables or validate every stored value.
 func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
@@ -35,31 +45,8 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS user (
-		id VARCHAR(36) PRIMARY KEY,
-		email VARCHAR(255) NOT NULL,
-		email_key TEXT NOT NULL UNIQUE,
-		verified BOOLEAN NOT NULL DEFAULT FALSE,
-		verification_required BOOLEAN NOT NULL DEFAULT FALSE,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		registration_auth_type VARCHAR(50),
-		password VARCHAR(255),
-		session_version INTEGER NOT NULL DEFAULT 1
-	)`)
-	if err != nil {
-		return fmt.Errorf("create account table: %w", err)
-	}
-	_, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usertoken (
-		user_id VARCHAR(36),
-		token_hash VARCHAR(255) NOT NULL,
-		expires_at TIMESTAMP NOT NULL,
-		token_type VARCHAR(255) NOT NULL,
-		PRIMARY KEY (user_id, token_hash),
-		FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
-	)`)
-	if err != nil {
-		return fmt.Errorf("create account token table: %w", err)
+	if err := prepareAccountVersion(ctx, tx); err != nil {
+		return err
 	}
 	if err := validateAccountColumns(ctx, tx); err != nil {
 		return err
@@ -80,13 +67,58 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
-	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS usertoken_expiration
-		ON usertoken (julianday(expires_at), user_id, token_hash)`)
-	if err != nil {
-		return fmt.Errorf("create account token expiration index: %w", err)
-	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit account schema setup: %w", err)
+	}
+	return nil
+}
+
+// prepareAccountVersion bootstraps only empty account storage. Existing stores
+// must have a clean, supported golang-migrate version before startup.
+func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
+	var objects int
+	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master
+		WHERE name COLLATE NOCASE IN ('user', 'usertoken', 'usertoken_expiration', ?)`, accountVersionTable).Scan(&objects)
+	if err != nil {
+		return fmt.Errorf("inspect account storage: %w", err)
+	}
+	if objects == 0 {
+		if _, err := tx.ExecContext(ctx, accountVersionSchema); err != nil {
+			return fmt.Errorf("create account schema version table: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, accountSchemaV1); err != nil {
+			return fmt.Errorf("create account schema version 1: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO hyperserver_account_version (version, dirty) VALUES (1, false)`); err != nil {
+			return fmt.Errorf("record account schema version 1: %w", err)
+		}
+		return nil
+	}
+
+	var hasHistory bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM sqlite_master
+		WHERE type = 'table' AND name = ? COLLATE NOCASE)`, accountVersionTable).Scan(&hasHistory)
+	if err != nil {
+		return fmt.Errorf("inspect account schema version: %w", err)
+	}
+	if !hasHistory {
+		return fmt.Errorf("unversioned SQLite account storage: explicit baseline adoption is required before startup")
+	}
+	var count int
+	var version sql.NullInt64
+	var dirty sql.NullBool
+	err = tx.QueryRowContext(ctx, `SELECT count(*), min(version), min(dirty) FROM hyperserver_account_version`).Scan(&count, &version, &dirty)
+	if err != nil {
+		return fmt.Errorf("read account schema version: %w", err)
+	}
+	if count != 1 || !version.Valid || !dirty.Valid {
+		return fmt.Errorf("invalid SQLite account schema version: expected one version and dirty flag")
+	}
+	if dirty.Bool {
+		return fmt.Errorf("SQLite account schema version %d is dirty: explicit migration repair is required before startup", version.Int64)
+	}
+	if version.Int64 != 1 {
+		return fmt.Errorf("unsupported SQLite account schema version %d: this provider supports version 1", version.Int64)
 	}
 	return nil
 }

@@ -49,7 +49,7 @@ func TestTokenForeignKeyDeclarations(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			db := unpreparedUserTestDB(t)
+			db := versionedAccountTestDB(t)
 			accountSchema := tc.accountSchema
 			if accountSchema == "" {
 				accountSchema = accountKeyTestSchema
@@ -94,16 +94,16 @@ func TestTokenForeignKeyDeclarations(t *testing.T) {
 }
 
 func TestTokenForeignKeyFailurePreservesDataAndAllowsRepair(t *testing.T) {
-	db := unpreparedUserTestDB(t)
+	db := versionedAccountTestDB(t)
 	schema := strings.Replace(tokenKeyTestSchema, ",\n\tFOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE", "", 1)
-	if _, err := db.ExecContext(t.Context(), schema+`; INSERT INTO usertoken VALUES ('account', 'preserved', '2030-01-01', 'auth-reset')`); err != nil {
+	if _, err := db.ExecContext(t.Context(), accountKeyTestSchema+`;`+schema+`; INSERT INTO usertoken VALUES ('account', 'preserved', '2030-01-01', 'auth-reset')`); err != nil {
 		t.Fatal(err)
 	}
-	if err := NewAccountRepository(db).Initialize(t.Context()); err == nil {
-		t.Fatal("missing foreign key accepted")
+	if err := NewAccountRepository(db).Initialize(t.Context()); err == nil || !strings.Contains(err.Error(), "requires a foreign key") {
+		t.Fatalf("missing foreign key not identified: %v", err)
 	}
 	var count int
-	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master WHERE name IN ('user', 'usertoken_expiration')").Scan(&count); err != nil || count != 0 {
+	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master WHERE name = 'usertoken_expiration'").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("failed setup left bootstrap objects: %d, %v", count, err)
 	}
 	var schemaAfter string
@@ -112,7 +112,7 @@ func TestTokenForeignKeyFailurePreservesDataAndAllowsRepair(t *testing.T) {
 	}
 
 	// Rebuild explicitly for this test. Initialization must not perform the repair.
-	if _, err := db.ExecContext(t.Context(), accountKeyTestSchema+`;
+	if _, err := db.ExecContext(t.Context(), `
 		INSERT INTO user (id, email, email_key) VALUES ('account', 'person@example.invalid', 'person@example.invalid');
 		ALTER TABLE usertoken RENAME TO old_tokens;`+tokenKeyTestSchema+`;
 		INSERT INTO usertoken SELECT * FROM old_tokens;

@@ -257,7 +257,7 @@ In the reference application, `auth.accountStorage.provider` selects account per
 
 Account models, token operations, and storage contracts live in [`user`](pkg/services/user). The SQLite implementation lives in [`user/sqlite`](pkg/services/user/sqlite). Import that provider when constructing `sqlite.NewAccountRepository(pool)` directly. The repository borrows the pool and must be initialized before use.
 
-SQLite account initialization creates missing tables and checks writable columns, supported types, required `NOT NULL` declarations, and unique keys for account IDs, normalized email keys, and account/token pairs. The keys must cover every row and use binary comparison. Tokens must reference `user(id)` through `user_id` with `ON DELETE CASCADE`. Initialization does not migrate existing tables or validate every stored value. Stored-format versions, remaining compatibility checks, and migration procedures remain unfinished.
+SQLite account initialization creates schema version 1 only when no account storage objects exist. Existing storage must have version 1 recorded in `hyperserver_account_version` with `dirty = false`. Missing, malformed, dirty, and unsupported versions stop startup without changes. Initialization also checks writable columns, supported types, required `NOT NULL` declarations, and unique keys for account IDs, normalized email keys, and account/token pairs. The keys must cover every row and use binary comparison. Tokens must reference `user(id)` through `user_id` with `ON DELETE CASCADE`. Initialization does not migrate existing tables or validate every stored value.
 
 Applications supply an initialized `user.AccountRepository` to their auth factories and middleware. For a borrowed SQLite pool:
 
@@ -278,7 +278,33 @@ SQLite writes complete before reporting success. File-backed SQLite data survive
 
 Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
 
-The built-in SQLite schemas and default session payloads have no format-version markers. Schema declaration checks do not establish that existing records are valid or that a database is safe to upgrade. Versioned migrations are not implemented. The [roadmap](roadmap.md#storage-and-serialization) defines migration ownership and the intended upgrade procedure.
+Session and contact schemas and default session payloads have no format-version markers yet. Schema declaration checks do not establish that existing records are valid or that a database is safe to upgrade. The [roadmap](roadmap.md#storage-and-serialization) defines migration ownership and the intended upgrade procedure.
+
+#### Account schema migrations
+
+Accounts use the separately installed [golang-migrate v4.20.1 CLI](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1). Migrations are plain SQL files: [up](pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates version 1 and [down](pkg/services/user/sqlite/migrations/000001_accounts.down.sql) removes its tables. Fresh initialization embeds the same up file and creates the schema and version metadata in one transaction. It needs no migration executable.
+
+The account-specific `hyperserver_account_version` table records the current version and whether a migration is incomplete (`dirty`). Startup checks this metadata without changing it. Existing unversioned account databases are rejected. Baseline adoption is not implemented yet. Do not add version metadata by hand.
+
+Install the pinned CLI with its SQLite driver, outside the application's dependency graph. The executable goes in `GOBIN`, or `$(go env GOPATH)/bin` if `GOBIN` is unset. With that directory on `PATH`, run from the repository root against a database with no account tables:
+
+```sh
+go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
+migrate -path pkg/services/user/sqlite/migrations \
+  -database 'sqlite3://file:///absolute/path/database.db?x-migrations-table=hyperserver_account_version&_foreign_keys=on' up
+```
+
+Stop affected writers, including cleanup jobs, and back up existing data before deployment migrations. Run only one migration process per database at a time. The SQLite driver does not coordinate locks across migration processes. Keep the account-specific table setting in every command. Use `down 1` to reverse version 1. After down, startup rejects the empty version table until an explicit `up` recreates the schema. If a migration fails, inspect and repair the database before using the tool's `force` command to correct its version marker. `force` does not run or undo SQL.
+
+Neither application code nor Go tests import golang-migrate. The CLI has its own dependencies to maintain, but adds none to this module. Only the SQLite provider knows its version-table format. Replacing the tool would require converting that metadata, not account records or SQL annotations.
+
+CI installs the pinned CLI and tests bootstrap compatibility, up/down, independent version tables, failed-migration rollback, and explicit repair. To run those tests locally:
+
+```sh
+HS_TEST_MIGRATE=migrate go test ./pkg/services/user/sqlite -run '^TestAccountMigration' -count=1
+```
+
+The command fails if `migrate` is not on `PATH`. You can also set `HS_TEST_MIGRATE` to an absolute executable path. Without `HS_TEST_MIGRATE`, CLI integration tests skip. Schema and version-validation tests still run.
 
 #### SQLite connections
 
