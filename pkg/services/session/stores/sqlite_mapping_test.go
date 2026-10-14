@@ -33,7 +33,7 @@ func TestSQLiteSessionFieldMappings(t *testing.T) {
 	store := revocationStore(t)
 	value := sessions.NewSession(store, "mapping")
 	value.Data["text"] = "O'Neil'); DROP TABLE sessions; --"
-	encoded, err := value.EncodedData()
+	encoded, err := value.EncodedData(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestSQLiteSessionFieldMappings(t *testing.T) {
 	}
 
 	loaded.Data["text"] = "replacement"
-	row.Session, err = loaded.EncodedData()
+	row.Session, err = loaded.EncodedData(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

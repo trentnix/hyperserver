@@ -21,6 +21,9 @@ type (
 	// SQLiteStore persists session data in SQLite and signs session IDs in cookies.
 	// Each store owns its pool. Close it after its consumers stop.
 	SQLiteStore struct {
+		// Serializer selects the payload format. Nil uses JSON. Set it before use
+		// and do not change it while requests are active.
+		Serializer sessions.Serializer
 		// JwtKey signs the session-ID cookie. It does not encrypt its contents.
 		JwtKey []byte
 		// lifetime of the JWT
@@ -248,7 +251,7 @@ func (s *SQLiteStore) Rotate(w http.ResponseWriter, r *http.Request, previous *s
 	for key, value := range data {
 		next.Data[key] = value
 	}
-	encoded, err := next.EncodedData()
+	encoded, err := next.EncodedData(s.Serializer)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +395,7 @@ func (s *SQLiteStore) getSessionFromDatabase(ctx context.Context, sessionID stri
 		return nil, nil
 	}
 
-	return sessions.LoadSession(dbSession.ID, name, dbSession.Expires_at, s, dbSession.Session)
+	return sessions.LoadSession(dbSession.ID, name, dbSession.Expires_at, s, dbSession.Session, s.Serializer)
 }
 
 // saveSessionToDatabase creates or updates the specified session in the database
@@ -401,7 +404,7 @@ func (s *SQLiteStore) save(ctx context.Context, session *sessions.Session) error
 		return database.NewErrDatabaseUnavailable(nil)
 	}
 
-	valueData, err := session.EncodedData()
+	valueData, err := session.EncodedData(s.Serializer)
 	if err != nil {
 		return err
 	}

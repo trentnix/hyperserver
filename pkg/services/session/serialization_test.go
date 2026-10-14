@@ -20,11 +20,11 @@ func TestSessionJSONRoundTrip(t *testing.T) {
 		"text": "hello <世界>", "version": int64(math.MaxInt64), "counter": 3,
 		"messages": []message{{Text: "saved"}}, "enabled": true,
 	}}
-	encoded, err := original.EncodedData()
+	encoded, err := original.EncodedData(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := LoadSession("id", "name", time.Now().Add(time.Hour), nil, encoded)
+	loaded, err := LoadSession("id", "name", time.Now().Add(time.Hour), nil, encoded, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestSessionJSONSizeLimits(t *testing.T) {
 		// The object syntax contributes eight bytes.
 		value := strings.Repeat("a", size-8)
 		s := &Session{Data: map[string]any{"x": value}}
-		encoded, err := s.EncodedData()
+		encoded, err := s.EncodedData(nil)
 		if size > MaxSessionDataSize {
 			if !errors.Is(err, ErrSessionTooLarge) || encoded != "" {
 				t.Fatalf("oversized encoding = %q, %v", encoded, err)
@@ -70,7 +70,7 @@ func TestSessionJSONSizeLimits(t *testing.T) {
 			t.Fatal(err)
 		}
 		raw := base64.URLEncoding.EncodeToString([]byte(`{"x":"` + value + `"}`))
-		loaded, err := LoadSession("id", "name", time.Now(), nil, raw)
+		loaded, err := LoadSession("id", "name", time.Now(), nil, raw, nil)
 		if size > MaxSessionDataSize {
 			if !errors.Is(err, ErrSessionTooLarge) || loaded != nil {
 				t.Fatalf("oversized decoding accepted: %v", err)
@@ -79,7 +79,7 @@ func TestSessionJSONSizeLimits(t *testing.T) {
 			t.Fatalf("bounded decoding failed: %v", err)
 		}
 	}
-	if _, err := LoadSession("id", "name", time.Now(), nil, strings.Repeat("!", MaxEncodedSessionSize+1)); !errors.Is(err, ErrSessionTooLarge) {
+	if _, err := LoadSession("id", "name", time.Now(), nil, strings.Repeat("!", MaxEncodedSessionSize+1), nil); !errors.Is(err, ErrSessionTooLarge) {
 		t.Fatalf("encoded size was not checked first: %v", err)
 	}
 }
@@ -91,23 +91,23 @@ func TestSessionJSONRejectsInvalidData(t *testing.T) {
 	}
 	for _, raw := range []string{"", "null", "[]", "1", `"text"`, `{"x":`, `{} {}`, `{} garbage`, legacy.String()} {
 		encoded := base64.URLEncoding.EncodeToString([]byte(raw))
-		if loaded, err := LoadSession("id", "name", time.Now(), nil, encoded); err == nil || loaded != nil {
+		if loaded, err := LoadSession("id", "name", time.Now(), nil, encoded, nil); err == nil || loaded != nil {
 			t.Fatalf("invalid data accepted: %.40q", raw)
 		}
 	}
-	if _, err := LoadSession("id", "name", time.Now(), nil, "!invalid-base64!"); err == nil {
+	if _, err := LoadSession("id", "name", time.Now(), nil, "!invalid-base64!", nil); err == nil {
 		t.Fatal("invalid base64 accepted")
 	}
 	for _, value := range []any{make(chan int), math.Inf(1), math.NaN()} {
-		if _, err := (&Session{Data: map[string]any{"x": value}}).EncodedData(); err == nil {
+		if _, err := (&Session{Data: map[string]any{"x": value}}).EncodedData(nil); err == nil {
 			t.Fatal("unsupported JSON value accepted")
 		}
 	}
-	encoded, err := (&Session{}).EncodedData()
+	encoded, err := (&Session{}).EncodedData(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := LoadSession("id", "name", time.Now(), nil, encoded)
+	loaded, err := LoadSession("id", "name", time.Now(), nil, encoded, nil)
 	if err != nil || loaded.Data == nil || len(loaded.Data) != 0 {
 		t.Fatalf("empty session = %+v, %v", loaded, err)
 	}
@@ -128,7 +128,7 @@ func TestSessionJSONNesting(t *testing.T) {
 				t.Fatal("fixture exceeds the byte limit instead of testing nesting")
 			}
 			encoded := base64.URLEncoding.EncodeToString([]byte(raw))
-			loaded, err := LoadSession("id", "name", time.Now(), nil, encoded)
+			loaded, err := LoadSession("id", "name", time.Now(), nil, encoded, nil)
 			if tc.depth == 100 {
 				if err != nil || loaded == nil {
 					t.Fatalf("valid nested object rejected: %v", err)
@@ -148,9 +148,99 @@ func FuzzLoadSession(f *testing.F) {
 		f.Add(base64.URLEncoding.EncodeToString([]byte(raw)))
 	}
 	f.Fuzz(func(t *testing.T, encoded string) {
-		s, err := LoadSession("id", "name", time.Time{}, nil, encoded)
+		s, err := LoadSession("id", "name", time.Time{}, nil, encoded, nil)
 		if err == nil && (s == nil || s.Data == nil) {
 			t.Fatal("successful decode returned no session data")
 		}
 	})
+}
+
+type testSerializer struct {
+	encode func(map[string]any) ([]byte, error)
+	decode func([]byte) (map[string]any, error)
+}
+
+func (s testSerializer) Encode(data map[string]any) ([]byte, error) { return s.encode(data) }
+func (s testSerializer) Decode(data []byte) (map[string]any, error) { return s.decode(data) }
+
+func TestDefaultSerializerStoredFormat(t *testing.T) {
+	// A fixed fixture prevents the encoder and decoder from changing together
+	// while silently making existing stored sessions unreadable.
+	const stored = "eyJuIjo5MjIzMzcyMDM2ODU0Nzc1ODA3LCJ0ZXh0Ijoic2F2ZWQifQ=="
+	for _, serializer := range []Serializer{nil, JSONSerializer{}} {
+		loaded, err := LoadSession("id", "name", time.Time{}, nil, stored, serializer)
+		if err != nil || loaded.Data["text"] != "saved" || loaded.Data["n"] != json.Number("9223372036854775807") {
+			t.Fatalf("existing data = %+v, %v", loaded, err)
+		}
+		encoded, err := loaded.EncodedData(serializer)
+		if err != nil || encoded != stored {
+			t.Fatalf("stored format changed: %q, %v", encoded, err)
+		}
+	}
+}
+
+func TestCustomSerializerBoundaries(t *testing.T) {
+	for _, size := range []int{MaxSessionDataSize - 1, MaxSessionDataSize, MaxSessionDataSize + 1} {
+		data := bytes.Repeat([]byte{0xff}, size)
+		decoded := false
+		serializer := testSerializer{
+			encode: func(values map[string]any) ([]byte, error) {
+				if values == nil {
+					t.Fatal("nil session data was not normalized")
+				}
+				return data, nil
+			},
+			decode: func(got []byte) (map[string]any, error) {
+				decoded = true
+				if !bytes.Equal(got, data) {
+					t.Fatal("binary serialized data changed")
+				}
+				return map[string]any{"size": size}, nil
+			},
+		}
+		encoded, err := (&Session{}).EncodedData(serializer)
+		if size > MaxSessionDataSize {
+			if encoded != "" || !errors.Is(err, ErrSessionTooLarge) {
+				t.Fatalf("oversized custom output = %q, %v", encoded, err)
+			}
+		} else if err != nil {
+			t.Fatal(err)
+		}
+
+		loaded, err := LoadSession("id", "name", time.Time{}, nil, base64.URLEncoding.EncodeToString(data), serializer)
+		if size > MaxSessionDataSize {
+			if loaded != nil || !errors.Is(err, ErrSessionTooLarge) || decoded {
+				t.Fatalf("oversized data reached custom decoder: decoded=%t, error=%v", decoded, err)
+			}
+		} else if err != nil || !decoded || loaded.Data["size"] != size {
+			t.Fatalf("custom round trip = %+v, %v", loaded, err)
+		}
+	}
+}
+
+func TestCustomSerializerFailures(t *testing.T) {
+	failure := errors.New("serializer failed")
+	serializer := testSerializer{
+		encode: func(map[string]any) ([]byte, error) { return []byte("partial"), failure },
+		decode: func([]byte) (map[string]any, error) { return map[string]any{"partial": true}, failure },
+	}
+	if encoded, err := (&Session{}).EncodedData(serializer); encoded != "" || !errors.Is(err, failure) {
+		t.Fatalf("encode failure = %q, %v", encoded, err)
+	}
+	if loaded, err := LoadSession("id", "name", time.Time{}, nil, "e30=", serializer); loaded != nil || !errors.Is(err, failure) {
+		t.Fatalf("decode failure = %+v, %v", loaded, err)
+	}
+	serializer.decode = func([]byte) (map[string]any, error) { return nil, nil }
+	if loaded, err := LoadSession("id", "name", time.Time{}, nil, "e30=", serializer); loaded != nil || err == nil {
+		t.Fatalf("nil custom data accepted: %+v, %v", loaded, err)
+	}
+	serializer.decode = func([]byte) (map[string]any, error) {
+		t.Fatal("invalid framing reached custom decoder")
+		return nil, nil
+	}
+	for _, value := range []string{"!bad-base64!", strings.Repeat("a", MaxEncodedSessionSize+1)} {
+		if loaded, err := LoadSession("id", "name", time.Time{}, nil, value, serializer); loaded != nil || err == nil {
+			t.Fatalf("invalid framing accepted: %v", err)
+		}
+	}
 }

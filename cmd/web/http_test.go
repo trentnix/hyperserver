@@ -675,6 +675,7 @@ func TestHTTPRegistrationRejectsExistingAccount(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
 		form := registrationForm()
+		form.Set("email", "PERSON@EXAMPLE.INVALID")
 		form.Set("password", "DifferentPassword1!")
 		form.Set("passwordMatch", "DifferentPassword1!")
 		w := h.request(http.MethodPost, "/auth/register/email", form, true)
@@ -1202,6 +1203,8 @@ func (h *httpHarness) assertUserUnchanged(t *testing.T, original *user.User) {
 
 func TestHTTPEmailSpellingPreserved(t *testing.T) {
 	for _, email := range []string{
+		"Person@Example.INVALID",
+		"élodie@bücher.invalid",
 		`"person"@example.invalid`,
 		`"first last"@example.invalid`,
 		`"first..last"@example.invalid`,
@@ -1229,7 +1232,7 @@ func TestHTTPEmailSpellingPreserved(t *testing.T) {
 						t.Fatal("verification mail did not use the stored account address")
 					}
 
-					w = h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {email}}, htmx)
+					w = h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {strings.ToUpper(email)}}, htmx)
 					if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Password reset request received.") {
 						t.Fatal("reset request rejected the submitted email")
 					}
@@ -1243,7 +1246,7 @@ func TestHTTPEmailSpellingPreserved(t *testing.T) {
 						t.Fatalf("reset token did not identify the account: %v", err)
 					}
 
-					w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {email}, "password": {"TestPassword1!"}}, htmx)
+					w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {strings.ToUpper(email)}, "password": {"TestPassword1!"}}, htmx)
 					assertRedirectResponse(t, w, "/auth/request/verify", htmx)
 				})
 			})

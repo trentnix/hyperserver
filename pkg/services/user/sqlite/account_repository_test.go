@@ -130,23 +130,31 @@ func TestSQLiteAccountRepository(t *testing.T) {
 	}
 }
 
-func TestSQLiteAccountRepositoryExactEmailMatching(t *testing.T) {
+func TestSQLiteAccountRepositoryCaseInsensitiveEmail(t *testing.T) {
 	repository := NewAccountRepository(userTestDB(t))
-	for _, email := range []string{"Person@example.invalid", "person@example.invalid"} {
-		account := &accounts.User{Email: email}
+	for _, emails := range [][]string{
+		{"Person@Example.INVALID", "person@example.invalid", "PERSON@EXAMPLE.INVALID"},
+		{"Élodie@EXAMPLE.invalid", "élodie@example.INVALID"},
+		{"σ@example.invalid", "ς@example.invalid", "Σ@EXAMPLE.INVALID"},
+	} {
+		account := &accounts.User{Email: emails[0]}
 		if err := repository.Create(t.Context(), account); err != nil {
 			t.Fatal(err)
 		}
-		stored, err := repository.GetByEmail(t.Context(), email)
-		if err != nil || stored.ID != account.ID || stored.Email != email {
-			t.Fatalf("exact lookup = %+v, %v", stored, err)
-		}
-		if err := repository.Create(t.Context(), &accounts.User{Email: email}); !errors.Is(err, accounts.ErrEmailAlreadyExists) {
-			t.Fatalf("duplicate email = %v", err)
+		for _, email := range emails {
+			stored, err := repository.GetByEmail(t.Context(), email)
+			if err != nil || stored.ID != account.ID || stored.Email != emails[0] {
+				t.Fatalf("case-insensitive lookup = %+v, %v", stored, err)
+			}
+			duplicate := accounts.User{Email: email}
+			before := duplicate
+			if err := repository.Create(t.Context(), &duplicate); !errors.Is(err, accounts.ErrEmailAlreadyExists) || duplicate != before {
+				t.Fatalf("duplicate email changed its input or returned %v", err)
+			}
 		}
 	}
 
-	for _, email := range []string{"PERSON@example.invalid", " person@example.invalid"} {
+	for _, email := range []string{"person+tag@example.invalid", "per.son@example.invalid", " person@example.invalid"} {
 		var missing *accounts.ErrUserNotFound
 		if stored, err := repository.GetByEmail(t.Context(), email); stored != nil || !errors.As(err, &missing) {
 			t.Fatalf("nonmatching lookup = %+v, %v", stored, err)
@@ -159,10 +167,10 @@ func TestSQLiteAccountRepositoryConcurrentCreate(t *testing.T) {
 	repository := NewAccountRepository(db)
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	for range 2 {
+	for _, email := range []string{"Shared@example.invalid", "shared@EXAMPLE.INVALID"} {
 		go func() {
 			<-start
-			account := &accounts.User{Email: "shared@example.invalid"}
+			account := &accounts.User{Email: email}
 			results <- repository.Create(t.Context(), account)
 		}()
 	}

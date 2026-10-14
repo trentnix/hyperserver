@@ -737,7 +737,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 		}
 		// a user is currently authenticated - redirect to Home with a custom message
 		authenticatedUserMessage := "Your account was verified successfully."
-		if authenticatedUser.Email != verifiedUser.Email {
+		if authenticatedUser.ID != verifiedUser.ID {
 			authenticatedUserMessage = "The account was verified successfully, but is not currently logged in. Logout and login with the newly verified account for access."
 		}
 

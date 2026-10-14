@@ -21,8 +21,8 @@ func TestAccountFieldMappings(t *testing.T) {
 			}
 			// Seed independently of the repository's write and scan mappings.
 			_, err := db.ExecContext(t.Context(), `INSERT INTO user
-				(id, email, password, registration_auth_type, verified, verification_required, session_version, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, original.ID, original.Email, original.Password,
+				(id, email, email_key, password, registration_auth_type, verified, verification_required, session_version, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, original.ID, original.Email, accounts.EmailKey(original.Email), original.Password,
 				original.RegistrationAuthType, original.Verified, original.VerificationRequired,
 				original.SessionVersion, original.CreatedAt, original.UpdatedAt)
 			if err != nil {

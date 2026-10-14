@@ -16,6 +16,9 @@ import (
 type (
 	// CookieStore serializes a Session to a browser cookie
 	CookieStore struct {
+		// Serializer selects the payload format. Nil uses JSON. Set it before use
+		// and do not change it while requests are active.
+		Serializer sessions.Serializer
 		// JwtKey signs session JWTs. It does not encrypt their contents.
 		JwtKey []byte
 		// lifetime of the JWT
@@ -88,7 +91,7 @@ func (c *CookieStore) Get(r *http.Request, name string) (*sessions.Session, erro
 	}
 
 	// the session exists - overwrite the ID with the session data that was extracted from the cookie
-	existingSession, loadErr := sessions.LoadSession(claimsData.ID, name, claimsData.ExpiresAtTime(), c, claimsData.Value)
+	existingSession, loadErr := sessions.LoadSession(claimsData.ID, name, claimsData.ExpiresAtTime(), c, claimsData.Value, c.Serializer)
 	if loadErr != nil {
 		return nil, loadErr
 	}
@@ -120,7 +123,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *sess
 		tokenExpiration = session.ExpiresAt
 	}
 
-	sessionValue, err := session.EncodedData()
+	sessionValue, err := session.EncodedData(c.Serializer)
 	if err != nil {
 		return err
 	}

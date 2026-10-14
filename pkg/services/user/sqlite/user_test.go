@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -131,6 +132,9 @@ func TestUpdateUsesID(t *testing.T) {
 	if _, err := NewAccountRepository(db).GetByEmail(t.Context(), "before@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("old email still exists: %v", err)
 	}
+	if found, err := NewAccountRepository(db).GetByEmail(t.Context(), "AFTER@EXAMPLE.INVALID"); err != nil || found.ID != id || found.Email != u.Email {
+		t.Fatalf("updated email key did not locate the account: %+v, %v", found, err)
+	}
 	var count int
 	if err := db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM user").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("update created another row: count=%d, error=%v", count, err)
@@ -153,13 +157,20 @@ func TestUpdateRejectsEmailConflict(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	first.Email = second.Email
+	metadata := accounts.TokenMetadata{AccountID: first.ID, TokenHash: "verification-hash", Purpose: accounts.VerificationTokenPurpose, ExpiresAt: time.Now().Add(time.Hour)}
+	if err := NewAccountRepository(db).InsertToken(ctx, metadata); err != nil {
+		t.Fatal(err)
+	}
+	first.Email = "SECOND@EXAMPLE.INVALID"
 	before := *first
 	if err := NewAccountRepository(db).Update(ctx, first); !errors.Is(err, accounts.ErrEmailAlreadyExists) {
 		t.Fatalf("email conflict = %v, want duplicate email", err)
 	}
 	if *first != before {
 		t.Error("failed update changed the caller's user")
+	}
+	if _, err := NewAccountRepository(db).GetToken(ctx, metadata.TokenHash, metadata.Purpose); err != nil {
+		t.Fatal("failed duplicate-email update revoked verification:", err)
 	}
 	for _, tc := range []struct{ id, email, password string }{
 		{first.ID, "first@example.invalid", "first hash"},

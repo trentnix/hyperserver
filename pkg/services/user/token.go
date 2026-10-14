@@ -150,7 +150,7 @@ func validateToken(ctx context.Context, accounts AccountRepository, tokenString 
 	if account == nil || account.ID != claims.Id {
 		return nil, NewErrUserNotFound(nil)
 	}
-	if tokenType == VerificationTokenPurpose && account.Email != claims.Email {
+	if tokenType == VerificationTokenPurpose && EmailKey(account.Email) != EmailKey(claims.Email) {
 		return nil, NewErrToken(errors.New("verification address no longer matches the account"))
 	}
 

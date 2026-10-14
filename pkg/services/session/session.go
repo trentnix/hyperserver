@@ -1,12 +1,10 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"time"
 
@@ -17,7 +15,7 @@ type (
 	// Session is used to manage a user or usage session
 	Session struct {
 		ID string
-		// Data contains JSON-compatible values. Loaded numbers use json.Number.
+		// Data contains JSON-compatible values. The JSON decoder uses json.Number.
 		// Cookie stores expose these values to the browser. Never store secrets there.
 		Data      map[string]any
 		Name      string
@@ -49,9 +47,10 @@ func NewSession(s SessionStore, name string) *Session {
 	return &session
 }
 
-// LoadSession restores a store's encoded session data using bounded JSON decoding.
+// LoadSession restores a store's base64-encoded data using the selected serializer.
+// A nil serializer selects JSON. Size limits apply before calling the serializer.
 // Providers must validate identity and expiration before calling it.
-func LoadSession(id string, name string, expiration time.Time, s SessionStore, value string) (*Session, error) {
+func LoadSession(id string, name string, expiration time.Time, s SessionStore, value string, serializer Serializer) (*Session, error) {
 	session := Session{
 		ID:        id,
 		Name:      name,
@@ -72,18 +71,15 @@ func LoadSession(id string, name string, expiration time.Time, s SessionStore, v
 		return nil, ErrSessionTooLarge
 	}
 
-	var sessionData map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(byteValue))
-	decoder.UseNumber()
-	if err := decoder.Decode(&sessionData); err != nil {
+	if serializer == nil {
+		serializer = JSONSerializer{}
+	}
+	sessionData, err := serializer.Decode(byteValue)
+	if err != nil {
 		return nil, err
 	}
 	if sessionData == nil {
-		return nil, NewErrSessionInvalid(errors.New("session data must be a JSON object"))
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		return nil, NewErrSessionInvalid(errors.New("unexpected data after session object"))
+		return nil, NewErrSessionInvalid(errors.New("session serializer returned nil data"))
 	}
 
 	session.Data = sessionData
@@ -152,7 +148,7 @@ func (s *Session) End(w http.ResponseWriter, r *http.Request) error {
 
 // DecodeValue decodes a JSON-compatible Data value into target, which must be a
 // pointer. A missing key leaves target unchanged. Use it for numbers and structured
-// values, whose Go types are not preserved across JSON storage.
+// values. This JSON conversion is independent of the storage serializer.
 func (s *Session) DecodeValue(key string, target any) error {
 	value, ok := s.Data[key]
 	if !ok {
@@ -168,14 +164,17 @@ func (s *Session) DecodeValue(key string, target any) error {
 	return json.Unmarshal(encoded, target)
 }
 
-// EncodedData returns JSON in URL-safe base64, limited to MaxSessionDataSize
-// bytes before base64 encoding. Encoding does not encrypt data. Gob is unsupported.
-func (s *Session) EncodedData() (string, error) {
+// EncodedData serializes values into URL-safe base64, limited to MaxSessionDataSize
+// bytes before base64 encoding. A nil serializer selects JSON. Encoding does not encrypt data.
+func (s *Session) EncodedData(serializer Serializer) (string, error) {
 	data := s.Data
 	if data == nil {
 		data = map[string]any{}
 	}
-	encoded, err := json.Marshal(data)
+	if serializer == nil {
+		serializer = JSONSerializer{}
+	}
+	encoded, err := serializer.Encode(data)
 	if err != nil {
 		return "", err
 	}

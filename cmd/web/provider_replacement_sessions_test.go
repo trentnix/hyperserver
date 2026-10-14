@@ -46,7 +46,7 @@ func (s *replacementSessionStore) Get(r *http.Request, name string) (*session.Se
 	if err == nil {
 		record, ok := s.records[cookie.Value]
 		if ok && record.name == name && time.Now().Before(record.expires) {
-			return session.LoadSession(cookie.Value, name, record.expires, s, record.data)
+			return session.LoadSession(cookie.Value, name, record.expires, s, record.data, nil)
 		}
 	}
 	return s.New(r, name)
@@ -65,7 +65,7 @@ func (s *replacementSessionStore) save(w http.ResponseWriter, r *http.Request, v
 	if s.closes != 0 {
 		return errors.New("test session store closed")
 	}
-	encoded, err := value.EncodedData()
+	encoded, err := value.EncodedData(nil)
 	if err != nil {
 		return err
 	}

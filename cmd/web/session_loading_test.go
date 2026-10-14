@@ -141,7 +141,7 @@ func TestHTTPSessionLoading(t *testing.T) {
 					const name = "auth-user-session"
 					// Exercise raw cookie loading too, without authenticating an account.
 					h.app.SessionManager.Types[name] = provider
-					encoded, err := (&session.Session{Data: map[string]any{"marker": "stored"}}).EncodedData()
+					encoded, err := (&session.Session{Data: map[string]any{"marker": "stored"}}).EncodedData(nil)
 					if err != nil {
 						t.Fatal(err)
 					}

@@ -8,9 +8,9 @@ The `session` package defines session values, storage contracts, and request han
 
 `SQLiteStore` stores session data in SQLite. Its signed cookie contains a session ID and token metadata, not session data. Authentication requires a store that supports revocable rotation, such as SQLite. Cookie-only sessions cannot revoke captured cookies.
 
-Both stores use JSON encoded in URL-safe base64. Only that format is supported. `Session.Data` accepts JSON-compatible values. Loaded numbers use `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read those values into the expected type.
+Both stores default to JSON encoded in URL-safe base64. Each store can select a different [Serializer](serializer.go). `Session.Data` still accepts JSON-compatible values. The JSON serializer restores numbers as `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read values into the expected type. That helper uses JSON conversion independently of the storage format.
 
-- `MaxSessionDataSize` limits JSON data to 64 KiB before base64 encoding. Reads reject oversized data before JSON decoding. Saves and rotations reject oversized data before writing storage.
+- `MaxSessionDataSize` limits serialized data to 64 KiB before base64 encoding. Reads reject oversized data before calling the serializer. Saves and rotations reject oversized serializer output before writing storage.
 - `MaxCookieSize` limits each cookie to 4 KiB, including its name and outgoing attributes. JWT and base64 overhead reduce the space available for cookie-store data.
 - Invalid or oversized data returns an error. A missing or expired session returns a new, empty session.
 
@@ -92,4 +92,27 @@ Pass the same manager to auth factories and `authmiddleware.LoadSessionManagemen
 
 `openMySessionStore` must accept `context.Context` and return `(session.SessionStore, error)`. It must release partial resources on failure. The manager owns successful results, closes them in reverse initialization order, and closes each selected provider only once. Provider names are case-insensitive. Session names are case-sensitive. A named selection overrides `default`. Unknown selections and ambiguous provider names fail before any factory runs.
 
-Providers can use `NewSession` to create an unsaved value and `LoadSession` to decode existing data. Providers remain responsible for identity and expiration checks. Replaceable serialization remains [roadmap](../../../roadmap.md) work.
+Providers can use `NewSession` to create an unsaved value. Pass the same serializer to `EncodedData` and `LoadSession`. A nil serializer selects JSON. Providers remain responsible for identity and expiration checks.
+
+## Replacing serialization
+
+Set a built-in store's `Serializer` in its factory, before serving requests. For example, supply this factory to `session.NewSessionManager`:
+
+```go
+openSessions := func(ctx context.Context) (session.SessionStore, error) {
+    store, err := stores.NewSQLiteStore(ctx, cfg)
+    if err != nil {
+        return nil, err
+    }
+    store.Serializer = mySerializer
+    return store, nil
+}
+```
+
+`CookieStore` supports the same field. Nil selects `session.JSONSerializer{}`. Serializer selection belongs to application setup, not a process-wide registry or YAML type name. Do not change it while requests are active.
+
+A serializer implements `Encode(map[string]any) ([]byte, error)` and `Decode([]byte) (map[string]any, error)`. Implementations must be safe for concurrent calls, preserve numeric precision, return independent maps, and reject malformed data. They must also bound their own allocations and decoding work. The byte limit alone cannot prevent a custom decoder from expanding a small input into a large object.
+
+Base64 framing, cookie signing, expiration, revocation, and size limits stay outside serialization. Neither selecting a serializer nor encoding data encrypts it. Decode failures return errors rather than new sessions. Encode failures issue no cookie and leave stored data unchanged.
+
+The default serializer reads the existing JSON format unchanged. A replacement must explicitly read existing data or the application must invalidate those sessions before switching formats. There is no automatic format detection or migration. A replacement can read the previous format and write its new format when a session is next saved. SQLite cookies contain only session identifiers, so changing the stored payload format does not require changing those cookies.

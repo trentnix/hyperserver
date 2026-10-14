@@ -1,6 +1,6 @@
 // Package session manages named sessions through application-supplied stores.
 // Attach a SessionManager to each request before calling Get or New. Session data
-// is size-limited JSON. Each manager owns its initialized providers.
+// uses bounded serialization, defaulting to JSON. Each manager owns its initialized providers.
 package session
 
 import (

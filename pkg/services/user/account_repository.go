@@ -29,8 +29,8 @@ type TokenMaintenance interface {
 // Accounts do not expire. Token redemption must enforce expiry without cleanup.
 type AccountRepository interface {
 	GetByID(context.Context, string) (*User, error)
-	// GetByEmail matches the supplied email exactly, without case folding or trimming.
-	// Create and Update must enforce uniqueness using the same comparison.
+	// GetByEmail matches by EmailKey. Create and Update must enforce uniqueness
+	// using the same key, while preserving the original address in User.Email.
 	GetByEmail(context.Context, string) (*User, error)
 	// GetToken reads metadata matching the token hash and purpose without consuming it.
 	// Missing tokens return ErrTokenNotFound. Expired tokens remain readable so the
@@ -49,9 +49,9 @@ type AccountRepository interface {
 	// stale SessionVersion values return ErrUserChanged, and duplicate emails return
 	// an error matching ErrEmailAlreadyExists. The caller must preserve the version from its
 	// account read and validate and hash any new password before calling.
-	// Changes to Password, Email, RegistrationAuthType, Verified, or VerificationRequired
+	// Changes to Password, EmailKey(Email), RegistrationAuthType, Verified, or VerificationRequired
 	// must increment SessionVersion. Otherwise, the version must stay unchanged.
-	// ID and CreatedAt must stay unchanged. An email change must also revoke the account's
+	// ID and CreatedAt must stay unchanged. An email key change must also revoke the account's
 	// verification tokens. These changes must commit together and preserve other tokens.
 	// Success updates u's UpdatedAt and SessionVersion. Failure must leave u and storage unchanged.
 	// SessionVersion guards security changes, not every edit. Concurrent edits that
@@ -75,7 +75,7 @@ type AccountRepository interface {
 	// Other account fields and tokens must remain unchanged.
 	ResetPassword(ctx context.Context, u *User, authorization ResetAuthorization, passwordHash string) error
 	// Verify atomically consumes the exact verification token and marks its account
-	// verified only if the current email matches the signed email. The caller must
+	// verified only if the current and signed emails have the same EmailKey. The caller must
 	// validate the token's signature, verification purpose, account ID, and email.
 	// Implementations must match the stored token's hash, account, and verification
 	// purpose and recheck signed and stored expiry when consuming it, including after

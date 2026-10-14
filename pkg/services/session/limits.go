@@ -5,7 +5,7 @@ import "errors"
 const (
 	// MaxCookieSize limits each session cookie, including its name and attributes.
 	MaxCookieSize = 4096
-	// MaxSessionDataSize limits session JSON before base64 encoding.
+	// MaxSessionDataSize limits serialized session bytes before base64 encoding.
 	MaxSessionDataSize = 64 * 1024
 	// MaxEncodedSessionSize bounds the base64 representation read by providers.
 	MaxEncodedSessionSize = ((MaxSessionDataSize + 2) / 3) * 4

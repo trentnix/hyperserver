@@ -84,7 +84,7 @@ func (s *AccountRepository) GetByID(ctx context.Context, id string) (*accounts.U
 	return u, nil
 }
 
-// GetByEmail loads an account by email, or returns [accounts.ErrUserNotFound].
+// GetByEmail loads an account using [accounts.EmailKey], or returns [accounts.ErrUserNotFound].
 func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*accounts.User, error) {
 	if s.db == nil {
 		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
@@ -94,9 +94,9 @@ func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*acco
 		return nil, fmt.Errorf("a users.email value must be specified to retrieve a user")
 	}
 
-	query := `SELECT ` + accountColumns + ` FROM ` + userTableName + ` WHERE email = ?`
+	query := `SELECT ` + accountColumns + ` FROM ` + userTableName + ` WHERE email_key = ?`
 
-	user, err := scanAccount(s.db.QueryRowContext(ctx, query, email))
+	user, err := scanAccount(s.db.QueryRowContext(ctx, query, accounts.EmailKey(email)))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, accounts.NewErrUserNotFound(err)
 	}
@@ -158,12 +158,12 @@ func (s *AccountRepository) Create(ctx context.Context, user *accounts.User) err
 	created.SessionVersion = 1
 
 	query := fmt.Sprintf(`
-        INSERT INTO %s (id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO %s (id, email, email_key, verified, verification_required, created_at, updated_at, registration_auth_type, password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, userTableName)
 
 	if _, err := s.db.ExecContext(ctx, query,
-		created.ID, created.Email, created.Verified, created.VerificationRequired,
+		created.ID, created.Email, accounts.EmailKey(created.Email), created.Verified, created.VerificationRequired,
 		created.CreatedAt, created.UpdatedAt, created.RegistrationAuthType, created.Password); err != nil {
 		return accountWriteError(err)
 	}
@@ -202,6 +202,7 @@ func (s *AccountRepository) InsertToken(ctx context.Context, metadata accounts.T
 // revokes stored verification tokens in the same transaction. Changes to credentials,
 // email, provider, or verification settings also invalidate authenticated sessions.
 // The supplied user must carry the security version from Create or an account read.
+// Case-only email edits preserve verification tokens and the session version.
 // If security state has since changed, Update returns [accounts.ErrUserChanged] without
 // changing the account, its tokens, or the supplied user. Reload the account and
 // reapply the intended edit before retrying. Do not copy only the new version.
@@ -235,8 +236,8 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 	// Starting with a write also avoids upgrading a SQLite read transaction.
 	_, err = tx.ExecContext(ctx, `DELETE FROM `+userTokenTableName+`
 		WHERE user_id = ? AND token_type = ?
-		AND EXISTS (SELECT 1 FROM `+userTableName+` WHERE id = ? AND email <> ?)`,
-		user.ID, accounts.VerificationTokenPurpose, user.ID, user.Email)
+		AND EXISTS (SELECT 1 FROM `+userTableName+` WHERE id = ? AND email_key <> ?)`,
+		user.ID, accounts.VerificationTokenPurpose, user.ID, accounts.EmailKey(user.Email))
 	if err != nil {
 		return err
 	}
@@ -244,12 +245,13 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 	query := fmt.Sprintf(`
         UPDATE %s
         SET email = :email,
+			email_key = :email_key,
             verified = :verified,
 			verification_required = :verification_required,
             updated_at = :updated_at,
             registration_auth_type = :registration_auth_type,
             session_version = session_version + CASE WHEN password IS NOT :password
-                OR email IS NOT :email OR verified IS NOT :verified
+                OR email_key IS NOT :email_key OR verified IS NOT :verified
                 OR verification_required IS NOT :verification_required
                 OR registration_auth_type IS NOT :registration_auth_type THEN 1 ELSE 0 END,
             password = :password
@@ -258,6 +260,7 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 
 	result, err := tx.ExecContext(ctx, query,
 		sql.Named("email", updated.Email),
+		sql.Named("email_key", accounts.EmailKey(updated.Email)),
 		sql.Named("verified", updated.Verified),
 		sql.Named("verification_required", updated.VerificationRequired),
 		sql.Named("updated_at", updated.UpdatedAt),
@@ -295,7 +298,7 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 
 func accountWriteError(err error) error {
 	var constraint sqlite3.Error
-	// Email is the account table's only UNIQUE constraint. Primary-key conflicts
+	// The email key is the account table's only UNIQUE constraint. Primary-key conflicts
 	// and other constraint failures must remain storage errors.
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {
 		return fmt.Errorf("%w: %w", accounts.ErrEmailAlreadyExists, err)
@@ -410,9 +413,9 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 
 	account, err := scanAccount(tx.QueryRowContext(ctx, `UPDATE `+userTableName+`
 		SET session_version = session_version + CASE WHEN verified THEN 0 ELSE 1 END,
-		verified = TRUE, updated_at = ? WHERE id = ? AND email = ?
+		verified = TRUE, updated_at = ? WHERE id = ? AND email_key = ?
 		RETURNING `+accountColumns,
-		time.Now(), authorization.AccountID, authorization.Email))
+		time.Now(), authorization.AccountID, accounts.EmailKey(authorization.Email)))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, accounts.NewErrToken(errors.New("verification address changed or account no longer exists"))
 	}

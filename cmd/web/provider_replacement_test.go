@@ -47,7 +47,7 @@ func (p *replacementAccountReads) GetByID(ctx context.Context, id string) (*user
 }
 
 func (p *replacementAccountReads) GetByEmail(ctx context.Context, email string) (*user.User, error) {
-	if email != p.account.Email {
+	if user.EmailKey(email) != user.EmailKey(p.account.Email) {
 		return nil, user.NewErrUserNotFound(nil)
 	}
 	return p.GetByID(ctx, p.account.ID)

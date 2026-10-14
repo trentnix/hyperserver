@@ -6,7 +6,7 @@ HyperServer is an experimental Go framework for server-rendered web applications
 
 Provide a working default setup with replaceable services. Developers must not need to learn unrelated libraries or copy security and lifecycle code to build a feature. High performance and low overhead are goals to demonstrate with measurements.
 
-HyperServer is not production-ready. Public interfaces remain experimental during `v0.x`. The immediate work is completing storage contracts and serializer replacement, followed by performance and operational validation.
+HyperServer is not production-ready. Public interfaces remain experimental during `v0.x`. The immediate work is shared storage-provider tests and stored-format migrations, followed by performance and operational validation.
 
 This roadmap defines direction and remaining priorities. The [README](readme.md) documents usage. [Architecture decisions](docs/decisions/readme.md) explain specific choices and their tradeoffs.
 
@@ -108,7 +108,6 @@ Work through these priorities in order, using the reference application to valid
 
 ### 1. Complete storage and serialization contracts
 
-- Separate session serialization from storage. Test serializer replacement and compatibility with previously saved data without forcing structured repositories to store opaque blobs.
 - Add in-memory adapters and shared contract tests for SQLite. Cover field mappings, affected-row checks, concurrent writes, transaction rollback, and failures. Explicitly configure connection limits, foreign-key enforcement, and lock waits.
 - Define stored-format versions and migration procedures. Reject incompatible schemas during provider startup. Test invalid data, interrupted migrations, and rollback or forward repair.
 

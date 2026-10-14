@@ -93,6 +93,26 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	}
 }
 
+func TestEmailCaseChangePreservesVerification(t *testing.T) {
+	db, account, token, key := verificationFixture(t)
+	repository := NewAccountRepository(db)
+	version := account.SessionVersion
+	account.Email = "Person@EXAMPLE.invalid"
+	if err := repository.Update(t.Context(), account); err != nil {
+		t.Fatal(err)
+	}
+	if account.SessionVersion != version {
+		t.Fatal("case-only edit invalidated sessions")
+	}
+	if _, err := accounts.ValidateVerificationToken(t.Context(), repository, token.Token, key); err != nil {
+		t.Fatal("case-only edit invalidated verification lookup:", err)
+	}
+	verified, err := accounts.Verify(t.Context(), repository, token.Token, key)
+	if err != nil || !verified.Verified || verified.Email != account.Email || verified.SessionVersion != version+1 {
+		t.Fatalf("verification after case-only edit = %+v, %v", verified, err)
+	}
+}
+
 func TestVerifyFailureRollsBack(t *testing.T) {
 	for _, failure := range []string{"update", "delete", "commit", "email changed", "missing account", "missing token", "stored account", "stored purpose", "expired", "wrong key", "canceled"} {
 		t.Run(failure, func(t *testing.T) {
@@ -113,7 +133,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				}
 			case "email changed":
 				// Bypass Update's revocation to test the signed email check itself.
-				if _, err := db.Exec(`UPDATE user SET email = ? WHERE id = ?`, "changed@example.invalid", u.ID); err != nil {
+				if _, err := db.Exec(`UPDATE user SET email = ?, email_key = ? WHERE id = ?`, "changed@example.invalid", accounts.EmailKey("changed@example.invalid"), u.ID); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token, key); err == nil {
