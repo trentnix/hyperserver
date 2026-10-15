@@ -70,9 +70,9 @@ func TestResponseOutOfBandAndNotifications(t *testing.T) {
 			cm.AddPageLayout(files, "page.html")
 			cm.AddHtmxLayout(files, "fragment.html")
 			calls := 0
-			cm.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+			cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 				calls++
-				return []messages.Notification{messages.NewNotification("<loaded>", messages.NotificationTypeSuccess)}, nil
+				return []messages.Notification{messages.NewNotification("<loaded>", messages.NotificationTypeSuccess)}, nil, nil
 			}
 			c := NewManagedContent(nil, cm)
 			c.AddContent(files, "parts.html")
@@ -130,9 +130,9 @@ func TestResponseRedirect(t *testing.T) {
 				r := httptest.NewRequest(http.MethodPost, "/", nil)
 				r.Header.Set(htmx.HeaderRequest, fmt.Sprint(hx))
 				cm := contentservice.NewContentManager()
-				cm.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+				cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 					t.Fatal("redirect consumed notifications")
-					return nil, nil
+					return nil, nil, nil
 				}
 				c := NewManagedContent(r, cm)
 				c.RedirectURL = destination
@@ -165,9 +165,9 @@ func TestResponseNoContent(t *testing.T) {
 		r.Header.Set(htmx.HeaderRequest, fmt.Sprint(hx))
 		cm := contentservice.NewContentManager()
 		calls := 0
-		cm.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+		cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 			calls++
-			return nil, nil
+			return nil, nil, nil
 		}
 		c := NewManagedContent(r, cm)
 		c.AddContent(fstest.MapFS{"view.html": {Data: []byte("ordinary page")}}, "view.html")
@@ -202,7 +202,12 @@ func TestResponseRejectsInvalidStatus(t *testing.T) {
 
 func TestResponseHead(t *testing.T) {
 	r := httptest.NewRequest(http.MethodHead, "/", nil)
-	c := NewContent(r)
+	cm := contentservice.NewContentManager()
+	cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+		t.Fatal("HEAD loaded notifications")
+		return nil, nil, nil
+	}
+	c := NewManagedContent(r, cm)
 	c.AddContent(fstest.MapFS{"view.html": {Data: []byte("<p>body</p>")}}, "view.html")
 	w := httptest.NewRecorder()
 	if err := c.Render(w, r); err != nil {
@@ -212,6 +217,82 @@ func TestResponseHead(t *testing.T) {
 		t.Fatalf("HEAD response = %d %v %q", w.Code, w.Result().Header, w.Body.String())
 	}
 }
+
+func TestResponseRefreshSkipsNotificationLoading(t *testing.T) {
+	for _, mode := range []string{"HTMX", "ordinary", "history restore"} {
+		t.Run(mode, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			if mode != "ordinary" {
+				r.Header.Set(htmx.HeaderRequest, "true")
+			}
+			if mode == "history restore" {
+				r.Header.Set(htmx.HeaderHistoryRestoreRequest, "true")
+			}
+			cm := contentservice.NewContentManager()
+			loads, acknowledgments := 0, 0
+			cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+				loads++
+				return nil, func(http.ResponseWriter) error { acknowledgments++; return nil }, nil
+			}
+			page := NewManagedContent(r, cm)
+			page.HTMX.Response = &htmx.Response{Refresh: true}
+			page.AddContent(fstest.MapFS{"page.html": {Data: []byte("rendered")}}, "page.html")
+			w := httptest.NewRecorder()
+			if err := page.Render(w, r); err != nil {
+				t.Fatal(err)
+			}
+			wantCalls, wantRefresh := 1, ""
+			if mode == "HTMX" {
+				wantCalls, wantRefresh = 0, "true"
+			}
+			if loads != wantCalls || acknowledgments != wantCalls || w.Header().Get(htmx.HeaderRefresh) != wantRefresh {
+				t.Fatalf("loads=%d acknowledgments=%d headers=%v", loads, acknowledgments, w.Header())
+			}
+		})
+	}
+}
+
+func TestNotificationAcknowledgmentPrecedesDelivery(t *testing.T) {
+	for _, deliveryFailure := range []bool{false, true} {
+		t.Run(fmt.Sprint(deliveryFailure), func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			w := &recordingResponse{ResponseRecorder: httptest.NewRecorder()}
+			cm := contentservice.NewContentManager()
+			acknowledged := false
+			cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+				return nil, func(writer http.ResponseWriter) error {
+					if w.committed || w.Body.Len() != 0 {
+						t.Fatal("acknowledgment ran after response commitment")
+					}
+					acknowledged = true
+					writer.Header().Add("Set-Cookie", "notification=; Max-Age=0")
+					return nil
+				}, nil
+			}
+			page := NewManagedContent(r, cm)
+			page.AddContent(fstest.MapFS{"page.html": {Data: []byte("rendered")}}, "page.html")
+			var writer http.ResponseWriter = w
+			failure := errors.New("connection lost")
+			if deliveryFailure {
+				writer = &failedNotificationWriter{ResponseWriter: w, err: failure}
+			}
+			err := page.Render(writer, r)
+			if !acknowledged || (err != nil) != deliveryFailure || deliveryFailure && !errors.Is(err, failure) {
+				t.Fatalf("delivery acknowledgment=%t, error=%v", acknowledged, err)
+			}
+			if w.Result().Header.Get("Set-Cookie") == "" {
+				t.Fatal("acknowledgment cookie missed response headers")
+			}
+		})
+	}
+}
+
+type failedNotificationWriter struct {
+	http.ResponseWriter
+	err error
+}
+
+func (w *failedNotificationWriter) Write([]byte) (int, error) { return 0, w.err }
 
 func TestResponseExplicitNoContent(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/", nil)

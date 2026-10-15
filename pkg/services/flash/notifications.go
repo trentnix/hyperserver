@@ -20,10 +20,40 @@ func AddSuccessNotification(w http.ResponseWriter, r *http.Request, message stri
 
 // GetNotifications retrieves notifications and persists their removal, ending an empty session.
 // A failed removal returns no notifications and leaves the request-local category intact.
+// HEAD returns no notifications and leaves storage unchanged. For rendering, use LoadNotifications.
 func GetNotifications(w http.ResponseWriter, r *http.Request) ([]messages.Notification, error) {
-	msgs, err := getMessages(w, r, categoryNotification)
+	notifications, acknowledge, err := LoadNotifications(r)
 	if err != nil {
 		return nil, err
+	}
+	if acknowledge != nil {
+		if err := acknowledge(w); err != nil {
+			return nil, err
+		}
+	}
+	return notifications, nil
+}
+
+// LoadNotifications reads without removing notifications. Call the returned
+// acknowledgment after rendering succeeds, before writing response headers.
+// It removes only the loaded messages, preserves later additions, and can be
+// retried after failure. Successful acknowledgment is a no-op on subsequent calls.
+// Both loading and acknowledgment belong to one request, not concurrent goroutines.
+// HEAD and missing categories return no notifications or acknowledgment.
+func LoadNotifications(r *http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+	return loadNotifications(r, "")
+}
+
+// LoadErrorNotifications uses LoadNotifications' acknowledgment rules but selects
+// only errors. Other notification types remain queued, including after acknowledgment.
+func LoadErrorNotifications(r *http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+	return loadNotifications(r, messages.NotificationTypeError.String())
+}
+
+func loadNotifications(r *http.Request, messageType string) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+	msgs, acknowledge, err := loadMessagesOfType(r, categoryNotification, messageType)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	var notifications []messages.Notification
@@ -32,7 +62,7 @@ func GetNotifications(w http.ResponseWriter, r *http.Request) ([]messages.Notifi
 		notifications = append(notifications, notification)
 	}
 
-	return notifications, nil
+	return notifications, acknowledge, nil
 }
 
 // addNotification serializes the specified message to a session used explicitly for storing

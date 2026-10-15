@@ -13,7 +13,7 @@ func configureRendering(app *server.ApplicationServer) error {
 		return err
 	}
 	if app.Config.App.RenderNotifications {
-		app.ContentManager.LoadNotifications = flash.GetNotifications
+		app.ContentManager.LoadNotifications = flash.LoadNotifications
 	}
 	return nil
 }

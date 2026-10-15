@@ -188,15 +188,17 @@ if err != nil {
 page.Messages = append(page.Messages, storedMessages...)
 ```
 
-Retrieval removes the category from storage before returning its messages. If removal fails, retrieval returns an error and no messages. Other categories remain available.
+`GetMessages` removes the category from storage before returning its messages. If removal fails, retrieval returns an error and no messages. Other categories remain available. HEAD requests return no messages and leave storage unchanged.
 
 For notifications, use `flash.AddSuccessNotification` or `flash.AddErrorNotification`. A content manager can retrieve notifications before template execution:
 
 ```go
-contentManager.LoadNotifications = flash.GetNotifications
+contentManager.LoadNotifications = flash.LoadNotifications
 ```
 
-Set the loader before serving requests. It must be concurrency-safe. A nil loader skips retrieval but still allows manually supplied `Content.Notifications`. A custom loader can supply notifications from another source. Loader errors stop rendering.
+Set the loader before serving requests. It must be concurrency-safe and must read without removing messages. It returns notifications, an optional `func(http.ResponseWriter) error` acknowledgment, and an error. Rendering acknowledges removal after all templates succeed and before writing headers. HEAD, redirects, HTMX refreshes, bodyless responses, and failed templates preserve notifications. Loading or acknowledgment errors stop rendering. A nil loader skips retrieval but still allows `Content.Notifications`. A nil acknowledgment needs no removal. Successful acknowledgment cannot guarantee browser receipt or exactly-once delivery.
+
+For a page that displays only errors, use `flash.LoadErrorNotifications`. Its acknowledgment removes only the loaded errors. Other notification types and messages added later remain queued.
 
 For browser console messages, use `flash.AddSystemDebugMessage`, `flash.AddSystemLogMessage`, `flash.AddSystemInfoMessage`, `flash.AddSystemWarningMessage`, or `flash.AddSystemErrorMessage`. Retrieve them with `flash.GetSystemMessages(w, r)` and assign them to `Content.SystemMessages`.
 

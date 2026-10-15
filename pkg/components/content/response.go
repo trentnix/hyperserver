@@ -15,7 +15,9 @@ import (
 // and rendering. HTMX.Response and OutOfBand apply only to HTMX requests.
 // For HTMX, NoContent skips rendering and notification loading and sends HTTP 204.
 // Otherwise, templates and out-of-band updates finish before response headers or
-// body are written. Notification loaders may set cookies before rendering.
+// body are written. Notifications are acknowledged after rendering succeeds and
+// before headers are written. HEAD and empty bodies do not acknowledge notifications.
+// HTMX refresh responses skip notification loading because the browser discards their body.
 // Delivery errors can follow partial writes. Call before committing the response.
 // Use http.ResponseWriter directly for streaming and other specialized responses.
 // History restoration renders a full page without fragment response metadata.
@@ -50,16 +52,24 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("content response status %d does not allow a body", status)
 	}
 
-	if view.ContentManager != nil && view.ContentManager.LoadNotifications != nil {
-		notifications, err := view.ContentManager.LoadNotifications(w, r)
+	var acknowledge func(http.ResponseWriter) error
+	refresh := view.IsHtmx() && metadata != nil && metadata.Refresh
+	if r.Method != http.MethodHead && !refresh && view.ContentManager != nil && view.ContentManager.LoadNotifications != nil {
+		notifications, ack, err := view.ContentManager.LoadNotifications(r)
 		if err != nil {
 			return err
 		}
 		view.Notifications = append(append([]messages.Notification(nil), c.Notifications...), notifications...)
+		acknowledge = ack
 	}
 	body, err := view.render()
 	if err != nil {
 		return err
+	}
+	if body.Len() > 0 && acknowledge != nil {
+		if err := acknowledge(w); err != nil {
+			return err
+		}
 	}
 
 	view.applyHeaders(w)

@@ -37,9 +37,9 @@ func TestSiteInitializationPreservesRenderingOverrides(t *testing.T) {
 		cm.HandleMessage = func(http.ResponseWriter, *http.Request, string) { calls = append(calls, "message") }
 		cm.HandleError = func(http.ResponseWriter, *http.Request, string, error, int) { calls = append(calls, "error") }
 		cm.HandleNotFound = func(http.ResponseWriter, *http.Request) { calls = append(calls, "not-found") }
-		cm.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+		cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 			calls = append(calls, "notifications")
-			return nil, nil
+			return nil, nil, nil
 		}
 
 		module := Module(nil, nil).New().(*SiteModule)
@@ -61,7 +61,7 @@ func TestSiteInitializationPreservesRenderingOverrides(t *testing.T) {
 		cm.HandleMessage(w, r, "message")
 		cm.HandleError(w, r, "error", nil, http.StatusInternalServerError)
 		cm.HandleNotFound(w, r)
-		if _, err := cm.LoadNotifications(w, r); err != nil {
+		if _, _, err := cm.LoadNotifications(r); err != nil {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(calls, []string{"message", "error", "not-found", "notifications"}) {

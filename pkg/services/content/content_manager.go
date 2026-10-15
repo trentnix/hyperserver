@@ -64,10 +64,13 @@ type (
 		// AppTitle is the default page title.
 		AppTitle string
 
-		// LoadNotifications optionally supplies notifications before template execution.
-		// Configure it before serving requests. It must be concurrency-safe. Nil skips
-		// loading. Errors stop rendering without appending the returned notifications.
-		LoadNotifications func(http.ResponseWriter, *http.Request) ([]messages.Notification, error)
+		// LoadNotifications reads notifications without removing them. It can return
+		// a request-local acknowledgment to persist removal after templates succeed,
+		// before response headers are written. Nil acknowledgment needs no removal.
+		// HEAD, redirects, HTMX refreshes, and 204 responses skip loading.
+		// Errors stop rendering.
+		// Configure before serving requests. The loader must be concurrency-safe.
+		LoadNotifications func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error)
 	}
 )
 

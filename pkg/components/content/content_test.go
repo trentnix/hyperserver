@@ -29,9 +29,9 @@ type failingTemplateData struct{ err error }
 
 func TestTemplateRenderingDoesNotLoadNotifications(t *testing.T) {
 	cm := contentservice.NewContentManager()
-	cm.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+	cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 		t.Fatal("template rendering must not call the notification loader")
-		return nil, nil
+		return nil, nil, nil
 	}
 	c := NewManagedContent(httptest.NewRequest(http.MethodGet, "/", nil), cm)
 	c.Notifications = []messages.Notification{messages.NewNotification("<provided>", messages.NotificationTypeSuccess)}
@@ -215,8 +215,11 @@ func TestRenderReportsNotificationReadFailure(t *testing.T) {
 			r.Header.Set("HX-Request", "true")
 		}
 		cm := contentservice.NewContentManager()
-		cm.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
-			return []messages.Notification{messages.NewNotification("must not render", messages.NotificationTypeError)}, failure
+		cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+			return []messages.Notification{messages.NewNotification("must not render", messages.NotificationTypeError)}, func(http.ResponseWriter) error {
+				t.Fatal("failed loading acknowledged notifications")
+				return nil
+			}, failure
 		}
 		c := NewManagedContent(r, cm)
 		c.ResponseStatusCode = http.StatusCreated
@@ -243,12 +246,12 @@ func TestRenderLoadsNotificationsWithoutSessionServices(t *testing.T) {
 				cm := contentservice.NewContentManager()
 				calls := 0
 				if load {
-					cm.LoadNotifications = func(gotW http.ResponseWriter, gotR *http.Request) ([]messages.Notification, error) {
+					cm.LoadNotifications = func(gotR *http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 						calls++
-						if gotW != w || gotR != r {
-							t.Error("loader did not receive the render's request and writer")
+						if gotR != r {
+							t.Error("loader did not receive the render's request")
 						}
-						return []messages.Notification{messages.NewNotification("<remote>", messages.NotificationTypeSuccess)}, nil
+						return []messages.Notification{messages.NewNotification("<remote>", messages.NotificationTypeSuccess)}, nil, nil
 					}
 				}
 				page := NewManagedContent(r, cm)

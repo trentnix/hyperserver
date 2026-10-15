@@ -133,7 +133,7 @@ The reference application defaults to `10s` for `app.initializationTimeout` and 
 
 The site and authentication modules embed their templates and static assets. A built binary does not need the repository beside it. Rebuild to apply changes to bundled assets.
 
-Application setup selects shared rendering defaults before module initialization. The reference application's [rendering setup](cmd/web/rendering.go) calls `site.ConfigureRendering` for layouts, navigation, response handlers, and redirect URLs. It selects `flash.GetNotifications` only when `app.renderNotifications` is enabled. The stateless application calls `pages.ConfigureRendering` for its layouts. Module initialization does not install either policy.
+Application setup selects shared rendering defaults before module initialization. The reference application's [rendering setup](cmd/web/rendering.go) calls `site.ConfigureRendering` for layouts, navigation, response handlers, and redirect URLs. It selects `flash.LoadNotifications` only when `app.renderNotifications` is enabled. The stateless application calls `pages.ConfigureRendering` for its layouts. Module initialization does not install either policy.
 
 Apply overrides after selecting defaults and before serving. For example:
 
@@ -239,7 +239,7 @@ Set `page.RedirectURL = "/saved"` for an ordinary 303 redirect or an HTMX 200 wi
 
 For an HTMX response that must not swap content, set `page.HTMX.Response = &htmx.Response{NoContent: true, Trigger: "saved"}`. It sends 204 with the event header and skips templates and notification retrieval. Ordinary requests still render their page. Setting `ResponseStatusCode` to 204 skips the body for both request types. Use `RedirectURL` for redirects, not a 3xx `ResponseStatusCode`.
 
-Notification loading can change cookies before rendering. A template failure leaves response content unwritten, but does not undo notification retrieval or application changes. A delivery error can occur after part of the body was sent. Direct `http.Handler` and `http.ResponseWriter` use remains available for streaming, downloads, and other specialized responses.
+Template failure leaves response content unwritten and notifications queued. Rendering does not undo application changes. A delivery error can occur after part of the body was sent. Direct `http.Handler` and `http.ResponseWriter` use remains available for streaming, downloads, and other specialized responses.
 
 The [contact form](modules/site/templates/html/partials/contact-form.html) demonstrates ordinary `method="post" action="/contact"` submission alongside HTMX. Validation and storage failures redisplay escaped input. Successful writes clear the form and show an acknowledgment without a redirect. The [workflow tests](cmd/web/form_workflow_test.go) cover both modes, storage failure and retry, and registration/login redirects. Native browser submission is also tested without HTMX.
 
@@ -247,7 +247,7 @@ The [contact form](modules/site/templates/html/partials/contact-form.html) demon
 
 Message values in `pkg/components/messages` need no session service. Applications can supply `Content.Notifications` directly or set `ContentManagerService.LoadNotifications` before serving requests. A nil loader skips retrieval. Loader errors stop rendering.
 
-For session-backed notifications, use [flash.GetNotifications](pkg/services/flash/notifications.go) as the loader. The reference site selects that loader when `app.renderNotifications` is enabled, unless the application already supplied one. See the [message examples](pkg/components/readme.md#messages) for storage helpers and direct message values.
+For session-backed notifications, use [flash.LoadNotifications](pkg/services/flash/notifications.go). The loader returns notifications and an optional acknowledgment callback. Rendering calls the acknowledgment after all templates succeed, before writing headers. HEAD, redirects, HTMX refreshes, 204 responses, empty bodies, and template failures leave notifications queued. Removal errors stop the response. Templates must display the loaded notifications. Network failures and concurrent requests can still lose or repeat messages. Browser receipt and exactly-once delivery are not guaranteed. See the [message examples](pkg/components/readme.md#messages).
 
 ### Rendered-response caching
 

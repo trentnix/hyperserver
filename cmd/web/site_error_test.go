@@ -120,6 +120,10 @@ func TestHTTPSiteQueuedErrors(t *testing.T) {
 		})
 		for _, htmx := range []bool{false, true} {
 			h.request(http.MethodPost, "/test/queue-errors", nil, htmx)
+			head := h.request(http.MethodHead, "/error", nil, htmx)
+			if head.Code != http.StatusOK || head.Body.Len() != 0 || len(head.Result().Cookies()) != 0 {
+				t.Fatal("HEAD consumed queued error notifications")
+			}
 			w := h.request(http.MethodGet, "/error", nil, htmx)
 			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Queued error") || strings.Contains(w.Body.String(), "Queued success") {
 				t.Fatalf("queued errors: status=%d body=%s", w.Code, w.Body.String())
@@ -127,6 +131,16 @@ func TestHTTPSiteQueuedErrors(t *testing.T) {
 			w = h.request(http.MethodGet, "/error", nil, htmx)
 			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "No errors were specified.") {
 				t.Fatalf("empty error queue: status=%d body=%s", w.Code, w.Body.String())
+			}
+			if len(w.Result().Cookies()) != 0 {
+				t.Fatal("empty error queue modified success notifications")
+			}
+			next := h.request(http.MethodGet, "/", nil, htmx)
+			if next.Code != http.StatusOK || !strings.Contains(next.Body.String(), "Queued success") || strings.Contains(next.Body.String(), "Queued error") {
+				t.Fatalf("error page discarded undisplayed notifications: %d %q", next.Code, next.Body.String())
+			}
+			if again := h.request(http.MethodGet, "/", nil, htmx); strings.Contains(again.Body.String(), "Queued success") {
+				t.Fatal("success notification was not removed after display")
 			}
 		}
 
@@ -146,10 +160,14 @@ func TestHTTPPageRenderFailureReturnsOnlyErrorPage(t *testing.T) {
 			t.Fatal(err)
 		}
 		cm := *h.app.ContentManager
-		cm.LoadNotifications = nil
 		cm.Layouts = map[string][]content.TemplatePath{
 			"page": {testTemplateFile(t, path)}, "htmx": {testTemplateFile(t, path)},
 		}
+		h.app.Web.HandleFunc("POST /test/queue-render-notice", func(w http.ResponseWriter, r *http.Request) {
+			if err := flash.AddSuccessNotification(w, r, "Retained notification"); err != nil {
+				t.Fatal(err)
+			}
+		})
 		h.app.Web.HandleFunc("GET /test/render-failure", func(w http.ResponseWriter, r *http.Request) {
 			page := content.NewManagedContent(r, &cm)
 			page.ResponseStatusCode = http.StatusCreated
@@ -160,6 +178,7 @@ func TestHTTPPageRenderFailureReturnsOnlyErrorPage(t *testing.T) {
 			}
 		})
 		for _, htmx := range []bool{false, true} {
+			h.request(http.MethodPost, "/test/queue-render-notice", nil, htmx)
 			w := h.request(http.MethodGet, "/test/render-failure", nil, htmx)
 			body := w.Body.String()
 			if w.Code != http.StatusInternalServerError || !strings.Contains(body, "Unable to display this page") || strings.Contains(body, "partial-success-output") || strings.Contains(body, path) {
@@ -170,6 +189,16 @@ func TestHTTPPageRenderFailureReturnsOnlyErrorPage(t *testing.T) {
 			}
 			if w.Header().Get("HX-Redirect") != "" || w.Header().Get("Content-Length") != "" || w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatalf("error inherited successful-render headers: %v", w.Header())
+			}
+			if len(w.Result().Cookies()) != 0 {
+				t.Fatal("failed page changed notification cookies")
+			}
+			next := h.request(http.MethodGet, "/", nil, htmx)
+			if !strings.Contains(next.Body.String(), "Retained notification") {
+				t.Fatal("template failure discarded the notification")
+			}
+			if again := h.request(http.MethodGet, "/", nil, htmx); strings.Contains(again.Body.String(), "Retained notification") {
+				t.Fatal("successful page did not remove the notification")
 			}
 		}
 	})

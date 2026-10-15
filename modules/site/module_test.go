@@ -115,9 +115,9 @@ func TestSiteLeavesNotificationSelectionToApplication(t *testing.T) {
 			}
 			customCalled := false
 			if mode == "custom" {
-				app.ContentManager.LoadNotifications = func(http.ResponseWriter, *http.Request) ([]messages.Notification, error) {
+				app.ContentManager.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 					customCalled = true
-					return nil, nil
+					return nil, nil, nil
 				}
 			}
 			module := Module(func(context.Context) (ContactRepository, error) { return new(memoryContacts), nil }, nil).New()
@@ -134,7 +134,7 @@ func TestSiteLeavesNotificationSelectionToApplication(t *testing.T) {
 			if load == nil {
 				t.Fatal("enabled notifications did not install a loader")
 			}
-			_, err = load(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+			_, _, err = load(httptest.NewRequest(http.MethodGet, "/", nil))
 			if mode == "custom" && (err != nil || !customCalled) {
 				t.Fatal("site replaced the application's notification loader")
 			}

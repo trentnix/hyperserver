@@ -12,22 +12,16 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// Error displays queued error notifications with HTTP 200. Notification retrieval
-// or rendering failures return 500. Current failures must use HandleError instead.
+// Error displays queued error notifications with HTTP 200. Loading, removal, or
+// rendering failures return 500. Current failures must use HandleError instead.
 func (m *SiteModule) Error(w http.ResponseWriter, r *http.Request) {
-	notifications, err := flash.GetNotifications(w, r)
+	notifications, acknowledge, err := flash.LoadErrorNotifications(r)
 	if err != nil {
 		m.HandleError(w, r, "Unable to load error notifications", err, http.StatusInternalServerError)
 		return
 	}
 
-	var errorMessages []messages.Notification
-	for _, n := range notifications {
-		if n.IsError() {
-			errorMessages = append(errorMessages, n)
-		}
-	}
-	m.renderError(w, r, errorMessages, http.StatusOK)
+	m.renderError(w, r, notifications, http.StatusOK, acknowledge)
 }
 
 // HandleError logs err and renders only the public message with httpStatus.
@@ -44,10 +38,10 @@ func (m *pageRenderer) HandleError(w http.ResponseWriter, r *http.Request, messa
 	if message == "" {
 		message = http.StatusText(httpStatus)
 	}
-	m.renderError(w, r, []messages.Notification{messages.NewNotification(message, messages.NotificationTypeError)}, httpStatus)
+	m.renderError(w, r, []messages.Notification{messages.NewNotification(message, messages.NotificationTypeError)}, httpStatus, nil)
 }
 
-func (m *pageRenderer) renderError(w http.ResponseWriter, r *http.Request, notifications []messages.Notification, status int) {
+func (m *pageRenderer) renderError(w http.ResponseWriter, r *http.Request, notifications []messages.Notification, status int, acknowledge func(http.ResponseWriter) error) {
 	// Error responses must still render when notification storage is unavailable.
 	cm := *m.contentManager
 	cm.LoadNotifications = nil
@@ -63,6 +57,12 @@ func (m *pageRenderer) renderError(w http.ResponseWriter, r *http.Request, notif
 	if err := page.Render(buffer, r); err != nil {
 		util.HttpError(w, r, "Unable to display the error page", err, http.StatusInternalServerError)
 		return
+	}
+	if buffer.Len() > 0 && acknowledge != nil {
+		if err := acknowledge(w); err != nil {
+			util.HttpError(w, r, "Unable to clear error notifications", err, http.StatusInternalServerError)
+			return
+		}
 	}
 	util.AddVary(w.Header(), buffer.Header().Values("Vary")...)
 
