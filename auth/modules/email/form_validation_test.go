@@ -2,6 +2,7 @@ package auth
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/auth/password"
@@ -40,8 +41,11 @@ func TestPasswordFormValidation(t *testing.T) {
 		{name: "both required", wantField: true, wantMatch: form.RequiredMessage},
 		{name: "password required", match: strong, wantField: true, wantMatch: "Passwords do not match."},
 		{name: "confirmation required", value: strong, wantMatch: form.RequiredMessage},
-		{name: "weak confirmation", value: strong, match: "short", wantMatch: "Password values must contain at least 8 characters, one letter, one number, and one special character"},
+		{name: "weak confirmation", value: strong, match: "short", wantMatch: "password must contain at least 8 characters (Unicode code points), an ASCII letter, a digit, and one of @$!%*?&"},
 		{name: "mismatch", value: strong, match: "Different1!", wantMatch: "Passwords do not match."},
+		{name: "oversized password", value: strings.Repeat("a", 73), match: strong, wantField: true, wantMatch: "Passwords do not match."},
+		{name: "oversized confirmation", value: strong, match: strings.Repeat("a", 73), wantMatch: "password must not exceed 72 bytes in UTF-8"},
+		{name: "invalid UTF-8 confirmation", value: strong, match: "Password1!\xff", wantMatch: "password must contain valid UTF-8 text"},
 	} {
 		for _, f := range []form.FormComponent{
 			&RegisterForm{Email: "person@example.com", Password: tc.value, PasswordMatch: tc.match},
@@ -82,6 +86,13 @@ func TestPasswordFormsUseSharedRules(t *testing.T) {
 		{"Password1#", false},
 		{"Password1&", true},
 		{"密码密码1!", false},
+		{"a1!界界界界", false},
+		{"a1!界界界界界", true},
+		{strings.Repeat("a", 69) + "a1!", true},
+		{strings.Repeat("a", 70) + "a1!", false},
+		{strings.Repeat("界", 23) + "a1!", true},
+		{strings.Repeat("界", 23) + "aa1!", false},
+		{"Password1!\xff", false},
 	} {
 		value := tc.value
 		if valid := password.ValidatePasswordComplexity(value) == nil; valid != tc.valid {
@@ -128,7 +139,7 @@ func TestCurrentPasswordValidation(t *testing.T) {
 	}
 
 	// Login must not apply new-password rules to an existing account's password.
-	for _, value := range []string{"", "legacy", "Password1!"} {
+	for _, value := range []string{"", "legacy", "Password1!", "a1!界界界界"} {
 		f := &LoginForm{Email: "person@example.com", Password: value}
 		if errors := f.Validate(); len(errors) != 0 {
 			t.Errorf("login password %q rejected before authentication: %v", value, errors)

@@ -1124,7 +1124,7 @@ func TestHTTPRegistrationRejectsInvalidForm(t *testing.T) {
 					name, email, password, confirmation, message string
 				}{
 					{"mismatch", "person@example.invalid", "TestPassword1!", "DifferentPassword1!", "Passwords do not match."},
-					{"weak password", "person@example.invalid", "short", "short", "Password values must contain at least 8 characters"},
+					{"weak password", "person@example.invalid", "short", "short", "password must contain at least 8 characters"},
 					{"invalid email", "not-an-email", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
 					{"domain slash", "person@foo/bar.com", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
 					{"domain leading hyphen", "person@-example.com", "TestPassword1!", "TestPassword1!", "Enter a valid email address."},
@@ -1446,7 +1446,7 @@ func TestHTTPResetRejectsInvalidPassword(t *testing.T) {
 		path := "/auth/reset/email?token=" + url.QueryEscape(token.Token)
 		for _, tc := range []struct{ password, confirmation, message string }{
 			{"NewPassword1!", "DifferentPassword1!", "Passwords do not match."},
-			{"short", "short", "Password values must contain at least 8 characters"},
+			{"short", "short", "password must contain at least 8 characters"},
 			{"", "", "This field is required."},
 		} {
 			t.Run(tc.message, func(t *testing.T) {
@@ -1485,7 +1485,7 @@ func TestHTTPChangeRejectsInvalidPassword(t *testing.T) {
 		}
 		for _, tc := range []struct{ old, password, confirmation, message string }{
 			{"TestPassword1!", "NewPassword1!", "DifferentPassword1!", "Passwords do not match."},
-			{"TestPassword1!", "short", "short", "Password values must contain at least 8 characters"},
+			{"TestPassword1!", "short", "short", "password must contain at least 8 characters"},
 			{"TestPassword1!", "TestPassword1!", "TestPassword1!", "New passwords must be different from the previous password."},
 			{"", "NewPassword1!", "NewPassword1!", "This field is required."},
 		} {

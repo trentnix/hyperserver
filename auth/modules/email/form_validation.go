@@ -68,7 +68,7 @@ func passwordError(value string) string {
 		return form.RequiredMessage
 	}
 	if err := password.ValidatePasswordComplexity(value); err != nil {
-		return "Password values must contain at least 8 characters, one letter, one number, and one special character"
+		return err.Error()
 	}
 	return ""
 }

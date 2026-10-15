@@ -63,7 +63,7 @@ func TestHTTPResetPasswordPolicy(t *testing.T) {
 	}
 }
 
-func TestHTTPResetHashingFailurePreservesToken(t *testing.T) {
+func TestHTTPResetOversizedPasswordPreservesToken(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
 		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
@@ -74,19 +74,17 @@ func TestHTTPResetHashingFailurePreservesToken(t *testing.T) {
 			t.Fatal(err)
 		}
 		path := "/auth/reset/email?token=" + url.QueryEscape(token.Token)
-		// This satisfies form complexity but exceeds bcrypt's 72-byte limit.
+		// This satisfies the minimum and character rules but exceeds the byte limit.
 		tooLong := strings.Repeat("a", 70) + "1!a"
 		for _, htmx := range []bool{false, true} {
 			w := h.request(http.MethodPost, path, url.Values{"password": {tooLong}, "passwordMatch": {tooLong}}, htmx)
-			if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Unable to reset password") {
-				t.Fatalf("hashing failure response=%d %s", w.Code, w.Body.String())
-			}
+			assertFormRejected(t, w, "password must not exceed 72 bytes in UTF-8")
 			h.assertUserUnchanged(t, u)
 			if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-reset"); err != nil {
-				t.Fatalf("hashing failure consumed token: %v", err)
+				t.Fatalf("invalid password consumed token: %v", err)
 			}
 			if strings.Contains(h.logs.String(), tooLong) || strings.Contains(h.logs.String(), token.Token) {
-				t.Fatal("hashing failure logged credentials")
+				t.Fatal("invalid password logged credentials")
 			}
 		}
 		w := h.request(http.MethodPost, path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, true)
