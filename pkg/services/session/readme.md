@@ -75,7 +75,7 @@ Startup checks writable `id` and `session` columns with text affinity and `expir
 
 First startup executes the [initial migration](sqlite/migrations/000001_sessions.up.sql), substitutes the configured table and index names, and records version 1. Version metadata uses `hyperserver_session_version_<table>`. For example, `sessions` uses `hyperserver_session_version_sessions`. Different tables have independent versions. SQLite's identifier case rules apply to both table and metadata names.
 
-Later migrations run explicitly with the [separately installed CLI](../../../readme.md#account-schema-migrations). For the default `sessions` table, run from the repository root:
+Later migrations run explicitly with the [separately installed CLI](../../../docs/storage.md#account-schema-migrations). For the default `sessions` table, run from the repository root:
 
 ```sh
 migrate -path pkg/services/session/sqlite/migrations \

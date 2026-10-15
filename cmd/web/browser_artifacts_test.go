@@ -288,6 +288,51 @@ func TestBrowserFailureArtifacts(t *testing.T) {
 	read("firefox.log")
 }
 
+func TestBrowserSuccessArtifacts(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("checks Linux process diagnostics")
+	}
+	root := t.TempDir()
+	t.Setenv("HS_TEST_BROWSER_ARTIFACTS", root)
+	browser := filepath.Join(t.TempDir(), "fake-firefox")
+	if err := os.WriteFile(browser, []byte("#!/bin/sh\nexec sleep 60\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HS_TEST_FIREFOX", browser)
+	ready := make(chan struct{})
+	close(ready)
+	result := make(chan string, 1)
+	result <- "PASS"
+	runBrowser(t, "http://127.0.0.1:1", ready, result, func() string { return "GET /successful-check" })
+
+	dirs, err := os.ReadDir(root)
+	if err != nil || len(dirs) != 1 {
+		t.Fatalf("artifact directories=%v, error=%v", dirs, err)
+	}
+	dir := filepath.Join(root, dirs[0].Name())
+	completed, err := os.ReadFile(filepath.Join(dir, "completed.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Captured after browser checks at", "Browser thread waits:", "/io (error: <nil>)", "read_bytes:", "write_bytes:"} {
+		if !strings.Contains(string(completed), want) {
+			t.Errorf("success snapshot missing %q:\n%s", want, completed)
+		}
+	}
+	timing, err := os.ReadFile(filepath.Join(dir, "timing.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, start, found := strings.Cut(string(timing), "Started at: ")
+	start, _, _ = strings.Cut(start, "\n")
+	if _, err := time.Parse(time.RFC3339Nano, start); !found || err != nil {
+		t.Fatalf("missing or invalid launch timestamp: %s", timing)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "before-stop.txt")); !os.IsNotExist(err) {
+		t.Fatalf("successful checks must not create a failure snapshot: %v", err)
+	}
+}
+
 func TestBrowserWaitSnapshotUnavailableProcess(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("checks Linux process diagnostics")

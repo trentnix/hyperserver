@@ -173,7 +173,7 @@ func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan s
 	}()
 
 	readyAfter, err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second)
-	timing := fmt.Sprintf("Browser PID: %d\nReadiness observed after: %s (zero means not observed)\nElapsed: %s\nResult: %v\n", cmd.Process.Pid, readyAfter, time.Since(started), err)
+	timing := fmt.Sprintf("Browser PID: %d\nStarted at: %s\nReadiness observed after: %s (zero means not observed)\nElapsed: %s\nResult: %v\n", cmd.Process.Pid, started.Format(time.RFC3339Nano), readyAfter, time.Since(started), err)
 	writeBrowserArtifact(t, artifacts, "timing.txt", timing)
 	t.Log(timing)
 	if err != nil {
@@ -182,6 +182,11 @@ func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan s
 		writeBrowserArtifact(t, artifacts, "before-stop.txt", diagnostics)
 		t.Fatalf("%v\n%s", err, diagnostics)
 	}
+
+	// Compare successful first and later launches with failure snapshots. Capture
+	// after the checks so diagnostic commands cannot consume their deadline.
+	writeBrowserArtifact(t, artifacts, "completed.txt", fmt.Sprintf("Captured after browser checks at %s\n%s",
+		time.Now().Format(time.RFC3339Nano), browserWaitSnapshot(cmd.Process.Pid)))
 }
 
 // Readiness means the page's JavaScript has started, not just that Firefox exists.
