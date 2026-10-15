@@ -18,6 +18,8 @@ Pass initialized accounts and sessions to `auth.Module(accounts, sessions, provi
 
 For mail, pass `smtp.NewSender(cfg.Mail)` to `messaging.NewMailClientWithSender`, then supply the client to modules. [Mail setup](../cmd/web/mail.go) and [module wiring](../cmd/web/site_modules.go) show the calls. Construction does not contact SMTP. Consumers requiring delivery must validate configuration.
 
+The SMTP sender converts internationalized domains to IDNA ASCII form for delivery without changing the stored address or mailbox name. Non-ASCII mailbox names require the server to advertise `SMTPUTF8` and `8BITMIME`, as required by [RFC 6531](https://www.rfc-editor.org/rfc/rfc6531.html#section-3.2). Missing support returns an error before message submission. Unicode display names, subjects, and HTML bodies use MIME encoding and do not require those extensions on their own. A successful send means the SMTP server accepted the message, not that it reached the inbox.
+
 Register owned services with `app.OnShutdown` before initializing consumers. Supplied services keep their existing owners. [Reference session setup](../cmd/web/sessions.go) registers cleanup for managers it creates or when `ownSessions` transfers ownership.
 
 `app.Run(ctx, prepare)` coordinates serving and cleanup. The preparation function receives a context and returns a configured `*http.Server`, a `net.Listener`, and an error. It must not start serving. Run closes resources on startup failure and drains requests before cleanup on cancellation. See [shutdown behavior](#module-cleanup) and the [stateless runner](../examples/stateless/main.go).

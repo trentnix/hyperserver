@@ -6,14 +6,20 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"mime"
+	"mime/quotedprintable"
 	"net"
 	mailaddr "net/mail"
 	netsmtp "net/smtp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
+
+	"golang.org/x/net/idna"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -56,8 +62,30 @@ func smtpMailbox(address *mailaddr.Address) string {
 	return strings.TrimSuffix(strings.TrimPrefix(formatted, "<"), ">")
 }
 
+// smtpAddress converts only the transport domain. Keep the local part unchanged,
+// including its case and Unicode normalization, regardless of account lookup rules.
+func smtpAddress(address *mailaddr.Address) (*mailaddr.Address, error) {
+	separator := strings.LastIndexByte(address.Address, '@')
+	domain := address.Address[separator+1:]
+	if !containsNonASCII(domain) {
+		return address, nil
+	}
+	profile := idna.New(idna.MapForLookup(), idna.Transitional(false),
+		idna.BidiRule(), idna.VerifyDNSLength(true), idna.CheckHyphens(false))
+	domain, err := profile.ToASCII(domain)
+	if err != nil {
+		return nil, errors.New("smtp: invalid internationalized address domain")
+	}
+	return &mailaddr.Address{Name: address.Name, Address: address.Address[:separator+1] + domain}, nil
+}
+
+func containsNonASCII(value string) bool {
+	return strings.ContainsFunc(value, func(r rune) bool { return r >= utf8.RuneSelf })
+}
+
 // Send submits one message over SMTP within the configured timeout.
-// It closes the connection when ctx is canceled.
+// It closes the connection when ctx is canceled. Internationalized local parts
+// require SMTPUTF8 and 8BITMIME support. Domains use IDNA ASCII form for delivery.
 func (m *Sender) Send(ctx context.Context, email messaging.MailMessage) (err error) {
 	if err := m.ValidateConfig(); err != nil {
 		return err
@@ -65,6 +93,14 @@ func (m *Sender) Send(ctx context.Context, email messaging.MailMessage) (err err
 	from, to, err := email.ValidateHeaders()
 	if err != nil {
 		return err
+	}
+	from, err = smtpAddress(from)
+	if err != nil {
+		return fmt.Errorf("email from: %w", err)
+	}
+	to, err = smtpAddress(to)
+	if err != nil {
+		return fmt.Errorf("email to: %w", err)
 	}
 
 	cfg := m.config
@@ -126,6 +162,13 @@ func (m *Sender) Send(ctx context.Context, email messaging.MailMessage) (err err
 		}
 	}
 
+	if containsNonASCII(from.Address) || containsNonASCII(to.Address) {
+		for _, extension := range []string{"SMTPUTF8", "8BITMIME"} {
+			if ok, _ := client.Extension(extension); !ok {
+				return fmt.Errorf("smtp: internationalized addresses require %s support", extension)
+			}
+		}
+	}
 	if ok, _ := client.Extension("AUTH"); !ok {
 		return errors.New("smtp: server doesn't support AUTH")
 	}
@@ -150,10 +193,16 @@ func (m *Sender) Send(ctx context.Context, email messaging.MailMessage) (err err
 		"Subject: " + mime.QEncoding.Encode("UTF-8", email.Subject),
 		"MIME-Version: 1.0",
 		`Content-Type: text/html; charset="UTF-8"`,
+		"Content-Transfer-Encoding: quoted-printable",
 	}
-	msg := strings.Join(headers, "\r\n") + "\r\n\r\n" + email.Body
-
-	if _, err := writer.Write([]byte(msg)); err != nil {
+	if _, err := io.WriteString(writer, strings.Join(headers, "\r\n")+"\r\n\r\n"); err != nil {
+		return err
+	}
+	encoded := quotedprintable.NewWriter(writer)
+	if _, err := io.WriteString(encoded, email.Body); err != nil {
+		return err
+	}
+	if err := encoded.Close(); err != nil {
 		return err
 	}
 	if err := writer.Close(); err != nil {

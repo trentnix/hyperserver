@@ -13,9 +13,11 @@ import (
 	"io"
 	"math/big"
 	"mime"
+	"mime/quotedprintable"
 	"net"
 	mailaddr "net/mail"
 	"net/textproto"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -101,14 +103,16 @@ func smtpTestClient(t *testing.T, serve func(net.Conn) error) (*testMailClient, 
 }
 
 type smtpTestExchange struct {
-	from, to     string
-	failStage    string
-	failCode     int
-	stallStage   string
-	onStall      func()
-	startTLS     bool
-	skipGreeting bool
-	message      string
+	from, to       string
+	extensions     []string
+	stopAfterHello bool
+	failStage      string
+	failCode       int
+	stallStage     string
+	onStall        func()
+	startTLS       bool
+	skipGreeting   bool
+	message        string
 }
 
 func (s *smtpTestExchange) serve(conn net.Conn) error {
@@ -120,11 +124,23 @@ func (s *smtpTestExchange) serve(conn net.Conn) error {
 	if to == "" {
 		to = "to@example.invalid"
 	}
+	hello := "250-localhost\r\n"
+	mailOptions := ""
+	for _, extension := range s.extensions {
+		hello += "250-" + extension + "\r\n"
+	}
+	hello += "250 AUTH PLAIN"
+	if slices.Contains(s.extensions, "8BITMIME") {
+		mailOptions += " BODY=8BITMIME"
+	}
+	if slices.Contains(s.extensions, "SMTPUTF8") {
+		mailOptions += " SMTPUTF8"
+	}
 	steps := []struct{ stage, command, response string }{
 		{"greeting", "", "220 localhost ready"},
-		{"hello", "EHLO localhost", "250-localhost\r\n250 AUTH PLAIN"},
+		{"hello", "EHLO localhost", hello},
 		{"auth", "AUTH PLAIN " + base64.StdEncoding.EncodeToString([]byte("\x00test\x00test")), "235 authenticated"},
-		{"mail", "MAIL FROM:<" + from + ">", "250 sender accepted"},
+		{"mail", "MAIL FROM:<" + from + ">" + mailOptions, "250 sender accepted"},
 		{"recipient", "RCPT TO:<" + to + ">", "250 recipient accepted"},
 		{"data", "DATA", "354 send message"},
 		{"body", "", "250 queued"},
@@ -178,6 +194,13 @@ func (s *smtpTestExchange) serve(conn net.Conn) error {
 		if err := peer.PrintfLine("%s", step.response); err != nil {
 			return err
 		}
+		if step.stage == "hello" && s.stopAfterHello {
+			command, err := peer.ReadLine()
+			if !errors.Is(err, io.EOF) {
+				return fmt.Errorf("expected disconnect before AUTH or MAIL, got %q: %v", command, err)
+			}
+			return nil
+		}
 	}
 	if s.startTLS {
 		if s.onStall != nil {
@@ -225,7 +248,7 @@ func TestSMTPDeliveryAndRejections(t *testing.T) {
 					t.Fatalf("%s=%v, error=%v", field, address, err)
 				}
 			}
-			body, err := io.ReadAll(message.Body)
+			body, err := io.ReadAll(quotedprintable.NewReader(message.Body))
 			if err != nil || string(body) != "<p>Hello &amp; welcome</p>\n" {
 				t.Fatalf("body=%q, error=%v", body, err)
 			}
@@ -419,98 +442,120 @@ func TestSMTPEncryptedDelivery(t *testing.T) {
 
 	for _, port := range []uint16{587, 465, 2465} {
 		for _, version := range []uint16{tls.VersionTLS12, tls.VersionTLS13} {
-			t.Run(fmt.Sprintf("port=%d/TLS=%x", port, version), func(t *testing.T) {
-				// TCP buffering permits complete TLS exchanges, including close alerts.
-				listener, err := net.Listen("tcp", "127.0.0.1:0")
-				if err != nil {
-					t.Fatal(err)
-				}
-				t.Cleanup(func() { listener.Close() })
-				exchange := &smtpTestExchange{skipGreeting: port == 587}
-				done := make(chan error, 1)
-				go func() {
-					done <- func() error {
-						conn, err := listener.Accept()
-						if err != nil {
-							return err
-						}
-						defer conn.Close()
-						if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
-							return err
-						}
-						if port == 587 {
-							peer := textproto.NewConn(conn)
-							if err := peer.PrintfLine("220 localhost ready"); err != nil {
+			for _, mode := range []string{"ASCII", "Unicode", "unsupported Unicode"} {
+				t.Run(fmt.Sprintf("port=%d/TLS=%x/%s", port, version, mode), func(t *testing.T) {
+					// TCP buffering permits complete TLS exchanges, including close alerts.
+					listener, err := net.Listen("tcp", "127.0.0.1:0")
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { listener.Close() })
+					exchange := &smtpTestExchange{skipGreeting: port == 587}
+					recipient := "to@example.invalid"
+					if mode != "ASCII" {
+						recipient = "用戶@example.invalid"
+						exchange.to = recipient
+						exchange.extensions = []string{"SMTPUTF8", "8BITMIME"}
+					}
+					if mode == "unsupported Unicode" {
+						exchange.extensions = nil
+						exchange.stopAfterHello = true
+					}
+					done := make(chan error, 1)
+					go func() {
+						done <- func() error {
+							conn, err := listener.Accept()
+							if err != nil {
 								return err
 							}
-							if command, err := peer.ReadLine(); err != nil || command != "EHLO localhost" {
-								return fmt.Errorf("expected EHLO, got %q: %v", command, err)
-							}
-							// AUTH is advertised only after TLS and a fresh EHLO.
-							if err := peer.PrintfLine("250-localhost\r\n250 STARTTLS"); err != nil {
+							defer conn.Close()
+							if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 								return err
 							}
-							if command, err := peer.ReadLine(); err != nil || command != "STARTTLS" {
-								return fmt.Errorf("expected STARTTLS, got %q: %v", command, err)
+							if port == 587 {
+								peer := textproto.NewConn(conn)
+								if err := peer.PrintfLine("220 localhost ready"); err != nil {
+									return err
+								}
+								if command, err := peer.ReadLine(); err != nil || command != "EHLO localhost" {
+									return fmt.Errorf("expected EHLO, got %q: %v", command, err)
+								}
+								// Capabilities must come from the fresh EHLO after TLS.
+								capabilities := "250-localhost\r\n250 STARTTLS"
+								if mode == "unsupported Unicode" {
+									capabilities = "250-localhost\r\n250-SMTPUTF8\r\n250-8BITMIME\r\n250 STARTTLS"
+								}
+								if err := peer.PrintfLine("%s", capabilities); err != nil {
+									return err
+								}
+								if command, err := peer.ReadLine(); err != nil || command != "STARTTLS" {
+									return fmt.Errorf("expected STARTTLS, got %q: %v", command, err)
+								}
+								if err := peer.PrintfLine("220 begin TLS"); err != nil {
+									return err
+								}
 							}
-							if err := peer.PrintfLine("220 begin TLS"); err != nil {
+							server := tls.Server(conn, &tls.Config{
+								Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}},
+								MinVersion:   version, MaxVersion: version,
+							})
+							defer server.Close()
+							if err := server.Handshake(); err != nil {
 								return err
 							}
-						}
-						server := tls.Server(conn, &tls.Config{
-							Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}},
-							MinVersion:   version, MaxVersion: version,
-						})
-						defer server.Close()
-						if err := server.Handshake(); err != nil {
-							return err
-						}
-						if state := server.ConnectionState(); state.Version != version || state.ServerName != "localhost" {
-							return fmt.Errorf("unexpected TLS state: version=%x, server name=%q", state.Version, state.ServerName)
-						}
-						return exchange.serve(server)
+							if state := server.ConnectionState(); state.Version != version || state.ServerName != "localhost" {
+								return fmt.Errorf("unexpected TLS state: version=%x, server name=%q", state.Version, state.ServerName)
+							}
+							return exchange.serve(server)
+						}()
 					}()
-				}()
-				client, err := newTestMailClient(&config.Config{Mail: config.MailConfig{
-					Hostname: "localhost", Port: port, User: "test", Password: "test",
-					FromAddress: "Sender <from@example.invalid>", Timeout: 3 * time.Second,
-				}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				sender := client.sender
-				sender.rootCAs = roots
-				sender.dialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-					if address != net.JoinHostPort("localhost", strconv.Itoa(int(port))) {
-						t.Errorf("unexpected dial address %q", address)
+					client, err := newTestMailClient(&config.Config{Mail: config.MailConfig{
+						Hostname: "localhost", Port: port, User: "test", Password: "test",
+						FromAddress: "Sender <from@example.invalid>", Timeout: 3 * time.Second,
+					}})
+					if err != nil {
+						t.Fatal(err)
 					}
-					return (&net.Dialer{}).DialContext(ctx, network, listener.Addr().String())
-				}
-				sendErr := client.Compose().To("Recipient <to@example.invalid>").Subject("Encrypted delivery").Body("<p>Hello &amp; welcome</p>").Send(context.Background())
-				listener.Close() // Unblock Accept if the client failed before dialing.
-				if peerErr := <-done; peerErr != nil {
-					t.Errorf("SMTP peer: %v", peerErr)
-				}
-				if sendErr != nil {
-					t.Fatal(sendErr)
-				}
-				message, err := mailaddr.ReadMessage(strings.NewReader(exchange.message))
-				if err != nil {
-					t.Fatal(err)
-				}
-				for field, want := range map[string]string{
-					"From": `"Sender" <from@example.invalid>`, "To": `"Recipient" <to@example.invalid>`,
-					"Subject": "Encrypted delivery", "Content-Type": `text/html; charset="UTF-8"`,
-				} {
-					if got := message.Header.Get(field); got != want {
-						t.Errorf("%s=%q, want %q", field, got, want)
+					sender := client.sender
+					sender.rootCAs = roots
+					sender.dialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+						if address != net.JoinHostPort("localhost", strconv.Itoa(int(port))) {
+							t.Errorf("unexpected dial address %q", address)
+						}
+						return (&net.Dialer{}).DialContext(ctx, network, listener.Addr().String())
 					}
-				}
-				body, err := io.ReadAll(message.Body)
-				if err != nil || string(body) != "<p>Hello &amp; welcome</p>\n" {
-					t.Fatalf("body=%q, error=%v", body, err)
-				}
-			})
+					sendErr := client.Compose().To("Recipient <" + recipient + ">").Subject("Encrypted delivery").Body("<p>Hello &amp; welcome</p>").Send(context.Background())
+					listener.Close() // Unblock Accept if the client failed before dialing.
+					if peerErr := <-done; peerErr != nil {
+						t.Errorf("SMTP peer: %v", peerErr)
+					}
+					if mode == "unsupported Unicode" {
+						if sendErr == nil || !strings.Contains(sendErr.Error(), "SMTPUTF8") {
+							t.Fatalf("error=%v, want unsupported SMTPUTF8", sendErr)
+						}
+						return
+					}
+					if sendErr != nil {
+						t.Fatal(sendErr)
+					}
+					message, err := mailaddr.ReadMessage(strings.NewReader(exchange.message))
+					if err != nil {
+						t.Fatal(err)
+					}
+					for field, want := range map[string]string{
+						"From": `"Sender" <from@example.invalid>`, "To": `"Recipient" <` + recipient + `>`,
+						"Subject": "Encrypted delivery", "Content-Type": `text/html; charset="UTF-8"`,
+					} {
+						if got := message.Header.Get(field); got != want {
+							t.Errorf("%s=%q, want %q", field, got, want)
+						}
+					}
+					body, err := io.ReadAll(quotedprintable.NewReader(message.Body))
+					if err != nil || string(body) != "<p>Hello &amp; welcome</p>\n" {
+						t.Fatalf("body=%q, error=%v", body, err)
+					}
+				})
+			}
 		}
 	}
 }
