@@ -92,7 +92,7 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 			}}}
 			cfg := &config.Config{Auth: config.AuthConfig{
 				Enabled: true, RegistrationEnabled: tc.registration, RegisterRequiresVerification: tc.verification,
-				JwtKey: "test-auth-signing-key", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
+				JwtKey: "test-auth-signing-key00000000000", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
 				Services: map[string]map[string]string{"custom": {"enabled": "true"}},
 			}}
 			cfg.HTTP.Session.Types = map[string]string{"default": "sqliteStore"}

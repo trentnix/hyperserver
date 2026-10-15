@@ -70,13 +70,13 @@ func messageStoreRequests(t *testing.T, provider string) func([]*http.Cookie) *h
 	manager, err := session.NewSessionManager(t.Context(), map[string]string{"default": provider}, map[string]session.StoreFactory{
 		"cookieStore": func(context.Context) (session.SessionStore, error) {
 			return cookie.NewCookieStore(cookie.Options{
-				SigningKey: "message-test-key", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+				SigningKey: "message-test-key0000000000000000", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
 			})
 		},
 		"sqliteStore": func(ctx context.Context) (session.SessionStore, error) {
 			return sqlite.NewSQLiteStore(ctx, sqlite.Options{
 				Connection: filepath.Join(t.TempDir(), "messages.db"), Table: "messages",
-				SigningKey: "message-test-key", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+				SigningKey: "message-test-key0000000000000000", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
 			})
 		},
 	})

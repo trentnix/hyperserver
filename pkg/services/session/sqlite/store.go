@@ -64,7 +64,7 @@ type Options struct {
 	Connection string
 	// Table names the session table to prepare and use.
 	Table string
-	// SigningKey signs session-ID cookies. It must not be empty or a placeholder.
+	// SigningKey signs session-ID cookies. Use at least 32 bytes from a secure random source.
 	SigningKey string
 	// TokenLifetime and CookieLifetime must each be at least one second.
 	TokenLifetime  time.Duration

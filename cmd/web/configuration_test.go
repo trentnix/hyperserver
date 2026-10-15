@@ -34,7 +34,7 @@ database:
   connection: ":memory:"
 http:
   session:
-    jwtKey: loaded-session-signing-key
+    jwtKey: loaded-session-signing-key000000
     tokenAge: 1h
     cookieAge: 1h
     types:
@@ -46,7 +46,7 @@ http:
         sessionTable: loaded_sessions
 auth:
   enabled: true
-  jwtKey: loaded-account-signing-key
+  jwtKey: loaded-account-signing-key000000
   verificationTokenExpiration: 1h
   resetTokenExpiration: 1h
 mail:

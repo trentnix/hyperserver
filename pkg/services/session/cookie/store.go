@@ -34,7 +34,7 @@ type (
 // Options configures a cookie session store. Application setup decides whether
 // to construct the store. A successful constructor always returns an enabled store.
 type Options struct {
-	// SigningKey signs session cookies. It must not be empty or a placeholder.
+	// SigningKey signs session cookies. Use at least 32 bytes from a secure random source.
 	SigningKey string
 	// TokenLifetime and CookieLifetime must each be at least one second.
 	TokenLifetime  time.Duration

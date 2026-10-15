@@ -140,7 +140,7 @@ func TestSQLiteMemoryPoolKeepsSchema(t *testing.T) {
 func setupCookieStore(t *testing.T) *cookie.CookieStore {
 	t.Helper()
 	store, err := cookie.NewCookieStore(cookie.Options{
-		SigningKey:     "secretKey",
+		SigningKey:     "secretKey00000000000000000000000",
 		TokenLifetime:  time.Hour,
 		CookieLifetime: time.Hour,
 	})

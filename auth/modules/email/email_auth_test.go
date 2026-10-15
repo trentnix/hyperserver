@@ -68,7 +68,7 @@ func TestEmailFormsUseStartupTemplates(t *testing.T) {
 	sessions := emailSessions(t, map[string]string{"default": "memory"})
 	service := Provider(&emailAccountRepository{}, sessions, nil).New().(*EmailAuthService)
 	app := &server.ApplicationServer{ContentManager: cm, Config: &config.Config{Auth: config.AuthConfig{
-		Enabled: true, RegistrationEnabled: true, JwtKey: "test-key",
+		Enabled: true, RegistrationEnabled: true, JwtKey: "test-key000000000000000000000000",
 		Services: map[string]map[string]string{"email": {"enabled": "true"}},
 	}}}
 	if err := service.Init(app); err != nil {
@@ -102,7 +102,7 @@ func TestEmailAuthModuleRequiresFlashSession(t *testing.T) {
 	for _, selection := range []string{"missing", "named", "default"} {
 		t.Run(selection, func(t *testing.T) {
 			cfg := config.Config{Auth: config.AuthConfig{
-				Enabled: true, JwtKey: "test-key", VerificationTokenExpiration: time.Hour,
+				Enabled: true, JwtKey: "test-key000000000000000000000000", VerificationTokenExpiration: time.Hour,
 				ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"email": {"enabled": "true"}},
 			}}
 			app, err := server.NewApplicationServer(cfg)
@@ -171,7 +171,7 @@ func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
 	manager, err := session.NewSessionManager(t.Context(), map[string]string{"default": "cookie"}, map[string]session.StoreFactory{
 		"cookie": func(context.Context) (session.SessionStore, error) {
 			return cookie.NewCookieStore(cookie.Options{
-				SigningKey: "message-removal-test-key", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+				SigningKey: "message-removal-test-key00000000000000000000000000000000", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
 			})
 		},
 	})
@@ -295,7 +295,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 
 			app := &server.ApplicationServer{
 				Config: &config.Config{Auth: config.AuthConfig{
-					JwtKey:   "test-key",
+					JwtKey:   "test-key000000000000000000000000",
 					Services: map[string]map[string]string{"email": {"enabled": "true"}},
 				}},
 				ContentManager: &content.ContentManagerService{},
@@ -342,7 +342,7 @@ func TestEmailAuthInitAccountRepository(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			app := &server.ApplicationServer{
 				Config: &config.Config{Auth: config.AuthConfig{
-					Enabled: true, JwtKey: "test-key",
+					Enabled: true, JwtKey: "test-key000000000000000000000000",
 					Services: map[string]map[string]string{"email": {"enabled": "true"}},
 				}},
 				// A supplied repository needs no SQL pool and must not be queried during initialization.

@@ -71,6 +71,7 @@ http:
   # Shared session settings and mappings from session names to storage providers.
   session:
     # Secret used to sign session JWTs. Signing does not encrypt their contents.
+    # Must be at least 32 bytes. Generate a separate random key with: openssl rand -hex 32
     jwtKey: <your JWT encryption key goes here>
     # Lifetime of a new session token. Must be at least 1s when sessions are used.
     tokenAge: "24h"
@@ -128,7 +129,8 @@ auth:
   # When registration is enabled, verification requires configured delivery at startup.
   registerRequiresVerification: false
   # Secret used to sign account verification and password-reset tokens.
-  # Use a different secret from http.session.jwtKey.
+  # Must be at least 32 bytes. Generate a separate random key with: openssl rand -hex 32
+  # Use a different secret from http.session.jwtKey. Length alone does not ensure randomness.
   jwtKey: <your auth token key goes here>
   # Verification token lifetime. Must be at least 1s when auth is enabled.
   verificationTokenExpiration: "24h"

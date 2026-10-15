@@ -27,7 +27,7 @@ func TestAuthenticationProviderDiagnostics(t *testing.T) {
 			cfg := moduleConfig()
 			cfg.Auth.Enabled = mode != "disabled"
 			cfg.Auth.Services["custom"]["password"] = "private-provider-secret"
-			cfg.Auth.JwtKey = "private-signing-secret"
+			cfg.Auth.JwtKey = "private-signing-secret0000000000"
 			app, err := server.NewApplicationServer(cfg)
 			if err != nil {
 				t.Fatal(err)
@@ -80,7 +80,7 @@ func (p *moduleProvider) Routes(routes *routing.Routes) error {
 
 func moduleConfig() config.Config {
 	return config.Config{
-		Auth: config.AuthConfig{Enabled: true, JwtKey: "test-key", VerificationTokenExpiration: time.Hour,
+		Auth: config.AuthConfig{Enabled: true, JwtKey: "test-key000000000000000000000000", VerificationTokenExpiration: time.Hour,
 			ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"custom": {"enabled": "true"}}},
 	}
 }

@@ -183,12 +183,12 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return fmt.Errorf("initialize email authentication: %w", err)
 	}
 
+	if err := config.ValidateSigningKey("auth.jwtKey", s.Config.Auth.JwtKey); err != nil {
+		return auth_services.NewErrEmailAuthServiceInit(err)
+	}
+
 	a.config = s.Config
 	a.contentManager = s.ContentManager
-
-	if a.config.Auth.JwtKey == "" {
-		return auth_services.NewErrEmailAuthServiceInit(errors.New("the auth JWT key is not configured"))
-	}
 
 	var err error
 	if a.TemplateFS == nil {

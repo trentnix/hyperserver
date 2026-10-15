@@ -78,7 +78,7 @@ func newReplacementHTTPHarness(t *testing.T) (*httpHarness, *replacementAccountR
 		Database: config.DatabaseConfig{Driver: "must-not-open"},
 		Mail:     config.MailConfig{Timeout: -time.Second},
 		Auth: config.AuthConfig{
-			Enabled: true, JwtKey: "replacement-account-test-key", ResetTokenExpiration: time.Hour,
+			Enabled: true, JwtKey: "replacement-account-test-key0000", ResetTokenExpiration: time.Hour,
 			VerificationTokenExpiration: time.Hour,
 			AccountStorage:              config.AccountStorageConfig{Provider: "must-not-open"},
 			Services:                    map[string]map[string]string{"email": {"enabled": "true"}},

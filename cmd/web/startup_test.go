@@ -263,8 +263,8 @@ func TestStartupAcceptsValidConfiguration(t *testing.T) {
 	}{
 		{name: "file settings"},
 		{name: "environment overrides", overrides: []string{
-			"HYPERSERVER_HTTP_SESSION_JWTKEY=environment-session-signing-key",
-			"HYPERSERVER_AUTH_JWTKEY=environment-auth-signing-key",
+			"HYPERSERVER_HTTP_SESSION_JWTKEY=environment-session-signing-key-01",
+			"HYPERSERVER_AUTH_JWTKEY=environment-auth-signing-key-0001",
 			"HYPERSERVER_HTTP_SESSION_TOKENAGE=1s",
 			"HYPERSERVER_HTTP_SESSION_COOKIEAGE=1s",
 			"HYPERSERVER_AUTH_VERIFICATIONTOKENEXPIRATION=1s",
@@ -380,6 +380,10 @@ func TestStartupRejectsInvalidConfiguration(t *testing.T) {
 	}{
 		{name: "legacy file key", old: "jwtKey: \"ssss", replacement: "key: \"ssss", want: "http.session.key: unknown setting"},
 		{name: "missing session key", old: "ssssssssssssssssssssssssssssssss", want: "http.session.jwtKey"},
+		{name: "short file session key", old: strings.Repeat("s", 32), replacement: strings.Repeat("s", 31), want: "http.session.jwtKey must be at least 32 bytes"},
+		{name: "short environment session key", env: "HYPERSERVER_HTTP_SESSION_JWTKEY=" + strings.Repeat("s", 31), want: "http.session.jwtKey must be at least 32 bytes"},
+		{name: "short file auth key", old: strings.Repeat("a", 32), replacement: strings.Repeat("a", 31), want: "auth.jwtKey must be at least 32 bytes"},
+		{name: "short environment auth key", env: "HYPERSERVER_AUTH_JWTKEY=" + strings.Repeat("a", 31), want: "auth.jwtKey must be at least 32 bytes"},
 		{name: "empty environment session key", env: "HYPERSERVER_HTTP_SESSION_JWTKEY=", want: "http.session.jwtKey"},
 		{name: "placeholder environment auth key", env: "HYPERSERVER_AUTH_JWTKEY=<your auth token key goes here>", want: "auth.jwtKey"},
 		{name: "zero file cookie lifetime", old: "cookieAge: 1h", replacement: "cookieAge: 0s", want: "http.session.cookieAge"},
@@ -415,6 +419,9 @@ func TestStartupRejectsInvalidConfiguration(t *testing.T) {
 			}
 			if strings.Contains(string(output), "Starting server at") {
 				t.Fatalf("startup attempted to listen: %s", output)
+			}
+			if strings.Contains(string(output), strings.Repeat("s", 31)) || strings.Contains(string(output), strings.Repeat("a", 31)) {
+				t.Fatal("startup output disclosed a signing key")
 			}
 		})
 	}

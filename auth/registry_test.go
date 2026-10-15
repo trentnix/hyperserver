@@ -18,7 +18,7 @@ func (*registryProvider) AuthType() string { return "test" }
 func (p *registryProvider) IsLoaded() bool { return p.loaded }
 
 func registryConfig() *config.Config {
-	c := &config.Config{Auth: config.AuthConfig{Enabled: true, JwtKey: "test-key", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"test": {"enabled": "true"}}}}
+	c := &config.Config{Auth: config.AuthConfig{Enabled: true, JwtKey: "test-key000000000000000000000000", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"test": {"enabled": "true"}}}}
 	c.HTTP.Session.Types = map[string]string{"default": "sqliteStore"}
 	return c
 }

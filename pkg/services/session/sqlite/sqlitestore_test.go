@@ -20,7 +20,7 @@ func setupSQLiteStore(t *testing.T) *SQLiteStore {
 	store, err := NewSQLiteStore(t.Context(), Options{
 		Connection:     ":memory:",
 		Table:          "sessions_test",
-		SigningKey:     "secretKey",
+		SigningKey:     "secretKey00000000000000000000000",
 		TokenLifetime:  time.Hour,
 		CookieLifetime: time.Hour,
 	})

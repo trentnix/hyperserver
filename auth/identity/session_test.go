@@ -84,13 +84,13 @@ func identityTestSessionManager(t *testing.T, store string) *session.SessionMana
 	manager, err := session.NewSessionManager(t.Context(), map[string]string{"default": store}, map[string]session.StoreFactory{
 		"cookieStore": func(context.Context) (session.SessionStore, error) {
 			return cookie.NewCookieStore(cookie.Options{
-				SigningKey: "account-reader-test-key", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+				SigningKey: "account-reader-test-key000000000", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
 			})
 		},
 		"sqliteStore": func(ctx context.Context) (session.SessionStore, error) {
 			return sqlite.NewSQLiteStore(ctx, sqlite.Options{
 				Connection: filepath.Join(t.TempDir(), "sessions.db"), Table: "session",
-				SigningKey: "account-reader-test-key", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
+				SigningKey: "account-reader-test-key000000000", TokenLifetime: time.Hour, CookieLifetime: time.Hour,
 			})
 		},
 	})

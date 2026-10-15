@@ -4,6 +4,12 @@ Use the [stateless application](../examples/stateless/readme.md) for a minimal s
 
 ## Application startup
 
+### Signing keys
+
+Configuration and built-in session constructors reject signing keys shorter than 32 bytes, as required for [HS256](https://www.rfc-editor.org/rfc/rfc7518#section-3.2). They also reject empty values and known placeholders without including secrets in errors. Length cannot establish randomness. Generate independent values for `auth.jwtKey` and `http.session.jwtKey` with a cryptographically secure generator, for example by running `openssl rand -hex 32` separately for each key. Paste each output unchanged: configuration uses the string's bytes without hex or base64 decoding.
+
+### Services and serving
+
 `server.NewApplicationServer(cfg)` returns `(*ApplicationServer, error)`. It validates shared settings, copies configuration including nested maps and pointers, and creates the router and content manager. It does not load configuration files or create optional services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
 
 Prepare shared services before initializing modules. The reference application owns its SQL pool in [application.go](../cmd/web/application.go), checks connectivity with a ten-second deadline, and registers pool cleanup before consumers. The core has no SQL pool. Applications or providers must import their SQL drivers.

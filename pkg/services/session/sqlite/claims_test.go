@@ -30,7 +30,7 @@ func TestSessionStoresRejectInvalidClaims(t *testing.T) {
 				t.Fatal(err)
 			}
 			cookie := w.Result().Cookies()[0]
-			key := []byte("secretKey")
+			key := []byte("secretKey00000000000000000000000")
 			if _, err := sessioncookie.Parse(cookie.Value, key); err != nil {
 				t.Fatalf("store issued an invalid session token: %v", err)
 			}

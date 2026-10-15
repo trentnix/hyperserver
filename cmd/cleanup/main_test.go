@@ -250,7 +250,7 @@ func TestCleanupCommand(t *testing.T) {
   workingDirectory: %q
 http:
   session:
-    jwtKey: cleanup-test-key
+    jwtKey: cleanup-test-key0000000000000000
     tokenAge: 1h
     cookieAge: 1h
     types:
@@ -264,7 +264,7 @@ http:
 			if scenario == "partial failure" {
 				yaml += `auth:
   enabled: true
-  jwtKey: cleanup-account-test-key
+  jwtKey: cleanup-account-test-key00000000
   verificationTokenExpiration: 1h
   resetTokenExpiration: 1h
   accountStorage:

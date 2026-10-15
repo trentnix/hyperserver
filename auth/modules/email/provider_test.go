@@ -3,12 +3,14 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	auth_services "github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
@@ -66,6 +68,48 @@ func TestProviderSuppliesDependencies(t *testing.T) {
 	t.Fatal("email provider did not self-register")
 }
 
+func TestProviderValidatesSigningKey(t *testing.T) {
+	for _, tc := range []struct {
+		name, key string
+		wantError bool
+	}{
+		{"missing", "", true},
+		{"short", strings.Repeat("s", 31), true},
+		{"placeholder", "placeholder-key-that-is-long-enough", true},
+		{"minimum", strings.Repeat("s", 32), false},
+		{"longer", strings.Repeat("s", 33), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sessions := emailSessions(t, map[string]string{"default": "memory"})
+			service := Provider(&emailAccountRepository{}, sessions, nil).New().(*EmailAuthService)
+			// Bypass shared configuration validation to exercise the provider boundary.
+			app := &server.ApplicationServer{ContentManager: content.NewContentManager(), Config: &config.Config{
+				Auth: config.AuthConfig{JwtKey: tc.key, Services: map[string]map[string]string{"email": {"enabled": "true"}}},
+			}}
+			err := service.Init(app)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("Init error = %v, want error = %v", err, tc.wantError)
+			}
+			if err == nil {
+				return
+			}
+			if service.config != nil || service.templates != nil {
+				t.Fatal("invalid signing key must be rejected before configuring the provider")
+			}
+			foundField := false
+			for cause := err; cause != nil; cause = errors.Unwrap(cause) {
+				foundField = foundField || strings.Contains(cause.Error(), "auth.jwtKey")
+				if tc.key != "" && strings.Contains(cause.Error(), tc.key) {
+					t.Fatal("initialization error disclosed signing key")
+				}
+			}
+			if !foundField {
+				t.Fatal("initialization error did not identify auth.jwtKey")
+			}
+		})
+	}
+}
+
 func TestProviderMailRequirements(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -80,7 +124,7 @@ func TestProviderMailRequirements(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			app, err := server.NewApplicationServer(config.Config{Auth: config.AuthConfig{
 				Enabled: true, RegistrationEnabled: true, RegisterRequiresVerification: test.required,
-				JwtKey: "test-key", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
+				JwtKey: "test-key000000000000000000000000", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
 				Services: map[string]map[string]string{"email": {"enabled": "true"}},
 			}})
 			if err != nil {

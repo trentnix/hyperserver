@@ -14,6 +14,7 @@ func TestConstructorValidatesOptions(t *testing.T) {
 	}{
 		{"zero options", func(o *Options) { *o = Options{} }, "signing key"},
 		{"empty key", func(o *Options) { o.SigningKey = "" }, "signing key"},
+		{"short key", func(o *Options) { o.SigningKey = strings.Repeat("s", 31) }, "at least 32 bytes"},
 		{"whitespace key", func(o *Options) { o.SigningKey = "  " }, "signing key"},
 		{"placeholder key", func(o *Options) { o.SigningKey = "<replace-me>" }, "signing key"},
 		{"zero token lifetime", func(o *Options) { o.TokenLifetime = 0 }, "token lifetime"},
@@ -33,6 +34,9 @@ func TestConstructorValidatesOptions(t *testing.T) {
 			store, err := NewCookieStore(options)
 			if store != nil || err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("constructor = %v, %v, want nil and %q", store, err, tc.want)
+			}
+			if options.SigningKey != "" && strings.Contains(err.Error(), options.SigningKey) {
+				t.Fatal("error disclosed signing key")
 			}
 		})
 	}

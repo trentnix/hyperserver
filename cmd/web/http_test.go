@@ -184,7 +184,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) (
 		Database: config.DatabaseConfig{Driver: "sqlite3", Connection: filepath.Join(t.TempDir(), "application.db")},
 		HTTP:     config.HTTPConfig{ListenHost: "127.0.0.1", Port: 8080},
 		Auth: config.AuthConfig{
-			Enabled: true, JwtKey: "http-test-only-auth-signing-key",
+			Enabled: true, JwtKey: "http-test-only-auth-signing-key0",
 			RegistrationEnabled:          true,
 			RegisterRequiresVerification: true,
 			VerificationTokenExpiration:  time.Hour, ResetTokenExpiration: time.Hour,

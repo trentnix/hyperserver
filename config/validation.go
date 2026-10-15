@@ -84,9 +84,16 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// ValidateSigningKey rejects missing and placeholder signing keys without logging them.
+// ValidateSigningKey requires at least 32 bytes for HS256 and rejects placeholders.
+// Errors never include the key. Length checks cannot establish randomness.
 func ValidateSigningKey(field, value string) error {
-	return validateSecret(field, value)
+	if err := validateSecret(field, value); err != nil {
+		return err
+	}
+	if len(value) < 32 {
+		return fmt.Errorf("%s must be at least 32 bytes", field)
+	}
+	return nil
 }
 
 func validateSecret(field, value string) error {

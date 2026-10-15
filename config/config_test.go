@@ -307,7 +307,15 @@ func TestConfigLoadsDoNotShareState(t *testing.T) {
 }
 
 func TestSigningKeys(t *testing.T) {
-	for _, key := range []string{"", "  ", "<your JWT encryption key goes here>", "change-me-to-a-long-secret-before-use", "placeholder-key-that-is-long-enough"} {
+	for _, key := range []string{
+		"",
+		"  ",
+		"<your JWT encryption key goes here>",
+		"change-me-to-a-long-secret-before-use",
+		"placeholder-key-that-is-long-enough",
+		strings.Repeat("s", 31),
+		strings.Repeat("é", 15) + "s",
+	} {
 		err := ValidateSigningKey("test.jwtKey", key)
 		if err == nil {
 			t.Fatalf("accepted invalid key of length %d", len(key))
@@ -316,8 +324,39 @@ func TestSigningKeys(t *testing.T) {
 			t.Fatal("error disclosed secret")
 		}
 	}
-	if err := ValidateSigningKey("test.jwtKey", strings.Repeat("x", 32)); err != nil {
-		t.Fatal(err)
+	// The limit counts the supplied bytes, not Unicode characters or decoded text.
+	// These predictable values test length only. Production keys must be random.
+	for _, key := range []string{strings.Repeat("x", 32), strings.Repeat("x", 33), strings.Repeat("é", 16)} {
+		if err := ValidateSigningKey("test.jwtKey", key); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestSigningKeyFileAndEnvironmentValidation(t *testing.T) {
+	shortKey, validKey := strings.Repeat("s", 31), strings.Repeat("v", 32)
+	for _, tc := range []struct {
+		name, fileKey, environmentKey string
+		wantError                     bool
+	}{
+		{"short file key", shortKey, "", true},
+		{"short environment override", validKey, shortKey, true},
+		{"valid file key", validKey, "", false},
+		{"valid environment override", shortKey, validKey, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanConfigEnvironment(t)
+			if tc.environmentKey != "" {
+				t.Setenv("HYPERSERVER_AUTH_JWTKEY", tc.environmentKey)
+			}
+			_, err := loadTestConfig(t, "auth:\n  enabled: true\n  jwtKey: "+tc.fileKey+"\n  verificationTokenExpiration: 1h\n  resetTokenExpiration: 1h\n")
+			if (err != nil) != tc.wantError {
+				t.Fatalf("load error = %v, want error = %v", err, tc.wantError)
+			}
+			if err != nil && (!strings.Contains(err.Error(), "auth.jwtKey must be at least 32 bytes") || strings.Contains(err.Error(), shortKey)) {
+				t.Fatal("key validation error must identify the setting without disclosing the key")
+			}
+		})
 	}
 }
 
@@ -375,6 +414,7 @@ func TestSharedConfigValidation(t *testing.T) {
 		want   string
 	}{
 		{"auth missing key", func(c *Config) { c.Auth.JwtKey = "" }, "auth.jwtKey"},
+		{"auth short key", func(c *Config) { c.Auth.JwtKey = strings.Repeat("s", 31) }, "auth.jwtKey must be at least 32 bytes"},
 		{"auth placeholder", func(c *Config) { c.Auth.JwtKey = "<your auth token key goes here>" }, "auth.jwtKey"},
 		{"missing verification age", func(c *Config) { c.Auth.VerificationTokenExpiration = 0 }, "auth.verificationTokenExpiration"},
 		{"negative reset age", func(c *Config) { c.Auth.ResetTokenExpiration = -time.Second }, "auth.resetTokenExpiration"},

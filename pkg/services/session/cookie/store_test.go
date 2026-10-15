@@ -18,7 +18,7 @@ import (
 func setupCookieStore(t *testing.T) *CookieStore {
 	t.Helper()
 	store, err := NewCookieStore(Options{
-		SigningKey:     "secretKey",
+		SigningKey:     "secretKey00000000000000000000000",
 		TokenLifetime:  time.Hour,
 		CookieLifetime: time.Hour,
 	})

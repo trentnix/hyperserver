@@ -28,6 +28,7 @@ func TestValidateSessionConfig(t *testing.T) {
 	}{
 		{"valid", func(c *config.Config) {}, ""},
 		{"missing key", func(c *config.Config) { c.HTTP.Session.JwtKey = "" }, "http.session.jwtKey"},
+		{"short key", func(c *config.Config) { c.HTTP.Session.JwtKey = strings.Repeat("s", 31) }, "http.session.jwtKey must be at least 32 bytes"},
 		{"placeholder key", func(c *config.Config) { c.HTTP.Session.JwtKey = "<your JWT encryption key goes here>" }, "http.session.jwtKey"},
 		{"missing token age", func(c *config.Config) { c.HTTP.Session.TokenAge = 0 }, "http.session.tokenAge"},
 		{"negative token age", func(c *config.Config) { c.HTTP.Session.TokenAge = -time.Hour }, "http.session.tokenAge"},

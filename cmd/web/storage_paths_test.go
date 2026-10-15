@@ -20,7 +20,7 @@ func TestApplicationsResolveIndependentStoragePaths(t *testing.T) {
 			App:      config.AppConfig{WorkingDirectory: t.TempDir()},
 			Database: config.DatabaseConfig{Driver: "sqlite3", Connection: "accounts.db"},
 		}
-		cfg.HTTP.Session.JwtKey = "independent-storage-test-key"
+		cfg.HTTP.Session.JwtKey = "independent-storage-test-key0000"
 		cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
 		cfg.HTTP.Session.Types = map[string]string{"default": "sqliteStore"}
 		cfg.HTTP.Session.Stores = map[string]map[string]string{"sqliteStore": {

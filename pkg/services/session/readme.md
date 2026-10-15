@@ -86,7 +86,7 @@ For a custom table, make a deployment-local copy of the migration files. Change 
 
 Missing, malformed, dirty, or unsupported versions stop startup without changing storage. Recreate disposable unversioned development databases. After `down 1`, startup rejects the empty version marker until an explicit `up` recreates the schema.
 
-Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Constructors reject missing or placeholder signing keys and lifetimes shorter than one second. Successful constructors return enabled stores. SQLite also requires a connection string and table name.
+Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Constructors reject signing keys shorter than 32 bytes, placeholders, and lifetimes shorter than one second. Successful constructors return enabled stores. SQLite also requires a connection string and table name. See [signing-key generation](../../../docs/application.md#signing-keys).
 
 The reference application's [session setup](../../../cmd/web/sessions.go) supplies the manager after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. Setup registers cleanup for managers it creates. A supplied manager keeps its existing owner unless setup explicitly transfers ownership with `ownSessions`. The core has no session-manager field.
 
