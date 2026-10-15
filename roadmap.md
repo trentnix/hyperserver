@@ -6,7 +6,7 @@ HyperServer is an experimental Go framework for server-rendered web applications
 
 Provide a working default setup with replaceable services. Developers must not need to learn unrelated libraries or copy security and lifecycle code to build a feature. High performance and low overhead are goals to demonstrate with measurements.
 
-HyperServer is not production-ready. Public interfaces remain experimental during `v0.x`. The immediate work is shared storage-provider tests and stored-format migrations, followed by performance and operational validation.
+HyperServer is not production-ready. Public interfaces remain experimental during `v0.x`. Resolve known security, correctness, and provider-contract gaps before performance and operational validation. Prove the default setup in an application outside this repository before stabilizing interfaces.
 
 This roadmap defines direction and remaining priorities. The [README](readme.md) documents usage. [Architecture decisions](docs/decisions/readme.md) explain specific choices and their tradeoffs.
 

@@ -21,7 +21,7 @@ High performance is a design goal, not an established benchmark result. Passing 
 - Experimental email/password authentication, account verification and recovery, cookie and SQLite session stores, SMTP mail, and request logging.
 - SQLite-backed persistence used by the reference application and framework services.
 
-Authentication requires SQLite sessions. Login and account verification rotate the session ID. Password reset or change signs out all devices. Cookie-only sessions are available for non-authentication data.
+Authentication requires a session provider that supports atomic rotation and server-side revocation. The supplied SQLite provider meets those requirements. Login and account verification rotate the session ID. Password reset or change signs out all devices. Cookie-only sessions are available for non-authentication data.
 
 Applications define access rules through [route-level authorization policies](auth/middleware/authorization_example_test.go), separate from authentication. Policies can inspect the loaded identity and route values. Denial returns 403, and policy failures return 500 without exposing the error, for both ordinary and HTMX requests.
 
@@ -144,6 +144,8 @@ Auth providers use `auth.Descriptor` and `auth.Register`. The registered auth mo
 The example uses the same initialized `accounts` repository and `sessions` manager for the auth manager and email provider. Its explicit provider list selects only email authentication. Import discovery still works, but applications must supply accounts and sessions to the auth module and configure each provider's dependencies before activation. [Reference module setup](cmd/web/site_modules.go) replaces the email descriptor in a snapshot while preserving other discovered providers.
 
 `auth.AuthService` requires only `AuthType`, `Init`, and `IsLoaded`. Add `LoginHandler`, `RegistrationHandler`, `ResetHandler`, or `ChangeHandler` for the workflows a provider supports. A login-only provider needs no registration or password-reset stubs. The manager shows only supported login and registration choices and rejects unsupported provider workflows with 404. If no provider supports registration, the registration page reports that registration is unavailable. Verification configuration is required only for registration-capable providers when registration and required verification are enabled. Implement `ProviderRoutes` only when a provider needs extra routes.
+
+Initialize resource-owning dependencies in application setup and pass them to provider factories. The application must close those dependencies. `AuthService.Init` receives no context, and the auth module does not invoke provider shutdown hooks.
 
 ### Module dependencies
 
@@ -666,13 +668,13 @@ go vet ./...
 go test -race ./...
 ```
 
-The [CI workflow](.github/workflows/ci.yml) runs these checks on pushes and pull requests. See [AGENTS.md](AGENTS.md) for working agreements and regression-test guidance.
+The [CI workflow](.github/workflows/ci.yml) runs these checks on pushes and pull requests. Browser checks run in an independent job, so a browser failure does not prevent race checks. Both jobs must pass. See [AGENTS.md](AGENTS.md) for working agreements and regression-test guidance.
 
-CI also tests error responses, native forms, HTMX redirects, retargeting, reswapping, and out-of-band notifications in headless Firefox. Run `HS_TEST_FIREFOX=firefox go test -count=1 -timeout=5m ./cmd/web -run '^TestBrowser(SiteErrors|NativeCredentialForms|ResponseDispatch|ErrorReporting)$'` locally. HTMX tests download the version pinned in the site layout and check its integrity hash. Ordinary Go test runs skip browser tests.
+CI also tests error responses, native forms, HTMX history, redirects, retargeting, reswapping, and out-of-band notifications in headless Firefox. Run `HS_TEST_FIREFOX=firefox go test -count=1 -timeout=5m ./cmd/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$'` locally. HTMX tests use the vendored asset served by the application and retain the layout's integrity check. Ordinary Go test runs skip browser tests unless `HS_TEST_FIREFOX` is set.
 
 CI saves browser diagnostics for seven days, including readiness timing, [Firefox process-launch logs](https://firefox-source-docs.mozilla.org/xpcom/logging.html), and available crash reports. On failure, it captures live process state and probes the test server before stopping Firefox. Whole browser profiles are not uploaded. Reports can contain synthetic test data. Set `HS_TEST_BROWSER_ARTIFACTS` to a directory to retain diagnostics locally.
 
-To investigate intermittent startup failures, manually run the CI workflow with `browser_diagnostics` enabled. It repeats the standalone `TestBrowserErrorReporting` test ten times with fresh profiles. Any failed attempt keeps the run failed. Startup and check deadlines remain 30 and 15 seconds.
+To investigate intermittent startup failures, manually run the CI workflow with `browser_diagnostics` enabled. The browser job runs only `TestBrowserErrorReporting`, ten times with fresh profiles, without running application browser tests first. Any failed attempt keeps the run failed. Startup and check deadlines remain 30 and 15 seconds. These diagnostic runs do not replace the application browser checks on pushes and pull requests.
 
 ## Feedback
 
