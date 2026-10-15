@@ -31,8 +31,9 @@ type (
 		// New creates an unsaved session with a new ID.
 		New(r *http.Request, name string) (*Session, error)
 		// Save persists a session and writes its cookie before the response body.
-		// Failure must not issue a cookie. Success does not guarantee that the
-		// browser receives it. Saving must not extend an existing session's expiry.
+		// Success sets IsNew to false and publishes ExpiresAt. Repeated saves must
+		// preserve expiry. Failure must leave the session unchanged and issue no
+		// cookie. Success does not guarantee that the browser receives it.
 		Save(w http.ResponseWriter, r *http.Request, session *Session) error
 		// End ends a session according to the provider's revocation guarantees.
 		End(w http.ResponseWriter, r *http.Request, session *Session) error

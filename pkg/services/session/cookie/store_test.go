@@ -287,8 +287,9 @@ func TestCookieStore_Save_ExistingSession(t *testing.T) {
 		t.Fatalf("initial Save returned error: %v", err)
 	}
 
-	// Simulate an update by marking the session as existing.
-	session.IsNew = false
+	if session.IsNew {
+		t.Fatal("successful save left session marked as new")
+	}
 	w = httptest.NewRecorder() // Reset the ResponseRecorder.
 
 	// Save the updated session.

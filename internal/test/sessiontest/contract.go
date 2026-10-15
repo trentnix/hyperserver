@@ -1,23 +1,26 @@
-// Package sessiontest checks the revocable session-storage contract.
+// Package sessiontest checks common and revocable session-storage contracts.
 // It is test support, not an application storage implementation.
 package sessiontest
 
 import (
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
-// Run checks a server-side store that implements SessionStore and RotatingStore.
+// RunCommon checks SessionStore without requiring server-side revocation.
 // Each factory call must return isolated, enabled storage with a finite lifetime
 // and register its cleanup with t. Backend-specific failures, encoded-size limits,
 // and expiry boundaries remain in provider tests, using their serializer and clock.
-func Run(t *testing.T, open func(*testing.T) session.SessionStore) {
+func RunCommon(t *testing.T, open func(*testing.T) session.SessionStore) {
 	t.Helper()
 	t.Run("round trip and independent reads", func(t *testing.T) {
 		store := open(t)
@@ -68,6 +71,83 @@ func Run(t *testing.T, open func(*testing.T) session.SessionStore) {
 		}
 	})
 
+	t.Run("repeated saves preserve state", func(t *testing.T) {
+		store := open(t)
+		s, r := saved(t, store)
+		id, expiry := s.ID, s.ExpiresAt
+		for range 2 {
+			s.Data["value"] = "updated"
+			w := httptest.NewRecorder()
+			if err := s.Save(w, r); err != nil {
+				t.Fatal(err)
+			}
+			if s.IsNew || s.ID != id || !s.ExpiresAt.Equal(expiry) {
+				t.Fatal("save changed identity, expiry, or new-session state")
+			}
+			loaded := load(t, store, cookieRequest(t, w), s.Name)
+			if loaded.IsNew || loaded.ID != id || !loaded.ExpiresAt.Equal(expiry) || loaded.Data["value"] != "updated" {
+				t.Fatal("cookie did not restore the saved state")
+			}
+		}
+	})
+
+	for _, state := range []string{"new", "loaded"} {
+		for _, failure := range []string{"serialization", "cookie syntax", "cookie size"} {
+			t.Run(state+" save failure/"+failure, func(t *testing.T) {
+				store := open(t)
+				r := request()
+				s := session.NewSession(store, "account")
+				s.Data["value"] = "original"
+				if state == "loaded" {
+					var original *session.Session
+					original, r = saved(t, store)
+					s = load(t, store, r, original.Name)
+				}
+				original := *s
+				switch failure {
+				case "serialization":
+					s.Data["bad"] = make(chan int)
+				case "cookie syntax":
+					s.Name = "invalid name"
+				case "cookie size":
+					s.Name = strings.Repeat("a", session.MaxCookieSize)
+				}
+				before := *s
+				before.Data = maps.Clone(s.Data)
+
+				w := httptest.NewRecorder()
+				if err := s.Save(w, r); err == nil {
+					t.Fatal("invalid session was saved")
+				}
+				noCookie(t, w)
+				if !reflect.DeepEqual(*s, before) {
+					t.Fatal("failed save changed caller-visible state")
+				}
+				if state == "loaded" {
+					unchanged(t, store, r, &original)
+				}
+
+				delete(s.Data, "bad")
+				s.Name = original.Name
+				w = httptest.NewRecorder()
+				if err := s.Save(w, r); err != nil {
+					t.Fatalf("corrected save failed: %v", err)
+				}
+				loaded := load(t, store, cookieRequest(t, w), s.Name)
+				if s.IsNew || loaded.IsNew || loaded.ID != s.ID || loaded.Data["value"] != "original" || !loaded.ExpiresAt.Equal(s.ExpiresAt) {
+					t.Fatal("corrected save lost session state")
+				}
+			})
+		}
+	}
+}
+
+// Run checks the common contract and server-side revocation through RotatingStore.
+// Its factory has the same requirements as RunCommon.
+func Run(t *testing.T, open func(*testing.T) session.SessionStore) {
+	t.Helper()
+	RunCommon(t, open)
+
 	t.Run("missing record and invalid cookie", func(t *testing.T) {
 		store := open(t)
 		s, r := saved(t, store)
@@ -91,11 +171,15 @@ func Run(t *testing.T, open func(*testing.T) session.SessionStore) {
 		duplicate := session.NewSession(store, s.Name)
 		duplicate.ID = s.ID
 		duplicate.Data["value"] = "replacement"
+		before := *duplicate
 		w := httptest.NewRecorder()
 		if err := store.Save(w, r, duplicate); err == nil {
 			t.Fatal("duplicate ID replaced an existing session")
 		}
 		noCookie(t, w)
+		if !reflect.DeepEqual(*duplicate, before) {
+			t.Fatal("duplicate ID failure changed caller-visible state")
+		}
 		unchanged(t, store, r, s)
 	})
 
@@ -265,6 +349,9 @@ func saved(t *testing.T, store session.SessionStore) (*session.Session, *http.Re
 	if err := store.Save(w, r, s); err != nil {
 		t.Fatal(err)
 	}
+	if s.IsNew || s.ExpiresAt.IsZero() {
+		t.Fatal("successful save did not publish new-session state and expiry")
+	}
 	return s, cookieRequest(t, w)
 }
 
@@ -296,7 +383,7 @@ func noCookie(t *testing.T, w *httptest.ResponseRecorder) {
 func unchanged(t *testing.T, store session.SessionStore, r *http.Request, original *session.Session) {
 	t.Helper()
 	loaded := load(t, store, r, original.Name)
-	if loaded.ID != original.ID || len(loaded.Data) != 1 || loaded.Data["value"] != "original" {
-		t.Fatal("operation changed stored data")
+	if loaded.IsNew || loaded.ID != original.ID || !loaded.ExpiresAt.Equal(original.ExpiresAt) || len(loaded.Data) != 1 || loaded.Data["value"] != "original" {
+		t.Fatal("operation changed stored data or expiry")
 	}
 }

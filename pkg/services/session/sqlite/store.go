@@ -181,15 +181,19 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *sess
 		return ErrDatabaseNotConfigured
 	}
 
-	cookie, err := s.sessionCookie(session, requestinfo.IsHTTPS(r))
+	// Prepare state locally. Failed saves must leave the caller's session intact.
+	pending := *session
+	cookie, err := s.sessionCookie(&pending, requestinfo.IsHTTPS(r))
 	if err != nil {
 		return err
 	}
-	if err := s.save(r.Context(), session); err != nil {
+	if err := s.save(r.Context(), &pending); err != nil {
 		return err
 	}
 
 	http.SetCookie(w, cookie)
+	session.ExpiresAt = pending.ExpiresAt
+	session.IsNew = pending.IsNew
 	return nil
 }
 

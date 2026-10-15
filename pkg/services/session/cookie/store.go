@@ -106,14 +106,9 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *sess
 		return sessions.NewErrSessionKeyInvalid(fmt.Errorf("the JWT key is not set"))
 	}
 
-	// create a token with just the session (and expiration)
-	var tokenExpiration time.Time
-
+	tokenExpiration := session.ExpiresAt
 	if session.IsNew {
-		tokenExpiration = time.Now().UTC().Add(c.TokenLifetime)
-		session.ExpiresAt = tokenExpiration
-	} else {
-		tokenExpiration = session.ExpiresAt
+		tokenExpiration = jwt.NewNumericDate(time.Now().UTC().Add(c.TokenLifetime)).Time
 	}
 
 	sessionValue, err := session.EncodedData(c.Serializer)
@@ -154,6 +149,8 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *sess
 		return err
 	}
 	http.SetCookie(w, cookie)
+	session.ExpiresAt = tokenExpiration
+	session.IsNew = false
 
 	return nil
 }

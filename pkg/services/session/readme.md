@@ -53,7 +53,7 @@ func countVisits(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-Save before writing response headers or a body. Simple string values can also be read directly with a checked type assertion: `title, ok := s.Data["title"].(string)`.
+Save before writing response headers or a body. A successful save sets `IsNew` to false and publishes `ExpiresAt`. Later saves preserve expiry. A failed save leaves the session unchanged and issues no cookie. Success does not guarantee browser receipt. Simple string values can also be read directly with a checked type assertion: `title, ok := s.Data["title"].(string)`.
 
 ## Rotation and logout
 

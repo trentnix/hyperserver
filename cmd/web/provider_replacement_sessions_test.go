@@ -80,6 +80,14 @@ func (s *replacementSessionStore) save(w http.ResponseWriter, r *http.Request, v
 	if err != nil {
 		return err
 	}
+	cookie := &http.Cookie{Name: value.Name, Value: value.ID, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode}
+	if err := cookie.Valid(); err != nil {
+		return err
+	}
+	if len(cookie.String()) > session.MaxCookieSize {
+		return session.ErrSessionCookieTooLarge
+	}
+
 	stored, exists := s.records[value.ID]
 	expires := stored.expires
 	if value.IsNew {
@@ -94,7 +102,7 @@ func (s *replacementSessionStore) save(w http.ResponseWriter, r *http.Request, v
 	s.records[value.ID] = replacementSessionRecord{name: value.Name, data: encoded, expires: expires}
 	value.ExpiresAt = expires
 	value.IsNew = false
-	http.SetCookie(w, &http.Cookie{Name: value.Name, Value: value.ID, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, cookie)
 	return nil
 }
 

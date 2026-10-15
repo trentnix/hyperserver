@@ -1,8 +1,10 @@
 package sqlite
 
 import (
+	"context"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -30,6 +32,37 @@ func TestSQLiteSessionContract(t *testing.T) {
 				return store
 			})
 		})
+	}
+}
+
+func TestSQLiteSaveFailurePreservesState(t *testing.T) {
+	for _, state := range []string{"new", "saved"} {
+		for _, failure := range []string{"canceled", "closed database"} {
+			t.Run(state+"/"+failure, func(t *testing.T) {
+				store := revocationStore(t)
+				r := httptest.NewRequest("GET", "/", nil)
+				s := session.NewSession(store, "account")
+				if state == "saved" {
+					s, r = savedSession(t, store)
+				}
+				before := *s
+				if failure == "canceled" {
+					ctx, cancel := context.WithCancel(r.Context())
+					cancel()
+					r = r.WithContext(ctx)
+				} else if err := store.Close(); err != nil {
+					t.Fatal(err)
+				}
+
+				w := httptest.NewRecorder()
+				if err := s.Save(w, r); err == nil {
+					t.Fatal("save succeeded despite storage failure")
+				}
+				if len(w.Header().Values("Set-Cookie")) != 0 || !reflect.DeepEqual(*s, before) {
+					t.Fatal("failed save issued a cookie or changed caller-visible state")
+				}
+			})
+		}
 	}
 }
 

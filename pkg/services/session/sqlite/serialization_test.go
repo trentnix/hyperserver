@@ -120,6 +120,9 @@ func TestOversizedSessionSavePreservesStorage(t *testing.T) {
 	if err := s.Save(w, httptest.NewRequest(http.MethodGet, "/", nil)); !errors.Is(err, sessions.ErrSessionCookieTooLarge) || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("cookie limit not enforced after JWT encoding: %v", err)
 	}
+	if !s.IsNew || !s.ExpiresAt.IsZero() || s.Data["large"] != strings.Repeat("a", sessions.MaxCookieSize) {
+		t.Fatal("oversized cookie changed caller-visible state")
+	}
 }
 
 func TestSQLiteSessionDataStaysServerSide(t *testing.T) {
