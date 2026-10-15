@@ -10,6 +10,23 @@ import (
 // Providers can wrap it. Callers must use errors.Is to recognize it.
 var ErrEmailAlreadyExists = errors.New("an account with that email already exists")
 
+// IsTokenRejection reports whether token validation or redemption rejected the
+// supplied authorization. Missing or changed accounts also invalidate the link.
+// Configuration and storage failures are not rejections. Providers must return
+// the documented rejection types only for those conditions, not for I/O errors.
+func IsTokenRejection(err error) bool {
+	var invalid *ErrToken
+	var invalidReset *ErrInvalidResetToken
+	var missing *ErrTokenNotSpecified
+	var notFound *ErrTokenNotFound
+	var expired *ErrTokenExpired
+	var accountMissing *ErrUserNotFound
+	var accountChanged *ErrUserChanged
+	return errors.As(err, &invalid) || errors.As(err, &invalidReset) ||
+		errors.As(err, &missing) || errors.As(err, &notFound) || errors.As(err, &expired) ||
+		errors.As(err, &accountMissing) || errors.As(err, &accountChanged)
+}
+
 // BaseError aliases the shared HyperServer error wrapper.
 type BaseError = hs_errors.BaseError
 

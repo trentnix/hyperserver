@@ -78,7 +78,9 @@ func TestHTTPResetHashingFailurePreservesToken(t *testing.T) {
 		tooLong := strings.Repeat("a", 70) + "1!a"
 		for _, htmx := range []bool{false, true} {
 			w := h.request(http.MethodPost, path, url.Values{"password": {tooLong}, "passwordMatch": {tooLong}}, htmx)
-			assertFormRejected(t, w, "Unable to reset password")
+			if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Unable to reset password") {
+				t.Fatalf("hashing failure response=%d %s", w.Code, w.Body.String())
+			}
 			h.assertUserUnchanged(t, u)
 			if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-reset"); err != nil {
 				t.Fatalf("hashing failure consumed token: %v", err)
@@ -134,7 +136,7 @@ func TestHTTPResetConsumesExactTokenAndRejectsReplay(t *testing.T) {
 		}
 		for _, htmx := range []bool{false, true} {
 			w := h.request(http.MethodPost, path, url.Values{"password": {"ReplayPassword1!"}, "passwordMatch": {"ReplayPassword1!"}}, htmx)
-			if w.Header().Get("HX-Redirect") != "" {
+			if w.Code != http.StatusBadRequest || w.Header().Get("HX-Redirect") != "" {
 				t.Fatal("replay returned a success redirect")
 			}
 			h.assertNoTokenExposure(t, w, presented.Token)
@@ -162,7 +164,7 @@ func TestHTTPResetDeletionFailureRollsBackPassword(t *testing.T) {
 		path := "/auth/reset/email?token=" + url.QueryEscape(token.Token)
 		for _, htmx := range []bool{false, true} {
 			w := h.request(http.MethodPost, path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, htmx)
-			if w.Header().Get("HX-Redirect") != "" {
+			if w.Code != http.StatusInternalServerError || w.Header().Get("HX-Redirect") != "" {
 				t.Error("failed reset returned a success redirect")
 			}
 			h.assertUserUnchanged(t, u)

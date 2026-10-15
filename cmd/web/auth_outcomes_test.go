@@ -43,7 +43,7 @@ func TestHTTPAuthCommitsSurviveNotificationFailure(t *testing.T) {
 					}
 					w := h.request(http.MethodPost, path, fields, htmx)
 					assertRedirectResponse(t, w, "/login", htmx)
-					if w.Body.Len() != 0 || !strings.Contains(h.logs.String(), "notification storage failure") {
+					if w.Body.Len() != 0 || !strings.Contains(h.logs.String(), "notification could not be saved") || strings.Contains(h.logs.String(), "notification storage failure") {
 						t.Fatal("notification failure was not logged or caused a second response")
 					}
 					stored, err := h.app.AccountRepository.GetByEmail(t.Context(), "person@example.invalid")

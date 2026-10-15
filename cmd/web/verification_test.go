@@ -202,7 +202,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 					link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 					for _, htmx := range []bool{false, true} {
 						w := h.request(http.MethodPost, "/auth/verify", link.Query(), htmx)
-						if !strings.Contains(w.Body.String(), "Verification failed") || w.Header().Get("HX-Redirect") != "" {
+						if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Verification failed") || w.Header().Get("HX-Redirect") != "" {
 							t.Fatal("storage failure returned verification success")
 						}
 						stored, err := h.app.AccountRepository.GetByID(t.Context(), before.ID)

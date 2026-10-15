@@ -1388,15 +1388,15 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 		for _, htmx := range []bool{false, true} {
 			for _, tc := range []struct{ method, path, message string }{
 				{http.MethodPost, "/auth/verify", "Verification failed"},
-				{http.MethodGet, "/auth/reset/email?token=" + url.QueryEscape(verification.Token), "invalid token"},
-				{http.MethodPost, "/auth/reset/email?token=" + url.QueryEscape(verification.Token), "invalid token"},
+				{http.MethodGet, "/auth/reset/email?token=" + url.QueryEscape(verification.Token), "invalid or expired"},
+				{http.MethodPost, "/auth/reset/email?token=" + url.QueryEscape(verification.Token), "invalid or expired"},
 			} {
 				form := url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}
 				if tc.path == "/auth/verify" {
 					form.Set("token", reset.Token)
 				}
 				w := h.request(tc.method, tc.path, form, htmx)
-				if !strings.Contains(w.Body.String(), tc.message) || strings.Contains(w.Body.String(), `id="reset-password-form"`) || w.Header().Get("HX-Redirect") != "" {
+				if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), tc.message) || strings.Contains(w.Body.String(), `id="reset-password-form"`) || w.Header().Get("HX-Redirect") != "" {
 					t.Fatal("wrong-purpose token did not produce a rejection")
 				}
 				h.assertUserUnchanged(t, u)
@@ -1408,7 +1408,7 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 	})
 }
 
-func TestHTTPExpiredResetTokenRedisplaysRequest(t *testing.T) {
+func TestHTTPExpiredResetTokenIsBadRequest(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
 		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
@@ -1422,8 +1422,8 @@ func TestHTTPExpiredResetTokenRedisplaysRequest(t *testing.T) {
 		for _, htmx := range []bool{false, true} {
 			for _, method := range []string{http.MethodGet, http.MethodPost} {
 				w := h.request(method, "/auth/reset/email?token="+url.QueryEscape(token.Token), url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, htmx)
-				if !strings.Contains(w.Body.String(), `id="reset-request-form"`) || !strings.Contains(w.Body.String(), "expired") {
-					t.Fatal("expired reset did not offer a new reset request")
+				if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Please request a new link") {
+					t.Fatal("expired reset did not return a client error with recovery instructions")
 				}
 				h.assertNoTokenExposure(t, w, token.Token)
 				h.assertUserUnchanged(t, u)

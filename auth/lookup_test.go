@@ -193,12 +193,19 @@ func (s verificationRepository) Verify(ctx context.Context, authorization user.V
 }
 
 func TestVerifyUsesAccountRepository(t *testing.T) {
-	for _, scenario := range []string{"success", "storage failure"} {
+	for _, scenario := range []string{"success", "storage failure", "nil account", "consumed", "expired", "canceled"} {
 		t.Run(scenario, func(t *testing.T) {
 			manager, account, sessions, _ := newLookupTestManager(t)
 			token, err := user.NewAuthVerificationToken(account, []byte(manager.verificationJwtKey), time.Hour)
 			if err != nil {
 				t.Fatal(err)
+			}
+			respond := manager.contentManager.HandleError
+			manager.contentManager.HandleError = func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
+				if err != nil && (strings.Contains(err.Error(), token.Token) || strings.Contains(err.Error(), "private storage failure")) {
+					t.Fatal("verification passed sensitive details to the error renderer")
+				}
+				respond(w, r, message, err, status)
 			}
 			r := httptest.NewRequest(http.MethodPost, "/auth/verify", strings.NewReader(url.Values{"token": {token.Token}}.Encode()))
 			r = session.AddSessionManagerToRequestContext(r, sessions)
@@ -210,8 +217,17 @@ func TestVerifyUsesAccountRepository(t *testing.T) {
 				if ctx != r.Context() || authorization.AccountID != account.ID || authorization.Email != account.Email || authorization.TokenHash != token.TokenHash {
 					t.Fatal("verification lost its request context or token identity")
 				}
-				if scenario == "storage failure" {
-					return nil, errors.New("private storage failure")
+				switch scenario {
+				case "storage failure":
+					return nil, errors.New("private storage failure: " + token.Token)
+				case "nil account":
+					return nil, nil
+				case "consumed":
+					return nil, user.NewErrTokenNotFound(nil)
+				case "expired":
+					return nil, user.NewErrTokenExpired(nil)
+				case "canceled":
+					return nil, context.Canceled
 				}
 				account.Verified = true
 				account.SessionVersion++
@@ -226,8 +242,14 @@ func TestVerifyUsesAccountRepository(t *testing.T) {
 				if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 					t.Fatalf("verification did not redirect after success: %d %s", w.Code, w.Body.String())
 				}
-			} else if w.Code != http.StatusBadRequest || w.Header().Get("HX-Redirect") != "" || !strings.Contains(w.Body.String(), "Verification failed") || strings.Contains(w.Body.String(), "private storage failure") {
-				t.Fatalf("failed verification rendered an incorrect response: %d %s", w.Code, w.Body.String())
+			} else {
+				want := http.StatusInternalServerError
+				if scenario == "consumed" || scenario == "expired" {
+					want = http.StatusBadRequest
+				}
+				if w.Code != want || w.Header().Get("HX-Redirect") != "" || !strings.Contains(w.Body.String(), "Verification failed") || strings.Contains(w.Body.String(), "private storage failure") {
+					t.Fatalf("failed verification rendered an incorrect response: %d %s", w.Code, w.Body.String())
+				}
 			}
 		})
 	}

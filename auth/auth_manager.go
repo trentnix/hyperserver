@@ -343,7 +343,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	r = user.AddUserToRequestContext(r, u)
 	err = flash.AddSuccessNotification(w, r, "You have been successfully logged in")
 	if err != nil {
-		logger.LogRequestError(r, err)
+		logger.LogRequestError(r, errors.New("login succeeded but its notification could not be saved"))
 	}
 
 	redirectURL := ""
@@ -363,7 +363,9 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// clear the redirect session, it is no longer valid
-	s.End(w, r)
+	if err := s.End(w, r); err != nil {
+		logger.LogRequestError(r, errors.New("login succeeded but the redirect session could not be cleared"))
+	}
 
 	util.RedirectToURL(w, r, redirectURL)
 }
@@ -481,30 +483,8 @@ func (a *AuthManager) GetReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		a.contentManager.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
-		return
-	}
-
-	var errTokenExpired *user.ErrTokenExpired
-
-	u, err := user.ValidateResetToken(r.Context(), a.accounts, token, []byte(a.verificationJwtKey))
-	if err != nil {
-		switch {
-		case errors.As(err, &errTokenExpired):
-			// show the reset request form with a message that the token is expired
-			flash.AddErrorNotification(w, r, "Unable to reset the specified authorization: the reset request has expired")
-			a.GetResetRequest(w, r)
-			return
-		default:
-			a.contentManager.HandleError(w, r, "Could not reset authorization: invalid token", nil, http.StatusInternalServerError)
-			return
-		}
-	}
-
+	token, u := a.resetAccount(w, r)
 	if u == nil {
-		a.contentManager.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
 		return
 	}
 
@@ -530,38 +510,34 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		a.contentManager.HandleError(w, r, "No reset token specified. Unable to reset authentication.", nil, http.StatusInternalServerError)
-		return
-	}
-
-	var errTokenExpired *user.ErrTokenExpired
-
-	u, err := user.ValidateResetToken(r.Context(), a.accounts, token, []byte(a.verificationJwtKey))
-	if err != nil {
-		switch {
-		case errors.As(err, &errTokenExpired):
-			// show the reset request form with a message that the token is expired
-			addMessageErr := flash.AddErrorNotification(w, r, "Unable to reset the specified authorization: the reset request has expired")
-			if addMessageErr != nil {
-				logger.LogRequestError(r, addMessageErr)
-			}
-
-			a.GetResetRequest(w, r)
-			return
-		default:
-			a.contentManager.HandleError(w, r, "Could not reset authorization: invalid token", nil, http.StatusInternalServerError)
-			return
-		}
-	}
-
+	token, u := a.resetAccount(w, r)
 	if u == nil {
-		a.contentManager.HandleError(w, r, "Could not reset authorization: invalid user", nil, http.StatusInternalServerError)
 		return
 	}
 
 	authService.Reset(w, r, u, token, a.resetRequiresNewCredentials)
+}
+
+// resetAccount applies the same token checks to the form and its submission.
+func (a *AuthManager) resetAccount(w http.ResponseWriter, r *http.Request) (string, *user.User) {
+	token := r.URL.Query().Get("token")
+	u, err := user.ValidateResetToken(r.Context(), a.accounts, token, []byte(a.verificationJwtKey))
+	if err != nil {
+		a.recoveryError(w, r, "Unable to reset password", err)
+		return "", nil
+	}
+	return token, u
+}
+
+func (a *AuthManager) recoveryError(w http.ResponseWriter, r *http.Request, message string, err error) {
+	if user.IsTokenRejection(err) {
+		a.contentManager.HandleError(w, r,
+			message+": the link is invalid or expired. Please request a new link.", nil, http.StatusBadRequest)
+		return
+	}
+	// Storage errors can contain tokens or account details. Log only the operation.
+	a.contentManager.HandleError(w, r, message+". Please try again later.",
+		errors.New(message+": recovery operation failed"), http.StatusInternalServerError)
 }
 
 // getAuthService returns the authService specified by authType (if it is loaded)
@@ -708,12 +684,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 
 	verifiedUser, err := user.Verify(r.Context(), a.accounts, verificationToken, []byte(a.verificationJwtKey))
 	if err != nil {
-		a.contentManager.HandleError(
-			w,
-			r,
-			verificationErrMsg,
-			fmt.Errorf("error retrieving the user from the verification token: %w", err),
-			http.StatusBadRequest)
+		a.recoveryError(w, r, "Verification failed", err)
 		return
 	}
 
@@ -722,15 +693,15 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 			w,
 			r,
 			verificationErrMsg,
-			fmt.Errorf("unable to retrieve the user from the verification token: %w", err),
-			http.StatusBadRequest)
+			errors.New("verification repository returned no account"),
+			http.StatusInternalServerError)
 		return
 	}
 
 	if authenticatedUser != nil {
 		if authenticatedUser.ID == verifiedUser.ID {
 			if err := identity.SetAuthenticatedUser(w, r, verifiedUser); err != nil {
-				logger.LogRequestError(r, err)
+				logger.LogRequestError(r, errors.New("verification succeeded but the authenticated session could not be renewed"))
 				util.HttpError(w, r, "Your account was verified, but the session could not be renewed. Please log in again.", nil, http.StatusInternalServerError)
 				return
 			}
@@ -743,7 +714,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 
 		err = flash.AddSuccessNotification(w, r, authenticatedUserMessage)
 		if err != nil {
-			logger.LogRequestError(r, err)
+			logger.LogRequestError(r, errors.New("verification succeeded but its notification could not be saved"))
 		}
 
 		util.RedirectToURL(w, r, a.contentManager.HomeURL)
@@ -754,7 +725,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 	// no user is authenticated - redirect the requestor to the login page
 	err = flash.AddSuccessNotification(w, r, "Your account was verified successfully. Please login to access the site.")
 	if err != nil {
-		logger.LogRequestError(r, err)
+		logger.LogRequestError(r, errors.New("verification succeeded but its notification could not be saved"))
 	}
 
 	util.RedirectToURL(w, r, a.contentManager.HomeURL)

@@ -418,7 +418,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 		successMessage = "You have been successfully registered. Check your email for verification instructions."
 	}
 	if err := flash.AddSuccessNotification(w, r, successMessage); err != nil {
-		logger.LogRequestError(r, err)
+		logger.LogRequestError(r, errors.New("registration succeeded but its notification could not be saved"))
 	}
 	util.RedirectToURL(w, r, a.contentManager.AuthURL)
 }
@@ -516,7 +516,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	resetErrMsg := "Unable to display the email authorization service password reset form"
 
 	if token == "" {
-		a.contentManager.HandleError(w, r, resetErrMsg, user.NewErrTokenNotSpecified(nil), http.StatusInternalServerError)
+		a.contentManager.HandleError(w, r, "No reset token specified. Please request a new link.", nil, http.StatusBadRequest)
 		return
 	}
 
@@ -559,13 +559,8 @@ func (a *EmailAuthService) Reset(
 	reset.Data = resetForm
 
 	if u == nil {
-		form.HandleFormError(
-			w,
-			r,
-			reset,
-			resetForm,
-			"Unable to reset your password due to an internal error",
-			user.NewErrUserNotSpecified(fmt.Errorf("reset failed")))
+		a.contentManager.HandleError(w, r, "Unable to reset password. Please try again later.",
+			errors.New("password reset requires an account"), http.StatusInternalServerError)
 		return
 	}
 
@@ -589,13 +584,19 @@ func (a *EmailAuthService) Reset(
 		return
 	}
 	if err != nil {
-		form.HandleFormError(w, r, reset, resetForm, "Unable to reset password", err)
+		if user.IsTokenRejection(err) {
+			a.contentManager.HandleError(w, r,
+				"Unable to reset password: the link is invalid or expired. Please request a new link.", nil, http.StatusBadRequest)
+			return
+		}
+		a.contentManager.HandleError(w, r, "Unable to reset password. Please try again later.",
+			errors.New("password reset operation failed"), http.StatusInternalServerError)
 		return
 	}
 
 	*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
 	if err := flash.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site."); err != nil {
-		logger.LogRequestError(r, err)
+		logger.LogRequestError(r, errors.New("password reset succeeded but its notification could not be saved"))
 	}
 	util.RedirectToURL(w, r, a.contentManager.AuthURL)
 }

@@ -225,6 +225,9 @@ func TestValidateTokenUsesRepository(t *testing.T) {
 				if (scenario == "canceled" || scenario == "account canceled") && !errors.Is(err, context.Canceled) {
 					t.Fatalf("cancellation was hidden: %v", err)
 				}
+				if (scenario == "nil account" || scenario == "wrong account") && IsTokenRejection(err) {
+					t.Fatalf("repository contract violation became a token rejection: %v", err)
+				}
 			})
 		}
 	}

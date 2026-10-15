@@ -148,7 +148,7 @@ func validateToken(ctx context.Context, accounts AccountRepository, tokenString 
 		return nil, err
 	}
 	if account == nil || account.ID != claims.Id {
-		return nil, NewErrUserNotFound(nil)
+		return nil, errors.New("account repository returned an unexpected account")
 	}
 	if tokenType == VerificationTokenPurpose && EmailKey(account.Email) != EmailKey(claims.Email) {
 		return nil, NewErrToken(errors.New("verification address no longer matches the account"))

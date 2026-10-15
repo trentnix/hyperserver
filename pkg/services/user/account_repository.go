@@ -70,7 +70,8 @@ type AccountRepository interface {
 	// and recheck both signed and stored expiry when consuming it, including after
 	// any wait for storage.
 	// A missing token returns ErrTokenNotFound. Expiry returns ErrTokenExpired.
-	// A missing account or changed password or provider must reject the operation.
+	// A missing account or changed password or provider returns ErrToken, ErrUserNotFound,
+	// or ErrUserChanged. Storage failures must remain separate from token rejections.
 	// Success refreshes u from storage. Failure must leave u and storage unchanged.
 	// Other account fields and tokens must remain unchanged.
 	ResetPassword(ctx context.Context, u *User, authorization ResetAuthorization, passwordHash string) error
@@ -80,6 +81,8 @@ type AccountRepository interface {
 	// Implementations must match the stored token's hash, account, and verification
 	// purpose and recheck signed and stored expiry when consuming it, including after
 	// any wait for storage. Missing tokens return ErrTokenNotFound. Expiry returns ErrTokenExpired.
+	// A missing account or changed email returns ErrToken or ErrUserNotFound.
+	// Storage failures must remain separate from token rejections.
 	// Success updates UpdatedAt and increments SessionVersion only if the account
 	// was not already verified. It returns the committed account. Other fields and
 	// tokens must stay unchanged. Failure must return nil and leave storage unchanged.

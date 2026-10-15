@@ -545,9 +545,15 @@ func TestChangeUsesAccountRepository(t *testing.T) {
 }
 
 func TestResetUsesAccountRepository(t *testing.T) {
-	for _, scenario := range []string{"success", "storage failure"} {
+	for _, scenario := range []string{"success", "storage failure", "consumed", "expired", "changed account", "canceled"} {
 		t.Run(scenario, func(t *testing.T) {
-			fail := scenario == "storage failure"
+			failure := map[string]error{
+				"storage failure": errors.New("private storage failure"),
+				"consumed":        user.NewErrTokenNotFound(nil),
+				"expired":         user.NewErrTokenExpired(nil),
+				"changed account": user.NewErrUserChanged(nil),
+				"canceled":        context.Canceled,
+			}[scenario]
 			account := &user.User{ID: "account", SessionVersion: 1}
 			key := "test-signing-key"
 			token, err := user.NewAuthResetToken(account, []byte(key), time.Hour)
@@ -564,15 +570,18 @@ func TestResetUsesAccountRepository(t *testing.T) {
 				if ctx != r.Context() || u != account || authorization.AccountID != account.ID || authorization.TokenHash != token.TokenHash || !password.CheckPasswordHash(form.Get("password"), hash) {
 					t.Fatal("reset did not pass the request context, account, token identity, and hashed password")
 				}
-				if fail {
-					return errors.New("private storage failure")
-				}
-				return nil
+				return failure
 			}}
 			cm := content.NewContentManager()
 			cm.AddHtmxLayout(fstest.MapFS{"partial.html": &fstest.MapFile{Data: []byte(`{{renderPartial .PartialName .}}`)}}, "partial.html")
 			// No SQL pool: reset submission must use the supplied repository.
 			cm.AuthURL = "/login"
+			cm.HandleError = func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
+				if err != nil && (strings.Contains(err.Error(), "private storage failure") || strings.Contains(err.Error(), token.Token)) {
+					t.Fatal("reset passed sensitive details to the error renderer")
+				}
+				http.Error(w, message, status)
+			}
 			service := &EmailAuthService{
 				TemplateFS: emailAuthTemplatesFS,
 				accounts:   accounts, contentManager: cm,
@@ -586,11 +595,17 @@ func TestResetUsesAccountRepository(t *testing.T) {
 			if calls != 1 {
 				t.Fatalf("repository calls=%d, want 1", calls)
 			}
-			if !fail && (w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != cm.AuthURL) {
+			if failure == nil && (w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != cm.AuthURL) {
 				t.Fatalf("successful reset did not redirect: %d %v", w.Code, w.Header())
 			}
-			if fail && (!strings.Contains(w.Body.String(), "Unable to reset password") || strings.Contains(w.Body.String(), "private storage failure")) {
-				t.Fatalf("failed reset rendered an incorrect error: %s", w.Body.String())
+			if failure != nil {
+				want := http.StatusInternalServerError
+				if user.IsTokenRejection(failure) {
+					want = http.StatusBadRequest
+				}
+				if w.Code != want || w.Header().Get("HX-Redirect") != "" || !strings.Contains(w.Body.String(), "Unable to reset password") || strings.Contains(w.Body.String(), "private storage failure") {
+					t.Fatalf("failed reset rendered an incorrect error: %d %s", w.Code, w.Body.String())
+				}
 			}
 		})
 	}

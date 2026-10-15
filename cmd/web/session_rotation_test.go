@@ -148,6 +148,9 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 				if w.Code != http.StatusInternalServerError || w.Body.String() != "Your account was verified, but the session could not be renewed. Please log in again.\n" {
 					t.Fatalf("partial failure response = %d %q", w.Code, w.Body.String())
 				}
+				if !strings.Contains(h.logs.String(), "authenticated session could not be renewed") || strings.Contains(h.logs.String(), "private rotation failure") {
+					t.Fatal("session renewal failure was not logged safely")
+				}
 				if len(w.Result().Cookies()) != 0 || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
 					t.Fatal("failed renewal issued cookies or redirected")
 				}
@@ -179,9 +182,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 					t.Fatal("old cookie retained access after verification")
 				}
 				w = h.request(http.MethodPost, "/auth/verify", url.Values{"token": {token.Token}}, htmx)
-				// The reference error renderer currently returns 200. Check rejection
-				// without expanding this change into response-status handling.
-				if !strings.Contains(w.Body.String(), "Verification failed") || w.Header().Get("HX-Redirect") != "" {
+				if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Verification failed") || w.Header().Get("HX-Redirect") != "" {
 					t.Fatalf("consumed verification token was not rejected: %d %s", w.Code, w.Body.String())
 				}
 				h.assertUserUnchanged(t, stored)
