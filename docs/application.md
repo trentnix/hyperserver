@@ -44,7 +44,9 @@ The [README example](../readme.md#module-registration) selects only email authen
 
 `auth.AuthService` requires `AuthType`, `Init`, and `IsLoaded`. Add `LoginHandler`, `RegistrationHandler`, `ResetHandler`, or `ChangeHandler` for supported workflows, and `ProviderRoutes` for extra routes. The manager displays supported choices and returns 404 for unsupported workflows. If no provider supports registration, the registration page reports it unavailable. Verification configuration is required only for registration-capable providers when registration and required verification are enabled.
 
-`AuthService.Init` receives no context, and the auth module does not call provider shutdown hooks. Initialize resource-owning dependencies in application setup, pass them to provider factories, and close them through application cleanup.
+Auth providers configure request handling, not service lifecycles. `Descriptor.New` must create a fresh instance without I/O. `AuthService.Init` can validate settings and prepare templates. It must not open connections, query storage, send mail, start background work, or initialize or close supplied services. Prepare those services in application setup, pass them through provider factories, and register their cleanup with `app.OnShutdown`.
+
+If provider setup fails, discard the application and its provider instances, then call application shutdown to release owned services. The auth module does not call provider `Close` or `Shutdown` methods. `Init` receives no context, so synchronous template reads, including a custom `TemplateFS`, cannot be interrupted by the initialization deadline. Use local or embedded template sources that return promptly. Resource-owning modules use the separate [module lifecycle](#module-cleanup).
 
 ## Module dependencies
 

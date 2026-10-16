@@ -101,10 +101,16 @@ type VerificationEmailSender interface {
 	SendVerificationEmail(context.Context, *user.User, url.URL) error
 }
 
-// AuthService identifies and initializes an authentication provider. Providers
-// implement the HTTP capabilities they support separately.
+// AuthService identifies and configures an authentication provider. Providers
+// implement the HTTP capabilities they support separately. Providers do not own
+// service resources. The auth module does not call Close or Shutdown on them.
 type AuthService interface {
-	// Init configures the provider using application-owned services.
+	// Init validates settings and prepares templates using supplied services.
+	// It must not open connections, query storage, send mail, start background work,
+	// or initialize or close supplied services. Initialize resource-owning
+	// dependencies in application setup.
+	// Template preparation is synchronous. Init has no cancellation context.
+	// On failure, discard the provider instance. Supplied services remain usable.
 	Init(*server.ApplicationServer) error
 	// IsLoaded reports whether the provider is available for selection.
 	IsLoaded() bool

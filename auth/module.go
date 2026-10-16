@@ -17,6 +17,8 @@ import (
 // Configure provider dependencies through their own factories. Each instance
 // owns its manager and enabled providers. An empty catalog does not use imports.
 // Required account, session, mail, and rendering services must be ready before Init.
+// Providers only configure themselves. Application setup owns service cleanup
+// after failed startup or after HTTP requests drain, not the auth module.
 func Module(accounts user.AccountRepository, sessions *session.SessionManager, providers []Descriptor) handlers.Descriptor {
 	providers = slices.Clone(providers)
 	return handlers.Descriptor{Name: "auth", New: func() handlers.Handler {

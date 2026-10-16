@@ -34,6 +34,7 @@ type (
 	// EmailAuthService implements email/password authentication using shared application services.
 	EmailAuthService struct {
 		// TemplateFS overrides bundled templates. Set before Init. Nil uses embedded assets.
+		// Reads during Init are synchronous and cannot be interrupted by a context.
 		TemplateFS        fs.FS
 		accounts          user.AccountRepository
 		sessions          *session.SessionManager
@@ -168,7 +169,9 @@ func Provider(accounts user.AccountRepository, sessions *session.SessionManager,
 	}}
 }
 
-// Init initializes the EmailAuthService instance
+// Init validates dependencies and settings and prepares email and page templates.
+// It does not access account or session storage, send mail, or acquire resources
+// that need shutdown. Supplied services remain owned by application setup.
 func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	configOptions := auth_services.GetAuthConfigOptions(s.Config, AuthTypeEmail)
 	authServiceEnabled := strings.EqualFold(configOptions["enabled"], "true") || configOptions["enabled"] == "1"

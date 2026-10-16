@@ -3,17 +3,119 @@ package auth
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	auth_services "github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+// Unimplemented repository and session operations panic if setup attempts I/O.
+type providerSetupAccounts struct {
+	user.AccountRepository
+	closes int
+}
+
+func (a *providerSetupAccounts) Close() error { a.closes++; return nil }
+
+type providerSetupStore struct {
+	session.SessionStore
+	session.RotatingStore
+	closes int
+}
+
+func (*providerSetupStore) IsEnabled() bool { return true }
+func (s *providerSetupStore) Close() error  { s.closes++; return nil }
+
+func TestProviderSetupLeavesServiceOwnershipWithApplication(t *testing.T) {
+	for _, tc := range []struct {
+		name, wantError string
+	}{
+		{"success", ""},
+		{"template failure", "unable to initialize the email authorization service"},
+		{"verification failure", "mail delivery is unavailable"},
+		{"route failure", "conflicts"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app, err := server.NewApplicationServer(config.Config{Auth: config.AuthConfig{
+				Enabled: true, RegistrationEnabled: true, RegisterRequiresVerification: true,
+				JwtKey: "test-key000000000000000000000000", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
+				Services: map[string]map[string]string{"email": {"enabled": "true"}},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := app.Shutdown(); err != nil {
+					t.Error(err)
+				}
+			})
+
+			accounts := new(providerSetupAccounts)
+			app.OnShutdown("accounts", func(context.Context) error { return accounts.Close() })
+			store := new(providerSetupStore)
+			sessions, err := session.NewSessionManager(t.Context(), map[string]string{"default": "test"}, map[string]session.StoreFactory{
+				"test": func(context.Context) (session.SessionStore, error) { return store, nil },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			app.OnShutdown("sessions", func(context.Context) error { return sessions.Close() })
+			client, err := messaging.NewMailClientWithSender("sender@example.invalid", accountMailSender(func(context.Context, messaging.MailMessage) error {
+				t.Fatal("provider setup attempted mail delivery")
+				return nil
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.name == "verification failure" {
+				client = nil
+			}
+			descriptor := auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
+				provider := Provider(accounts, sessions, client).New().(*EmailAuthService)
+				if tc.name == "template failure" {
+					provider.TemplateFS = fstest.MapFS{}
+				}
+				return provider
+			}}
+			if tc.name == "route failure" {
+				app.Web.HandleFunc("GET /auth/login", func(http.ResponseWriter, *http.Request) {})
+			}
+
+			err = handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{
+				auth_services.Module(accounts, sessions, []auth_services.Descriptor{descriptor}),
+			}, nil)
+			if tc.wantError == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+				t.Fatalf("setup error = %v, want %q", err, tc.wantError)
+			}
+			if accounts.closes != 0 || store.closes != 0 {
+				t.Fatal("provider setup or rollback closed application-owned services")
+			}
+
+			for range 2 {
+				if err := app.Shutdown(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if accounts.closes != 1 || store.closes != 1 {
+				t.Fatalf("application cleanup: accounts=%d sessions=%d, want one each", accounts.closes, store.closes)
+			}
+		})
+	}
+}
 
 var (
 	_ auth_services.AuthService         = (*EmailAuthService)(nil)
