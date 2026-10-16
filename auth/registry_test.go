@@ -92,13 +92,44 @@ func TestRegistryDisabledProvidersDoNotRunFactories(t *testing.T) {
 }
 
 func TestRegistryFactoryFailures(t *testing.T) {
-	for _, factory := range []func() AuthService{func() AuthService { return nil }, func() AuthService { return configTestAuthService{name: "wrong"} }} {
-		if r, err := NewRegistry(registryConfig(), []Descriptor{{Name: "test", New: factory}}); r != nil || err == nil {
-			t.Fatalf("registry=%v error=%v", r, err)
-		}
+	for _, tc := range []struct {
+		name    string
+		factory func() AuthService
+	}{
+		{"nil", func() AuthService { return nil }},
+		{"typed nil with nil-safe method", func() AuthService { return (*registryProvider)(nil) }},
+		{"typed nil with value method", func() AuthService { return (*configTestAuthService)(nil) }},
+		{"wrong type", func() AuthService { return configTestAuthService{name: "wrong"} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := registryConfig()
+			c.Auth.Services["later"] = map[string]string{"enabled": "true"}
+			catalog := []Descriptor{
+				{Name: "test", New: tc.factory},
+				{Name: "later", New: func() AuthService {
+					t.Fatal("factory ran after invalid provider")
+					return nil
+				}},
+			}
+			if r, err := NewRegistry(c, catalog); r != nil || err == nil || !strings.Contains(err.Error(), `auth provider "test" returned no instance or a different AuthType`) {
+				t.Fatalf("registry=%v error=%v", r, err)
+			}
+		})
 	}
 	if r, err := NewRegistry(registryConfig(), nil); r != nil || err == nil || !strings.Contains(err.Error(), "unknown enabled") {
 		t.Fatalf("empty local catalog: %v %v", r, err)
+	}
+}
+
+func TestRegistryAcceptsValueProvider(t *testing.T) {
+	r, err := NewRegistry(registryConfig(), []Descriptor{{Name: "test", New: func() AuthService {
+		return configTestAuthService{name: "test"}
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if services := r.Services(); len(services) != 1 || services[0].AuthType() != "test" {
+		t.Fatalf("services = %v", services)
 	}
 }
 

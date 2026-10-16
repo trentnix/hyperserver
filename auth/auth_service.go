@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ var catalog struct {
 
 // Descriptor names an authentication provider and supplies its factory.
 // New must return a fresh instance without I/O. Name must match AuthType.
+// The instance must not be nil, including a typed nil inside an interface.
 type Descriptor struct {
 	Name string
 	New  func() AuthService
@@ -55,12 +57,25 @@ func NewRegistry(c *config.Config, descriptors []Descriptor) (*Registry, error) 
 			continue
 		}
 		service := d.New()
-		if service == nil || service.AuthType() != d.Name {
+		if isNilAuthService(service) || service.AuthType() != d.Name {
 			return nil, fmt.Errorf("auth provider %q returned no instance or a different AuthType", d.Name)
 		}
 		r.services = append(r.services, service)
 	}
 	return r, nil
+}
+
+// isNilAuthService rejects typed nils before registry construction calls methods.
+func isNilAuthService(service AuthService) bool {
+	if service == nil {
+		return true
+	}
+	switch value := reflect.ValueOf(service); value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // Services returns a copy of the application's provider list, not new instances.

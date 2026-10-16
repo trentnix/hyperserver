@@ -10,6 +10,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -42,6 +43,7 @@ func GetSessionManager(r *http.Request) *SessionManager {
 
 // StoreFactory initializes a session store. On failure it must release any
 // partially acquired resources. On success the manager owns the returned store.
+// The returned store must not be nil, including a typed nil inside an interface.
 type StoreFactory func(context.Context) (SessionStore, error)
 
 // NewSessionManager validates selections and initializes each selected provider
@@ -82,10 +84,13 @@ func NewSessionManager(ctx context.Context, types map[string]string, factories m
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("initialize session store %s: %w", name, err), m.Close())
 		}
+		if isNilStore(store) {
+			return nil, errors.Join(fmt.Errorf("session store %q is missing or disabled", name), m.Close())
+		}
 		if closer, ok := store.(io.Closer); ok {
 			m.closers = append(m.closers, closer)
 		}
-		if store == nil || !store.IsEnabled() {
+		if !store.IsEnabled() {
 			return nil, errors.Join(fmt.Errorf("session store %q is missing or disabled", name), m.Close())
 		}
 		if err := ctx.Err(); err != nil {
@@ -94,6 +99,19 @@ func NewSessionManager(ctx context.Context, types map[string]string, factories m
 		m.stores[name] = store
 	}
 	return m, nil
+}
+
+// isNilStore rejects typed nils before setup calls methods or takes ownership.
+func isNilStore(store SessionStore) bool {
+	if store == nil {
+		return true
+	}
+	switch value := reflect.ValueOf(store); value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // Close releases owned provider resources in reverse initialization order.

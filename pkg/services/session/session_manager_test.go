@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +20,32 @@ func (s *managerTestStore) IsEnabled() bool { return s.enabled }
 func (s *managerTestStore) Close() error    { return s.close() }
 func (s *managerTestStore) Get(_ *http.Request, name string) (*Session, error) {
 	return NewSession(s, name), nil
+}
+
+type managerNilSafeStore struct{ managerTestStore }
+
+func (*managerNilSafeStore) IsEnabled() bool { return true }
+
+type managerValueStore struct{ SessionStore }
+
+func (managerValueStore) IsEnabled() bool { return true }
+
+func TestManagerAcceptsValueProvider(t *testing.T) {
+	m, err := NewSessionManager(t.Context(), map[string]string{"default": "value"}, map[string]StoreFactory{
+		"value": func(context.Context) (SessionStore, error) { return managerValueStore{}, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := m.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	store, err := m.Store("default")
+	if _, ok := store.(managerValueStore); err != nil || !ok {
+		t.Fatalf("store = %T, error = %v", store, err)
+	}
 }
 
 func TestManagerOwnsSelectedProviders(t *testing.T) {
@@ -87,7 +114,7 @@ func TestManagerRejectsInvalidSelectionsBeforeSetup(t *testing.T) {
 
 func TestManagerRollsBackProviderFailures(t *testing.T) {
 	failure, closeFailure := errors.New("setup failed"), errors.New("close failed")
-	for _, reason := range []string{"error", "nil store", "disabled", "canceled during setup", "canceled before setup"} {
+	for _, reason := range []string{"error", "nil store", "typed-nil store", "typed-nil nil-safe store", "disabled", "canceled during setup", "canceled before setup"} {
 		t.Run(reason, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -102,6 +129,10 @@ func TestManagerRollsBackProviderFailures(t *testing.T) {
 							return nil, failure
 						case "nil store":
 							return nil, nil
+						case "typed-nil store":
+							return (*managerTestStore)(nil), nil
+						case "typed-nil nil-safe store":
+							return (*managerNilSafeStore)(nil), nil
 						case "canceled during setup":
 							cancel()
 						}
@@ -137,6 +168,9 @@ func TestManagerRollsBackProviderFailures(t *testing.T) {
 			}
 			if reason == "error" && !errors.Is(err, failure) {
 				t.Fatal("lost initialization error", err)
+			}
+			if (strings.Contains(reason, "nil") || reason == "disabled") && !strings.Contains(err.Error(), `session store "b" is missing or disabled`) {
+				t.Fatal("lost invalid provider error", err)
 			}
 		})
 	}
