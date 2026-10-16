@@ -6,7 +6,7 @@ The core provides rendering and HTMX responses. Authentication, sessions, storag
 
 ## Project status
 
-HyperServer is not production-ready. Public APIs and configuration can change without backward compatibility during `v0.x`. Performance and operational readiness still need validation.
+HyperServer is not production-ready. Public APIs and configuration can change without backward compatibility during `v0.x`. See the [compatibility policy](docs/compatibility.md) for upgrades and deprecation. Performance and operational readiness still need validation.
 
 The reference application is for local development, not public deployment or sensitive data. Its loopback restriction does not prevent exposure through a tunnel or proxy. The framework itself is not restricted to loopback.
 
@@ -36,7 +36,7 @@ go run ./cmd/web
 
 | Guide | Use it for |
 | --- | --- |
-| [Application setup](docs/application.md) | Service wiring, module dependencies, startup, and cleanup. |
+| [Application setup](docs/application.md) | Adding modules, replacing services, startup, and cleanup. |
 | [Rendering and forms](pkg/components/readme.md) | Prepared templates, HTMX responses, validation, and notifications. |
 | [Storage](docs/storage.md) | Repository guarantees, migrations, backend access, and maintenance. |
 | [Sessions](pkg/services/session/readme.md) | Store selection, rotation, serialization, and replacement contracts. |

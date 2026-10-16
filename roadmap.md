@@ -117,10 +117,10 @@ Validate the configuration being deployed. Unused adapters and caches must not b
 
 ### 3. Prove framework replacement and reuse
 
-- Run shared contract tests and a representative workflow against PostgreSQL and one suitable file, document, or cloud adapter, without changing handlers or operations. Document backend requirements and data migration.
+- Add storage providers when an application needs them. Validate each provider with shared contract tests and its application workflow, without changing unrelated handlers or operations. Document backend requirements and data migration.
 - Build an application outside this repository using documented setup and self-registering modules. Demonstrate a persistent feature with full-page and HTMX success and failure paths, without copying reference-application infrastructure.
 - Use that application to test provider and serializer replacement, isolation, and cleanup ownership. Fix demonstrated coupling without adding speculative abstractions.
-- Document extension contracts and runnable examples. Stabilize interfaces only after real usage, with explicit compatibility and deprecation policies.
+- Use the [extension contracts](docs/application.md#adding-or-replacing-a-feature) and [compatibility policy](docs/compatibility.md) when adding providers. Stabilize interfaces only after further application use and backend validation.
 
 ## Scope limits and deferred decisions
 
