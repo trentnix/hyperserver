@@ -1,35 +1,19 @@
 # 0001: Self-registration and application-owned runtime state
 
-Status: Accepted. Factory catalogs, per-application instances, capability ordering, and declared dependency delivery are implemented. Automatic module cleanup remains pending.
-
-## Context
-
-Importing a module must make it available to HyperServer. Storing live objects in a process-wide registry makes every server instance share those objects.
-
-When server A initializes a module, the module stores A's database, configuration, and other dependencies. If server B initializes the same module object, B can overwrite those dependencies while A's handlers still use the object. Separate processes do not share these registries.
-
-The [handler catalog](../../pkg/handlers/handlers.go) and [auth catalog](../../auth/auth_service.go) therefore store descriptions and factories. Each server creates and initializes its own module objects.
+Status: Accepted.
 
 ## Decision
 
-Package `init()` functions must register immutable module descriptors, not runtime instances. Registration must not load configuration, perform I/O, bind routes, migrate storage, or start background work.
+Package `init()` functions register immutable descriptors and factories, not live modules. Each application selects a catalog, creates its own instances, initializes dependencies before consumers, and binds routes before serving. Tests can supply local catalogs.
 
-Each application snapshots the process-wide module catalog and owns its enabled instances. Startup explicitly resolves dependencies, initializes modules, and binds routes before accepting traffic. Shutdown drains requests before closing dependent services in reverse order. Tests can supply local catalogs.
+## Reason
+
+A process-wide registry of live objects lets one application's initialization overwrite another application's configuration and services. Sharing descriptors preserves import-based discovery without sharing runtime state.
 
 ## Consequences
 
-Importing a module still makes it available to every application in the process. Applications share descriptions of available modules, not the module objects themselves. Each application creates, initializes, and cleans up its own objects.
+Factories must not perform I/O. Modules own resources acquired during initialization and release them during reverse-order cleanup. A failed initializer releases its partial resources. The initializer rolls back previously completed modules on failure.
 
-Descriptions contain a name, a factory that creates an instance without I/O, and required and provided capabilities. Applications can copy the import catalog or supply a local catalog. Metadata slices are copied so applications cannot change each other's descriptions. Auth registries instantiate only configured, enabled providers.
+Application-owned services use typed constructors. Module-supplied capabilities are checked at startup, not compile time. See the [setup guide](../application.md#module-dependencies) for dependency declarations and lifecycle rules.
 
-`handlers.Resolve` validates module metadata and provider selections before factories run. A required capability needs one provider unless the consumer permits several. Optional requirements permit no provider but do not hide ambiguous selections. Explicit selections narrow matching providers to one. The resolver follows catalog and requirement order, orders dependencies first, and rejects cycles. Every module in the supplied catalog stays selected. Provider selection changes dependency edges, not which modules run.
-
-`handlers.Initialize` uses the resolved selections to initialize providers before consumers. Providers publish their declared services through `Capabilities`. Consumers receive a `Dependencies` view in `BindDependencies` before `Init`. The view contains only declared requirements. Generic lookup functions check each value against a consumer-owned interface. Existing application-supplied services still use `Init` parameters.
-
-This approach supports different service interfaces without adding methods to a central service locator. Capability names connect modules, while Go interfaces describe the behavior consumers need. Type mismatches produce startup errors, not compile-time errors. Missing optional services return a zero value or empty slice. Optional requirements never hide provider failures. Consumers borrow services and must not close them. Initialization returns successfully initialized modules even on failure, leaving cleanup to the application until module lifecycle handling is implemented.
-
-Future plugin loaders can register module descriptions and factories through the same registration API that imports use. Registration must therefore be callable without relying on `init()`. We have not chosen how to load plugin code or check whether a plugin works with a particular HyperServer version.
-
-For now, each application selects its modules at startup. Adding or replacing a plugin while the server is running needs more design work. We must decide how to change routes and dependencies, finish requests already using the old plugin, and release its resources.
-
-Giving each application its own module objects prevents accidental sharing. It does not make untrusted plugin code safe to run inside the server process.
+Registration does not provide runtime plugin replacement or isolation from untrusted code. Those features require a separate design.

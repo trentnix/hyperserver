@@ -1,70 +1,74 @@
 # Application setup and modules
 
-Use the [stateless application](../examples/stateless/readme.md) for a minimal setup and [cmd/web](../cmd/web) for accounts, sessions, and mail. The [README](../readme.md#module-registration) shows basic module registration and wiring.
+Start with the [stateless application](../examples/stateless/main.go). The [reference command](../cmd/web/main.go) adds accounts, sessions, mail, and middleware. Application setup selects services and owns shared resources. Modules own their internal resources and routes.
 
 ## Application startup
 
 ### Signing keys
 
-Configuration and built-in session constructors reject signing keys shorter than 32 bytes, as required for [HS256](https://www.rfc-editor.org/rfc/rfc7518#section-3.2). They also reject empty values and known placeholders without including secrets in errors. Length cannot establish randomness. Generate independent values for `auth.jwtKey` and `http.session.jwtKey` with a cryptographically secure generator, for example by running `openssl rand -hex 32` separately for each key. Paste each output unchanged: configuration uses the string's bytes without hex or base64 decoding.
+Generate independent values for `auth.jwtKey` and `http.session.jwtKey`, for example with `openssl rand -hex 32` separately for each key. Configuration uses the output's bytes unchanged, without decoding. Constructors reject keys shorter than 32 bytes and known placeholders. Length alone cannot establish randomness.
 
 ### Services and serving
 
-`server.NewApplicationServer(cfg)` returns `(*ApplicationServer, error)`. It validates shared settings, copies configuration including nested maps and pointers, and creates the router and content manager. It does not load configuration files or create optional services. A stateless application can use `config.Config{}` and serve `app.Web` through `net/http`.
+`server.NewApplicationServer(cfg)` validates and copies configuration and creates the router and content manager. It does not load configuration files or create optional services. The core can run with `config.Config{}`.
 
-Prepare shared services before initializing modules. The reference application owns its SQL pool in [application.go](../cmd/web/application.go), checks connectivity with a ten-second deadline, and registers pool cleanup before consumers. The core has no SQL pool. Applications or providers must import their SQL drivers.
+Prepare shared services, select rendering and middleware, then initialize modules. Register owned resources with `app.OnShutdown` before their consumers. Supplying a service does not transfer ownership unless the receiving API explicitly says so.
 
-Pass initialized accounts and sessions to `auth.Module(accounts, sessions, providers)`, `email.Provider(accounts, sessions, mailClient)`, and authentication middleware. See [session factories](../pkg/services/session/readme.md#ownership-and-extension) and [reference session setup](../cmd/internal/setup/sessions.go).
+Pass initialized dependencies through module factories. For example, this catalog selects email authentication and a site module with application-owned contact storage:
 
-For mail, pass `smtp.NewSender(cfg.Mail)` to `messaging.NewMailClientWithSender`, then supply the client to modules. [Mail setup](../cmd/web/mail.go) and [module wiring](../cmd/web/site_modules.go) show the calls. Construction does not contact SMTP. Consumers requiring delivery must validate configuration.
+```go
+catalog := []handlers.Descriptor{
+    auth.Module(accounts, sessions, []auth.Descriptor{
+        email.Provider(accounts, sessions, mailClient),
+    }),
+    site.Module(
+        func(context.Context) (site.ContactRepository, error) { return contacts, nil },
+        mailClient,
+    ),
+}
+if err := site.ConfigureRendering(app.ContentManager, app.Config.Auth.Enabled); err != nil {
+    return err
+}
+if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
+    return err
+}
+```
 
-The SMTP sender converts internationalized domains to IDNA ASCII form for delivery without changing the stored address or mailbox name. Non-ASCII mailbox names require the server to advertise `SMTPUTF8` and `8BITMIME`, as required by [RFC 6531](https://www.rfc-editor.org/rfc/rfc6531.html#section-3.2). Missing support returns an error before message submission. Unicode display names, subjects, and HTML bodies use MIME encoding and do not require those extensions on their own. A successful send means the SMTP server accepted the message, not that it reached the inbox.
+This example deliberately selects only these modules and email authentication. [Reference module setup](../cmd/web/site_modules.go) instead replaces configured descriptors while preserving other discovered modules and auth providers. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
 
-Register owned services with `app.OnShutdown` before initializing consumers. Supplied services keep their existing owners. [Reference session setup](../cmd/web/sessions.go) registers cleanup for managers it creates or when `ownSessions` transfers ownership.
+The SMTP sender is supplied through `messaging.NewMailClientWithSender`. Construction does not contact SMTP. Consumers that require delivery must validate configuration. Internationalized domains are converted to IDNA ASCII form for delivery. Non-ASCII mailbox names require the SMTP server's `SMTPUTF8` and `8BITMIME` extensions. Successful sending means server acceptance, not inbox delivery.
 
-`app.Run(ctx, prepare)` coordinates serving and cleanup. The preparation function receives a context and returns a configured `*http.Server`, a `net.Listener`, and an error. It must not start serving. Run closes resources on startup failure and drains requests before cleanup on cancellation. See [shutdown behavior](#module-cleanup) and the [stateless runner](../examples/stateless/main.go).
+For sessions alone, install `session.WithSessionManager(sessions)`. For authenticated identity, use `authmiddleware.LoadSessionManagement(accounts, sessions)` with the appropriate authentication and authorization guards. See [reference middleware selection](../cmd/web/main.go) for proxy verification, security headers, request limits, and session loading.
 
-Applications managing HTTP themselves can use `server.ServeHTTP` and call `Shutdown()` after requests drain. Signal handling belongs in the command.
+Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware` attaches request fields to the logger returned by `logger.Get(r.Context())`. Use context-aware logging methods to pass cancellation and tracing values to the handler. Check for nil when no request logger is installed.
 
-For session-only middleware, use `session.WithSessionManager(sessions)`. For authenticated identity loading, use `authmiddleware.LoadSessionManagement(accounts, sessions)` from `auth/middleware`, alongside `RequireAuthentication` and `RequireAnonymous`. The reference application selects loading behavior through `auth.enabled`. General logging, security headers, composition, and application-defined authorization live in `pkg/services/middleware`.
+`app.Run(ctx, prepare)` coordinates startup, serving, and shutdown. The preparation function returns a configured `*http.Server`, a `net.Listener`, and an error. It must not start serving. Run cleans up startup failures and drains requests before closing services. Applications managing HTTP themselves can use `server.ServeHTTP` and call `Shutdown` after requests drain.
 
 ## Module catalogs and authentication
 
-Use `handlers.Setup` for dependency resolution, initialization, route binding, and cleanup registration. A nil catalog selects no modules. For route defaults, pass a configured `*routing.Routes` instead of nil. If setup fails, discard the application because its mux can still contain registered routes. Use `handlers.Initialize` only when managing route binding and cleanup yourself.
+Imports register descriptors, not live modules. Use `handlers.Registered()` for a catalog copy or supply a local catalog. Factories must return fresh instances without I/O. `handlers.Replace` replaces the entire descriptor, including its dependency declarations. To replace only its factory, copy the original descriptor and change `New`.
 
-`handlers.Replace` replaces the whole descriptor, including `Provides` and `Requires`, without changing other catalogs. To replace only a factory, copy the original descriptor and change `New`. Module-owned constructors supply declarations that match their configuration.
+`handlers.Setup` resolves dependencies, initializes modules, binds routes, and registers cleanup. Pass configured `*routing.Routes` for route defaults, or nil for defaults. A nil catalog selects no modules. If setup fails, discard the application because its mux may still contain routes. Use `handlers.Initialize` only when managing route binding and cleanup yourself.
 
-Modules own registration, internal setup, requirements, and routes. Applications select modules and supply shared services. Modules must not initialize or close those supplied services. The [README example](../readme.md#module-registration) wires contact storage directly without a provider module.
+Auth has a separate descriptor catalog. Only configured, enabled providers initialize. An explicit empty catalog does not fall back to imports. Providers implement `AuthService` and the workflow interfaces they support, such as `LoginHandler` or `ResetHandler`. Unsupported routes return 404. Registration without a supporting provider is reported as unavailable.
 
-Startup logs show module names and advertised capabilities in initialization order, explicit selections, and auth providers in catalog order. They also show the account-repository type, session-provider names, and mail-client choice. Logs omit configuration values and connection details. They describe selection, not service health. Unchosen provider modules still appear if they remain in the catalog.
-
-Auth providers use `auth.Descriptor` and `auth.Register`. The auth module creates its manager and enabled providers, validates verification settings during `Init`, and binds routes during `Routes`. Supply initialized accounts and sessions and configure provider dependencies before activation. An explicit empty provider catalog does not fall back to imports. Registration does not alter running applications.
-
-The [README example](../readme.md#module-registration) selects only email authentication. [Reference module setup](../cmd/web/site_modules.go) instead replaces the email descriptor while preserving other discovered providers.
-
-`auth.AuthService` requires `AuthType`, `Init`, and `IsLoaded`. Add `LoginHandler`, `RegistrationHandler`, `ResetHandler`, or `ChangeHandler` for supported workflows, and `ProviderRoutes` for extra routes. The manager displays supported choices and returns 404 for unsupported workflows. If no provider supports registration, the registration page reports it unavailable. Verification configuration is required only for registration-capable providers when registration and required verification are enabled.
-
-Auth providers configure request handling, not service lifecycles. `Descriptor.New` must create a fresh instance without I/O. `AuthService.Init` can validate settings and prepare templates. It must not open connections, query storage, send mail, start background work, or initialize or close supplied services. Prepare those services in application setup, pass them through provider factories, and register their cleanup with `app.OnShutdown`.
-
-If provider setup fails, discard the application and its provider instances, then call application shutdown to release owned services. The auth module does not call provider `Close` or `Shutdown` methods. `Init` receives no context, so synchronous template reads, including a custom `TemplateFS`, cannot be interrupted by the initialization deadline. Use local or embedded template sources that return promptly. Resource-owning modules use the separate [module lifecycle](#module-cleanup).
+Auth providers configure request handling, not resource lifecycles. Their `Init` can validate settings and prepare templates. It must not open connections, query storage, send mail, or start background work. Application setup supplies those services and owns cleanup. The auth module does not call provider close hooks. Provider `Init` has no context, so custom template filesystems must return promptly.
 
 ## Module dependencies
 
-Give each dependency one source. Pass application-owned services through typed constructors. For module-supplied services, declare `Requires` and read them through `BindDependencies`. If a module supports both sources, its descriptor constructor must select one without silently overwriting a supplied service.
+Give each dependency one source. Use typed constructor parameters for application-owned services. Use declared capabilities only when one module supplies a service to another.
 
-Descriptors can declare `Provides: []string{"post-storage"}` and `Requires: []handlers.Requirement{{Capability: "post-storage"}}`. Capability and module names are case-sensitive. `handlers.Initialize` validates the catalog before invoking factories, then binds dependencies and initializes providers before consumers. Missing requirements, ambiguous providers, duplicate names, invalid metadata, and dependency cycles return errors. Use `handlers.Resolve` to check metadata without creating modules.
+Descriptors declare `Provides: []string{"post-storage"}` and `Requires: []handlers.Requirement{{Capability: "post-storage"}}`. Names are case-sensitive. Resolution rejects missing requirements, ambiguity, duplicate names, and cycles before invoking factories. Providers initialize before consumers. `handlers.Resolve` checks metadata without creating instances.
 
-If several modules provide a required capability, select one by module name:
+If several modules provide a capability, the selections argument to `Setup` or `Initialize` maps that capability to a module name:
 
 ```go
-modules, err := handlers.Initialize(ctx, app, handlers.Registered(), map[string]string{
-    "post-storage": "postgres-posts",
-})
+selections := map[string]string{"post-storage": "postgres-posts"}
 ```
 
-`Optional: true` permits a missing provider. `Multiple: true` accepts all matching providers. Optional requirements still reject ambiguity unless they accept multiple providers. An explicit selection narrows either form to one provider, and invalid selections always fail. All modules in the supplied catalog still initialize, including unchosen alternatives. Remove a module from the local catalog to exclude it from the application.
+`Optional: true` permits no provider. `Multiple: true` accepts all matching providers. Explicit selection narrows either form to one provider. Unselected alternatives still initialize if they remain in the catalog. Remove their descriptors to exclude them.
 
-Providers implement `Capabilities() map[string]any`, returning exactly their declared services after `Init` succeeds. Consumers implement `BindDependencies(handlers.Dependencies) error`, called before their `Init`. Both hooks must avoid I/O. Consumers request their own interfaces:
+Providers return exactly their declared services from `Capabilities() map[string]any` after initialization. Consumers receive only declared dependencies through `BindDependencies`, before their own initialization:
 
 ```go
 func (m *PostsModule) BindDependencies(d handlers.Dependencies) error {
@@ -74,36 +78,20 @@ func (m *PostsModule) BindDependencies(d handlers.Dependencies) error {
 }
 ```
 
-Only declared requirements are available. An absent optional capability returns the requested type's zero value, so an interface field is `nil`. The consumer must handle that absence. Use `GetDependencies[PostRepository]` for several providers. It returns a new slice in catalog order, or an empty slice when an optional capability is absent. Wrong types, nil services, missing hooks, and initialization failures stop startup. An optional requirement does not hide a broken provider.
-
-`Initialize` uses the caller's deadline, or ten seconds if none is set, for all module initialization. Pass `context.WithTimeout` to change the budget. Modules must open and validate storage during `Init`, before consumers receive it or routes bind. Use the initialization context for setup I/O, not later requests. Deadlines cannot interrupt operations that ignore context, including some filesystem calls.
-
-The reference application sets that deadline from `app.initializationTimeout`, which defaults to `10s` and must be positive. For longer module setup:
-
-```yaml
-app:
-  initializationTimeout: 2m
-```
-
-`HYPERSERVER_APP_INITIALIZATIONTIMEOUT` overrides the file. The budget covers all module initialization, not each module separately, and an earlier parent deadline wins. Database, account, and session setup retain their separate ten-second limits. The initializer itself does not read configuration.
+Use `GetDependencies` for multiple providers. Missing optional services return a zero value or empty slice. Consumers must handle that absence. Wrong types, nil services, missing hooks, and provider failures stop startup. Capability and binding hooks must not perform I/O. See the [executable example](../pkg/handlers/example_test.go).
 
 ## Module cleanup
 
-A module that owns resources can implement `Shutdown(context.Context) error`. Modules without owned resources need no shutdown hook. `handlers.Initialize` rolls back completed modules when startup fails. A failing `Init` must release its own partially acquired resources. Factories and dependency-binding hooks must not acquire resources.
+Resource-owning modules can implement `Shutdown(context.Context) error`. `Initialize` rolls back completed modules on failure and returns no instances. A failing `Init` must release its own partial resources. Modules must not close application-owned services.
 
-`handlers.Setup` registers module cleanup with `app.OnShutdown`. If you use `handlers.Initialize` directly, register `handlers.Close` yourself. Call `app.Shutdown()` on later startup errors and after requests drain. Cleanup runs consumers before providers, leaves borrowed services open, and reports all errors. Repeated cleanup calls do not rerun module hooks.
+`Setup` registers reverse-order cleanup automatically. If using `Initialize` directly, register `handlers.Close` yourself. Repeated cleanup does not rerun module hooks.
 
-`Shutdown()` gives cleanup ten seconds. `ShutdownContext(ctx)` accepts a different deadline. Modules must honor cancellation and stop their background work before returning. Cleanup cannot interrupt code that ignores context or context-free storage close functions.
+| Budget | Control | Scope |
+| --- | --- | --- |
+| Module initialization | Caller context. Reference command: `app.initializationTimeout`, default `10s`. | All selected modules together. An earlier parent deadline wins. |
+| HTTP draining | `http.shutdownTimeout`, default `10s`. | Requests already in progress, not module cleanup. |
+| Resource cleanup | `Shutdown()` allows `10s`. `ShutdownContext(ctx)` accepts another deadline. | Reverse-order shutdown hooks. |
 
-The reference application handles `SIGINT` and `SIGTERM`, stops accepting requests, and gives active requests `http.shutdownTimeout` to finish. The setting defaults to `10s` and must be positive. To allow longer requests to drain:
+Without a caller deadline, `Initialize` uses ten seconds. The reference command's database, account, and session setup have separate ten-second limits. Context deadlines cannot interrupt code that ignores cancellation. Initialization contexts must not be retained for request I/O.
 
-```yaml
-http:
-  shutdownTimeout: 30s
-```
-
-`HYPERSERVER_HTTP_SHUTDOWNTIMEOUT` overrides the file. This budget controls HTTP draining only, not request duration or module cleanup. After draining, the application closes modules, account providers, session providers, and the shared database.
-
-If draining fails, Run closes HTTP connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. The reference command exits with an error. A second signal forces exit. Applications must manage hijacked connections separately.
-
-See the [storage-provider example](../pkg/handlers/example_test.go). `Initialize` does not bind routes and returns no instances on failure.
+If HTTP draining fails, Run closes HTTP connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. The reference command exits with an error, and a second signal forces exit. Applications must manage hijacked connections separately.

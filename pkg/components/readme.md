@@ -1,370 +1,124 @@
-# HyperMedia Components Documentation
+# Rendering and forms
 
-HyperServer implements hyperMedia components to simplify serving hypertext-based content to requestors. The implemented components reside in the **components** folder and include:
+Start with the [stateless application](../../examples/stateless) for a complete page and HTMX example. The [contact handler](../../modules/site/contact.go) demonstrates validation, persistence, and errors for both ordinary forms and HTMX.
 
-- **Content**: A view model for rendering and delivering HTML payloads.
-- **ContentManagerService**: Component used to manage reusable templates for rendering pages and components.
-- **SessionMessage**: A message that is serialized to a session.
-- **Notification**: A message that is 
-- **Form**: Validates, renders, and manages errors for HTML forms.
-- **htmx.Request**: Models HTMX-related request attributes.
-- **htmx.Response**: Models HTMX-related response attributes and configurations.
+## Prepare templates once
 
-This document provides details on each component, its purpose, and usage.
-
-## Content Component
-
-The `Content` component, found in the **content** package, is a view model responsible for rendering HTML based on provided templates and data.
-
-### Template Categories
-
-Templates are categorized into:
-
-- **Layouts**: Serve as scaffolding (headers, footers, and general page structure).
-- **Contents**: Page-specific main content.
-- **Components**: Reusable snippets used in layouts or content.
-
-The examples use `templateFiles`, an `fs.FS` such as an `embed.FS` or an `os.DirFS` rooted at an absolute directory. Paths are relative to that filesystem. Each call can supply a different filesystem.
-
-Example usage:
-
-```go
-homepage := content.NewContent(httpRequest /* *http.Request */)
-homepage.Title = "Home Page"
-homepage.AddLayout(templateFiles, "templates/layout.html")
-homepage.AddContent(templateFiles, "templates/home-content.html")
-homepage.AddComponent(templateFiles, "templates/footer.html")
-err := homepage.Render(w, r)
-```
-
-Each `AddLayout`, `AddContent`, or `AddComponent` call accepts one or several filenames and appends them in order:
-
-```go
-homepage.AddContent(templateFiles, "templates/home-content.html", "templates/admin-content.html")
-homepage.AddComponent(templateFiles, "templates/footer.html", "templates/admin-components.html")
-```
-
-The content manager selects page or HTMX layouts according to the request. Layouts added directly to `Content` apply to either response type.
-
-The content manager's `AddPage*` and `AddHtmx*` methods also accept several filenames. Calls with no filenames leave existing paths unchanged. `RegisterLayouts`, `RegisterContents`, and `RegisterComponents` replace the selected response type's paths instead. Calling a `Register*` method with no filenames clears those paths.
-
-### Reusable templates
-
-Prepare reusable page and fragment templates during module initialization, after the application configures its content manager:
+Application setup configures shared layouts and response handlers before initializing modules. Each module prepares its own pages during initialization:
 
 ```go
 templates, err := content.PrepareTemplates(cm,
-    content.TemplatePath{FS: templateFiles, Path: "templates/home-content.html"})
+    content.TemplatePath{FS: templateFiles, Path: "templates/home.html"})
 if err != nil {
     return err
 }
 ```
 
-Store `templates` on the module. Each handler creates its own content and supplies request data:
+Store the result on the module. Each request gets separate content and data:
 
 ```go
 page := content.NewManagedContent(r, cm)
 page.Templates = templates
 page.PartialName = "home"
 page.Data = data
-err := page.Render(w, r)
+if err := page.Render(w, r); err != nil {
+    cm.HandleError(w, r, "Unable to render the page", err, http.StatusInternalServerError)
+}
 ```
 
-Prepared sets include the manager's layouts, content, and components at preparation time. They share parsed templates, not request data or rendered HTML. Do not combine `Templates` with request-specific `AddLayout`, `AddContent`, or `AddComponent` calls. Without `Templates`, those calls still parse files on each render. To apply template changes, prepare new sets during server restart. No automatic file watcher or request-time reload is provided.
+`templateFiles` is an `fs.FS`, commonly an `embed.FS`. Paths are relative to that filesystem and use forward slashes. Layouts and page templates can use different filesystems.
 
-Parsing errors stop initialization when the module returns the preparation error. Data-dependent execution errors still occur during rendering. Output remains buffered until every selected template, including out-of-band fragments, succeeds.
+Prepared sets capture the manager's page and HTMX layouts, contents, and components. They share parsed templates, not rendered HTML or request data. Set `PartialName` to the named template used for the fragment. History-restoration requests render the full page.
 
-The reference site and stateless example both use prepared sets. Shared response handlers can install `ContentManagerService.PrepareTemplates`. `handlers.Setup` calls that callback after application overrides and before module initialization. If an application invokes shared handlers without `handlers.Setup`, it must call the preparation callback itself before serving requests. Preparation does not change response callbacks, load notifications, or open application services.
+Do not combine `Templates` with request-specific `AddLayout`, `AddContent`, or `AddComponent` calls. Those methods provide a per-render parsing path when no prepared set is supplied. Restart and prepare new sets to apply template changes. There is no file watcher.
 
-#### Rendering benchmark
+Parsing errors can stop initialization. Execution errors still occur per request. Rendering buffers all selected templates before writing response content. It does not undo application changes if rendering fails, and network writes can fail after partial delivery.
 
-Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem -count=3`. The benchmark renders an in-memory layout, a named partial, and escaped input into a buffer. It excludes HTTP delivery, notification storage, and preparation time.
+Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem` to compare prepared and per-render parsing. The benchmark excludes HTTP delivery and notification storage.
 
-Measured on Linux/amd64, Go 1.27.2, AMD Ryzen 9 9950X3D, with 32 logical CPUs available. Values below are medians of three runs on October 12, 2026. These are rendering microbenchmarks, not application throughput estimates.
+## Shared rendering policy
 
-| Response | Before: parse each render | Prepared | Before allocations | Prepared allocations |
-| --- | ---: | ---: | ---: | ---: |
-| Page | 13,180 ns/op | 1,808 ns/op | 19,354 B / 194 allocs | 1,121 B / 31 allocs |
-| Fragment | 11,640 ns/op | 1,294 ns/op | 18,160 B / 166 allocs | 865 B / 24 allocs |
+Configure `ContentManagerService` before serving. It selects shared page and HTMX templates, `HomeURL`, `AuthURL`, and response callbacks. `HandleMessage`, `HandleError`, and `HandleNotFound` render responses when called. Assigning them does not register routes.
 
-The retained per-render path measured 13,042 ns/op for pages and 11,505 ns/op for fragments after extraction of the shared parser. Use the benchmark's `per-render` and `prepared` subtests to compare both paths on the same machine.
+The reference application's [rendering setup](../../cmd/web/rendering.go) selects site defaults. Apply overrides afterward, before template preparation. `ApplyDefaults` rejects a second defaults policy. Explicit field and template overrides remain available.
 
-### Content.Data
+`AddPage*` and `AddHtmx*` append template paths. `RegisterLayouts`, `RegisterContents`, and `RegisterComponents` replace the selected response type's paths. Calling a `Register*` method without filenames clears them.
 
-`Content.Data` stores any data required for rendering within templates.
+Shared response handlers can install `ContentManagerService.PrepareTemplates`. `handlers.Setup` calls it before module initialization. Applications that bypass `Setup` must call the callback themselves before serving.
 
-### Content Manager Service
+## HTMX responses
 
-`ContentManagerService` holds shared template paths and response settings for one application.
-
-- Configure shared `Layouts`, `Contents`, and `Components`.
-- Set `HomeURL` and `AuthURL` for home and login redirects.
-- Supply `HandleMessage`, `HandleError`, and `HandleNotFound` to render those responses directly.
-
-The ApplicationServer structure has a `ContentManagerService` named `ContentManager` or you can create your own *ContentManager* via *content.NewContentManager*.
-
-A `Content` instance must have its *ContentManagerService* set before rendering to use any configured templates:
+Set response instructions on the request's content:
 
 ```go
-import (
-  "github.com/trentnix/hyperserver/pkg/components/content"
-  content_services "github.com/trentnix/hyperserver/pkg/services/content"
-)
-
-/* ... */
-
-homepage := content.NewContent(httpRequest /* *http.Request */)
-homepage.ContentManager = content_services.NewContentManager()
+page.HTMX.Response = &htmx.Response{
+    Trigger:  "saved",
+    Retarget: "#editor",
+    Reswap:   "outerHTML",
+}
 ```
 
-Alternatively, *content.NewManagedContent* can be used for convenience:
+Other fields support after-swap and after-settle events, history URLs, and refreshes. These are server-selected instructions. Do not copy untrusted values into them. Ordinary and history-restoration requests ignore fragment response metadata.
 
-```go
-cm := content_services.NewContentManager()
+For additional fragments, define named templates containing their own `hx-swap-oob` markup and set `page.OutOfBand = []string{"notice"}`. They share the main view's data and notifications. They render only for HTMX fragment requests, and all must succeed before response content is written.
 
-/* set up the ContentManagerService */
+| Intent | Setting | Result |
+| --- | --- | --- |
+| Redirect | `page.RedirectURL = "/saved"` | Ordinary 303 or HTMX 200 with `HX-Redirect`. |
+| Send an HTMX event without a swap | `page.HTMX.Response = &htmx.Response{NoContent: true, Trigger: "saved"}` | HTMX 204 with the event. Ordinary requests still render. |
+| Return no body in either mode | `page.ResponseStatusCode = http.StatusNoContent` | 204 without template execution. |
+| Show validation errors | Render the form with errors | 200 by default so HTMX swaps the form. |
 
-homepage := content.NewManagedContent(r /* *http.Request */, cm)
-```
+Redirects take precedence and skip templates and notification retrieval. Use `RedirectURL`, not a 3xx `ResponseStatusCode`. Store destination notifications explicitly. If an application chooses 422 for validation, it must configure HTMX to swap that status.
 
-Configure response callbacks during application setup. Callbacks do not register routes. `AppName` and `AppTitle` supply template values. For example, this setup uses plain-text response handlers:
-
-```go
-import (
-  "net/http"
-
-  content_services "github.com/trentnix/hyperserver/pkg/services/content"
-  "github.com/trentnix/hyperserver/pkg/util"
-)
-
-/* ... */
-
-cm := content_services.NewContentManager()
-cm.AddPageLayout(templateFiles, "templates/some-layout.html")
-cm.AddPageComponent(templateFiles, "templates/components/some-component.html")
-
-cm.HomeURL = homeURL
-cm.AuthURL = authURL
-
-cm.AppName = "My Company"
-cm.AppTitle = "My Application"
-
-cm.HandleMessage = util.HttpMessage
-cm.HandleError = util.HttpError
-cm.HandleNotFound = http.NotFound
-```
-
-Templates can be selectively added to be rendered with standard responses, HTMX response, or both:
-
-```go
-contentManager.AddPageComponent(templateFiles, "templates/componenents/some-universal-component.html")
-contentManager.AddHtmxComponent(templateFiles, "templates/componenents/some-universal-component.html")
-```
+Rendered responses default to `Cache-Control: no-store` and add both HTMX request headers to `Vary`. An existing response `Cache-Control` header takes precedence over `page.Headers`. Keep sensitive responses uncacheable. Direct `http.Handler` and `http.ResponseWriter` remain available for streaming and downloads.
 
 ## Messages
 
-The `messages` package defines values for `Content.Messages`, `Content.Notifications`, and `Content.SystemMessages`. These values require no storage or session service:
+`pkg/components/messages` defines message, notification, and system-message values without requiring sessions. Assign them directly to `Content.Messages`, `Content.Notifications`, or `Content.SystemMessages`.
+
+For notifications across requests, use the [flash service](../services/flash/notifications.go) with session middleware:
 
 ```go
-message := messages.NewMessage("Your settings were saved.", messages.MessageTypeSuccess)
-notification := messages.NewNotification("Your settings were saved.", messages.NotificationTypeSuccess)
-systemMessage := messages.NewSystemMessage("Request completed.", messages.SystemMessageTypeInfo)
-```
-
-### Session-backed messages
-
-The [flash service](../services/flash/messages.go) stores messages between requests. Its helpers require session middleware on the request. Check errors from both storage and retrieval.
-
-For messages grouped by purpose, supply a category:
-
-```go
-if err := flash.AddSuccessMessage(w, r, "Your settings were saved.", "settings"); err != nil {
-    return err
-}
-
-storedMessages, err := flash.GetMessages(w, r, "settings")
-if err != nil {
-    return err
-}
-page.Messages = append(page.Messages, storedMessages...)
-```
-
-`GetMessages` removes the category from storage before returning its messages. If removal fails, retrieval returns an error and no messages. Other categories remain available. HEAD requests return no messages and leave storage unchanged.
-
-For notifications, use `flash.AddSuccessNotification` or `flash.AddErrorNotification`. A content manager can retrieve notifications before template execution:
-
-```go
+// During application setup:
 contentManager.LoadNotifications = flash.LoadNotifications
-```
 
-Set the loader before serving requests. It must be concurrency-safe and must read without removing messages. It returns notifications, an optional `func(http.ResponseWriter) error` acknowledgment, and an error. Rendering acknowledges removal after all templates succeed and before writing headers. HEAD, redirects, HTMX refreshes, bodyless responses, and failed templates preserve notifications. Loading or acknowledgment errors stop rendering. A nil loader skips retrieval but still allows `Content.Notifications`. A nil acknowledgment needs no removal. Successful acknowledgment cannot guarantee browser receipt or exactly-once delivery.
-
-For a page that displays only errors, use `flash.LoadErrorNotifications`. Its acknowledgment removes only the loaded errors. Other notification types and messages added later remain queued.
-
-For browser console messages, use `flash.AddSystemDebugMessage`, `flash.AddSystemLogMessage`, `flash.AddSystemInfoMessage`, `flash.AddSystemWarningMessage`, or `flash.AddSystemErrorMessage`. Retrieve them with `flash.GetSystemMessages(w, r)` and assign them to `Content.SystemMessages`.
-
-## form Package
-
-Embed `form.Form` to store field errors and form-level messages. Implement `Bind` and `Validate` to satisfy `form.FormComponent`. Validation uses ordinary Go checks, not struct tags.
-
-`FormComponent` requires only `Bind`, `Validate`, `SetFieldErrors`, and `SetValidated`. `form.Validate` accepts `ValidationForm`, without HTTP binding. `ParseAndValidate` and `Validate` reject nil forms but accept any implementation of their interfaces, including value wrappers around shared form state. `HandleFormError` accepts an `ErrorForm` with only `AddErrorMessage`.
-
-Applications can supply their own form storage and template accessors without implementing unused message methods. Check recorded errors before changing application data. Forms embedding `Form` can call `HasErrors`.
-
-For example, a contact form can define its rules alongside its fields:
-
-```go
-type ContactForm struct {
-    Name    string
-    Email   string
-    Message string
-
-    form.Form
-}
-
-func (f *ContactForm) Bind(r *http.Request) error {
-    f.Name = r.FormValue("name")
-    f.Email = r.FormValue("email")
-    f.Message = r.FormValue("message")
-    return nil
-}
-
-func (f *ContactForm) Validate() form.FieldErrors {
-    errors := make(form.FieldErrors)
-    if f.Name == "" {
-        errors["Name"] = []string{form.RequiredMessage}
-    }
-    if f.Email == "" {
-        errors["Email"] = []string{form.RequiredMessage}
-    } else if !form.ValidEmail(f.Email) {
-        errors["Email"] = []string{form.EmailMessage}
-    }
-    if f.Message == "" {
-        errors["Message"] = []string{form.RequiredMessage}
-    }
-    return errors
+// Before redirecting after a successful operation:
+if err := flash.AddSuccessNotification(w, r, "Your settings were saved."); err != nil {
+    // The operation succeeded, but its notification could not be stored.
+    return err
 }
 ```
 
-`Validate` returns plain-text messages keyed by Go field name. It must not change form state or application data. A nil or empty map means no field failed validation. See [account validation](../../auth/modules/email/form_validation.go) for forms that share password rules with account operations.
+A notification loader reads without removing messages. It returns an optional acknowledgment callback. Rendering acknowledges after all templates succeed and before writing headers. HEAD, redirects, refreshes, bodyless responses, and template failures preserve notifications. Loading or acknowledgment errors stop rendering. Templates must display the loaded notifications.
 
-### Rendering a Form
+A nil loader permits direct notifications without session storage. `flash.LoadErrorNotifications` loads and removes only errors. Network failures and concurrent requests mean flash messages do not provide exactly-once delivery.
 
-A `Content` instance renders the form. These examples use a configured `contentManager` and the `templateFiles` filesystem described above:
+For categorized messages, `flash.AddSuccessMessage(w, r, text, category)` and `flash.GetMessages(w, r, category)` store and retrieve a group. Unlike notification loading, `GetMessages` removes the group immediately. HEAD leaves it unchanged. Check errors from both operations.
+
+## Forms
+
+Embed `form.Form` for errors and messages. Implement `Bind(*http.Request) error` to copy parsed inputs and `Validate() form.FieldErrors` for ordinary Go validation. Validation returns plain-text messages keyed by field name and must not change application data. See the [contact form](../../modules/site/contact.go) and [account rules](../../auth/modules/email/form_validation.go).
+
+The POST handler stops on any parsing, binding, or validation error:
 
 ```go
 page := content.NewManagedContent(r, contentManager)
+page.Templates = contactTemplates
 page.PartialName = "contact-form"
-page.AddContent(templateFiles, "templates/forms/contact-form.html")
-page.Data = &ContactForm{}
-if err := page.Render(w, r); err != nil {
-    contentManager.HandleError(w, r, "Unable to render the contact form", err, http.StatusInternalServerError)
-}
-```
-
-### Validate a Form
-
-In the POST handler, parse and validate before saving data or sending mail. `ParseAndValidate` enforces form limits, calls `Bind`, and records the errors returned by `Validate`. A nil returned error does not mean the form is valid. Callers must also check `HasErrors()`:
-
-```go
-page := content.NewManagedContent(r, contentManager)
-page.PartialName = "contact-form"
-page.AddContent(templateFiles, "templates/forms/contact-form.html")
 contactForm := &ContactForm{}
+page.Data = contactForm
 
-message, err := form.ParseAndValidate(r, contactForm)
-if err != nil {
-    form.HandleFormError(w, r, page, contactForm, message, err)
+if err := form.ParseAndValidate(r, contactForm); err != nil {
+    form.HandleFormError(w, r, page, contactForm, "Unable to process submission", err)
     return
 }
 
-if contactForm.HasErrors() {
-    form.HandleFormError(w, r, page, contactForm, "", nil)
-    return
-}
-
-// Save the validated submission and handle the operation's result here.
+// Save the validated submission and handle the operation's result.
 ```
 
-`form.HandleFormError` renders field and form-level errors. Parsing failures return the parser's HTTP status without rendering submitted values. Other supplied errors are logged before rendering. Render all messages through `html/template` to escape their contents.
+A nil error means parsing, binding, and field validation succeeded. Invalid fields return `form.FieldErrors` and remain recorded for templates. `HandleFormError` renders those fields without logging or adding the generic message. Parser failures reject the request without rendering submitted values. Other errors are logged and show the supplied public message. Existing form-level messages remain unchanged by validation.
 
-### Form HTML Template
+Parsing limits decoded fields to 16 KiB and encoded queries to 64 KiB, independently of the route body limit. `ParseAndValidateWithOptions` can change field limits or explicitly disable them. Account and contact forms return 413 for oversized input, 400 for malformed forms, and 415 for unsupported encodings.
 
-The example template defines the `contact-form` partial and displays errors beside each field:
-
-```html
-{{template "contact-form" .}}
-
-{{define "contact-form"}}
-{{ with .Data }}
-    <form id="contact-form"
-          method="post"
-          action="/contact"
-          hx-post="/contact"
-          hx-target="this"
-          hx-swap="outerHTML"
-          hx-trigger="submit">
-        
-        <label for="name">Name</label>
-        <input type="text" id="name" name="name" value="{{ .Name }}"
-               required {{ if .HasFieldErrors "Name" }} aria-invalid="true" {{ end }}>
-        {{template "field-errors" (.GetFieldErrors "Name")}}
-
-        <label for="email">Email</label>
-        <input type="email" id="email"
-               name="email"
-               value="{{ .Email }}"
-               required {{ if .HasFieldErrors "Email" }} aria-invalid="true" {{ end }}>
-        {{template "field-errors" (.GetFieldErrors "Email")}}
-
-        <label for="message">Message</label>
-        <textarea id="message" name="message"
-                  required {{ if .HasFieldErrors "Message" }} aria-invalid="true" {{ end }}>{{ .Message }}</textarea>
-        {{template "field-errors" (.GetFieldErrors "Message")}}
-
-        <button type="submit">Send message</button>
-        
-        {{ if .HasErrorMessages }}
-            <div class="form-messages"><ul>{{ range .GetErrorMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>
-        {{ else if .HasInfoMessages }}
-            <div class="form-messages"><ul>{{ range .GetInfoMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>
-        {{ end }}
-    </form>
-{{ else }}
-    <div>Unable to display the contact form.</div>
-{{ end }}
-{{end}}
-
-{{define "field-errors"}}
-    {{- range .}}
-        <span class="field-error">{{.}}</span>
-    {{- end}}
-{{end}}
-```
-
-## htmx Package
-
-The **htmx** package simplifies interactions with HTMX requests and responses.
-
-### HTMX Request
-
-The `htmx.Request` component extracts HTMX request details easily:
-
-```go
-htmxRequest := htmx.GetRequest(r)
-fmt.Printf("trigger: %s", htmxRequest.Trigger)
-```
-
-### HTMX Reponse
-
-To create and configure a `htmx.Response`:
-
-```go
-htmxResp := htmx.NewResponse()
-htmxResp.TriggerAfterSwap = "contentUpdated"
-htmxResp.Apply(w)
-```
-
----
-
-This documentation aims to provide clarity about the framework's core components, their purposes, and usage patterns, aiding developers in efficiently building HyperMedia applications.
+Use both ordinary `method`/`action` attributes and HTMX attributes when a form must work without JavaScript. See the [contact template](../../modules/site/templates/html/partials/contact-form.html). Render submitted values and messages through `html/template`. For internationalized email addresses, use `type="text" inputmode="email"` and validate on the server.
