@@ -68,7 +68,8 @@ func browserWaitSnapshot(pid int) string {
 	}
 	// Collect the browser parent's threads, without arguments or environments.
 	// wchan identifies a sleeping thread's kernel wait location when permitted.
-	threads := browserCommandSnapshot("ps", "-L", "-p", fmt.Sprint(pid), "-o", "pid,lwp,stat,wchan:32,comm")
+	// Major faults require loading memory pages from storage. Minor faults do not.
+	threads := browserCommandSnapshot("ps", "-L", "-p", fmt.Sprint(pid), "-o", "pid,lwp,stat,maj_flt,min_flt,wchan:32,comm")
 	path := fmt.Sprintf("/proc/%d/io", pid)
 	counters, err := os.ReadFile(path)
 	// A process can exit during capture, and the runner can restrict /proc access.
@@ -276,6 +277,8 @@ func TestBrowserFailureArtifacts(t *testing.T) {
 		"GET /original-browser-request",
 		"Browser thread waits:",
 		"WCHAN",
+		"MAJFL",
+		"MINFL",
 		"/proc/" + pid[1] + "/io (error: <nil>)",
 		"read_bytes:",
 		"write_bytes:",
@@ -314,7 +317,15 @@ func TestBrowserSuccessArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Captured after browser checks at", "Browser thread waits:", "/io (error: <nil>)", "read_bytes:", "write_bytes:"} {
+	for _, want := range []string{
+		"Captured after browser checks at",
+		"Browser thread waits:",
+		"MAJFL",
+		"MINFL",
+		"/io (error: <nil>)",
+		"read_bytes:",
+		"write_bytes:",
+	} {
 		if !strings.Contains(string(completed), want) {
 			t.Errorf("success snapshot missing %q:\n%s", want, completed)
 		}
