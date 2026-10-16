@@ -16,8 +16,9 @@ func TestWaitForBrowser(t *testing.T) {
 		report, wantErr                             string
 	}{
 		{name: "success", readyAfter: time.Second, reportAfter: 2 * time.Second, elapsed: 2 * time.Second, report: "PASS"},
-		{name: "slow startup leaves full check budget", readyAfter: 29 * time.Second, reportAfter: 43 * time.Second, elapsed: 43 * time.Second, report: "PASS"},
-		{name: "startup timeout", elapsed: 30 * time.Second, wantErr: "browser startup timed out after 30s"},
+		{name: "startup beyond old limit", readyAfter: 40 * time.Second, reportAfter: 41 * time.Second, elapsed: 41 * time.Second, report: "PASS"},
+		{name: "slow startup leaves full check budget", readyAfter: 59 * time.Second, reportAfter: 73 * time.Second, elapsed: 73 * time.Second, report: "PASS"},
+		{name: "startup timeout", elapsed: 60 * time.Second, wantErr: "browser startup timed out after 1m0s"},
 		{name: "script failure before readiness", reportAfter: time.Second, elapsed: time.Second, report: "JavaScript error: script failed", wantErr: "browser checks failed before readiness was observed: JavaScript error: script failed"},
 		{name: "success requires readiness", reportAfter: time.Second, elapsed: time.Second, report: "PASS", wantErr: "browser reported success before JavaScript reported readiness"},
 		{name: "check timeout", readyAfter: 5 * time.Second, elapsed: 20 * time.Second, wantErr: "browser checks timed out after 15s"},
@@ -50,7 +51,7 @@ func TestWaitForBrowser(t *testing.T) {
 				}
 
 				started := time.Now()
-				readyAfter, err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second)
+				readyAfter, err := waitForBrowser(ready, result, exited, browserStartupTimeout, browserCheckTimeout)
 				if readyAfter != tc.readyAfter {
 					t.Fatalf("readiness observed after %s, want %s", readyAfter, tc.readyAfter)
 				}

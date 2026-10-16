@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestHTTPCredentialFormActions(t *testing.T) {
@@ -53,7 +52,7 @@ func TestBrowserNativeForms(t *testing.T) {
 	if os.Getenv("HS_TEST_FIREFOX") == "" {
 		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
 	}
-	runHTTPScenarioWithTimeout(t, 75*time.Second, func(h *httpHarness) {
+	runHTTPScenarioWithTimeout(t, browserScenarioTimeout, func(h *httpHarness) {
 		const secret = "Native&A+B1!"
 		forms := []struct {
 			path   string

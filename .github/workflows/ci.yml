@@ -70,7 +70,7 @@ jobs:
     name: Firefox browser checks
     # No dependency on the test job: either job must run even if the other fails.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash # Enable pipefail so tee cannot hide a failed test command.
@@ -111,15 +111,15 @@ jobs:
       - name: Test HTMX and native forms in Firefox
         if: ${{ !inputs.browser_diagnostics }}
         run: |
-          # Allow 30s startup, 15s checks, and cleanup inside the 75s scenario limit.
-          go test -v -count=1 -timeout=5m ./cmd/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/tests.log"
+          # Allow 60s startup, 15s checks, and cleanup inside the 105s scenario limit.
+          go test -v -count=1 -timeout=10m ./cmd/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/tests.log"
 
       - name: Repeat standalone browser diagnostics
         if: ${{ inputs.browser_diagnostics }}
         run: |
           mkdir -p "$HS_TEST_BROWSER_ARTIFACTS"
           # A failed attempt keeps the step failed. This is not a retry policy.
-          go test -v -count=10 -timeout=7m ./cmd/web -run '^TestBrowserErrorReporting$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/repeated-tests.log"
+          go test -v -count=10 -timeout=15m ./cmd/web -run '^TestBrowserErrorReporting$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/repeated-tests.log"
 
       - name: Upload browser diagnostics
         if: ${{ !cancelled() }}

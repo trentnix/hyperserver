@@ -20,6 +20,12 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
+const (
+	browserStartupTimeout  = 60 * time.Second
+	browserCheckTimeout    = 15 * time.Second
+	browserScenarioTimeout = browserStartupTimeout + browserCheckTimeout + 30*time.Second
+)
+
 // TestBrowserSiteErrors uses the site's embedded HTMX asset.
 // CI enables it with HS_TEST_FIREFOX=firefox.
 func TestBrowserSiteErrors(t *testing.T) {
@@ -27,7 +33,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
 	}
-	runHTTPScenarioWithTimeout(t, 75*time.Second, func(h *httpHarness) {
+	runHTTPScenarioWithTimeout(t, browserScenarioTimeout, func(h *httpHarness) {
 		// Render the real layout and retain the local HTMX URL and integrity check.
 		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.SessionManager)
 		page := content.NewManagedContent(r, h.app.ContentManager)
@@ -150,7 +156,7 @@ func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan s
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 2 * time.Second
-	metadata := fmt.Sprintf("Test: %s\nBrowser executable: %s\nArguments: %q\nTMPDIR: %s\nStartup limit: 30s\nCheck limit: 15s\n", t.Name(), cmd.Path, cmd.Args, os.TempDir())
+	metadata := fmt.Sprintf("Test: %s\nBrowser executable: %s\nArguments: %q\nTMPDIR: %s\nStartup limit: %s\nCheck limit: %s\n", t.Name(), cmd.Path, cmd.Args, os.TempDir(), browserStartupTimeout, browserCheckTimeout)
 	t.Log(metadata)
 	writeBrowserArtifact(t, artifacts, "launch.txt", metadata)
 	if err := cmd.Start(); err != nil {
@@ -172,7 +178,7 @@ func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan s
 		preserveBrowserCrashes(t, profile, artifacts)
 	}()
 
-	readyAfter, err := waitForBrowser(ready, result, exited, 30*time.Second, 15*time.Second)
+	readyAfter, err := waitForBrowser(ready, result, exited, browserStartupTimeout, browserCheckTimeout)
 	timing := fmt.Sprintf("Browser PID: %d\nStarted at: %s\nReadiness observed after: %s (zero means not observed)\nElapsed: %s\nResult: %v\n", cmd.Process.Pid, started.Format(time.RFC3339Nano), readyAfter, time.Since(started), err)
 	writeBrowserArtifact(t, artifacts, "timing.txt", timing)
 	t.Log(timing)

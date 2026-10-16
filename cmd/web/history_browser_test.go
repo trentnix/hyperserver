@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
@@ -21,7 +20,7 @@ func TestBrowserHistory(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
 	}
 
-	runHTTPScenarioWithTimeout(t, 75*time.Second, func(h *httpHarness) {
+	runHTTPScenarioWithTimeout(t, browserScenarioTimeout, func(h *httpHarness) {
 		file := testTemplateFile(t, "modules/site/testdata/history.html")
 		templates, err := content.PrepareTemplates(h.app.ContentManager, file)
 		if err != nil {

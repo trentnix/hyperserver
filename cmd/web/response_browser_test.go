@@ -9,7 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
@@ -40,7 +39,7 @@ func TestBrowserResponseDispatch(t *testing.T) {
 	if os.Getenv("HS_TEST_FIREFOX") == "" {
 		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
 	}
-	runHTTPScenarioWithTimeout(t, 75*time.Second, func(h *httpHarness) {
+	runHTTPScenarioWithTimeout(t, browserScenarioTimeout, func(h *httpHarness) {
 		file := testTemplateFile(t, "modules/site/testdata/response-dispatch.html")
 		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.SessionManager)
 		page := content.NewManagedContent(r, h.app.ContentManager)
