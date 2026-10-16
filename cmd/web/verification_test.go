@@ -29,6 +29,16 @@ func TestHTTPVerificationRecoveryNavigation(t *testing.T) {
 						t.Fatalf("registration failure is missing %q", text)
 					}
 				}
+				for _, markup := range []string{
+					`id="registration-pending" class="verification-panel" aria-labelledby="registration-pending-title"`,
+					`<h1 id="registration-pending-title">`,
+					`class="verification-status verification-status--error" role="alert"`,
+					`class="verification-actions"`,
+				} {
+					if !strings.Contains(body, markup) {
+						t.Fatalf("pending registration is missing presentation markup %q", markup)
+					}
+				}
 				if strings.Contains(body, `id="register-form"`) || strings.Contains(body, "private SMTP failure") {
 					t.Fatal("registration failure offered duplicate registration or exposed SMTP details")
 				}
