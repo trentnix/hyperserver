@@ -87,13 +87,11 @@ func TestSignedTokenValidation(t *testing.T) {
 				if _, err := parseAuthToken(raw, key, purpose); err == nil {
 					t.Fatal("invalid token accepted")
 				} else if failure == "expired" {
-					var expired *ErrTokenExpired
-					if !errors.As(err, &expired) {
+					if !errors.Is(err, ErrTokenExpired) {
 						t.Fatalf("error = %v, want ErrTokenExpired", err)
 					}
 				} else if failure == "expired wrong key" {
-					var expired *ErrTokenExpired
-					if errors.As(err, &expired) {
+					if errors.Is(err, ErrTokenExpired) {
 						t.Fatal("invalid signature was classified as an expired valid token")
 					}
 				}
@@ -154,7 +152,7 @@ func TestValidateTokenUsesRepository(t *testing.T) {
 						metadata := token.Metadata()
 						switch scenario {
 						case "missing token":
-							return TokenMetadata{}, NewErrTokenNotFound(nil)
+							return TokenMetadata{}, ErrTokenNotFound
 						case "token failure":
 							return TokenMetadata{}, failure
 						case "wrong stored account":
@@ -177,7 +175,7 @@ func TestValidateTokenUsesRepository(t *testing.T) {
 						}
 						switch scenario {
 						case "missing account":
-							return nil, NewErrUserNotFound(nil)
+							return nil, ErrUserNotFound
 						case "account failure":
 							return nil, failure
 						case "account canceled":
@@ -269,8 +267,7 @@ func TestValidateTokenExpiryDuringLookup(t *testing.T) {
 							},
 						}
 						got, err := validateToken(context.Background(), repository, token.Token, key, purpose)
-						var expired *ErrTokenExpired
-						if got != nil || !errors.As(err, &expired) {
+						if got != nil || !errors.Is(err, ErrTokenExpired) {
 							t.Fatalf("lookup accepted token at its expiry boundary: %v, %v", got, err)
 						}
 					})

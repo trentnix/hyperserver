@@ -26,6 +26,8 @@ SQLite issues cookies only after successful writes. Persistent database files su
 
 Storage I/O must use the request context. Cancellation after a completed write does not undo that write. Authentication rejects providers without `RotatingStore` during initialization. Custom implementations must satisfy its revocation and concurrency rules, not merely implement a method with that name.
 
+`session.New` calls the selected store's `New` method and caches only a successful result. `Session.End` creates an unsaved replacement before revoking the old session. If creation or revocation fails, the request-local session remains unchanged. A successful revocation installs the provider's replacement and clears the old data.
+
 ## Reading and saving
 
 The following handler increments a counter. `DecodeValue` leaves the destination unchanged when the key is absent and returns an error if the value cannot be decoded into the requested type.

@@ -31,7 +31,7 @@ func AddSuccessMessage(w http.ResponseWriter, r *http.Request, message string, c
 // A failed removal returns no messages and leaves the request-local category intact.
 func GetMessages(w http.ResponseWriter, r *http.Request, category string) ([]messages.Message, error) {
 	if category == "" {
-		return nil, NewErrMessageCategoryNotSpecified(nil)
+		return nil, ErrMessageCategoryNotSpecified
 	}
 
 	flashMessages, err := getMessages(w, r, flashMessageCategory(category))

@@ -82,8 +82,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 			for _, email := range []string{stale.Email, "profile-edit@example.invalid"} {
 				stale.Email = email
 				before := stale
-				var changed *accounts.ErrUserChanged
-				if err := repository.Update(ctx, &stale); !errors.As(err, &changed) {
+				if err := repository.Update(ctx, &stale); !errors.Is(err, accounts.ErrUserChanged) {
 					t.Fatalf("stale update error = %v, want ErrUserChanged", err)
 				}
 				if stale != before {
@@ -154,8 +153,7 @@ func TestConcurrentUpdatesRejectStaleSnapshot(t *testing.T) {
 			successes++
 			winner = outcome.account
 		} else {
-			var changed *accounts.ErrUserChanged
-			if !errors.As(outcome.err, &changed) {
+			if !errors.Is(outcome.err, accounts.ErrUserChanged) {
 				t.Errorf("competing update error = %v, want ErrUserChanged", outcome.err)
 			}
 			if outcome.account.SessionVersion != u.SessionVersion || outcome.account.UpdatedAt != u.UpdatedAt {
@@ -185,8 +183,7 @@ func TestUpdateRejectsIncorrectSecurityVersion(t *testing.T) {
 		attempt.SessionVersion = version
 		attempt.Email = "changed@example.invalid"
 		before := attempt
-		var changed *accounts.ErrUserChanged
-		if err := NewAccountRepository(db).Update(ctx, &attempt); !errors.As(err, &changed) {
+		if err := NewAccountRepository(db).Update(ctx, &attempt); !errors.Is(err, accounts.ErrUserChanged) {
 			t.Fatalf("version %d: error=%v, want ErrUserChanged", version, err)
 		}
 		stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)

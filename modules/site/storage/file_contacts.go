@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 // FileContactRepository stores one JSON file per contact submission. It owns no
@@ -90,7 +91,7 @@ func (repository *FileContactRepository) Create(ctx context.Context, submission 
 		return err
 	}
 	if !models.IsValidEmail(submission.Email) {
-		return models.NewErrInvalidEmail(fmt.Errorf("failed to create a new contact_submission record"))
+		return hs_errors.WithCause(models.ErrInvalidEmail, fmt.Errorf("failed to create a new contact_submission record"))
 	}
 
 	created := *submission

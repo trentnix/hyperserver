@@ -1,6 +1,6 @@
 // Package form binds HTTP input and records field and form-level validation errors.
-// Embed Form in an application form and implement Bind and Validate. After
-// ParseAndValidate returns without an error, check HasErrors before changing data.
+// Embed Form in an application form and implement Bind and Validate.
+// ParseAndValidate returns an error for parsing, binding, or field validation failures.
 // Message strings are plain text. Render them through html/template for escaping.
 package form
 

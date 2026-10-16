@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -27,7 +28,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
-	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -120,23 +120,15 @@ type capturedLogs struct {
 	lines []string
 }
 
-type testLogger struct {
-	logs   *capturedLogs
-	fields []logger.Field
+func newTestLogger(logs *capturedLogs) *slog.Logger {
+	return slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 }
 
-func (l *testLogger) record(message string, fields ...logger.Field) {
-	l.logs.mu.Lock()
-	defer l.logs.mu.Unlock()
-	l.logs.lines = append(l.logs.lines, fmt.Sprint(message, l.fields, fields))
-}
-
-func (l *testLogger) Debug(message string, fields ...logger.Field) { l.record(message, fields...) }
-func (l *testLogger) Info(message string, fields ...logger.Field)  { l.record(message, fields...) }
-func (l *testLogger) Warn(message string, fields ...logger.Field)  { l.record(message, fields...) }
-func (l *testLogger) Error(message string, fields ...logger.Field) { l.record(message, fields...) }
-func (l *testLogger) With(fields ...logger.Field) logger.Logger {
-	return &testLogger{logs: l.logs, fields: append(append([]logger.Field(nil), l.fields...), fields...)}
+func (l *capturedLogs) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lines = append(l.lines, strings.TrimSuffix(string(p), "\n"))
+	return len(p), nil
 }
 
 func (l *capturedLogs) String() string {
@@ -244,7 +236,7 @@ func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) (
 	if err := configureRendering(app.ApplicationServer); err != nil {
 		t.Fatal(err)
 	}
-	l := &testLogger{logs: logs}
+	l := newTestLogger(logs)
 	if catalogFactory == nil {
 		catalogFactory = func(app *application) ([]handlers.Descriptor, error) {
 			return siteModules(app, "")

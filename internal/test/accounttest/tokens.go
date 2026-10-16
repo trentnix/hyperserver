@@ -82,8 +82,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 
 			beforeReplay := input
 			got, err = redeem(t.Context(), repo, &input, token)
-			var missing *user.ErrTokenNotFound
-			if !errors.As(err, &missing) || got != nil {
+			if !errors.Is(err, user.ErrTokenNotFound) || got != nil {
 				t.Fatalf("replay = %v, %v", got, err)
 			}
 			assertAccount(t, input, beforeReplay)
@@ -131,13 +130,11 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 					t.Fatalf("invalid redemption = %v, %v", got, err)
 				}
 				if strings.Contains(failure, "expiry") {
-					var expired *user.ErrTokenExpired
-					if !errors.As(err, &expired) {
+					if !errors.Is(err, user.ErrTokenExpired) {
 						t.Fatalf("expiry error = %v", err)
 					}
 				} else if failure != "account mismatch" {
-					var missing *user.ErrTokenNotFound
-					if !errors.As(err, &missing) {
+					if !errors.Is(err, user.ErrTokenNotFound) {
 						t.Fatalf("token mismatch error = %v", err)
 					}
 				}
@@ -165,8 +162,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				return err
 			})
 			winner := oneSuccess(t, errs)
-			var missing *user.ErrTokenNotFound
-			if results[winner] == nil || results[1-winner] != nil || !errors.As(errs[1-winner], &missing) {
+			if results[winner] == nil || results[1-winner] != nil || !errors.Is(errs[1-winner], user.ErrTokenNotFound) {
 				t.Fatalf("concurrent redemption results = %v, %v", results, errs)
 			}
 			want := original
@@ -290,8 +286,7 @@ func cancellationContract(t *testing.T, open func(*testing.T) user.AccountReposi
 			assertTokenMissing(t, repo, newToken)
 			if operation == "create" || operation == "update" {
 				got, err := repo.GetByEmail(t.Context(), input.Email)
-				var missing *user.ErrUserNotFound
-				if got != nil || !errors.As(err, &missing) {
+				if got != nil || !errors.Is(err, user.ErrUserNotFound) {
 					t.Fatalf("canceled write persisted email: %v, %v", got, err)
 				}
 			}
@@ -327,8 +322,7 @@ func assertToken(t *testing.T, repo user.AccountRepository, want user.TokenMetad
 func assertTokenMissing(t *testing.T, repo user.AccountRepository, token user.TokenMetadata) {
 	t.Helper()
 	got, err := repo.GetToken(t.Context(), token.TokenHash, token.Purpose)
-	var missing *user.ErrTokenNotFound
-	if !errors.As(err, &missing) || got != (user.TokenMetadata{}) {
+	if !errors.Is(err, user.ErrTokenNotFound) || got != (user.TokenMetadata{}) {
 		t.Fatalf("missing token = %+v, %v", got, err)
 	}
 }

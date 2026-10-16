@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -37,14 +38,14 @@ func (c *Claims) ExpiresAtTime() time.Time {
 // Parse validates a signed session token and extracts its claims.
 func Parse(tokenString string, jwtKey []byte) (*Claims, error) {
 	if len(tokenString) > sessions.MaxCookieSize {
-		return nil, sessions.NewErrInvalidToken(sessions.ErrSessionCookieTooLarge)
+		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, sessions.ErrSessionCookieTooLarge)
 	}
 	if tokenString == "" {
-		return nil, sessions.NewErrInvalidToken(fmt.Errorf("the token string is empty"))
+		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, fmt.Errorf("the token string is empty"))
 	}
 
 	if len(jwtKey) == 0 {
-		return nil, sessions.NewErrTokenKeyNotSet(fmt.Errorf("unable to parse the JWT"))
+		return nil, hs_errors.WithCause(sessions.ErrTokenKeyNotSet, fmt.Errorf("unable to parse the JWT"))
 	}
 
 	claims := &Claims{}
@@ -52,11 +53,11 @@ func Parse(tokenString string, jwtKey []byte) (*Claims, error) {
 		return jwtKey, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil {
-		return nil, sessions.NewErrInvalidToken(err)
+		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, err)
 	}
 
 	if !token.Valid || claims.ID == "" || claims.Purpose != Purpose {
-		return nil, sessions.NewErrInvalidToken(fmt.Errorf("invalid session claims"))
+		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, fmt.Errorf("invalid session claims"))
 	}
 	return claims, nil
 }

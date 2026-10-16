@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 type (
@@ -49,7 +50,7 @@ func ValidateResetToken(ctx context.Context, accounts AccountRepository, tokenSt
 // Success refreshes the receiver and invalidates existing authenticated sessions.
 func (u *User) ResetPassword(ctx context.Context, accounts AccountRepository, token string, jwtKey []byte, passwordHash string) error {
 	if u == nil || u.ID == "" {
-		return NewErrUserNotSpecified(nil)
+		return ErrUserNotSpecified
 	}
 	if accounts == nil {
 		return errors.New("the account repository is not configured")
@@ -63,7 +64,7 @@ func (u *User) ResetPassword(ctx context.Context, accounts AccountRepository, to
 		return err
 	}
 	if claims.Id != u.ID {
-		return NewErrToken(errors.New("reset token belongs to another account"))
+		return hs_errors.WithCause(ErrToken, errors.New("reset token belongs to another account"))
 	}
 
 	hash := sha256.Sum256([]byte(token))

@@ -11,6 +11,7 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 //go:embed migrations/000001_contacts.up.sql
@@ -24,11 +25,11 @@ const contactVersionTable = "hyperserver_contact_version"
 // Existing storage must have clean version 1 metadata. Setup does not migrate it.
 func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
-		return database.NewErrDatabaseUnavailable(fmt.Errorf("the database is not valid"))
+		return hs_errors.WithCause(database.ErrDatabaseUnavailable, fmt.Errorf("the database is not valid"))
 	}
 
 	if _, ok := db.Driver().(*sqlite3.SQLiteDriver); !ok {
-		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
+		return hs_errors.WithCause(database.ErrDatabaseNotSupported, fmt.Errorf("the database type %T is not supported", db.Driver()))
 	}
 
 	tx, err := db.BeginTx(ctx, nil)

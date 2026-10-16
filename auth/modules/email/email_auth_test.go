@@ -125,8 +125,7 @@ func TestEmailAuthModuleRequiresFlashSession(t *testing.T) {
 
 			err = module.Init(t.Context(), app)
 			if selection == "missing" {
-				var missing *session.ErrSessionStoreNotFound
-				if !errors.As(err, &missing) || !strings.Contains(err.Error(), "flash") {
+				if !errors.Is(err, session.ErrSessionStoreNotFound) || !strings.Contains(err.Error(), "flash") {
 					t.Fatalf("initialization error = %v, want missing flash session", err)
 				}
 				return
@@ -394,7 +393,7 @@ func TestLoginUsesAccountRepository(t *testing.T) {
 				}
 				switch scenario {
 				case "missing":
-					return nil, errors.Join(errors.New("lookup failed"), user.NewErrUserNotFound(nil))
+					return nil, errors.Join(errors.New("lookup failed"), user.ErrUserNotFound)
 				case "storage failure":
 					return nil, errors.New("private storage failure")
 				case "canceled":
@@ -549,9 +548,9 @@ func TestResetUsesAccountRepository(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			failure := map[string]error{
 				"storage failure": errors.New("private storage failure"),
-				"consumed":        user.NewErrTokenNotFound(nil),
-				"expired":         user.NewErrTokenExpired(nil),
-				"changed account": user.NewErrUserChanged(nil),
+				"consumed":        user.ErrTokenNotFound,
+				"expired":         user.ErrTokenExpired,
+				"changed account": user.ErrUserChanged,
 				"canceled":        context.Canceled,
 			}[scenario]
 			account := &user.User{ID: "account", SessionVersion: 1}

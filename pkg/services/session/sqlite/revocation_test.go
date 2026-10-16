@@ -78,8 +78,7 @@ func TestSQLiteSessionRevocation(t *testing.T) {
 	}
 
 	w = httptest.NewRecorder()
-	var invalid *sessions.ErrSessionInvalid
-	if err := stale.Save(w, r); !errors.As(err, &invalid) || len(w.Result().Cookies()) != 0 {
+	if err := stale.Save(w, r); !errors.Is(err, sessions.ErrSessionInvalid) || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("stale save did not reject revocation: %v", err)
 	}
 	// Ending the already deleted ID is safe and still expires the browser cookie.

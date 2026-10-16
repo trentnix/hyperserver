@@ -269,7 +269,7 @@ func (w *failedErrorWriter) Write([]byte) (int, error) {
 
 func TestHTTPSiteErrorWriteFailure(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
-		handler := middleware.LoggerMiddleware(&testLogger{logs: h.logs})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := middleware.LoggerMiddleware(newTestLogger(h.logs))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h.app.ContentManager.HandleError(w, r, "Unavailable", nil, http.StatusServiceUnavailable)
 		}))
 		w := &failedErrorWriter{ResponseRecorder: httptest.NewRecorder()}

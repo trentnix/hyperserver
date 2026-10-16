@@ -122,7 +122,7 @@ func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
 			app := &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}
 			logs := &capturedLogs{}
 			app.Config.Database.Connection = "private-connection-secret"
-			err := SetupHandlers(context.Background(), app, &testLogger{logs: logs}, catalog, selections)
+			err := SetupHandlers(context.Background(), app, newTestLogger(logs), catalog, selections)
 			if mode != "selected" {
 				if err == nil || len(steps) != 0 {
 					t.Fatalf("invalid graph: error=%v steps=%v", err, steps)
@@ -139,7 +139,7 @@ func TestSetupHandlersResolvesBeforeFactories(t *testing.T) {
 			if strings.Join(steps, ",") != want {
 				t.Fatalf("initialization order=%v", steps)
 			}
-			for _, want := range []string{"Modules initialized", "modules [two consumer one]", "capabilityProviders [storage=two pages=consumer storage=one]", "providerSelections map[storage:two]"} {
+			for _, want := range []string{"Modules initialized", `modules="[two consumer one]"`, `capabilityProviders="[storage=two pages=consumer storage=one]"`, "providerSelections=map[storage:two]"} {
 				if !strings.Contains(logs.String(), want) {
 					t.Fatalf("startup summary missing %q: %s", want, logs.String())
 				}
@@ -200,13 +200,13 @@ func TestStartupSummaryPreservesMultipleProviderOrder(t *testing.T) {
 	}
 	defer app.Shutdown()
 	logs := &capturedLogs{}
-	if err := SetupHandlers(t.Context(), app, &testLogger{logs: logs}, catalog, nil); err != nil {
+	if err := SetupHandlers(t.Context(), app, newTestLogger(logs), catalog, nil); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(selected, ",") != "one,two" {
 		t.Fatalf("binding order changed from catalog order: %v", selected)
 	}
-	if !strings.Contains(logs.String(), "modules [two one consumer]") {
+	if !strings.Contains(logs.String(), `modules="[two one consumer]"`) {
 		t.Fatalf("summary omitted initialization order: %s", logs.String())
 	}
 }

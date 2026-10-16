@@ -39,7 +39,7 @@ func TestAuthenticationProviderDiagnostics(t *testing.T) {
 			sessions := moduleSessions(t, map[string]string{"default": "custom"})
 			module := auth.Module(accounts, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
 			var output bytes.Buffer
-			var log logger.Logger = logger.NewSlogLogger(slog.NewTextHandler(&output, nil))
+			var log *slog.Logger = slog.New(slog.NewTextHandler(&output, nil))
 			err = module.Init(logger.Set(t.Context(), log), app)
 			if mode == "failure" {
 				if err == nil || output.Len() != 0 {

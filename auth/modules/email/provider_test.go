@@ -263,8 +263,7 @@ func TestProviderRequiresSuppliedSessions(t *testing.T) {
 	}}}
 	provider := Provider(&emailAccountRepository{}, nil, nil).New()
 	err := provider.Init(app)
-	var missing *session.ErrSessionManagerNotFound
-	if !errors.As(err, &missing) {
+	if !errors.Is(err, session.ErrSessionManagerNotFound) {
 		t.Fatalf("initialization error = %v, want missing session manager", err)
 	}
 }

@@ -107,8 +107,7 @@ func TestSQLiteAccountRepository(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(stored, again) || stored == again {
 				t.Fatal("reads must return independent account values:", err)
 			}
-			var notFound *accounts.ErrUserNotFound
-			if got, err := lookup(context.Background(), "absent"); got != nil || !errors.As(err, &notFound) {
+			if got, err := lookup(context.Background(), "absent"); got != nil || !errors.Is(err, accounts.ErrUserNotFound) {
 				t.Fatalf("missing account = %v, %v", got, err)
 			}
 			if _, err := lookup(context.Background(), ""); err == nil {
@@ -123,7 +122,7 @@ func TestSQLiteAccountRepository(t *testing.T) {
 			if err := db.Close(); err != nil {
 				t.Fatal(err)
 			}
-			if got, err := lookup(context.Background(), key); got != nil || err == nil || errors.As(err, &notFound) {
+			if got, err := lookup(context.Background(), key); got != nil || err == nil || errors.Is(err, accounts.ErrUserNotFound) {
 				t.Fatalf("storage failure treated as missing account: %v, %v", got, err)
 			}
 		})
@@ -155,8 +154,7 @@ func TestSQLiteAccountRepositoryCaseInsensitiveEmail(t *testing.T) {
 	}
 
 	for _, email := range []string{"person+tag@example.invalid", "per.son@example.invalid", " person@example.invalid"} {
-		var missing *accounts.ErrUserNotFound
-		if stored, err := repository.GetByEmail(t.Context(), email); stored != nil || !errors.As(err, &missing) {
+		if stored, err := repository.GetByEmail(t.Context(), email); stored != nil || !errors.Is(err, accounts.ErrUserNotFound) {
 			t.Fatalf("nonmatching lookup = %+v, %v", stored, err)
 		}
 	}
@@ -292,8 +290,7 @@ func TestSQLiteAccountRepositoryLookupCancellationWhileWaiting(t *testing.T) {
 
 				cancel()
 				err = <-result
-				var notFound *accounts.ErrUserNotFound
-				if account != nil || !errors.Is(err, context.Canceled) || errors.As(err, &notFound) {
+				if account != nil || !errors.Is(err, context.Canceled) || errors.Is(err, accounts.ErrUserNotFound) {
 					t.Fatalf("canceled lookup = %v, %v, want nil account and context.Canceled", account, err)
 				}
 			})
@@ -339,8 +336,7 @@ func TestSQLiteAccountRepositoryCreateCancellationWhileWaiting(t *testing.T) {
 func TestSQLiteAccountRepositoryRequiresPreparedStorage(t *testing.T) {
 	for _, reader := range []*AccountRepository{NewAccountRepository(nil), NewAccountRepository(unpreparedUserTestDB(t))} {
 		for _, lookup := range []func(context.Context, string) (*accounts.User, error){reader.GetByID, reader.GetByEmail} {
-			var notFound *accounts.ErrUserNotFound
-			if got, err := lookup(context.Background(), "account"); got != nil || err == nil || errors.As(err, &notFound) {
+			if got, err := lookup(context.Background(), "account"); got != nil || err == nil || errors.Is(err, accounts.ErrUserNotFound) {
 				t.Fatalf("unavailable storage treated as missing account: %v, %v", got, err)
 			}
 		}

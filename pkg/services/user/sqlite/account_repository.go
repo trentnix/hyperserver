@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -64,7 +65,7 @@ func (s *AccountRepository) Initialize(ctx context.Context) error {
 // GetByID loads an account by ID, or returns [accounts.ErrUserNotFound].
 func (s *AccountRepository) GetByID(ctx context.Context, id string) (*accounts.User, error) {
 	if s.db == nil {
-		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
+		return nil, hs_errors.WithCause(database.ErrDatabaseUnavailable, fmt.Errorf("no database connection is specified"))
 	}
 
 	if id == "" {
@@ -75,7 +76,7 @@ func (s *AccountRepository) GetByID(ctx context.Context, id string) (*accounts.U
 
 	u, err := scanAccount(s.db.QueryRowContext(ctx, query, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, accounts.NewErrUserNotFound(err)
+		return nil, hs_errors.WithCause(accounts.ErrUserNotFound, err)
 	}
 	if err != nil {
 		return nil, err
@@ -87,7 +88,7 @@ func (s *AccountRepository) GetByID(ctx context.Context, id string) (*accounts.U
 // GetByEmail loads an account using [accounts.EmailKey], or returns [accounts.ErrUserNotFound].
 func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*accounts.User, error) {
 	if s.db == nil {
-		return nil, database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
+		return nil, hs_errors.WithCause(database.ErrDatabaseUnavailable, fmt.Errorf("no database connection is specified"))
 	}
 
 	if email == "" {
@@ -98,7 +99,7 @@ func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*acco
 
 	user, err := scanAccount(s.db.QueryRowContext(ctx, query, accounts.EmailKey(email)))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, accounts.NewErrUserNotFound(err)
+		return nil, hs_errors.WithCause(accounts.ErrUserNotFound, err)
 	}
 	if err != nil {
 		return nil, err
@@ -110,13 +111,13 @@ func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*acco
 // GetToken reads stored metadata without consuming or checking the expiry of the token.
 func (s *AccountRepository) GetToken(ctx context.Context, tokenHash, purpose string) (accounts.TokenMetadata, error) {
 	if purpose != accounts.ResetTokenPurpose && purpose != accounts.VerificationTokenPurpose {
-		return accounts.TokenMetadata{}, accounts.NewErrToken(errors.New("invalid token purpose"))
+		return accounts.TokenMetadata{}, hs_errors.WithCause(accounts.ErrToken, errors.New("invalid token purpose"))
 	}
 	if tokenHash == "" {
-		return accounts.TokenMetadata{}, accounts.NewErrTokenNotSpecified(fmt.Errorf("get token by value"))
+		return accounts.TokenMetadata{}, hs_errors.WithCause(accounts.ErrTokenNotSpecified, fmt.Errorf("get token by value"))
 	}
 	if s.db == nil {
-		return accounts.TokenMetadata{}, database.NewErrDatabaseUnavailable(nil)
+		return accounts.TokenMetadata{}, database.ErrDatabaseUnavailable
 	}
 
 	var metadata accounts.TokenMetadata
@@ -124,10 +125,10 @@ func (s *AccountRepository) GetToken(ctx context.Context, tokenHash, purpose str
 		FROM `+userTokenTableName+` WHERE token_hash = ? AND token_type = ?`, tokenHash, purpose).
 		Scan(&metadata.AccountID, &metadata.TokenHash, &metadata.ExpiresAt, &metadata.Purpose)
 	if errors.Is(err, sql.ErrNoRows) {
-		return accounts.TokenMetadata{}, accounts.NewErrTokenNotFound(fmt.Errorf("get token by value"))
+		return accounts.TokenMetadata{}, hs_errors.WithCause(accounts.ErrTokenNotFound, fmt.Errorf("get token by value"))
 	}
 	if err != nil {
-		return accounts.TokenMetadata{}, database.NewErrDatabase(fmt.Errorf("get token by value: %w", err))
+		return accounts.TokenMetadata{}, hs_errors.WithCause(database.ErrDatabase, fmt.Errorf("get token by value: %w", err))
 	}
 	return metadata, nil
 }
@@ -136,7 +137,7 @@ func (s *AccountRepository) GetToken(ctx context.Context, tokenHash, purpose str
 // The supplied user is unchanged if insertion fails.
 func (s *AccountRepository) Create(ctx context.Context, user *accounts.User) error {
 	if user == nil {
-		return accounts.NewErrUserNotSpecified(nil)
+		return accounts.ErrUserNotSpecified
 	}
 	if user.ID != "" {
 		return fmt.Errorf("a new user must not already have an id")
@@ -148,7 +149,7 @@ func (s *AccountRepository) Create(ctx context.Context, user *accounts.User) err
 		return err
 	}
 	if s.db == nil {
-		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
+		return hs_errors.WithCause(database.ErrDatabaseUnavailable, fmt.Errorf("no database connection is specified"))
 	}
 
 	created := *user
@@ -175,20 +176,20 @@ func (s *AccountRepository) Create(ctx context.Context, user *accounts.User) err
 // The account schema must already exist. The raw token is never passed to storage.
 func (s *AccountRepository) InsertToken(ctx context.Context, metadata accounts.TokenMetadata) error {
 	if s.db == nil {
-		return database.NewErrDatabaseUnavailable(nil)
+		return database.ErrDatabaseUnavailable
 	}
 	errInsertToken := errors.New("error creating a new token in the database")
 	if metadata.AccountID == "" {
-		return accounts.NewErrUserNotSpecified(errInsertToken)
+		return hs_errors.WithCause(accounts.ErrUserNotSpecified, errInsertToken)
 	}
 	if metadata.TokenHash == "" {
-		return accounts.NewErrTokenNotSpecified(errInsertToken)
+		return hs_errors.WithCause(accounts.ErrTokenNotSpecified, errInsertToken)
 	}
 	if metadata.ExpiresAt.IsZero() {
-		return accounts.NewErrTokenExpirationNotSpecified(errInsertToken)
+		return hs_errors.WithCause(accounts.ErrTokenExpirationNotSpecified, errInsertToken)
 	}
 	if metadata.Purpose != accounts.ResetTokenPurpose && metadata.Purpose != accounts.VerificationTokenPurpose {
-		return accounts.NewErrToken(errors.New("invalid token purpose"))
+		return hs_errors.WithCause(accounts.ErrToken, errors.New("invalid token purpose"))
 	}
 
 	_, err := s.db.ExecContext(ctx, `INSERT INTO `+userTokenTableName+`
@@ -208,7 +209,7 @@ func (s *AccountRepository) InsertToken(ctx context.Context, metadata accounts.T
 // reapply the intended edit before retrying. Do not copy only the new version.
 func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) error {
 	if user == nil {
-		return accounts.NewErrUserNotSpecified(nil)
+		return accounts.ErrUserNotSpecified
 	}
 	if user.ID == "" {
 		return fmt.Errorf("a user.id value must be specified to update a user record")
@@ -220,7 +221,7 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 		return err
 	}
 	if s.db == nil {
-		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
+		return hs_errors.WithCause(database.ErrDatabaseUnavailable, fmt.Errorf("no database connection is specified"))
 	}
 
 	updated := *user
@@ -278,13 +279,13 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 
 	err = tx.QueryRowContext(ctx, `SELECT session_version FROM user WHERE id = ?`, user.ID).Scan(&updated.SessionVersion)
 	if errors.Is(err, sql.ErrNoRows) {
-		return accounts.NewErrUserNotFound(sql.ErrNoRows)
+		return hs_errors.WithCause(accounts.ErrUserNotFound, sql.ErrNoRows)
 	}
 	if err != nil {
 		return err
 	}
 	if count == 0 {
-		return accounts.NewErrUserChanged(nil)
+		return accounts.ErrUserChanged
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -311,10 +312,10 @@ func accountWriteError(err error) error {
 // The supplied user changes only after the database update succeeds.
 func (s *AccountRepository) ChangePassword(ctx context.Context, u *accounts.User, passwordHash string) error {
 	if u == nil || u.ID == "" {
-		return accounts.NewErrUserNotSpecified(nil)
+		return accounts.ErrUserNotSpecified
 	}
 	if s.db == nil {
-		return database.NewErrDatabaseUnavailable(nil)
+		return database.ErrDatabaseUnavailable
 	}
 	if passwordHash == "" {
 		return errors.New("a password hash is required")
@@ -347,16 +348,16 @@ func (s *AccountRepository) ChangePassword(ctx context.Context, u *accounts.User
 // transaction. The caller must check the signature before supplying authorization.
 func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User, authorization accounts.ResetAuthorization, passwordHash string) error {
 	if u == nil || u.ID == "" {
-		return accounts.NewErrUserNotSpecified(nil)
+		return accounts.ErrUserNotSpecified
 	}
 	if s.db == nil {
-		return database.NewErrDatabaseUnavailable(nil)
+		return database.ErrDatabaseUnavailable
 	}
 	if passwordHash == "" {
 		return errors.New("a password hash is required")
 	}
 	if authorization.AccountID != u.ID || authorization.TokenHash == "" || authorization.ExpiresAt.IsZero() {
-		return accounts.NewErrToken(errors.New("invalid reset authorization"))
+		return hs_errors.WithCause(accounts.ErrToken, errors.New("invalid reset authorization"))
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -377,7 +378,7 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 		RETURNING `+accountColumns,
 		passwordHash, now, u.ID, u.Password, u.RegistrationAuthType))
 	if errors.Is(err, sql.ErrNoRows) {
-		return accounts.NewErrToken(errors.New("account changed or no longer exists"))
+		return hs_errors.WithCause(accounts.ErrToken, errors.New("account changed or no longer exists"))
 	}
 	if err != nil {
 		return err
@@ -395,10 +396,10 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 // in one transaction. The caller must check the signature before supplying authorization.
 func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.VerificationAuthorization) (*accounts.User, error) {
 	if s.db == nil {
-		return nil, database.NewErrDatabaseUnavailable(nil)
+		return nil, database.ErrDatabaseUnavailable
 	}
 	if authorization.AccountID == "" || authorization.Email == "" || authorization.TokenHash == "" || authorization.ExpiresAt.IsZero() {
-		return nil, accounts.NewErrToken(errors.New("invalid verification authorization"))
+		return nil, hs_errors.WithCause(accounts.ErrToken, errors.New("invalid verification authorization"))
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -417,7 +418,7 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 		RETURNING `+accountColumns,
 		time.Now(), authorization.AccountID, accounts.EmailKey(authorization.Email)))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, accounts.NewErrToken(errors.New("verification address changed or account no longer exists"))
+		return nil, hs_errors.WithCause(accounts.ErrToken, errors.New("verification address changed or account no longer exists"))
 	}
 	if err != nil {
 		return nil, err
@@ -440,7 +441,7 @@ func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, token
 		RETURNING expires_at`, accountID, tokenHash, purpose).
 		Scan(&expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return accounts.NewErrTokenNotFound(err)
+		return hs_errors.WithCause(accounts.ErrTokenNotFound, err)
 	}
 	if err != nil {
 		return err
@@ -448,7 +449,7 @@ func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, token
 
 	now := time.Now()
 	if !now.Before(expiresAt) || !now.Before(signedExpiry) {
-		return accounts.NewErrTokenExpired(nil)
+		return accounts.ErrTokenExpired
 	}
 	return nil
 }

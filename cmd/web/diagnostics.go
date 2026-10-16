@@ -2,15 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
-
-	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 // logServiceProviders reports actual application selections, not provider options.
 // mailProvider comes from the setup branch because supplied clients hide their sender.
-func logServiceProviders(log logger.Logger, app *application, mailProvider string) {
+func logServiceProviders(log *slog.Logger, app *application, mailProvider string) {
 	if log == nil {
 		return
 	}
@@ -27,7 +26,7 @@ func logServiceProviders(log logger.Logger, app *application, mailProvider strin
 		sessions = slices.Compact(sessions)
 	}
 	log.Info("Application service providers selected",
-		logger.Field{Key: "accountRepository", Value: accounts},
-		logger.Field{Key: "sessionProviders", Value: sessions},
-		logger.Field{Key: "mailProvider", Value: mailProvider})
+		slog.Any("accountRepository", accounts),
+		slog.Any("sessionProviders", sessions),
+		slog.Any("mailProvider", mailProvider))
 }

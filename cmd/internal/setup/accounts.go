@@ -33,6 +33,12 @@ func NewAccountStorage(cfg *config.Config) *AccountStorage {
 	return &AccountStorage{config: cfg}
 }
 
+// NeedsSQLPool reports whether the selected account provider uses the shared pool.
+// Other providers open and own their resources through their configured factories.
+func (s *AccountStorage) NeedsSQLPool() bool {
+	return s.config.Auth.Enabled && (s.config.Auth.AccountStorage.Provider == "" || s.config.Auth.AccountStorage.Provider == "sqlite")
+}
+
 // AccountProvider supplies account storage and optional token maintenance.
 // Factories must honor ctx and validate their private copy of options without
 // exposing secrets in errors. Each optional close function releases only owned

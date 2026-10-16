@@ -40,7 +40,7 @@ func (p *replacementAccountReads) GetByID(ctx context.Context, id string) (*user
 		return nil, p.fail
 	}
 	if id != p.account.ID {
-		return nil, user.NewErrUserNotFound(nil)
+		return nil, user.ErrUserNotFound
 	}
 	copy := p.account
 	return &copy, nil
@@ -48,7 +48,7 @@ func (p *replacementAccountReads) GetByID(ctx context.Context, id string) (*user
 
 func (p *replacementAccountReads) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	if user.EmailKey(email) != user.EmailKey(p.account.Email) {
-		return nil, user.NewErrUserNotFound(nil)
+		return nil, user.ErrUserNotFound
 	}
 	return p.GetByID(ctx, p.account.ID)
 }
@@ -140,7 +140,7 @@ func newReplacementHTTPHarness(t *testing.T) (*httpHarness, *replacementAccountR
 		t.Fatal(err)
 	}
 	logs := &capturedLogs{}
-	log := &testLogger{logs: logs}
+	log := newTestLogger(logs)
 	if err := SetupHandlers(t.Context(), app.ApplicationServer, log, catalog, nil); err != nil {
 		t.Fatal(err)
 	}

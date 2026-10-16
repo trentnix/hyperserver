@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -87,7 +88,8 @@ func TestBrowserResponseDispatch(t *testing.T) {
 				report("update was not an HTMX request")
 			}
 			f := &browserResponseForm{}
-			if _, err := form.ParseAndValidate(r, f); err != nil {
+			var fields form.FieldErrors
+			if err := form.ParseAndValidate(r, f); err != nil && !errors.As(err, &fields) {
 				report("could not parse update form")
 				http.Error(w, "invalid request", http.StatusBadRequest)
 				return

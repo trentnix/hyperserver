@@ -2,10 +2,9 @@
 package models
 
 import (
+	"errors"
 	"net/mail"
 	"time"
-
-	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 type (
@@ -17,28 +16,13 @@ type (
 		Message   string
 		CreatedAt time.Time
 	}
-
-	// BaseError aliases the shared HyperServer error wrapper.
-	BaseError = hs_errors.BaseError
-
-	// ErrInvalidEmail indicates an email address field is invalid
-	ErrInvalidEmail struct {
-		*BaseError
-	}
 )
+
+// ErrInvalidEmail reports an invalid email address in a contact submission.
+var ErrInvalidEmail = errors.New("invalid email address")
 
 // IsValidEmail confirms that the email provided is a validly constructed email address.
 func IsValidEmail(email string) bool {
 	_, err := mail.ParseAddress(email)
 	return err == nil
-}
-
-// NewErrInvalidEmail returns an ErrInvalidEmail wrapping err.
-func NewErrInvalidEmail(err error) *ErrInvalidEmail {
-	return &ErrInvalidEmail{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "invalid email address",
-		},
-	}
 }

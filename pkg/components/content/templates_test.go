@@ -108,13 +108,11 @@ func TestPrepareTemplatesFailures(t *testing.T) {
 				t.Fatalf("lost underlying cause: %v", err)
 			}
 			if tc.name == "no templates" {
-				var noTemplates *ErrNoTemplates
-				if !errors.As(err, &noTemplates) {
+				if !errors.Is(err, ErrNoTemplates) {
 					t.Fatalf("lost no-templates error type: %v", err)
 				}
 			} else {
-				var parseErr *ErrParsingTemplates
-				if !errors.As(err, &parseErr) {
+				if !errors.Is(err, ErrParsingTemplates) {
 					t.Fatalf("lost parsing error type: %v", err)
 				}
 			}
@@ -160,8 +158,7 @@ func TestPreparedTemplatesFailureDoesNotCommit(t *testing.T) {
 			}
 			w := &recordingResponse{ResponseRecorder: httptest.NewRecorder()}
 			err = c.Render(w, r)
-			var renderErr *ErrRenderingTemplates
-			if !errors.As(err, &renderErr) || w.committed || w.Body.Len() != 0 || w.Header().Get("HX-Redirect") != "" {
+			if !errors.Is(err, ErrRenderingTemplates) || w.committed || w.Body.Len() != 0 || w.Header().Get("HX-Redirect") != "" {
 				t.Fatalf("render failure: error=%v committed=%t body=%q headers=%v", err, w.committed, w.Body.String(), w.Header())
 			}
 			if (kind == "execution" || kind == "partial" || kind == "out of band") && !errors.Is(err, failure) {

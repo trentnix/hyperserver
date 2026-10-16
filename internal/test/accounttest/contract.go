@@ -22,8 +22,7 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 		repo := open(t)
 		for _, lookup := range []func(context.Context, string) (*user.User, error){repo.GetByID, repo.GetByEmail} {
 			got, err := lookup(t.Context(), "missing@example.invalid")
-			var missing *user.ErrUserNotFound
-			if got != nil || !errors.As(err, &missing) {
+			if got != nil || !errors.Is(err, user.ErrUserNotFound) {
 				t.Fatalf("missing account = %v, %v", got, err)
 			}
 		}
@@ -147,8 +146,7 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				assertTokenMissing(t, repo, verification)
 				assertTokenMissing(t, repo, secondVerification)
 				got, err := repo.GetByEmail(t.Context(), original.Email)
-				var missing *user.ErrUserNotFound
-				if got != nil || !errors.As(err, &missing) {
+				if got != nil || !errors.Is(err, user.ErrUserNotFound) {
 					t.Fatalf("old email still resolves: %v, %v", got, err)
 				}
 			} else {
@@ -185,11 +183,9 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			}
 			before := changed
 			err := repo.Update(t.Context(), &changed)
-			var stale *user.ErrUserChanged
-			var missing *user.ErrUserNotFound
 			if (failure == "duplicate email" && !errors.Is(err, user.ErrEmailAlreadyExists)) ||
-				(failure == "stale version" && !errors.As(err, &stale)) ||
-				(failure == "missing account" && !errors.As(err, &missing)) {
+				(failure == "stale version" && !errors.Is(err, user.ErrUserChanged)) ||
+				(failure == "missing account" && !errors.Is(err, user.ErrUserNotFound)) {
 				t.Fatalf("update error = %v", err)
 			}
 			assertAccount(t, changed, before)
@@ -228,8 +224,7 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			wantLoser := [2]user.User{first, second}[loser]
 			if operation == "update" {
 				wantLoser.Password = "new hash"
-				var stale *user.ErrUserChanged
-				if !errors.As(errs[loser], &stale) {
+				if !errors.Is(errs[loser], user.ErrUserChanged) {
 					t.Fatalf("concurrent update error = %v", errs[loser])
 				}
 			}

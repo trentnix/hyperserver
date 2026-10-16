@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -188,8 +189,7 @@ func TestInsertTokenHonorsCancellation(t *testing.T) {
 	if err := NewAccountRepository(db).InsertToken(ctx, token.Metadata()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled creation returned %v", err)
 	}
-	var missing *accounts.ErrTokenNotFound
-	if _, err := NewAccountRepository(db).GetToken(t.Context(), token.TokenHash, accounts.VerificationTokenPurpose); !errors.As(err, &missing) {
+	if _, err := NewAccountRepository(db).GetToken(t.Context(), token.TokenHash, accounts.VerificationTokenPurpose); !errors.Is(err, accounts.ErrTokenNotFound) {
 		t.Fatalf("canceled creation stored token: %v", err)
 	}
 }
@@ -371,9 +371,8 @@ func TestSQLiteAccountRepositoryGetTokenFailures(t *testing.T) {
 				cancel()
 			}
 			got, err := repository.GetToken(ctx, hash, purpose)
-			var missing *accounts.ErrTokenNotFound
 			wantMissing := scenario == "missing" || scenario == "wrong purpose"
-			if err == nil || got != (accounts.TokenMetadata{}) || errors.As(err, &missing) != wantMissing {
+			if err == nil || got != (accounts.TokenMetadata{}) || errors.Is(err, accounts.ErrTokenNotFound) != wantMissing {
 				t.Fatalf("failed lookup returned metadata or wrong error: %+v, %v", got, err)
 			}
 			if scenario == "canceled" && !errors.Is(err, context.Canceled) {
@@ -452,8 +451,7 @@ func TestTokenRejectsUnsupportedPurpose(t *testing.T) {
 				t.Fatal(err)
 			}
 			token := accounts.AuthToken{UserId: u.ID, TokenHash: "test-hash", ExpiresAt: time.Now().Add(time.Hour), Type: purpose}
-			var invalid *accounts.ErrToken
-			if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); !errors.As(err, &invalid) || invalid.Unwrap() == nil || invalid.Unwrap().Error() != "invalid token purpose" {
+			if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); !errors.Is(err, accounts.ErrToken) || errors.Unwrap(err) == nil || !strings.Contains(errors.Unwrap(err).Error(), "invalid token purpose") {
 				t.Fatalf("unsupported purpose error = %v, want invalid token purpose", err)
 			}
 			var count int

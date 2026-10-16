@@ -1,7 +1,9 @@
 package ratelimit
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
@@ -14,18 +16,17 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
-type rateLog struct{ entries []map[string]any }
+type rateLog struct {
+	slog.Handler
+	entries []map[string]any
+}
 
-func (*rateLog) Debug(string, ...logger.Field)        {}
-func (*rateLog) Info(string, ...logger.Field)         {}
-func (*rateLog) Error(string, ...logger.Field)        {}
-func (l *rateLog) With(...logger.Field) logger.Logger { return l }
-func (l *rateLog) Warn(message string, fields ...logger.Field) {
-	entry := map[string]any{"message": message}
-	for _, field := range fields {
-		entry[field.Key] = field.Value
-	}
+func (*rateLog) Enabled(context.Context, slog.Level) bool { return true }
+func (l *rateLog) Handle(_ context.Context, record slog.Record) error {
+	entry := map[string]any{"message": record.Message}
+	record.Attrs(func(attr slog.Attr) bool { entry[attr.Key] = attr.Value.Any(); return true })
 	l.entries = append(l.entries, entry)
+	return nil
 }
 
 func TestRateLimiterDiagnostics(t *testing.T) {
@@ -35,7 +36,7 @@ func TestRateLimiterDiagnostics(t *testing.T) {
 			t.Fatal(err)
 		}
 		capture := &rateLog{}
-		var log logger.Logger = capture
+		log := slog.New(capture)
 		handler := l.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
 		for _, ip := range []string{"192.0.2.1:1", "192.0.2.1:2", "192.0.2.2:1"} {
 			r := httptest.NewRequest("POST", "/private-token?email=private-account", strings.NewReader("private-password"))
@@ -48,7 +49,7 @@ func TestRateLimiterDiagnostics(t *testing.T) {
 		}
 		for i, reason := range []string{"allowance exhausted", "client capacity reached"} {
 			entry := capture.entries[i]
-			if entry["message"] != "Request rate limited" || entry["limiter"] != "shared mail" || entry["reason"] != reason || entry["requests"] != 1 || entry["window"] != "1m0s" || entry["retryAfter"] != int64(60) || entry["maxClients"] != 1 {
+			if entry["message"] != "Request rate limited" || entry["limiter"] != "shared mail" || entry["reason"] != reason || entry["requests"] != int64(1) || entry["window"] != "1m0s" || entry["retryAfter"] != int64(60) || entry["maxClients"] != int64(1) {
 				t.Fatalf("incomplete rejection log: %v", entry)
 			}
 		}

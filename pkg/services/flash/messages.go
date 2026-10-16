@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	"github.com/trentnix/hyperserver/pkg/components/messages"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -50,21 +51,21 @@ func newMessage(message string, messageType string) messages.SessionMessage {
 func addMessage(w http.ResponseWriter, r *http.Request, message string, messageType string, category string) error {
 	s, err := session.Get(r, messagesSession.String())
 	if err != nil {
-		return NewErrRetrievingContentMessages(err)
+		return hs_errors.WithCause(ErrRetrievingContentMessages, err)
 	}
 
 	m := newMessage(message, messageType)
 
 	var msgs []messages.SessionMessage
 	if err := s.DecodeValue(category, &msgs); err != nil {
-		return NewErrRetrievingContentMessages(err)
+		return hs_errors.WithCause(ErrRetrievingContentMessages, err)
 	}
 	msgs = append(msgs, m)
 	s.Data[category] = msgs
 
 	err = s.Save(w, r)
 	if err != nil {
-		return NewErrSavingContentMessages(err)
+		return hs_errors.WithCause(ErrSavingContentMessages, err)
 	}
 
 	return nil
@@ -97,7 +98,7 @@ func loadMessagesOfType(r *http.Request, category, messageType string) ([]messag
 	}
 	s, err := session.Get(r, messagesSession.String())
 	if err != nil {
-		return nil, nil, NewErrRetrievingContentMessages(err)
+		return nil, nil, hs_errors.WithCause(ErrRetrievingContentMessages, err)
 	}
 
 	if _, exists := s.Data[category]; !exists {
@@ -105,7 +106,7 @@ func loadMessagesOfType(r *http.Request, category, messageType string) ([]messag
 	}
 	var contentMessages []messages.SessionMessage
 	if err := s.DecodeValue(category, &contentMessages); err != nil {
-		return nil, nil, NewErrRetrievingContentMessages(err)
+		return nil, nil, hs_errors.WithCause(ErrRetrievingContentMessages, err)
 	}
 
 	var selected, retained []messages.SessionMessage
@@ -127,10 +128,10 @@ func loadMessagesOfType(r *http.Request, category, messageType string) ([]messag
 		}
 		var current []messages.SessionMessage
 		if err := s.DecodeValue(category, &current); err != nil {
-			return NewErrDeletingContentMessages(err)
+			return hs_errors.WithCause(ErrDeletingContentMessages, err)
 		}
 		if len(current) < len(contentMessages) || !slices.Equal(current[:len(contentMessages)], contentMessages) {
-			return NewErrDeletingContentMessages(errors.New("messages changed before acknowledgment"))
+			return hs_errors.WithCause(ErrDeletingContentMessages, errors.New("messages changed before acknowledgment"))
 		}
 		stored := s.Data[category]
 		remaining := append(slices.Clone(retained), current[len(contentMessages):]...)
@@ -147,7 +148,7 @@ func loadMessagesOfType(r *http.Request, category, messageType string) ([]messag
 		}
 		if err != nil {
 			s.Data[category] = stored
-			return NewErrDeletingContentMessages(err)
+			return hs_errors.WithCause(ErrDeletingContentMessages, err)
 		}
 		acknowledged = true
 		return nil

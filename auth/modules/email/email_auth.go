@@ -20,6 +20,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/server"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
@@ -176,18 +177,18 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	configOptions := auth_services.GetAuthConfigOptions(s.Config, AuthTypeEmail)
 	authServiceEnabled := strings.EqualFold(configOptions["enabled"], "true") || configOptions["enabled"] == "1"
 	if !authServiceEnabled {
-		return auth_services.NewErrEmailAuthServiceInit(errors.New("the email auth service is not enabled"))
+		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, errors.New("the email auth service is not enabled"))
 	}
 
 	if a.accounts == nil {
-		return auth_services.NewErrEmailAuthServiceInit(errors.New("the account repository is not configured"))
+		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, errors.New("the account repository is not configured"))
 	}
 	if err := flash.ValidateSessionManager(a.sessions); err != nil {
 		return fmt.Errorf("initialize email authentication: %w", err)
 	}
 
 	if err := config.ValidateSigningKey("auth.jwtKey", s.Config.Auth.JwtKey); err != nil {
-		return auth_services.NewErrEmailAuthServiceInit(err)
+		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, err)
 	}
 
 	a.config = s.Config
@@ -199,23 +200,23 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	}
 	a.verificationEmail, err = template.ParseFS(a.TemplateFS, emailVerificationTemplate)
 	if err != nil {
-		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("load verification email template %s: %w", emailVerificationTemplate, err))
+		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, fmt.Errorf("load verification email template %s: %w", emailVerificationTemplate, err))
 	}
 	a.resetEmail, err = template.ParseFS(a.TemplateFS, emailResetTemplate)
 	if err != nil {
-		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("load reset email template %s: %w", emailResetTemplate, err))
+		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, fmt.Errorf("load reset email template %s: %w", emailResetTemplate, err))
 	}
 
 	loginButtonTemplate := emailLoginButtonTemplateName
 	a.loginButton, err = util.LoadHTML(a.TemplateFS, loginButtonTemplate)
 	if err != nil {
-		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", loginButtonTemplate))
+		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, fmt.Errorf("could not find %s", loginButtonTemplate))
 	}
 
 	registerButtonTemplate := emailRegisterButtonTemplateName
 	a.registerButton, err = util.LoadHTML(a.TemplateFS, registerButtonTemplate)
 	if err != nil {
-		return auth_services.NewErrEmailAuthServiceInit(fmt.Errorf("could not find %s", registerButtonTemplate))
+		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, fmt.Errorf("could not find %s", registerButtonTemplate))
 	}
 
 	return a.prepareTemplates()
@@ -309,15 +310,9 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
 
-	errMessage, err := form.ParseAndValidate(r, loginForm)
+	err := form.ParseAndValidate(r, loginForm)
 	if err != nil {
-		form.HandleFormError(w, r, login, loginForm, errMessage, err)
-		return nil
-	}
-
-	// if there are any validation errors, handle them and return an error.
-	if loginForm.HasErrors() {
-		form.HandleFormError(w, r, login, loginForm, "", nil)
+		form.HandleFormError(w, r, login, loginForm, "Unable to process form data", err)
 		return nil
 	}
 
@@ -384,14 +379,9 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
 
-	errMessage, err := form.ParseAndValidate(r, registerForm)
+	err := form.ParseAndValidate(r, registerForm)
 	if err != nil {
-		form.HandleFormError(w, r, register, registerForm, errMessage, err)
-		return
-	}
-
-	if registerForm.HasErrors() {
-		form.HandleFormError(w, r, register, registerForm, "", nil)
+		form.HandleFormError(w, r, register, registerForm, "Unable to process form data", err)
 		return
 	}
 
@@ -472,14 +462,9 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
 
-	errMessage, err := form.ParseAndValidate(r, resetRequestForm)
+	err := form.ParseAndValidate(r, resetRequestForm)
 	if err != nil {
-		form.HandleFormError(w, r, reset, resetRequestForm, errMessage, err)
-		return
-	}
-
-	if resetRequestForm.HasErrors() {
-		form.HandleFormError(w, r, reset, resetRequestForm, "", nil)
+		form.HandleFormError(w, r, reset, resetRequestForm, "Unable to process form data", err)
 		return
 	}
 
@@ -569,14 +554,9 @@ func (a *EmailAuthService) Reset(
 
 	resetForm.ActionUrl = emailResetPath + "?" + url.Values{"token": {token}}.Encode()
 
-	errMessage, err := form.ParseAndValidate(r, resetForm)
+	err := form.ParseAndValidate(r, resetForm)
 	if err != nil {
-		form.HandleFormError(w, r, reset, resetForm, errMessage, err)
-		return
-	}
-
-	if resetForm.HasErrors() {
-		form.HandleFormError(w, r, reset, resetForm, "", nil)
+		form.HandleFormError(w, r, reset, resetForm, "Unable to process form data", err)
 		return
 	}
 
@@ -651,18 +631,13 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 			change,
 			changeForm,
 			"Unable to change your password due to an internal error",
-			user.NewErrUserNotSpecified(fmt.Errorf("change failed")))
+			hs_errors.WithCause(user.ErrUserNotSpecified, fmt.Errorf("change failed")))
 		return
 	}
 
-	errMessage, err := form.ParseAndValidate(r, changeForm)
+	err := form.ParseAndValidate(r, changeForm)
 	if err != nil {
-		form.HandleFormError(w, r, change, changeForm, errMessage, err)
-		return
-	}
-
-	if changeForm.HasErrors() {
-		form.HandleFormError(w, r, change, changeForm, "", nil)
+		form.HandleFormError(w, r, change, changeForm, "Unable to process form data", err)
 		return
 	}
 

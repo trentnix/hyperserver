@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -11,21 +12,23 @@ import (
 // LoggerMiddleware logs the request method and path, excluding query parameters.
 // It adds a logger and tracing ID to the request context and returns the ID in
 // X-Request-ID. Handlers receive the original request URL unchanged.
-func LoggerMiddleware(l logger.Logger) func(http.Handler) http.Handler {
+func LoggerMiddleware(l *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestId := getRequestIdentifier()
 			ctx := context.WithValue(r.Context(), logger.RequestIDKey, requestId)
-			ctx = logger.Set(ctx, l)
+			if l != nil {
+				reqLogger := l.With(
+					slog.Any(string(logger.RequestIDKey), requestId),
+					slog.Any("method", r.Method),
+					slog.Any("path", r.URL.Path),
+				)
 
-			// add request-specific fields if needed
-			reqLogger := l.With(
-				logger.Field{Key: string(logger.RequestIDKey), Value: requestId},
-				logger.Field{Key: "method", Value: r.Method},
-				logger.Field{Key: "path", Value: r.URL.Path},
-			)
-
-			reqLogger.Info("Incoming request")
+				ctx = logger.Set(ctx, reqLogger)
+				reqLogger.InfoContext(ctx, "Incoming request")
+			} else {
+				ctx = logger.Set(ctx, nil)
+			}
 
 			// set it in the response header for client visibility
 			w.Header().Set("X-Request-ID", requestId)

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 // Serializer converts JSON-compatible session values to and from bytes.
@@ -42,14 +44,14 @@ func (JSONSerializer) Decode(data []byte) (map[string]any, error) {
 			return nil, err
 		}
 		if len(envelope) != 2 {
-			return nil, NewErrSessionInvalid(errors.New("session payload must contain a version and an object"))
+			return nil, hs_errors.WithCause(ErrSessionInvalid, errors.New("session payload must contain a version and an object"))
 		}
 		var version int
 		if err := json.Unmarshal(envelope[0], &version); err != nil {
-			return nil, NewErrSessionInvalid(fmt.Errorf("invalid session payload version: %w", err))
+			return nil, hs_errors.WithCause(ErrSessionInvalid, fmt.Errorf("invalid session payload version: %w", err))
 		}
 		if version != 1 {
-			return nil, NewErrSessionInvalid(fmt.Errorf("unsupported session payload version %d", version))
+			return nil, hs_errors.WithCause(ErrSessionInvalid, fmt.Errorf("unsupported session payload version %d", version))
 		}
 		data = envelope[1]
 	}
@@ -61,11 +63,11 @@ func (JSONSerializer) Decode(data []byte) (map[string]any, error) {
 		return nil, err
 	}
 	if values == nil {
-		return nil, NewErrSessionInvalid(errors.New("session data must be a JSON object"))
+		return nil, hs_errors.WithCause(ErrSessionInvalid, errors.New("session data must be a JSON object"))
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		return nil, NewErrSessionInvalid(errors.New("unexpected data after session object"))
+		return nil, hs_errors.WithCause(ErrSessionInvalid, errors.New("unexpected data after session object"))
 	}
 	return values, nil
 }

@@ -39,11 +39,10 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	if _, err := NewAccountRepository(db).GetToken(t.Context(), tokens[0].TokenHash, accounts.ResetTokenPurpose); err != nil {
 		t.Fatalf("consumed a different token: %v", err)
 	}
-	var missing *accounts.ErrTokenNotFound
-	if _, err := NewAccountRepository(db).GetToken(t.Context(), tokens[1].TokenHash, accounts.ResetTokenPurpose); !errors.As(err, &missing) {
+	if _, err := NewAccountRepository(db).GetToken(t.Context(), tokens[1].TokenHash, accounts.ResetTokenPurpose); !errors.Is(err, accounts.ErrTokenNotFound) {
 		t.Fatalf("presented token still exists: %v", err)
 	}
-	if err := u.ResetPassword(ctx, NewAccountRepository(db), tokens[1].Token, key, "replayed hash"); !errors.As(err, &missing) {
+	if err := u.ResetPassword(ctx, NewAccountRepository(db), tokens[1].Token, key, "replayed hash"); !errors.Is(err, accounts.ErrTokenNotFound) {
 		t.Fatalf("replay error = %v, want ErrTokenNotFound", err)
 	}
 	stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
@@ -236,8 +235,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 			successes++
 			winningHash = outcome.hash
 		} else {
-			var missing *accounts.ErrTokenNotFound
-			if !errors.As(outcome.err, &missing) {
+			if !errors.Is(outcome.err, accounts.ErrTokenNotFound) {
 				t.Errorf("losing redemption error = %v, want ErrTokenNotFound", outcome.err)
 			}
 		}
@@ -379,8 +377,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 					t.Fatalf("reset error = %v, want context.Canceled", err)
 				}
 			} else {
-				var expired *accounts.ErrTokenExpired
-				if !errors.As(err, &expired) {
+				if !errors.Is(err, accounts.ErrTokenExpired) {
 					t.Fatalf("reset error = %v, want ErrTokenExpired", err)
 				}
 			}

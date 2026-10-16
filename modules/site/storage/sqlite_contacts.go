@@ -11,6 +11,7 @@ import (
 	site_db "github.com/trentnix/hyperserver/modules/site/database"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/database"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 // SQLiteContactRepository stores contact submissions using a borrowed pool.
@@ -23,7 +24,7 @@ type SQLiteContactRepository struct {
 // The caller must keep db open until all repository operations have finished.
 func NewSQLiteContactRepository(ctx context.Context, db *sql.DB) (*SQLiteContactRepository, error) {
 	if db == nil {
-		return nil, database.NewErrDatabaseUnavailable(nil)
+		return nil, database.ErrDatabaseUnavailable
 	}
 	if err := site_db.PrepareDatabase(ctx, db); err != nil {
 		return nil, err
@@ -40,7 +41,7 @@ func (repository *SQLiteContactRepository) Create(ctx context.Context, submissio
 		return err
 	}
 	if !models.IsValidEmail(submission.Email) {
-		return models.NewErrInvalidEmail(fmt.Errorf("failed to create a new contact_submission record"))
+		return hs_errors.WithCause(models.ErrInvalidEmail, fmt.Errorf("failed to create a new contact_submission record"))
 	}
 
 	created := *submission
@@ -50,7 +51,7 @@ func (repository *SQLiteContactRepository) Create(ctx context.Context, submissio
 	const query = `INSERT INTO hyperserver_contact_submission (id, name, email, message, created_at)
 		VALUES (?, ?, ?, ?, ?)`
 	if _, err := repository.db.ExecContext(ctx, query, created.Id, created.Name, created.Email, created.Message, created.CreatedAt); err != nil {
-		return database.NewErrDatabase(err)
+		return hs_errors.WithCause(database.ErrDatabase, err)
 	}
 	*submission = created
 	return nil

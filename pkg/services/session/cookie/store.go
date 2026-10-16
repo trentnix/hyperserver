@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/session/internal/sessioncookie"
@@ -71,7 +72,7 @@ func (c *CookieStore) Get(r *http.Request, name string) (*sessions.Session, erro
 		return sessions.NewSession(c, name), nil
 	}
 	if err := sessioncookie.Validate(cookie); err != nil {
-		return nil, sessions.NewErrInvalidToken(err)
+		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, err)
 	}
 
 	// return the decoded Session data
@@ -103,7 +104,7 @@ func (c *CookieStore) New(r *http.Request, name string) (*sessions.Session, erro
 // MaxCookieSize are rejected. Call Save before writing response headers or a body.
 func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *sessions.Session) error {
 	if len(c.JwtKey) == 0 {
-		return sessions.NewErrSessionKeyInvalid(fmt.Errorf("the JWT key is not set"))
+		return hs_errors.WithCause(sessions.ErrSessionKeyInvalid, fmt.Errorf("the JWT key is not set"))
 	}
 
 	tokenExpiration := session.ExpiresAt
@@ -130,7 +131,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *sess
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(c.JwtKey)
 	if err != nil {
-		return sessions.NewErrSessionKeyInvalid(err)
+		return hs_errors.WithCause(sessions.ErrSessionKeyInvalid, err)
 	}
 
 	cookieAge := int(c.CookieLifetime / time.Second)

@@ -44,8 +44,7 @@ func TestHTTPResetPasswordPolicy(t *testing.T) {
 						}
 						w = h.request(http.MethodPost, path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, htmx)
 					}
-					var missing *user.ErrTokenNotFound
-					if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-reset"); !errors.As(err, &missing) {
+					if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-reset"); !errors.Is(err, user.ErrTokenNotFound) {
 						t.Fatalf("accepted password did not consume token: %v", err)
 					}
 					assertRedirectResponse(t, w, "/login", htmx)
@@ -125,8 +124,7 @@ func TestHTTPResetConsumesExactTokenAndRejectsReplay(t *testing.T) {
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatal("reset did not succeed")
 		}
-		var missing *user.ErrTokenNotFound
-		if _, err := h.app.AccountRepository.GetToken(t.Context(), presented.TokenHash, "auth-reset"); !errors.As(err, &missing) {
+		if _, err := h.app.AccountRepository.GetToken(t.Context(), presented.TokenHash, "auth-reset"); !errors.Is(err, user.ErrTokenNotFound) {
 			t.Fatalf("presented token was not consumed: %v", err)
 		}
 		if _, err := h.app.AccountRepository.GetToken(t.Context(), untouched.TokenHash, "auth-reset"); err != nil {

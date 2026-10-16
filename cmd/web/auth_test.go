@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -109,7 +110,7 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { manager.Close() })
-			err = SetupHandlers(context.Background(), app, log, []handlers.Descriptor{auth.Module(&struct{ user.AccountRepository }{}, manager, catalog)}, nil)
+			err = SetupHandlers(context.Background(), app, slog.New(log), []handlers.Descriptor{auth.Module(&struct{ user.AccountRepository }{}, manager, catalog)}, nil)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
 					t.Fatalf("error = %v, routed = %t, want %q without routes", err, provider.routed, tc.want)

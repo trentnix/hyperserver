@@ -12,6 +12,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/components/types"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
@@ -209,14 +210,14 @@ func (c *Content) render() (*bytes.Buffer, error) {
 	var parsed *parsedTemplates
 	if c.Templates != nil {
 		if len(c.Layouts)+len(c.Contents)+len(c.Components) != 0 {
-			return nil, NewErrRenderingTemplates(fmt.Errorf("prepared templates cannot be combined with request template files"))
+			return nil, hs_errors.WithCause(ErrRenderingTemplates, fmt.Errorf("prepared templates cannot be combined with request template files"))
 		}
 		parsed = c.Templates.page
 		if c.IsHtmx() {
 			parsed = c.Templates.fragment
 		}
 		if parsed == nil {
-			return nil, NewErrRenderingTemplates(fmt.Errorf("templates have not been prepared"))
+			return nil, hs_errors.WithCause(ErrRenderingTemplates, fmt.Errorf("templates have not been prepared"))
 		}
 	} else {
 		var err error
@@ -229,12 +230,12 @@ func (c *Content) render() (*bytes.Buffer, error) {
 	var body bytes.Buffer
 	err := parsed.template.ExecuteTemplate(&body, parsed.root, c)
 	if err != nil {
-		return nil, NewErrRenderingTemplates(err)
+		return nil, hs_errors.WithCause(ErrRenderingTemplates, err)
 	}
 	if c.IsHtmx() {
 		for _, name := range c.OutOfBand {
 			if err := parsed.template.ExecuteTemplate(&body, name, c); err != nil {
-				return nil, NewErrRenderingTemplates(err)
+				return nil, hs_errors.WithCause(ErrRenderingTemplates, err)
 			}
 		}
 	}

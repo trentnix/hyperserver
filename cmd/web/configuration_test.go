@@ -103,8 +103,7 @@ mail:
 	if _, ok := app.AccountRepository.(*usersqlite.AccountRepository); !ok {
 		t.Fatalf("account provider = %T, want SQLite", app.AccountRepository)
 	}
-	var notFound *user.ErrUserNotFound
-	if _, err := app.AccountRepository.GetByEmail(t.Context(), "absent@example.invalid"); !errors.As(err, &notFound) {
+	if _, err := app.AccountRepository.GetByEmail(t.Context(), "absent@example.invalid"); !errors.Is(err, user.ErrUserNotFound) {
 		t.Fatalf("account repository was not prepared: %v", err)
 	}
 	r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), app.SessionManager)

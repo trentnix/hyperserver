@@ -256,8 +256,7 @@ func TestNotificationAcknowledgmentRejectsChangedCategory(t *testing.T) {
 				original := s.Data[categoryNotification]
 				s.Data[categoryNotification] = changed
 				w := httptest.NewRecorder()
-				var removal *ErrDeletingContentMessages
-				if err := ack(w); !errors.As(err, &removal) || len(w.Header()) != 0 {
+				if err := ack(w); !errors.Is(err, ErrDeletingContentMessages) || len(w.Header()) != 0 {
 					t.Fatalf("changed category acknowledged: %v", err)
 				}
 				s.Data[categoryNotification] = original

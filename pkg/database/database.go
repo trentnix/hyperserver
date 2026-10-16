@@ -5,6 +5,8 @@ package database
 import (
 	"database/sql"
 	"fmt"
+
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 // Setup opens a SQL connection pool for driver and connection.
@@ -13,7 +15,7 @@ import (
 func Setup(driver string, connection string) (*sql.DB, error) {
 	db, err := sql.Open(driver, connection)
 	if err != nil {
-		return nil, NewErrDatabaseConfiguration(fmt.Errorf("error opening database file: %w", err))
+		return nil, hs_errors.WithCause(ErrDatabaseConfiguration, fmt.Errorf("error opening database file: %w", err))
 	}
 
 	return db, nil

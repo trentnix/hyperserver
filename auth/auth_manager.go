@@ -323,8 +323,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	s, err := session.Get(r, session.AuthSession)
 	if err != nil {
 		logger.LogRequestError(r, err)
-		var invalidToken *session.ErrInvalidToken
-		if errors.As(err, &invalidToken) {
+		if errors.Is(err, session.ErrInvalidToken) {
 			session.ExpireCookie(w, r, session.AuthSession)
 			util.HttpError(w, r, "Invalid session cookie", nil, http.StatusBadRequest)
 			return

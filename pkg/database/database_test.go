@@ -11,8 +11,7 @@ func TestSetupRejectsUnregisteredDriver(t *testing.T) {
 		db.Close()
 		t.Fatal("unknown driver returned a pool")
 	}
-	var configurationError *ErrDatabaseConfiguration
-	if !errors.As(err, &configurationError) {
+	if !errors.Is(err, ErrDatabaseConfiguration) {
 		t.Fatalf("error = %v, want database configuration error", err)
 	}
 }

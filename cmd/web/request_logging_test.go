@@ -8,7 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -16,9 +18,41 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
+func TestCapturedLoggerPreservesGroups(t *testing.T) {
+	logs := &capturedLogs{}
+	base := newTestLogger(logs).With("component", "base")
+	request := base.WithGroup("request").With("method", "GET")
+	request.WithGroup("details").Info("grouped", "path", "/")
+	base.Info("ungrouped", "path", "/other")
+
+	lines := strings.Split(strings.TrimSpace(logs.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("records = %v", lines)
+	}
+	if !strings.HasSuffix(lines[0], "component=base request.method=GET request.details.path=/") || !strings.HasSuffix(lines[1], "component=base path=/other") {
+		t.Fatalf("attributes changed groups or leaked into the parent: %v", lines)
+	}
+}
+
+func TestCapturedLoggerConcurrentWrites(t *testing.T) {
+	logs := &capturedLogs{}
+	log := newTestLogger(logs)
+	var workers sync.WaitGroup
+	for i := range 32 {
+		workers.Go(func() {
+			log.With("worker", i).Info("completed")
+			_ = logs.String()
+		})
+	}
+	workers.Wait()
+	if count := strings.Count(logs.String(), "msg=completed"); count != 32 {
+		t.Fatalf("records = %d, want 32", count)
+	}
+}
+
 func TestSlogRequestCorrelationAndRedaction(t *testing.T) {
 	var output bytes.Buffer
-	l := logger.NewSlogLogger(slog.NewJSONHandler(&output, nil))
+	l := slog.New(slog.NewJSONHandler(&output, nil))
 	handler := middleware.LoggerMiddleware(l)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, errors.New("storage unavailable"))
 		w.WriteHeader(http.StatusInternalServerError)
@@ -73,7 +107,7 @@ func TestRequestLoggingOmitsQuery(t *testing.T) {
 			originalURL, originalURI := *r.URL, r.RequestURI
 			w := httptest.NewRecorder()
 			called := false
-			handler := middleware.LoggerMiddleware(&testLogger{logs: logs})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := middleware.LoggerMiddleware(newTestLogger(logs))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				called = true
 				if *r.URL != originalURL || r.RequestURI != originalURI {
 					t.Error("logging changed the request URL")
@@ -92,7 +126,7 @@ func TestRequestLoggingOmitsQuery(t *testing.T) {
 			// Check both incoming-request and error records. Exact fields exclude
 			// query data, while the caller's original URL must remain untouched.
 			for _, line := range logs.lines {
-				if !strings.Contains(line, "{path /accounts}") || strings.Contains(line, "?") {
+				if !slices.Contains(strings.Fields(line), "path=/accounts") || strings.Contains(line, "?") {
 					t.Errorf("expected path-only logging: %s", line)
 				}
 			}
@@ -133,11 +167,11 @@ func TestHTTPRequestLogsExcludeSecrets(t *testing.T) {
 					t.Fatal("query data reached request logs")
 				}
 				for _, field := range []string{
-					fmt.Sprintf("{path %s}", tc.path),
-					fmt.Sprintf("{method %s}", tc.method),
-					fmt.Sprintf("{requestID %s}", w.Header().Get("X-Request-ID")),
+					fmt.Sprintf("path=%s", tc.path),
+					fmt.Sprintf("method=%s", tc.method),
+					fmt.Sprintf("requestID=%s", w.Header().Get("X-Request-ID")),
 				} {
-					if !strings.Contains(logs, field) {
+					if !slices.Contains(strings.Fields(logs), field) {
 						t.Errorf("request log missing %s", field)
 					}
 				}

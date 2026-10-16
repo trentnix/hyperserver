@@ -20,8 +20,7 @@ func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionMa
 			r, authUserErr = loadAuthenticatedUser(r, accounts)
 			if authUserErr != nil {
 				logger.LogRequestError(r, authUserErr)
-				var invalidToken *session.ErrInvalidToken
-				if errors.As(authUserErr, &invalidToken) {
+				if errors.Is(authUserErr, session.ErrInvalidToken) {
 					identity.ClearAuthenticationCookie(w, r)
 					util.HttpError(w, r, "Invalid session cookie", nil, http.StatusBadRequest)
 					return
@@ -43,8 +42,7 @@ func loadAuthenticatedUser(r *http.Request, accounts user.AccountRepository) (*h
 
 	u, err := identity.GetAuthenticatedUser(r, accounts)
 
-	var notFoundErr *user.ErrUserNotFound
-	if err != nil && !errors.As(err, &notFoundErr) {
+	if err != nil && !errors.Is(err, user.ErrUserNotFound) {
 		return r, err
 	}
 

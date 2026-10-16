@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"path"
 
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
@@ -45,7 +46,7 @@ func PrepareTemplates(cm *contentservice.ContentManagerService, contents ...Temp
 
 func parseTemplates(files []TemplatePath) (*parsedTemplates, error) {
 	if len(files) == 0 {
-		return nil, NewErrNoTemplates(fmt.Errorf("No templates have been set"))
+		return nil, hs_errors.WithCause(ErrNoTemplates, fmt.Errorf("No templates have been set"))
 	}
 	root := path.Base(files[0].Path)
 	var tmpl *template.Template
@@ -69,18 +70,18 @@ func parseTemplates(files []TemplatePath) (*parsedTemplates, error) {
 	tmpl = template.New(root).Funcs(funcs)
 	for _, file := range files {
 		if file.FS == nil || !fs.ValidPath(file.Path) {
-			return nil, NewErrParsingTemplates(fmt.Errorf("template requires a filesystem and a valid path: %q", file.Path))
+			return nil, hs_errors.WithCause(ErrParsingTemplates, fmt.Errorf("template requires a filesystem and a valid path: %q", file.Path))
 		}
 		data, err := fs.ReadFile(file.FS, file.Path)
 		if err != nil {
-			return nil, NewErrParsingTemplates(err)
+			return nil, hs_errors.WithCause(ErrParsingTemplates, err)
 		}
 		target := tmpl
 		if name := path.Base(file.Path); name != root {
 			target = tmpl.New(name)
 		}
 		if _, err := target.Parse(string(data)); err != nil {
-			return nil, NewErrParsingTemplates(err)
+			return nil, hs_errors.WithCause(ErrParsingTemplates, err)
 		}
 	}
 	return &parsedTemplates{template: tmpl, root: root}, nil

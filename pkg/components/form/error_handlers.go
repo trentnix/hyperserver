@@ -19,7 +19,8 @@ type ErrorForm interface {
 
 // HandleFormError is a generic handler to render the specified content with the specified form
 // to display the specified error. ParseError returns a plain-text rejection
-// without rendering submitted values. Other errors are logged before rendering.
+// without rendering submitted values. FieldErrors render recorded field messages
+// without logging or adding a form-level message. Other errors are logged.
 func HandleFormError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -32,6 +33,10 @@ func HandleFormError(
 	if errors.As(e, &parseErr) {
 		util.HttpError(w, r, parseErr.Error(), nil, parseErr.StatusCode)
 		return
+	}
+	var fields FieldErrors
+	if errors.As(e, &fields) {
+		formErrorMessage, e = "", nil
 	}
 
 	if formErrorMessage != "" {

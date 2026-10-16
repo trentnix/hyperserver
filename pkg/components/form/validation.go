@@ -11,6 +11,9 @@ import (
 // A nil or empty map means no field failed validation.
 type FieldErrors map[string][]string
 
+// Error reports rejected input without including submitted values or field messages.
+func (FieldErrors) Error() string { return "form validation failed" }
+
 const (
 	// RequiredMessage describes a missing field value.
 	RequiredMessage = "This field is required."

@@ -123,8 +123,7 @@ func TestSetCachedSession_NilRequest(t *testing.T) {
 		t.Fatalf("expected error when request is nil")
 	}
 
-	var reqErr *ErrRequestNotSpecified
-	if !errors.As(err, &reqErr) {
+	if !errors.Is(err, ErrRequestNotSpecified) {
 		t.Errorf("expected error of type ErrRequestNotSpecified, got %T", err)
 	}
 }

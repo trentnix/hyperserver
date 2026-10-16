@@ -157,10 +157,10 @@ func TestParseAndValidateDefaultsAndOverrides(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := new(bindingProbe)
 			h := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				message, err := ParseAndValidateWithOptions(r, f, tc.options)
+				err := ParseAndValidateWithOptions(r, f, tc.options)
 				if err != nil {
 					// Parsing failures must not try to render or retain submitted values.
-					HandleFormError(w, r, nil, f, message, err)
+					HandleFormError(w, r, nil, f, "Unable to process form data", err)
 					return
 				}
 				w.WriteHeader(http.StatusNoContent)

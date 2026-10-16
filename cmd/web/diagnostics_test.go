@@ -22,9 +22,9 @@ func TestServiceDiagnosticsUseSuppliedProvidersAndExcludeSecrets(t *testing.T) {
 
 	for _, mail := range []string{"smtp", "application-supplied"} {
 		logs := &capturedLogs{}
-		logServiceProviders(&testLogger{logs: logs}, app, mail)
+		logServiceProviders(newTestLogger(logs), app, mail)
 		output := logs.String()
-		for _, want := range []string{"accountRepository *main.suppliedAccountRepository", "sessionProviders [cookie custom]", "mailProvider " + mail} {
+		for _, want := range []string{"accountRepository=*main.suppliedAccountRepository", `sessionProviders="[cookie custom]"`, "mailProvider=" + mail} {
 			if !strings.Contains(output, want) {
 				t.Fatalf("diagnostics missing %q: %s", want, output)
 			}
@@ -38,8 +38,8 @@ func TestServiceDiagnosticsUseSuppliedProvidersAndExcludeSecrets(t *testing.T) {
 
 func TestServiceDiagnosticsWithoutOptionalServices(t *testing.T) {
 	logs := &capturedLogs{}
-	logServiceProviders(&testLogger{logs: logs}, &application{}, "none")
-	for _, want := range []string{"accountRepository none", "sessionProviders []", "mailProvider none"} {
+	logServiceProviders(newTestLogger(logs), &application{}, "none")
+	for _, want := range []string{"accountRepository=none", "sessionProviders=[]", "mailProvider=none"} {
 		if !strings.Contains(logs.String(), want) {
 			t.Fatalf("missing %q: %s", want, logs.String())
 		}

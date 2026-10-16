@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 type (
@@ -79,7 +80,7 @@ func LoadSession(id string, name string, expiration time.Time, s SessionStore, v
 		return nil, err
 	}
 	if sessionData == nil {
-		return nil, NewErrSessionInvalid(errors.New("session serializer returned nil data"))
+		return nil, hs_errors.WithCause(ErrSessionInvalid, errors.New("session serializer returned nil data"))
 	}
 
 	session.Data = sessionData
@@ -90,7 +91,7 @@ func LoadSession(id string, name string, expiration time.Time, s SessionStore, v
 // session to a http cookie.
 func (s *Session) Save(w http.ResponseWriter, r *http.Request) error {
 	if s.Store == nil {
-		return NewErrSessionStoreNotFound(nil)
+		return ErrSessionStoreNotFound
 	}
 
 	// save the session to the store
@@ -115,7 +116,7 @@ func (s *Session) Rotate(w http.ResponseWriter, r *http.Request, data map[string
 		return errors.New("session store does not support revocable session rotation")
 	}
 	if r == nil {
-		return NewErrRequestNotSpecified(nil)
+		return ErrRequestNotSpecified
 	}
 
 	replacement, err := store.Rotate(w, r, s, data)
@@ -129,20 +130,25 @@ func (s *Session) Rotate(w http.ResponseWriter, r *http.Request, data map[string
 }
 
 // End delegates revocation to the store, then replaces this session and its cached
-// value with a new empty session. A failed revocation leaves local state unchanged.
+// value with a new session from the provider. Replacement creation happens before
+// revocation, so either failure leaves local state unchanged.
 func (s *Session) End(w http.ResponseWriter, r *http.Request) error {
 	if s.Store == nil {
-		return NewErrSessionStoreNotFound(nil)
+		return ErrSessionStoreNotFound
 	}
 
 	if r == nil {
-		return NewErrRequestNotSpecified(nil)
+		return ErrRequestNotSpecified
+	}
+	replacement, err := createSession(r, s.Store, s.Name)
+	if err != nil {
+		return err
 	}
 	if err := s.Store.End(w, r, s); err != nil {
 		return err
 	}
 	clear(s.Data)
-	*s = *NewSession(s.Store, s.Name)
+	*s = *replacement
 	return setCachedSession(r, s)
 }
 
@@ -207,7 +213,7 @@ func getCachedSession(r *http.Request, name string) *Session {
 // setCachedSession caches the session and replaces r's context in place.
 func setCachedSession(r *http.Request, session *Session) error {
 	if r == nil {
-		return NewErrRequestNotSpecified(errors.New("unable to set the session to the session cache"))
+		return hs_errors.WithCause(ErrRequestNotSpecified, errors.New("unable to set the session to the session cache"))
 	}
 
 	registry, ok := r.Context().Value(sessionRegistryKey).(map[string]*Session)

@@ -72,8 +72,9 @@ var (
 
 func TestValidationDoesNotRequireBindingOrMessages(t *testing.T) {
 	f := &validationOnlyForm{}
-	if err := Validate(f); err != nil {
-		t.Fatal(err)
+	var fields FieldErrors
+	if err := Validate(f); !errors.As(err, &fields) {
+		t.Fatalf("expected field errors, got %v", err)
 	}
 	if !f.validated || !reflect.DeepEqual(f.fields, FieldErrors{"Value": {RequiredMessage}}) {
 		t.Fatalf("validation results: %+v", f)
@@ -101,9 +102,9 @@ func TestParseAndValidateMinimalContract(t *testing.T) {
 			f := &bindingValidationForm{bindErr: tc.bindErr}
 			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			message, err := ParseAndValidate(r, f)
-			if (err != nil) != tc.wantError || (message != "") != tc.wantError {
-				t.Fatalf("result = %q, %v", message, err)
+			err := ParseAndValidate(r, f)
+			if (err != nil) != (tc.wantError || len(tc.wantFields) > 0) {
+				t.Fatalf("result = %v", err)
 			}
 			if tc.bindErr != nil && !errors.Is(err, tc.bindErr) {
 				t.Fatalf("lost binding error: %v", err)
@@ -120,32 +121,31 @@ func TestParseAndValidateRejectsNilBeforeBinding(t *testing.T) {
 	for _, f := range []FormComponent{nil, typedNil, mapForm(nil)} {
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("value=present"))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		message, err := ParseAndValidate(r, f)
-		var invalid *ErrInvalidForm
-		if message == "" || !errors.As(err, &invalid) {
-			t.Fatalf("invalid form result = %q, %v", message, err)
+		err := ParseAndValidate(r, f)
+		if !errors.Is(err, ErrInvalidForm) {
+			t.Fatalf("invalid form result = %v", err)
 		}
 	}
 }
 
 func TestMapForm(t *testing.T) {
 	var nilMap mapForm
-	var invalid *ErrInvalidForm
-	if err := Validate(nilMap); !errors.As(err, &invalid) {
+	if err := Validate(nilMap); !errors.Is(err, ErrInvalidForm) {
 		t.Fatalf("nil map validation = %v, want ErrInvalidForm", err)
 	}
 
 	f := make(mapForm)
-	if err := Validate(f); err != nil {
-		t.Fatal(err)
+	var fields FieldErrors
+	if err := Validate(f); !errors.As(err, &fields) {
+		t.Fatalf("expected field errors, got %v", err)
 	}
 	if f["validated"] != true || !reflect.DeepEqual(f["errors"], FieldErrors{"Value": {RequiredMessage}}) {
 		t.Fatalf("map validation = %v", f)
 	}
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("value=corrected"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if message, err := ParseAndValidate(r, f); err != nil || message != "" {
-		t.Fatalf("map form parsing = %q, %v", message, err)
+	if err := ParseAndValidate(r, f); err != nil {
+		t.Fatalf("map form parsing = %v", err)
 	}
 	if f["value"] != "corrected" || f["validated"] != true || len(f["errors"].(FieldErrors)) != 0 {
 		t.Fatalf("map form did not record corrected input: %v", f)
@@ -154,8 +154,9 @@ func TestMapForm(t *testing.T) {
 
 func TestValueFormWrapper(t *testing.T) {
 	f := struct{ *bindingValidationForm }{&bindingValidationForm{}}
-	if err := Validate(f); err != nil {
-		t.Fatal(err)
+	var fields FieldErrors
+	if err := Validate(f); !errors.As(err, &fields) {
+		t.Fatalf("expected field errors, got %v", err)
 	}
 	if !f.validated || !reflect.DeepEqual(f.fields, FieldErrors{"Value": {RequiredMessage}}) {
 		t.Fatalf("value wrapper did not record validation: %+v", f)
@@ -163,8 +164,8 @@ func TestValueFormWrapper(t *testing.T) {
 
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("value=corrected"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if message, err := ParseAndValidate(r, f); err != nil || message != "" {
-		t.Fatalf("value wrapper parsing = %q, %v", message, err)
+	if err := ParseAndValidate(r, f); err != nil {
+		t.Fatalf("value wrapper parsing = %v", err)
 	}
 	if f.value != "corrected" || !f.validated || len(f.fields) != 0 {
 		t.Fatalf("value wrapper did not record corrected input: %+v", f)

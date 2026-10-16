@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/trentnix/hyperserver/internal/test/sessiontest"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
@@ -53,7 +54,7 @@ func (s *replacementSessionStore) Get(r *http.Request, name string) (*session.Se
 	cookie, err := r.Cookie(name)
 	if err == nil {
 		if _, err := uuid.Parse(cookie.Value); err != nil {
-			return nil, session.NewErrInvalidToken(err)
+			return nil, hs_errors.WithCause(session.ErrInvalidToken, err)
 		}
 		record, ok := s.records[cookie.Value]
 		if ok && record.name == name && time.Now().Before(record.expires) {
@@ -92,11 +93,11 @@ func (s *replacementSessionStore) save(w http.ResponseWriter, r *http.Request, v
 	expires := stored.expires
 	if value.IsNew {
 		if exists {
-			return session.NewErrSessionInvalid(errors.New("session ID already exists"))
+			return hs_errors.WithCause(session.ErrSessionInvalid, errors.New("session ID already exists"))
 		}
 		expires = time.Now().Add(time.Hour)
 	} else if !exists {
-		return session.NewErrSessionInvalid(errors.New("session was revoked"))
+		return hs_errors.WithCause(session.ErrSessionInvalid, errors.New("session was revoked"))
 	}
 
 	s.records[value.ID] = replacementSessionRecord{name: value.Name, data: encoded, expires: expires}
@@ -115,7 +116,7 @@ func (s *replacementSessionStore) Rotate(w http.ResponseWriter, r *http.Request,
 	if !old.IsNew {
 		stored, exists := s.records[old.ID]
 		if !exists || !time.Now().Before(stored.expires) {
-			return nil, session.NewErrSessionInvalid(nil)
+			return nil, session.ErrSessionInvalid
 		}
 	}
 

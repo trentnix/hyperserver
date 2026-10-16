@@ -85,8 +85,7 @@ func TestSQLiteTokenExpiryBoundary(t *testing.T) {
 							AccountID: u.ID, Email: u.Email, TokenHash: token.TokenHash, ExpiresAt: signedExpiry,
 						})
 					}
-					var expired *user.ErrTokenExpired
-					if result != nil || !errors.As(err, &expired) {
+					if result != nil || !errors.Is(err, user.ErrTokenExpired) {
 						t.Fatalf("redemption at expiry = %v, %v", result, err)
 					}
 					assertAccountFields(t, *u, before)

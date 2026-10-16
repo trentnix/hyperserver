@@ -14,6 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/trentnix/hyperserver/pkg/database"
 	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	sessions "github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/session/internal/sessioncookie"
@@ -137,7 +138,7 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*sessions.Session, erro
 		return session, nil
 	}
 	if err := sessioncookie.Validate(cookie); err != nil {
-		return nil, sessions.NewErrInvalidToken(err)
+		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, err)
 	}
 
 	// return the decoded Session data
@@ -220,7 +221,7 @@ func (s *SQLiteStore) sessionCookie(session *sessions.Session, secure bool) (*ht
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(s.JwtKey)
 	if err != nil {
-		return nil, sessions.NewErrSessionKeyInvalid(err)
+		return nil, hs_errors.WithCause(sessions.ErrSessionKeyInvalid, err)
 	}
 
 	cookieAge := int(s.CookieLifetime / time.Second)
@@ -250,7 +251,7 @@ func (s *SQLiteStore) Rotate(w http.ResponseWriter, r *http.Request, previous *s
 		return nil, ErrSQLiteStoreNotConfigured
 	}
 	if previous == nil || previous.ID == "" {
-		return nil, sessions.NewErrSessionInvalid(nil)
+		return nil, sessions.ErrSessionInvalid
 	}
 
 	next := sessions.NewSession(s, previous.Name)
@@ -283,7 +284,7 @@ func (s *SQLiteStore) Rotate(w http.ResponseWriter, r *http.Request, previous *s
 			return nil, err
 		}
 		if count != 1 {
-			return nil, sessions.NewErrSessionInvalid(nil)
+			return nil, sessions.ErrSessionInvalid
 		}
 	}
 
@@ -311,7 +312,7 @@ func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *sessi
 		return ErrSQLiteStoreNotConfigured
 	}
 	if session == nil || session.ID == "" {
-		return sessions.NewErrSessionInvalid(nil)
+		return sessions.ErrSessionInvalid
 	}
 
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", quoteIdentifier(s.tableName))
@@ -341,7 +342,7 @@ func (s *SQLiteStore) Close() error {
 func (s *SQLiteStore) configureDatabase(ctx context.Context) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return database.NewErrDatabase(err)
+		return hs_errors.WithCause(database.ErrDatabase, err)
 	}
 	defer tx.Rollback()
 	if err := prepareSessionVersion(ctx, tx, s.tableName); err != nil {
@@ -418,7 +419,7 @@ func compatibleSessionColumnType(declaredType, kind string) bool {
 // getSessionFromDatabase attempts to retrieve the specified session from the database
 func (s *SQLiteStore) getSessionFromDatabase(ctx context.Context, sessionID string, name string) (*sessions.Session, error) {
 	if s.db == nil {
-		return nil, database.NewErrDatabaseUnavailable(nil)
+		return nil, database.ErrDatabaseUnavailable
 	}
 
 	if s.tableName == "" {
@@ -448,7 +449,7 @@ func (s *SQLiteStore) getSessionFromDatabase(ctx context.Context, sessionID stri
 // saveSessionToDatabase creates or updates the specified session in the database
 func (s *SQLiteStore) save(ctx context.Context, session *sessions.Session) error {
 	if s.db == nil {
-		return database.NewErrDatabaseUnavailable(nil)
+		return database.ErrDatabaseUnavailable
 	}
 
 	valueData, err := session.EncodedData(s.Serializer)
@@ -480,7 +481,7 @@ func (s *SQLiteStore) save(ctx context.Context, session *sessions.Session) error
 // create creates a new sessions table entry
 func (s *SQLiteStore) create(ctx context.Context, session *SQLiteSession) error {
 	if session.ID == "" {
-		return sessions.NewErrSessionInvalid(nil)
+		return sessions.ErrSessionInvalid
 	}
 
 	session.Created_at = time.Now()
@@ -495,7 +496,7 @@ func (s *SQLiteStore) create(ctx context.Context, session *SQLiteSession) error 
 // update updates the specified session in the sessions table
 func (s *SQLiteStore) update(ctx context.Context, session *SQLiteSession) error {
 	if session.ID == "" {
-		return sessions.NewErrSessionInvalid(nil)
+		return sessions.ErrSessionInvalid
 	}
 
 	session.Updated_at = time.Now()
@@ -511,7 +512,7 @@ func (s *SQLiteStore) update(ctx context.Context, session *SQLiteSession) error 
 		return err
 	}
 	if count == 0 {
-		return sessions.NewErrSessionInvalid(nil)
+		return sessions.ErrSessionInvalid
 	}
 	return nil
 }

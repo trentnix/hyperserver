@@ -1,13 +1,13 @@
 package module_site
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // ContactForm binds the development site's contact submission fields.
@@ -84,8 +84,11 @@ func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
 
 // Contact handles a contact submission
 func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
-	if err := form.Parse(r); err != nil {
-		util.HttpError(w, r, err.Error(), nil, err.StatusCode)
+	contactForm := &ContactForm{}
+	validationErr := form.ParseAndValidate(r, contactForm)
+	var parseErr *form.ParseError
+	if errors.As(validationErr, &parseErr) {
+		form.HandleFormError(w, r, nil, contactForm, "", validationErr)
 		return
 	}
 
@@ -99,28 +102,14 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		contact.Templates = m.templates[contactFormTemplate]
 	}
 
-	// process a contact submission
-	contactForm := &ContactForm{}
-	contactForm.Name = r.FormValue("name")
-	contactForm.Email = r.FormValue("email")
-	contactForm.Message = r.FormValue("message")
-
-	// validate the ContactForm form
-	err := form.Validate(contactForm)
-	if err != nil {
+	if validationErr != nil {
 		form.HandleFormError(
 			w,
 			r,
 			contact,
 			contactForm,
 			"The contact form could not be validated",
-			err)
-		return
-	}
-
-	if contactForm.HasErrors() {
-		// there are validation errors - render the form errors
-		form.HandleFormError(w, r, contact, contactForm, "", nil)
+			validationErr)
 		return
 	}
 
@@ -131,7 +120,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		Message: contactForm.Message,
 	}
 
-	err = m.contacts.Create(r.Context(), &cs)
+	err := m.contacts.Create(r.Context(), &cs)
 	if err != nil {
 		form.HandleFormError(w, r, contact, contactForm, "Unable to save your message", err)
 		return

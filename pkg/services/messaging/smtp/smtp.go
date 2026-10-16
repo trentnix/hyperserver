@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"mime"
 	"mime/quotedprintable"
 	"net"
@@ -215,7 +216,7 @@ func (m *Sender) Send(ctx context.Context, email messaging.MailMessage) (err err
 	}
 
 	if ctxLogger := logger.Get(ctx); ctxLogger != nil {
-		ctxLogger.Info("Sent email", logger.Field{Key: "to", Value: email.To})
+		ctxLogger.InfoContext(ctx, "Sent email", slog.Any("to", email.To))
 	} else {
 		log.Printf("Sent email to=%s", email.To)
 	}

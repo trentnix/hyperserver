@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
@@ -139,12 +140,12 @@ func Get(r *http.Request, name string) (*Session, error) {
 
 	sm := GetSessionManager(r)
 	if sm == nil {
-		return nil, NewErrSessionManagerNotFound(nil)
+		return nil, ErrSessionManagerNotFound
 	}
 
 	store, err := sm.Store(name)
 	if err != nil {
-		return nil, NewErrSessionStoreNotFound(err)
+		return nil, hs_errors.WithCause(ErrSessionStoreNotFound, err)
 	}
 
 	// retrieve the session from the request
@@ -156,7 +157,7 @@ func Get(r *http.Request, name string) (*Session, error) {
 		// if the request doesn't have a session, return a new session
 		session, err = New(r, name)
 		if err != nil || session == nil {
-			return nil, NewErrSessionCouldNotBeCreated(err)
+			return nil, hs_errors.WithCause(ErrSessionCouldNotBeCreated, err)
 		}
 	}
 
@@ -169,12 +170,15 @@ func Get(r *http.Request, name string) (*Session, error) {
 	return session, nil
 }
 
-// New creates and caches an unsaved session with a new ID.
+// New asks the selected provider for an unsaved session with a new ID and caches it.
 // It replaces the request-local session of the same name but does not revoke the old one.
 func New(r *http.Request, name string) (*Session, error) {
+	if r == nil {
+		return nil, ErrRequestNotSpecified
+	}
 	sm := GetSessionManager(r)
 	if sm == nil {
-		return nil, NewErrSessionManagerNotFound(nil)
+		return nil, ErrSessionManagerNotFound
 	}
 
 	store, err := sm.Store(name)
@@ -182,7 +186,10 @@ func New(r *http.Request, name string) (*Session, error) {
 		return nil, err
 	}
 
-	session := NewSession(store, name)
+	session, err := createSession(r, store, name)
+	if err != nil {
+		return nil, err
+	}
 
 	// cache the session so any subsequent retrieval is efficient
 	cacheSessionErr := setCachedSession(r, session)
@@ -193,23 +200,34 @@ func New(r *http.Request, name string) (*Session, error) {
 	return session, nil
 }
 
+func createSession(r *http.Request, store SessionStore, name string) (*Session, error) {
+	session, err := store.New(r, name)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, ErrSessionCouldNotBeCreated
+	}
+	return session, nil
+}
+
 // Store returns the provider selected for a session name, falling back to "default".
 // Callers borrow the store and must not close it.
 func (m *SessionManager) Store(sessionName string) (SessionStore, error) {
 	if m == nil {
-		return nil, NewErrSessionManagerNotFound(nil)
+		return nil, ErrSessionManagerNotFound
 	}
 	storeType, ok := m.Types[sessionName]
 	if !ok {
 		// the session type isn't explicitly defined so check for a default configuration
 		if storeType, ok = m.Types[defaultStore]; !ok {
-			return nil, NewErrSessionStoreNotFound(fmt.Errorf("session name: %s", sessionName))
+			return nil, hs_errors.WithCause(ErrSessionStoreNotFound, fmt.Errorf("session name: %s", sessionName))
 		}
 	}
 
 	store := m.stores[strings.ToLower(storeType)]
 	if store == nil {
-		return nil, NewErrSessionStoreNotFound(fmt.Errorf("store type: %s", storeType))
+		return nil, hs_errors.WithCause(ErrSessionStoreNotFound, fmt.Errorf("store type: %s", storeType))
 	}
 
 	return store, nil

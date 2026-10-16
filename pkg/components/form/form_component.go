@@ -1,9 +1,12 @@
 package form
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
+
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 type (
@@ -23,21 +26,27 @@ type (
 	// those methods independently. Rendering does not require this interface.
 	FormComponent interface {
 		ValidationForm
-		// Bind allows a form to populate its fields from an http.Request
+		// Bind populates fields from the request. It can return FieldErrors
+		// when input cannot be converted to a field's type.
 		Bind(*http.Request) error
 	}
 )
 
-// Validate records the field errors returned by f.Validate. Nil forms are rejected.
-// Field validation failures do not produce a returned error. Check the recorded
-// field errors before processing the form.
+// Validate records and returns field errors. Nil means every field passed.
+// Existing form-level messages remain unchanged. Nil forms are rejected.
 func Validate(f ValidationForm) error {
 	if isNilForm(f) {
-		return NewErrInvalidForm(fmt.Errorf("the form must not be nil"))
+		return hs_errors.WithCause(ErrInvalidForm, fmt.Errorf("the form must not be nil"))
 	}
 
-	f.SetFieldErrors(f.Validate())
+	fields := f.Validate()
+	f.SetFieldErrors(fields)
 	f.SetValidated(true)
+	for _, messages := range fields {
+		if len(messages) > 0 {
+			return fields
+		}
+	}
 	return nil
 }
 
@@ -58,31 +67,30 @@ func isNilForm(f ValidationForm) bool {
 
 // ParseAndValidate parses request data with the default field limits, binds f,
 // and records validation errors. Use ParseAndValidateWithOptions for other limits.
-// The returned message and error describe parsing, binding, or form-setup failures.
-// A nil error does not mean the input is valid: callers must check recorded errors
-// (for forms embedding Form, call HasErrors).
-func ParseAndValidate(r *http.Request, f FormComponent) (string, error) {
+// A nil error means parsing, binding, and field validation succeeded. Invalid
+// fields return FieldErrors, which HandleFormError renders without logging them.
+// FieldErrors from Bind are recorded without running validation.
+func ParseAndValidate(r *http.Request, f FormComponent) error {
 	return ParseAndValidateWithOptions(r, f, ParseOptions{})
 }
 
 // ParseAndValidateWithOptions parses and validates with explicit field limits.
-// Callers must still check recorded errors after a nil error.
-func ParseAndValidateWithOptions(r *http.Request, f FormComponent, options ParseOptions) (string, error) {
+// Its result has the same guarantees as ParseAndValidate.
+func ParseAndValidateWithOptions(r *http.Request, f FormComponent, options ParseOptions) error {
 	if err := ParseWithOptions(r, options); err != nil {
-		return err.Error(), err
+		return err
 	}
 	if isNilForm(f) {
-		return "Unable to validate form data", NewErrInvalidForm(fmt.Errorf("the form must not be nil"))
+		return hs_errors.WithCause(ErrInvalidForm, fmt.Errorf("the form must not be nil"))
 	}
 
 	if err := f.Bind(r); err != nil {
-		return "Unable to save form data", err
+		var fields FieldErrors
+		if errors.As(err, &fields) {
+			f.SetFieldErrors(fields)
+		}
+		return err
 	}
 
-	// Validate the form using the package-level function.
-	if err := Validate(f); err != nil {
-		return "Unable to validate form data", err
-	}
-
-	return "", nil
+	return Validate(f)
 }

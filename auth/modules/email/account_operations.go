@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -18,19 +20,40 @@ var (
 	errPasswordReused     = errors.New("password was already used")
 )
 
+// A fixed, valid hash supplies comparable work when no usable password exists.
+// It is not an account credential. Keep its cost aligned with HashPassword.
+const missingAccountHash = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+
 // Account operations use the provider's configured dependencies without HTTP,
 // session, or notification state. Callers validate form fields before invoking
 // these operations and translate their results into responses afterward.
 func (a *EmailAuthService) authenticate(ctx context.Context, email, suppliedPassword string) (*user.User, error) {
-	u, err := a.accounts.GetByEmail(ctx, email)
-	var notFound *user.ErrUserNotFound
-	if errors.As(err, &notFound) {
+	return a.authenticateWithPasswordCheck(ctx, email, suppliedPassword, bcrypt.CompareHashAndPassword)
+}
+
+func (a *EmailAuthService) authenticateWithPasswordCheck(ctx context.Context, email, suppliedPassword string, compare func([]byte, []byte) error) (*user.User, error) {
+	// bcrypt comparisons ignore bytes beyond 72. Reject them before any account lookup.
+	if len(suppliedPassword) > 72 {
 		return nil, errInvalidCredentials
+	}
+	u, err := a.accounts.GetByEmail(ctx, email)
+	if errors.Is(err, user.ErrUserNotFound) {
+		u, err = nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if u == nil || u.Password == "" || !password.CheckPasswordHash(suppliedPassword, u.Password) {
+
+	hash := missingAccountHash
+	if u != nil && u.Password != "" {
+		hash = u.Password
+	}
+	comparison := compare([]byte(hash), []byte(suppliedPassword))
+	if comparison != nil && !errors.Is(comparison, bcrypt.ErrMismatchedHashAndPassword) {
+		// Malformed stored hashes must not create a fast rejection path either.
+		_ = compare([]byte(missingAccountHash), []byte(suppliedPassword))
+	}
+	if u == nil || u.Password == "" || comparison != nil {
 		return nil, errInvalidCredentials
 	}
 	return u, nil
@@ -38,7 +61,7 @@ func (a *EmailAuthService) authenticate(ctx context.Context, email, suppliedPass
 
 func (a *EmailAuthService) changePassword(ctx context.Context, u *user.User, current, replacement string) error {
 	if u == nil {
-		return user.NewErrUserNotSpecified(nil)
+		return user.ErrUserNotSpecified
 	}
 	if u.Password != "" && !password.CheckPasswordHash(current, u.Password) {
 		return errInvalidCredentials
@@ -53,7 +76,7 @@ func (a *EmailAuthService) changePassword(ctx context.Context, u *user.User, cur
 
 func (a *EmailAuthService) resetPassword(ctx context.Context, u *user.User, token, replacement string, requireNew bool) error {
 	if u == nil {
-		return user.NewErrUserNotSpecified(nil)
+		return user.ErrUserNotSpecified
 	}
 	if requireNew && u.Password != "" && password.CheckPasswordHash(replacement, u.Password) {
 		return errPasswordReused
@@ -72,7 +95,7 @@ func (a *EmailAuthService) sendRegistrationVerification(ctx context.Context, ema
 		return err
 	}
 	if u == nil {
-		return user.NewErrUserNotFound(nil)
+		return user.ErrUserNotFound
 	}
 	return a.SendVerificationEmail(ctx, u, origin)
 }
@@ -81,8 +104,7 @@ func (a *EmailAuthService) sendRegistrationVerification(ctx context.Context, ema
 // the caller, which must give every valid request the same HTTP acknowledgment.
 func (a *EmailAuthService) requestPasswordReset(ctx context.Context, email string, expiration time.Duration, link url.URL) error {
 	u, err := a.accounts.GetByEmail(ctx, email)
-	var notFound *user.ErrUserNotFound
-	if errors.As(err, &notFound) {
+	if errors.Is(err, user.ErrUserNotFound) {
 		return nil
 	}
 	if err != nil {

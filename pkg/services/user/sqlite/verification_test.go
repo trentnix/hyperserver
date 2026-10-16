@@ -71,14 +71,13 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if *stored != *before || *verified != *stored {
 		t.Fatal("verification changed unrelated account data")
 	}
-	var missing *accounts.ErrTokenNotFound
-	if _, err := NewAccountRepository(db).GetToken(t.Context(), second.TokenHash, accounts.VerificationTokenPurpose); !errors.As(err, &missing) {
+	if _, err := NewAccountRepository(db).GetToken(t.Context(), second.TokenHash, accounts.VerificationTokenPurpose); !errors.Is(err, accounts.ErrTokenNotFound) {
 		t.Fatalf("presented token was not consumed: %v", err)
 	}
 	if _, err := NewAccountRepository(db).GetToken(t.Context(), first.TokenHash, accounts.VerificationTokenPurpose); err != nil {
 		t.Fatalf("different token was consumed: %v", err)
 	}
-	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), second.Token, key); !errors.As(err, &missing) || got != nil {
+	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), second.Token, key); !errors.Is(err, accounts.ErrTokenNotFound) || got != nil {
 		t.Fatalf("replayed token accepted: %v", err)
 	}
 	// Each outstanding token remains independently usable once, including when
@@ -236,8 +235,7 @@ func TestVerifyConcurrentRedemption(t *testing.T) {
 			if err == nil {
 				successes++
 			} else {
-				var missing *accounts.ErrTokenNotFound
-				if !errors.As(err, &missing) {
+				if !errors.Is(err, accounts.ErrTokenNotFound) {
 					t.Errorf("losing verification returned %v, want ErrTokenNotFound", err)
 				}
 			}
@@ -362,8 +360,7 @@ func TestVerifyCancellationAndExpiryDuringContention(t *testing.T) {
 					t.Fatalf("verification error=%v, want context.Canceled", outcome.err)
 				}
 			} else {
-				var expired *accounts.ErrTokenExpired
-				if !errors.As(outcome.err, &expired) {
+				if !errors.Is(outcome.err, accounts.ErrTokenExpired) {
 					t.Fatalf("verification error=%v, want ErrTokenExpired", outcome.err)
 				}
 			}
@@ -424,8 +421,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, token := range []*accounts.AuthVerificationToken{first, second} {
-			var missing *accounts.ErrTokenNotFound
-			if _, err := accounts.Verify(context.Background(), NewAccountRepository(db), token.Token, key); !errors.As(err, &missing) {
+			if _, err := accounts.Verify(context.Background(), NewAccountRepository(db), token.Token, key); !errors.Is(err, accounts.ErrTokenNotFound) {
 				t.Fatalf("old link at %s: got %v, want revoked token", email, err)
 			}
 		}

@@ -96,8 +96,7 @@ func TestUpdateRejectsMissingUser(t *testing.T) {
 	db := userTestDB(t)
 	u := &accounts.User{ID: "missing-id", Email: "person@example.invalid", Password: "hash"}
 	before := *u
-	var missing *accounts.ErrUserNotFound
-	if err := NewAccountRepository(db).Update(context.Background(), u); !errors.As(err, &missing) {
+	if err := NewAccountRepository(db).Update(context.Background(), u); !errors.Is(err, accounts.ErrUserNotFound) {
 		t.Errorf("missing account error = %v, want ErrUserNotFound", err)
 	}
 	if *u != before {

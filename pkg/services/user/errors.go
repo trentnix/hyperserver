@@ -1,196 +1,37 @@
 package user
 
-import (
-	"errors"
+import "errors"
 
-	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
+var (
+	// ErrEmailAlreadyExists reports a duplicate account email.
+	ErrEmailAlreadyExists = errors.New("an account with that email already exists")
+	// ErrUserNotSpecified indicates a user.User instance was required but was not set
+	ErrUserNotSpecified = errors.New("a user account was not specified")
+	// ErrUserNotFound indicates a user.User instance could not be retrieved
+	ErrUserNotFound = errors.New("unable to retrieve the specified user account")
+	// ErrUserChanged indicates that an update used an outdated account security version.
+	ErrUserChanged = errors.New("account security state changed since it was loaded")
+	// ErrToken indicates an error creating and managing a token
+	ErrToken = errors.New("token error")
+	// ErrInvalidResetToken reports a rejected password-reset token.
+	ErrInvalidResetToken = errors.New("the reset token is invalid")
+	// ErrTokenNotSpecified indicates the token was not specified
+	ErrTokenNotSpecified = errors.New("token not specified")
+	// ErrTokenNotFound indicates the token could not be retrieved
+	ErrTokenNotFound = errors.New("token not found")
+	// ErrTokenExpired indicates that an account token has expired.
+	ErrTokenExpired = errors.New("token expired")
+	// ErrTokenExpirationNotSpecified indicates no expiration value has been provided
+	ErrTokenExpirationNotSpecified = errors.New("token expiration not set")
+	// ErrJwtKeyNotSet indicates no JWT key was set
+	ErrJwtKeyNotSet = errors.New("JWT key is not set")
 )
 
-// ErrEmailAlreadyExists indicates that another account has the requested email.
-// Providers can wrap it. Callers must use errors.Is to recognize it.
-var ErrEmailAlreadyExists = errors.New("an account with that email already exists")
-
-// IsTokenRejection reports whether token validation or redemption rejected the
-// supplied authorization. Missing or changed accounts also invalidate the link.
-// Configuration and storage failures are not rejections. Providers must return
-// the documented rejection types only for those conditions, not for I/O errors.
+// IsTokenRejection distinguishes invalid authorization from storage and configuration failures.
+// Providers must not use rejection errors for I/O failures.
 func IsTokenRejection(err error) bool {
-	var invalid *ErrToken
-	var invalidReset *ErrInvalidResetToken
-	var missing *ErrTokenNotSpecified
-	var notFound *ErrTokenNotFound
-	var expired *ErrTokenExpired
-	var accountMissing *ErrUserNotFound
-	var accountChanged *ErrUserChanged
-	return errors.As(err, &invalid) || errors.As(err, &invalidReset) ||
-		errors.As(err, &missing) || errors.As(err, &notFound) || errors.As(err, &expired) ||
-		errors.As(err, &accountMissing) || errors.As(err, &accountChanged)
-}
-
-// BaseError aliases the shared HyperServer error wrapper.
-type BaseError = hs_errors.BaseError
-
-// ErrUserNotSpecified indicates a user.User instance was required but was not set
-type ErrUserNotSpecified struct {
-	*BaseError
-}
-
-// NewErrUserNotSpecified returns an ErrUserNotSpecified wrapping err.
-func NewErrUserNotSpecified(err error) *ErrUserNotSpecified {
-	return &ErrUserNotSpecified{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "a user account was not specified",
-		},
-	}
-}
-
-// ErrUserNotFound indicates a user.User instance could not be retrieved
-type ErrUserNotFound struct {
-	*BaseError
-}
-
-// NewErrUserNotFound returns an ErrUserNotFound wrapping err.
-func NewErrUserNotFound(err error) *ErrUserNotFound {
-	return &ErrUserNotFound{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "unable to retrieve the specified user account",
-		},
-	}
-}
-
-// ErrUserChanged indicates that an update used an outdated account security version.
-type ErrUserChanged struct {
-	*BaseError
-}
-
-// NewErrUserChanged returns an ErrUserChanged wrapping err.
-func NewErrUserChanged(err error) *ErrUserChanged {
-	return &ErrUserChanged{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "account security state changed since it was loaded",
-		},
-	}
-}
-
-// ErrToken indicates an error creating and managing a token
-type ErrToken struct {
-	*BaseError
-}
-
-// NewErrToken returns an ErrToken wrapping err.
-func NewErrToken(err error) *ErrToken {
-	return &ErrToken{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "token error",
-		},
-	}
-}
-
-// ErrInvalidResetToken indicates an error creating and managing a reset token
-type ErrInvalidResetToken struct {
-	*BaseError
-}
-
-// NewErrInvalidResetToken returns an ErrInvalidResetToken wrapping err.
-func NewErrInvalidResetToken(err error) *ErrInvalidResetToken {
-	return &ErrInvalidResetToken{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "the reset token is invalid",
-		},
-	}
-}
-
-// ErrTokenNotSpecified indicates the token was not specified
-type ErrTokenNotSpecified struct {
-	*BaseError
-}
-
-// NewErrTokenNotSpecified returns an ErrTokenNotSpecified wrapping err.
-func NewErrTokenNotSpecified(err error) *ErrTokenNotSpecified {
-	return &ErrTokenNotSpecified{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "token not specified",
-		},
-	}
-}
-
-// ErrTokenNotFound indicates the token could not be retrieved
-type ErrTokenNotFound struct {
-	*BaseError
-}
-
-// NewErrTokenNotFound returns an ErrTokenNotFound wrapping err.
-func NewErrTokenNotFound(err error) *ErrTokenNotFound {
-	return &ErrTokenNotFound{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "token not found",
-		},
-	}
-}
-
-// ErrTokenExpired indicates that an account token has expired.
-type ErrTokenExpired struct {
-	*BaseError
-}
-
-// NewErrTokenExpired returns an ErrTokenExpired wrapping err.
-func NewErrTokenExpired(err error) *ErrTokenExpired {
-	return &ErrTokenExpired{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "token expired",
-		},
-	}
-}
-
-// ErrTokenExpirationNotSpecified indicates no expiration value has been provided
-type ErrTokenExpirationNotSpecified struct {
-	*BaseError
-}
-
-// NewErrTokenExpirationNotSpecified returns an ErrTokenExpirationNotSpecified wrapping err.
-func NewErrTokenExpirationNotSpecified(err error) *ErrTokenExpirationNotSpecified {
-	return &ErrTokenExpirationNotSpecified{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "token expiration not set",
-		},
-	}
-}
-
-// ErrSendVerification indicates there was an error sending a verification request
-type ErrSendVerification struct {
-	*BaseError
-}
-
-// NewErrSendVerification returns an ErrSendVerification wrapping err.
-func NewErrSendVerification(err error) *ErrSendVerification {
-	return &ErrSendVerification{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "verification error",
-		},
-	}
-}
-
-// ErrJwtKeyNotSet indicates no JWT key was set
-type ErrJwtKeyNotSet struct {
-	*BaseError
-}
-
-// NewErrJwtKeyNotSet returns an ErrJwtKeyNotSet wrapping err.
-func NewErrJwtKeyNotSet(err error) *ErrJwtKeyNotSet {
-	return &ErrJwtKeyNotSet{
-		BaseError: &BaseError{
-			Err:     err,
-			Message: "JWT key is not set",
-		},
-	}
+	return errors.Is(err, ErrToken) || errors.Is(err, ErrInvalidResetToken) ||
+		errors.Is(err, ErrTokenNotSpecified) || errors.Is(err, ErrTokenNotFound) ||
+		errors.Is(err, ErrTokenExpired) || errors.Is(err, ErrUserNotFound) ||
+		errors.Is(err, ErrUserChanged)
 }

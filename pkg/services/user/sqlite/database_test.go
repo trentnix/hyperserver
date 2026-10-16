@@ -72,8 +72,7 @@ func TestPrepareDatabaseIndependentDatabases(t *testing.T) {
 
 func TestPrepareDatabaseFailures(t *testing.T) {
 	t.Run("missing database", func(t *testing.T) {
-		var unavailable *database.ErrDatabaseUnavailable
-		if err := PrepareDatabase(context.Background(), nil); !errors.As(err, &unavailable) {
+		if err := PrepareDatabase(context.Background(), nil); !errors.Is(err, database.ErrDatabaseUnavailable) {
 			t.Fatalf("missing database error = %v", err)
 		}
 	})

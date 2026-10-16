@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,7 +14,6 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/server"
-	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 func TestHTTPRateLimitedRoutes(t *testing.T) {
@@ -183,7 +184,7 @@ func TestGlobalRateLimitPrecedesSessionLoading(t *testing.T) {
 	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
 	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 10}
 	logs := &capturedLogs{}
-	handler, err := applicationHandler(app, &testLogger{logs: logs})
+	handler, err := applicationHandler(app, newTestLogger(logs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +208,7 @@ func TestGlobalRateLimitPrecedesSessionLoading(t *testing.T) {
 	}
 
 	// A separately composed application must not inherit an exhausted budget.
-	other, err := applicationHandler(app, &testLogger{logs: logs})
+	other, err := applicationHandler(app, newTestLogger(logs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +226,7 @@ func TestApplicationHandlerRejectsInvalidRateLimit(t *testing.T) {
 		{Enabled: true, Requests: 1, Window: time.Minute},
 	} {
 		app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{HTTP: config.HTTPConfig{SharedRateLimit: limit}}, Web: http.NewServeMux()}}
-		handler, err := applicationHandler(app, &testLogger{logs: &capturedLogs{}})
+		handler, err := applicationHandler(app, newTestLogger(&capturedLogs{}))
 		if handler != nil || err == nil || !strings.Contains(err.Error(), "http.sharedRateLimit") {
 			t.Fatalf("handler=%v error=%v", handler, err)
 		}
@@ -234,18 +235,18 @@ func TestApplicationHandlerRejectsInvalidRateLimit(t *testing.T) {
 
 // Capture warnings and ignore the informational startup summary.
 type ratePolicyWarningLogger struct {
-	logger.Logger
+	slog.Handler
 	warnings []map[string]any
 }
 
-func (*ratePolicyWarningLogger) Info(string, ...logger.Field) {}
-
-func (l *ratePolicyWarningLogger) Warn(message string, fields ...logger.Field) {
-	entry := map[string]any{"message": message}
-	for _, field := range fields {
-		entry[field.Key] = field.Value
-	}
+func (*ratePolicyWarningLogger) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= slog.LevelWarn
+}
+func (l *ratePolicyWarningLogger) Handle(_ context.Context, record slog.Record) error {
+	entry := map[string]any{"message": record.Message}
+	record.Attrs(func(attr slog.Attr) bool { entry[attr.Key] = attr.Value.Any(); return true })
 	l.warnings = append(l.warnings, entry)
+	return nil
 }
 
 func TestApplicationRatePolicyWarnings(t *testing.T) {
@@ -272,7 +273,7 @@ func TestApplicationRatePolicyWarnings(t *testing.T) {
 				SharedRateLimit:  config.RateLimitConfig{Enabled: !tc.disabled, Requests: 20, Window: time.Minute, MaxClients: 10},
 			}
 			capture := &ratePolicyWarningLogger{}
-			var log logger.Logger = capture
+			log := slog.New(capture)
 			if tc.noLogger {
 				log = nil
 			}
@@ -301,7 +302,7 @@ func TestApplicationRatePolicyWarnings(t *testing.T) {
 				t.Fatalf("warnings = %v, want one startup warning", capture.warnings)
 			}
 			entry := capture.warnings[0]
-			if entry["route"] != "GET /items/{id}" || entry["routeRequests"] != 200 || entry["sharedRequests"] != 20 || entry["window"] != "1m0s" || !strings.Contains(entry["message"].(string), "per client IP") {
+			if entry["route"] != "GET /items/{id}" || entry["routeRequests"] != int64(200) || entry["sharedRequests"] != int64(20) || entry["window"] != "1m0s" || !strings.Contains(entry["message"].(string), "per client IP") {
 				t.Fatalf("incomplete warning: %v", entry)
 			}
 			for i := 0; i < 2; i++ {

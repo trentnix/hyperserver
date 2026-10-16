@@ -49,7 +49,7 @@ func TestGetAuthenticatedUserUsesAccountRepository(t *testing.T) {
 			var wantErr error
 			switch scenario {
 			case "missing":
-				wantErr = user.NewErrUserNotFound(nil)
+				wantErr = user.ErrUserNotFound
 			case "storage failure":
 				wantErr = errors.New("storage unavailable")
 			case "canceled":

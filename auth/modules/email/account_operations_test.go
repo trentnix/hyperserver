@@ -34,7 +34,7 @@ func TestAuthenticateOperation(t *testing.T) {
 		{"missing password", "", false, nil, "TestPassword1!", errInvalidCredentials},
 		{"corrupt hash", "invalid", false, nil, "TestPassword1!", errInvalidCredentials},
 		{"nil account", "", true, nil, "TestPassword1!", errInvalidCredentials},
-		{"not found", "", true, errors.Join(errors.New("lookup failed"), user.NewErrUserNotFound(nil)), "TestPassword1!", errInvalidCredentials},
+		{"not found", "", true, errors.Join(errors.New("lookup failed"), user.ErrUserNotFound), "TestPassword1!", errInvalidCredentials},
 		{"storage failure", hash, false, failure, "TestPassword1!", failure},
 		{"canceled", hash, false, context.Canceled, "TestPassword1!", context.Canceled},
 	} {
@@ -185,7 +185,7 @@ func TestAccountDeliveryOperations(t *testing.T) {
 					account.RegistrationAuthType = "other"
 				}
 				failure := errors.New("private storage or delivery failure")
-				notFound := user.NewErrUserNotFound(nil)
+				notFound := user.ErrUserNotFound
 				lookups, stored, sent := 0, 0, 0
 				accounts := emailAccountRepository{
 					lookup: func(got context.Context, email string) (*user.User, error) {
@@ -258,8 +258,7 @@ func TestAccountDeliveryOperations(t *testing.T) {
 					wantErr = messaging.ErrMailUnavailable
 				}
 				if operation == "registration" && (scenario == "unknown" || scenario == "nil account") {
-					var missing *user.ErrUserNotFound
-					if !errors.As(err, &missing) {
+					if !errors.Is(err, user.ErrUserNotFound) {
 						t.Fatalf("expected missing registered account, got %v", err)
 					}
 				} else if !errors.Is(err, wantErr) {

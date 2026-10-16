@@ -51,9 +51,7 @@ func TestValidateSessionManager(t *testing.T) {
 				t.Fatalf("validation error = %v, valid = %t", err, tc.valid)
 			}
 			if !tc.valid {
-				var missingManager *session.ErrSessionManagerNotFound
-				var missingStore *session.ErrSessionStoreNotFound
-				if !errors.As(err, &missingManager) && !errors.As(err, &missingStore) {
+				if !errors.Is(err, session.ErrSessionManagerNotFound) && !errors.Is(err, session.ErrSessionStoreNotFound) {
 					t.Fatalf("validation lost the session error: %v", err)
 				}
 			}
@@ -226,8 +224,7 @@ func TestMessageRemovalFailurePreservesCategoryForRetry(t *testing.T) {
 				store := &failingMessageStore{SessionStore: value.Store, err: failure}
 				value.Store = store
 				got, err := GetNotifications(w, r)
-				var removal *ErrDeletingContentMessages
-				if got != nil || !errors.Is(err, failure) || !errors.As(err, &removal) || !reflect.DeepEqual(value.Data, before) || len(w.Result().Cookies()) != 0 {
+				if got != nil || !errors.Is(err, failure) || !errors.Is(err, ErrDeletingContentMessages) || !reflect.DeepEqual(value.Data, before) || len(w.Result().Cookies()) != 0 {
 					t.Fatalf("failed removal changed state: messages=%v, error=%v, data=%v", got, err, value.Data)
 				}
 				if (store.saves == 1) != (operation == "save") || (store.ends == 1) != (operation == "end") {

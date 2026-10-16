@@ -77,8 +77,7 @@ func TestSessionOperationsRejectUnknownStore(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			r = sessions.AddSessionManagerToRequestContext(r, &sessions.SessionManager{Types: map[string]string{"default": "missing"}})
 			session, err := operation(r, "user")
-			var notFound *sessions.ErrSessionStoreNotFound
-			if session != nil || !errors.As(err, &notFound) {
+			if session != nil || !errors.Is(err, sessions.ErrSessionStoreNotFound) {
 				t.Fatalf("%s = %v, %v, want nil and ErrSessionStoreNotFound", name, session, err)
 			}
 		})

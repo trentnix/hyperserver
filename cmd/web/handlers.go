@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/config"
@@ -15,7 +16,7 @@ import (
 
 // SetupHandlers selects the reference application's route defaults and delegates
 // module initialization, registration, and cleanup to handlers.Setup.
-func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.Logger, catalog []handlers.Descriptor, providers map[string]string) error {
+func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log *slog.Logger, catalog []handlers.Descriptor, providers map[string]string) error {
 	routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)
 	if err != nil {
 		return err
@@ -41,25 +42,25 @@ func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log logger.
 				capabilities = append(capabilities, capability+"="+module.Name)
 			}
 		}
-		log.Info("Modules initialized",
-			logger.Field{Key: "modules", Value: modules},
-			logger.Field{Key: "capabilityProviders", Value: capabilities},
-			logger.Field{Key: "providerSelections", Value: providers})
+		log.InfoContext(ctx, "Modules initialized",
+			slog.Any("modules", modules),
+			slog.Any("capabilityProviders", capabilities),
+			slog.Any("providerSelections", providers))
 	}
 	return nil
 }
 
 // applicationRoutes selects defaults without allocating shared request counters.
-func applicationRoutes(mux *http.ServeMux, cfg config.HTTPConfig, log logger.Logger) (*routing.Routes, error) {
+func applicationRoutes(mux *http.ServeMux, cfg config.HTTPConfig, log *slog.Logger) (*routing.Routes, error) {
 	routes := routing.NewRoutes(mux)
 	if shared := cfg.SharedRateLimit; shared.Enabled && log != nil {
 		routes.OnRateLimitRegistered = func(pattern string, policy ratelimit.Policy) {
 			if policy.Window == shared.Window && policy.Requests > shared.Requests {
 				log.Warn("Route allowance exceeds the shared application budget per client IP. Confirm this restriction is intentional.",
-					logger.Field{Key: "route", Value: pattern},
-					logger.Field{Key: "routeRequests", Value: policy.Requests},
-					logger.Field{Key: "sharedRequests", Value: shared.Requests},
-					logger.Field{Key: "window", Value: policy.Window.String()},
+					slog.Any("route", pattern),
+					slog.Any("routeRequests", policy.Requests),
+					slog.Any("sharedRequests", shared.Requests),
+					slog.Any("window", policy.Window.String()),
 				)
 			}
 		}

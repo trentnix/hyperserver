@@ -5,6 +5,7 @@ package ratelimit
 import (
 	"container/list"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -97,13 +98,13 @@ func (l *Limiter) Handler(next http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 
 			if log := logger.Get(r.Context()); log != nil {
-				log.Warn("Request rate limited",
-					logger.Field{Key: "limiter", Value: l.name},
-					logger.Field{Key: "reason", Value: reason},
-					logger.Field{Key: "requests", Value: l.policy.Requests},
-					logger.Field{Key: "window", Value: l.policy.Window.String()},
-					logger.Field{Key: "maxClients", Value: l.policy.MaxClients},
-					logger.Field{Key: "retryAfter", Value: seconds},
+				log.WarnContext(r.Context(), "Request rate limited",
+					slog.Any("limiter", l.name),
+					slog.Any("reason", reason),
+					slog.Any("requests", l.policy.Requests),
+					slog.Any("window", l.policy.Window.String()),
+					slog.Any("maxClients", l.policy.MaxClients),
+					slog.Any("retryAfter", seconds),
 				)
 			}
 

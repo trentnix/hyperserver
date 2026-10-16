@@ -223,9 +223,9 @@ func TestVerifyUsesAccountRepository(t *testing.T) {
 				case "nil account":
 					return nil, nil
 				case "consumed":
-					return nil, user.NewErrTokenNotFound(nil)
+					return nil, user.ErrTokenNotFound
 				case "expired":
-					return nil, user.NewErrTokenExpired(nil)
+					return nil, user.ErrTokenExpired
 				case "canceled":
 					return nil, context.Canceled
 				}

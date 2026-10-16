@@ -11,6 +11,7 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 const (
@@ -33,10 +34,10 @@ var accountSchemaV1 string
 // not adopt or migrate existing tables or validate every stored value.
 func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 	if db == nil {
-		return database.NewErrDatabaseUnavailable(fmt.Errorf("no database connection is specified"))
+		return hs_errors.WithCause(database.ErrDatabaseUnavailable, fmt.Errorf("no database connection is specified"))
 	}
 	if _, ok := db.Driver().(*sqlite3.SQLiteDriver); !ok {
-		return database.NewErrDatabaseNotSupported(fmt.Errorf("the database type %T is not supported", db.Driver()))
+		return hs_errors.WithCause(database.ErrDatabaseNotSupported, fmt.Errorf("the database type %T is not supported", db.Driver()))
 	}
 
 	tx, err := db.BeginTx(ctx, nil)

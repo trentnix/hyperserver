@@ -149,7 +149,7 @@ func TestSecurityHeadersPrecedeRejections(t *testing.T) {
 	configureTestProxy(app.Config)
 	app.Config.HTTP.HSTSMaxAge = 86400
 	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 2, Window: time.Minute, MaxClients: 10}
-	handler, err := applicationHandler(app, &testLogger{logs: &capturedLogs{}})
+	handler, err := applicationHandler(app, newTestLogger(&capturedLogs{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestSecurityHeadersPrecedeRejections(t *testing.T) {
 		}
 	}
 	app.Config.HTTP.HSTSMaxAge = -1
-	if handler, err := applicationHandler(app, &testLogger{logs: &capturedLogs{}}); handler != nil || err == nil {
+	if handler, err := applicationHandler(app, newTestLogger(&capturedLogs{})); handler != nil || err == nil {
 		t.Fatal("negative HSTS configuration accepted")
 	}
 }

@@ -109,8 +109,7 @@ func TestModuleTemplateFailureRollsBackStartup(t *testing.T) {
 		{Name: "consumer", Requires: []handlers.Requirement{{Capability: "ready"}}, New: func() handlers.Handler { return consumer }},
 	}
 	err = handlers.Setup(t.Context(), app, nil, catalog, nil)
-	var parseErr *content.ErrParsingTemplates
-	if !errors.As(err, &parseErr) || closed != 1 {
+	if !errors.Is(err, content.ErrParsingTemplates) || closed != 1 {
 		t.Fatalf("error=%v closed=%d", err, closed)
 	}
 	if err := app.Shutdown(); err != nil || closed != 1 {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -81,7 +82,7 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	if _, err := body.WriteTo(w); err != nil {
-		return NewErrRenderingTemplates(err)
+		return hs_errors.WithCause(ErrRenderingTemplates, err)
 	}
 	return nil
 }

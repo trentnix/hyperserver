@@ -99,7 +99,7 @@ func TestCSRFRejectsBeforeSessionLoading(t *testing.T) {
 		t.Fatal("rejected request reached its handler")
 	})
 	logs := &capturedLogs{}
-	handler, err := applicationHandler(app, &testLogger{logs: logs})
+	handler, err := applicationHandler(app, newTestLogger(logs))
 	if err != nil {
 		t.Fatal(err)
 	}

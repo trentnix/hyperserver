@@ -196,7 +196,8 @@ func TestValidateReplacesFieldErrors(t *testing.T) {
 	f := &testForm{}
 	f.AddErrorMessage("Unable to save")
 	for range 2 {
-		if err := Validate(f); err != nil {
+		var fields FieldErrors
+		if err := Validate(f); !errors.As(err, &fields) {
 			t.Fatal(err)
 		}
 		if !f.IsValidated() || !reflect.DeepEqual(f.GetFieldErrors("Value"), []string{RequiredMessage}) {
@@ -219,8 +220,7 @@ func TestValidateReplacesFieldErrors(t *testing.T) {
 func TestValidateNilForm(t *testing.T) {
 	var nilForm *testForm
 	for _, value := range []ValidationForm{nil, nilForm} {
-		var invalid *ErrInvalidForm
-		if err := Validate(value); !errors.As(err, &invalid) {
+		if err := Validate(value); !errors.Is(err, ErrInvalidForm) {
 			t.Errorf("Validate(%T) = %v, want ErrInvalidForm", value, err)
 		}
 	}
@@ -242,9 +242,9 @@ func TestParseAndValidate(t *testing.T) {
 			f := &testForm{bindErr: tc.bindErr}
 			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			message, err := ParseAndValidate(r, f)
-			if (err != nil) != tc.wantError || (message != "") != tc.wantError {
-				t.Fatalf("ParseAndValidate() = %q, %v", message, err)
+			err := ParseAndValidate(r, f)
+			if (err != nil) != (tc.wantError || tc.wantField) {
+				t.Fatalf("ParseAndValidate() = %v", err)
 			}
 			if f.IsValidated() == tc.wantError || f.HasErrors() != tc.wantField {
 				t.Fatalf("validated = %v, errors = %v", f.IsValidated(), f.GetAllFieldErrors())

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -50,7 +51,7 @@ func (m *memoryRepository) GetByID(ctx context.Context, id string) (*user.User, 
 	}
 	u, ok := m.accounts[id]
 	if !ok {
-		return nil, user.NewErrUserNotFound(nil)
+		return nil, user.ErrUserNotFound
 	}
 	return &u, nil
 }
@@ -66,7 +67,7 @@ func (m *memoryRepository) GetByEmail(ctx context.Context, email string) (*user.
 			return &u, nil
 		}
 	}
-	return nil, user.NewErrUserNotFound(nil)
+	return nil, user.ErrUserNotFound
 }
 
 func (m *memoryRepository) GetToken(ctx context.Context, hash, purpose string) (user.TokenMetadata, error) {
@@ -80,7 +81,7 @@ func (m *memoryRepository) GetToken(ctx context.Context, hash, purpose string) (
 			return token, nil
 		}
 	}
-	return user.TokenMetadata{}, user.NewErrTokenNotFound(nil)
+	return user.TokenMetadata{}, user.ErrTokenNotFound
 }
 
 func (m *memoryRepository) Create(ctx context.Context, u *user.User) error {
@@ -117,7 +118,7 @@ func (m *memoryRepository) InsertToken(ctx context.Context, token user.TokenMeta
 		return errors.New("invalid token metadata")
 	}
 	if _, ok := m.accounts[token.AccountID]; !ok {
-		return user.NewErrUserNotFound(nil)
+		return user.ErrUserNotFound
 	}
 	key := tokenKey{token.AccountID, token.TokenHash}
 	if _, ok := m.tokens[key]; ok {
@@ -138,10 +139,10 @@ func (m *memoryRepository) Update(ctx context.Context, u *user.User) error {
 	}
 	stored, ok := m.accounts[u.ID]
 	if !ok {
-		return user.NewErrUserNotFound(nil)
+		return user.ErrUserNotFound
 	}
 	if stored.SessionVersion != u.SessionVersion {
-		return user.NewErrUserChanged(nil)
+		return user.ErrUserChanged
 	}
 	if m.emailExists(u.Email, u.ID) {
 		return user.ErrEmailAlreadyExists
@@ -202,7 +203,7 @@ func (m *memoryRepository) ResetPassword(ctx context.Context, u *user.User, auth
 	}
 	stored, ok := m.accounts[u.ID]
 	if !ok || stored.Password != u.Password || stored.RegistrationAuthType != u.RegistrationAuthType {
-		return user.NewErrToken(errors.New("account changed"))
+		return hs_errors.WithCause(user.ErrToken, errors.New("account changed"))
 	}
 
 	stored.Password, stored.UpdatedAt = hash, m.now()
@@ -224,7 +225,7 @@ func (m *memoryRepository) Verify(ctx context.Context, auth user.VerificationAut
 	}
 	stored, ok := m.accounts[auth.AccountID]
 	if !ok || user.EmailKey(stored.Email) != user.EmailKey(auth.Email) {
-		return nil, user.NewErrToken(errors.New("verification address changed"))
+		return nil, hs_errors.WithCause(user.ErrToken, errors.New("verification address changed"))
 	}
 
 	if !stored.Verified {
@@ -249,11 +250,11 @@ func (m *memoryRepository) emailExists(email, exceptID string) bool {
 func (m *memoryRepository) checkToken(id, hash, purpose string, signedExpiry time.Time) error {
 	token, ok := m.tokens[tokenKey{id, hash}]
 	if !ok || token.Purpose != purpose {
-		return user.NewErrTokenNotFound(nil)
+		return user.ErrTokenNotFound
 	}
 	now := m.now()
 	if !now.Before(token.ExpiresAt) || !now.Before(signedExpiry) {
-		return user.NewErrTokenExpired(nil)
+		return user.ErrTokenExpired
 	}
 	return nil
 }

@@ -121,7 +121,7 @@ func selectedSessionOptions(cfg *config.Config, name string) (map[string]string,
 		return nil, err
 	}
 	if !enabled {
-		return nil, session.NewErrStoreDisabled(nil)
+		return nil, session.ErrStoreDisabled
 	}
 	return options, nil
 }

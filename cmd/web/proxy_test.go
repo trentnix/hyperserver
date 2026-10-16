@@ -75,7 +75,7 @@ func TestInvalidProxyMetadataPrecedesApplicationWork(t *testing.T) {
 	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
 	configureTestProxy(app.Config)
 	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 10}
-	handler, err := applicationHandler(app, &testLogger{logs: &capturedLogs{}})
+	handler, err := applicationHandler(app, newTestLogger(&capturedLogs{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestInvalidProxyMetadataPrecedesApplicationWork(t *testing.T) {
 		t.Fatalf("valid metadata: status=%d, want session initialization failure", w.Code)
 	}
 	app.Config.HTTP.TrustedProxies = []string{"invalid"}
-	if handler, err := applicationHandler(app, &testLogger{logs: &capturedLogs{}}); err == nil || handler != nil {
+	if handler, err := applicationHandler(app, newTestLogger(&capturedLogs{})); err == nil || handler != nil {
 		t.Fatal("invalid proxy configuration accepted")
 	}
 }

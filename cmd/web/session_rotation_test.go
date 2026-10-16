@@ -158,8 +158,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 				if err != nil || !stored.Verified || stored.SessionVersion != u.SessionVersion+1 {
 					t.Fatalf("session failure rolled back verification: %+v, %v", stored, err)
 				}
-				var missing *user.ErrTokenNotFound
-				if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-verification"); !errors.As(err, &missing) {
+				if _, err := h.app.AccountRepository.GetToken(t.Context(), token.TokenHash, "auth-verification"); !errors.Is(err, user.ErrTokenNotFound) {
 					t.Fatalf("verification token was not consumed: %v", err)
 				}
 				if _, err := h.app.Database.Exec(`DROP TRIGGER reject_rotation`); err != nil {

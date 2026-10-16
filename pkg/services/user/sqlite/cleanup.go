@@ -39,7 +39,7 @@ func DeleteExpiredTokens(ctx context.Context, db *sql.DB, limit int) (int64, err
 		return 0, fmt.Errorf("token cleanup limit must be positive")
 	}
 	if db == nil {
-		return 0, database.NewErrDatabaseUnavailable(nil)
+		return 0, database.ErrDatabaseUnavailable
 	}
 
 	result, err := db.ExecContext(ctx, `DELETE FROM usertoken WHERE (user_id, token_hash) IN (

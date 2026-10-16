@@ -136,8 +136,7 @@ func TestInitializeAccountsFailureAndRetry(t *testing.T) {
 			if err == nil || s.app.AccountRepository != nil {
 				t.Fatalf("failed setup: error = %v, repository = %v", err, s.app.AccountRepository)
 			}
-			var unavailable *database.ErrDatabaseUnavailable
-			if scenario == "missing pool" && !errors.As(err, &unavailable) {
+			if scenario == "missing pool" && !errors.Is(err, database.ErrDatabaseUnavailable) {
 				t.Fatalf("missing pool error = %v", err)
 			}
 			if scenario == "canceled" && !errors.Is(err, context.Canceled) {

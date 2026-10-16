@@ -169,8 +169,7 @@ func TestSQLiteSaveAndEndAfterCleanup(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	var invalid *sessions.ErrSessionInvalid
-	if err := original.Save(w, r); !errors.As(err, &invalid) || len(w.Result().Cookies()) != 0 {
+	if err := original.Save(w, r); !errors.Is(err, sessions.ErrSessionInvalid) || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("stale save accepted: %v", err)
 	}
 	if err := original.End(w, r); err != nil {
@@ -203,8 +202,7 @@ func TestSQLiteConcurrentSaveAndEnd(t *testing.T) {
 		}()
 		close(start)
 		saveErr, endErr := <-saved, <-ended
-		var invalid *sessions.ErrSessionInvalid
-		if saveErr != nil && !errors.As(saveErr, &invalid) {
+		if saveErr != nil && !errors.Is(saveErr, sessions.ErrSessionInvalid) {
 			t.Fatal("concurrent save:", saveErr)
 		}
 		if endErr != nil {
@@ -240,8 +238,7 @@ func TestSQLiteCleanupDuringSave(t *testing.T) {
 			if err != nil || (count == 1) != expired {
 				t.Fatalf("concurrent cleanup = %d, %v", count, err)
 			}
-			var invalid *sessions.ErrSessionInvalid
-			if saveErr != nil && (!expired || !errors.As(saveErr, &invalid)) {
+			if saveErr != nil && (!expired || !errors.Is(saveErr, sessions.ErrSessionInvalid)) {
 				t.Fatal("concurrent save:", saveErr)
 			}
 			loaded, err := store.Get(r, original.Name)

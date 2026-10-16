@@ -11,6 +11,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/trentnix/hyperserver/pkg/database"
+	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 // Open opens an owned SQLite pool without pinging it or preparing a schema.
@@ -24,7 +25,7 @@ import (
 func Open(connection string) (*sql.DB, error) {
 	dsn, err := connectionString(connection)
 	if err != nil {
-		return nil, database.NewErrDatabaseConfiguration(err)
+		return nil, hs_errors.WithCause(database.ErrDatabaseConfiguration, err)
 	}
 	db, err := database.Setup("sqlite3", dsn)
 	if err != nil {
@@ -42,13 +43,13 @@ func Open(connection string) (*sql.DB, error) {
 func OpenExisting(connection string) (*sql.DB, error) {
 	dsn, err := connectionString(connection)
 	if err != nil {
-		return nil, database.NewErrDatabaseConfiguration(err)
+		return nil, hs_errors.WithCause(database.ErrDatabaseConfiguration, err)
 	}
 	path, query, _ := strings.Cut(dsn, "?")
 	options, _ := url.ParseQuery(query) // connectionString validated the options.
 	mode := options.Get("mode")
 	if len(options["mode"]) > 1 || (mode != "" && mode != "rw" && mode != "rwc" && mode != "ro") {
-		return nil, database.NewErrDatabaseConfiguration(fmt.Errorf("SQLite maintenance requires a file connection with mode rw, rwc, or ro"))
+		return nil, hs_errors.WithCause(database.ErrDatabaseConfiguration, fmt.Errorf("SQLite maintenance requires a file connection with mode rw, rwc, or ro"))
 	}
 
 	var uri *url.URL
@@ -59,14 +60,14 @@ func OpenExisting(connection string) (*sql.DB, error) {
 		uri = &url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
 	}
 	if err != nil || uri == nil {
-		return nil, database.NewErrDatabaseConfiguration(fmt.Errorf("SQLite maintenance requires a database file"))
+		return nil, hs_errors.WithCause(database.ErrDatabaseConfiguration, fmt.Errorf("SQLite maintenance requires a database file"))
 	}
 	name := uri.Path
 	if uri.Opaque != "" {
 		name, err = url.PathUnescape(uri.Opaque)
 	}
 	if err != nil || name == "" || name == ":memory:" {
-		return nil, database.NewErrDatabaseConfiguration(fmt.Errorf("SQLite maintenance requires a database file"))
+		return nil, hs_errors.WithCause(database.ErrDatabaseConfiguration, fmt.Errorf("SQLite maintenance requires a database file"))
 	}
 
 	if mode != "ro" {

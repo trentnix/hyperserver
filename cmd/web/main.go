@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -21,7 +22,6 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
-	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
@@ -70,10 +70,11 @@ func prepareHTTP(ctx context.Context, s *application, accounts *setup.AccountSto
 		return nil, nil, err
 	}
 
-	// The reference site's contact storage uses this pool. Mail is used by its
-	// sample routes and the email authentication provider. Neither is a core requirement.
-	if err := s.initializeDatabase(ctx); err != nil {
-		return nil, nil, fmt.Errorf("failed to prepare application database: %w", err)
+	// Open shared SQL storage only for selected consumers.
+	if contactDirectory == "" || (s.AccountRepository == nil && accounts.NeedsSQLPool()) {
+		if err := s.initializeDatabase(ctx); err != nil {
+			return nil, nil, fmt.Errorf("failed to prepare application database: %w", err)
+		}
 	}
 	mailProvider := "application-supplied"
 	if s.Mail == nil {
@@ -93,7 +94,7 @@ func prepareHTTP(ctx context.Context, s *application, accounts *setup.AccountSto
 	if err := initializeAccounts(ctx, s, accounts); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare account storage: %w", err)
 	}
-	l := logger.NewSlogLogger(nil)
+	l := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	if err := configureRendering(s.ApplicationServer); err != nil {
 		return nil, nil, err
 	}
@@ -135,7 +136,7 @@ func prepareHTTP(ctx context.Context, s *application, accounts *setup.AccountSto
 // Inherited per-route policies and body limits are applied during registration.
 // Non-browser requests without origin headers follow Go's CrossOriginProtection
 // defaults. No trusted origins or CSRF exemptions are set.
-func applicationHandler(s *application, l logger.Logger) (http.Handler, error) {
+func applicationHandler(s *application, l *slog.Logger) (http.Handler, error) {
 	proxy, err := requestinfo.NewProxyMiddleware(s.Config.HTTP.TrustedProxies)
 	if err != nil {
 		return nil, fmt.Errorf("http.trustedProxies: %w", err)

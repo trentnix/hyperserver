@@ -12,7 +12,7 @@ func WithSessionManager(s *SessionManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if s == nil {
-				util.HttpError(w, r, "There was an error loading the session manager", NewErrSessionManagerNotFound(nil), http.StatusInternalServerError)
+				util.HttpError(w, r, "There was an error loading the session manager", ErrSessionManagerNotFound, http.StatusInternalServerError)
 				return
 			}
 

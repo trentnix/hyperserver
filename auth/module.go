@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -69,7 +70,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		for _, provider := range registry.Services() {
 			providers = append(providers, provider.AuthType())
 		}
-		log.Info("Authentication providers initialized", logger.Field{Key: "providers", Value: providers})
+		log.InfoContext(ctx, "Authentication providers initialized", slog.Any("providers", providers))
 	}
 	return nil
 }
