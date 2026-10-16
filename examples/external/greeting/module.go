@@ -55,6 +55,7 @@ func (m *module) greet(w http.ResponseWriter, r *http.Request) {
 	input := &greetingForm{}
 	page := content.NewManagedContent(r, m.contentManager)
 	page.Templates, page.Data = m.templates, input
+	page.PartialName = "greeting.form"
 	if r.URL.RawQuery != "" {
 		if err := form.ParseAndValidate(r, input); err != nil {
 			form.HandleFormError(w, r, page, input, "Unable to read the name", err)

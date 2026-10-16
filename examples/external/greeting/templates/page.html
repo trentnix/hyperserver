@@ -5,5 +5,5 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Site}}</title>
 </head>
-<body><main><h1>{{.Site}}</h1>{{template "greeting.form" .}}</main></body>
+<body><main><h1>{{.Site}}</h1><nav><a href="/">Greeting</a> <a href="/notes">Notes</a></nav>{{renderPartial .PartialName .}}</main></body>
 </html>

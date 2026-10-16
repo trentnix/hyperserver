@@ -1,0 +1,13 @@
+{{define "notes.panel"}}
+<section id="notes">
+  <h2>Notes</h2>
+  <form method="post" action="/notes">
+    <label for="text">New note</label>
+    <textarea id="text" name="text" maxlength="1000" required>{{.Data.Text}}</textarea>
+    {{range .Data.GetAllFieldErrors}}<p role="alert">{{.}}</p>{{end}}
+    <button type="submit">Save note</button>
+  </form>
+  <ul>{{range .Data.Notes}}<li>{{.Text}}</li>{{end}}</ul>
+  {{if .Data.HasErrors}}<p><a href="/notes">Back to saved notes</a></p>{{end}}
+</section>
+{{end}}

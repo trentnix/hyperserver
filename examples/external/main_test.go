@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,10 +21,10 @@ func TestExternalApplication(t *testing.T) {
 	t.Chdir(directory)
 	t.Setenv("HYPERSERVER_HTTP_PORT", "invalid")
 	catalog := handlers.Registered()
-	if len(catalog) != 1 || catalog[0].Name != "greeting" {
+	if len(catalog) != 2 {
 		t.Fatalf("unexpected imported modules: %+v", catalog)
 	}
-	app, err := newApplication(t.Context())
+	app, err := newApplication(t.Context(), "sqlite", filepath.Join(t.TempDir(), "notes.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestExternalApplication(t *testing.T) {
 func TestCanceledStartup(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	app, err := newApplication(ctx)
+	app, err := newApplication(ctx, "sqlite", filepath.Join(t.TempDir(), "notes.db"))
 	if app != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("app=%v err=%v", app, err)
 	}
