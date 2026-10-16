@@ -41,7 +41,8 @@ func TestNotesWorkflow(t *testing.T) {
 	for _, provider := range []string{"sqlite", "files"} {
 		t.Run(provider, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "notes")
-			app, err := newApplication(t.Context(), provider, path)
+			settings := testSettings(t, provider, path)
+			app, err := newApplication(t.Context(), settings)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -50,7 +51,7 @@ func TestNotesWorkflow(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			handler := newHTTPServer(app).Handler
+			handler := loggedInHandler(t, app)
 			for _, variant := range []struct {
 				name        string
 				hx, history bool
@@ -89,7 +90,7 @@ func TestNotesWorkflow(t *testing.T) {
 					if w.Code != 200 || !strings.Contains(body, variant.name+" &lt;script&gt;") || strings.Contains(body, "<script>") || strings.Contains(body, "<!doctype html>") != (!variant.hx || variant.history) {
 						t.Fatalf("list = %d %s", w.Code, body)
 					}
-					if w.Header().Get("Cache-Control") != "no-store" || len(w.Result().Cookies()) != 0 {
+					if w.Header().Get("Cache-Control") != "no-store" {
 						t.Fatal("unexpected cache or session behavior")
 					}
 				})
@@ -113,7 +114,7 @@ func TestNotesWorkflow(t *testing.T) {
 			if err := app.Shutdown(); err != nil {
 				t.Fatal(err)
 			}
-			reopened, err := newApplication(t.Context(), provider, path)
+			reopened, err := newApplication(t.Context(), settings)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -154,10 +155,12 @@ func TestNotesStorageFailures(t *testing.T) {
 	if err := greeting.ConfigureRendering(app.ContentManager); err != nil {
 		t.Fatal(err)
 	}
-	if err := handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{notes.Module(repository)}, nil); err != nil {
+	app.ContentManager.BuildLayoutData = func(*http.Request) any { return true }
+	allow := func(next http.Handler) http.Handler { return next }
+	if err := handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{notes.Module(repository, allow)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	handler := newHTTPServer(app).Handler
+	handler := app.Web
 	for _, hx := range []bool{false, true} {
 		before := repository.writes.Load()
 		w := noteRequest(t, handler, "POST", "/notes", "text=+", hx, false)
@@ -175,9 +178,21 @@ func TestNotesStorageFailures(t *testing.T) {
 
 func TestNotesStartupFailure(t *testing.T) {
 	for _, provider := range []string{"unknown", "sqlite"} {
-		app, err := newApplication(t.Context(), provider, filepath.Join(t.TempDir(), "missing", "notes"))
+		app, err := newApplication(t.Context(), testSettings(t, provider, filepath.Join(t.TempDir(), "missing", "notes")))
 		if app != nil || err == nil {
 			t.Fatalf("unexpected startup success for %s", provider)
 		}
+	}
+}
+
+func TestNotesRequiresWritePolicy(t *testing.T) {
+	app, err := server.NewApplicationServer(config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Shutdown()
+	err = handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{notes.Module(&failedNotes{}, nil)}, nil)
+	if err == nil || !strings.Contains(err.Error(), "write-access policy") {
+		t.Fatalf("missing access policy = %v", err)
 	}
 }

@@ -18,16 +18,18 @@ import (
 //go:embed templates/*.html
 var notesModuleTemplatesFS embed.FS
 
-func init() { handlers.Register(Module(nil)) }
+func init() { handlers.Register(Module(nil, nil)) }
 
 // Module supplies this feature's repository without selecting a storage platform.
+// protect applies the application's write-access policy. Both arguments are required.
 // Application setup owns and closes the repository after module consumers stop.
-func Module(repository Repository) handlers.Descriptor {
-	return handlers.Descriptor{Name: "notes", New: func() handlers.Handler { return &module{repository: repository} }}
+func Module(repository Repository, protect func(http.Handler) http.Handler) handlers.Descriptor {
+	return handlers.Descriptor{Name: "notes", New: func() handlers.Handler { return &module{repository: repository, protect: protect} }}
 }
 
 type module struct {
 	repository     Repository
+	protect        func(http.Handler) http.Handler
 	contentManager *contentservice.ContentManagerService
 	templates      *content.Templates
 }
@@ -35,6 +37,9 @@ type module struct {
 func (m *module) Init(_ context.Context, app *server.ApplicationServer) error {
 	if m.repository == nil {
 		return fmt.Errorf("notes requires a repository")
+	}
+	if m.protect == nil {
+		return fmt.Errorf("notes requires a write-access policy")
 	}
 	m.contentManager = app.ContentManager
 	templates, err := content.PrepareTemplates(m.contentManager, content.TemplatePath{FS: notesModuleTemplatesFS, Path: "templates/notes.html"})
@@ -47,7 +52,7 @@ func (m *module) Init(_ context.Context, app *server.ApplicationServer) error {
 
 func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /notes", m.list)
-	routes.HandleFunc("POST /notes", m.create)
+	routes.Handle("POST /notes", m.protect(http.HandlerFunc(m.create)))
 	return routes.Err()
 }
 

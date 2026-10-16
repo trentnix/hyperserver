@@ -21,10 +21,10 @@ func TestExternalApplication(t *testing.T) {
 	t.Chdir(directory)
 	t.Setenv("HYPERSERVER_HTTP_PORT", "invalid")
 	catalog := handlers.Registered()
-	if len(catalog) != 2 {
+	if len(catalog) != 3 {
 		t.Fatalf("unexpected imported modules: %+v", catalog)
 	}
-	app, err := newApplication(t.Context(), "sqlite", filepath.Join(t.TempDir(), "notes.db"))
+	app, err := newApplication(t.Context(), testSettings(t, "sqlite", filepath.Join(t.TempDir(), "notes.db")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestExternalApplication(t *testing.T) {
 					}
 				}
 				if len(response.Cookies()) != 0 {
-					t.Fatal("stateless response issued cookies")
+					t.Fatal("anonymous greeting response issued cookies")
 				}
 				if tc.name == "invalid" && strings.Contains(text, "Hello,") {
 					t.Fatal("invalid input produced a greeting")
@@ -125,7 +125,7 @@ func TestExternalApplication(t *testing.T) {
 func TestCanceledStartup(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	app, err := newApplication(ctx, "sqlite", filepath.Join(t.TempDir(), "notes.db"))
+	app, err := newApplication(ctx, testSettings(t, "sqlite", filepath.Join(t.TempDir(), "notes.db")))
 	if app != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("app=%v err=%v", app, err)
 	}
