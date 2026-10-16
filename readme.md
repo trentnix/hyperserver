@@ -24,6 +24,8 @@ go run ./examples/stateless
 
 Open http://127.0.0.1:8082. The [example](examples/stateless/readme.md) shows module setup, embedded templates, and full-page and HTMX responses.
 
+For a separate Go module that you can copy outside this repository, see the [external application example](examples/external/readme.md).
+
 To run the reference application, copy [config-template.yaml](config-template.yaml) to the ignored `config.yaml`, configure the enabled services, and run:
 
 ```sh

@@ -16,6 +16,8 @@ The [CI workflow](../.github/workflows/ci.yml) runs these checks on pushes and p
 
 [Container recovery and soak tests](deployment.md#start-and-test) are opt-in. Ordinary Go test runs and CI skip them. Never run failure/recovery tests alongside a soak test or against real data.
 
+The [external-module example](../examples/external/readme.md) has a separate `go.mod`. The root suite copies it outside the repository and tests it against the current checkout. To test its pinned public dependency instead, run `go test ./...` from `examples/external`.
+
 ## Browser tests
 
 CI tests error responses, native forms, HTMX history, redirects, retargeting, reswapping, and out-of-band notifications in headless Firefox. To run them locally:

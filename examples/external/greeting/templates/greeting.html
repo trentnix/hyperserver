@@ -1,0 +1,11 @@
+{{define "greeting.form"}}
+<section id="greeting">
+  <form method="get" action="/">
+    <label for="name">Your name</label>
+    <input id="name" name="name" value="{{.Data.Name}}" required>
+    <button type="submit">Say hello</button>
+  </form>
+  {{range .Data.GetAllFieldErrors}}<p role="alert">{{.}}</p>{{end}}
+  {{if and .Data.IsValidated (not .Data.HasErrors)}}<p>Hello, {{.Data.Name}}!</p>{{end}}
+</section>
+{{end}}
