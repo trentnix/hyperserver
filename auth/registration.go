@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/auth/password"
-	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -18,7 +17,7 @@ func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, u
 		return "There was an error creating a user account", NewErrUserRegistration(uname, err)
 	}
 	if accounts == nil {
-		return "There was an error creating a user account", NewErrUserRegistration(uname, database.NewErrDatabaseUnavailable(nil))
+		return "There was an error creating a user account", NewErrUserRegistration(uname, errors.New("account repository is not configured"))
 	}
 
 	var err error

@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/auth/identity"
-	"github.com/trentnix/hyperserver/pkg/database"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -21,7 +20,8 @@ func RequireAuthentication(accounts user.AccountRepository, cm *content_services
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if accounts == nil {
-				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
+				err := errors.New("account repository is not configured")
+				util.HttpError(w, r, err.Error(), err, http.StatusInternalServerError)
 				return
 			}
 
@@ -90,7 +90,8 @@ func RequireAnonymous(accounts user.AccountRepository, cm *content_services.Cont
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if accounts == nil {
-				util.HttpError(w, r, "database not available", database.NewErrDatabaseUnavailable(nil), http.StatusInternalServerError)
+				err := errors.New("account repository is not configured")
+				util.HttpError(w, r, err.Error(), err, http.StatusInternalServerError)
 				return
 			}
 

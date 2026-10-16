@@ -14,7 +14,6 @@ import (
 
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	content_services "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -221,11 +220,14 @@ func TestVerificationRejectsMissingOrMalformedForm(t *testing.T) {
 	}
 }
 
-func TestRegistrationReportsDatabaseFailure(t *testing.T) {
+func TestRegistrationReportsMissingAccountRepository(t *testing.T) {
 	message, err := ProcessRegistration(context.Background(), nil, "person@example.invalid", "", "email", true)
-	var unavailable *database.ErrDatabaseUnavailable
-	if !errors.As(err, &unavailable) || message != "There was an error creating a user account" {
-		t.Fatalf("database failure = (%v, %q), want database unavailable and creation failure", err, message)
+	var registrationErr *ErrUserRegistration
+	if !errors.As(err, &registrationErr) || message != "There was an error creating a user account" {
+		t.Fatalf("missing repository = (%v, %q), want registration error and creation failure", err, message)
+	}
+	if cause := errors.Unwrap(err); cause == nil || cause.Error() != "account repository is not configured" {
+		t.Fatalf("missing repository cause = %v", cause)
 	}
 }
 

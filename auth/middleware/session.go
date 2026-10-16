@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/auth/identity"
-	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -39,7 +38,7 @@ func LoadSessionManagement(accounts user.AccountRepository, s *session.SessionMa
 // loadAuthenticatedUser loads any authenticated user into the specified request's context
 func loadAuthenticatedUser(r *http.Request, accounts user.AccountRepository) (*http.Request, error) {
 	if accounts == nil {
-		return r, database.NewErrDatabaseUnavailable(nil)
+		return r, errors.New("account repository is not configured")
 	}
 
 	u, err := identity.GetAuthenticatedUser(r, accounts)
