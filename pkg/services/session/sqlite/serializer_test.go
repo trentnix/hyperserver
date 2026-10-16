@@ -153,6 +153,8 @@ func TestSerializerReplacementCompatibility(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			original := serializerStore(t, kind, nil)
 			s, r := savedSession(t, original)
+			originalRequest := r
+			originalPayload := storedPayload(t, original, r, s.Name)
 			// Separate provider instances share only storage and signing settings.
 			// Runtime serializer configuration stays unchanged.
 			var strict, compatible sessions.SessionStore
@@ -170,19 +172,32 @@ func TestSerializerReplacementCompatibility(t *testing.T) {
 				t.Fatalf("incompatible format accepted: %+v, %v", loaded, err)
 			}
 			loaded, err := compatible.Get(r, s.Name)
-			if err != nil || loaded.ID != s.ID || loaded.Data["identity"] != "account" {
+			if err != nil || loaded == nil || loaded.ID != s.ID || loaded.Data["identity"] != "account" {
 				t.Fatalf("legacy session lost: %+v, %v", loaded, err)
 			}
+			if got := storedPayload(t, original, r, s.Name); got != originalPayload {
+				t.Fatal("reading through replacement serializers changed stored data")
+			}
+			expiration := loaded.ExpiresAt
+
 			w := httptest.NewRecorder()
 			if err := loaded.Save(w, r); err != nil {
 				t.Fatal(err)
 			}
 			r = requestWithSessionCookie(t, w)
-			if loaded, err := strict.Get(r, s.Name); err != nil || loaded.ID != s.ID || loaded.Data["identity"] != "account" {
+			if loaded, err := strict.Get(r, s.Name); err != nil || loaded == nil || loaded.ID != s.ID || !loaded.ExpiresAt.Equal(expiration) || loaded.Data["identity"] != "account" {
 				t.Fatalf("replacement did not write its own format: %+v, %v", loaded, err)
 			}
 			if loaded, err := original.Get(r, s.Name); loaded != nil || err == nil {
 				t.Fatalf("default decoder accepted incompatible data: %+v, %v", loaded, err)
+			}
+
+			if kind == "sqlite" {
+				// The existing cookie identifies a row, not its serialized format.
+				loaded, err := strict.Get(originalRequest, s.Name)
+				if err != nil || loaded == nil || loaded.ID != s.ID || !loaded.ExpiresAt.Equal(expiration) || loaded.Data["identity"] != "account" {
+					t.Fatalf("format replacement invalidated the original cookie: %+v, %v", loaded, err)
+				}
 			}
 		})
 	}
