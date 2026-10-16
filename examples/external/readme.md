@@ -45,7 +45,7 @@ This is a loopback-only example, not a public deployment configuration. Do not u
 
 The [notes repository interface](notes/notes.go) has two operations: create a note and list recent notes. [The handlers](notes/module.go) use the same interface with either provider. Notes are append-only, limited to 1,000 Unicode code points, and displayed newest first, up to 100 at a time. Both providers reject duplicate IDs rather than overwriting notes.
 
-Importing each module registers its factory. Setup supplies the notes repository and write-access middleware, then configures the auth module with the selected email provider. Session middleware loads the current account before routes run. Templates are embedded and prepared during initialization. Request input and stored notes are escaped when rendered.
+Importing each module registers its factory. `authweb.Email` takes accounts, sessions, and mail once. Its `Setup` method initializes the selected modules and returns a handler with session and identity loading attached. The application uses its authentication guard to protect note writes. Layout data and security headers remain application choices. Templates are embedded and prepared during initialization. Request input and stored notes are escaped when rendered.
 
 The file provider writes each JSON record inside a temporary directory, then renames the directory to `<id>.note`. It requires atomic directory renames, not hard links. Existing nonempty record directories cannot be overwritten. Keep storage private through directory permissions or mount settings. Older `<id>.json` records remain readable, but stop old application processes before using the new writer.
 

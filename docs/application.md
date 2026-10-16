@@ -4,7 +4,7 @@ Start with the [stateless application](../examples/stateless/main.go). The [exte
 
 ## Adding or replacing a feature
 
-Use the [notes module](../examples/external/notes/module.go) as a starting point. Its `Module(repository, protect)` constructor returns a descriptor whose factory creates a fresh module. The package registers an unconfigured descriptor during import. [Application setup](../examples/external/main.go) supplies storage and write-access middleware with `handlers.Replace` before calling `handlers.Setup`. Importing the module alone does not supply its dependencies.
+Use the [notes module](../examples/external/notes/module.go) as a starting point. Its `Module(repository, protect)` constructor returns a descriptor whose factory creates a fresh module. The package registers an unconfigured descriptor during import. [Application setup](../examples/external/main.go) supplies storage and write-access middleware with `handlers.Replace` before initializing modules. Importing the module alone does not supply its dependencies.
 
 The module's `Init` checks dependencies and prepares embedded templates. `Routes` binds ordinary Go handlers and returns registration errors. Handlers use the supplied repository, not a database client or configuration lookup. To replace notes storage, change [provider selection](../examples/external/storage.go), not the handlers. The [repository contract](../examples/external/notes/notes.go) belongs to this feature, not the framework.
 
@@ -56,7 +56,28 @@ This example deliberately selects only these modules and email authentication. [
 
 The SMTP sender is supplied through `messaging.NewMailClientWithSender`. Construction does not contact SMTP. Consumers that require delivery must validate configuration. Internationalized domains are converted to IDNA ASCII form for delivery. Non-ASCII mailbox names require the SMTP server's `SMTPUTF8` and `8BITMIME` extensions. Successful sending means server acceptance, not inbox delivery.
 
-For sessions alone, install `session.WithSessionManager(sessions)`. For authenticated identity, use `authmiddleware.LoadSessionManagement(accounts, sessions)` with the appropriate authentication and authorization guards. See [reference middleware selection](../cmd/web/main.go) for proxy verification, security headers, request limits, and session loading.
+For built-in email/password authentication, [`auth/web.Email`](../auth/web/email.go) connects accounts, sessions, mail, and flash notifications. Configure layouts first, then supply services once:
+
+```go
+accountWeb := authweb.Email{
+    Accounts: accounts, Sessions: sessions, Mail: mailClient,
+    LoginURL: "/auth/login/email", HomeURL: "/notes",
+}
+protect := accountWeb.RequireAuthentication(app.ContentManager)
+catalog, err := handlers.Replace(handlers.Registered(), notes.Module(repository, protect))
+if err != nil {
+    return err
+}
+handler, err := accountWeb.Setup(ctx, app, catalog)
+if err != nil {
+    return err
+}
+// Serve handler through the application's outer security middleware.
+```
+
+Import `authweb "github.com/trentnix/hyperserver/auth/web"`. `Setup` configures the selected auth descriptor, initializes the entire catalog, and returns its handler with session and identity loading attached. Do not also call `handlers.Setup`. The catalog must include auth, as `handlers.Registered()` does here. Authentication and the email provider must be enabled in configuration.
+
+The application still chooses protected routes, layout data, and security middleware and closes its services after requests drain. If setup fails, discard the application and close its services. Use the lower-level `auth.Module`, `handlers.Setup`, and `authmiddleware.LoadSessionManagement` APIs for other auth providers, route defaults, or capability selections. For sessions without accounts, install `session.WithSessionManager(sessions)`. See [reference middleware selection](../cmd/web/main.go) for proxy verification, security headers, and request limits.
 
 Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware` attaches request fields to the logger returned by `logger.Get(r.Context())`. Use context-aware logging methods to pass cancellation and tracing values to the handler. Check for nil when no request logger is installed.
 

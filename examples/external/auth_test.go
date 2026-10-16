@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/auth/password"
+	databasesqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -172,6 +173,14 @@ func TestAuthenticationWorkflow(t *testing.T) {
 			}
 			response, _ = request("POST", "/auth/logout", "", srv.URL)
 			redirect(response, "/notes")
+			_, body = request("GET", "/notes", "", "")
+			if !strings.Contains(body, "successfully logged out") {
+				t.Fatal("logout notification was not rendered", body)
+			}
+			_, body = request("GET", "/notes", "", "")
+			if strings.Contains(body, "successfully logged out") {
+				t.Fatal("logout notification was not consumed", body)
+			}
 			response, _ = request("POST", "/notes", "text=logged-out", srv.URL)
 			redirect(response, "/auth/login/email")
 			base, _ := url.Parse(srv.URL)
@@ -270,12 +279,6 @@ func TestSessionFailureBlocksNoteWrite(t *testing.T) {
 	}
 }
 
-type unavailableAccounts struct{ user.AccountRepository }
-
-func (unavailableAccounts) GetByID(context.Context, string) (*user.User, error) {
-	return nil, errors.New("private-account-storage-detail")
-}
-
 func TestAccountFailureBlocksNoteWrite(t *testing.T) {
 	s := testSettings(t, "files", filepath.Join(t.TempDir(), "notes"))
 	app, err := newApplication(t.Context(), s)
@@ -290,7 +293,15 @@ func TestAccountFailureBlocksNoteWrite(t *testing.T) {
 	if login.Code != 303 {
 		t.Fatal("login failed", login.Body)
 	}
-	app.accounts = unavailableAccounts{app.accounts}
+	// Break only this test's account storage, leaving its sessions usable.
+	pool, err := databasesqlite.Open(s.accountsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if _, err := pool.ExecContext(t.Context(), "DROP TABLE user"); err != nil {
+		t.Fatal(err)
+	}
 	handler := newHTTPServer(app).Handler
 	request := httptest.NewRequest("POST", "http://example.test/notes", strings.NewReader("text=must-not-save"))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -299,7 +310,7 @@ func TestAccountFailureBlocksNoteWrite(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != 500 || strings.Contains(response.Body.String(), "private-account-storage-detail") {
+	if response.Code != 500 || strings.Contains(response.Body.String(), "no such table") {
 		t.Fatalf("account failure = %d %s", response.Code, response.Body)
 	}
 	if entries, err := os.ReadDir(s.notesPath); err != nil || len(entries) != 0 {

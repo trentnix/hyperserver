@@ -16,12 +16,9 @@ import (
 
 	"example.com/greeting/greeting"
 	"example.com/greeting/notes"
-	"github.com/trentnix/hyperserver/auth"
-	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
-	emailauth "github.com/trentnix/hyperserver/auth/modules/email"
+	authweb "github.com/trentnix/hyperserver/auth/web"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
-	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -31,6 +28,7 @@ type application struct {
 	*server.ApplicationServer
 	accounts user.AccountRepository
 	sessions *session.SessionManager
+	handler  http.Handler
 }
 
 type layoutData struct {
@@ -110,9 +108,6 @@ func newApplication(ctx context.Context, s settings) (*application, error) {
 	if err := greeting.ConfigureRendering(app.ContentManager); err != nil {
 		return nil, errors.Join(err, app.Shutdown())
 	}
-	app.ContentManager.AuthURL = "/auth/login/email"
-	app.ContentManager.HomeURL = "/notes"
-	app.ContentManager.LoadNotifications = flash.LoadNotifications
 	app.ContentManager.BuildLayoutData = func(r *http.Request) any {
 		data := layoutData{RegistrationEnabled: s.registration}
 		if u := user.GetUserFromContext(r.Context()); u != nil {
@@ -122,30 +117,29 @@ func newApplication(ctx context.Context, s settings) (*application, error) {
 		}
 		return data
 	}
-	protect := authmiddleware.RequireAuthentication(app.accounts, app.ContentManager)
-	catalog, err := handlers.Replace(handlers.Registered(), notes.Module(repository, protect))
-	if err != nil {
-		return nil, errors.Join(err, app.Shutdown())
-	}
 	mail, err := configureMail(s)
 	if err != nil {
 		return nil, errors.Join(err, app.Shutdown())
 	}
-	providers := []auth.Descriptor{emailauth.Provider(app.accounts, app.sessions, mail)}
-	catalog, err = handlers.Replace(catalog, auth.Module(app.accounts, app.sessions, providers))
+	accountWeb := authweb.Email{
+		Accounts: app.accounts, Sessions: app.sessions, Mail: mail,
+		LoginURL: "/auth/login/email", HomeURL: "/notes",
+	}
+	protect := accountWeb.RequireAuthentication(app.ContentManager)
+	catalog, err := handlers.Replace(handlers.Registered(), notes.Module(repository, protect))
 	if err != nil {
 		return nil, errors.Join(err, app.Shutdown())
 	}
-	if err := handlers.Setup(ctx, core, nil, catalog, nil); err != nil {
+	app.handler, err = accountWeb.Setup(ctx, core, catalog)
+	if err != nil {
 		return nil, errors.Join(err, app.Shutdown())
 	}
 	return app, nil
 }
 
 func newHTTPServer(app *application) *http.Server {
-	handler := authmiddleware.LoadSessionManagement(app.accounts, app.sessions)(app.Web)
 	return &http.Server{
-		Handler:           middleware.SecurityHeaders("default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")(http.NewCrossOriginProtection().Handler(handler)),
+		Handler:           middleware.SecurityHeaders("default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")(http.NewCrossOriginProtection().Handler(app.handler)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
