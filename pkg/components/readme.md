@@ -37,14 +37,16 @@ homepage.AddComponent(templateFiles, "templates/footer.html")
 err := homepage.Render(w, r)
 ```
 
-The `Content` component contains plural methods for convenience:
+Each `AddLayout`, `AddContent`, or `AddComponent` call accepts one or several filenames and appends them in order:
 
 ```go
-homepage.AddContents(templateFiles, "templates/home-content.html", "templates/admin-content.html")
-homepage.AddComponents(templateFiles, "templates/footer.html", "templates/admin-components.html")
+homepage.AddContent(templateFiles, "templates/home-content.html", "templates/admin-content.html")
+homepage.AddComponent(templateFiles, "templates/footer.html", "templates/admin-components.html")
 ```
 
 The content manager selects page or HTMX layouts according to the request. Layouts added directly to `Content` apply to either response type.
+
+The content manager's `AddPage*` and `AddHtmx*` methods also accept several filenames. Calls with no filenames leave existing paths unchanged. `RegisterLayouts`, `RegisterContents`, and `RegisterComponents` replace the selected response type's paths instead. Calling a `Register*` method with no filenames clears those paths.
 
 ### Reusable templates
 

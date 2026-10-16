@@ -125,115 +125,76 @@ func (c *ContentManagerService) Configure(cfg *config.Config) {
 }
 
 // RegisterLayouts replaces layout paths for contentType with paths relative to files.
+// With no names, it clears the paths for contentType.
 func (c *ContentManagerService) RegisterLayouts(contentType string, files fs.FS, names ...string) {
 	c.Layouts[contentType] = nil
-	c.AddLayouts(contentType, files, names...)
+	c.AddLayout(contentType, files, names...)
 }
 
 // RegisterContents replaces content paths for contentType with paths relative to files.
+// With no names, it clears the paths for contentType.
 func (c *ContentManagerService) RegisterContents(contentType string, files fs.FS, names ...string) {
 	c.Contents[contentType] = nil
-	c.AddContents(contentType, files, names...)
+	c.AddContent(contentType, files, names...)
 }
 
 // RegisterComponents replaces component paths for contentType with paths relative to files.
+// With no names, it clears the paths for contentType.
 func (c *ContentManagerService) RegisterComponents(contentType string, files fs.FS, names ...string) {
 	c.Components[contentType] = nil
-	c.AddComponents(contentType, files, names...)
+	c.AddComponent(contentType, files, names...)
 }
 
-// AddLayout appends a layout path relative to files for contentType.
-func (c *ContentManagerService) AddLayout(contentType string, files fs.FS, name string) {
-	c.Layouts[contentType] = append(c.Layouts[contentType], TemplatePath{FS: files, Path: name})
-}
-
-// AddLayouts appends layout paths relative to files for contentType, in order.
-func (c *ContentManagerService) AddLayouts(contentType string, files fs.FS, names ...string) {
+// AddLayout appends layout paths relative to files for contentType, in order.
+// With no names, it leaves the paths unchanged.
+func (c *ContentManagerService) AddLayout(contentType string, files fs.FS, names ...string) {
 	for _, name := range names {
-		c.AddLayout(contentType, files, name)
+		c.Layouts[contentType] = append(c.Layouts[contentType], TemplatePath{FS: files, Path: name})
 	}
 }
 
-// AddContent appends a content path relative to files for contentType.
-func (c *ContentManagerService) AddContent(contentType string, files fs.FS, name string) {
-	c.Contents[contentType] = append(c.Contents[contentType], TemplatePath{FS: files, Path: name})
-}
-
-// AddContents appends content paths relative to files for contentType, in order.
-func (c *ContentManagerService) AddContents(contentType string, files fs.FS, names ...string) {
+// AddContent appends content paths relative to files for contentType, in order.
+// With no names, it leaves the paths unchanged.
+func (c *ContentManagerService) AddContent(contentType string, files fs.FS, names ...string) {
 	for _, name := range names {
-		c.AddContent(contentType, files, name)
+		c.Contents[contentType] = append(c.Contents[contentType], TemplatePath{FS: files, Path: name})
 	}
 }
 
-// AddComponent appends a component path relative to files for contentType.
-func (c *ContentManagerService) AddComponent(contentType string, files fs.FS, name string) {
-	c.Components[contentType] = append(c.Components[contentType], TemplatePath{FS: files, Path: name})
-}
-
-// AddComponents appends component paths relative to files for contentType, in order.
-func (c *ContentManagerService) AddComponents(contentType string, files fs.FS, names ...string) {
+// AddComponent appends component paths relative to files for contentType, in order.
+// With no names, it leaves the paths unchanged.
+func (c *ContentManagerService) AddComponent(contentType string, files fs.FS, names ...string) {
 	for _, name := range names {
-		c.AddComponent(contentType, files, name)
+		c.Components[contentType] = append(c.Components[contentType], TemplatePath{FS: files, Path: name})
 	}
 }
 
-// AddPageLayout appends a layout path relative to files for PageType responses.
-func (c *ContentManagerService) AddPageLayout(files fs.FS, name string) {
-	c.AddLayout(PageType, files, name)
+// AddPageLayout appends layout paths relative to files for PageType responses, in order.
+func (c *ContentManagerService) AddPageLayout(files fs.FS, names ...string) {
+	c.AddLayout(PageType, files, names...)
 }
 
-// AddPageLayouts appends layout paths relative to files for PageType responses, in order.
-func (c *ContentManagerService) AddPageLayouts(files fs.FS, names ...string) {
-	c.AddLayouts(PageType, files, names...)
+// AddHtmxLayout appends layout paths relative to files for HtmxType responses, in order.
+func (c *ContentManagerService) AddHtmxLayout(files fs.FS, names ...string) {
+	c.AddLayout(HtmxType, files, names...)
 }
 
-// AddHtmxLayout appends a layout path relative to files for HtmxType responses.
-func (c *ContentManagerService) AddHtmxLayout(files fs.FS, name string) {
-	c.AddLayout(HtmxType, files, name)
+// AddPageContent appends content paths relative to files for PageType responses, in order.
+func (c *ContentManagerService) AddPageContent(files fs.FS, names ...string) {
+	c.AddContent(PageType, files, names...)
 }
 
-// AddHtmxLayouts appends layout paths relative to files for HtmxType responses, in order.
-func (c *ContentManagerService) AddHtmxLayouts(files fs.FS, names ...string) {
-	c.AddLayouts(HtmxType, files, names...)
+// AddHtmxContent appends content paths relative to files for HtmxType responses, in order.
+func (c *ContentManagerService) AddHtmxContent(files fs.FS, names ...string) {
+	c.AddContent(HtmxType, files, names...)
 }
 
-// AddPageContent appends a content path relative to files for PageType responses.
-func (c *ContentManagerService) AddPageContent(files fs.FS, name string) {
-	c.AddContent(PageType, files, name)
+// AddPageComponent appends component paths relative to files for PageType responses, in order.
+func (c *ContentManagerService) AddPageComponent(files fs.FS, names ...string) {
+	c.AddComponent(PageType, files, names...)
 }
 
-// AddPageContents appends content paths relative to files for PageType responses, in order.
-func (c *ContentManagerService) AddPageContents(files fs.FS, names ...string) {
-	c.AddContents(PageType, files, names...)
-}
-
-// AddHtmxContent appends a content path relative to files for HtmxType responses.
-func (c *ContentManagerService) AddHtmxContent(files fs.FS, name string) {
-	c.AddContent(HtmxType, files, name)
-}
-
-// AddHtmxContents appends content paths relative to files for HtmxType responses, in order.
-func (c *ContentManagerService) AddHtmxContents(files fs.FS, names ...string) {
-	c.AddContents(HtmxType, files, names...)
-}
-
-// AddPageComponent appends a component path relative to files for PageType responses.
-func (c *ContentManagerService) AddPageComponent(files fs.FS, name string) {
-	c.AddComponent(PageType, files, name)
-}
-
-// AddPageComponents appends component paths relative to files for PageType responses, in order.
-func (c *ContentManagerService) AddPageComponents(files fs.FS, names ...string) {
-	c.AddComponents(PageType, files, names...)
-}
-
-// AddHtmxComponent appends a component path relative to files for HtmxType responses.
-func (c *ContentManagerService) AddHtmxComponent(files fs.FS, name string) {
-	c.AddComponent(HtmxType, files, name)
-}
-
-// AddHtmxComponents appends component paths relative to files for HtmxType responses, in order.
-func (c *ContentManagerService) AddHtmxComponents(files fs.FS, names ...string) {
-	c.AddComponents(HtmxType, files, names...)
+// AddHtmxComponent appends component paths relative to files for HtmxType responses, in order.
+func (c *ContentManagerService) AddHtmxComponent(files fs.FS, names ...string) {
+	c.AddComponent(HtmxType, files, names...)
 }

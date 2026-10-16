@@ -11,38 +11,40 @@ func TestManagerAddsTemplatePaths(t *testing.T) {
 	first := fstest.MapFS{"first.html": {Data: []byte("first")}}
 	second := fstest.MapFS{"second.html": {Data: []byte("second")}}
 	for _, tc := range []struct {
-		name    string
-		kind    string
-		add     func(*ContentManagerService, fs.FS, string)
-		addMany func(*ContentManagerService, fs.FS, ...string)
-		paths   func(*ContentManagerService) map[string][]TemplatePath
+		name  string
+		kind  string
+		add   func(*ContentManagerService, fs.FS, ...string)
+		paths func(*ContentManagerService) map[string][]TemplatePath
 	}{
 		{"custom layouts", "custom",
-			func(c *ContentManagerService, files fs.FS, name string) { c.AddLayout("custom", files, name) },
-			func(c *ContentManagerService, files fs.FS, names ...string) { c.AddLayouts("custom", files, names...) },
+			func(c *ContentManagerService, files fs.FS, names ...string) { c.AddLayout("custom", files, names...) },
 			func(c *ContentManagerService) map[string][]TemplatePath { return c.Layouts }},
-		{"page layouts", PageType, (*ContentManagerService).AddPageLayout, (*ContentManagerService).AddPageLayouts, func(c *ContentManagerService) map[string][]TemplatePath { return c.Layouts }},
-		{"htmx layouts", HtmxType, (*ContentManagerService).AddHtmxLayout, (*ContentManagerService).AddHtmxLayouts, func(c *ContentManagerService) map[string][]TemplatePath { return c.Layouts }},
+		{"page layouts", PageType, (*ContentManagerService).AddPageLayout, func(c *ContentManagerService) map[string][]TemplatePath { return c.Layouts }},
+		{"htmx layouts", HtmxType, (*ContentManagerService).AddHtmxLayout, func(c *ContentManagerService) map[string][]TemplatePath { return c.Layouts }},
 		{"custom contents", "custom",
-			func(c *ContentManagerService, files fs.FS, name string) { c.AddContent("custom", files, name) },
-			func(c *ContentManagerService, files fs.FS, names ...string) { c.AddContents("custom", files, names...) },
+			func(c *ContentManagerService, files fs.FS, names ...string) { c.AddContent("custom", files, names...) },
 			func(c *ContentManagerService) map[string][]TemplatePath { return c.Contents }},
-		{"page contents", PageType, (*ContentManagerService).AddPageContent, (*ContentManagerService).AddPageContents, func(c *ContentManagerService) map[string][]TemplatePath { return c.Contents }},
-		{"htmx contents", HtmxType, (*ContentManagerService).AddHtmxContent, (*ContentManagerService).AddHtmxContents, func(c *ContentManagerService) map[string][]TemplatePath { return c.Contents }},
+		{"page contents", PageType, (*ContentManagerService).AddPageContent, func(c *ContentManagerService) map[string][]TemplatePath { return c.Contents }},
+		{"htmx contents", HtmxType, (*ContentManagerService).AddHtmxContent, func(c *ContentManagerService) map[string][]TemplatePath { return c.Contents }},
 		{"custom components", "custom",
-			func(c *ContentManagerService, files fs.FS, name string) { c.AddComponent("custom", files, name) },
 			func(c *ContentManagerService, files fs.FS, names ...string) {
-				c.AddComponents("custom", files, names...)
+				c.AddComponent("custom", files, names...)
 			},
 			func(c *ContentManagerService) map[string][]TemplatePath { return c.Components }},
-		{"page components", PageType, (*ContentManagerService).AddPageComponent, (*ContentManagerService).AddPageComponents, func(c *ContentManagerService) map[string][]TemplatePath { return c.Components }},
-		{"htmx components", HtmxType, (*ContentManagerService).AddHtmxComponent, (*ContentManagerService).AddHtmxComponents, func(c *ContentManagerService) map[string][]TemplatePath { return c.Components }},
+		{"page components", PageType, (*ContentManagerService).AddPageComponent, func(c *ContentManagerService) map[string][]TemplatePath { return c.Components }},
+		{"htmx components", HtmxType, (*ContentManagerService).AddHtmxComponent, func(c *ContentManagerService) map[string][]TemplatePath { return c.Components }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cm := NewContentManager()
+			tc.add(cm, first)
+			if len(tc.paths(cm)) != 0 {
+				t.Fatal("adding no names created a response-type entry")
+			}
 			tc.add(cm, first, "first.html")
-			tc.addMany(cm, second, "second.html", "third.html")
-			tc.addMany(cm, first)
+			names := []string{"second.html", "third.html"}
+			tc.add(cm, second, names...)
+			names[0] = "changed.html"
+			tc.add(cm, first)
 			want := map[string][]TemplatePath{tc.kind: {
 				{FS: first, Path: "first.html"},
 				{FS: second, Path: "second.html"},

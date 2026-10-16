@@ -15,20 +15,25 @@ func TestAddTemplatePaths(t *testing.T) {
 	first := fstest.MapFS{"first.html": {Data: []byte("first")}}
 	second := fstest.MapFS{"second.html": {Data: []byte("second")}}
 	for _, tc := range []struct {
-		name    string
-		add     func(*Content, fs.FS, string)
-		addMany func(*Content, fs.FS, ...string)
-		paths   func(*Content) []TemplatePath
+		name  string
+		add   func(*Content, fs.FS, ...string)
+		paths func(*Content) []TemplatePath
 	}{
-		{"layouts", (*Content).AddLayout, (*Content).AddLayouts, func(c *Content) []TemplatePath { return c.Layouts }},
-		{"contents", (*Content).AddContent, (*Content).AddContents, func(c *Content) []TemplatePath { return c.Contents }},
-		{"components", (*Content).AddComponent, (*Content).AddComponents, func(c *Content) []TemplatePath { return c.Components }},
+		{"layouts", (*Content).AddLayout, func(c *Content) []TemplatePath { return c.Layouts }},
+		{"contents", (*Content).AddContent, func(c *Content) []TemplatePath { return c.Contents }},
+		{"components", (*Content).AddComponent, func(c *Content) []TemplatePath { return c.Components }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := NewContent(nil)
+			tc.add(c, first)
+			if len(tc.paths(c)) != 0 {
+				t.Fatal("adding no names created template paths")
+			}
 			tc.add(c, first, "first.html")
-			tc.addMany(c, second, "second.html", "third.html")
-			tc.addMany(c, first)
+			names := []string{"second.html", "third.html"}
+			tc.add(c, second, names...)
+			names[0] = "changed.html"
+			tc.add(c, first)
 			want := []TemplatePath{
 				{FS: first, Path: "first.html"},
 				{FS: second, Path: "second.html"},
@@ -54,10 +59,10 @@ func TestRenderRegisteredFilesystems(t *testing.T) {
 		"footer.html": {Data: []byte("{{define \"footer\"}}<footer>Site</footer>{{end}}")},
 	}
 	cm := contentservice.NewContentManager()
-	cm.AddPageLayouts(layouts, "page.html")
-	cm.AddHtmxLayouts(layouts, "fragment.html")
-	cm.AddPageComponents(components, "footer.html")
-	cm.AddHtmxComponents(components, "footer.html")
+	cm.AddPageLayout(layouts, "page.html")
+	cm.AddHtmxLayout(layouts, "fragment.html")
+	cm.AddPageComponent(components, "footer.html")
+	cm.AddHtmxComponent(components, "footer.html")
 
 	for _, htmx := range []bool{false, true} {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -65,7 +70,7 @@ func TestRenderRegisteredFilesystems(t *testing.T) {
 			r.Header.Set("HX-Request", "true")
 		}
 		page := NewManagedContent(r, cm)
-		page.AddContents(pages, "body.html", "heading.html")
+		page.AddContent(pages, "body.html", "heading.html")
 		page.Data = "<unsafe>"
 		w := httptest.NewRecorder()
 		if err := page.Render(w, r); err != nil {

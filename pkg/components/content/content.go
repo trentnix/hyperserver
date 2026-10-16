@@ -135,39 +135,27 @@ func (c *Content) IsHtmx() bool {
 	return c.HTMX.Request.Enabled && !c.HTMX.Request.HistoryRestore
 }
 
-// AddLayout appends a layout path relative to files.
-func (c *Content) AddLayout(files fs.FS, name string) {
-	c.Layouts = append(c.Layouts, TemplatePath{FS: files, Path: name})
-}
-
-// AddLayouts appends layout paths relative to files, in order.
-func (c *Content) AddLayouts(files fs.FS, names ...string) {
+// AddLayout appends layout paths relative to files, in order.
+// With no names, it leaves the paths unchanged.
+func (c *Content) AddLayout(files fs.FS, names ...string) {
 	for _, name := range names {
-		c.AddLayout(files, name)
+		c.Layouts = append(c.Layouts, TemplatePath{FS: files, Path: name})
 	}
 }
 
-// AddContent appends a content path relative to files.
-func (c *Content) AddContent(files fs.FS, name string) {
-	c.Contents = append(c.Contents, TemplatePath{FS: files, Path: name})
-}
-
-// AddContents appends content paths relative to files, in order.
-func (c *Content) AddContents(files fs.FS, names ...string) {
+// AddContent appends content paths relative to files, in order.
+// With no names, it leaves the paths unchanged.
+func (c *Content) AddContent(files fs.FS, names ...string) {
 	for _, name := range names {
-		c.AddContent(files, name)
+		c.Contents = append(c.Contents, TemplatePath{FS: files, Path: name})
 	}
 }
 
-// AddComponent appends a component path relative to files.
-func (c *Content) AddComponent(files fs.FS, name string) {
-	c.Components = append(c.Components, TemplatePath{FS: files, Path: name})
-}
-
-// AddComponents appends component paths relative to files, in order.
-func (c *Content) AddComponents(files fs.FS, names ...string) {
+// AddComponent appends component paths relative to files, in order.
+// With no names, it leaves the paths unchanged.
+func (c *Content) AddComponent(files fs.FS, names ...string) {
 	for _, name := range names {
-		c.AddComponent(files, name)
+		c.Components = append(c.Components, TemplatePath{FS: files, Path: name})
 	}
 }
 

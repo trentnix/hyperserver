@@ -152,7 +152,7 @@ Rendering accepts explicit filesystems. A layout and its page content can come f
 
 ```go
 page.AddLayout(layoutFiles, "layouts/page.html")
-page.AddContents(templateFiles, "pages/home.html", "partials/banner.html")
+page.AddContent(templateFiles, "pages/home.html", "partials/banner.html")
 ```
 
 Paths use forward slashes and are relative to the supplied filesystem. Missing files and invalid paths return rendering errors. The email provider accepts a `TemplateFS` override before initialization, with the same paths as its bundled `templates` directory.
