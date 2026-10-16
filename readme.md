@@ -299,4 +299,8 @@ go test -race ./...
 
 ## Feedback
 
-Email design feedback and private security reports to trentnix at gmail.com. Do not include credentials, personal data, or exploit details in public issues.
+Email design feedback to [trentnix@gmail.com](mailto:trentnix@gmail.com). For vulnerabilities, follow the [security-reporting policy](SECURITY.md).
+
+## License
+
+HyperServer is available under the [MIT License](LICENSE), copyright Trent Nix. Third-party components retain their own licenses.

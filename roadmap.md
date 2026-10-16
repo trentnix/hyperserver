@@ -121,7 +121,6 @@ Validate the configuration being deployed. Unused adapters and caches must not b
 - Build an application outside this repository using documented setup and self-registering modules. Demonstrate a persistent feature with full-page and HTMX success and failure paths, without copying reference-application infrastructure.
 - Use that application to test provider and serializer replacement, isolation, and cleanup ownership. Fix demonstrated coupling without adding speculative abstractions.
 - Document extension contracts and runnable examples. Stabilize interfaces only after real usage, with explicit compatibility and deprecation policies.
-- Choose a license and publish a security-reporting policy before inviting adoption. The maintainer must choose the license.
 
 ## Scope limits and deferred decisions
 
