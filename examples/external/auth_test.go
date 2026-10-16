@@ -186,7 +186,7 @@ func TestAuthenticationWorkflow(t *testing.T) {
 			}
 			jar.SetCookies(base, []*http.Cookie{{Name: "auth-user-session", Path: "/", MaxAge: -1}})
 			_, body = request("GET", "/notes", "", "")
-			if strings.Count(body, "<li>") != 1 {
+			if strings.Count(body, `<li class="note-card">`) != 1 {
 				t.Fatal("unauthorized request changed notes", body)
 			}
 			response, _ = request("POST", "/auth/register/email", credentials, srv.URL)

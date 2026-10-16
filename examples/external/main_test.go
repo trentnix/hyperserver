@@ -103,6 +103,13 @@ func TestExternalApplication(t *testing.T) {
 					if full := strings.Contains(text, "<!doctype html>"); full != (!variant.hx || variant.history) {
 						t.Fatal("wrong response representation")
 					}
+					if styled := strings.Contains(text, `href="/assets/app.css"`); styled != (!variant.hx || variant.history) {
+						t.Fatal("stylesheet must appear only in full-page responses")
+					}
+					policy := response.Header.Get("Content-Security-Policy")
+					if !strings.Contains(policy, "style-src 'self'") || strings.Contains(policy, "unsafe-inline") {
+						t.Fatalf("unexpected stylesheet policy: %s", policy)
+					}
 					if response.Header.Get("Cache-Control") != "no-store" || !strings.Contains(response.Header.Get("Vary"), "HX-Request") {
 						t.Fatal("missing cache policy")
 					}
@@ -114,6 +121,33 @@ func TestExternalApplication(t *testing.T) {
 					t.Fatal("invalid input produced a greeting")
 				}
 			})
+		}
+	}
+	for _, method := range []string{"GET", "HEAD", "POST"} {
+		r, err := http.NewRequestWithContext(t.Context(), method, "http://"+listener.Addr().String()+"/assets/app.css", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if method == "POST" {
+			if response.StatusCode != http.StatusMethodNotAllowed {
+				t.Fatalf("stylesheet POST status = %d", response.StatusCode)
+			}
+			continue
+		}
+		if response.StatusCode != http.StatusOK || !strings.HasPrefix(response.Header.Get("Content-Type"), "text/css") {
+			t.Fatalf("stylesheet %s: status=%d type=%s", method, response.StatusCode, response.Header.Get("Content-Type"))
+		}
+		if method == "GET" && !strings.Contains(string(body), ".note-card") || method == "HEAD" && len(body) != 0 {
+			t.Fatalf("unexpected stylesheet %s body", method)
 		}
 	}
 	entries, err := os.ReadDir(directory)

@@ -1,5 +1,10 @@
 {{define "greeting.form"}}
 <section id="greeting">
+  <header class="page-heading">
+    <p class="eyebrow">A simple hello</p>
+    <h1>Good to see you.</h1>
+    <p>Try a small form, then make yourself at home in the notebook.</p>
+  </header>
   <form method="get" action="/">
     <label for="name">Your name</label>
     <input id="name" name="name" value="{{.Data.Name}}" required>

@@ -3,12 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Site}}</title>
+  <title>Notes · HyperServer example</title>
+  <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body><main><h1>{{.Site}}</h1>
-<nav><a href="/">Greeting</a> <a href="/notes">Notes</a>
-{{if .LayoutData}}<form method="post" action="/auth/logout"><button type="submit">Log out</button></form>
-{{else}}<a href="/auth/login/email">Log in</a>{{end}}</nav>
-{{range .Notifications}}<p role="status">{{.Message}}</p>{{end}}
-{{renderPartial .PartialName .}}</main></body>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/notes">Notes<span>A HyperServer example</span></a>
+    <nav aria-label="Main navigation">
+      <a href="/notes">Notebook</a>
+      <a href="/">Greeting</a>
+      {{if .LayoutData.SignedIn}}
+      {{if .LayoutData.NeedsVerification}}<a href="/auth/request/verify">Verify email</a>{{end}}
+      <form method="post" action="/auth/logout"><button class="nav-button" type="submit">Log out</button></form>
+      {{else}}
+      <a href="/auth/login/email">Log in</a>
+      {{if .LayoutData.RegistrationEnabled}}<a class="nav-button" href="/auth/register/email">Register</a>{{end}}
+      {{end}}
+    </nav>
+  </header>
+  <main id="main">
+    {{range .Notifications}}<p class="notice" role="status">{{.Message}}</p>{{end}}
+    {{renderPartial .PartialName .}}
+  </main>
+  <footer class="site-footer">Built with HyperServer. A small example, with room for your ideas.</footer>
+</body>
 </html>

@@ -128,7 +128,7 @@ func TestNotesWorkflow(t *testing.T) {
 			}
 			defer response.Body.Close()
 			body, err := io.ReadAll(response.Body)
-			if err != nil || response.StatusCode != 200 || strings.Count(string(body), "<li>") != 3 {
+			if err != nil || response.StatusCode != 200 || strings.Count(string(body), `<li class="note-card">`) != 3 {
 				t.Fatalf("persisted list = %s, %v", body, err)
 			}
 		})
@@ -155,7 +155,7 @@ func TestNotesStorageFailures(t *testing.T) {
 	if err := greeting.ConfigureRendering(app.ContentManager); err != nil {
 		t.Fatal(err)
 	}
-	app.ContentManager.BuildLayoutData = func(*http.Request) any { return true }
+	app.ContentManager.BuildLayoutData = func(*http.Request) any { return layoutData{SignedIn: true, CanWrite: true} }
 	allow := func(next http.Handler) http.Handler { return next }
 	if err := handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{notes.Module(repository, allow)}, nil); err != nil {
 		t.Fatal(err)

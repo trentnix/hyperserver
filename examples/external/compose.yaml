@@ -1,0 +1,21 @@
+name: hyperserver-external
+
+services:
+  mailpit:
+    # Same pinned image as the local deployment rehearsal. Captures mail only.
+    image: axllent/mailpit@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
+    ports:
+      - "127.0.0.1:11025:1025"
+      - "127.0.0.1:18026:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+      MP_MAX_MESSAGES: "100"
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_ALLOWED_HOSTS: localhost,127.0.0.1
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    mem_limit: 128m
+    pids_limit: 64

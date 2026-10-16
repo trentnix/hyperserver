@@ -33,21 +33,35 @@ type application struct {
 	sessions *session.SessionManager
 }
 
+type layoutData struct {
+	SignedIn, CanWrite, NeedsVerification, RegistrationEnabled bool
+}
+
 func main() {
 	port := flag.Int("port", 8083, "loopback HTTP port (0 chooses an available port)")
 	provider := flag.String("notes-store", "files", "notes storage provider: files or sqlite")
 	path := flag.String("notes-path", "", "notes storage location (defaults depend on provider)")
 	accountsPath := flag.String("accounts-path", "accounts.db", "account and session SQLite database")
 	provision := flag.Bool("create-user", false, "create an account from EXAMPLE_USER_EMAIL and EXAMPLE_USER_PASSWORD, then exit")
+	registration := flag.Bool("registration", false, "enable registration with required email verification")
+	publicOrigin := flag.String("public-origin", "", "origin for email links (defaults to the loopback HTTP address)")
+	smtpPort := flag.Int("smtp-port", 11025, "local Mailpit SMTP port (0 disables delivery)")
 	flag.Parse()
 	if *port < 0 || *port > 65535 {
 		log.Fatal("port must be between 0 and 65535")
+	}
+	if *smtpPort < 0 || *smtpPort > 65535 {
+		log.Fatal("smtp-port must be between 0 and 65535")
+	}
+	if *publicOrigin == "" && *port != 0 {
+		*publicOrigin = fmt.Sprintf("http://127.0.0.1:%d", *port)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	app, err := newApplication(ctx, settings{
 		notesStore: *provider, notesPath: *path, accountsPath: *accountsPath,
 		sessionKey: os.Getenv("EXAMPLE_SESSION_KEY"), authKey: os.Getenv("EXAMPLE_AUTH_KEY"),
+		registration: *registration, publicOrigin: *publicOrigin, smtpPort: uint16(*smtpPort),
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -99,13 +113,25 @@ func newApplication(ctx context.Context, s settings) (*application, error) {
 	app.ContentManager.AuthURL = "/auth/login/email"
 	app.ContentManager.HomeURL = "/notes"
 	app.ContentManager.LoadNotifications = flash.LoadNotifications
-	app.ContentManager.BuildLayoutData = func(r *http.Request) any { return user.GetUserFromContext(r.Context()) != nil }
+	app.ContentManager.BuildLayoutData = func(r *http.Request) any {
+		data := layoutData{RegistrationEnabled: s.registration}
+		if u := user.GetUserFromContext(r.Context()); u != nil {
+			data.SignedIn = true
+			data.NeedsVerification = u.NeedsVerification()
+			data.CanWrite = !data.NeedsVerification
+		}
+		return data
+	}
 	protect := authmiddleware.RequireAuthentication(app.accounts, app.ContentManager)
 	catalog, err := handlers.Replace(handlers.Registered(), notes.Module(repository, protect))
 	if err != nil {
 		return nil, errors.Join(err, app.Shutdown())
 	}
-	providers := []auth.Descriptor{emailauth.Provider(app.accounts, app.sessions, nil)}
+	mail, err := configureMail(s)
+	if err != nil {
+		return nil, errors.Join(err, app.Shutdown())
+	}
+	providers := []auth.Descriptor{emailauth.Provider(app.accounts, app.sessions, mail)}
 	catalog, err = handlers.Replace(catalog, auth.Module(app.accounts, app.sessions, providers))
 	if err != nil {
 		return nil, errors.Join(err, app.Shutdown())
@@ -119,7 +145,7 @@ func newApplication(ctx context.Context, s settings) (*application, error) {
 func newHTTPServer(app *application) *http.Server {
 	handler := authmiddleware.LoadSessionManagement(app.accounts, app.sessions)(app.Web)
 	return &http.Server{
-		Handler:           middleware.SecurityHeaders("default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")(http.NewCrossOriginProtection().Handler(handler)),
+		Handler:           middleware.SecurityHeaders("default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")(http.NewCrossOriginProtection().Handler(handler)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

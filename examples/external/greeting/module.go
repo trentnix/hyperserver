@@ -15,7 +15,7 @@ import (
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
-//go:embed templates/*.html
+//go:embed templates/*.html static/*.css
 var greetingModuleTemplatesFS embed.FS
 
 func init() {
@@ -48,6 +48,9 @@ func ConfigureRendering(cm *contentservice.ContentManagerService) error {
 
 func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /{$}", m.greet)
+	routes.HandleFunc("GET /assets/app.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFileFS(w, r, greetingModuleTemplatesFS, "static/app.css")
+	})
 	return routes.Err()
 }
 

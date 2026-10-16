@@ -11,6 +11,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	databasesqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	sessionsqlite "github.com/trentnix/hyperserver/pkg/services/session/sqlite"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -21,9 +22,17 @@ type settings struct {
 	notesStore, notesPath string
 	accountsPath          string
 	sessionKey, authKey   string
+	registration          bool
+	publicOrigin          string
+	smtpPort              uint16
+	// A supplied sender replaces SMTP without changing authentication handlers.
+	mailSender messaging.MailSender
 }
 
 func (s settings) config() (config.Config, error) {
+	if s.registration && s.publicOrigin == "" {
+		return config.Config{}, errors.New("registration requires a public origin for verification links")
+	}
 	if s.accountsPath == "" {
 		return config.Config{}, errors.New("accounts database path is required")
 	}
@@ -37,9 +46,11 @@ func (s settings) config() (config.Config, error) {
 		return config.Config{}, errors.New("account and session signing keys must differ")
 	}
 	cfg := config.Config{
-		App: config.AppConfig{Name: "External example"},
+		App:  config.AppConfig{Name: "External example"},
+		HTTP: config.HTTPConfig{PublicOrigin: s.publicOrigin},
 		Auth: config.AuthConfig{
 			Enabled: true, JwtKey: s.authKey,
+			RegistrationEnabled: s.registration, RegisterRequiresVerification: s.registration,
 			VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
 			Services: map[string]map[string]string{"email": {"enabled": "true"}},
 		},
