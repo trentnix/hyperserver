@@ -6,7 +6,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.52
-	github.com/trentnix/hyperserver v0.0.0-20261016172901-8e237fd58b32
+	github.com/trentnix/hyperserver v0.0.0-20261016224133-81a3ca098952
 )
 
 require (
