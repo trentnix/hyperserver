@@ -93,10 +93,11 @@ The retained per-render path measured 13,042 ns/op for pages and 11,505 ns/op fo
 
 ### Content Manager Service
 
-The `ContentManagerService` is a service managing global template paths and application URLs.
+`ContentManagerService` holds shared template paths and response settings for one application.
 
-- Layouts, Contents, Components can be globally managed.
-- Provides default URL paths (HomeURL, AuthURL, ErrorURL) configurable as needed.
+- Configure shared `Layouts`, `Contents`, and `Components`.
+- Set `HomeURL` and `AuthURL` for home and login redirects.
+- Supply `HandleMessage`, `HandleError`, and `HandleNotFound` to render those responses directly.
 
 The ApplicationServer structure has a `ContentManagerService` named `ContentManager` or you can create your own *ContentManager* via *content.NewContentManager*.
 
@@ -124,20 +125,21 @@ cm := content_services.NewContentManager()
 homepage := content.NewManagedContent(r /* *http.Request */, cm)
 ```
 
-*ContentManagerService* also stores URLs for commonly used paths such as the home page (*HomeURL*), login page (*AuthURL*), and error page (*ErrorURL*). These values can be changed from the defaults by your module and then the application can use your custom URLs for redirection. Methods for replacing the template paths in a *ContentManagerService* or adding to the existing paths are available.
-
-*ContentManagerService* can also store the application name and a title value to be used, and it also contains an *ErrorHandler** function variable that allows you to override default ErrorHandler behavior.
-
-See below for an example configuring a ContentManagerService` instance:
+Configure response callbacks during application setup. Callbacks do not register routes. `AppName` and `AppTitle` supply template values. For example, this setup uses plain-text response handlers:
 
 ```go
-import content_services "github.com/trentnix/hyperserver/pkg/services/content"
+import (
+  "net/http"
+
+  content_services "github.com/trentnix/hyperserver/pkg/services/content"
+  "github.com/trentnix/hyperserver/pkg/util"
+)
 
 /* ... */
 
 cm := content_services.NewContentManager()
 cm.AddPageLayout(templateFiles, "templates/some-layout.html")
-cm.AddPageComponent(templateFiles, "templates/componenents/some-component.html")
+cm.AddPageComponent(templateFiles, "templates/components/some-component.html")
 
 cm.HomeURL = homeURL
 cm.AuthURL = authURL
@@ -145,12 +147,9 @@ cm.AuthURL = authURL
 cm.AppName = "My Company"
 cm.AppTitle = "My Application"
 
-cm.ErrorHandler = m.RedirectToError
-}
-
-func (m *SiteModule) RedirectToError(w http.ResponseWriter, r *http.Request, message string, e error) {
-  // handle redirection
-}
+cm.HandleMessage = util.HttpMessage
+cm.HandleError = util.HttpError
+cm.HandleNotFound = http.NotFound
 ```
 
 Templates can be selectively added to be rendered with standard responses, HTMX response, or both:

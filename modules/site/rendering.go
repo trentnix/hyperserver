@@ -29,8 +29,6 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, authEnabled bo
 
 		cm.HomeURL = homeURL
 		cm.AuthURL = authURL
-		cm.ErrorURL = errorURL
-		cm.NotFoundURL = notFoundURL
 		renderer := &pageRenderer{contentManager: cm}
 		cm.PrepareTemplates = renderer.prepareTemplates
 		cm.HandleMessage = renderer.HandleMessage

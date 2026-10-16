@@ -31,7 +31,7 @@ func TestSiteInitializationPreservesRenderingOverrides(t *testing.T) {
 		cm.RegisterLayouts(contentservice.PageType, files, "custom.html")
 		cm.RegisterLayouts(contentservice.HtmxType, files, "custom.html")
 		cm.RegisterComponents(contentservice.PageType, files, "custom.html")
-		cm.HomeURL, cm.AuthURL, cm.ErrorURL, cm.NotFoundURL = "/home", "/signin", "/failed", "/missing"
+		cm.HomeURL, cm.AuthURL = "/home", "/signin"
 		cm.BuildLayoutData = func(*http.Request) any { return "custom navigation" }
 		var calls []string
 		cm.HandleMessage = func(http.ResponseWriter, *http.Request, string) { calls = append(calls, "message") }
@@ -47,7 +47,7 @@ func TestSiteInitializationPreservesRenderingOverrides(t *testing.T) {
 		if err := module.Init(t.Context(), app); err != nil {
 			t.Fatal(err)
 		}
-		if cm.HomeURL != "/home" || cm.AuthURL != "/signin" || cm.ErrorURL != "/failed" || cm.NotFoundURL != "/missing" {
+		if cm.HomeURL != "/home" || cm.AuthURL != "/signin" {
 			t.Fatal("initialization changed redirect URLs")
 		}
 		want := []contentservice.TemplatePath{{FS: files, Path: "custom.html"}}
@@ -78,10 +78,39 @@ func TestSiteRenderingDoesNotNeedAnInitializedModule(t *testing.T) {
 	if err := cm.PrepareTemplates(); err != nil {
 		t.Fatal(err)
 	}
-	w := httptest.NewRecorder()
-	cm.HandleError(w, httptest.NewRequest(http.MethodGet, "/", nil), "public failure", nil, http.StatusServiceUnavailable)
-	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "public failure") {
-		t.Fatalf("shared error response: %d %s", w.Code, w.Body.String())
+	for _, tc := range []struct {
+		name    string
+		handler http.HandlerFunc
+		status  int
+		message string
+	}{
+		{"message", func(w http.ResponseWriter, r *http.Request) {
+			cm.HandleMessage(w, r, "public message")
+		}, http.StatusOK, "public message"},
+		{"error", func(w http.ResponseWriter, r *http.Request) {
+			cm.HandleError(w, r, "public failure", nil, http.StatusServiceUnavailable)
+		}, http.StatusServiceUnavailable, "public failure"},
+		{"not-found", cm.HandleNotFound, http.StatusNotFound, "The resource you requested was not found: /missing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, htmx := range []bool{false, true} {
+				w := httptest.NewRecorder()
+				r := httptest.NewRequest(http.MethodGet, "/missing", nil)
+				if htmx {
+					r.Header.Set("HX-Request", "true")
+				}
+				tc.handler(w, r)
+				if w.Code != tc.status || !strings.Contains(w.Body.String(), tc.message) {
+					t.Fatalf("htmx=%t: status=%d body=%s", htmx, w.Code, w.Body.String())
+				}
+				if strings.Contains(w.Body.String(), "<!DOCTYPE html>") == htmx {
+					t.Fatalf("htmx=%t: wrong page/fragment response", htmx)
+				}
+				if w.Header().Get("Location") != "" || w.Header().Get("HX-Redirect") != "" {
+					t.Fatalf("response redirected instead of rendering: %v", w.Header())
+				}
+			}
+		})
 	}
 	if cm.LoadNotifications != nil {
 		t.Fatal("site defaults selected notification storage")

@@ -43,12 +43,6 @@ type (
 		HomeURL string
 		// AuthURL is the login-page redirect destination.
 		AuthURL string
-		// MessageURL holds an optional application message-page address.
-		MessageURL string
-		// ErrorURL holds an optional application error-page address.
-		ErrorURL string
-		// NotFoundURL holds an optional application not-found-page address.
-		NotFoundURL string
 
 		// HandleMessage displays plain text. HTML renderers must escape the message.
 		HandleMessage func(w http.ResponseWriter, r *http.Request, message string)
