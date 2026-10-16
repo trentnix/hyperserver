@@ -1,0 +1,96 @@
+{
+  "go_version": "go1.27.2",
+  "goos": "linux",
+  "goarch": "amd64",
+  "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+  "gomaxprocs": 2,
+  "minimum_samples": 5,
+  "max_binary_bytes": 18000000,
+  "benchmarks": {
+    "BenchmarkRenderTemplates/page/per-render": {
+      "ns/op": 19343,
+      "B/op": 24182,
+      "allocs/op": 244
+    },
+    "BenchmarkRenderTemplates/page/prepared": {
+      "ns/op": 2690,
+      "B/op": 1400,
+      "allocs/op": 39
+    },
+    "BenchmarkRenderTemplates/fragment/per-render": {
+      "ns/op": 16497,
+      "B/op": 22692,
+      "allocs/op": 209
+    },
+    "BenchmarkRenderTemplates/fragment/prepared": {
+      "ns/op": 1896,
+      "B/op": 1080,
+      "allocs/op": 30
+    },
+    "BenchmarkMiddleware/bare": {
+      "ns/op": 209,
+      "B/op": 900,
+      "allocs/op": 9
+    },
+    "BenchmarkMiddleware/security-and-logging": {
+      "ns/op": 2625,
+      "B/op": 3780,
+      "allocs/op": 50
+    },
+    "BenchmarkSession/cookie/get": {
+      "ns/op": 10919,
+      "B/op": 11748,
+      "allocs/op": 97
+    },
+    "BenchmarkSession/cookie/repeated-get": {
+      "ns/op": 11199,
+      "B/op": 11748,
+      "allocs/op": 97
+    },
+    "BenchmarkSession/cookie/save": {
+      "ns/op": 8720,
+      "B/op": 12654,
+      "allocs/op": 72
+    },
+    "BenchmarkSession/sqlite/get": {
+      "ns/op": 18677,
+      "B/op": 11840,
+      "allocs/op": 152
+    },
+    "BenchmarkSession/sqlite/repeated-get": {
+      "ns/op": 18215,
+      "B/op": 11840,
+      "allocs/op": 152
+    },
+    "BenchmarkSession/sqlite/save": {
+      "ns/op": 19645692,
+      "B/op": 9415,
+      "allocs/op": 97
+    },
+    "BenchmarkReferenceRequest/anonymous-page": {
+      "ns/op": 20487,
+      "B/op": 34654,
+      "allocs/op": 199
+    },
+    "BenchmarkReferenceRequest/anonymous-fragment": {
+      "ns/op": 15392,
+      "B/op": 30684,
+      "allocs/op": 150
+    },
+    "BenchmarkReferenceRequest/authenticated-page": {
+      "ns/op": 49434,
+      "B/op": 40374,
+      "allocs/op": 392
+    },
+    "BenchmarkReferenceRequest/authenticated-fragment": {
+      "ns/op": 45071,
+      "B/op": 36389,
+      "allocs/op": 360
+    },
+    "BenchmarkReferenceLoad": {
+      "ns/op": 29795,
+      "B/op": 35573,
+      "allocs/op": 275
+    }
+  }
+}

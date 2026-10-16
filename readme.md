@@ -141,6 +141,8 @@ The [rendering guide](pkg/components/readme.md) covers pages, fragments, redirec
 
 Rendered responses default to `Cache-Control: no-store` and vary by `HX-Request` and `HX-History-Restore-Request`. Keep that default for personalized or transient content. Public pages can opt into caching with `page.Headers = map[string]string{"Cache-Control": "public, max-age=60"}`. HyperServer does not provide a response cache.
 
+See [performance checks](docs/performance.md) for benchmarks, measured budgets, and the current cache decision.
+
 Redirects accept local paths beginning with a single `/`. Ordinary requests receive 303. HTMX requests receive 200 with `HX-Redirect`. History restoration renders a full page and uses ordinary redirects. The reference site serves [HTMX locally](modules/site/templates/html/js/vendor/htmx/README.md) with script evaluation and local history snapshots disabled.
 
 ### Body and form limits

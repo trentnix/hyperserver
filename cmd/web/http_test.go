@@ -146,7 +146,7 @@ type httpHarness struct {
 	logs    *capturedLogs
 }
 
-func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarness {
+func newHTTPHarness(t testing.TB, configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
 	return newHTTPHarnessWithCatalog(t, nil, configure...)
 }
@@ -163,7 +163,7 @@ func testTemplateFile(t *testing.T, name string) content.TemplatePath {
 	return content.TemplatePath{FS: os.DirFS(filepath.Dir(name)), Path: filepath.Base(name)}
 }
 
-func newHTTPHarnessWithCatalog(t *testing.T, catalogFactory func(*application) ([]handlers.Descriptor, error), configure ...func(*config.Config)) *httpHarness {
+func newHTTPHarnessWithCatalog(t testing.TB, catalogFactory func(*application) ([]handlers.Descriptor, error), configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -1161,7 +1161,7 @@ func (h *httpHarness) assertRowCount(t *testing.T, table string, want int) {
 	}
 }
 
-func (h *httpHarness) seedUser(t *testing.T, email string) *user.User {
+func (h *httpHarness) seedUser(t testing.TB, email string) *user.User {
 	t.Helper()
 	hash, err := password.HashPassword("TestPassword1!")
 	if err != nil {

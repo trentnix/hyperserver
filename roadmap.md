@@ -99,10 +99,10 @@ Work in this order, with security defects taking precedence throughout.
 
 ### 1. Establish performance baselines and add justified caching
 
-- Benchmark rendering, middleware, sessions, and representative requests. Record workload, environment, latency, allocations, and memory. Profile before optimizing.
+- Maintain the [performance baselines and regression checks](docs/performance.md). Measure representative application and deployment workloads before optimizing.
 - Add a bounded in-memory cache and no-op implementation only for demonstrated consumers. Define isolation, freshness, invalidation, concurrent misses, and failure behavior.
 - Test cached reads after mutations and failures, including the deployment's HTTP cache behavior.
-- Measure cache hits, misses, evictions, and errors. Set performance, memory, and build-size budgets from stable baselines and add regression checks.
+- When adding a cache, measure hits, misses, evictions, errors, and resource use against the uncached baseline.
 
 ### 2. Validate deployment and recovery
 

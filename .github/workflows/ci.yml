@@ -66,6 +66,46 @@ jobs:
           GORACE: atexit_sleep_ms=0 # Avoid an exit delay for every test subprocess.
         run: go test -race -count=1 -timeout=10m ./...
 
+  performance:
+    name: Allocation, memory, and build-size budgets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: '1'
+      GOTOOLCHAIN: local
+      GOFLAGS: -mod=readonly
+      GOMAXPROCS: '2'
+      GOGC: '100'
+      GOMEMLIMIT: 'off'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Measure allocations and check budgets
+        run: |
+          mkdir -p tmp/performance
+          {
+            go version
+            go test -run '^$' -bench 'Benchmark(RenderTemplates|Middleware|Session|Reference)' \
+              -benchmem -benchtime=500ms -count=5 \
+              ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./cmd/web
+          } | tee tmp/performance/results.txt
+          go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/web
+          # Shared runners are not a stable environment for latency budgets.
+          go run ./internal/test/perfcheck -results tmp/performance/results.txt -binary tmp/performance/web
+          HS_TEST_PERFORMANCE=1 go test -v -count=5 ./cmd/web -run '^TestReferenceHeapBudget$'
+
   browser:
     name: Firefox browser checks
     # No dependency on the test job: either job must run even if the other fails.

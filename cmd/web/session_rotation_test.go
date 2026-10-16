@@ -18,7 +18,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-func (h *httpHarness) establishSession(t *testing.T, u *user.User) {
+func (h *httpHarness) establishSession(t testing.TB, u *user.User) {
 	t.Helper()
 	r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.SessionManager)
 	w := httptest.NewRecorder()

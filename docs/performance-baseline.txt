@@ -1,0 +1,110 @@
+go version go1.27.2 linux/amd64
+goos: linux
+goarch: amd64
+pkg: github.com/trentnix/hyperserver/pkg/components/content
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor          
+BenchmarkRenderTemplates/page/per-render-2         	   46292	     13196 ns/op	   19346 B/op	     195 allocs/op
+BenchmarkRenderTemplates/page/per-render-2         	   47199	     13130 ns/op	   19345 B/op	     195 allocs/op
+BenchmarkRenderTemplates/page/per-render-2         	   48081	     12583 ns/op	   19345 B/op	     195 allocs/op
+BenchmarkRenderTemplates/page/per-render-2         	   47348	     12692 ns/op	   19345 B/op	     195 allocs/op
+BenchmarkRenderTemplates/page/per-render-2         	   47742	     12895 ns/op	   19345 B/op	     195 allocs/op
+BenchmarkRenderTemplates/page/prepared-2           	  337855	      1793 ns/op	    1120 B/op	      31 allocs/op
+BenchmarkRenderTemplates/page/prepared-2           	  330669	      1798 ns/op	    1120 B/op	      31 allocs/op
+BenchmarkRenderTemplates/page/prepared-2           	  326239	      1767 ns/op	    1120 B/op	      31 allocs/op
+BenchmarkRenderTemplates/page/prepared-2           	  322924	      1773 ns/op	    1120 B/op	      31 allocs/op
+BenchmarkRenderTemplates/page/prepared-2           	  327580	      1795 ns/op	    1120 B/op	      31 allocs/op
+BenchmarkRenderTemplates/fragment/per-render-2     	   53653	     11047 ns/op	   18153 B/op	     167 allocs/op
+BenchmarkRenderTemplates/fragment/per-render-2     	   54636	     10998 ns/op	   18153 B/op	     167 allocs/op
+BenchmarkRenderTemplates/fragment/per-render-2     	   54214	     10992 ns/op	   18153 B/op	     167 allocs/op
+BenchmarkRenderTemplates/fragment/per-render-2     	   54714	     10914 ns/op	   18153 B/op	     167 allocs/op
+BenchmarkRenderTemplates/fragment/per-render-2     	   53784	     11010 ns/op	   18153 B/op	     167 allocs/op
+BenchmarkRenderTemplates/fragment/prepared-2       	  472502	      1257 ns/op	     864 B/op	      24 allocs/op
+BenchmarkRenderTemplates/fragment/prepared-2       	  487864	      1285 ns/op	     864 B/op	      24 allocs/op
+BenchmarkRenderTemplates/fragment/prepared-2       	  469777	      1264 ns/op	     864 B/op	      24 allocs/op
+BenchmarkRenderTemplates/fragment/prepared-2       	  456016	      1273 ns/op	     864 B/op	      24 allocs/op
+BenchmarkRenderTemplates/fragment/prepared-2       	  479820	      1254 ns/op	     864 B/op	      24 allocs/op
+PASS
+ok  	github.com/trentnix/hyperserver/pkg/components/content	11.973s
+goos: linux
+goarch: amd64
+pkg: github.com/trentnix/hyperserver/pkg/services/middleware
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor          
+BenchmarkMiddleware/bare-2         	 3694695	       144.9 ns/op	     720 B/op	       7 allocs/op
+BenchmarkMiddleware/bare-2         	 4450690	       139.4 ns/op	     720 B/op	       7 allocs/op
+BenchmarkMiddleware/bare-2         	 4653428	       138.9 ns/op	     720 B/op	       7 allocs/op
+BenchmarkMiddleware/bare-2         	 4599298	       136.6 ns/op	     720 B/op	       7 allocs/op
+BenchmarkMiddleware/bare-2         	 4243864	       133.1 ns/op	     720 B/op	       7 allocs/op
+BenchmarkMiddleware/security-and-logging-2         	  337339	      1766 ns/op	    3024 B/op	      40 allocs/op
+BenchmarkMiddleware/security-and-logging-2         	  347310	      1738 ns/op	    3024 B/op	      40 allocs/op
+BenchmarkMiddleware/security-and-logging-2         	  316642	      1750 ns/op	    3024 B/op	      40 allocs/op
+BenchmarkMiddleware/security-and-logging-2         	  348349	      1807 ns/op	    3024 B/op	      40 allocs/op
+BenchmarkMiddleware/security-and-logging-2         	  355424	      1742 ns/op	    3024 B/op	      40 allocs/op
+PASS
+ok  	github.com/trentnix/hyperserver/pkg/services/middleware	6.002s
+goos: linux
+goarch: amd64
+pkg: github.com/trentnix/hyperserver/pkg/services/session
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor          
+BenchmarkSession/cookie/get-2     	   79352	      7263 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/get-2     	   82873	      7190 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/get-2     	   83641	      7279 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/get-2     	   84253	      7483 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/get-2     	   75720	      7403 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/repeated-get-2         	   84064	      7403 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/repeated-get-2         	   75396	      7523 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/repeated-get-2         	   72907	      7523 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/repeated-get-2         	   82027	      7466 ns/op	    9399 B/op	      77 allocs/op
+BenchmarkSession/cookie/repeated-get-2         	   80158	      7465 ns/op	    9398 B/op	      77 allocs/op
+BenchmarkSession/cookie/save-2                 	  103131	      5931 ns/op	   10122 B/op	      57 allocs/op
+BenchmarkSession/cookie/save-2                 	  106406	      5777 ns/op	   10123 B/op	      57 allocs/op
+BenchmarkSession/cookie/save-2                 	   98053	      5813 ns/op	   10123 B/op	      57 allocs/op
+BenchmarkSession/cookie/save-2                 	  108122	      5866 ns/op	   10122 B/op	      57 allocs/op
+BenchmarkSession/cookie/save-2                 	   99423	      5769 ns/op	   10123 B/op	      57 allocs/op
+BenchmarkSession/sqlite/get-2                  	   49238	     12803 ns/op	    9471 B/op	     121 allocs/op
+BenchmarkSession/sqlite/get-2                  	   49863	     12737 ns/op	    9471 B/op	     121 allocs/op
+BenchmarkSession/sqlite/get-2                  	   48909	     12377 ns/op	    9472 B/op	     121 allocs/op
+BenchmarkSession/sqlite/get-2                  	   47780	     12258 ns/op	    9473 B/op	     121 allocs/op
+BenchmarkSession/sqlite/get-2                  	   44143	     12451 ns/op	    9472 B/op	     121 allocs/op
+BenchmarkSession/sqlite/repeated-get-2         	   45906	     12335 ns/op	    9472 B/op	     121 allocs/op
+BenchmarkSession/sqlite/repeated-get-2         	   43284	     13078 ns/op	    9472 B/op	     121 allocs/op
+BenchmarkSession/sqlite/repeated-get-2         	   48987	     12143 ns/op	    9472 B/op	     121 allocs/op
+BenchmarkSession/sqlite/repeated-get-2         	   50311	     11972 ns/op	    9472 B/op	     121 allocs/op
+BenchmarkSession/sqlite/repeated-get-2         	   50376	     11923 ns/op	    9471 B/op	     121 allocs/op
+BenchmarkSession/sqlite/save-2                 	      39	  13295443 ns/op	    7532 B/op	      77 allocs/op
+BenchmarkSession/sqlite/save-2                 	      43	  13097128 ns/op	    7534 B/op	      77 allocs/op
+BenchmarkSession/sqlite/save-2                 	      43	  13107955 ns/op	    7507 B/op	      77 allocs/op
+BenchmarkSession/sqlite/save-2                 	      58	   9986824 ns/op	    7502 B/op	      77 allocs/op
+BenchmarkSession/sqlite/save-2                 	      58	  10120887 ns/op	    7541 B/op	      77 allocs/op
+PASS
+ok  	github.com/trentnix/hyperserver/pkg/services/session	17.713s
+goos: linux
+goarch: amd64
+pkg: github.com/trentnix/hyperserver/cmd/web
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor          
+BenchmarkReferenceRequest/anonymous-page-2         	   43784	     12888 ns/op	   27727 B/op	     159 allocs/op
+BenchmarkReferenceRequest/anonymous-page-2         	   40566	     13658 ns/op	   27724 B/op	     159 allocs/op
+BenchmarkReferenceRequest/anonymous-page-2         	   39352	     13746 ns/op	   27723 B/op	     159 allocs/op
+BenchmarkReferenceRequest/anonymous-page-2         	   39025	     13736 ns/op	   27723 B/op	     159 allocs/op
+BenchmarkReferenceRequest/anonymous-page-2         	   44292	     13272 ns/op	   27722 B/op	     159 allocs/op
+BenchmarkReferenceRequest/anonymous-fragment-2     	   61383	     10217 ns/op	   24550 B/op	     120 allocs/op
+BenchmarkReferenceRequest/anonymous-fragment-2     	   48690	     10641 ns/op	   24548 B/op	     120 allocs/op
+BenchmarkReferenceRequest/anonymous-fragment-2     	   61279	     10463 ns/op	   24545 B/op	     120 allocs/op
+BenchmarkReferenceRequest/anonymous-fragment-2     	   59707	     10261 ns/op	   24545 B/op	     120 allocs/op
+BenchmarkReferenceRequest/anonymous-fragment-2     	   59668	     10089 ns/op	   24547 B/op	     120 allocs/op
+BenchmarkReferenceRequest/authenticated-page-2     	   18055	     32956 ns/op	   32311 B/op	     313 allocs/op
+BenchmarkReferenceRequest/authenticated-page-2     	   18440	     32879 ns/op	   32297 B/op	     313 allocs/op
+BenchmarkReferenceRequest/authenticated-page-2     	   18519	     32468 ns/op	   32299 B/op	     313 allocs/op
+BenchmarkReferenceRequest/authenticated-page-2     	   17398	     33151 ns/op	   32298 B/op	     313 allocs/op
+BenchmarkReferenceRequest/authenticated-page-2     	   17955	     33021 ns/op	   32300 B/op	     313 allocs/op
+BenchmarkReferenceRequest/authenticated-fragment-2 	   19672	     30047 ns/op	   29122 B/op	     288 allocs/op
+BenchmarkReferenceRequest/authenticated-fragment-2 	   19377	     30128 ns/op	   29109 B/op	     288 allocs/op
+BenchmarkReferenceRequest/authenticated-fragment-2 	   19957	     29690 ns/op	   29111 B/op	     288 allocs/op
+BenchmarkReferenceRequest/authenticated-fragment-2 	   19742	     32090 ns/op	   29112 B/op	     288 allocs/op
+BenchmarkReferenceRequest/authenticated-fragment-2 	   19806	     29978 ns/op	   29109 B/op	     288 allocs/op
+BenchmarkReferenceLoad-2                           	   30390	     20102 ns/op	   28478 B/op	     220 allocs/op
+BenchmarkReferenceLoad-2                           	   30627	     19863 ns/op	   28459 B/op	     220 allocs/op
+BenchmarkReferenceLoad-2                           	   32100	     20579 ns/op	   28458 B/op	     220 allocs/op
+BenchmarkReferenceLoad-2                           	   31100	     18840 ns/op	   28458 B/op	     220 allocs/op
+BenchmarkReferenceLoad-2                           	   32250	     18370 ns/op	   28452 B/op	     220 allocs/op
+PASS
+ok  	github.com/trentnix/hyperserver/cmd/web	19.522s
