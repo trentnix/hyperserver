@@ -38,18 +38,24 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, authEnabled bo
 }
 
 func (m *pageRenderer) prepareTemplates() error {
-	prepared := make(map[string]*content.Templates)
-	for _, name := range []string{
-		errorPageTemplate,
-		messagePageTemplate,
-		notFoundPageTemplate,
-	} {
-		templates, err := content.PrepareTemplates(m.contentManager, content.TemplatePath{FS: siteModuleTemplatesFS, Path: name})
-		if err != nil {
-			return fmt.Errorf("prepare site response %s: %w", name, err)
-		}
-		prepared[name] = templates
+	errorTemplates, err := content.PrepareTemplates(m.contentManager,
+		content.TemplatePath{FS: siteModuleTemplatesFS, Path: errorPageTemplate})
+	if err != nil {
+		return fmt.Errorf("prepare site error response: %w", err)
 	}
-	m.templates = prepared
+
+	views := make(map[string]*content.View)
+	for _, page := range []struct{ file, partial string }{
+		{messagePageTemplate, messagePagePartialName},
+		{notFoundPageTemplate, notFoundPagePartialName},
+	} {
+		view, err := content.PrepareView(m.contentManager, page.partial,
+			content.TemplatePath{FS: siteModuleTemplatesFS, Path: page.file})
+		if err != nil {
+			return fmt.Errorf("prepare site response %s: %w", page.partial, err)
+		}
+		views[page.partial] = view
+	}
+	m.views, m.errorTemplates = views, errorTemplates
 	return nil
 }

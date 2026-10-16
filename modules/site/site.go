@@ -46,7 +46,8 @@ type (
 // pageRenderer implements shared responses without requiring a live site module.
 type pageRenderer struct {
 	contentManager *content_services.ContentManagerService
-	templates      map[string]*content.Templates
+	views          map[string]*content.View
+	errorTemplates *content.Templates
 }
 
 const (
@@ -110,22 +111,22 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	if err := m.prepareTemplates(); err != nil {
 		return err
 	}
-	for _, name := range []string{
-		homePageTemplate,
-		loginPageTemplate,
-		registerPageTemplate,
-		contactPageTemplate,
-		contactFormTemplate,
+	for _, page := range []struct{ file, partial string }{
+		{homePageTemplate, homePagePartialName},
+		{loginPageTemplate, loginPagePartialName},
+		{registerPageTemplate, registerPagePartialName},
+		{contactPageTemplate, contactPagePartialName},
+		{contactFormTemplate, contactFormPartialName},
 	} {
-		files := []content.TemplatePath{{FS: siteModuleTemplatesFS, Path: name}}
-		if name == contactPageTemplate {
+		files := []content.TemplatePath{{FS: siteModuleTemplatesFS, Path: page.file}}
+		if page.file == contactPageTemplate {
 			files = append(files, content.TemplatePath{FS: siteModuleTemplatesFS, Path: contactFormTemplate})
 		}
-		templates, err := content.PrepareTemplates(m.contentManager, files...)
+		view, err := content.PrepareView(m.contentManager, page.partial, files...)
 		if err != nil {
-			return fmt.Errorf("prepare site template %s: %w", name, err)
+			return fmt.Errorf("prepare site view %s: %w", page.partial, err)
 		}
-		m.templates[name] = templates
+		m.views[page.partial] = view
 	}
 
 	contacts, err := m.NewContacts(ctx)

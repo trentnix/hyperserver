@@ -2,12 +2,12 @@
 
 Start with the [stateless application](../../examples/stateless) for a complete page and HTMX example. The [contact handler](../../modules/site/contact.go) demonstrates validation, persistence, and errors for both ordinary forms and HTMX.
 
-## Prepare templates once
+## Prepare views once
 
 Application setup configures shared layouts and response handlers before initializing modules. Each module prepares its own pages during initialization:
 
 ```go
-templates, err := content.PrepareTemplates(cm,
+view, err := content.PrepareView(cm, "home",
     content.TemplatePath{FS: templateFiles, Path: "templates/home.html"})
 if err != nil {
     return err
@@ -17,10 +17,7 @@ if err != nil {
 Store the result on the module. Each request gets separate content and data:
 
 ```go
-page := content.NewManagedContent(r, cm)
-page.Templates = templates
-page.PartialName = "home"
-page.Data = data
+page := view.Content(r, data)
 if err := page.Render(w, r); err != nil {
     cm.HandleError(w, r, "Unable to render the page", err, http.StatusInternalServerError)
 }
@@ -28,11 +25,22 @@ if err := page.Render(w, r); err != nil {
 
 `templateFiles` is an `fs.FS`, commonly an `embed.FS`. Paths are relative to that filesystem and use forward slashes. Layouts and page templates can use different filesystems.
 
-Prepared sets capture the manager's page and HTMX layouts, contents, and components. They share parsed templates, not rendered HTML or request data. Set `PartialName` to the named template used for the fragment. History-restoration requests render the full page.
+The view binds the manager, prepared templates, and a named partial. Preparation checks that the partial exists in both the page and HTMX template sets. Layouts render it with `{{renderPartial .PartialName .}}`. Ordinary navigation and history restoration use the full-page layout. HTMX requests use the fragment layout. See the [notes module](../../examples/external/notes/module.go).
+
+To serve several partials from the same files, call `content.PrepareTemplates` once, then select each view without reparsing:
+
+```go
+listView, err := templates.View(cm, "notes.list")
+if err != nil {
+    return err
+}
+```
+
+Use the same manager that prepared the templates. Nested `{{template "name" .}}` calls do not need view objects. Views share parsed templates, not rendered HTML or request data. `view.Content` returns the existing `*content.Content`, with response fields available for titles, redirects, and HTMX instructions. Direct `NewManagedContent` construction remains available when a handler chooses templates or partials per request.
 
 Do not combine `Templates` with request-specific `AddLayout`, `AddContent`, or `AddComponent` calls. Those methods provide a per-render parsing path when no prepared set is supplied. Restart and prepare new sets to apply template changes. There is no file watcher.
 
-Parsing errors can stop initialization. Execution errors still occur per request. Rendering buffers all selected templates before writing response content. It does not undo application changes if rendering fails, and network writes can fail after partial delivery.
+Parsing errors and missing view partials stop initialization when returned by the module. Execution errors still occur per request. Rendering buffers all selected templates before writing response content. It does not undo application changes if rendering fails, and network writes can fail after partial delivery.
 
 Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem` to compare prepared and per-render parsing. The benchmark excludes HTTP delivery and notification storage.
 
@@ -103,11 +111,8 @@ Embed `form.Form` for errors and messages. Implement `Bind(*http.Request) error`
 The POST handler stops on any parsing, binding, or validation error:
 
 ```go
-page := content.NewManagedContent(r, contentManager)
-page.Templates = contactTemplates
-page.PartialName = "contact-form"
 contactForm := &ContactForm{}
-page.Data = contactForm
+page := contactView.Content(r, contactForm)
 
 if err := form.ParseAndValidate(r, contactForm); err != nil {
     form.HandleFormError(w, r, page, contactForm, "Unable to process submission", err)

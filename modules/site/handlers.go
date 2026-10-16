@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/auth"
-	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -28,9 +27,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 		welcomeMessage = "Welcome " + u.Email + "!"
 	}
 
-	homepage := content.NewManagedContent(r, m.contentManager)
-	homepage.PartialName = homePagePartialName
-	homepage.Templates = m.templates[homePageTemplate]
+	homepage := m.views[homePagePartialName].Content(r, nil)
 	homepage.Title = welcomeMessage
 
 	err := homepage.Render(w, r)
@@ -41,11 +38,8 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 // Login provides a handler to act as a portal to user authentication
 func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
-	login := content.NewManagedContent(r, m.contentManager)
-	login.PartialName = loginPagePartialName
+	login := m.views[loginPagePartialName].Content(r, nil)
 	login.Title = "Login"
-
-	login.Templates = m.templates[loginPageTemplate]
 
 	err := login.Render(w, r)
 	if err != nil {
@@ -61,11 +55,8 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	register := content.NewManagedContent(r, m.contentManager)
-	register.PartialName = registerPagePartialName
+	register := m.views[registerPagePartialName].Content(r, nil)
 	register.Title = "Register"
-
-	register.Templates = m.templates[registerPageTemplate]
 
 	err := register.Render(w, r)
 	if err != nil {
@@ -80,10 +71,7 @@ func (m *pageRenderer) HandleMessage(w http.ResponseWriter, r *http.Request, mes
 		message = "(no message)"
 	}
 
-	messagePage := content.NewManagedContent(r, m.contentManager)
-	messagePage.PartialName = messagePagePartialName
-	messagePage.Templates = m.templates[messagePageTemplate]
-	messagePage.Data = message
+	messagePage := m.views[messagePagePartialName].Content(r, message)
 	err := messagePage.Render(w, r)
 	if err != nil {
 		m.contentManager.HandleError(w, r,
@@ -112,9 +100,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	}
 	counter++ // add this visit
 
-	page := content.NewManagedContent(r, m.contentManager)
-	page.PartialName = homePagePartialName
-	page.Templates = m.templates[homePageTemplate]
+	page := m.views[homePagePartialName].Content(r, nil)
 	page.Title = fmt.Sprintf("# of My Visits: %d", counter)
 
 	// save the updated counter value in the session
@@ -135,10 +121,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 
 // NotFound handles the /404 endpoint by displaying the "NotFound" page
 func (m *pageRenderer) NotFound(w http.ResponseWriter, r *http.Request) {
-	notFound := content.NewManagedContent(r, m.contentManager)
-	notFound.PartialName = notFoundPagePartialName
-	notFound.Templates = m.templates[notFoundPageTemplate]
-	notFound.Data = fmt.Sprintf("The resource you requested was not found: %s", r.URL.Path)
+	notFound := m.views[notFoundPagePartialName].Content(r, fmt.Sprintf("The resource you requested was not found: %s", r.URL.Path))
 	notFound.Title = "Resource Not Found"
 	notFound.ResponseStatusCode = http.StatusNotFound
 

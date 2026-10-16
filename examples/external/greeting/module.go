@@ -24,17 +24,17 @@ func init() {
 
 type module struct {
 	contentManager *contentservice.ContentManagerService
-	templates      *content.Templates
+	view           *content.View
 }
 
 func (m *module) Init(_ context.Context, app *server.ApplicationServer) error {
 	m.contentManager = app.ContentManager
-	templates, err := content.PrepareTemplates(m.contentManager,
+	view, err := content.PrepareView(m.contentManager, "greeting.form",
 		content.TemplatePath{FS: greetingModuleTemplatesFS, Path: "templates/greeting.html"})
 	if err != nil {
 		return err
 	}
-	m.templates = templates
+	m.view = view
 	return nil
 }
 
@@ -56,9 +56,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 
 func (m *module) greet(w http.ResponseWriter, r *http.Request) {
 	input := &greetingForm{}
-	page := content.NewManagedContent(r, m.contentManager)
-	page.Templates, page.Data = m.templates, input
-	page.PartialName = "greeting.form"
+	page := m.view.Content(r, input)
 	if r.URL.RawQuery != "" {
 		if err := form.ParseAndValidate(r, input); err != nil {
 			form.HandleFormError(w, r, page, input, "Unable to read the name", err)

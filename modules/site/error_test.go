@@ -27,7 +27,7 @@ func TestQueuedErrorAcknowledgment(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				renderer := pageRenderer{contentManager: cm, templates: map[string]*content.Templates{errorPageTemplate: prepared}}
+				renderer := pageRenderer{contentManager: cm, errorTemplates: prepared}
 				r := httptest.NewRequest(http.MethodGet, "/error", nil)
 				r.Header.Set("HX-Request", fmt.Sprint(hx))
 				if outcome == "HEAD" {

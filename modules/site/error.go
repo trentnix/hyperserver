@@ -47,7 +47,7 @@ func (m *pageRenderer) renderError(w http.ResponseWriter, r *http.Request, notif
 	cm.LoadNotifications = nil
 	page := content.NewManagedContent(r, &cm)
 	page.PartialName, page.Title = errorPagePartialName, "Error"
-	page.Templates = m.templates[errorPageTemplate]
+	page.Templates = m.errorTemplates
 	page.Data = notifications
 
 	// Stage the error page separately to control its status, headers, and HEAD body.

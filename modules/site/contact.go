@@ -8,6 +8,7 @@ import (
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 )
 
 // ContactForm binds the development site's contact submission fields.
@@ -62,19 +63,19 @@ func (cf *ContactForm) Bind(r *http.Request) error {
 	return nil
 }
 
+func (m *SiteModule) contactContent(r *http.Request, data *ContactForm) *content.Content {
+	request := htmx.GetRequest(r)
+	if request.Enabled && !request.HistoryRestore {
+		return m.views[contactFormPartialName].Content(r, data)
+	}
+	page := m.views[contactPagePartialName].Content(r, data)
+	page.Title = "Contact Us"
+	return page
+}
+
 // GetContact retrieves an empty contact form
 func (m *SiteModule) GetContact(w http.ResponseWriter, r *http.Request) {
-	contact := content.NewManagedContent(r, m.contentManager)
-
-	if !contact.IsHtmx() {
-		contact.PartialName = contactPagePartialName
-		contact.Title = "Contact Us"
-		contact.Templates = m.templates[contactPageTemplate]
-	} else {
-		contact.PartialName = contactFormPartialName
-		contact.Templates = m.templates[contactFormTemplate]
-	}
-	contact.Data = &ContactForm{}
+	contact := m.contactContent(r, &ContactForm{})
 
 	err := contact.Render(w, r)
 	if err != nil {
@@ -92,15 +93,7 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contact := content.NewManagedContent(r, m.contentManager)
-	if !contact.IsHtmx() {
-		contact.PartialName = contactPagePartialName
-		contact.Title = "Contact Us"
-		contact.Templates = m.templates[contactPageTemplate]
-	} else {
-		contact.PartialName = contactFormPartialName
-		contact.Templates = m.templates[contactFormTemplate]
-	}
+	contact := m.contactContent(r, contactForm)
 
 	if validationErr != nil {
 		form.HandleFormError(
@@ -132,8 +125,6 @@ func (m *SiteModule) Contact(w http.ResponseWriter, r *http.Request) {
 	contactForm.AddSuccessMessage("Your message has been submitted.")
 
 	// render the success response
-	contact.Data = contactForm
-
 	err = contact.Render(w, r)
 	if err != nil {
 		m.contentManager.HandleError(w, r, "could not render the contact form after successfully adding a contact", err, http.StatusInternalServerError)

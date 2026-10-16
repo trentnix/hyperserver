@@ -31,7 +31,7 @@ type module struct {
 	repository     Repository
 	protect        func(http.Handler) http.Handler
 	contentManager *contentservice.ContentManagerService
-	templates      *content.Templates
+	view           *content.View
 }
 
 func (m *module) Init(_ context.Context, app *server.ApplicationServer) error {
@@ -42,11 +42,11 @@ func (m *module) Init(_ context.Context, app *server.ApplicationServer) error {
 		return fmt.Errorf("notes requires a write-access policy")
 	}
 	m.contentManager = app.ContentManager
-	templates, err := content.PrepareTemplates(m.contentManager, content.TemplatePath{FS: notesModuleTemplatesFS, Path: "templates/notes.html"})
+	view, err := content.PrepareView(m.contentManager, "notes.panel", content.TemplatePath{FS: notesModuleTemplatesFS, Path: "templates/notes.html"})
 	if err != nil {
 		return err
 	}
-	m.templates = templates
+	m.view = view
 	return nil
 }
 
@@ -74,12 +74,6 @@ func (f *noteForm) Validate() form.FieldErrors {
 	return nil
 }
 
-func (m *module) page(r *http.Request, input *noteForm) *content.Content {
-	page := content.NewManagedContent(r, m.contentManager)
-	page.Templates, page.PartialName, page.Data = m.templates, "notes.panel", input
-	return page
-}
-
 func (m *module) list(w http.ResponseWriter, r *http.Request) {
 	input := &noteForm{}
 	items, err := m.repository.List(r.Context(), MaxListSize)
@@ -88,14 +82,14 @@ func (m *module) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Notes = items
-	if err := m.page(r, input).Render(w, r); err != nil {
+	if err := m.view.Content(r, input).Render(w, r); err != nil {
 		m.contentManager.HandleError(w, r, "Unable to display notes", err, http.StatusInternalServerError)
 	}
 }
 
 func (m *module) create(w http.ResponseWriter, r *http.Request) {
 	input := &noteForm{}
-	page := m.page(r, input)
+	page := m.view.Content(r, input)
 	if err := form.ParseAndValidate(r, input); err != nil {
 		form.HandleFormError(w, r, page, input, "Unable to read the note", err)
 		return
