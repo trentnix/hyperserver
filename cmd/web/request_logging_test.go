@@ -82,10 +82,10 @@ func TestSlogRequestCorrelationAndRedaction(t *testing.T) {
 				t.Errorf("record %d: %s = %v, want %s", i, key, record[key], want)
 			}
 		}
-		if i == 0 && (record["level"] != "INFO" || record["msg"] != "Incoming request") {
-			t.Errorf("incorrect incoming request record: %v", record)
+		if i == 1 && (record["level"] != "INFO" || record["msg"] != "Request completed" || record["status"] != float64(500) || record["duration"].(float64) <= 0) {
+			t.Errorf("incorrect completion record: %v", record)
 		}
-		if i == 1 && (record["level"] != "ERROR" || record["msg"] != "Request Error" || record["error"] != "storage unavailable") {
+		if i == 0 && (record["level"] != "ERROR" || record["msg"] != "Request Error" || record["error"] != "storage unavailable") {
 			t.Errorf("incorrect error record: %v", record)
 		}
 	}

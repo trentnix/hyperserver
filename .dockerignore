@@ -1,0 +1,12 @@
+**
+!go.mod
+!go.sum
+!auth/**
+!cmd/**
+!config/**
+!modules/**
+!pkg/**
+!deploy/local/**
+deploy/local/state
+**/*_test.go
+**/config.yaml

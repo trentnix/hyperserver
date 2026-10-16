@@ -39,6 +39,7 @@ go run ./cmd/web
 | [Storage](docs/storage.md) | Repository guarantees, migrations, backend access, and maintenance. |
 | [Sessions](pkg/services/session/readme.md) | Store selection, rotation, serialization, and replacement contracts. |
 | [Testing](docs/testing.md) | Go tests, browser checks, and diagnostics. |
+| [Local deployment](docs/deployment.md) | Containers, health checks, logs, backups, and optional recovery/soak tests. |
 | [Roadmap](roadmap.md) | Remaining work and architectural direction. |
 
 ## Configuration

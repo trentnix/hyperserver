@@ -25,6 +25,8 @@ type application struct {
 	AccountRepository user.AccountRepository
 	// SessionManager can be borrowed. Use ownSessions to transfer cleanup.
 	SessionManager *session.SessionManager
+	mailHealth     func(context.Context) error
+	contactHealth  func(context.Context) error
 }
 
 func newApplication(cfg config.Config) (*application, error) {

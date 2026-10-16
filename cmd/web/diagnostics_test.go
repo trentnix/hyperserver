@@ -1,12 +1,30 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
+
+func TestLifecycleErrorRedaction(t *testing.T) {
+	app, err := newApplication(config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Config.Auth.JwtKey = "account-secret"
+	app.Config.HTTP.Session.JwtKey = "session-secret"
+	app.Config.Mail.Password = "mail-secret"
+	app.Config.Database.Connection = "database-secret"
+	app.Config.HTTP.Session.Stores = map[string]map[string]string{"sqliteStore": {"connection": "storage-secret"}}
+	app.Config.Auth.AccountStorage.Options = map[string]string{"password": "provider-secret"}
+	message := redactLifecycleError(errors.New("startup failed: account-secret session-secret mail-secret database-secret storage-secret provider-secret"), app)
+	if strings.Contains(message, "-secret") || !strings.HasPrefix(message, "startup failed:") || strings.Count(message, "[redacted]") != 6 {
+		t.Fatal(message)
+	}
+}
 
 func TestServiceDiagnosticsUseSuppliedProvidersAndExcludeSecrets(t *testing.T) {
 	app, err := newApplication(config.Config{})

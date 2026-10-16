@@ -32,6 +32,12 @@ func NewSQLiteContactRepository(ctx context.Context, db *sql.DB) (*SQLiteContact
 	return &SQLiteContactRepository{db: db}, nil
 }
 
+// CheckHealth verifies that the contact table can be read without changing data.
+func (repository *SQLiteContactRepository) CheckHealth(ctx context.Context) error {
+	var count int
+	return repository.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM (SELECT 1 FROM hyperserver_contact_submission LIMIT 1)").Scan(&count)
+}
+
 // Create stores a contact submission. Failed writes leave the submission unchanged.
 func (repository *SQLiteContactRepository) Create(ctx context.Context, submission *models.ContactSubmission) error {
 	if submission == nil {

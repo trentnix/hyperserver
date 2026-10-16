@@ -18,6 +18,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  deployment-build:
+    name: Build local deployment images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build application and maintenance stages
+        run: >-
+          docker build --file deploy/local/Dockerfile --target maintenance
+          --build-arg VERSION=ci --build-arg COMMIT="$GITHUB_SHA"
+          --tag hyperserver-rehearsal-ci .
+
   test:
     name: Tests, vet, and race checks
     runs-on: ubuntu-24.04

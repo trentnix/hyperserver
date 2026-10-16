@@ -47,6 +47,23 @@ func GetSessionManager(r *http.Request) *SessionManager {
 // The returned store must not be nil, including a typed nil inside an interface.
 type StoreFactory func(context.Context) (SessionStore, error)
 
+// CheckHealth probes selected stores that expose CheckHealth(context.Context).
+// In-process stores need no I/O probe. Remote stores should implement that method
+// to make outages visible. It must be safe for concurrent calls and honor ctx.
+func (m *SessionManager) CheckHealth(ctx context.Context) error {
+	for _, name := range slices.Sorted(maps.Keys(m.stores)) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if check, ok := m.stores[name].(interface{ CheckHealth(context.Context) error }); ok {
+			if err := check.CheckHealth(ctx); err != nil {
+				return fmt.Errorf("session store %s: %w", name, err)
+			}
+		}
+	}
+	return ctx.Err()
+}
+
 // NewSessionManager validates selections and initializes each selected provider
 // once. It copies session mappings and releases acquired resources on failure.
 // Call Close after all consumers stop. Requests never initialize providers.

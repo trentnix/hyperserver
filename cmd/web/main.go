@@ -7,7 +7,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -22,11 +21,15 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
 func main() {
+	l := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	info := buildInfo()
+	l.Info("Application starting", "version", info.Version, "commit", info.Commit, "modified", info.Modified)
 	contactDirectory := flag.String("contact-directory", "", "store contact submissions as JSON files in this directory instead of SQLite")
 	flag.Parse()
 
@@ -39,16 +42,20 @@ func main() {
 	}()
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Fatal(err)
+		l.Error("Configuration failed", "error", err)
+		os.Exit(1)
 	}
 	app, err := newApplication(cfg)
 	if err != nil {
-		log.Fatal(err)
+		l.Error("Application configuration failed", "error", err)
+		os.Exit(1)
 	}
 	accounts := setup.NewAccountStorage(app.Config)
 	if err := run(ctx, app, accounts, *contactDirectory); err != nil {
-		log.Fatal(err)
+		l.Error("Application lifecycle failed", "error", redactLifecycleError(err, app))
+		os.Exit(1)
 	}
+	l.Info("Application stopped")
 }
 
 // run delegates serving and resource ownership to the shared application lifecycle.
@@ -110,6 +117,10 @@ func prepareHTTP(ctx context.Context, s *application, accounts *setup.AccountSto
 	logServiceProviders(l, s, mailProvider)
 
 	handler, err := applicationHandler(s, l)
+	if err != nil {
+		return nil, nil, err
+	}
+	handler, err = healthHandler(logger.Set(ctx, l), s, handler)
 	if err != nil {
 		return nil, nil, err
 	}

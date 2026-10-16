@@ -203,7 +203,7 @@ func TestGlobalRateLimitPrecedesSessionLoading(t *testing.T) {
 	if w.Code != 429 || body.reads != 0 || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("rejection touched request state: status=%d reads=%d cookies=%v", w.Code, body.reads, w.Result().Cookies())
 	}
-	if w.Header().Get("X-Request-ID") == "" || !strings.Contains(logs.String(), "Incoming request") {
+	if w.Header().Get("X-Request-ID") == "" || !strings.Contains(logs.String(), "Request completed") {
 		t.Fatal("rejection was not logged")
 	}
 

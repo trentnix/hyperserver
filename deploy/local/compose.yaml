@@ -1,0 +1,77 @@
+name: hyperserver-rehearsal
+
+x-limits: &limits
+  user: "${LOCAL_UID:?Run init.sh}:${LOCAL_GID:?Run init.sh}"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 256m
+  cpus: 1
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+
+services:
+  edge:
+    <<: *limits
+    image: nginx:stable-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+    entrypoint: [sh, -c, "nginx -t && exec nginx -g 'daemon off;'"]
+    ports:
+      - "127.0.0.1:18443:8443"
+      - "127.0.0.1:18025:8025"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./state/tls:/tls:ro
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+  mail:
+    <<: *limits
+    image: axllent/mailpit@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
+    network_mode: service:edge
+    environment:
+      MP_SMTP_BIND_ADDR: 127.0.0.1:1025
+      MP_UI_BIND_ADDR: 0.0.0.0:8025
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+      MP_MAX_MESSAGES: "100"
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_ALLOWED_HOSTS: localhost,127.0.0.1
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+  app:
+    <<: *limits
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+      target: runtime
+      args:
+        VERSION: ${VERSION:-development}
+        COMMIT: ${COMMIT:?Run init.sh}
+    network_mode: service:edge
+    depends_on: [mail]
+    env_file: ./state/app.env
+    environment:
+      GOMEMLIMIT: 192MiB
+      GOMAXPROCS: "2"
+    volumes:
+      - ./settings.yaml:/app/config.yaml:ro
+      - ./state/data:/data
+    stop_grace_period: 25s
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --max-time, "3", http://127.0.0.1:8080/health/ready]
+      interval: 10s
+      timeout: 4s
+      retries: 3
+      start_period: 20s
+  maintenance:
+    <<: *limits
+    profiles: [tools]
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+      target: maintenance
+    network_mode: none
+    env_file: ./state/app.env
+    volumes:
+      - ./settings.yaml:/app/config.yaml:ro
+      - ./state/data:/data
+      - ./state/backups:/backups

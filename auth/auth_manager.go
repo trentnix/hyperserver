@@ -316,6 +316,7 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	u := authService.Login(w, r)
 	if u == nil {
+		logger.Audit(r.Context(), "login", "rejected")
 		return
 	}
 
@@ -334,11 +335,13 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	setAuthenticatedUserErr := identity.SetAuthenticatedUser(w, r, u)
 	if setAuthenticatedUserErr != nil {
+		logger.Audit(r.Context(), "login", "failed")
 		logger.LogRequestError(r, setAuthenticatedUserErr)
 		util.HttpError(w, r, "There was an internal error when trying to login", nil, http.StatusInternalServerError)
 		return
 	}
 
+	logger.Audit(r.Context(), "login", "succeeded")
 	r = user.AddUserToRequestContext(r, u)
 	err = flash.AddSuccessNotification(w, r, "You have been successfully logged in")
 	if err != nil {
@@ -373,11 +376,13 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 func (a *AuthManager) Logout(w http.ResponseWriter, r *http.Request) {
 	logoutErr := identity.LogoutAuthenticatedUser(w, r)
 	if logoutErr != nil {
+		logger.Audit(r.Context(), "logout", "failed")
 		logger.LogRequestError(r, logoutErr)
 		util.HttpError(w, r, "There was an error trying to log out", nil, http.StatusInternalServerError)
 		return
 	}
 
+	logger.Audit(r.Context(), "logout", "succeeded")
 	err := flash.AddSuccessNotification(w, r, "You have been successfully logged out")
 	if err != nil {
 		logger.LogRequestError(r, err)
@@ -682,6 +687,11 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	verifiedUser, err := user.Verify(r.Context(), a.accounts, verificationToken, []byte(a.verificationJwtKey))
+	if err != nil {
+		logger.Audit(r.Context(), "verification", "failed")
+	} else {
+		logger.Audit(r.Context(), "verification", "succeeded")
+	}
 	if err != nil {
 		a.recoveryError(w, r, "Verification failed", err)
 		return

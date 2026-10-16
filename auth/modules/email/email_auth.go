@@ -387,10 +387,12 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 
 	userMessage, registrationErr := auth_services.ProcessRegistration(r.Context(), a.accounts, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
 	if registrationErr != nil {
+		logger.Audit(r.Context(), "registration", "failed")
 		form.HandleFormError(w, r, register, registerForm, userMessage, registrationErr)
 		return
 	}
 
+	logger.Audit(r.Context(), "registration", "succeeded")
 	if a.config.Auth.RegisterRequiresVerification {
 		// The account already exists. Offer sign-in instead of another registration.
 		register.PartialName = "auth.partial.email.registration.pending"
@@ -561,6 +563,11 @@ func (a *EmailAuthService) Reset(
 	}
 
 	err = a.resetPassword(r.Context(), u, token, resetForm.Password, requireNewCredentials)
+	if err != nil {
+		logger.Audit(r.Context(), "password_reset", "failed")
+	} else {
+		logger.Audit(r.Context(), "password_reset", "succeeded")
+	}
 	if errors.Is(err, errPasswordReused) {
 		form.HandleFormError(w, r, reset, resetForm,
 			"The provided password has been recently used. For security reasons, a new password is required.", nil)
@@ -642,6 +649,11 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	}
 
 	err = a.changePassword(r.Context(), u, changeForm.OldPassword, changeForm.NewPassword)
+	if err != nil {
+		logger.Audit(r.Context(), "password_change", "failed")
+	} else {
+		logger.Audit(r.Context(), "password_change", "succeeded")
+	}
 	if errors.Is(err, errInvalidCredentials) {
 		form.HandleFormError(w, r, change, changeForm, "The provided password is incorrect", nil)
 		return

@@ -117,7 +117,7 @@ func TestCSRFRejectsBeforeSessionLoading(t *testing.T) {
 	if w.Code != http.StatusForbidden || body.reads != 0 || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("rejection touched request state: status=%d, body reads=%d, cookies=%v", w.Code, body.reads, w.Result().Cookies())
 	}
-	if w.Header().Get("X-Request-ID") == "" || !strings.Contains(logs.String(), "Incoming request") {
+	if w.Header().Get("X-Request-ID") == "" || !strings.Contains(logs.String(), "Request completed") {
 		t.Fatal("rejected request was not logged")
 	}
 }

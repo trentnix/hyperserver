@@ -22,7 +22,11 @@ func siteModules(app *application, directory string) ([]handlers.Descriptor, err
 	db := app.Database
 	newContacts := func(ctx context.Context) (site.ContactRepository, error) {
 		if directory == "" {
-			return storage.NewSQLiteContactRepository(ctx, db)
+			contacts, err := storage.NewSQLiteContactRepository(ctx, db)
+			if err == nil {
+				app.contactHealth = contacts.CheckHealth
+			}
+			return contacts, err
 		}
 		return storage.NewFileContactRepository(ctx, directory)
 	}

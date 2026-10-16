@@ -1,0 +1,45 @@
+# Disposable local rehearsal. Secrets come from state/app.env.
+http:
+  listenHost: 127.0.0.1
+  port: 8080
+  publicOrigin: https://localhost:18443
+  trustedProxies: [127.0.0.1/32]
+  hstsMaxAge: 0 # Do not change the developer browser's localhost HSTS policy.
+  readTimeout: 5s
+  writeTimeout: 15s
+  idleTimeout: 30s
+  shutdownTimeout: 10s
+  session:
+    tokenAge: 24h
+    cookieAge: 24h
+    stores:
+      sqliteStore:
+        enabled: true
+        connection: /data/hyperserver.db?_journal=WAL&_timeout=1000&_fk=true
+        sessionTable: session
+    types:
+      default: sqliteStore
+      auth-user-session: sqliteStore
+auth:
+  enabled: true
+  registrationEnabled: true
+  registerRequiresVerification: true
+  verificationTokenExpiration: 24h
+  resetTokenExpiration: 1h
+  resetMinimumResponseTime: 2s
+  services:
+    email:
+      enabled: true
+mail:
+  hostname: localhost
+  port: 1025
+  user: rehearsal
+  password: local-mailpit-only
+  fromAddress: noreply@example.invalid
+  timeout: 5s
+database:
+  driver: sqlite3
+  connection: /data/hyperserver.db?_journal=WAL&_timeout=1000&_fk=true
+app:
+  name: HyperServer rehearsal
+  renderNotifications: true

@@ -40,6 +40,7 @@ config.yaml
 
 # Repository-local temporary files
 /tmp/
+/deploy/local/state/
 
 # Local implementation guidance
 /production-readiness-checklist.md

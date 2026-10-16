@@ -106,12 +106,9 @@ Work in this order, with security defects taking precedence throughout.
 
 ### 2. Validate deployment and recovery
 
-- Add liveness and readiness checks. Readiness must reflect the services needed to serve traffic.
-- Log response status, duration, lifecycle failures, and security events with request correlation and secret redaction. Keep metrics and tracing optional.
-- Add vulnerability scanning, reviewed dependency updates, and repeatable builds with version and commit metadata.
-- Test a container or service deployment from a clean environment. Document secrets, TLS/proxies, resource limits and locations, and migration ownership.
-- Test backups and restores of accounts, sessions, and application records, plus migration rollback or forward repair.
-- Run load, restart, failure, and soak tests. Cover request limits, recovery timing, slow mail, storage outages, startup failure, and shutdown during active requests. Minimum response times cannot conceal longer work.
+- Maintain the [local container rehearsal](docs/deployment.md): health checks, redacted logs, reviewed dependency updates, migrations, backups, and recovery exercises.
+- Repeat cache, load, restart, failure, and optional soak tests for each deployment configuration. Check the enabled capabilities, secrets, TLS/proxy trust, resource limits, and service ownership.
+- Choose backup retention and off-host storage for real data. Verify restored accounts, sessions, and application records with a compatible binary before resuming traffic.
 - Obtain an independent security review before exposing account and recovery flows publicly. Maintain HTTP and browser regression coverage.
 
 Add optional automatic session and token cleanup with bounded batches and no overlapping runs. Report failures and stop cleanup before storage closes. External scheduling remains sufficient for deployment readiness.

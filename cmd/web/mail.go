@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/messaging/smtp"
+	"net"
+	"strconv"
 )
 
 // initializeMail supplies the reference application's SMTP client unless a client
@@ -22,5 +25,13 @@ func initializeMail(s *application) error {
 		return err
 	}
 	s.Mail = client
+	// Probe connectivity only. Delivery failures still surface in the mail operation.
+	s.mailHealth = func(ctx context.Context) error {
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(s.Config.Mail.Hostname, strconv.Itoa(int(s.Config.Mail.Port))))
+		if err != nil {
+			return err
+		}
+		return conn.Close()
+	}
 	return nil
 }

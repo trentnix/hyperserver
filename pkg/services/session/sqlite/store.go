@@ -324,6 +324,15 @@ func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *sessi
 	return nil
 }
 
+// CheckHealth verifies that the selected session table can be read.
+func (s *SQLiteStore) CheckHealth(ctx context.Context) error {
+	if s.db == nil {
+		return ErrDatabaseNotConfigured
+	}
+	var count int
+	return s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM (SELECT 1 FROM "+quoteIdentifier(s.tableName)+" LIMIT 1)").Scan(&count)
+}
+
 // IsEnabled reports whether this SQLite store was initialized for use.
 func (s *SQLiteStore) IsEnabled() bool {
 	return s.enabled
