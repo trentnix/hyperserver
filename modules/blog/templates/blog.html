@@ -1,0 +1,68 @@
+{{define "blog.post"}}
+{{with .Data}}<article>
+  {{if .Admin}}<nav class="post-actions content-admin-panel" aria-label="Post actions"><a href="/post/update/{{.ID}}">Edit Post</a><a href="/post/delete/{{.ID}}">Delete Post</a><a href="/post/images/upload">Upload image</a></nav>{{end}}
+  <header class="post-heading">
+    <h1 class="title">{{.Title}}</h1>
+    <div class="metadata"><time datetime="{{.PublishedAt.Format "2006-01-02"}}">{{.PublishedAt.Format "January 2, 2006"}}</time></div>
+  </header>
+  <div class="prose">{{.HTML}}</div>
+</article>{{end}}
+{{end}}
+
+{{define "blog.recent"}}
+<div class="title">Recent Posts</div>
+{{range .Data.Months}}<div class="section">{{.Title}}</div><ul>{{range .Posts}}<li><a href="/post/s/{{.Slug}}">{{.Title}}</a></li>{{end}}</ul>{{else}}<p>No posts yet.</p>{{end}}
+{{if .Data.Next}}<a href="/posts">All posts</a>{{end}}
+{{end}}
+
+{{define "blog.archive"}}
+<p class="eyebrow">The archive</p><h1>All posts</h1>
+{{range .Data.Months}}<section class="archive-month"><h2>{{.Title}}</h2><ul class="post-list">
+{{range .Posts}}<li><time datetime="{{.PublishedAt.Format "2006-01-02"}}">{{.PublishedAt.Format "Jan 2"}}</time><div><a href="/post/s/{{.Slug}}">{{.Title}}</a>{{if .Summary}}<p>{{.Summary}}</p>{{end}}</div></li>{{end}}
+</ul></section>{{else}}<p>No posts yet.</p>{{end}}
+<nav class="pagination" aria-label="Archive pages">{{if .Data.Previous}}<a href="{{.Data.Previous}}">← Newer posts</a>{{end}}{{if .Data.Next}}<a href="{{.Data.Next}}">Older posts →</a>{{end}}</nav>
+{{end}}
+
+{{define "blog.about"}}
+<h1 class="title">About Me</h1>
+<div class="prose"><p>Trent Nix is a Texas-based technologist interested in software project management, software process, and full-stack software development.</p>
+<p>This blog is a place for me to write about software and technology, to share things I'm working on, and to think out loud.</p>
+<p>Need to contact me? Send me an email to trentnix (at) gmail.com, find me on <a href="https://x.com/trentnix">X / Twitter</a>, or find me on <a href="https://www.linkedin.com/in/trent-nix/">LinkedIn</a>.</p></div>
+{{end}}
+
+{{define "blog.projects"}}
+<h1 class="title">Projects</h1><p>I've got nothing interesting to show.</p>
+{{end}}
+
+{{define "blog.empty"}}
+<p class="eyebrow">A space for ideas</p><h1>The first post is still to come.</h1><p class="summary">Notes on software, technology, and the things we learn along the way.</p>
+{{if .LayoutData.Admin}}<p><a class="button" href="/post/create">Write the first post</a></p>{{end}}
+{{end}}
+
+{{define "blog.edit"}}
+<p class="eyebrow">The writing desk</p><h1>{{if eq .Data.Action "/post"}}New post{{else}}Edit post{{end}}</h1>
+{{with .Data}}<form class="editor" method="post" action="{{.Action}}" hx-post="{{.Action}}" hx-target="#main">
+  {{range .GetAllFieldErrors}}<p class="field-error" role="alert">{{.}}</p>{{end}}
+  {{range .GetErrorMessages}}<p class="field-error" role="alert">{{.Message}}</p>{{end}}
+  <input type="hidden" name="version" value="{{.Version}}">
+  <label for="title">Title</label><input id="title" name="title" value="{{.Title}}" maxlength="200" required>
+  <label for="slug">URL slug</label><input id="slug" name="slug" value="{{.Slug}}" maxlength="160" aria-describedby="slug-help">
+  <p class="field-help" id="slug-help">Leave blank to use the title. Use lowercase letters, numbers, and hyphens.</p>
+  <label for="summary">Summary</label><textarea id="summary" name="summary" rows="2" maxlength="1000">{{.Summary}}</textarea>
+  <label for="markdown">Post (Markdown)</label><textarea id="markdown" class="markdown" name="markdown" rows="18" required aria-describedby="markdown-help">{{.Markdown}}</textarea>
+  <p class="field-help" id="markdown-help">Up to 256 KiB. Use **bold**, *italic*, [links](https://example.com), and ![description](/images/id). Raw HTML is not supported. <a href="/post/images/upload" target="_blank" rel="noopener">Upload an image in a new tab</a>.</p>
+  <div class="form-actions"><button type="submit">Publish post</button><a href="/">Cancel</a></div>
+</form>{{end}}
+{{end}}
+
+{{define "blog.delete"}}
+<p class="eyebrow">Delete post</p><h1>Delete “{{.Data.Title}}”?</h1><p>This removes the post permanently. Uploaded images remain available.</p>
+<form method="post" action="/post/delete/{{.Data.ID}}"><input type="hidden" name="version" value="{{.Data.Version}}"><div class="form-actions"><button class="danger" type="submit">Delete post</button><a href="/post/s/{{.Data.Slug}}">Keep post</a></div></form>
+{{end}}
+
+{{define "blog.upload"}}
+<p class="eyebrow">Image library</p><h1>Upload an image</h1><p>Choose a PNG, JPEG, or GIF up to 5 MiB and 16 million pixels.</p>
+{{if .Data}}<div class="notice" role="status"><p>Image uploaded. Copy this into your post and replace the description:</p><code>![Image description]({{.Data}})</code></div><img class="upload-preview" src="{{.Data}}" alt="Uploaded image preview">{{end}}
+<form method="post" action="/post/images/upload" enctype="multipart/form-data"><label for="file">Image file</label><input id="file" type="file" name="file" accept="image/png,image/jpeg,image/gif" required><button type="submit">Upload image</button></form>
+<p class="field-help">Images are public once uploaded. Removing a post does not delete its images.</p>
+{{end}}

@@ -37,6 +37,8 @@ config.yaml
 
 # executable
 /web
+/blog
+/blog-data/
 
 # Repository-local temporary files
 /tmp/

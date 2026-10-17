@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false}'>
+  <title>{{.LayoutData.Title}} | {{.Title}}</title>
+  <meta name="description" content="{{.LayoutData.Description}}">
+  <link rel="stylesheet" href="/blog-assets/blog.css">
+  <link rel="stylesheet" href="/blog-assets/forms.css">
+  <link rel="icon" type="image/png" href="/blog-assets/favicon-32x32.png">
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="/rss">
+  <script src="/blog-assets/htmx.min.js" defer></script>
+  <script src="/blog-assets/blog.js" defer></script>
+</head>
+<body{{if .LayoutData.SignedIn}} class="signed-in"{{end}}>
+  <a class="skip-link" href="#main">Skip to content</a>
+  {{if .LayoutData.SignedIn}}<div id="admin-bar" class="account-nav">
+    <ul class="user-menu"><li id="welcome-user">Welcome {{.LayoutData.Email}}!</li>{{if .LayoutData.Admin}}<li><a href="/post/create">New Post</a></li>{{end}}</ul>
+    <ul class="actions-menu"><li><form method="post" action="/auth/logout"><button type="submit">Logout</button></form></li></ul>
+  </div>{{end}}
+  <div class="container site-layout">
+    <aside class="column navigation sidebar">
+      <div class="header-info">
+        <div class="header-profile"><img alt="Trent Nix" src="/blog-assets/trent-nix-small.jpg"></div>
+        <div class="header-details">
+          <div class="header-title"><a href="/">{{.LayoutData.Title}}</a></div>
+          <div class="header-description">{{.LayoutData.Description}}</div>
+          <nav class="header-links" aria-label="Main navigation">
+            <a class="link-icon" href="/about"><img alt="About Me" src="/blog-assets/about.png"></a>
+            <a class="link-icon" href="/projects"><img alt="My Projects" src="/blog-assets/projects.png"></a>
+            <a class="link-icon" href="https://www.linkedin.com/in/trent-nix/" target="_blank" rel="noopener"><img alt="Trent Nix on LinkedIn" src="/blog-assets/linkedin.png"></a>
+            <a class="link-icon" href="/rss"><img alt="RSS Feed" src="/blog-assets/rss.png"></a>
+          </nav>
+        </div>
+      </div>
+      <div id="posts-list" class="menu" hx-get="/posts" hx-trigger="load" hx-swap="innerHTML"><a href="/posts">Recent Posts</a></div>
+      <div class="toc-link"><a href="#content-menu">Recent Posts</a></div>
+    </aside>
+    <div class="column content" id="page-content">
+      <main id="main" class="post" tabindex="-1">
+        {{range .Notifications}}<p class="notice" role="status">{{.Message}}</p>{{end}}
+        {{renderPartial .PartialName .}}
+      </main>
+      <div id="content-menu" class="menu"><a href="/posts">Recent Posts</a></div>
+      <footer id="footer" class="post"><ul><li><a href="/">Home</a></li><li><a href="/about">About Me</a></li><li><a href="/projects">Projects</a></li>{{if not .LayoutData.SignedIn}}<li><a href="/auth/login/email">Log in</a></li>{{end}}</ul></footer>
+    </div>
+  </div>
+</body>
+</html>
