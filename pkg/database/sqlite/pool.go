@@ -10,9 +10,28 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
+
+// OpenConfigured opens a pool using Open's connection policy. It requires the
+// sqlite3 driver and resolves relative file paths against directory. An empty
+// directory uses the current directory. It does not connect or prepare schema.
+// The caller must close the pool.
+func OpenConfigured(cfg config.DatabaseConfig, directory string) (*sql.DB, error) {
+	if cfg.Driver != "sqlite3" {
+		return nil, hs_errors.WithCause(database.ErrDatabaseConfiguration, fmt.Errorf("SQLite requires the sqlite3 database driver"))
+	}
+	if _, err := connectionString(cfg.Connection); err != nil {
+		return nil, hs_errors.WithCause(database.ErrDatabaseConfiguration, err)
+	}
+	connection, err := database.ResolveConnection(cfg.Driver, cfg.Connection, directory)
+	if err != nil {
+		return nil, hs_errors.WithCause(database.ErrDatabaseConfiguration, fmt.Errorf("invalid SQLite connection path or options"))
+	}
+	return Open(connection)
+}
 
 // Open opens an owned SQLite pool without pinging it or preparing a schema.
 // The caller must close the pool. One open and idle connection serializes access

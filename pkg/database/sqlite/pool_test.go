@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,7 +13,90 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
+	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/database"
 )
+
+func TestOpenConfigured(t *testing.T) {
+	for _, name := range []string{"relative", "absolute", "URI", "memory"} {
+		t.Run(name, func(t *testing.T) {
+			directory := t.TempDir()
+			path := filepath.Join(directory, "blog here.db")
+			connection := "blog here.db?_timeout=75"
+			switch name {
+			case "absolute":
+				connection = path + "?_timeout=75"
+				directory = t.TempDir()
+			case "URI":
+				connection = "file:blog%20here.db?mode=rwc&_timeout=75"
+			case "memory":
+				connection = ":memory:?_timeout=75"
+			}
+			db, err := OpenConfigured(config.DatabaseConfig{Driver: "sqlite3", Connection: connection}, directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { db.Close() })
+			if db.Stats().OpenConnections != 0 || db.Stats().MaxOpenConnections != 1 {
+				t.Fatalf("unexpected initial pool state: %+v", db.Stats())
+			}
+			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("database file exists before first use: %v", err)
+			}
+
+			conn, err := db.Conn(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			assertConnection(t, conn, 75)
+			var sequence int
+			var schema, file string
+			if err := conn.QueryRowContext(t.Context(), "PRAGMA database_list").Scan(&sequence, &schema, &file); err != nil {
+				t.Fatal(err)
+			}
+			want := path
+			if name == "memory" {
+				want = ""
+			}
+			if file != want {
+				t.Fatalf("database file = %q, want %q", file, want)
+			}
+		})
+	}
+}
+
+func TestOpenConfiguredRejectsInvalidConfiguration(t *testing.T) {
+	for _, cfg := range []config.DatabaseConfig{
+		{Driver: "postgres", Connection: "private.db"},
+		{Connection: "private.db"},
+		{Driver: "sqlite3"},
+		{Driver: "sqlite3", Connection: " "},
+		{Driver: "sqlite3", Connection: " \t?_timeout=75"},
+		{Driver: "sqlite3", Connection: "file:private%xx.db"},
+		{Driver: "sqlite3", Connection: "private.db?_timeout=%xx"},
+		{Driver: "sqlite3", Connection: "private.db?_fk=off"},
+	} {
+		t.Run(cfg.Driver+"/"+cfg.Connection, func(t *testing.T) {
+			directory := t.TempDir()
+			db, err := OpenConfigured(cfg, directory)
+			if db != nil {
+				db.Close()
+				t.Fatal("invalid configuration returned a pool")
+			}
+			if !errors.Is(err, database.ErrDatabaseConfiguration) {
+				t.Fatalf("expected configuration error, got %v", err)
+			}
+			if strings.Contains(err.Error(), "private") {
+				t.Fatalf("error exposes connection: %v", err)
+			}
+			entries, err := os.ReadDir(directory)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("invalid configuration created files: %v, %v", entries, err)
+			}
+		})
+	}
+}
 
 func TestConnectionOptions(t *testing.T) {
 	for _, tc := range []struct {
