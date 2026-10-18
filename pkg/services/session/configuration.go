@@ -165,13 +165,7 @@ func ValidateConfiguredStores(c *config.Config, providers map[string]ConfiguredP
 		return fmt.Errorf("http.session.types.default is required when a session store is enabled")
 	}
 
-	if err := config.ValidateSigningKey("http.session.jwtKey", c.HTTP.Session.JwtKey); err != nil {
-		return err
-	}
-	if err := config.ValidateLifetime("http.session.tokenAge", c.HTTP.Session.TokenAge); err != nil {
-		return err
-	}
-	return config.ValidateLifetime("http.session.cookieAge", c.HTTP.Session.CookieAge)
+	return nil
 }
 
 func normalizeProviders(providers map[string]ConfiguredProvider) (map[string]ConfiguredProvider, error) {

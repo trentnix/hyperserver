@@ -3,12 +3,16 @@ package session_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/cookie"
+	"github.com/trentnix/hyperserver/pkg/services/session/sqlite"
 )
 
 type configuredStore struct {
@@ -25,8 +29,7 @@ func (*configuredMaintenance) DeleteExpired(context.Context, int) (int64, error)
 
 func configuredSettings() *config.Config {
 	cfg := &config.Config{}
-	cfg.HTTP.Session.JwtKey = strings.Repeat("s", 32)
-	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
+	// Custom providers need not use the built-in JWT and cookie settings.
 	cfg.HTTP.Session.Stores = map[string]map[string]string{"custom": {"enabled": "true", "location": "original"}}
 	cfg.HTTP.Session.Types = map[string]string{"default": "CUSTOM", "another": "custom"}
 	return cfg
@@ -76,8 +79,7 @@ func TestConfiguredProviderSelectionAndOwnership(t *testing.T) {
 	if err := manager.Close(); err != nil || store.closed != 1 {
 		t.Fatal("cleanup was not idempotent")
 	}
-	// Maintenance must not need signing keys or open runtime stores.
-	cfg.HTTP.Session.JwtKey = ""
+	// Maintenance must not open runtime stores.
 	count, err := session.CleanupConfiguredStores(t.Context(), cfg, providers, 10)
 	if err != nil || count != 2 || maintenanceCloses != 1 || opens != 1 {
 		t.Fatalf("count=%d closes=%d opens=%d error=%v", count, maintenanceCloses, opens, err)
@@ -129,5 +131,51 @@ func TestConfiguredProviderFailures(t *testing.T) {
 				t.Fatal("lost provider error")
 			}
 		})
+	}
+}
+
+func TestBuiltInConfiguredProvidersValidateBeforeOpening(t *testing.T) {
+	for name, factory := range map[string]func(config.Config) session.ConfiguredProvider{
+		"cookie": cookie.ConfiguredProvider,
+		"sqlite": sqlite.ConfiguredProvider,
+	} {
+		for _, setting := range []string{"valid", "jwtKey", "tokenAge", "cookieAge"} {
+			t.Run(name+"/"+setting, func(t *testing.T) {
+				connection := filepath.Join(t.TempDir(), "sessions.db")
+				cfg := config.Config{}
+				cfg.HTTP.Session.JwtKey = strings.Repeat("s", 32)
+				cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
+				cfg.HTTP.Session.Stores = map[string]map[string]string{name: {
+					"enabled": "true", "connection": connection, "sessiontable": "sessions",
+				}}
+				cfg.HTTP.Session.Types = map[string]string{"default": name}
+				switch setting {
+				case "jwtKey":
+					cfg.HTTP.Session.JwtKey = ""
+				case "tokenAge":
+					cfg.HTTP.Session.TokenAge = 0
+				case "cookieAge":
+					cfg.HTTP.Session.CookieAge = 0
+				}
+				providers := map[string]session.ConfiguredProvider{name: factory(cfg)}
+				if setting == "valid" {
+					if err := session.ValidateConfiguredStores(&cfg, providers); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					manager, err := session.NewConfiguredManager(t.Context(), &cfg, providers)
+					if manager != nil {
+						manager.Close()
+						t.Fatal("invalid settings opened a manager")
+					}
+					if err == nil || !strings.Contains(err.Error(), "http.session."+setting) {
+						t.Fatalf("expected error for %s, got %v", setting, err)
+					}
+				}
+				if _, err := os.Stat(connection); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("validation touched storage: %v", err)
+				}
+			})
+		}
 	}
 }

@@ -1,9 +1,11 @@
 package web_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -15,10 +17,12 @@ import (
 	"github.com/trentnix/hyperserver/auth/web"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -187,6 +191,7 @@ func TestEmailSetupRejectsInvalidConfiguration(t *testing.T) {
 	for _, name := range []string{
 		"nil app", "nil config", "nil mux", "nil renderer", "disabled auth", "nil accounts", "typed nil accounts",
 		"nil sessions", "missing flash store", "login URL", "home URL", "empty URL", "missing auth", "duplicate auth", "canceled",
+		"rate limit requests", "rate limit window", "rate limit capacity",
 	} {
 		t.Run(name, func(t *testing.T) {
 			app, setup, store := fixture(t)
@@ -227,6 +232,17 @@ func TestEmailSetupRejectsInvalidConfiguration(t *testing.T) {
 				catalog = append(catalog, selectedAuth())
 			case "canceled":
 				cancel()
+			case "rate limit requests", "rate limit window", "rate limit capacity":
+				limit := config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 10}
+				switch name {
+				case "rate limit requests":
+					limit.Requests = 0
+				case "rate limit window":
+					limit.Window = 0
+				case "rate limit capacity":
+					limit.MaxClients = -1
+				}
+				app.Config.HTTP.DefaultRateLimit = limit
 			}
 			handler, err := setup.Setup(ctx, input, catalog)
 			if err == nil || handler != nil {
@@ -236,6 +252,86 @@ func TestEmailSetupRejectsInvalidConfiguration(t *testing.T) {
 				t.Fatal("invalid setup changed rendering or closed services")
 			}
 		})
+	}
+}
+
+func TestEmailSetupConfiguredRouteLimits(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		t.Run(fmt.Sprintf("enabled=%t", enabled), func(t *testing.T) {
+			var apps []http.Handler
+			for range 2 {
+				app, setup, _ := fixture(t)
+				app.Config.HTTP.DefaultRateLimit = config.RateLimitConfig{
+					Enabled: enabled, Requests: 1, Window: time.Minute, MaxClients: 10,
+				}
+				feature := &module{routes: func(routes *routing.Routes) error {
+					serve := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
+					routes.HandleFunc("GET /default", serve)
+					routes.HandleFunc("GET /other", serve)
+					scope, err := routes.WithRateLimit(ratelimit.Policy{Requests: 2, Window: time.Minute, MaxClients: 10})
+					if err != nil {
+						return err
+					}
+					scope.HandleFunc("GET /override", serve)
+					scope.WithoutRateLimit().HandleFunc("GET /unlimited", serve)
+					return routes.Err()
+				}}
+				handler, err := setup.Setup(t.Context(), app, []handlers.Descriptor{
+					selectedAuth(), {Name: "feature", New: func() handlers.Handler { return feature }},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				apps = append(apps, handler)
+			}
+
+			// Exercise both apps after setup to detect shared counters.
+			for _, handler := range apps {
+				for _, path := range []string{"/default", "/other", "/override", "/unlimited"} {
+					for attempt := 1; attempt <= 3; attempt++ {
+						w := httptest.NewRecorder()
+						handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+						want := http.StatusNoContent
+						if (enabled && (path == "/default" || path == "/other") && attempt > 1) ||
+							(path == "/override" && attempt > 2) {
+							want = http.StatusTooManyRequests
+						}
+						if w.Code != want {
+							t.Fatalf("%s attempt %d: status=%d, want %d", path, attempt, w.Code, want)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestEmailSetupLogsSharedBudgetWarning(t *testing.T) {
+	app, setup, _ := fixture(t)
+	app.Config.HTTP.DefaultRateLimit = config.RateLimitConfig{Enabled: true, Requests: 2, Window: time.Minute, MaxClients: 10}
+	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 10}
+	feature := &module{routes: func(routes *routing.Routes) error {
+		routes.HandleFunc("GET /feature", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+		return routes.Err()
+	}}
+	var logs bytes.Buffer
+	ctx := logger.Set(t.Context(), slog.New(slog.NewTextHandler(&logs, nil)))
+	handler, err := setup.Setup(ctx, app, []handlers.Descriptor{
+		selectedAuth(), {Name: "feature", New: func() handlers.Handler { return feature }},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(logs.String(), `route="GET /feature"`) || !strings.Contains(logs.String(), "level=WARN") {
+		t.Fatalf("missing shared-budget warning: %s", &logs)
+	}
+	// Setup must not install the separate shared-budget middleware.
+	for range 2 {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest("GET", "/feature", nil))
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("unexpected shared limit: %d", w.Code)
+		}
 	}
 }
 

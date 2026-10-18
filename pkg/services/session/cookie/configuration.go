@@ -5,6 +5,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/internal/sessioncookie"
 )
 
 // ConfiguredProvider adapts cookie sessions to configuration-driven setup.
@@ -12,6 +13,9 @@ import (
 func ConfiguredProvider(cfg config.Config) session.ConfiguredProvider {
 	settings := cfg.HTTP.Session
 	return session.ConfiguredProvider{
+		Validate: func(map[string]string) error {
+			return sessioncookie.ValidateConfig(settings.JwtKey, settings.TokenAge, settings.CookieAge)
+		},
 		Open: func(ctx context.Context, _ map[string]string) (session.SessionStore, error) {
 			if err := ctx.Err(); err != nil {
 				return nil, err

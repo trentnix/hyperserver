@@ -79,7 +79,7 @@ if err != nil {
 
 Import `authweb "github.com/trentnix/hyperserver/auth/web"`. `Setup` configures the selected auth descriptor, initializes the entire catalog, and returns its handler with session and identity loading attached. Do not also call `handlers.Setup`. The catalog must include auth, as `handlers.Registered()` does here. Authentication and the email provider must be enabled in configuration.
 
-The application still chooses protected routes, layout data, and security middleware and closes its services after requests drain. If setup fails, discard the application and close its services. Use the lower-level `auth.Module`, `handlers.Setup`, and `authmiddleware.LoadSessionManagement` APIs for other auth providers, route defaults, or capability selections. For sessions without accounts, install `session.WithSessionManager(sessions)`.
+The application still chooses protected routes, layout data, and security middleware and closes its services after requests drain. If setup fails, discard the application and close its services. Use the lower-level `auth.Module`, `handlers.Setup`, and `authmiddleware.LoadSessionManagement` APIs for other auth providers or capability selections. For sessions without accounts, install `session.WithSessionManager(sessions)`.
 
 [`middleware.FromConfig`](../pkg/services/middleware/configuration.go) applies proxy verification, HSTS, and the optional shared rate limit in that request order. Keep origin checks and session loading inside it. Keep logging and security headers outside so they also cover rejected requests:
 
@@ -93,11 +93,11 @@ handler = middleware.SecurityHeaders(contentSecurityPolicy)(handler)
 handler = middleware.LoggerMiddleware(log)(handler)
 ```
 
-Before registering modules, use `routing.NewConfiguredRoutes(app.Web, app.Config.HTTP, log)` and pass the result to `handlers.Setup` to apply `http.defaultRateLimit`. The shared budget is separate and requires `middleware.FromConfig`. See the [reference composition](../cmd/web/main.go).
+`authweb.Email.Setup` applies `http.defaultRateLimit`. When using `handlers.Setup` directly, pass routes created by `routing.NewConfiguredRoutes(app.Web, app.Config.HTTP, log)` to apply that setting. The shared budget is separate and requires `middleware.FromConfig`. See the [reference composition](../cmd/web/main.go).
 
 Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware` attaches request fields to the logger returned by `logger.Get(r.Context())`. Use context-aware logging methods to pass cancellation and tracing values to the handler. Check for nil when no request logger is installed.
 
-[`server.NewHTTPServer(app.Config.HTTP, handler)`](../pkg/server/http.go) creates a standard `*http.Server` with the configured address, timeouts, and optional TLS certificate. Resolve configuration paths first. It does not wrap the handler or open a listener. Timeout values pass through unchanged, including zero. File loading supplies defaults. Applications can still construct `http.Server` directly.
+[`server.NewHTTPServer(app.Config.HTTP, handler)`](../pkg/server/http.go) creates a standard `*http.Server` with the configured address, timeouts, and optional TLS certificate. Resolve configuration paths first. It does not wrap the handler or open a listener. Timeout values pass through unchanged, including zero. Omitted read, write, and idle timeouts remain zero. The [configuration template](../config-template.yaml) supplies example values. Applications can still construct `http.Server` directly.
 
 `app.Run(ctx, prepare)` coordinates startup, serving, and shutdown. The preparation function returns the HTTP server, a `net.Listener` opened on its `Addr`, and an error. It must not start serving. Run cleans up startup failures and drains requests before closing services. Applications managing HTTP themselves can use `server.ServeHTTP` and call `Shutdown` after requests drain.
 

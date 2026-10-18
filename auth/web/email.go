@@ -12,9 +12,11 @@ import (
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	emailauth "github.com/trentnix/hyperserver/auth/modules/email"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -47,7 +49,8 @@ func (e Email) RequireAuthentication(cm *content.ContentManagerService) func(htt
 //
 // Configure layouts and rendering overrides first. Setup assigns AuthURL, HomeURL,
 // and the flash notification loader. Layout data and other callbacks are unchanged.
-// It uses the standard route defaults and dependency resolution without selections.
+// It applies http.defaultRateLimit and resolves dependencies without selections.
+// The shared rate limit requires separate middleware.FromConfig wrapping.
 // Use the lower-level auth and handlers packages for other provider arrangements.
 //
 // Call once before serving. On failure, no handler is returned. Discard app and
@@ -87,10 +90,14 @@ func (e Email) Setup(ctx context.Context, app *server.ApplicationServer, catalog
 	if err != nil {
 		return nil, err
 	}
+	routes, err := routing.NewConfiguredRoutes(app.Web, app.Config.HTTP, logger.Get(ctx))
+	if err != nil {
+		return nil, err
+	}
 
 	app.ContentManager.AuthURL, app.ContentManager.HomeURL = e.LoginURL, e.HomeURL
 	app.ContentManager.LoadNotifications = flash.LoadNotifications
-	if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
+	if err := handlers.Setup(ctx, app, routes, catalog, nil); err != nil {
 		return nil, err
 	}
 	return authmiddleware.LoadSessionManagement(e.Accounts, e.Sessions)(app.Web), nil
