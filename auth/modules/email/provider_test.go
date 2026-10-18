@@ -195,7 +195,7 @@ func TestProviderValidatesSigningKey(t *testing.T) {
 			if err == nil {
 				return
 			}
-			if service.config != nil || service.templates != nil {
+			if service.config != nil || service.views != nil {
 				t.Fatal("invalid signing key must be rejected before configuring the provider")
 			}
 			foundField := false

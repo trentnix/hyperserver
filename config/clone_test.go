@@ -15,7 +15,7 @@ func TestConfigClone(t *testing.T) {
 			AccountStorage: AccountStorageConfig{Provider: "custom", Options: map[string]string{"bucket": "users"}},
 			RateLimit:      &ModuleRateLimitConfig{MaxClients: 100},
 		},
-		App: AppConfig{Name: "original", SiteRateLimit: &ModuleRateLimitConfig{MaxClients: 200}, InitializationTimeout: &timeout},
+		App: AppConfig{Name: "original", InitializationTimeout: &timeout},
 	}
 	original.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
 	original.HTTP.Session.Stores = map[string]map[string]string{"cookieStore": {"enabled": "true"}, "unset": nil}
@@ -32,7 +32,6 @@ func TestConfigClone(t *testing.T) {
 		"auth provider map":        func(c *Config) { delete(c.Auth.Services, "email") },
 		"account options":          func(c *Config) { c.Auth.AccountStorage.Options["bucket"] = "other" },
 		"auth rate limit":          func(c *Config) { c.Auth.RateLimit.MaxClients++ },
-		"site rate limit":          func(c *Config) { c.App.SiteRateLimit.MaxClients++ },
 	} {
 		t.Run(name, func(t *testing.T) {
 			copy := original.Clone()

@@ -41,7 +41,7 @@ type (
 		sessions          *session.SessionManager
 		config            *config.Config
 		contentManager    *content_services.ContentManagerService
-		templates         map[string]*content.Templates
+		views             map[string]*content.View
 		mailClient        *messaging.MailClient
 		verificationEmail *template.Template
 		resetEmail        *template.Template
@@ -223,22 +223,22 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 }
 
 func (a *EmailAuthService) prepareTemplates() error {
-	prepared := make(map[string]*content.Templates)
-	for _, name := range []string{
-		emailLoginFormTemplate,
-		emailRegisterFormTemplate,
-		emailResetRequestFormTemplate,
-		emailResetPasswordFormTemplate,
-		emailChangePasswordFormTemplate,
-		"templates/html/partials/registration-pending.html",
+	prepared := make(map[string]*content.View)
+	for _, page := range []struct{ file, partial string }{
+		{emailLoginFormTemplate, emailLoginFormPartial},
+		{emailRegisterFormTemplate, emailRegisterFormPartial},
+		{emailResetRequestFormTemplate, emailResetRequestFormPartial},
+		{emailResetPasswordFormTemplate, emailResetPasswordFormPartial},
+		{emailChangePasswordFormTemplate, emailChangePasswordFormPartial},
+		{"templates/html/partials/registration-pending.html", "auth.partial.email.registration.pending"},
 	} {
-		templates, err := content.PrepareTemplates(a.contentManager, content.TemplatePath{FS: a.TemplateFS, Path: name})
+		view, err := content.PrepareView(a.contentManager, page.partial, content.TemplatePath{FS: a.TemplateFS, Path: page.file})
 		if err != nil {
-			return fmt.Errorf("prepare email auth template %s: %w", name, err)
+			return fmt.Errorf("prepare email auth template %s: %w", page.file, err)
 		}
-		prepared[name] = templates
+		prepared[page.partial] = view
 	}
-	a.templates = prepared
+	a.views = prepared
 	return nil
 }
 
@@ -270,11 +270,9 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 
 // GetLogin serves the login form
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
-	login := content.NewManagedContent(r, a.contentManager)
-	login.PartialName = emailLoginFormPartial
-	login.Templates = a.templates[emailLoginFormTemplate]
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
+	login := a.views[emailLoginFormPartial].Content(r, loginForm)
 
 	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
@@ -282,8 +280,6 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	loginForm.SetMessages(authMessages)
-
-	login.Data = loginForm
 
 	err = login.Render(w, r)
 	if err != nil {
@@ -294,21 +290,12 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Login handles a login request, validates the input, confirms the password matches the
-// password stored in the database, and handles the user response.
-//
-// The logic flow is as follows:
-//
-//	Login page
-//	  error -> back to login form with error displayed
-//	  authentication failed -> back to login form with authentication failure displayed
-//	  success -> redirect to the configured home page
+// Login validates credentials and renders failures. The auth manager establishes
+// the session and redirects after a successful login.
 func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.User {
-	login := content.NewManagedContent(r, a.contentManager)
-	login.PartialName = emailLoginFormPartial
-	login.Templates = a.templates[emailLoginFormTemplate]
 	loginForm := &LoginForm{}
 	loginForm.ActionUrl = emailLoginPath
+	login := a.views[emailLoginFormPartial].Content(r, loginForm)
 
 	err := form.ParseAndValidate(r, loginForm)
 	if err != nil {
@@ -340,11 +327,9 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	register := content.NewManagedContent(r, a.contentManager)
-	register.PartialName = emailRegisterFormPartial
-	register.Templates = a.templates[emailRegisterFormTemplate]
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
+	register := a.views[emailRegisterFormPartial].Content(r, registerForm)
 
 	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
@@ -352,8 +337,6 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	registerForm.SetMessages(authMessages)
-
-	register.Data = registerForm
 
 	err = register.Render(w, r)
 	if err != nil {
@@ -373,11 +356,9 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	register := content.NewManagedContent(r, a.contentManager)
-	register.PartialName = emailRegisterFormPartial
-	register.Templates = a.templates[emailRegisterFormTemplate]
 	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
+	register := a.views[emailRegisterFormPartial].Content(r, registerForm)
 
 	err := form.ParseAndValidate(r, registerForm)
 	if err != nil {
@@ -395,8 +376,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 	logger.Audit(r.Context(), "registration", "succeeded")
 	if a.config.Auth.RegisterRequiresVerification {
 		// The account already exists. Offer sign-in instead of another registration.
-		register.PartialName = "auth.partial.email.registration.pending"
-		register.Templates = a.templates["templates/html/partials/registration-pending.html"]
+		register = a.views["auth.partial.email.registration.pending"].Content(r, registerForm)
 		const deliveryFailure = "Your account was created, but we could not send the verification email. You can sign in to request another email. Protected pages remain unavailable until you verify your address."
 		origin, err := util.BuildPublicURL(r, a.config.HTTP, "", nil)
 		if err == nil {
@@ -425,12 +405,9 @@ func (a *EmailAuthService) ValidateVerification() error {
 
 // GetResetRequest serves the password reset request page with the resetPasswordRequestForm form
 func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
-	reset := content.NewManagedContent(r, a.contentManager)
-	reset.PartialName = emailResetRequestFormPartial
-	reset.Templates = a.templates[emailResetRequestFormTemplate]
-
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
+	reset := a.views[emailResetRequestFormPartial].Content(r, resetRequestForm)
 
 	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
@@ -438,8 +415,6 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	resetRequestForm.SetMessages(authMessages)
-
-	reset.Data = resetRequestForm
 
 	err = reset.Render(w, r)
 	if err != nil {
@@ -457,12 +432,9 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 // Delivery and rendering errors do not change the completed storage operations.
 func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, tokenExpiration time.Duration) {
 	respondAfter := time.Now().Add(a.config.Auth.ResetMinimumResponseTime)
-	reset := content.NewManagedContent(r, a.contentManager)
-	reset.PartialName = emailResetRequestFormPartial
-	reset.Templates = a.templates[emailResetRequestFormTemplate]
-
 	resetRequestForm := &ResetPasswordRequestForm{}
 	resetRequestForm.ActionUrl = emailResetRequestPath
+	reset := a.views[emailResetRequestFormPartial].Content(r, resetRequestForm)
 
 	err := form.ParseAndValidate(r, resetRequestForm)
 	if err != nil {
@@ -513,9 +485,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 	resetForm := &ResetPasswordForm{}
 	resetForm.ActionUrl = emailResetPath + "?" + url.Values{"token": {token}}.Encode()
 
-	reset := content.NewManagedContent(r, a.contentManager)
-	reset.PartialName = emailResetPasswordFormPartial
-	reset.Templates = a.templates[emailResetPasswordFormTemplate]
+	reset := a.views[emailResetPasswordFormPartial].Content(r, resetForm)
 
 	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
@@ -523,8 +493,6 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 		return
 	}
 	resetForm.SetMessages(authMessages)
-
-	reset.Data = resetForm
 
 	err = reset.Render(w, r)
 	if err != nil {
@@ -541,12 +509,8 @@ func (a *EmailAuthService) Reset(
 	token string,
 	requireNewCredentials bool,
 ) {
-	reset := content.NewManagedContent(r, a.contentManager)
-	reset.PartialName = emailResetPasswordFormPartial
-	reset.Templates = a.templates[emailResetPasswordFormTemplate]
-
 	resetForm := &ResetPasswordForm{}
-	reset.Data = resetForm
+	reset := a.views[emailResetPasswordFormPartial].Content(r, resetForm)
 
 	if u == nil {
 		a.contentManager.HandleError(w, r, "Unable to reset password. Please try again later.",
@@ -598,9 +562,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 	changeForm := &ChangePasswordForm{}
 	changeForm.ActionUrl = emailChangePath
 
-	change := content.NewManagedContent(r, a.contentManager)
-	change.PartialName = emailChangePasswordFormPartial
-	change.Templates = a.templates[emailChangePasswordFormTemplate]
+	change := a.views[emailChangePasswordFormPartial].Content(r, changeForm)
 
 	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
 	if err != nil {
@@ -608,8 +570,6 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	changeForm.SetMessages(authMessages)
-
-	change.Data = changeForm
 
 	err = change.Render(w, r)
 	if err != nil {
@@ -623,13 +583,9 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *user.User) {
 	changeErrMsg := "unable to change your password"
 
-	change := content.NewManagedContent(r, a.contentManager)
-	change.PartialName = emailChangePasswordFormPartial
-	change.Templates = a.templates[emailChangePasswordFormTemplate]
-
 	changeForm := &ChangePasswordForm{}
-	change.Data = changeForm
 	changeForm.ActionUrl = emailChangePath
+	change := a.views[emailChangePasswordFormPartial].Content(r, changeForm)
 
 	if u == nil {
 		form.HandleFormError(
@@ -670,6 +626,7 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	identity.ClearAuthenticationCookie(w, r)
 	changeForm.AddSuccessMessage("Your password has been changed. Please log in again.")
 
+	change = a.views[emailChangePasswordFormPartial].Content(r, changeForm)
 	err = change.Render(w, r)
 	if err != nil {
 		a.contentManager.HandleError(

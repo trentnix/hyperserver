@@ -93,7 +93,6 @@ func TestRateLimitSettingsAreIndependent(t *testing.T) {
 func TestModuleRateLimitConfiguration(t *testing.T) {
 	for _, scope := range []struct{ section, key, env string }{
 		{"auth", "rateLimit", "HYPERSERVER_AUTH_RATELIMIT_MAXCLIENTS"},
-		{"app", "siteRateLimit", "HYPERSERVER_APP_SITERATELIMIT_MAXCLIENTS"},
 	} {
 		for _, tc := range []struct {
 			name, file, env string
@@ -130,12 +129,9 @@ func TestModuleRateLimitConfiguration(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				configured, other := cfg.Auth.RateLimit, cfg.App.SiteRateLimit
-				if scope.section == "app" {
-					configured, other = other, configured
-				}
-				if configured == nil || configured.MaxClients != tc.want || other == nil || other.MaxClients != 4096 {
-					t.Fatalf("configured = %+v, other = %+v, want %d and 4096", configured, other, tc.want)
+				configured := cfg.Auth.RateLimit
+				if configured == nil || configured.MaxClients != tc.want {
+					t.Fatalf("configured = %+v, want %d", configured, tc.want)
 				}
 				if cfg.HTTP.DefaultRateLimit.MaxClients != 4096 || cfg.HTTP.SharedRateLimit.MaxClients != 4096 {
 					t.Fatal("module capacity changed an HTTP capacity")

@@ -15,6 +15,8 @@ type (
 	Claims struct {
 		// identifies a unique session
 		ID string `json:"id"`
+		// Name binds the token to its named session.
+		Name string `json:"name"`
 		// Purpose distinguishes session cookies from account-action tokens.
 		Purpose string `json:"purpose"`
 		// values that can be stored in a session
@@ -36,7 +38,7 @@ func (c *Claims) ExpiresAtTime() time.Time {
 }
 
 // Parse validates a signed session token and extracts its claims.
-func Parse(tokenString string, jwtKey []byte) (*Claims, error) {
+func Parse(tokenString string, jwtKey []byte, name string) (*Claims, error) {
 	if len(tokenString) > sessions.MaxCookieSize {
 		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, sessions.ErrSessionCookieTooLarge)
 	}
@@ -56,7 +58,7 @@ func Parse(tokenString string, jwtKey []byte) (*Claims, error) {
 		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, err)
 	}
 
-	if !token.Valid || claims.ID == "" || claims.Purpose != Purpose {
+	if !token.Valid || claims.ID == "" || claims.Purpose != Purpose || name == "" || claims.Name != name {
 		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, fmt.Errorf("invalid session claims"))
 	}
 	return claims, nil

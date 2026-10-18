@@ -8,6 +8,8 @@ The `session` package defines session values, storage contracts, and request han
 
 `SQLiteStore` stores session data in SQLite. Its signed cookie contains a session ID and token metadata, not session data. Authentication requires a store that supports revocable rotation, such as SQLite. Cookie-only sessions cannot revoke captured cookies.
 
+Both providers bind signed cookies to the session name. Renamed cookies and older cookies without a signed name are rejected. After upgrading from the unnamed format, clear the browser's HyperServer cookies and sign in again. This does not change stored payload or database schema versions.
+
 Both stores default to versioned JSON encoded in URL-safe base64. Each store can select a different [Serializer](serializer.go). `Session.Data` still accepts JSON-compatible values. The JSON serializer restores numbers as `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read values into the expected type. That helper uses JSON conversion independently of the storage format.
 
 - `MaxSessionDataSize` limits serialized data to 64 KiB before base64 encoding. Reads reject oversized data before calling the serializer. Saves and rotations reject oversized serializer output before writing storage.

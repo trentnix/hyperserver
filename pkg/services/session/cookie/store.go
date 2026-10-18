@@ -76,7 +76,7 @@ func (c *CookieStore) Get(r *http.Request, name string) (*sessions.Session, erro
 	}
 
 	// return the decoded Session data
-	claimsData, sessionError := sessioncookie.Parse(jwtValue, c.JwtKey)
+	claimsData, sessionError := sessioncookie.Parse(jwtValue, c.JwtKey, name)
 	if errors.Is(sessionError, jwt.ErrTokenExpired) {
 		return sessions.NewSession(c, name), nil
 	}
@@ -119,6 +119,7 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *sess
 
 	claims := &sessioncookie.Claims{
 		ID:      session.ID,
+		Name:    session.Name,
 		Purpose: sessioncookie.Purpose,
 		Value:   sessionValue,
 		RegisteredClaims: jwt.RegisteredClaims{

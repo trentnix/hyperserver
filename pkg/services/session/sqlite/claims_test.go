@@ -31,11 +31,11 @@ func TestSessionStoresRejectInvalidClaims(t *testing.T) {
 			}
 			cookie := w.Result().Cookies()[0]
 			key := []byte("secretKey00000000000000000000000")
-			if _, err := sessioncookie.Parse(cookie.Value, key); err != nil {
+			if _, err := sessioncookie.Parse(cookie.Value, key, cookie.Name); err != nil {
 				t.Fatalf("store issued an invalid session token: %v", err)
 			}
 
-			for _, failure := range []string{"missing expiry", "wrong algorithm", "wrong purpose"} {
+			for _, failure := range []string{"missing expiry", "wrong algorithm", "wrong purpose", "missing name", "wrong name"} {
 				t.Run(failure, func(t *testing.T) {
 					claims := jwt.MapClaims{}
 					if _, err := jwt.ParseWithClaims(cookie.Value, claims, func(*jwt.Token) (any, error) { return key, nil }); err != nil {
@@ -43,6 +43,10 @@ func TestSessionStoresRejectInvalidClaims(t *testing.T) {
 					}
 					method := jwt.SigningMethodHS256
 					switch failure {
+					case "missing name":
+						delete(claims, "name")
+					case "wrong name":
+						claims["name"] = "other"
 					case "missing expiry":
 						delete(claims, "exp")
 					case "wrong algorithm":

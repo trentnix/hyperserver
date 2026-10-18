@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -230,7 +232,14 @@ func TestHTTPModuleClientCapacities(t *testing.T) {
 		}
 	}, func(cfg *config.Config) {
 		cfg.Auth.RateLimit = &config.ModuleRateLimitConfig{MaxClients: 2}
-		cfg.App.SiteRateLimit = &config.ModuleRateLimitConfig{MaxClients: 3}
+		cfg.App.WorkingDirectory = t.TempDir()
+		directory := filepath.Join(cfg.App.WorkingDirectory, "modules", "site")
+		if err := os.MkdirAll(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "config.yaml"), []byte("rateLimit:\n  maxClients: 3\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
 		// Module capacities and request allowances must not inherit these smaller defaults.
 		cfg.HTTP.DefaultRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 1}
 	})

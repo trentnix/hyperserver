@@ -52,7 +52,8 @@ func TestServeDrainsBeforeApplicationShutdown(t *testing.T) {
 			go func() {
 				defer close(stopped)
 				serveErr = app.Run(ctx, func(context.Context) (*http.Server, net.Listener, error) {
-					return newHTTPServer(app), listener, nil
+					httpServer, err := newHTTPServer(app)
+					return httpServer, listener, err
 				})
 			}()
 			t.Cleanup(func() {
@@ -132,7 +133,8 @@ func TestServeFailureClosesApplication(t *testing.T) {
 	}
 	listener.Close()
 	err = app.Run(context.Background(), func(context.Context) (*http.Server, net.Listener, error) {
-		return newHTTPServer(app), listener, nil
+		httpServer, err := newHTTPServer(app)
+		return httpServer, listener, err
 	})
 	if err == nil || !closed {
 		t.Fatalf("failed serving left resources open: error=%v closed=%t", err, closed)

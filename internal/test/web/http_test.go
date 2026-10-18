@@ -238,7 +238,10 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	}
 	logs := &capturedLogs{}
 	log := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	handler = middleware.LoggerMiddleware(log)(http.NewCrossOriginProtection().Handler(handler))
+	handler, err = middleware.Web(handler, app.Config.HTTP, "", log)
+	if err != nil {
+		t.Fatal(err)
+	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)

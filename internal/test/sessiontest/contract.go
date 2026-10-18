@@ -22,6 +22,26 @@ import (
 // and expiry boundaries remain in provider tests, using their serializer and clock.
 func RunCommon(t *testing.T, open func(*testing.T) session.SessionStore) {
 	t.Helper()
+	t.Run("cookie name isolation", func(t *testing.T) {
+		store := open(t)
+		original, r := saved(t, store)
+		cookie, err := r.Cookie(original.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cookie.Name = "another-session"
+		renamed := request()
+		renamed.AddCookie(cookie)
+		got, err := store.Get(renamed, cookie.Name)
+		if err == nil {
+			if got == nil || !got.IsNew || got.ID == original.ID || len(got.Data) != 0 {
+				t.Fatalf("renamed cookie restored a session: %+v", got)
+			}
+		} else if got != nil {
+			t.Fatalf("failed lookup returned a session: %+v, %v", got, err)
+		}
+		unchanged(t, store, r, original)
+	})
 	t.Run("round trip and independent reads", func(t *testing.T) {
 		store := open(t)
 		if !store.IsEnabled() {
@@ -221,6 +241,13 @@ func Run(t *testing.T, open func(*testing.T) session.SessionStore) {
 		loaded := load(t, store, cookieRequest(t, w), old.Name)
 		if loaded.ID != next.ID || loaded.Data["value"] != "rotated" {
 			t.Fatal("replacement cookie cannot load the new data")
+		}
+		cookie := w.Result().Cookies()[0]
+		cookie.Name = "another-session"
+		renamed := request()
+		renamed.AddCookie(cookie)
+		if got, err := store.Get(renamed, cookie.Name); err == nil && (got == nil || !got.IsNew || len(got.Data) != 0 || got.ID == next.ID) {
+			t.Fatal("rotated cookie restored data under another name")
 		}
 		if replay := load(t, store, r, old.Name); !replay.IsNew || replay.ID == old.ID {
 			t.Fatal("old cookie restored a rotated session")

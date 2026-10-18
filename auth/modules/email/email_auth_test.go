@@ -458,6 +458,9 @@ func TestRegisterUsesAccountRepository(t *testing.T) {
 		contentManager: content.NewContentManager(),
 	}
 	service.contentManager.AuthURL = "/login"
+	if err := service.prepareTemplates(); err != nil {
+		t.Fatal(err)
+	}
 	w := httptest.NewRecorder()
 	service.Register(w, r)
 	if calls != 1 || w.Code != http.StatusSeeOther || w.Header().Get("Location") != service.contentManager.AuthURL {
@@ -538,6 +541,44 @@ func TestChangeUsesAccountRepository(t *testing.T) {
 			}
 			if wantCalls == 1 && !strings.Contains(w.Body.String(), "unable to change your password") {
 				t.Fatalf("repository failure did not render an error: %s", w.Body.String())
+			}
+		})
+	}
+}
+
+func TestChangeRendersLoggedOutLayout(t *testing.T) {
+	hash, err := password.HashPassword("OldPassword1!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, htmx := range []bool{false, true} {
+		t.Run(fmt.Sprintf("htmx=%v", htmx), func(t *testing.T) {
+			account := &user.User{ID: "account", Password: hash, SessionVersion: 1}
+			accounts := emailAccountRepository{changePassword: func(_ context.Context, u *user.User, hash string) error {
+				u.Password = hash
+				u.SessionVersion++
+				return nil
+			}}
+			cm := content.NewContentManager()
+			cm.BuildLayoutData = func(r *http.Request) any { return user.GetUserFromContext(r.Context()) != nil }
+			layout := fstest.MapFS{"layout.html": {Data: []byte(`signed-in={{.LayoutData}} {{renderPartial .PartialName .}}`)}}
+			cm.AddPageLayout(layout, "layout.html")
+			cm.AddHtmxLayout(layout, "layout.html")
+			service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, accounts: accounts, contentManager: cm}
+			if err := service.prepareTemplates(); err != nil {
+				t.Fatal(err)
+			}
+			values := url.Values{"oldPassword": {"OldPassword1!"}, "newPassword": {"NewPassword1!"}, "newPasswordMatch": {"NewPassword1!"}}
+			r := httptest.NewRequest("POST", emailChangePath, strings.NewReader(values.Encode()))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if htmx {
+				r.Header.Set("HX-Request", "true")
+			}
+			r = user.AddUserToRequestContext(r, account)
+			w := httptest.NewRecorder()
+			service.Change(w, r, account)
+			if w.Code != 200 || user.GetUserFromContext(r.Context()) != nil || !strings.Contains(w.Body.String(), "signed-in=false") || !strings.Contains(w.Body.String(), "Your password has been changed") {
+				t.Fatalf("stale success response: %d %s", w.Code, w.Body.String())
 			}
 		})
 	}

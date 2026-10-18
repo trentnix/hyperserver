@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"net/http/httptest"
 	"testing"
+
+	hserrors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 func TestContextLogger(t *testing.T) {
@@ -26,6 +28,23 @@ func TestContextLogger(t *testing.T) {
 	}
 	if Get(Set(child, nil)) != nil || Get(child) != second {
 		t.Fatal("nil did not mask the inherited logger")
+	}
+}
+
+func TestErrorDetails(t *testing.T) {
+	private := hserrors.WithCause(errors.New("operation failed"), errors.New("storage unavailable"))
+	for _, test := range []struct {
+		err  error
+		want string
+	}{
+		{errors.New("plain"), "plain"},
+		{fmt.Errorf("load: %w", errors.New("storage unavailable")), "load: storage unavailable"},
+		{fmt.Errorf("load: %w", private), "load: operation failed -> storage unavailable"},
+		{errors.Join(private, hserrors.WithCause(errors.New("cleanup failed"), errors.New("close unavailable"))), "operation failed\ncleanup failed -> storage unavailable -> close unavailable"},
+	} {
+		if got := errorDetails(test.err); got != test.want {
+			t.Fatalf("details=%q, want %q", got, test.want)
+		}
 	}
 }
 
@@ -51,7 +70,7 @@ func TestLogRequestError(t *testing.T) {
 	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
 		t.Fatal(err)
 	}
-	if record["requestID"] != "request-123" || record["error"] != "load failed: storage unavailable -> storage unavailable" {
+	if record["requestID"] != "request-123" || record["error"] != "load failed: storage unavailable" {
 		t.Fatalf("lost inherited fields or error cause: %v", record)
 	}
 }

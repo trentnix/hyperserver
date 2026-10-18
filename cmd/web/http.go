@@ -107,17 +107,7 @@ func applicationHandler(s *application, l *slog.Logger) (http.Handler, error) {
 	if s.Config.Auth.Enabled {
 		loadSession = authmiddleware.LoadSessionManagement(s.AccountRepository, s.SessionManager)
 	}
-	handler := middleware.ChainMiddleware(s.Web,
-		loadSession,
-		http.NewCrossOriginProtection().Handler,
-	)
-	handler, err := middleware.FromConfig(handler, s.Config.HTTP)
-	if err != nil {
-		return nil, err
-	}
-
-	handler = middleware.SecurityHeaders(referenceContentSecurityPolicy)(handler)
-	return middleware.LoggerMiddleware(l)(handler), nil
+	return middleware.Web(loadSession(s.Web), s.Config.HTTP, referenceContentSecurityPolicy, l)
 }
 
 // referenceListenAddress keeps the development application on loopback interfaces.

@@ -9,7 +9,6 @@ import (
 
 	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/handlers"
-	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -64,10 +63,6 @@ func configureRendering(app *server.ApplicationServer) error {
 // SetupHandlers selects the reference application's route defaults and delegates
 // module initialization, registration, and cleanup to handlers.Setup.
 func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log *slog.Logger, catalog []handlers.Descriptor, providers map[string]string) error {
-	routes, err := routing.NewConfiguredRoutes(s.Web, s.Config.HTTP, log)
-	if err != nil {
-		return err
-	}
 	// Resolve for diagnostics, but initialize the original catalog so multiple
 	// providers retain their declared binding order, not initialization order.
 	resolved, err := handlers.Resolve(catalog, providers)
@@ -77,7 +72,7 @@ func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log *slog.L
 	if log != nil {
 		ctx = logger.Set(ctx, log)
 	}
-	if err := handlers.Setup(ctx, s, routes, catalog, providers); err != nil {
+	if err := handlers.Setup(ctx, s, nil, catalog, providers); err != nil {
 		return err
 	}
 

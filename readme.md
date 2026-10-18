@@ -82,7 +82,7 @@ Trust only the direct proxy peer and restrict backend access to it. Trusting loo
 
 Verified proxy information controls client-IP limits and cookie security. `publicOrigin` alone does not enable TLS or secure cookies. For a custom HTTP stack, install [proxy verification](pkg/requestinfo/request.go) before rate limits and session loading.
 
-The reference stack includes security headers and Go's `http.CrossOriginProtection`. Other applications must select and install their own middleware. Keep Host and origin headers intact through proxies. For HTTPS-only deployments, `http.hstsMaxAge` enables HSTS for direct or verified proxy HTTPS. The default `0` omits it but does not clear a browser's existing policy.
+Use `middleware.Web(handler, cfg.HTTP, contentSecurityPolicy, log)` for the standard HTTP stack, including security headers and Go's `http.CrossOriginProtection`. Supply session loading inside `handler`. Keep Host and origin headers intact through proxies. For HTTPS-only deployments, `http.hstsMaxAge` enables HSTS for direct or verified proxy HTTPS. The default `0` omits it but does not clear a browser's existing policy.
 
 ## Module registration
 
@@ -99,7 +99,7 @@ func init() {
 
 Factories must return fresh instances without I/O. Application setup supplies shared services and selects a copy of `handlers.Registered()` or a local `[]handlers.Descriptor`. Imports make modules available. The selected catalog controls which modules initialize.
 
-Call `handlers.Setup(ctx, app, routes, catalog, selections)` after configuring services and rendering. It initializes modules, binds routes, and registers reverse-order cleanup. A nil catalog selects no modules. If setup fails, discard the application because its mux may contain routes.
+Call `handlers.Setup(ctx, app, routes, catalog, selections)` after configuring services and rendering. It initializes modules, binds routes, and registers reverse-order cleanup. Nil routes use `http.defaultRateLimit`. Explicit routes retain their own defaults. A nil catalog selects no modules. If setup fails, discard the application because its mux may contain routes.
 
 Modules use ordinary handlers and return registration errors:
 
@@ -268,12 +268,16 @@ Configure their client capacities separately from the HTTP defaults:
 auth:
   rateLimit:
     maxClients: 10000
-app:
-  siteRateLimit:
-    maxClients: 2000
 ```
 
-These capacities apply per route, not across a module. Both default to 4,096 and must be positive. Override them with `HYPERSERVER_AUTH_RATELIMIT_MAXCLIENTS` and `HYPERSERVER_APP_SITERATELIMIT_MAXCLIENTS`. HTTP rate-limit capacities do not change these settings.
+For the reference site, use an optional `modules/site/config.yaml` under `app.workingDirectory`:
+
+```yaml
+rateLimit:
+  maxClients: 2000
+```
+
+These capacities apply per route, not across a module. Both default to 4,096 and must be positive. `HYPERSERVER_AUTH_RATELIMIT_MAXCLIENTS` overrides the auth setting. Module files do not read environment overrides. HTTP rate-limit capacities do not change these settings.
 
 Startup warns when a route's allowance exceeds an enabled `http.sharedRateLimit` with the same window duration. The warning identifies the route and both per-IP allowances. Startup continues with both limits enforced. Different windows and explicit opt-outs do not trigger this warning.
 

@@ -23,6 +23,58 @@ type setupModule struct {
 	routes func(*routing.Routes) error
 }
 
+func TestSetupConfiguredRouteDefaults(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		t.Run(map[bool]string{false: "configured default", true: "explicit routes"}[explicit], func(t *testing.T) {
+			cfg := config.Config{HTTP: config.HTTPConfig{DefaultRateLimit: config.RateLimitConfig{
+				Enabled: true, Requests: 1, Window: time.Hour, MaxClients: 10,
+			}}}
+			app, err := server.NewApplicationServer(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { app.Shutdown() })
+			var routes *routing.Routes
+			if explicit {
+				routes = routing.NewRoutes(app.Web)
+			}
+			module := &setupModule{routes: func(routes *routing.Routes) error {
+				routes.HandleFunc("GET /test", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
+				return routes.Err()
+			}}
+			module.close = func(context.Context) error { return nil }
+			if err := handlers.Setup(t.Context(), app, routes, []handlers.Descriptor{
+				{Name: "test", New: func() handlers.Handler { return module }},
+			}, nil); err != nil {
+				t.Fatal(err)
+			}
+			for i := range 2 {
+				w := httptest.NewRecorder()
+				app.Web.ServeHTTP(w, httptest.NewRequest("GET", "/test", nil))
+				want := 204
+				if !explicit && i == 1 {
+					want = 429
+				}
+				if w.Code != want {
+					t.Fatalf("request %d: status %d, want %d", i, w.Code, want)
+				}
+			}
+		})
+	}
+}
+
+func TestSetupRejectsInvalidDefaultBeforeInitializing(t *testing.T) {
+	app, err := server.NewApplicationServer(config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Config.HTTP.DefaultRateLimit.Enabled = true
+	app.ContentManager.PrepareTemplates = func() error { t.Fatal("prepared templates with invalid limits"); return nil }
+	if err := handlers.Setup(t.Context(), app, nil, nil, nil); err == nil {
+		t.Fatal("invalid rate limit accepted")
+	}
+}
+
 func (m *setupModule) Routes(routes *routing.Routes) error { return m.routes(routes) }
 
 func TestSetupPreparesSharedTemplatesBeforeModules(t *testing.T) {

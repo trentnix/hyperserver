@@ -54,7 +54,6 @@ func defaultConfig() Config {
 	c.HTTP.DefaultRateLimit = RateLimitConfig{Requests: 20, Window: time.Minute, MaxClients: 4096}
 	c.HTTP.SharedRateLimit = RateLimitConfig{Requests: 120, Window: time.Minute, MaxClients: 4096}
 	c.Auth.RateLimit = &ModuleRateLimitConfig{MaxClients: 4096}
-	c.App.SiteRateLimit = &ModuleRateLimitConfig{MaxClients: 4096}
 	initializationTimeout := 10 * time.Second
 	c.App.InitializationTimeout = &initializationTimeout
 	c.Auth.ResetMinimumResponseTime = 2 * time.Second
@@ -101,8 +100,6 @@ func configFields(c *Config) map[string]any {
 		"auth.registerRequiresVerification": &c.Auth.RegisterRequiresVerification,
 		"database.driver":                   &c.Database.Driver,
 		"database.connection":               &c.Database.Connection,
-		"database.testConnection":           &c.Database.TestConnection,
-		"app.siteRateLimit.maxClients":      &c.App.SiteRateLimit.MaxClients,
 		"app.name":                          &c.App.Name,
 		"app.initializationTimeout":         c.App.InitializationTimeout,
 		"app.workingDirectory":              &c.App.WorkingDirectory,

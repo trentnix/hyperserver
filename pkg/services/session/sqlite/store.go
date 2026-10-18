@@ -142,7 +142,7 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*sessions.Session, erro
 	}
 
 	// return the decoded Session data
-	claimsData, sessionError := sessioncookie.Parse(jwtValue, s.JwtKey)
+	claimsData, sessionError := sessioncookie.Parse(jwtValue, s.JwtKey, name)
 	if errors.Is(sessionError, jwt.ErrTokenExpired) {
 		return sessions.NewSession(s, name), nil
 	}
@@ -210,6 +210,7 @@ func (s *SQLiteStore) sessionCookie(session *sessions.Session, secure bool) (*ht
 
 	claims := &sessioncookie.Claims{
 		ID:      session.ID,
+		Name:    session.Name,
 		Purpose: sessioncookie.Purpose,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(tokenExpiration),

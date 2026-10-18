@@ -20,7 +20,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/handlers"
-	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -129,11 +128,7 @@ func newSiteHTTPHarness(t testing.TB, catalogFactory func(*httpHarness) ([]handl
 		t.Fatal(err)
 	}
 	log := newTestLogger(h.logs)
-	routes, err := routing.NewConfiguredRoutes(app.Web, cfg.HTTP, log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := handlers.Setup(logger.Set(t.Context(), log), app, routes, catalog, nil); err != nil {
+	if err := handlers.Setup(logger.Set(t.Context(), log), app, nil, catalog, nil); err != nil {
 		t.Fatal(err)
 	}
 	h.handler, err = siteHTTPHandler(h, log)
@@ -163,13 +158,7 @@ func siteHTTPHandler(h *httpHarness, log *slog.Logger) (http.Handler, error) {
 	if h.app.Config.Auth.Enabled {
 		loadSession = authmiddleware.LoadSessionManagement(h.accounts, h.sessions)
 	}
-	handler := http.NewCrossOriginProtection().Handler(loadSession(h.app.Web))
-	handler, err := middleware.FromConfig(handler, h.app.Config.HTTP)
-	if err != nil {
-		return nil, err
-	}
-	handler = middleware.SecurityHeaders(referenceContentSecurityPolicy)(handler)
-	return middleware.LoggerMiddleware(log)(handler), nil
+	return middleware.Web(loadSession(h.app.Web), h.app.Config.HTTP, referenceContentSecurityPolicy, log)
 }
 
 func testTemplateFile(t *testing.T, name string) content.TemplatePath {

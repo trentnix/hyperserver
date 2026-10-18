@@ -29,8 +29,9 @@ http:
   hstsMaxAge: 0
   # Maximum time to read a request, including its body. Zero disables the limit.
   readTimeout: "5s"
-  # Maximum time to write a response. Zero disables the limit.
-  writeTimeout: "10s"
+  # Response budget, including handler work. Allow time for mail.timeout plus rendering.
+  # Zero disables the limit.
+  writeTimeout: "40s"
   # Maximum wait for another request on a keep-alive connection.
   # Zero uses readTimeout.
   idleTimeout: "2m"
@@ -172,8 +173,6 @@ database:
   # Database file and driver options. Relative SQLite paths use the config directory or app.workingDirectory.
   # Foreign keys must stay enabled. _timeout sets the lock wait in milliseconds (default 5000, 0 disables waiting).
   connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
-  # Unused by the current application and test harness. Tests supply their own connections.
-  testConnection: ":memory:?_journal=WAL&_timeout=5000&_fk=true"
 
 # Reference application startup, identity, and rendering settings.
 app:
@@ -181,11 +180,6 @@ app:
   # Defaults to 10s and must be positive. An earlier parent deadline takes precedence.
   # Database, account, and session setup retain their separate ten-second limits.
   initializationTimeout: "10s"
-  # Capacity for each reference-site contact/test-email route.
-  siteRateLimit:
-    # Maximum tracked client IPs per route. Defaults to 4096. Must be positive.
-    # At capacity, new IPs receive 429 until an entry expires.
-    maxClients: 4096
   # Application name used in page content and verification emails.
   name: "HyperServer"
   # Optional base directory for local storage, TLS files, and -contact-directory.

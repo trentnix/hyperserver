@@ -4,7 +4,6 @@ package logger
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -41,10 +40,30 @@ func LogRequestError(r *http.Request, err error) {
 		return
 	}
 
-	var messages []string
-	for err != nil {
-		messages = append(messages, err.Error())
-		err = errors.Unwrap(err)
+	l.ErrorContext(r.Context(), "Request Error", "error", errorDetails(err))
+}
+
+// Some errors expose only public text through Error. Include their private causes
+// in diagnostics, without repeating causes already present in wrapped error text.
+func errorDetails(err error) string {
+	details := err.Error()
+	var visit func(error)
+	visit = func(err error) {
+		if err == nil {
+			return
+		}
+		if message := err.Error(); !strings.Contains(details, message) {
+			details += " -> " + message
+		}
+		switch err := err.(type) {
+		case interface{ Unwrap() []error }:
+			for _, cause := range err.Unwrap() {
+				visit(cause)
+			}
+		case interface{ Unwrap() error }:
+			visit(err.Unwrap())
+		}
 	}
-	l.ErrorContext(r.Context(), "Request Error", "error", strings.Join(messages, " -> "))
+	visit(err)
+	return details
 }

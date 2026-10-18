@@ -78,15 +78,13 @@ type (
 
 	// DatabaseConfig stores the database configuration
 	DatabaseConfig struct {
-		Driver         string
-		Connection     string
-		TestConnection string
+		Driver     string
+		Connection string
 	}
 
 	// AppConfig stores application configuration
 	AppConfig struct {
-		InitializationTimeout *time.Duration         // Module startup budget. Nil uses the initializer's default. If set, must be positive.
-		SiteRateLimit         *ModuleRateLimitConfig // Capacity for each reference-site submission route. Nil uses defaults.
+		InitializationTimeout *time.Duration // Module startup budget. Nil uses the initializer's default. If set, must be positive.
 		Name                  string
 		WorkingDirectory      string // Resource base for local files. Does not change the process directory.
 		RenderNotifications   bool

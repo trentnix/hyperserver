@@ -66,9 +66,6 @@ func (c Config) Validate() error {
 	if _, err := c.Auth.RateLimit.ClientCapacity(); err != nil {
 		return fmt.Errorf("auth.rateLimit.%w", err)
 	}
-	if _, err := c.App.SiteRateLimit.ClientCapacity(); err != nil {
-		return fmt.Errorf("app.siteRateLimit.%w", err)
-	}
 
 	if c.Auth.Enabled {
 		if err := ValidateSigningKey("auth.jwtKey", c.Auth.JwtKey); err != nil {

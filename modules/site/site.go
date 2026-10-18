@@ -31,7 +31,6 @@ type (
 	// SiteModule contains all of the data required to implement the site module
 	SiteModule struct {
 		pageRenderer
-		AppName string
 		// NewContacts prepares this module's contact storage. Applications must
 		// supply the factory before initialization.
 		NewContacts func(context.Context) (ContactRepository, error)
@@ -39,9 +38,18 @@ type (
 		contacts            ContactRepository
 		mailClient          *messaging.MailClient
 		registrationEnabled bool
-		rateLimit           *config.ModuleRateLimitConfig
+		settings            Settings
 	}
 )
+
+// Settings configures the development site's submission routes.
+type Settings struct {
+	RateLimit *config.ModuleRateLimitConfig `yaml:"rateLimit"`
+}
+
+// Configuration exposes optional modules/site/config.yaml settings.
+// Omitted settings keep the standard route capacity.
+func (m *SiteModule) Configuration() any { return &m.settings }
 
 // pageRenderer implements shared responses without requiring a live site module.
 type pageRenderer struct {
@@ -103,6 +111,9 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	if s.ContentManager == nil {
 		return fmt.Errorf("site requires a content manager")
 	}
+	if _, err := m.settings.RateLimit.ClientCapacity(); err != nil {
+		return fmt.Errorf("site.rateLimit.%w", err)
+	}
 
 	if m.NewContacts == nil {
 		return fmt.Errorf("site requires a contact-storage factory")
@@ -136,9 +147,6 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	if contacts == nil {
 		return fmt.Errorf("site contact repository is not configured")
 	}
-
-	m.AppName = s.Config.App.Name
-	m.rateLimit = s.Config.App.SiteRateLimit
 
 	m.contacts = contacts
 	m.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled

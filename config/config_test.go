@@ -468,3 +468,17 @@ func TestTemplateSessionSigningKey(t *testing.T) {
 		})
 	}
 }
+
+func TestTemplateResponseBudget(t *testing.T) {
+	template, err := os.ReadFile("../config-template.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := readConfig(strings.NewReader(string(template)), []string{"HYPERSERVER_AUTH_ENABLED=false"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Mail.Timeout <= 0 || cfg.HTTP.WriteTimeout < cfg.Mail.Timeout+5*time.Second {
+		t.Fatal("example response timeout must allow mail delivery and response work")
+	}
+}

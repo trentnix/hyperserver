@@ -27,6 +27,7 @@ type (
 		// Invalid cookies, storage failures, and corrupt data return an error.
 		// Expiration must be checked on reads, independently of cleanup. Separate
 		// requests must receive independent session data.
+		// A cookie issued for another name must not restore that session.
 		Get(r *http.Request, name string) (*Session, error)
 		// New creates an unsaved session with a new ID.
 		New(r *http.Request, name string) (*Session, error)

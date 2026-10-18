@@ -13,14 +13,22 @@ func TestParseSessionJWT(t *testing.T) {
 		"missing ID", "missing purpose", "reset purpose", "verification purpose",
 		"HS384", "HS512", "unsigned", "wrong key", "empty key",
 		"future issued at", "future not before", "malformed", "empty token",
+		"missing name", "wrong name", "empty expected name",
 	} {
 		t.Run(name, func(t *testing.T) {
 			expires := time.Now().Add(time.Hour).Truncate(time.Second)
-			claims := jwt.MapClaims{"id": "session-id", "purpose": "session", "exp": expires.Unix()}
+			claims := jwt.MapClaims{"id": "session-id", "name": "account", "purpose": "session", "exp": expires.Unix()}
+			expectedName := "account"
 			key := []byte("test-session-key")
 			var signingKey any = key
 			var method jwt.SigningMethod = jwt.SigningMethodHS256
 			switch name {
+			case "missing name":
+				delete(claims, "name")
+			case "wrong name":
+				claims["name"] = "other"
+			case "empty expected name":
+				expectedName = ""
 			case "missing expiry":
 				delete(claims, "exp")
 			case "null expiry":
@@ -65,7 +73,7 @@ func TestParseSessionJWT(t *testing.T) {
 				raw = ""
 			}
 
-			got, err := Parse(raw, key)
+			got, err := Parse(raw, key, expectedName)
 			if name != "valid" {
 				if err == nil || got != nil {
 					t.Fatal("invalid session token accepted")

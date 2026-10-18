@@ -16,9 +16,9 @@ import (
 // Routes registers routes with the provided router and, along with Init, satisfies
 // the Handler interface
 func (m *SiteModule) Routes(mux *routing.Routes) error {
-	maxClients, err := m.rateLimit.ClientCapacity()
+	maxClients, err := m.settings.RateLimit.ClientCapacity()
 	if err != nil {
-		return fmt.Errorf("app.siteRateLimit.%w", err)
+		return fmt.Errorf("site.rateLimit.%w", err)
 	}
 	submissions, err := mux.WithRateLimit(ratelimit.Policy{Requests: 10, Window: time.Minute, MaxClients: maxClients})
 	if err != nil {

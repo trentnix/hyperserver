@@ -43,19 +43,24 @@ func main() {
 			return nil, nil, err
 		}
 		log.Printf("Hello application listening at http://%s", listener.Addr())
-		return newHTTPServer(app), listener, nil
+		httpServer, err := newHTTPServer(app)
+		return httpServer, listener, err
 	}); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func newHTTPServer(app *server.ApplicationServer) *http.Server {
-	handler := middleware.SecurityHeaders("default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")(app.Web)
+func newHTTPServer(app *server.ApplicationServer) (*http.Server, error) {
+	handler, err := middleware.Web(app.Web, app.Config.HTTP,
+		"default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'", nil)
+	if err != nil {
+		return nil, err
+	}
 	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       time.Minute,
-	}
+	}, nil
 }

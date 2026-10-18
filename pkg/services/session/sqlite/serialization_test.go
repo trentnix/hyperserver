@@ -21,7 +21,7 @@ func TestSessionCookieSizeLimits(t *testing.T) {
 			t.Fatalf("cookie size %d: %v", size, err)
 		}
 	}
-	if _, err := sessioncookie.Parse(strings.Repeat("!", sessions.MaxCookieSize+1), nil); !errors.Is(err, sessions.ErrSessionCookieTooLarge) {
+	if _, err := sessioncookie.Parse(strings.Repeat("!", sessions.MaxCookieSize+1), nil, "session"); !errors.Is(err, sessions.ErrSessionCookieTooLarge) {
 		t.Fatalf("JWT size not checked before parsing: %v", err)
 	}
 	for _, store := range []sessions.SessionStore{setupCookieStore(t), revocationStore(t)} {
@@ -135,7 +135,7 @@ func TestSQLiteSessionDataStaysServerSide(t *testing.T) {
 		t.Fatal(err)
 	}
 	cookie := w.Result().Cookies()[0]
-	claims, err := sessioncookie.Parse(cookie.Value, store.JwtKey)
+	claims, err := sessioncookie.Parse(cookie.Value, store.JwtKey, cookie.Name)
 	if err != nil || claims.Value != "" || claims.ID != s.ID {
 		t.Fatalf("SQLite cookie leaked session data: %+v, %v", claims, err)
 	}

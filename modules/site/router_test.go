@@ -51,10 +51,10 @@ func siteForRouteTest(t *testing.T) (*SiteModule, *http.ServeMux) {
 
 func TestSiteRoutesRejectInvalidClientCapacity(t *testing.T) {
 	for _, capacity := range []int{0, -1} {
-		module := &SiteModule{rateLimit: &config.ModuleRateLimitConfig{MaxClients: capacity}}
+		module := &SiteModule{settings: Settings{RateLimit: &config.ModuleRateLimitConfig{MaxClients: capacity}}}
 		mux := http.NewServeMux()
 		err := module.Routes(routing.NewRoutes(mux))
-		if err == nil || !strings.Contains(err.Error(), "app.siteRateLimit.maxClients") {
+		if err == nil || !strings.Contains(err.Error(), "site.rateLimit.maxClients") {
 			t.Fatalf("capacity %d: error = %v", capacity, err)
 		}
 		if _, pattern := mux.Handler(httptest.NewRequest(http.MethodGet, "/contact", nil)); pattern != "" {

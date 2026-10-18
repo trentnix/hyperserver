@@ -25,10 +25,6 @@ func (c Config) Clone() Config {
 		limit := *c.Auth.RateLimit
 		c.Auth.RateLimit = &limit
 	}
-	if c.App.SiteRateLimit != nil {
-		limit := *c.App.SiteRateLimit
-		c.App.SiteRateLimit = &limit
-	}
 	return c
 }
 

@@ -159,7 +159,7 @@ func TestHTTPSessionLoading(t *testing.T) {
 						expires = time.Now().Add(-time.Hour)
 					}
 					claims := sessionCookieClaims{
-						ID: "stored-session", Purpose: "session", Value: encoded,
+						ID: "stored-session", Name: name, Purpose: "session", Value: encoded,
 						RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(expires)},
 					}
 					if provider == "sqliteStore" {
@@ -327,7 +327,7 @@ func TestHTTPLoginRedirectSessionFailure(t *testing.T) {
 								t.Fatal(err)
 							}
 						} else {
-							claims := sessionCookieClaims{ID: redirect.ID, Purpose: "session", Value: "invalid base64!", RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
+							claims := sessionCookieClaims{ID: redirect.ID, Name: redirect.Name, Purpose: "session", Value: "invalid base64!", RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
 							cookie.Value, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(h.app.Config.HTTP.Session.JwtKey))
 							if err != nil {
 								t.Fatal(err)
@@ -382,6 +382,7 @@ func TestHTTPLoginRedirectSessionFailure(t *testing.T) {
 
 // sessionCookieClaims describes the cookie wire format used by HTTP fixtures.
 type sessionCookieClaims struct {
+	Name    string `json:"name"`
 	ID      string `json:"id"`
 	Purpose string `json:"purpose"`
 	Value   string `json:"data"`

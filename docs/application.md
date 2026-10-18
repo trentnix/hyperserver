@@ -32,27 +32,7 @@ Generate independent values for `auth.jwtKey` and `http.session.jwtKey`, for exa
 
 Prepare shared services, select rendering and middleware, then initialize modules. Register owned resources with `app.OnShutdown` before their consumers. Supplying a service does not transfer ownership unless the receiving API explicitly says so.
 
-Pass initialized dependencies through module factories. For example, this catalog selects email authentication and a site module with application-owned contact storage:
-
-```go
-catalog := []handlers.Descriptor{
-    auth.Module(accounts, sessions, []auth.Descriptor{
-        email.Provider(accounts, sessions, mailClient),
-    }),
-    site.Module(
-        func(context.Context) (site.ContactRepository, error) { return contacts, nil },
-        mailClient,
-    ),
-}
-if err := site.ConfigureRendering(app.ContentManager, app.Config.Auth.Enabled); err != nil {
-    return err
-}
-if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
-    return err
-}
-```
-
-This example deliberately selects only these modules and email authentication. [Reference module setup](../cmd/web/modules.go) instead replaces configured descriptors while preserving other discovered modules and auth providers. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
+Pass initialized services through module factories. Use `handlers.Setup(ctx, app, nil, catalog, selections)` to initialize modules with configured route defaults. For email/password authentication, use the setup below instead. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
 
 `smtp.NewMailClient(cfg.Mail)` returns a mail client and a connectivity-check function using the same copied settings. Construction performs no network I/O. The application decides whether to use the check for readiness. It only opens and closes a TCP connection, bounded by the caller's deadline and mail timeout. It does not verify TLS, authentication, or delivery. Other senders use `messaging.NewMailClientWithSender`.
 
@@ -74,30 +54,25 @@ handler, err := accountWeb.Setup(ctx, app, catalog)
 if err != nil {
     return err
 }
-// Serve handler through the application's outer security middleware.
+handler, err = middleware.Web(handler, app.Config.HTTP, contentSecurityPolicy, log)
+if err != nil {
+    return err
+}
 ```
 
 Import `authweb "github.com/trentnix/hyperserver/auth/web"`. `Setup` configures the selected auth descriptor, initializes the entire catalog, and returns its handler with session and identity loading attached. Do not also call `handlers.Setup`. The catalog must include auth, as `handlers.Registered()` does here. Authentication and the email provider must be enabled in configuration.
 
 The application still chooses protected routes, layout data, and security middleware and closes its services after requests drain. If setup fails, discard the application and close its services. Use the lower-level `auth.Module`, `handlers.Setup`, and `authmiddleware.LoadSessionManagement` APIs for other auth providers or capability selections. For sessions without accounts, install `session.WithSessionManager(sessions)`.
 
-[`middleware.FromConfig`](../pkg/services/middleware/configuration.go) applies proxy verification, HSTS, and the optional shared rate limit in that request order. Keep origin checks and session loading inside it. Keep logging and security headers outside so they also cover rejected requests:
+[`middleware.Web`](../pkg/services/middleware/web.go) installs logging, security headers, proxy verification, HSTS, the shared rate limit, and cross-origin protection in that order. Supply the application's CSP and logger. Pass `app.Web` for a stateless application or the session-aware handler returned by auth setup. Rejected requests receive security headers and are logged. For a different cross-origin policy or middleware order, compose the individual middleware explicitly.
 
-```go
-handler = http.NewCrossOriginProtection().Handler(handler)
-handler, err = middleware.FromConfig(handler, app.Config.HTTP)
-if err != nil {
-    return err
-}
-handler = middleware.SecurityHeaders(contentSecurityPolicy)(handler)
-handler = middleware.LoggerMiddleware(log)(handler)
-```
-
-`authweb.Email.Setup` applies `http.defaultRateLimit`. When using `handlers.Setup` directly, pass routes created by `routing.NewConfiguredRoutes(app.Web, app.Config.HTTP, log)` to apply that setting. The shared budget is separate and requires `middleware.FromConfig`. See the [reference composition](../cmd/web/http.go).
+`handlers.Setup` and `authweb.Email.Setup` apply `http.defaultRateLimit`. Explicit routes passed to `handlers.Setup` keep their own defaults. `middleware.Web` applies the separate shared budget. Neither policy silently replaces the other.
 
 Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware` attaches request fields to the logger returned by `logger.Get(r.Context())`. Use context-aware logging methods to pass cancellation and tracing values to the handler. Check for nil when no request logger is installed.
 
 [`server.NewHTTPServer(app.Config.HTTP, handler)`](../pkg/server/http.go) creates a standard `*http.Server` with the configured address, timeouts, and optional TLS certificate. Resolve configuration paths first. It does not wrap the handler or open a listener. Timeout values pass through unchanged, including zero. Omitted read, write, and idle timeouts remain zero. The [configuration template](../config-template.yaml) supplies example values. Applications can still construct `http.Server` directly.
+
+The HTTP write timeout includes handler work. For synchronous mail, allow time for `mail.timeout`, storage, and rendering. The reference values are 30 seconds for SMTP and 40 seconds for the HTTP response. The write timeout does not cancel handler work or replace the password-reset minimum response time.
 
 `app.Run(ctx, prepare)` coordinates startup, serving, and shutdown. The preparation function returns the HTTP server, a `net.Listener` opened on its `Addr`, and an error. It must not start serving. Run cleans up startup failures and drains requests before closing services. Applications managing HTTP themselves can use `server.ServeHTTP` and call `Shutdown` after requests drain.
 
@@ -143,7 +118,7 @@ For custom initialization outside `handlers.Setup` or `handlers.Initialize`, use
 
 Imports register descriptors, not live modules. Use `handlers.Registered()` for a catalog copy or supply a local catalog. Factories must return fresh instances without I/O. `handlers.Replace` replaces the entire descriptor, including its dependency declarations. To replace only its factory, copy the original descriptor and change `New`.
 
-`handlers.Setup` resolves dependencies, initializes modules, binds routes, and registers cleanup. Pass configured `*routing.Routes` for route defaults, or nil for defaults. A nil catalog selects no modules. If setup fails, discard the application because its mux may still contain routes. Use `handlers.Initialize` only when managing route binding and cleanup yourself.
+`handlers.Setup` resolves dependencies, initializes modules, binds routes, and registers cleanup. Pass nil routes to use `http.defaultRateLimit`, or supply routes with explicit defaults. A nil catalog selects no modules. If setup fails, discard the application because its mux may still contain routes. Use `handlers.Initialize` only when managing route binding and cleanup yourself.
 
 Auth has a separate descriptor catalog. Only configured, enabled providers initialize. An explicit empty catalog does not fall back to imports. Providers implement `AuthService` and the workflow interfaces they support, such as `LoginHandler` or `ResetHandler`. Unsupported routes return 404. Registration without a supporting provider is reported as unavailable.
 

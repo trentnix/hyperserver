@@ -7,12 +7,13 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 // Setup prepares shared response templates, loads optional module configuration,
 // initializes modules, binds routes, and registers cleanup with app. Shared services and
 // application rendering overrides must be ready before calling Setup. A nil
-// routes value uses app.Web with the standard route defaults. A nil catalog loads
+// routes value uses app.Web with http.defaultRateLimit. A nil catalog loads
 // no modules. Use Registered explicitly to select the import catalog.
 //
 // app.initializationTimeout bounds initialization. An earlier ctx deadline wins.
@@ -34,7 +35,10 @@ func Setup(ctx context.Context, app *server.ApplicationServer, routes *routing.R
 	}
 
 	if routes == nil {
-		routes = routing.NewRoutes(app.Web)
+		routes, err = routing.NewConfiguredRoutes(app.Web, app.Config.HTTP, logger.Get(ctx))
+		if err != nil {
+			return err
+		}
 	}
 	if err := routes.Err(); err != nil {
 		return err

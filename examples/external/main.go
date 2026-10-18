@@ -134,15 +134,20 @@ func newApplication(ctx context.Context, s settings) (*application, error) {
 	if err != nil {
 		return nil, errors.Join(err, app.Shutdown())
 	}
+	app.handler, err = middleware.Web(app.handler, app.Config.HTTP,
+		"default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'", nil)
+	if err != nil {
+		return nil, errors.Join(err, app.Shutdown())
+	}
 	return app, nil
 }
 
 func newHTTPServer(app *application) *http.Server {
 	return &http.Server{
-		Handler:           middleware.SecurityHeaders("default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")(http.NewCrossOriginProtection().Handler(app.handler)),
+		Handler:           app.handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		WriteTimeout:      40 * time.Second,
 		IdleTimeout:       time.Minute,
 	}
 }

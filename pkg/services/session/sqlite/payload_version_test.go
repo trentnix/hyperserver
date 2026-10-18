@@ -51,13 +51,13 @@ func storedPayload(t *testing.T, store sessions.SessionStore, r *http.Request, n
 	var encoded string
 	switch store := store.(type) {
 	case *cookie.CookieStore:
-		claims, err := sessioncookie.Parse(requestCookie.Value, store.JwtKey)
+		claims, err := sessioncookie.Parse(requestCookie.Value, store.JwtKey, name)
 		if err != nil {
 			t.Fatal(err)
 		}
 		encoded = claims.Value
 	case *SQLiteStore:
-		claims, err := sessioncookie.Parse(requestCookie.Value, store.JwtKey)
+		claims, err := sessioncookie.Parse(requestCookie.Value, store.JwtKey, name)
 		if err != nil {
 			t.Fatal(err)
 		}
