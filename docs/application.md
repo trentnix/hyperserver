@@ -28,6 +28,12 @@ Generate independent values for `auth.jwtKey` and `http.session.jwtKey`, for exa
 
 ### Services and serving
 
+[`application.New(ctx, cfg, application.Options{})`](../pkg/application/application.go) creates the core and opens configuration-selected accounts, sessions, and mail. It resolves paths on a configuration copy and closes acquired resources if startup fails. `Options.Services` accepts initialized services without taking ownership. `AccountProviders` and `SessionProviders` override built-in factories.
+
+The constructor does not initialize modules or install middleware, including authentication. Configure those consumers before serving. Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. Service startup uses `app.initializationTimeout`, defaulting to ten seconds. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
+
+The reference command still uses the explicit setup below.
+
 `server.NewApplicationServer(cfg)` validates and copies configuration and creates the router and content manager. It does not load configuration files or create optional services. The core can run with `config.Config{}`.
 
 Prepare shared services, select rendering and middleware, then initialize modules. Register owned resources with `app.OnShutdown` before their consumers. Supplying a service does not transfer ownership unless the receiving API explicitly says so.

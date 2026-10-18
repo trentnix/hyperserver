@@ -1,0 +1,125 @@
+// Package application assembles configured services around the core server.
+// Use server directly for applications that do not need the built-in providers.
+package application
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"reflect"
+	"time"
+
+	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
+	"github.com/trentnix/hyperserver/pkg/services/messaging/smtp"
+	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
+)
+
+// Services contains optional services shared by application modules.
+// Supplied services must be initialized and keep their existing owner.
+type Services struct {
+	Accounts user.AccountRepository
+	Sessions *session.SessionManager
+	Mail     *messaging.MailClient
+	// MailHealth optionally checks the supplied mail service. The built-in SMTP
+	// probe checks TCP connectivity only, not credentials or delivery.
+	MailHealth func(context.Context) error
+}
+
+// Options overrides configuration-selected services or their factories.
+// Supplied services bypass their factories. Additional factories replace matching
+// built-in names and are local to this application.
+type Options struct {
+	Services         Services
+	AccountProviders map[string]user.StorageProvider
+	SessionProviders map[string]session.ConfiguredProvider
+}
+
+// Application owns the services it creates, but not services supplied in Options.
+// Initialize modules and middleware before serving. Run drains requests before
+// closing registered resources. Without Run, call Shutdown after consumers stop.
+type Application struct {
+	*server.ApplicationServer
+	Services
+}
+
+// New copies and validates configuration, resolves paths, and opens selected
+// services. It does not load configuration files, initialize modules, install
+// middleware, or listen. Consumers must validate the services they require.
+// Startup uses app.initializationTimeout, or ten seconds if unset. An earlier
+// ctx deadline wins. Failure closes acquired resources with a fresh cleanup
+// deadline. Startup contexts must not be retained for request handling.
+func New(ctx context.Context, cfg config.Config, options Options) (_ *Application, err error) {
+	core, err := server.NewApplicationServer(cfg)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, core.ShutdownContext(context.WithoutCancel(ctx)))
+		}
+	}()
+
+	timeout := 10 * time.Second
+	if core.Config.App.InitializationTimeout != nil {
+		timeout = *core.Config.App.InitializationTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := core.Config.ResolvePaths(); err != nil {
+		return nil, err
+	}
+
+	app := &Application{ApplicationServer: core, Services: options.Services}
+	if err := app.openServices(ctx, options); err != nil {
+		return nil, err
+	}
+	return app, nil
+}
+
+func (a *Application) openServices(ctx context.Context, options Options) error {
+	if a.Accounts != nil {
+		value := reflect.ValueOf(a.Accounts)
+		switch value.Kind() {
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+			if value.IsNil() {
+				return errors.New("supplied account repository is nil")
+			}
+		}
+	} else {
+		repository, cleanup, err := configured.OpenAccounts(ctx, a.Config, options.AccountProviders)
+		if err != nil {
+			return fmt.Errorf("prepare accounts: %w", err)
+		}
+		a.Accounts = repository
+		if cleanup != nil {
+			a.OnShutdown("accounts", func(context.Context) error { return cleanup() })
+		}
+	}
+
+	if a.Sessions == nil {
+		manager, err := configured.NewSessionManager(ctx, a.Config, options.SessionProviders)
+		if err != nil {
+			return fmt.Errorf("prepare sessions: %w", err)
+		}
+		if len(manager.Types) > 0 {
+			a.Sessions = manager
+			a.OnShutdown("sessions", func(context.Context) error { return manager.Close() })
+		}
+	}
+
+	if a.Mail == nil && a.Config.Mail != (config.MailConfig{}) {
+		var err error
+		a.Mail, a.MailHealth, err = smtp.NewMailClient(a.Config.Mail)
+		if err != nil {
+			return fmt.Errorf("prepare mail: %w", err)
+		}
+	}
+	return ctx.Err()
+}
