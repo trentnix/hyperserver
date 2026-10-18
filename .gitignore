@@ -41,7 +41,6 @@ config.yaml
 # Repository-local temporary files
 /tmp/
 /deploy/local/state/
-/examples/external/notes-data/
 
 # Local implementation guidance
 /production-readiness-checklist.md

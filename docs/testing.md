@@ -16,7 +16,7 @@ The [CI workflow](../.github/workflows/ci.yml) runs these checks on pushes and p
 
 [Container recovery and soak tests](deployment.md#start-and-test) are opt-in. Ordinary Go test runs and CI skip them. Never run failure/recovery tests alongside a soak test or against real data.
 
-The [external-module example](../examples/external/readme.md) has a separate `go.mod`. The root suite copies it outside the repository and tests it against the current checkout. To test its pinned public dependency instead, run `go test ./...` from `examples/external`.
+CI also builds and tests the core without CGO. Dependency checks verify that the core does not import optional storage, authentication, session, or mail implementations. External-application compatibility testing is deferred until a replacement sample is available.
 
 ## Browser tests
 

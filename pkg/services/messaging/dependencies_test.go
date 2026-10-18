@@ -14,7 +14,6 @@ func TestSharedPackagesDoNotImportSMTP(t *testing.T) {
 	output, err := exec.CommandContext(ctx, "go", "list", "-deps",
 		"github.com/trentnix/hyperserver/pkg/services/messaging",
 		"github.com/trentnix/hyperserver/pkg/server",
-		"github.com/trentnix/hyperserver/examples/stateless",
 	).CombinedOutput()
 	if err != nil {
 		t.Fatalf("inspect shared dependencies: %v\n%s", err, output)

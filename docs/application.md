@@ -1,12 +1,12 @@
 # Application setup and modules
 
-Start with the [stateless application](../examples/stateless/main.go). The [external application](../examples/external/readme.md) adds persistent notes, accounts, sessions, and mail using public packages. Application setup selects services and owns shared resources. Modules own their internal resources and routes.
+The [reference application](../cmd/web/application.go) selects services and owns shared resources. Modules own their internal resources and routes.
 
 ## Adding or replacing a feature
 
-Use the [notes module](../examples/external/notes/module.go) as a starting point. Its `Module(repository, protect)` constructor returns a descriptor whose factory creates a fresh module. The package registers an unconfigured descriptor during import. [Application setup](../examples/external/main.go) supplies storage and write-access middleware with `handlers.Replace` before initializing modules. Importing the module alone does not supply its dependencies.
+A module descriptor's factory creates a fresh instance. Application setup supplies dependencies with `handlers.Replace` before initializing modules. Importing a module alone does not supply its dependencies.
 
-The module's `Init` checks dependencies and prepares embedded templates. `Routes` binds ordinary Go handlers and returns registration errors. Handlers use the supplied repository, not a database client or configuration lookup. To replace notes storage, change [provider selection](../examples/external/storage.go), not the handlers. The [repository contract](../examples/external/notes/notes.go) belongs to this feature, not the framework.
+The module's `Init` checks dependencies and prepares embedded templates. `Routes` binds ordinary Go handlers and returns registration errors. Handlers use the supplied repository, not a database client or configuration lookup. Repository contracts belong to the feature that uses them.
 
 | Replace | Implement and supply |
 | --- | --- |
@@ -16,7 +16,7 @@ The module's `Init` checks dependencies and prepares embedded templates. `Routes
 | Mail delivery | [`messaging.MailSender`](../pkg/services/messaging/mail.go) through `NewMailClientWithSender`. Honor cancellation, validate headers, and report unavailable delivery as an error. The client does not close the sender. |
 | Authentication workflow | [`auth.AuthService`](../auth/auth_service.go) plus the supported workflow interfaces. Supply its descriptor to `auth.Module`. Changing account storage alone does not require a new auth provider. |
 
-Selected services handle concurrent requests. Keep mutable request data separate and give each resource one cleanup owner. The contracts linked above define failure and concurrency guarantees. Matching method signatures is not enough. The external application's [storage tests](../examples/external/notes/repository_test.go) and [HTTP tests](../examples/external/verification_test.go) demonstrate provider-independent behavior and injected failures.
+Selected services handle concurrent requests. Keep mutable request data separate and give each resource one cleanup owner. The contracts linked above define failure and concurrency guarantees. Matching method signatures is not enough.
 
 These extension points remain experimental. See the [compatibility policy](compatibility.md) before publishing an adapter.
 

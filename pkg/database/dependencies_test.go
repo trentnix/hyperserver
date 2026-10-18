@@ -14,7 +14,6 @@ func TestSharedPackagesDoNotImportSQLite(t *testing.T) {
 	output, err := exec.CommandContext(ctx, "go", "list", "-deps",
 		"github.com/trentnix/hyperserver/pkg/database",
 		"github.com/trentnix/hyperserver/pkg/server",
-		"github.com/trentnix/hyperserver/examples/stateless",
 	).CombinedOutput()
 	if err != nil {
 		t.Fatalf("inspect shared dependencies: %v\n%s", err, output)
@@ -31,7 +30,6 @@ func TestCoreDoesNotImportSQLPool(t *testing.T) {
 	defer cancel()
 	output, err := exec.CommandContext(ctx, "go", "list", "-deps",
 		"github.com/trentnix/hyperserver/pkg/server",
-		"github.com/trentnix/hyperserver/examples/stateless",
 	).CombinedOutput()
 	if err != nil {
 		t.Fatalf("inspect core dependencies: %v\n%s", err, output)

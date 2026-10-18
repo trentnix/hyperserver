@@ -11,7 +11,7 @@ import (
 func TestCoreDoesNotImportOptionalImplementations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, "go", "list", "-deps", "github.com/trentnix/hyperserver/pkg/server", "github.com/trentnix/hyperserver/examples/stateless").CombinedOutput()
+	output, err := exec.CommandContext(ctx, "go", "list", "-deps", "github.com/trentnix/hyperserver/pkg/server").CombinedOutput()
 	if err != nil {
 		t.Fatalf("inspect core dependencies: %v\n%s", err, output)
 	}
@@ -23,7 +23,7 @@ func TestCoreDoesNotImportOptionalImplementations(t *testing.T) {
 			"github.com/trentnix/hyperserver/pkg/services/session",
 		} {
 			if dependency == forbidden || strings.HasPrefix(dependency, forbidden+"/") {
-				t.Errorf("core or stateless application imports optional setup or service %s", dependency)
+				t.Errorf("core imports optional setup or service %s", dependency)
 			}
 		}
 	}

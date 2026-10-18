@@ -69,12 +69,12 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Build and test stateless application without CGO
+      - name: Build and test core without CGO
         env:
           CGO_ENABLED: '0'
         run: |
-          go build ./examples/stateless/...
-          go test -count=1 -timeout=5m ./pkg/database ./examples/stateless/...
+          go build ./pkg/server
+          go test -count=1 -timeout=5m ./pkg/database ./pkg/server
 
       - name: Test with race detector
         env:

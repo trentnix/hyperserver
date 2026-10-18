@@ -1,6 +1,6 @@
 # Rendering and forms
 
-Start with the [stateless application](../../examples/stateless) for a complete page and HTMX example. The [contact handler](../../modules/site/contact.go) demonstrates validation, persistence, and errors for both ordinary forms and HTMX.
+The [contact handler](../../modules/site/contact.go) demonstrates validation, persistence, and errors for both ordinary forms and HTMX.
 
 ## Prepare views once
 
@@ -25,7 +25,7 @@ if err := page.Render(w, r); err != nil {
 
 `templateFiles` is an `fs.FS`, commonly an `embed.FS`. Paths are relative to that filesystem and use forward slashes. Layouts and page templates can use different filesystems.
 
-The view binds the manager, prepared templates, and a named partial. Preparation checks that the partial exists in both the page and HTMX template sets. Layouts render it with `{{renderPartial .PartialName .}}`. Ordinary navigation and history restoration use the full-page layout. HTMX requests use the fragment layout. See the [notes module](../../examples/external/notes/module.go).
+The view binds the manager, prepared templates, and a named partial. Preparation checks that the partial exists in both the page and HTMX template sets. Layouts render it with `{{renderPartial .PartialName .}}`. Ordinary navigation and history restoration use the full-page layout. HTMX requests use the fragment layout.
 
 To serve several partials from the same files, call `content.PrepareTemplates` once, then select each view without reparsing:
 
