@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
@@ -39,19 +38,8 @@ func (s *AccountStorage) NeedsSQLPool() bool {
 	return s.config.Auth.Enabled && (s.config.Auth.AccountStorage.Provider == "" || s.config.Auth.AccountStorage.Provider == "sqlite")
 }
 
-// AccountProvider supplies account storage and optional token maintenance.
-// Factories must honor ctx and validate their private copy of options without
-// exposing secrets in errors. Each optional close function releases only owned
-// resources, never borrowed pools. Open calls close on failure even when the
-// factory returns an error. After a successful Open, the caller owns cleanup.
-// CleanupTokens closes maintenance storage after each batch.
-type AccountProvider struct {
-	// Open creates a ready-to-use repository. It may initialize storage.
-	Open func(ctx context.Context, options map[string]string) (user.AccountRepository, func() error, error)
-	// OpenMaintenance opens existing storage without creating or migrating tables.
-	// Nil means that this provider does not support explicit token maintenance.
-	OpenMaintenance func(ctx context.Context, options map[string]string) (user.TokenMaintenance, func() error, error)
-}
+// AccountProvider is the reference commands' account adapter contract.
+type AccountProvider = user.StorageProvider
 
 // RegisterProvider adds a provider to this application's account setup. Names are
 // case-sensitive. The built-in name "sqlite" is reserved. Register serially
@@ -82,78 +70,24 @@ func (s *AccountStorage) Open(ctx context.Context, pool *sql.DB) (user.AccountRe
 	if !s.config.Auth.Enabled {
 		return nil, nil, nil
 	}
-
-	name, provider, err := accountProvider(s.config, pool, s.providers)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	ctx, cancel := context.WithTimeout(ctx, accountSetupTimeout)
 	defer cancel()
-	if err := ctx.Err(); err != nil {
-		return nil, nil, err
-	}
-
-	repository, cleanup, err := provider.Open(ctx, maps.Clone(s.config.Auth.AccountStorage.Options))
-	if err == nil {
-		err = ctx.Err()
-	}
-	if err == nil && repository == nil {
-		err = errors.New("provider returned no account repository")
-	}
-	if err != nil {
-		if cleanup != nil {
-			err = errors.Join(err, cleanup())
-		}
-		return nil, nil, fmt.Errorf("initialize account provider %q: %w", name, err)
-	}
-	return repository, cleanup, nil
+	selection, providers := accountSelection(s.config, pool, s.providers)
+	return user.OpenConfiguredStorage(ctx, selection, providers)
 }
 
-func initializeSQLiteAccounts(ctx context.Context, pool *sql.DB, options map[string]string) (user.AccountRepository, func() error, error) {
-	if err := usersqlite.ValidateOptions(options); err != nil {
-		return nil, nil, err
+// accountSelection supplies the reference commands' default adapter without I/O.
+func accountSelection(cfg *config.Config, pool *sql.DB, available map[string]AccountProvider) (config.AccountStorageConfig, map[string]user.StorageProvider) {
+	selection := cfg.Auth.AccountStorage
+	if selection.Provider == "" {
+		selection.Provider = "sqlite"
 	}
-
-	repository := usersqlite.NewAccountRepository(pool)
-	if err := repository.Initialize(ctx); err != nil {
-		return nil, nil, err
+	providers := maps.Clone(available)
+	if providers == nil {
+		providers = make(map[string]user.StorageProvider)
 	}
-	return repository, nil, nil
-}
-
-func accountProvider(cfg *config.Config, pool *sql.DB, providers map[string]AccountProvider) (string, AccountProvider, error) {
-	name := cfg.Auth.AccountStorage.Provider
-	if name == "" {
-		name = "sqlite"
-	}
-
-	if name == "sqlite" {
-		return name, AccountProvider{
-			Open: func(ctx context.Context, options map[string]string) (user.AccountRepository, func() error, error) {
-				return initializeSQLiteAccounts(ctx, pool, options)
-			},
-			OpenMaintenance: func(ctx context.Context, options map[string]string) (user.TokenMaintenance, func() error, error) {
-				if err := usersqlite.ValidateOptions(options); err != nil {
-					return nil, nil, err
-				}
-				if cfg.Database.Driver != "sqlite3" {
-					return nil, nil, errors.New("SQLite account maintenance requires the sqlite3 database driver")
-				}
-				connection, err := database.ResolveConnection(cfg.Database.Driver, cfg.Database.Connection, cfg.App.WorkingDirectory)
-				if err != nil {
-					return nil, nil, err
-				}
-				return usersqlite.OpenTokenMaintenance(ctx, connection)
-			},
-		}, nil
-	}
-
-	provider, ok := providers[name]
-	if !ok {
-		return name, AccountProvider{}, fmt.Errorf("auth.accountStorage.provider: unknown provider %q", name)
-	}
-	return name, provider, nil
+	providers["sqlite"] = usersqlite.ConfiguredProvider(*cfg, pool)
+	return selection, providers
 }
 
 // CleanupAccountTokens removes one bounded batch using the reference application's
@@ -169,38 +103,13 @@ func (s *AccountStorage) CleanupTokens(ctx context.Context, limit int) (int64, e
 	return cleanupAccountTokens(ctx, s.config, limit, s.providers)
 }
 
-func cleanupAccountTokens(ctx context.Context, cfg *config.Config, limit int, providers map[string]AccountProvider) (count int64, err error) {
+func cleanupAccountTokens(ctx context.Context, cfg *config.Config, limit int, providers map[string]AccountProvider) (int64, error) {
 	if limit < 1 {
 		return 0, errors.New("token cleanup limit must be positive")
 	}
 	if !cfg.Auth.Enabled {
 		return 0, nil
 	}
-	if err := ctx.Err(); err != nil {
-		return 0, err
-	}
-
-	name, provider, err := accountProvider(cfg, nil, providers)
-	if err != nil {
-		return 0, err
-	}
-	if provider.OpenMaintenance == nil {
-		return 0, fmt.Errorf("account provider %q does not support token maintenance", name)
-	}
-
-	maintenance, closeStore, err := provider.OpenMaintenance(ctx, maps.Clone(cfg.Auth.AccountStorage.Options))
-	if closeStore != nil {
-		defer func() { err = errors.Join(err, closeStore()) }()
-	}
-	if err != nil {
-		return 0, fmt.Errorf("open account maintenance %q: %w", name, err)
-	}
-	if err := ctx.Err(); err != nil {
-		return 0, err
-	}
-	if maintenance == nil {
-		return 0, fmt.Errorf("account provider %q returned no token maintenance", name)
-	}
-
-	return maintenance.DeleteExpiredTokens(ctx, limit)
+	selection, available := accountSelection(cfg, nil, providers)
+	return user.CleanupConfiguredTokens(ctx, selection, available, limit)
 }

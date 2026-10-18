@@ -67,7 +67,19 @@ The [cleanup command](../../../cmd/cleanup) removes expired SQLite sessions and 
 
 ## Ownership and extension
 
-Session contracts live in `session`. The built-in implementations live in [`session/sqlite`](sqlite/store.go) and [`session/cookie`](cookie/store.go), following the same layout as `user` and `user/sqlite`. The reference application's [setup](../../../cmd/internal/setup/sessions.go) selects configured providers. Other applications supply factories to `session.NewSessionManager` directly. The manager copies session mappings and initializes each selected provider once. Requests reuse those providers. Unselected providers do not open storage. Failed setup returns an error and closes acquired resources.
+Session contracts live in `session`. The built-in implementations live in [`session/sqlite`](sqlite/store.go) and [`session/cookie`](cookie/store.go). Applications choose their available adapters explicitly:
+
+```go
+providers := map[string]session.ConfiguredProvider{
+    "cookiestore": cookie.ConfiguredProvider(*cfg),
+    "sqlitestore": sqlite.ConfiguredProvider(*cfg),
+}
+manager, err := session.NewConfiguredManager(ctx, cfg, providers)
+```
+
+`http.session.types` selects from those adapters. Provider names are case-insensitive. `NewConfiguredManager` validates configuration and opens each selected provider once. The manager owns the stores and must be closed after requests stop. Failed setup closes acquired resources. For programmatic setup without configuration, use `NewSessionManager` with store factories directly.
+
+Custom adapters supply `ConfiguredProvider` callbacks. Validation performs no I/O, and callbacks receive private option maps. `CleanupConfiguredStores` uses the same selection with maintenance factories, without requiring signing keys or initializing schema. The [reference setup](../../../cmd/internal/setup/sessions.go) shares its adapter list between startup and cleanup.
 
 Each SQLite store owns its pool and prepares its table, expiration index, and version metadata in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Session-store transactions use `BEGIN IMMEDIATE`, overriding `_txlock`, so concurrent initializations acquire the write lock before inspecting storage. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
 

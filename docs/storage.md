@@ -94,22 +94,23 @@ Direct access couples that code to the backend. Direct writes must preserve the 
 
 ## Provider selection
 
-The reference application's [shared setup](../cmd/internal/setup) is private to packages under `cmd`. It supports named factories. In the web command, register replacements before initialization:
+Applications can use `user.OpenConfiguredStorage` with an explicit map of available adapters. Selection and failure cleanup belong to the library. The application owns successful resources and decides when to close them:
 
 ```go
-accounts := setup.NewAccountStorage(app.Config)
-if err := accounts.RegisterProvider("company", setup.AccountProvider{
-    Open: openCompanyAccounts,
-    OpenMaintenance: openCompanyTokenMaintenance, // Optional. Opens existing storage only.
-}); err != nil {
+providers := map[string]user.StorageProvider{
+    "company": {
+        Open: openCompanyAccounts,
+        OpenMaintenance: openCompanyTokenMaintenance, // Optional. Opens existing storage only.
+    },
+}
+repository, closeStorage, err := user.OpenConfiguredStorage(ctx, cfg.Auth.AccountStorage, providers)
+if err != nil {
     return err
 }
-if err := initializeAccounts(ctx, app, accounts); err != nil {
-    return err
-}
+// Supply repository to consumers. Call closeStorage, if non-nil, after they stop.
 ```
 
-This `cmd/internal/setup` helper uses configuration, not a server instance. Provider factories receive the startup context and a copy of the configured options. `accounts.Open(ctx, pool)` returns an initialized repository and its optional cleanup function. Failed opens release partial acquisitions. The web command's [initializeAccounts](../cmd/web/accounts.go) supplies the repository and registers its cleanup. Cleanup runs after consumers stop and before the shared pool closes.
+Factories receive the caller's context and a private copy of the configured options. The library has no default provider. For SQLite, `usersqlite.ConfiguredProvider(*cfg, pool)` wraps an application-owned pool without closing it. Direct repository constructors remain available for applications that do not need configuration-driven selection.
 
 Select the registered name and its options in configuration:
 
@@ -121,11 +122,11 @@ auth:
       connection: your-provider-connection
 ```
 
-Reference provider registrations belong to one setup instance. Names are case-sensitive, and `sqlite` is reserved. Supplying `AccountRepository` on the reference application's [setup struct](../cmd/web/application.go) bypasses selection and initialization. The reference application ships only SQLite. Its shared database and session setup remain separate from account-provider selection.
+Provider names are case-sensitive. The reference application's [shared setup](../cmd/internal/setup/accounts.go) chooses SQLite as its default and supports additional adapters through `RegisterProvider`. Those choices belong to the commands, not the library. Supplying `AccountRepository` on the reference application's [setup struct](../cmd/web/application.go) bypasses selection and initialization.
 
 `OpenMaintenance` returns [TokenMaintenance](../pkg/services/user/account_repository.go), an optional close function, and an error. It must not create or migrate tables. Each batch closes acquired resources, including on failure. Missing maintenance capabilities return errors rather than skipping cleanup.
 
-The cleanup command calls `setup.CleanupAccountTokens(ctx, cfg, limit)` without constructing a server or `AccountStorage`. Provider selection is shared with web startup. An account setup's `CleanupTokens` method uses its custom registrations through the same maintenance implementation. Applications already holding a repository with `TokenMaintenance` can call `DeleteExpiredTokens` directly.
+`user.CleanupConfiguredTokens(ctx, cfg.Auth.AccountStorage, providers, limit)` uses the same selection for maintenance without opening a runtime repository. The reference cleanup command shares adapter selection with web startup. Applications already holding a repository with `TokenMaintenance` can call `DeleteExpiredTokens` directly.
 
 ## Expired-record cleanup
 
