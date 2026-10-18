@@ -103,6 +103,44 @@ Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware
 
 ## Module catalogs and authentication
 
+### Optional module configuration
+
+Modules can implement `handlers.Configurable` to load settings before dependency binding and `Init`:
+
+```go
+type Settings struct {
+    Title string `yaml:"title"`
+}
+
+type Module struct {
+    settings Settings
+}
+
+func New() *Module {
+    return &Module{settings: Settings{Title: "My application"}}
+}
+
+func (m *Module) Configuration() any {
+    return &m.settings
+}
+```
+
+The module also implements the usual `Init` and `Routes` methods. Its factory must create fresh settings. `Init` validates the loaded values and can apply explicit constructor overrides before validation.
+
+For a module registered as `news`, the framework reads `modules/news/config.yaml` under `app.workingDirectory`. If the application uses `cmd/example/config.yaml` and leaves `app.workingDirectory` unset, the module file is `cmd/example/modules/news/config.yaml`:
+
+```yaml
+title: My news
+```
+
+Applications own runtime files. Module packages own defaults, validation, and configuration templates. Installed Go package paths do not affect file lookup. Configurable module names must be single local directory names, not `.` or `..`.
+
+Missing or empty files keep defaults. Invalid or unreadable files stop startup. Required settings still must pass module validation. Modules without `Configurable` do not read configuration files. Loading happens once during initialization, with no directory search or module-specific environment overrides. Keep runtime `config.yaml` files out of source control.
+
+For custom initialization outside `handlers.Setup` or `handlers.Initialize`, use [`config.LoadModuleFile`](../config/module.go) directly.
+
+### Catalog selection
+
 Imports register descriptors, not live modules. Use `handlers.Registered()` for a catalog copy or supply a local catalog. Factories must return fresh instances without I/O. `handlers.Replace` replaces the entire descriptor, including its dependency declarations. To replace only its factory, copy the original descriptor and change `New`.
 
 `handlers.Setup` resolves dependencies, initializes modules, binds routes, and registers cleanup. Pass configured `*routing.Routes` for route defaults, or nil for defaults. A nil catalog selects no modules. If setup fails, discard the application because its mux may still contain routes. Use `handlers.Initialize` only when managing route binding and cleanup yourself.

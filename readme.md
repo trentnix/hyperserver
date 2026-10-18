@@ -111,6 +111,8 @@ func (m *ReportsModule) Routes(routes *routing.Routes) error {
 }
 ```
 
+Modules can load optional settings from `modules/<registered-name>/config.yaml` under the application's resource directory. See [module configuration](docs/application.md#optional-module-configuration) for defaults, validation, and the `Configuration` hook.
+
 See [application setup](docs/application.md) for service injection, capability-based dependencies, and lifecycle ownership. The [registration decision](docs/decisions/0001-module-registration.md) explains why catalogs and runtime instances are separate.
 
 ## Account storage

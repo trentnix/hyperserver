@@ -4,13 +4,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/server"
 )
 
 const defaultInitializationTimeout = 10 * time.Second
+
+// Configurable exposes a module-owned settings struct for optional YAML loading.
+// Configuration must return a nonnil pointer to a struct initialized with defaults.
+// Each instance must own its settings. The method must perform no I/O.
+// Initialize loads modules/<registered-name>/config.yaml under app.workingDirectory
+// before dependency binding and Init. Missing files keep defaults.
+// Init applies explicit overrides and validates the effective settings.
+// Modules without file-based settings need not implement this interface.
+type Configurable interface {
+	Configuration() any
+}
 
 // CapabilityProvider exposes the services named by its descriptor's Provides list.
 // Call after Init succeeds. Capabilities must perform no I/O and must return exactly
@@ -81,8 +95,9 @@ type Instance struct {
 	Handler
 }
 
-// Initialize resolves requirements, creates modules, binds declared dependencies,
-// and initializes modules in dependency order. It checks cancellation between steps.
+// Initialize resolves requirements, creates modules, loads optional configuration,
+// binds declared dependencies, and initializes modules in dependency order.
+// It checks cancellation between steps. Configuration paths use app.Config.FilePath.
 // The whole initialization uses ctx's deadline, or ten seconds if it has none.
 // Init must honor ctx for storage setup and other I/O. Cancellation is cooperative.
 // On failure, it closes completed modules with a fresh cleanup deadline and returns
@@ -108,8 +123,16 @@ func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []De
 		return nil, err
 	}
 
-	// Detect missing hooks before any module starts I/O.
+	// Validate configuration paths and dependency hooks before I/O.
 	for i, d := range plan.modules {
+		if _, ok := modules[i].(Configurable); ok {
+			if !filepath.IsLocal(d.Name) || d.Name == "." || strings.ContainsAny(d.Name, `/\`) {
+				return nil, fmt.Errorf("configurable module %q requires a single local directory name", d.Name)
+			}
+			if app == nil || app.Config == nil {
+				return nil, fmt.Errorf("module %q configuration requires application settings", d.Name)
+			}
+		}
 		if _, ok := modules[i].(DependencyBinder); len(d.Requires) > 0 && !ok {
 			return nil, fmt.Errorf("module %q declares requirements but does not implement DependencyBinder", d.Name)
 		}
@@ -131,6 +154,20 @@ func Initialize(ctx context.Context, app *server.ApplicationServer, catalog []De
 		d := plan.modules[i]
 		if err := ctx.Err(); err != nil {
 			return result, fmt.Errorf("initialize module %q: %w", d.Name, err)
+		}
+
+		if configurable, ok := module.(Configurable); ok {
+			settings := configurable.Configuration()
+			if err := ctx.Err(); err != nil {
+				return result, fmt.Errorf("configure module %q: %w", d.Name, err)
+			}
+			path := app.Config.FilePath(filepath.Join("modules", d.Name, "config.yaml"))
+			if _, err := config.LoadModuleFile(path, settings); err != nil {
+				return result, fmt.Errorf("configure module %q: %w", d.Name, err)
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return result, fmt.Errorf("configure module %q: %w", d.Name, err)
 		}
 
 		dependencies := Dependencies{values: make(map[string][]any)}

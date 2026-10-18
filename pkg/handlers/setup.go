@@ -9,8 +9,8 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 )
 
-// Setup prepares shared response templates, initializes the selected modules,
-// binds their routes, and registers their cleanup with app. Shared services and
+// Setup prepares shared response templates, loads optional module configuration,
+// initializes modules, binds routes, and registers cleanup with app. Shared services and
 // application rendering overrides must be ready before calling Setup. A nil
 // routes value uses app.Web with the standard route defaults. A nil catalog loads
 // no modules. Use Registered explicitly to select the import catalog.

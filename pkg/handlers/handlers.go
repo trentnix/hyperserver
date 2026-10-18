@@ -22,6 +22,8 @@ var catalog struct {
 // Descriptor describes a module without holding its runtime state. New must return
 // a fresh instance without performing I/O. Names must be nonempty and unique.
 type Descriptor struct {
+	// Name also selects modules/<name>/config.yaml for Configurable modules.
+	// Those names must be a single local directory name, not "." or "..".
 	Name     string
 	New      func() Handler
 	Provides []string
