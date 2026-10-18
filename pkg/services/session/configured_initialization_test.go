@@ -1,4 +1,4 @@
-package setup
+package session_test
 
 import (
 	"context"
@@ -33,12 +33,12 @@ func TestSessionManagerIsolationAndReuse(t *testing.T) {
 			if sameFile {
 				secondConfig.HTTP.Session.Stores["sqliteStore"]["connection"] = firstConfig.HTTP.Session.Stores["sqliteStore"]["connection"]
 			}
-			first, err := NewSessionManager(context.Background(), firstConfig)
+			first, err := sessions.NewConfiguredManager(context.Background(), firstConfig, configuredTestProviders(firstConfig))
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { first.Close() })
-			second, err := NewSessionManager(context.Background(), secondConfig)
+			second, err := sessions.NewConfiguredManager(context.Background(), secondConfig, configuredTestProviders(secondConfig))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -120,7 +120,7 @@ func TestSessionInitializationFailureAndRetry(t *testing.T) {
 				defer cancel()
 				want = context.DeadlineExceeded
 			}
-			manager, err := NewSessionManager(ctx, c)
+			manager, err := sessions.NewConfiguredManager(ctx, c, configuredTestProviders(c))
 			if manager != nil || err == nil || (want != nil && !errors.Is(err, want)) {
 				t.Fatalf("failed setup returned %v, %v", manager, err)
 			}
@@ -141,7 +141,7 @@ func TestSessionInitializationFailureAndRetry(t *testing.T) {
 				t.Fatal("failed setup unexpectedly created storage:", err)
 			}
 			c.HTTP.Session.Stores["sqliteStore"]["connection"] = path
-			manager, err = NewSessionManager(context.Background(), c)
+			manager, err = sessions.NewConfiguredManager(context.Background(), c, configuredTestProviders(c))
 			if err != nil {
 				t.Fatal("retry failed:", err)
 			}
@@ -158,7 +158,7 @@ func TestSessionInitializationFailureAndRetry(t *testing.T) {
 func TestUnselectedSessionProvidersStayInactive(t *testing.T) {
 	c := sqliteManagerConfig(filepath.Join(t.TempDir(), "missing", "sessions.db"), "sessions")
 	c.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
-	m, err := NewSessionManager(context.Background(), c)
+	m, err := sessions.NewConfiguredManager(context.Background(), c, configuredTestProviders(c))
 	if err != nil {
 		t.Fatal("unselected SQLite provider was opened:", err)
 	}
@@ -166,7 +166,7 @@ func TestUnselectedSessionProvidersStayInactive(t *testing.T) {
 	if store, err := m.Store("anything"); err != nil || !store.IsEnabled() {
 		t.Fatal("manager initialized unselected providers")
 	}
-	m, err = NewSessionManager(context.Background(), &config.Config{})
+	m, err = sessions.NewConfiguredManager(context.Background(), &config.Config{}, configuredTestProviders(&config.Config{}))
 	if err != nil {
 		t.Fatal("empty session configuration requires providers:", err)
 	}
@@ -178,7 +178,7 @@ func TestSessionSetupResolvesStoragePath(t *testing.T) {
 		t.Run(connection, func(t *testing.T) {
 			cfg := sqliteManagerConfig(connection, "sessions")
 			cfg.App.WorkingDirectory = t.TempDir()
-			manager, err := NewSessionManager(t.Context(), cfg)
+			manager, err := sessions.NewConfiguredManager(t.Context(), cfg, configuredTestProviders(cfg))
 			if err != nil {
 				t.Fatal(err)
 			}

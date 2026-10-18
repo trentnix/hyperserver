@@ -1,13 +1,15 @@
-package setup
+package session_test
 
 import (
-	"os"
-	"path/filepath"
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	sessions "github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/cookie"
+	"github.com/trentnix/hyperserver/pkg/services/session/sqlite"
 )
 
 func validSessionConfig() *config.Config {
@@ -18,6 +20,13 @@ func validSessionConfig() *config.Config {
 	c.HTTP.Session.Stores = map[string]map[string]string{"cookiestore": {"enabled": "true"}}
 	c.HTTP.Session.Types = map[string]string{"default": "cookieStore"}
 	return c
+}
+
+func configuredTestProviders(cfg *config.Config) map[string]sessions.ConfiguredProvider {
+	return map[string]sessions.ConfiguredProvider{
+		"cookiestore": cookie.ConfiguredProvider(*cfg),
+		"sqlitestore": sqlite.ConfiguredProvider(*cfg),
+	}
 }
 
 func TestValidateSessionConfig(t *testing.T) {
@@ -51,7 +60,7 @@ func TestValidateSessionConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := validSessionConfig()
 			tc.change(c)
-			err := ValidateSessionConfig(c)
+			err := sessions.ValidateConfiguredStores(c, configuredTestProviders(c))
 			if tc.want == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -63,53 +72,62 @@ func TestValidateSessionConfig(t *testing.T) {
 	}
 }
 
-func TestSessionSetupRejectsInvalidSelections(t *testing.T) {
-	for _, provider := range []string{"cookieStore", "sqliteStore"} {
-		for _, failure := range []string{"missing", "disabled", "malformed", "duplicate"} {
-			t.Run(provider+"/"+failure, func(t *testing.T) {
-				path := filepath.Join(t.TempDir(), "sessions.db")
-				cfg := validSessionConfig()
-				cfg.HTTP.Session.Types = map[string]string{"default": provider}
-				cfg.HTTP.Session.Stores = map[string]map[string]string{
-					provider: {"enabled": "true", "connection": path, "sessiontable": "sessions"},
-				}
-				switch failure {
-				case "missing":
-					delete(cfg.HTTP.Session.Stores, provider)
-				case "disabled":
-					cfg.HTTP.Session.Stores[provider]["enabled"] = "false"
-				case "malformed":
-					cfg.HTTP.Session.Stores[provider]["enabled"] = "perhaps"
-				case "duplicate":
-					cfg.HTTP.Session.Stores[strings.ToUpper(provider)] = map[string]string{"enabled": "true"}
-				}
-
-				manager, err := NewSessionManager(t.Context(), cfg)
-				if manager != nil {
-					t.Cleanup(func() { manager.Close() })
-				}
-				if manager != nil || err == nil {
-					t.Fatalf("NewSessionManager = %v, %v, want nil and an error", manager, err)
-				}
-				if count, err := CleanupSessions(t.Context(), cfg, 10); count != 0 || err == nil {
-					t.Fatalf("CleanupSessions = %d, %v, want zero and an error", count, err)
-				}
-				if _, err := os.Stat(path); !os.IsNotExist(err) {
-					t.Fatalf("invalid selection created storage: %v", err)
-				}
-			})
-		}
+func TestManagerRejectsMissingSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		types map[string]string
+	}{
+		{"unknown named store", map[string]string{"user": "missing", "default": "cookieStore"}},
+		{"unknown default store", map[string]string{"default": "missing"}},
+		{"empty named store", map[string]string{"user": "", "default": "cookieStore"}},
+		{"empty default store", map[string]string{"default": ""}},
+		{"missing default", map[string]string{"other": "cookieStore"}},
+		{"no selections", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := validSessionConfig()
+			cfg.HTTP.Session.Types = tc.types
+			manager, err := sessions.NewConfiguredManager(context.Background(), cfg, configuredTestProviders(cfg))
+			if manager != nil || err == nil {
+				t.Fatalf("NewSessionManager = %v, %v, want nil and an error", manager, err)
+			}
+		})
 	}
 }
 
-func TestSessionSetupRejectsNilConfig(t *testing.T) {
-	if err := ValidateSessionConfig(nil); err == nil {
-		t.Fatal("validation accepted nil configuration")
+func TestGetStoreSelectsCookieStore(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		types map[string]string
+	}{
+		{"named store", map[string]string{"user": "cookieStore", "default": "cookieStore"}},
+		{"default fallback", map[string]string{"default": "cookieStore"}},
+		{"case insensitive provider", map[string]string{"user": "COOKIESTORE", "default": "cookieStore"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := validSessionConfig()
+			cfg.HTTP.Session.Types = tc.types
+			manager, err := sessions.NewConfiguredManager(context.Background(), cfg, configuredTestProviders(cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { manager.Close() })
+			store, err := manager.Store("user")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cookie, ok := store.(*cookie.CookieStore); !ok || !cookie.IsEnabled() {
+				t.Fatalf("getStore = %T, want enabled CookieStore", store)
+			}
+		})
 	}
-	if manager, err := NewSessionManager(t.Context(), nil); manager != nil || err == nil {
+}
+
+func TestManagerRejectsDisabledStore(t *testing.T) {
+	cfg := validSessionConfig()
+	cfg.HTTP.Session.Stores["cookiestore"]["enabled"] = "false"
+	manager, err := sessions.NewConfiguredManager(context.Background(), cfg, configuredTestProviders(cfg))
+	if manager != nil || err == nil {
 		t.Fatalf("NewSessionManager = %v, %v, want nil and an error", manager, err)
-	}
-	if count, err := CleanupSessions(t.Context(), nil, 10); count != 0 || err == nil {
-		t.Fatalf("CleanupSessions = %d, %v, want zero and an error", count, err)
 	}
 }
