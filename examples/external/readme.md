@@ -2,16 +2,10 @@
 
 This application has its own `go.mod`. It serves a greeting form and shared notes using public framework packages. Reading notes is public. Saving notes requires login through the built-in email/password provider.
 
-The new `middleware.Web` setup requires the current checkout until a containing commit is published and the dependency pin is updated. From the repository root, create an ignored Go workspace:
+From this directory, test against the published framework dependency without a local workspace override:
 
 ```sh
-go work init . ./examples/external
-```
-
-If a workspace already exists, use `go work use . ./examples/external` instead. Then, from this directory:
-
-```sh
-go test ./...
+GOWORK=off go test ./...
 ```
 
 Use Go 1.27.2 or newer, CGO, and a C compiler. Accounts and revocable sessions use SQLite in `accounts.db`. Notes use files in `notes-data` by default. Neither store depends on the other's location or implementation.
@@ -84,4 +78,4 @@ Tests cover both notes providers, login and session persistence, registration, v
 EXAMPLE_MAILPIT_TEST=1 go test -run '^TestMailpitRegistration$' -count=1 .
 ```
 
-The optional test adds one uniquely addressed message without deleting other mail. Ordinary tests do not require Docker. The repository's external-module regression test copies this example to a temporary directory and replaces only that copy's HyperServer dependency with the current checkout. The example itself has no local `replace` directive. Before copying it outside the repository, update its HyperServer pin to a published commit containing the APIs it uses.
+The optional test adds one uniquely addressed message without deleting other mail. Ordinary tests do not require Docker. The repository's external-module regression test copies this example to a temporary directory and replaces only that copy's HyperServer dependency with the current checkout. The example itself pins a published framework commit and has no local `replace` directive.
