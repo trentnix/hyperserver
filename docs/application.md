@@ -30,7 +30,22 @@ Generate independent values for `auth.jwtKey` and `http.session.jwtKey`, for exa
 
 [`application.New(ctx, cfg, application.Options{})`](../pkg/application/application.go) creates the core and opens configuration-selected accounts, sessions, and mail. It resolves paths on a configuration copy and closes acquired resources if startup fails. `Options.Services` accepts initialized services without taking ownership. `AccountProviders` and `SessionProviders` override built-in factories.
 
-The constructor does not initialize modules or install middleware, including authentication. Configure those consumers before serving. Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. Service startup uses `app.initializationTimeout`, defaulting to ten seconds. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
+Select modules through `Options.Modules`, which runs after shared services are ready. Return descriptors that supply feature dependencies through their factories. Return `handlers.Registered()` to select the import catalog explicitly. A nil callback loads no modules. `Options.ProviderSelections` resolves ambiguous capabilities. The constructor uses `handlers.Setup` to load optional module configuration, initialize modules, and bind routes. Do not initialize the same modules again.
+
+```go
+app, err := application.New(ctx, cfg, application.Options{
+    Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
+        return handlers.Registered(), nil
+    },
+})
+if err != nil {
+    return err
+}
+```
+
+Services, module selection, and module initialization share one `app.initializationTimeout`, defaulting to ten seconds. Set shared rendering overrides in the callback before module setup prepares templates. Register any resources opened by the callback with `app.OnShutdown`. Modules close before those resources and shared services, including on startup failure.
+
+The constructor does not install middleware or automatically wire authentication. Configure those before serving. Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
 
 The reference command still uses the explicit setup below.
 

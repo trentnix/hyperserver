@@ -1,4 +1,4 @@
-// Package application assembles configured services around the core server.
+// Package application assembles configured services and modules around the core server.
 // Use server directly for applications that do not need the built-in providers.
 package application
 
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
@@ -29,27 +30,36 @@ type Services struct {
 	MailHealth func(context.Context) error
 }
 
-// Options overrides configuration-selected services or their factories.
+// Options selects modules and overrides configuration-selected services or factories.
 // Supplied services bypass their factories. Additional factories replace matching
 // built-in names and are local to this application.
 type Options struct {
 	Services         Services
 	AccountProviders map[string]user.StorageProvider
 	SessionProviders map[string]session.ConfiguredProvider
+	// Modules selects a catalog after shared services are ready. Supply feature
+	// dependencies through descriptor factories. A nil callback loads no modules.
+	// Use handlers.Registered explicitly to select the import catalog. Register
+	// callback-owned resources with app.OnShutdown before returning.
+	Modules func(context.Context, *Application) ([]handlers.Descriptor, error)
+	// ProviderSelections resolves ambiguous module capabilities by provider name.
+	ProviderSelections map[string]string
 }
 
-// Application owns the services it creates, but not services supplied in Options.
-// Initialize modules and middleware before serving. Run drains requests before
-// closing registered resources. Without Run, call Shutdown after consumers stop.
+// Application owns initialized modules and the services it creates, but not
+// services supplied in Options. Install middleware before serving. Run drains
+// requests before closing modules and then services. Without Run, call Shutdown
+// after consumers stop.
 type Application struct {
 	*server.ApplicationServer
 	Services
 }
 
 // New copies and validates configuration, resolves paths, and opens selected
-// services. It does not load configuration files, initialize modules, install
-// middleware, or listen. Consumers must validate the services they require.
-// Startup uses app.initializationTimeout, or ten seconds if unset. An earlier
+// services, then initializes selected modules and binds their routes. It loads
+// optional module configuration, but not the application configuration file.
+// It does not install middleware or listen. Consumers must validate required services.
+// All startup shares app.initializationTimeout, or ten seconds if unset. An earlier
 // ctx deadline wins. Failure closes acquired resources with a fresh cleanup
 // deadline. Startup contexts must not be retained for request handling.
 func New(ctx context.Context, cfg config.Config, options Options) (_ *Application, err error) {
@@ -79,6 +89,17 @@ func New(ctx context.Context, cfg config.Config, options Options) (_ *Applicatio
 	app := &Application{ApplicationServer: core, Services: options.Services}
 	if err := app.openServices(ctx, options); err != nil {
 		return nil, err
+	}
+
+	var catalog []handlers.Descriptor
+	if options.Modules != nil {
+		catalog, err = options.Modules(ctx, app)
+		if err != nil {
+			return nil, fmt.Errorf("select modules: %w", err)
+		}
+	}
+	if err := handlers.Setup(ctx, core, nil, catalog, options.ProviderSelections); err != nil {
+		return nil, fmt.Errorf("prepare modules: %w", err)
 	}
 	return app, nil
 }

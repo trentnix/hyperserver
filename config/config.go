@@ -84,7 +84,7 @@ type (
 
 	// AppConfig stores application configuration
 	AppConfig struct {
-		InitializationTimeout *time.Duration // Module startup budget. Nil uses the initializer's default. If set, must be positive.
+		InitializationTimeout *time.Duration // Startup budget. Nil uses the initializer's default. If set, must be positive.
 		Name                  string
 		WorkingDirectory      string // Resource base for local files. Does not change the process directory.
 		RenderNotifications   bool

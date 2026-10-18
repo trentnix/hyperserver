@@ -14,6 +14,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -189,6 +190,10 @@ func TestStartupFailureClosesOwnedResources(t *testing.T) {
 			cause, accountCloseErr, sessionCloseErr := errors.New("open failed"), errors.New("account close failed"), errors.New("session close failed")
 			var closed []string
 			options := application.Options{
+				Modules: func(context.Context, *application.Application) ([]handlers.Descriptor, error) {
+					t.Fatal("selected modules after service startup failed")
+					return nil, nil
+				},
 				AccountProviders: map[string]user.StorageProvider{"custom": {Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 					cleanup := func() error { closed = append(closed, "accounts"); return accountCloseErr }
 					if stage == "accounts" {
