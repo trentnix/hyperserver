@@ -52,7 +52,7 @@ if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
 }
 ```
 
-This example deliberately selects only these modules and email authentication. [Reference module setup](../cmd/web/site_modules.go) instead replaces configured descriptors while preserving other discovered modules and auth providers. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
+This example deliberately selects only these modules and email authentication. [Reference module setup](../cmd/web/modules.go) instead replaces configured descriptors while preserving other discovered modules and auth providers. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
 
 `smtp.NewMailClient(cfg.Mail)` returns a mail client and a connectivity-check function using the same copied settings. Construction performs no network I/O. The application decides whether to use the check for readiness. It only opens and closes a TCP connection, bounded by the caller's deadline and mail timeout. It does not verify TLS, authentication, or delivery. Other senders use `messaging.NewMailClientWithSender`.
 
@@ -93,7 +93,7 @@ handler = middleware.SecurityHeaders(contentSecurityPolicy)(handler)
 handler = middleware.LoggerMiddleware(log)(handler)
 ```
 
-`authweb.Email.Setup` applies `http.defaultRateLimit`. When using `handlers.Setup` directly, pass routes created by `routing.NewConfiguredRoutes(app.Web, app.Config.HTTP, log)` to apply that setting. The shared budget is separate and requires `middleware.FromConfig`. See the [reference composition](../cmd/web/main.go).
+`authweb.Email.Setup` applies `http.defaultRateLimit`. When using `handlers.Setup` directly, pass routes created by `routing.NewConfiguredRoutes(app.Web, app.Config.HTTP, log)` to apply that setting. The shared budget is separate and requires `middleware.FromConfig`. See the [reference composition](../cmd/web/http.go).
 
 Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware` attaches request fields to the logger returned by `logger.Get(r.Context())`. Use context-aware logging methods to pass cancellation and tracing values to the handler. Check for nil when no request logger is installed.
 

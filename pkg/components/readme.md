@@ -48,7 +48,7 @@ Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplate
 
 Configure `ContentManagerService` before serving. It selects shared page and HTMX templates, `HomeURL`, `AuthURL`, and response callbacks. `HandleMessage`, `HandleError`, and `HandleNotFound` render responses when called. Assigning them does not register routes.
 
-The reference application's [rendering setup](../../cmd/web/rendering.go) selects site defaults. Apply overrides afterward, before template preparation. `ApplyDefaults` rejects a second defaults policy. Explicit field and template overrides remain available.
+The reference application's [rendering setup](../../cmd/web/modules.go) selects site defaults. Apply overrides afterward, before template preparation. `ApplyDefaults` rejects a second defaults policy. Explicit field and template overrides remain available.
 
 `AddPage*` and `AddHtmx*` append template paths. `RegisterLayouts`, `RegisterContents`, and `RegisterComponents` replace the selected response type's paths. Calling a `Register*` method without filenames clears them.
 
