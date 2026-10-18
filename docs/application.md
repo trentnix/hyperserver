@@ -54,7 +54,9 @@ if err := handlers.Setup(ctx, app, nil, catalog, nil); err != nil {
 
 This example deliberately selects only these modules and email authentication. [Reference module setup](../cmd/web/site_modules.go) instead replaces configured descriptors while preserving other discovered modules and auth providers. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
 
-The SMTP sender is supplied through `messaging.NewMailClientWithSender`. Construction does not contact SMTP. Consumers that require delivery must validate configuration. Internationalized domains are converted to IDNA ASCII form for delivery. Non-ASCII mailbox names require the SMTP server's `SMTPUTF8` and `8BITMIME` extensions. Successful sending means server acceptance, not inbox delivery.
+`smtp.NewMailClient(cfg.Mail)` returns a mail client and a connectivity-check function using the same copied settings. Construction performs no network I/O. The application decides whether to use the check for readiness. It only opens and closes a TCP connection, bounded by the caller's deadline and mail timeout. It does not verify TLS, authentication, or delivery. Other senders use `messaging.NewMailClientWithSender`.
+
+Consumers that require delivery must call the client's `ValidateConfig`. Internationalized domains are converted to IDNA ASCII form for delivery. Non-ASCII mailbox names require the SMTP server's `SMTPUTF8` and `8BITMIME` extensions. Successful sending means server acceptance, not inbox delivery.
 
 For built-in email/password authentication, [`auth/web.Email`](../auth/web/email.go) connects accounts, sessions, mail, and flash notifications. Configure layouts first, then supply services once:
 

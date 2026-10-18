@@ -17,13 +17,16 @@ func TestMailInitializesExplicitly(t *testing.T) {
 	if err != nil {
 		t.Fatal("unused services prevented construction:", err)
 	}
-	if err := initializeMail(app); err == nil || app.Mail != nil {
+	if err := initializeMail(app); err == nil || app.Mail != nil || app.mailHealth != nil {
 		t.Fatal("invalid mail initialization succeeded")
 	}
 	app.Config.Mail.Timeout = 0
 	app.Config.Mail.FromAddress = "test@example.invalid"
 	if err := initializeMail(app); err != nil {
 		t.Fatal("mail retry:", err)
+	}
+	if app.mailHealth == nil {
+		t.Fatal("SMTP setup omitted its connectivity probe")
 	}
 	mail := app.Mail
 	app.Config.Mail.Timeout = -time.Second
@@ -49,6 +52,8 @@ func TestMailSetupPreservesReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	app.Mail = client
+	probes := 0
+	app.mailHealth = func(context.Context) error { probes++; return nil }
 	if err := initializeMail(app); err != nil || app.Mail != client {
 		t.Fatal("setup replaced the supplied client or used SMTP settings:", err)
 	}
@@ -57,6 +62,12 @@ func TestMailSetupPreservesReplacement(t *testing.T) {
 	}
 	if len(sender.snapshot()) != 0 {
 		t.Fatal("setup attempted mail delivery")
+	}
+	if probes != 0 {
+		t.Fatal("setup ran the supplied readiness probe")
+	}
+	if err := app.mailHealth(t.Context()); err != nil || probes != 1 {
+		t.Fatal("setup replaced the supplied readiness probe:", err)
 	}
 
 	if err := app.Mail.Compose().To("recipient@example.invalid").Body("Hello").Send(context.Background()); err != nil {
