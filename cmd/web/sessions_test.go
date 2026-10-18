@@ -106,7 +106,8 @@ type ownedSessionStore struct {
 }
 
 func (*ownedSessionStore) IsEnabled() bool { return true }
-func (s *ownedSessionStore) Close() error  { return s.close() }
+
+func (s *ownedSessionStore) Close() error { return s.close() }
 
 func testOwnedSessionManager(t *testing.T, close func() error) *session.SessionManager {
 	t.Helper()

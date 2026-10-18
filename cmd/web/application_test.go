@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -13,6 +16,11 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
+	"github.com/trentnix/hyperserver/pkg/services/session"
+	sessionsqlite "github.com/trentnix/hyperserver/pkg/services/session/sqlite"
+	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 // A test driver exposes deadlines and connection cleanup without a remote database.
@@ -26,8 +34,11 @@ type startupConnection struct {
 }
 
 func (c *startupConnection) Prepare(string) (driver.Stmt, error) { return nil, errors.New("unused") }
-func (c *startupConnection) Begin() (driver.Tx, error)           { return nil, errors.New("unused") }
-func (c *startupConnection) Ping(ctx context.Context) error      { return c.ping(ctx) }
+
+func (c *startupConnection) Begin() (driver.Tx, error) { return nil, errors.New("unused") }
+
+func (c *startupConnection) Ping(ctx context.Context) error { return c.ping(ctx) }
+
 func (c *startupConnection) Close() error {
 	c.closed = true
 	return nil
@@ -237,5 +248,181 @@ func TestApplicationPreservesBorrowedPool(t *testing.T) {
 	}
 	if err := db.Ping(); err != nil {
 		t.Fatal("shutdown closed a borrowed pool:", err)
+	}
+}
+
+func TestMailInitializesExplicitly(t *testing.T) {
+	cfg := config.Config{Database: config.DatabaseConfig{Driver: "unknown"}, Mail: config.MailConfig{Timeout: -time.Second}}
+	cfg.HTTP.Session.Types = map[string]string{"default": "unknown"}
+	app, err := newApplication(cfg)
+	if err != nil {
+		t.Fatal("unused services prevented construction:", err)
+	}
+	if err := initializeMail(app); err == nil || app.Mail != nil || app.mailHealth != nil {
+		t.Fatal("invalid mail initialization succeeded")
+	}
+	app.Config.Mail.Timeout = 0
+	app.Config.Mail.FromAddress = "test@example.invalid"
+	if err := initializeMail(app); err != nil {
+		t.Fatal("mail retry:", err)
+	}
+	if app.mailHealth == nil {
+		t.Fatal("SMTP setup omitted its connectivity probe")
+	}
+	mail := app.Mail
+	app.Config.Mail.Timeout = -time.Second
+	if err := initializeMail(app); err != nil || app.Mail != mail {
+		t.Fatal("repeated initialization replaced the client:", err)
+	}
+	if !errors.Is(mail.ValidateConfig(), messaging.ErrMailUnavailable) {
+		t.Fatal("unconfigured mail reported available delivery")
+	}
+	if err := app.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMailSetupPreservesReplacement(t *testing.T) {
+	app, err := newApplication(config.Config{Mail: config.MailConfig{Timeout: -time.Second}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sender := &fakeMailSender{}
+	client, err := messaging.NewMailClientWithSender("replacement@example.invalid", sender)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Mail = client
+	probes := 0
+	app.mailHealth = func(context.Context) error { probes++; return nil }
+	if err := initializeMail(app); err != nil || app.Mail != client {
+		t.Fatal("setup replaced the supplied client or used SMTP settings:", err)
+	}
+	if err := app.Mail.ValidateConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.snapshot()) != 0 {
+		t.Fatal("setup attempted mail delivery")
+	}
+	if probes != 0 {
+		t.Fatal("setup ran the supplied readiness probe")
+	}
+	if err := app.mailHealth(t.Context()); err != nil || probes != 1 {
+		t.Fatal("setup replaced the supplied readiness probe:", err)
+	}
+
+	if err := app.Mail.Compose().To("recipient@example.invalid").Body("Hello").Send(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	sent := sender.snapshot()
+	if len(sent) != 1 || sent[0].From != "replacement@example.invalid" || sent[0].To != "recipient@example.invalid" {
+		t.Fatalf("replacement delivery: %+v", sent)
+	}
+}
+
+func TestOptionalServicesUseLoadedConfiguration(t *testing.T) {
+	// Isolate the load from the developer's environment and configuration files.
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "HYPERSERVER_") {
+			t.Setenv(name, "")
+			if err := os.Unsetenv(name); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	t.Chdir(t.TempDir())
+	const settings = `app:
+  name: file-name
+database:
+  driver: sqlite3
+  connection: ":memory:"
+http:
+  session:
+    jwtKey: loaded-session-signing-key000000
+    tokenAge: 1h
+    cookieAge: 1h
+    types:
+      default: sqliteStore
+    stores:
+      sqliteStore:
+        enabled: true
+        connection: ":memory:"
+        sessionTable: loaded_sessions
+auth:
+  enabled: true
+  jwtKey: loaded-account-signing-key000000
+  verificationTokenExpiration: 1h
+  resetTokenExpiration: 1h
+mail:
+  hostname: localhost
+  port: 1025
+  user: test-user
+  password: test-password
+  fromAddress: sender@example.invalid
+`
+	if err := os.WriteFile("config.yaml", []byte(settings), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HYPERSERVER_APP_NAME", "loaded-name")
+	cfg, err := config.GetConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Neither application construction nor service initialization may reload these.
+	if err := os.WriteFile("config.yaml", []byte("invalid: ["), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HYPERSERVER_APP_NAME", "changed-name")
+	t.Setenv("HYPERSERVER_DATABASE_DRIVER", "unknown")
+	t.Setenv("HYPERSERVER_HTTP_SESSION_TYPES_DEFAULT", "unknown")
+	t.Setenv("HYPERSERVER_AUTH_ACCOUNTSTORAGE_PROVIDER", "unknown")
+	t.Setenv("HYPERSERVER_MAIL_FROMADDRESS", "invalid")
+	t.Setenv("HYPERSERVER_MAIL_TIMEOUT", "-1s")
+	app, err := newApplication(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := app.Shutdown(); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := app.initializeDatabase(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := newAccountSetup(app).Initialize(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := initializeSessions(t.Context(), app); err != nil {
+		t.Fatal(err)
+	}
+	if err := initializeMail(app); err != nil {
+		t.Fatal(err)
+	}
+
+	if app.ContentManager.AppName != "loaded-name" {
+		t.Fatal("rendering did not use the loaded application name")
+	}
+	if _, ok := app.AccountRepository.(*usersqlite.AccountRepository); !ok {
+		t.Fatalf("account provider = %T, want SQLite", app.AccountRepository)
+	}
+	if _, err := app.AccountRepository.GetByEmail(t.Context(), "absent@example.invalid"); !errors.Is(err, user.ErrUserNotFound) {
+		t.Fatalf("account repository was not prepared: %v", err)
+	}
+	r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), app.SessionManager)
+	s, err := session.New(r, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Store.(*sessionsqlite.SQLiteStore); !ok {
+		t.Fatalf("session provider = %T, want SQLite", s.Store)
+	}
+	if err := s.Save(httptest.NewRecorder(), r); err != nil {
+		t.Fatal("session store was not prepared:", err)
+	}
+	if err := app.Mail.ValidateConfig(); err != nil {
+		t.Fatal("mail did not use the loaded settings:", err)
 	}
 }

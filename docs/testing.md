@@ -2,7 +2,7 @@
 
 Run commands from the repository root with the Go version in [go.mod](../go.mod). SQLite and race tests require CGO and a C compiler.
 
-Tests live beside the code they exercise. Shared storage contract helpers live in [internal/test](../internal/test) and can be used by tests throughout the repository.
+Unit tests live beside the code they exercise. HTTP integration and browser tests live in [internal/test/web](../internal/test/web) and assemble public framework APIs. Command setup and lifecycle tests stay in `cmd/web`. Shared storage contract helpers live in [internal/test](../internal/test).
 
 Run:
 
@@ -23,7 +23,7 @@ The [external-module example](../examples/external/readme.md) has a separate `go
 CI tests error responses, native forms, HTMX history, redirects, retargeting, reswapping, and out-of-band notifications in headless Firefox. To run them locally:
 
 ```sh
-HS_TEST_FIREFOX=firefox go test -count=1 -timeout=10m ./cmd/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$'
+HS_TEST_FIREFOX=firefox go test -count=1 -timeout=10m ./internal/test/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$'
 ```
 
 HTMX tests use the vendored asset and the layout's integrity check. Ordinary Go test runs skip browser tests unless `HS_TEST_FIREFOX` is set.

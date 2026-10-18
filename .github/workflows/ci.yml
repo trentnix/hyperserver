@@ -166,15 +166,15 @@ jobs:
       - name: Test HTMX and native forms in Firefox
         if: ${{ !inputs.browser_diagnostics }}
         run: |
-          # Allow 60s startup, 15s checks, and cleanup inside the 105s scenario limit.
-          go test -v -count=1 -timeout=10m ./cmd/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/tests.log"
+          # Each browser gets 60s for startup and a separate 15s for checks.
+          go test -v -count=1 -timeout=10m ./internal/test/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/tests.log"
 
       - name: Repeat standalone browser diagnostics
         if: ${{ inputs.browser_diagnostics }}
         run: |
           mkdir -p "$HS_TEST_BROWSER_ARTIFACTS"
           # A failed attempt keeps the step failed. This is not a retry policy.
-          go test -v -count=10 -timeout=15m ./cmd/web -run '^TestBrowserErrorReporting$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/repeated-tests.log"
+          go test -v -count=10 -timeout=15m ./internal/test/web -run '^TestBrowserErrorReporting$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/repeated-tests.log"
 
       - name: Upload browser diagnostics
         if: ${{ !cancelled() }}
