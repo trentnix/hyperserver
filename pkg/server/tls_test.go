@@ -1,16 +1,9 @@
-package main
+package server
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"io"
-	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -20,57 +13,19 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/internal/test/tlstest"
 )
-
-func testTLSFiles(t *testing.T) (config.HTTPConfig, *x509.CertPool) {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "HyperServer test"},
-		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
-		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
-		KeyUsage:    x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	private, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := config.HTTPConfig{}
-	cfg.TLS.Enabled = true
-	cfg.TLS.Certificate = filepath.Join(t.TempDir(), "server.pem")
-	cfg.TLS.Key = filepath.Join(t.TempDir(), "server.key")
-	certificate := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	if err := os.WriteFile(cfg.TLS.Certificate, certificate, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(cfg.TLS.Key, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private}), 0600); err != nil {
-		t.Fatal(err)
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(certificate) {
-		t.Fatal("invalid test certificate")
-	}
-	return cfg, roots
-}
 
 func TestListenerTLS(t *testing.T) {
 	if got, err := listenerTLS(config.HTTPConfig{}); err != nil || got != nil {
 		t.Fatalf("disabled TLS: %v, %v", got, err)
 	}
-	cfg, _ := testTLSFiles(t)
+	cfg, _ := tlstest.Files(t)
 	got, err := listenerTLS(cfg)
 	if err != nil || got == nil || got.MinVersion != tls.VersionTLS12 || len(got.Certificates) != 1 {
 		t.Fatalf("TLS configuration: %v, %v", got, err)
 	}
-	other, _ := testTLSFiles(t)
+	other, _ := tlstest.Files(t)
 	for _, mode := range []string{"missing certificate", "missing key", "mismatched key", "invalid PEM"} {
 		t.Run(mode, func(t *testing.T) {
 			invalid := cfg
@@ -95,8 +50,13 @@ func TestListenerTLS(t *testing.T) {
 }
 
 func TestServeHTTPWithTLS(t *testing.T) {
-	cfg, roots := testTLSFiles(t)
-	tlsConfig, err := listenerTLS(cfg)
+	cfg, roots := tlstest.Files(t)
+	httpServer, err := NewHTTPServer(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.TLS == nil {
+			t.Error("request reached the handler without TLS")
+		}
+		w.WriteHeader(204)
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,15 +64,9 @@ func TestServeHTTPWithTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpServer := &http.Server{TLSConfig: tlsConfig, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.TLS == nil {
-			t.Error("request reached the handler without TLS")
-		}
-		w.WriteHeader(204)
-	})}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- server.ServeHTTP(ctx, httpServer, listener, 10*time.Second) }()
+	go func() { done <- ServeHTTP(ctx, httpServer, listener, 10*time.Second) }()
 	t.Cleanup(func() {
 		cancel()
 		select {

@@ -20,6 +20,7 @@ import (
 
 	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/test/tlstest"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -85,7 +86,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	scheme := "http"
 	transport := &http.Transport{}
 	if secure {
-		cfg, roots := testTLSFiles(t)
+		cfg, roots := tlstest.Files(t)
 		s.Config.HTTP.TLS = cfg.TLS
 		transport.TLSClientConfig = &tls.Config{RootCAs: roots}
 		scheme = "https"

@@ -2,13 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"net/http"
 
-	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/handlers"
-	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -17,7 +13,7 @@ import (
 // SetupHandlers selects the reference application's route defaults and delegates
 // module initialization, registration, and cleanup to handlers.Setup.
 func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log *slog.Logger, catalog []handlers.Descriptor, providers map[string]string) error {
-	routes, err := applicationRoutes(s.Web, s.Config.HTTP, log)
+	routes, err := routing.NewConfiguredRoutes(s.Web, s.Config.HTTP, log)
 	if err != nil {
 		return err
 	}
@@ -48,31 +44,4 @@ func SetupHandlers(ctx context.Context, s *server.ApplicationServer, log *slog.L
 			slog.Any("providerSelections", providers))
 	}
 	return nil
-}
-
-// applicationRoutes selects defaults without allocating shared request counters.
-func applicationRoutes(mux *http.ServeMux, cfg config.HTTPConfig, log *slog.Logger) (*routing.Routes, error) {
-	routes := routing.NewRoutes(mux)
-	if shared := cfg.SharedRateLimit; shared.Enabled && log != nil {
-		routes.OnRateLimitRegistered = func(pattern string, policy ratelimit.Policy) {
-			if policy.Window == shared.Window && policy.Requests > shared.Requests {
-				log.Warn("Route allowance exceeds the shared application budget per client IP. Confirm this restriction is intentional.",
-					slog.Any("route", pattern),
-					slog.Any("routeRequests", policy.Requests),
-					slog.Any("sharedRequests", shared.Requests),
-					slog.Any("window", policy.Window.String()),
-				)
-			}
-		}
-	}
-
-	limit := cfg.DefaultRateLimit
-	if !limit.Enabled {
-		return routes, nil
-	}
-	routes, err := routes.WithRateLimit(ratelimit.Policy{Requests: limit.Requests, Window: limit.Window, MaxClients: limit.MaxClients})
-	if err != nil {
-		return nil, fmt.Errorf("http.defaultRateLimit: %w", err)
-	}
-	return routes, nil
 }

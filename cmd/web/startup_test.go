@@ -55,7 +55,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		fmt.Println("route conflict cleanup passed")
 	case "relative-database", "invalid-working-directory":
 		checkStartupStoragePaths(t)
-	case "listen-failure":
+	case "listen-failure", "tls-failure":
 		s := newStartupApplication(t)
 		closed := 0
 		moduleClosed := 0
@@ -83,20 +83,28 @@ func TestStartupHelperProcess(t *testing.T) {
 		}}); err != nil {
 			t.Fatal(err)
 		}
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
+		wantError := "address already in use"
+		if os.Getenv("HS_STARTUP_TEST_HELPER") == "tls-failure" {
+			wantError = "http.tls: load certificate and key"
+			s.Config.HTTP.TLS.Enabled = true
+			s.Config.HTTP.TLS.Certificate = filepath.Join(t.TempDir(), "missing.pem")
+			s.Config.HTTP.TLS.Key = filepath.Join(t.TempDir(), "missing.key")
+		} else {
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			s.Config.HTTP.Port = uint16(listener.Addr().(*net.TCPAddr).Port)
 		}
-		defer listener.Close()
-		s.Config.HTTP.Port = uint16(listener.Addr().(*net.TCPAddr).Port)
-		if err := run(context.Background(), s, accounts, ""); err == nil || !strings.Contains(err.Error(), "address already in use") {
-			t.Fatalf("listen failure = %v", err)
+		if err := run(context.Background(), s, accounts, ""); err == nil || !strings.Contains(err.Error(), wantError) {
+			t.Fatalf("HTTP startup failure = %v, want %q", err, wantError)
 		}
 		if closed != 1 || moduleClosed != 1 {
-			t.Fatalf("listen failure cleanup calls: accounts=%d modules=%d", closed, moduleClosed)
+			t.Fatalf("HTTP startup cleanup calls: accounts=%d modules=%d", closed, moduleClosed)
 		}
 		if err := s.Database.Ping(); err == nil {
-			t.Fatal("listen failure left the application's pool open")
+			t.Fatal("HTTP startup failure left the application's pool open")
 		}
 		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), s.SessionManager)
 		value, err := session.New(r, "auth-user-session")
@@ -104,9 +112,9 @@ func TestStartupHelperProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err := value.Save(httptest.NewRecorder(), r); err == nil {
-			t.Fatal("listen failure left the session pool open")
+			t.Fatal("HTTP startup failure left the session pool open")
 		}
-		fmt.Println("listen failure cleanup passed")
+		fmt.Println("HTTP startup cleanup passed")
 	case "initialize":
 		// Exercise successful initialization without binding a network port.
 		s := newStartupApplication(t)
@@ -332,15 +340,19 @@ func TestStartupRejectsUnavailableSessionStorage(t *testing.T) {
 	}
 }
 
-func TestStartupClosesPoolOnListenFailure(t *testing.T) {
+func TestStartupClosesResourcesOnHTTPFailure(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
-	output, err := runStartupProcess(t, yaml, "listen-failure")
-	if err != nil || !strings.Contains(string(output), "listen failure cleanup passed") {
-		t.Fatalf("listen failure cleanup: error = %v, output = %s", err, output)
+	for _, failure := range []string{"listen-failure", "tls-failure"} {
+		t.Run(failure, func(t *testing.T) {
+			output, err := runStartupProcess(t, yaml, failure)
+			if err != nil || !strings.Contains(string(output), "HTTP startup cleanup passed") {
+				t.Fatalf("HTTP startup cleanup: error = %v, output = %s", err, output)
+			}
+		})
 	}
 }
 

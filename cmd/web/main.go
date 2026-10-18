@@ -19,8 +19,7 @@ import (
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/ratelimit"
-	"github.com/trentnix/hyperserver/pkg/requestinfo"
+	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -91,10 +90,6 @@ func prepareHTTP(ctx context.Context, s *application, accounts *setup.AccountSto
 		return nil, nil, fmt.Errorf("failed to prepare mail: %w", err)
 	}
 
-	tlsConfig, err := listenerTLS(s.Config.HTTP)
-	if err != nil {
-		return nil, nil, err
-	}
 	if err := initializeSessions(ctx, s); err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare session storage: %w", err)
 	}
@@ -124,14 +119,12 @@ func prepareHTTP(ctx context.Context, s *application, accounts *setup.AccountSto
 	if err != nil {
 		return nil, nil, err
 	}
-	httpServer := &http.Server{
-		Addr:         address,
-		Handler:      handler,
-		ReadTimeout:  s.Config.HTTP.ReadTimeout,
-		WriteTimeout: s.Config.HTTP.WriteTimeout,
-		IdleTimeout:  s.Config.HTTP.IdleTimeout,
-		TLSConfig:    tlsConfig,
+	httpServer, err := server.NewHTTPServer(s.Config.HTTP, handler)
+	if err != nil {
+		return nil, nil, err
 	}
+	// Keep the reference application's loopback policy outside the library.
+	httpServer.Addr = address
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -148,15 +141,6 @@ func prepareHTTP(ctx context.Context, s *application, accounts *setup.AccountSto
 // Non-browser requests without origin headers follow Go's CrossOriginProtection
 // defaults. No trusted origins or CSRF exemptions are set.
 func applicationHandler(s *application, l *slog.Logger) (http.Handler, error) {
-	proxy, err := requestinfo.NewProxyMiddleware(s.Config.HTTP.TrustedProxies)
-	if err != nil {
-		return nil, fmt.Errorf("http.trustedProxies: %w", err)
-	}
-	hsts, err := middleware.NewHSTS(s.Config.HTTP.HSTSMaxAge)
-	if err != nil {
-		return nil, fmt.Errorf("http.hstsMaxAge: %w", err)
-	}
-
 	loadSession := session.WithSessionManager(s.SessionManager)
 	if s.Config.Auth.Enabled {
 		loadSession = authmiddleware.LoadSessionManagement(s.AccountRepository, s.SessionManager)
@@ -165,15 +149,11 @@ func applicationHandler(s *application, l *slog.Logger) (http.Handler, error) {
 		loadSession,
 		http.NewCrossOriginProtection().Handler,
 	)
-	if limit := s.Config.HTTP.SharedRateLimit; limit.Enabled {
-		limiter, err := ratelimit.New("shared application", ratelimit.Policy{Requests: limit.Requests, Window: limit.Window, MaxClients: limit.MaxClients})
-		if err != nil {
-			return nil, fmt.Errorf("http.sharedRateLimit: %w", err)
-		}
-		handler = limiter.Handler(handler)
+	handler, err := middleware.FromConfig(handler, s.Config.HTTP)
+	if err != nil {
+		return nil, err
 	}
 
-	handler = proxy(hsts(handler))
 	handler = middleware.SecurityHeaders(referenceContentSecurityPolicy)(handler)
 	return middleware.LoggerMiddleware(l)(handler), nil
 }

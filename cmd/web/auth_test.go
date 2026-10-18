@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"html/template"
-	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -101,7 +100,7 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 				cfg.HTTP.DefaultRateLimit = config.RateLimitConfig{Enabled: true, Requests: 200, Window: time.Minute, MaxClients: 10}
 				cfg.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 20, Window: time.Minute, MaxClients: 10}
 			}
-			log := &ratePolicyWarningLogger{}
+			log := &capturedLogs{}
 			app := &server.ApplicationServer{Config: cfg, Web: http.NewServeMux(), ContentManager: content.NewContentManager()}
 			manager, err := session.NewSessionManager(t.Context(), map[string]string{"default": "custom"}, map[string]session.StoreFactory{
 				"custom": func(context.Context) (session.SessionStore, error) { return setupSessionStore{}, nil },
@@ -110,7 +109,7 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { manager.Close() })
-			err = SetupHandlers(context.Background(), app, slog.New(log), []handlers.Descriptor{auth.Module(&struct{ user.AccountRepository }{}, manager, catalog)}, nil)
+			err = SetupHandlers(context.Background(), app, newTestLogger(log), []handlers.Descriptor{auth.Module(&struct{ user.AccountRepository }{}, manager, catalog)}, nil)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) || provider.routed {
 					t.Fatalf("error = %v, routed = %t, want %q without routes", err, provider.routed, tc.want)
@@ -123,12 +122,8 @@ func TestAuthModuleRequiresVerificationMechanism(t *testing.T) {
 				t.Fatalf("initialized = %t, validated = %t", provider.initialized, verifier.validated)
 			}
 			if tc.warnRatePolicy {
-				found := false
-				for _, warning := range log.warnings {
-					found = found || warning["route"] == "GET /custom"
-				}
-				if !found {
-					t.Fatalf("missing provider route warning: %v", log.warnings)
+				if !strings.Contains(log.String(), `level=WARN`) || !strings.Contains(log.String(), `route="GET /custom"`) {
+					t.Fatalf("missing provider route warning: %s", log.String())
 				}
 			}
 		})
