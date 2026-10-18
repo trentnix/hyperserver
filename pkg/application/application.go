@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -37,6 +39,10 @@ type Options struct {
 	Services         Services
 	AccountProviders map[string]user.StorageProvider
 	SessionProviders map[string]session.ConfiguredProvider
+	// AuthProviders supplies the selected auth module's provider catalog. Nil
+	// selects email/password with this application's services. An empty non-nil
+	// slice selects none. Configuration determines which providers are enabled.
+	AuthProviders []auth.Descriptor
 	// Modules selects a catalog after shared services are ready. Supply feature
 	// dependencies through descriptor factories. A nil callback loads no modules.
 	// Use handlers.Registered explicitly to select the import catalog. Register
@@ -47,18 +53,23 @@ type Options struct {
 }
 
 // Application owns initialized modules and the services it creates, but not
-// services supplied in Options. Install middleware before serving. Run drains
+// services supplied in Options. Add standard web middleware before serving. Run drains
 // requests before closing modules and then services. Without Run, call Shutdown
 // after consumers stop.
 type Application struct {
 	*server.ApplicationServer
 	Services
+	// Handler wraps Web with session loading and, when auth is selected and
+	// enabled, identity loading. Serve this handler, not the bare Web mux.
+	// Route authorization and standard web middleware remain explicit.
+	Handler http.Handler
 }
 
 // New copies and validates configuration, resolves paths, and opens selected
 // services, then initializes selected modules and binds their routes. It loads
 // optional module configuration, but not the application configuration file.
-// It does not install middleware or listen. Consumers must validate required services.
+// It installs session and identity loading, but no other middleware or listener.
+// Consumers must validate required services and choose protected routes.
 // All startup shares app.initializationTimeout, or ten seconds if unset. An earlier
 // ctx deadline wins. Failure closes acquired resources with a fresh cleanup
 // deadline. Startup contexts must not be retained for request handling.
@@ -97,6 +108,10 @@ func New(ctx context.Context, cfg config.Config, options Options) (_ *Applicatio
 		if err != nil {
 			return nil, fmt.Errorf("select modules: %w", err)
 		}
+	}
+	catalog, err = app.configureAuthentication(catalog, options.AuthProviders)
+	if err != nil {
+		return nil, fmt.Errorf("prepare authentication: %w", err)
 	}
 	if err := handlers.Setup(ctx, core, nil, catalog, options.ProviderSelections); err != nil {
 		return nil, fmt.Errorf("prepare modules: %w", err)

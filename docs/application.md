@@ -45,7 +45,11 @@ if err != nil {
 
 Services, module selection, and module initialization share one `app.initializationTimeout`, defaulting to ten seconds. Set shared rendering overrides in the callback before module setup prepares templates. Register any resources opened by the callback with `app.OnShutdown`. Modules close before those resources and shared services, including on startup failure.
 
-The constructor does not install middleware or automatically wire authentication. Configure those before serving. Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
+If the selected catalog includes `auth` and `auth.enabled` is true, the constructor supplies its accounts, sessions, and mail. Email/password is the default provider catalog. Enable it with `auth.services.email.enabled`. `Options.AuthProviders` replaces that catalog with explicit factories, which must supply their providers' dependencies. Module initialization validates the enabled providers and required services. Imports alone do not select the auth module.
+
+Serve `app.Handler`, not `app.Web`. The handler attaches selected sessions and, when authentication is active, loads the current identity. Modules still choose protected routes with `auth/middleware.RequireAuthentication(app.Accounts, app.ContentManager)`. The constructor defaults the login destination to `/auth/login` and supplies flash notification loading. Set presentation overrides on `app.ContentManager` in the module-selection callback. Login and home destinations must be local absolute paths.
+
+Standard web middleware, including cross-origin protection and security headers, must still be installed before serving. Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
 
 The reference command still uses the explicit setup below.
 
