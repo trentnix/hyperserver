@@ -73,41 +73,17 @@ Use the lower-level APIs below when an application needs a different service lif
 
 Prepare shared services, select rendering and middleware, then initialize modules. Register owned resources with `app.OnShutdown` before their consumers. Supplying a service does not transfer ownership unless the receiving API explicitly says so.
 
-Pass initialized services through module factories. Use `handlers.Setup(ctx, app, nil, catalog, selections)` to initialize modules with configured route defaults. For email/password authentication, use the setup below instead. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
+Pass initialized services through module factories. Use `handlers.Setup(ctx, app, nil, catalog, selections)` to initialize modules with configured route defaults. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
 
 `smtp.NewMailClient(cfg.Mail)` returns a mail client using copied settings. Construction performs no network I/O. Its `CheckHealth` opens and closes a TCP connection, bounded by the caller's deadline and mail timeout. It does not verify TLS, authentication, or delivery. Other senders use `messaging.NewMailClientWithSender`.
 
 Consumers that require delivery must call the client's `ValidateConfig`. Internationalized domains are converted to IDNA ASCII form for delivery. Non-ASCII mailbox names require the SMTP server's `SMTPUTF8` and `8BITMIME` extensions. Successful sending means server acceptance, not inbox delivery.
 
-For built-in email/password authentication, [`auth/web.Email`](../auth/web/email.go) connects accounts, sessions, mail, and flash notifications. Configure layouts first, then supply services once:
-
-```go
-accountWeb := authweb.Email{
-    Accounts: accounts, Sessions: sessions, Mail: mailClient,
-    LoginURL: "/auth/login/email", HomeURL: "/notes",
-}
-protect := accountWeb.RequireAuthentication(app.ContentManager)
-catalog, err := handlers.Replace(handlers.Registered(), notes.Module(repository, protect))
-if err != nil {
-    return err
-}
-handler, err := accountWeb.Setup(ctx, app, catalog)
-if err != nil {
-    return err
-}
-handler, err = middleware.Web(handler, app.Config.HTTP, contentSecurityPolicy, log)
-if err != nil {
-    return err
-}
-```
-
-Import `authweb "github.com/trentnix/hyperserver/auth/web"`. `Setup` configures the selected auth descriptor, initializes the entire catalog, and returns its handler with session and identity loading attached. Do not also call `handlers.Setup`. The catalog must include auth, as `handlers.Registered()` does here. Authentication and the email provider must be enabled in configuration.
-
-The application still chooses protected routes, layout data, and security middleware and closes its services after requests drain. If setup fails, discard the application and close its services. Use the lower-level `auth.Module`, `handlers.Setup`, and `authmiddleware.LoadSessionManagement` APIs for other auth providers or capability selections. For sessions without accounts, install `session.WithSessionManager(sessions)`.
+For authentication, supply [`auth.Module`](../auth/module.go) with accounts, sessions, and provider descriptors, such as [`email.Provider(accounts, sessions, mailClient)`](../auth/modules/email/provider.go). Set `ContentManager.AuthURL` and `HomeURL`, then initialize the catalog through `handlers.Setup`. Wrap the mux with `authmiddleware.LoadSessionManagement(accounts, sessions)` and protect routes with `authmiddleware.RequireAuthentication(accounts, contentManager)`. For sessions without accounts, use `session.WithSessionManager(sessions)`. Install `flash.LoadNotifications` separately if pages need session-backed notifications. The application owns validation and cleanup in this lower-level path.
 
 [`middleware.Web`](../pkg/services/middleware/web.go) installs logging, security headers, proxy verification, HSTS, the shared rate limit, and cross-origin protection in that order. Supply the application's CSP and logger. Pass `app.Web` for a stateless application or the session-aware handler returned by auth setup. Rejected requests receive security headers and are logged. For a different cross-origin policy or middleware order, compose the individual middleware explicitly.
 
-`handlers.Setup` and `authweb.Email.Setup` apply `http.defaultRateLimit`. Explicit routes passed to `handlers.Setup` keep their own defaults. `middleware.Web` applies the separate shared budget. Neither policy silently replaces the other.
+`handlers.Setup` applies `http.defaultRateLimit`. Explicit routes passed to `handlers.Setup` keep their own defaults. `middleware.Web` applies the separate shared budget. Neither policy silently replaces the other.
 
 Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware` attaches request fields to the logger returned by `logger.Get(r.Context())`. Use context-aware logging methods to pass cancellation and tracing values to the handler. Check for nil when no request logger is installed.
 

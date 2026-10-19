@@ -20,14 +20,14 @@ import (
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/password"
-	authweb "github.com/trentnix/hyperserver/auth/web"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/application"
 	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/session/cookie"
 	sessionsqlite "github.com/trentnix/hyperserver/pkg/services/session/sqlite"
@@ -168,7 +168,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	// Explicit configuration and temporary storage keep local files and environment
 	// settings out of these tests. No working-directory changes or subprocesses.
 	cfg := config.Config{
-		App:  config.AppConfig{Name: "HTTP test application"},
+		App:  config.AppConfig{Name: "HTTP test application", RenderNotifications: true},
 		HTTP: config.HTTPConfig{ListenHost: "127.0.0.1", Port: 8080},
 		Auth: config.AuthConfig{
 			Enabled: true, JwtKey: "http-test-only-auth-signing-key0",
@@ -189,33 +189,6 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	for _, change := range configure {
 		change(&cfg)
 	}
-	app, err := server.NewApplicationServer(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.Shutdown(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	db, err := sqlitedb.Open(connection)
-	if err != nil {
-		t.Fatal(err)
-	}
-	app.OnShutdown("accounts", func(context.Context) error { return db.Close() })
-	accounts := usersqlite.NewAccountRepository(db)
-	if err := accounts.Initialize(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	sessions, err := session.NewConfiguredManager(t.Context(), app.Config, map[string]session.ConfiguredProvider{
-		"cookie": cookie.ConfiguredProvider(*app.Config),
-		"sqlite": sessionsqlite.ConfiguredProvider(*app.Config),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	app.OnShutdown("sessions", func(context.Context) error { return sessions.Close() })
 	sender := &fakeMailSender{}
 	mail, err := messaging.NewMailClientWithSender("test@example.invalid", sender)
 	if err != nil {
@@ -226,27 +199,44 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 		"page.html":     {Data: []byte(`<!doctype html><html><body>{{renderPartial .PartialName .}}</body></html>`)},
 		"fragment.html": {Data: []byte(`{{renderPartial .PartialName .}}`)},
 	}
-	app.ContentManager.RegisterLayouts(content.PageType, layouts, "page.html")
-	app.ContentManager.RegisterLayouts(content.HtmxType, layouts, "fragment.html")
-	web := authweb.Email{
-		Accounts: accounts, Sessions: sessions, Mail: mail,
-		LoginURL: "/auth/login/email", HomeURL: "/",
-	}
-	handler, err := web.Setup(t.Context(), app, []handlers.Descriptor{auth.Module(accounts, sessions, nil)})
-	if err != nil {
-		t.Fatal(err)
-	}
 	logs := &capturedLogs{}
 	log := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	handler, err = middleware.Web(handler, app.Config.HTTP, "", log)
+	var db *sql.DB
+	app, err := application.New(logger.Set(t.Context(), log), cfg, application.Options{
+		Services: application.Services{Mail: mail},
+		AccountProviders: map[string]user.StorageProvider{"sqlite": {Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
+			pool, err := sqlitedb.Open(connection)
+			if err != nil {
+				return nil, nil, err
+			}
+			db = pool // Keep the fixture's SQL assertions on the application's pool.
+			accounts := usersqlite.NewAccountRepository(pool)
+			return accounts, pool.Close, accounts.Initialize(ctx)
+		}}},
+		SessionProviders: map[string]session.ConfiguredProvider{
+			"cookie": cookie.ConfiguredProvider(cfg),
+			"sqlite": sessionsqlite.ConfiguredProvider(cfg),
+		},
+		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
+			app.ContentManager.RegisterLayouts(content.PageType, layouts, "page.html")
+			app.ContentManager.RegisterLayouts(content.HtmxType, layouts, "fragment.html")
+			app.ContentManager.AuthURL, app.ContentManager.HomeURL = "/auth/login/email", "/"
+			return []handlers.Descriptor{auth.Module(app.Accounts, app.Sessions, nil)}, nil
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := app.Shutdown(); err != nil {
+			t.Error(err)
+		}
+	})
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &httpHarness{baseURL: "http://127.0.0.1:8080", app: app, db: db, accounts: accounts, sessions: sessions, mailClient: mail, handler: handler, mail: sender, logs: logs, cookies: jar}
+	return &httpHarness{baseURL: "http://127.0.0.1:8080", app: app.ApplicationServer, db: db, accounts: app.Accounts, sessions: app.Sessions, mailClient: mail, handler: app.Handler, mail: sender, logs: logs, cookies: jar}
 }
 
 type fakeMailSender struct {
