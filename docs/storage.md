@@ -126,11 +126,11 @@ auth:
       connection: your-provider-connection
 ```
 
-Provider names are case-sensitive. `application.Options.AccountProviders` adds or replaces factories. Supplying `Options.Services.Accounts` bypasses selection and initialization without transferring ownership. The [maintenance command setup](../cmd/internal/setup/accounts.go) selects its providers separately.
+Provider names are case-sensitive. `application.Options.AccountProviders` adds or replaces factories. Supplying `Options.Services.Accounts` bypasses selection and initialization without transferring ownership. [`configured.AccountProviders`](../pkg/services/configured/accounts.go) supplies the built-in catalog for startup and maintenance. Pass custom factories to both operations when replacing a provider.
 
 `OpenMaintenance` returns [TokenMaintenance](../pkg/services/user/account_repository.go), an optional close function, and an error. It must not create or migrate tables. Each batch closes acquired resources, including on failure. Missing maintenance capabilities return errors rather than skipping cleanup.
 
-`user.CleanupConfiguredTokens(ctx, cfg.Auth.AccountStorage, providers, limit)` uses the same selection for maintenance without opening a runtime repository. The reference cleanup command shares adapter selection with web startup. Applications already holding a repository with `TokenMaintenance` can call `DeleteExpiredTokens` directly.
+`configured.CleanupAccountTokens(ctx, cfg, limit, additional)` uses the same defaults and provider overrides as `configured.OpenAccounts`, without opening a runtime repository. Disabled authentication skips cleanup. For an explicit catalog without built-in defaults, use `user.CleanupConfiguredTokens`. Applications already holding a repository with `TokenMaintenance` can call `DeleteExpiredTokens` directly.
 
 ## Expired-record cleanup
 

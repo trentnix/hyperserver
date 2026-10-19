@@ -26,11 +26,40 @@ func OpenAccounts(ctx context.Context, cfg *config.Config, additional map[string
 	if !cfg.Auth.Enabled {
 		return nil, nil, nil
 	}
-	settings := cfg.Clone()
-	if settings.Auth.AccountStorage.Provider == "" {
-		settings.Auth.AccountStorage.Provider = "sqlite"
+	selection, providers := accountStorage(*cfg, additional)
+	return user.OpenConfiguredStorage(ctx, selection, providers)
+}
+
+// CleanupAccountTokens removes one bounded batch using the same provider selection
+// as OpenAccounts. It opens existing storage without initializing schema and closes
+// acquired resources. Disabled authentication opens nothing. Configuration paths
+// must already be resolved. The caller controls cancellation and deadlines.
+func CleanupAccountTokens(ctx context.Context, cfg *config.Config, limit int, additional map[string]user.StorageProvider) (int64, error) {
+	if limit < 1 {
+		return 0, errors.New("token cleanup limit must be positive")
 	}
-	providers := map[string]user.StorageProvider{"sqlite": usersqlite.OwnedProvider(settings)}
+	if cfg == nil {
+		return 0, errors.New("account configuration is required")
+	}
+	if !cfg.Auth.Enabled {
+		return 0, nil
+	}
+	selection, providers := accountStorage(*cfg, additional)
+	return user.CleanupConfiguredTokens(ctx, selection, providers, limit)
+}
+
+// AccountProviders returns fresh built-in factories for runtime setup or maintenance.
+// Construction performs no I/O. Callers can add or replace entries.
+func AccountProviders(cfg config.Config) map[string]user.StorageProvider {
+	return map[string]user.StorageProvider{"sqlite": usersqlite.OwnedProvider(cfg)}
+}
+
+func accountStorage(cfg config.Config, additional map[string]user.StorageProvider) (config.AccountStorageConfig, map[string]user.StorageProvider) {
+	selection := cfg.Auth.AccountStorage
+	if selection.Provider == "" {
+		selection.Provider = "sqlite"
+	}
+	providers := AccountProviders(cfg)
 	maps.Copy(providers, additional)
-	return user.OpenConfiguredStorage(ctx, settings.Auth.AccountStorage, providers)
+	return selection, providers
 }

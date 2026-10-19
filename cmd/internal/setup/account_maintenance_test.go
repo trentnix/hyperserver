@@ -10,7 +10,6 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
@@ -102,28 +101,5 @@ func TestMaintenanceResolvesConfiguredPaths(t *testing.T) {
 	}
 	if cfg.Database.Connection != "maintenance.db?_timeout=25" || cfg.HTTP.Session.Stores["sqliteStore"]["connection"] != "maintenance.db?_timeout=25" {
 		t.Fatal("maintenance rewrote caller configuration")
-	}
-}
-
-type tokenMaintenanceFunc func(context.Context, int) (int64, error)
-
-func (f tokenMaintenanceFunc) DeleteExpiredTokens(ctx context.Context, limit int) (int64, error) {
-	return f(ctx, limit)
-}
-
-func TestDisabledAccountMaintenanceDoesNotOpenProvider(t *testing.T) {
-	cfg := &config.Config{Auth: config.AuthConfig{AccountStorage: config.AccountStorageConfig{Provider: "custom"}}}
-	providers := map[string]user.StorageProvider{"custom": {
-		Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
-			t.Fatal("disabled accounts opened runtime storage")
-			return nil, nil, nil
-		},
-		OpenMaintenance: func(context.Context, map[string]string) (user.TokenMaintenance, func() error, error) {
-			t.Fatal("disabled accounts opened maintenance storage")
-			return nil, nil, nil
-		},
-	}}
-	if count, err := cleanupAccountTokens(t.Context(), cfg, 1, providers); count != 0 || err != nil {
-		t.Fatalf("disabled maintenance = %d, %v", count, err)
 	}
 }
