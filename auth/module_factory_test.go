@@ -12,6 +12,9 @@ func TestModuleSuppliesServicesWithoutChangingCatalog(t *testing.T) {
 	accounts := &struct{ user.AccountRepository }{}
 	sessions := new(session.SessionManager)
 	descriptor := Module(accounts, sessions, nil)
+	if descriptor.Name != ModuleName {
+		t.Fatalf("module name = %q, want %q", descriptor.Name, ModuleName)
+	}
 	first, second := descriptor.New().(*module), descriptor.New().(*module)
 	if first == second || first.manager == second.manager {
 		t.Fatal("factory reused module or manager state")

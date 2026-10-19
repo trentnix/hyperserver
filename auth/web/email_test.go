@@ -14,6 +14,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/web"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -110,7 +111,7 @@ func fixture(t *testing.T) (*server.ApplicationServer, web.Email, *sessionStore)
 }
 
 func selectedAuth() handlers.Descriptor {
-	return handlers.Descriptor{Name: "auth", New: func() handlers.Handler { panic("unconfigured auth factory called") }}
+	return handlers.Descriptor{Name: auth.ModuleName, New: func() handlers.Handler { panic("unconfigured auth factory called") }}
 }
 
 func TestEmailSetupConnectsModulesAndIdentity(t *testing.T) {

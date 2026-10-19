@@ -14,6 +14,9 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
+// ModuleName identifies authentication in the module catalog.
+const ModuleName = "auth"
+
 // Module supplies the manager's accounts, sessions, and an explicit provider catalog.
 // Configure provider dependencies through their own factories. Each instance
 // owns its manager and enabled providers. An empty catalog does not use imports.
@@ -22,7 +25,7 @@ import (
 // after failed startup or after HTTP requests drain, not the auth module.
 func Module(accounts user.AccountRepository, sessions *session.SessionManager, providers []Descriptor) handlers.Descriptor {
 	providers = slices.Clone(providers)
-	return handlers.Descriptor{Name: "auth", New: func() handlers.Handler {
+	return handlers.Descriptor{Name: ModuleName, New: func() handlers.Handler {
 		return &module{manager: NewAuthManager(accounts, sessions), providers: providers}
 	}}
 }
@@ -35,7 +38,7 @@ type module struct {
 func init() {
 	// Snapshot providers when an application creates the module, after all Go
 	// package initialization has finished registering available providers.
-	handlers.Register(handlers.Descriptor{Name: "auth", New: func() handlers.Handler {
+	handlers.Register(handlers.Descriptor{Name: ModuleName, New: func() handlers.Handler {
 		return &module{manager: NewAuthManager(nil, nil), providers: Registered()}
 	}})
 }

@@ -22,9 +22,9 @@ func (a *Application) configureAuthentication(catalog []handlers.Descriptor, pro
 	}
 
 	if !a.Config.Auth.Enabled {
-		return slices.DeleteFunc(slices.Clone(catalog), func(d handlers.Descriptor) bool { return d.Name == "auth" }), nil
+		return slices.DeleteFunc(slices.Clone(catalog), func(d handlers.Descriptor) bool { return d.Name == auth.ModuleName }), nil
 	}
-	selected := slices.ContainsFunc(catalog, func(d handlers.Descriptor) bool { return d.Name == "auth" })
+	selected := slices.ContainsFunc(catalog, func(d handlers.Descriptor) bool { return d.Name == auth.ModuleName })
 	if !selected {
 		return catalog, nil
 	}

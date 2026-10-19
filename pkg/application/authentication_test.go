@@ -318,7 +318,7 @@ func TestDisabledAuthenticationIsRemovedBeforeModuleSetup(t *testing.T) {
 		t.Run(fmt.Sprintf("requires auth=%t", requiresAuth), func(t *testing.T) {
 			var featureCreated bool
 			catalog := []handlers.Descriptor{
-				{Name: "auth", Provides: []string{"identity"}, New: func() handlers.Handler {
+				{Name: auth.ModuleName, Provides: []string{"identity"}, New: func() handlers.Handler {
 					t.Fatal("disabled auth factory ran")
 					return nil
 				}},
@@ -344,7 +344,7 @@ func TestDisabledAuthenticationIsRemovedBeforeModuleSetup(t *testing.T) {
 			if app != nil {
 				t.Cleanup(func() { app.Shutdown() })
 			}
-			if catalog[0].Name != "auth" || catalog[0].New == nil || reflect.ValueOf(catalog[0].New).Pointer() != authFactory || catalog[1].Name != "feature" {
+			if catalog[0].Name != auth.ModuleName || catalog[0].New == nil || reflect.ValueOf(catalog[0].New).Pointer() != authFactory || catalog[1].Name != "feature" {
 				t.Fatal("modified the supplied catalog")
 			}
 			if requiresAuth {
