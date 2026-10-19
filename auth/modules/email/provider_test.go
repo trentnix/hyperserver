@@ -267,3 +267,21 @@ func TestProviderRequiresSuppliedSessions(t *testing.T) {
 		t.Fatalf("initialization error = %v, want missing session manager", err)
 	}
 }
+
+func TestProviderRejectsUnknownOptionsBeforeDependencies(t *testing.T) {
+	for _, option := range []string{"typo", "registrationenabled", "enabled "} {
+		t.Run(option, func(t *testing.T) {
+			app := &server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{
+				Services: map[string]map[string]string{"email": {"enabled": "true", option: "secret-option-value"}},
+			}}}
+			provider := Provider(nil, nil, nil).New()
+			err := provider.Init(app)
+			if !errors.Is(err, auth_services.ErrEmailAuthServiceInit) || !strings.Contains(err.Error(), "auth.services.email accepts only the enabled option") || strings.Contains(err.Error(), "secret-option-value") {
+				t.Fatalf("expected safe option error, got %v", err)
+			}
+			if app.Config.Auth.Services["email"][option] != "secret-option-value" {
+				t.Fatal("validation changed configuration")
+			}
+		})
+	}
+}

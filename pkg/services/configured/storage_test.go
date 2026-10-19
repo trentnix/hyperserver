@@ -157,7 +157,11 @@ func TestSessionsSelectConfiguredProvider(t *testing.T) {
 			cfg.HTTP.Session.JwtKey = strings.Repeat("a", 64)
 			cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
 			cfg.HTTP.Session.Types = map[string]string{"default": name}
-			cfg.HTTP.Session.Stores = map[string]map[string]string{name: {"enabled": "true", "connection": "sessions.db", "sessiontable": "sessions"}}
+			cfg.HTTP.Session.Stores = map[string]map[string]string{name: {"enabled": "true"}}
+			if name == "sqlitestore" {
+				cfg.HTTP.Session.Stores[name]["connection"] = "sessions.db"
+				cfg.HTTP.Session.Stores[name]["sessiontable"] = "sessions"
+			}
 			custom := &store{}
 			opens := 0
 			manager, err := configured.NewSessionManager(t.Context(), cfg, map[string]session.ConfiguredProvider{"custom": {

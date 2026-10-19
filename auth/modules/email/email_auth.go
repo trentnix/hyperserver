@@ -171,10 +171,16 @@ func Provider(accounts user.AccountRepository, sessions *session.SessionManager,
 }
 
 // Init validates dependencies and settings and prepares email and page templates.
+// Provider options accept only enabled. Other auth settings belong under auth.
 // It does not access account or session storage, send mail, or acquire resources
 // that need shutdown. Supplied services remain owned by application setup.
 func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	configOptions := auth_services.GetAuthConfigOptions(s.Config, AuthTypeEmail)
+	for name := range configOptions {
+		if name != "enabled" {
+			return fmt.Errorf("%w: auth.services.email accepts only the enabled option", auth_services.ErrEmailAuthServiceInit)
+		}
+	}
 	authServiceEnabled := strings.EqualFold(configOptions["enabled"], "true") || configOptions["enabled"] == "1"
 	if !authServiceEnabled {
 		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, errors.New("the email auth service is not enabled"))

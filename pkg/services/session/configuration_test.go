@@ -3,6 +3,7 @@ package session_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,9 +146,11 @@ func TestBuiltInConfiguredProvidersValidateBeforeOpening(t *testing.T) {
 				cfg := config.Config{}
 				cfg.HTTP.Session.JwtKey = strings.Repeat("s", 32)
 				cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
-				cfg.HTTP.Session.Stores = map[string]map[string]string{name: {
-					"enabled": "true", "connection": connection, "sessiontable": "sessions",
-				}}
+				cfg.HTTP.Session.Stores = map[string]map[string]string{name: {"enabled": "true"}}
+				if name == "sqlite" {
+					cfg.HTTP.Session.Stores[name]["connection"] = connection
+					cfg.HTTP.Session.Stores[name]["sessiontable"] = "sessions"
+				}
 				cfg.HTTP.Session.Types = map[string]string{"default": name}
 				switch setting {
 				case "jwtKey":
@@ -177,5 +180,94 @@ func TestBuiltInConfiguredProvidersValidateBeforeOpening(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestBuiltInProvidersRejectUnknownOptions(t *testing.T) {
+	for name, factory := range map[string]func(config.Config) session.ConfiguredProvider{
+		"cookie": cookie.ConfiguredProvider,
+		"sqlite": sqlite.ConfiguredProvider,
+	} {
+		for _, option := range []string{"typo", "cookieage", "enabled "} {
+			t.Run(name+"/"+option, func(t *testing.T) {
+				cfg := config.Config{App: config.AppConfig{WorkingDirectory: t.TempDir()}}
+				cfg.HTTP.Session.JwtKey = strings.Repeat("s", 32)
+				cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
+				options := map[string]string{"enabled": "true", option: "secret-option-value"}
+				if name == "sqlite" {
+					options["connection"], options["sessiontable"] = "sessions.db", "sessions"
+				}
+				original := maps.Clone(options)
+				cfg.HTTP.Session.Stores = map[string]map[string]string{name: options}
+				cfg.HTTP.Session.Types = map[string]string{"default": name}
+				provider := factory(cfg)
+				providers := map[string]session.ConfiguredProvider{name: provider}
+				checkError := func(err error) {
+					t.Helper()
+					if err == nil || !strings.Contains(err.Error(), "accept only") || strings.Contains(err.Error(), "secret-option-value") {
+						t.Fatalf("expected safe option error, got %v", err)
+					}
+				}
+
+				checkError(provider.Validate(options))
+				store, err := provider.Open(t.Context(), options)
+				checkError(err)
+				if store != nil {
+					t.Fatal("invalid options returned a store")
+				}
+				maintenance, closeStore, err := provider.OpenMaintenance(t.Context(), options)
+				checkError(err)
+				if maintenance != nil || closeStore != nil {
+					t.Fatal("invalid options acquired maintenance resources")
+				}
+				manager, err := session.NewConfiguredManager(t.Context(), &cfg, providers)
+				checkError(err)
+				if manager != nil || !strings.Contains(err.Error(), "http.session.stores."+name) {
+					t.Fatalf("invalid manager or missing configuration path: %v", err)
+				}
+				count, err := session.CleanupConfiguredStores(t.Context(), &cfg, providers, 1)
+				checkError(err)
+				if count != 0 || !maps.Equal(options, original) {
+					t.Fatal("invalid options changed storage or configuration")
+				}
+				entries, err := os.ReadDir(cfg.App.WorkingDirectory)
+				if err != nil || len(entries) != 0 {
+					t.Fatalf("invalid options touched storage: %v %v", entries, err)
+				}
+			})
+		}
+	}
+}
+
+func TestBuiltInMaintenanceDoesNotRequireCookieSettings(t *testing.T) {
+	for name, factory := range map[string]func(config.Config) session.ConfiguredProvider{
+		"cookie": cookie.ConfiguredProvider,
+		"sqlite": sqlite.ConfiguredProvider,
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := config.Config{App: config.AppConfig{WorkingDirectory: t.TempDir()}}
+			cfg.HTTP.Session.JwtKey = strings.Repeat("s", 32)
+			cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
+			cfg.HTTP.Session.Types = map[string]string{"default": name}
+			cfg.HTTP.Session.Stores = map[string]map[string]string{name: {"enabled": "true"}}
+			if name == "sqlite" {
+				cfg.HTTP.Session.Stores[name]["connection"] = "sessions.db"
+				cfg.HTTP.Session.Stores[name]["sessiontable"] = "sessions"
+			}
+			manager, err := session.NewConfiguredManager(t.Context(), &cfg, map[string]session.ConfiguredProvider{name: factory(cfg)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := manager.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			cfg.HTTP.Session.JwtKey = ""
+			cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = 0, 0
+			count, err := session.CleanupConfiguredStores(t.Context(), &cfg, map[string]session.ConfiguredProvider{name: factory(cfg)}, 1)
+			if err != nil || count != 0 {
+				t.Fatalf("maintenance required runtime settings: count=%d err=%v", count, err)
+			}
+		})
 	}
 }
