@@ -313,6 +313,63 @@ func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
 	}
 }
 
+func TestDisabledAuthenticationIsRemovedBeforeModuleSetup(t *testing.T) {
+	for _, requiresAuth := range []bool{false, true} {
+		t.Run(fmt.Sprintf("requires auth=%t", requiresAuth), func(t *testing.T) {
+			var featureCreated bool
+			catalog := []handlers.Descriptor{
+				{Name: "auth", Provides: []string{"identity"}, New: func() handlers.Handler {
+					t.Fatal("disabled auth factory ran")
+					return nil
+				}},
+				{Name: "feature", New: func() handlers.Handler {
+					featureCreated = true
+					return &moduleStub{routes: func(routes *routing.Routes) error {
+						routes.HandleFunc("GET /feature", func(w http.ResponseWriter, r *http.Request) {
+							w.WriteHeader(http.StatusNoContent)
+						})
+						return routes.Err()
+					}}
+				}},
+			}
+			if requiresAuth {
+				catalog[1].Requires = []handlers.Requirement{{Capability: "identity"}}
+			}
+			authFactory := reflect.ValueOf(catalog[0].New).Pointer()
+			app, err := application.New(t.Context(), config.Config{}, application.Options{
+				Modules: func(context.Context, *application.Application) ([]handlers.Descriptor, error) {
+					return catalog, nil
+				},
+			})
+			if app != nil {
+				t.Cleanup(func() { app.Shutdown() })
+			}
+			if catalog[0].Name != "auth" || catalog[0].New == nil || reflect.ValueOf(catalog[0].New).Pointer() != authFactory || catalog[1].Name != "feature" {
+				t.Fatal("modified the supplied catalog")
+			}
+			if requiresAuth {
+				if app != nil || err == nil || !strings.Contains(err.Error(), `module "feature" requires missing capability "identity"`) {
+					t.Fatalf("expected missing dependency: app=%v err=%v", app, err)
+				}
+				if featureCreated {
+					t.Fatal("created a module before resolving dependencies")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if app.Accounts != nil || app.Sessions != nil || app.ContentManager.LoadNotifications != nil {
+				t.Fatal("disabled auth activated services or notifications")
+			}
+			w := browserRequests(t, app, false)(http.MethodGet, "/feature", nil)
+			if w.Code != http.StatusNoContent {
+				t.Fatalf("feature status = %d, want %d", w.Code, http.StatusNoContent)
+			}
+		})
+	}
+}
+
 func TestAuthenticationSelectionAndPresentationOverrides(t *testing.T) {
 	for _, mode := range []string{"unselected", "disabled", "selected"} {
 		t.Run(mode, func(t *testing.T) {

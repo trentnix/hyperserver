@@ -20,8 +20,12 @@ func (a *Application) configureAuthentication(catalog []handlers.Descriptor, pro
 	if a.Sessions != nil {
 		a.Handler = session.WithSessionManager(a.Sessions)(a.Handler)
 	}
+
+	if !a.Config.Auth.Enabled {
+		return slices.DeleteFunc(slices.Clone(catalog), func(d handlers.Descriptor) bool { return d.Name == "auth" }), nil
+	}
 	selected := slices.ContainsFunc(catalog, func(d handlers.Descriptor) bool { return d.Name == "auth" })
-	if !a.Config.Auth.Enabled || !selected {
+	if !selected {
 		return catalog, nil
 	}
 

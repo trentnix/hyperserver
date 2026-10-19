@@ -47,6 +47,8 @@ Services, module selection, and module initialization share one `app.initializat
 
 If the selected catalog includes `auth` and `auth.enabled` is true, the constructor supplies its accounts, sessions, and mail. Email/password is the default provider catalog. Enable it with `auth.services.email.enabled`. `Options.AuthProviders` replaces that catalog with explicit factories, which must supply their providers' dependencies. Module initialization validates the enabled providers and required services. Imports alone do not select the auth module.
 
+With `auth.enabled: false`, the constructor removes auth from the selected catalog before dependency resolution. It does not initialize auth, prepare its templates, or bind its routes. Sessions remain available independently.
+
 Serve `app.Handler`, not `app.Web`. The handler attaches selected sessions and, when authentication is active, loads the current identity. Modules still choose protected routes with `auth/middleware.RequireAuthentication(app.Accounts, app.ContentManager)`. The constructor defaults the login destination to `/auth/login` and supplies flash notification loading. Set presentation overrides on `app.ContentManager` in the module-selection callback. Login and home destinations must be local absolute paths.
 
 Standard web middleware, including cross-origin protection and security headers, must still be installed before serving. Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
