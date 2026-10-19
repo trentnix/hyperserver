@@ -72,8 +72,8 @@ type (
 
 	// AccountStorageConfig selects one account repository provider and its options.
 	AccountStorageConfig struct {
-		Provider string            // Case-sensitive provider name. Reference commands default an empty value to sqlite.
-		Options  map[string]string // Validated by the selected provider. SQLite accepts no options.
+		Provider string            // Case-sensitive provider name. Configured setup defaults an empty value to sqlite.
+		Options  map[string]string // Validated by the selected provider.
 	}
 
 	// DatabaseConfig stores the database configuration

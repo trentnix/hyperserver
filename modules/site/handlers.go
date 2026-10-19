@@ -32,7 +32,7 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 
 	err := homepage.Render(w, r)
 	if err != nil {
-		m.contentManager.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
+		homepage.HandleRenderError(w, r, "there was an error rendering the home page", err)
 	}
 }
 
@@ -43,7 +43,7 @@ func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
 
 	err := login.Render(w, r)
 	if err != nil {
-		m.contentManager.HandleError(w, r, "there was an error rendering the login page", err, http.StatusInternalServerError)
+		login.HandleRenderError(w, r, "there was an error rendering the login page", err)
 		return
 	}
 }
@@ -60,7 +60,7 @@ func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 
 	err := register.Render(w, r)
 	if err != nil {
-		m.contentManager.HandleError(w, r, "there was an error rendering the register page", err, http.StatusInternalServerError)
+		register.HandleRenderError(w, r, "there was an error rendering the register page", err)
 		return
 	}
 }
@@ -74,10 +74,9 @@ func (m *pageRenderer) HandleMessage(w http.ResponseWriter, r *http.Request, mes
 	messagePage := m.views[messagePagePartialName].Content(r, message)
 	err := messagePage.Render(w, r)
 	if err != nil {
-		m.contentManager.HandleError(w, r,
+		messagePage.HandleRenderError(w, r,
 			fmt.Sprintf("Unable to display the following message: %s", message),
-			err,
-			http.StatusInternalServerError)
+			err)
 	}
 }
 
@@ -114,7 +113,7 @@ func (m *SiteModule) SessionExample(w http.ResponseWriter, r *http.Request) {
 	// render the result
 	renderErr := page.Render(w, r)
 	if renderErr != nil {
-		m.contentManager.HandleError(w, r, "there was an error rendering the home page", renderErr, http.StatusInternalServerError)
+		page.HandleRenderError(w, r, "there was an error rendering the home page", renderErr)
 		return
 	}
 }
@@ -127,7 +126,7 @@ func (m *pageRenderer) NotFound(w http.ResponseWriter, r *http.Request) {
 
 	err := notFound.Render(w, r)
 	if err != nil {
-		m.contentManager.HandleError(w, r, "there was an error rendering the home page", err, http.StatusInternalServerError)
+		notFound.HandleRenderError(w, r, "there was an error rendering the home page", err)
 	}
 }
 

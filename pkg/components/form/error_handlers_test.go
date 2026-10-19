@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,63 @@ type failingErrorForm struct {
 }
 
 func (f *failingErrorForm) Fail() (string, error) { return "", f.err }
+
+type failedFormResponse struct {
+	*httptest.ResponseRecorder
+	statuses []int
+	writes   int
+	err      error
+}
+
+func (w *failedFormResponse) WriteHeader(status int) {
+	w.statuses = append(w.statuses, status)
+	w.ResponseRecorder.WriteHeader(status)
+}
+
+func (w *failedFormResponse) Write(body []byte) (int, error) {
+	w.writes++
+	n, _ := w.ResponseRecorder.Write(body[:len(body)/2])
+	return n, w.err
+}
+
+func TestFormDeliveryFailureDoesNotWriteErrorResponse(t *testing.T) {
+	for _, hx := range []bool{false, true} {
+		for _, policy := range []string{"custom", "no callback", "no manager"} {
+			for _, cause := range []error{errors.New("connection lost"), nil} {
+				t.Run(fmt.Sprintf("htmx=%t/%s/error=%v", hx, policy, cause), func(t *testing.T) {
+					var logs bytes.Buffer
+					r := httptest.NewRequest(http.MethodPost, "/", nil)
+					r.Header.Set("HX-Request", fmt.Sprint(hx))
+					r = r.WithContext(logger.Set(r.Context(), slog.New(slog.NewTextHandler(&logs, nil))))
+					cm := contentservice.NewContentManager()
+					if policy == "custom" {
+						cm.HandleError = func(http.ResponseWriter, *http.Request, string, error, int) {
+							t.Fatal("delivery failure called the error-page handler")
+						}
+					}
+					page := content.NewManagedContent(r, cm)
+					if policy == "no manager" {
+						page = content.NewContent(r)
+					}
+					page.AddContent(fstest.MapFS{"form.html": {Data: []byte("<p>form contents</p>")}}, "form.html")
+					page.ResponseStatusCode = http.StatusUnprocessableEntity
+					w := &failedFormResponse{ResponseRecorder: httptest.NewRecorder(), err: cause}
+					HandleFormError(w, r, page, &Form{}, "", nil)
+
+					if w.writes != 1 || len(w.statuses) != 1 || w.statuses[0] != http.StatusUnprocessableEntity {
+						t.Fatalf("writes=%d, statuses=%v", w.writes, w.statuses)
+					}
+					if cause == nil {
+						cause = io.ErrShortWrite
+					}
+					if strings.Count(logs.String(), cause.Error()) != 1 {
+						t.Fatalf("delivery failure must be logged once: %s", logs.String())
+					}
+				})
+			}
+		}
+	}
+}
 
 func TestFormRenderingFailurePresentation(t *testing.T) {
 	for _, hx := range []bool{false, true} {

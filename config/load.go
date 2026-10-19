@@ -141,6 +141,17 @@ func readConfig(reader io.Reader, environment []string) (Config, error) {
 		name, value, _ := strings.Cut(entry, "=")
 		if suffix, ok := strings.CutPrefix(name, "HYPERSERVER_"); ok {
 			key := strings.ToLower(strings.ReplaceAll(suffix, "_", "."))
+			const sessionPrefix = "HTTP_SESSION_TYPES_"
+			if strings.HasPrefix(strings.ToUpper(suffix), sessionPrefix) {
+				sessionName := suffix[len(sessionPrefix):]
+				if sessionName == "" || strings.Contains(sessionName, ".") {
+					return Config{}, errors.New("http.session.types: invalid session name")
+				}
+				if sessionName == "DEFAULT" {
+					sessionName = "default"
+				}
+				key = "http.session.types." + sessionName
+			}
 			values[key] = yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
 		}
 	}
@@ -162,11 +173,15 @@ func readConfig(reader io.Reader, environment []string) (Config, error) {
 	return c, nil
 }
 
-// Normalize names after YAML has resolved aliases and checked duplicate keys.
+// Normalize setting names, but preserve case-sensitive session names.
+// YAML has already resolved aliases and checked duplicate keys.
 func collectSettings(entries map[string]any, prefix string, values map[string]yaml.Node) error {
 	seen := make(map[string]bool)
 	for name, child := range entries {
 		key := prefix + strings.ToLower(name)
+		if prefix == "http.session.types." {
+			key = prefix + name
+		}
 		if seen[key] || name == "" || strings.Contains(name, ".") {
 			return fmt.Errorf("%s: duplicate or invalid setting name", key)
 		}

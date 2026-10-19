@@ -9,4 +9,7 @@ var (
 	ErrParsingTemplates = errors.New("unable to parse the specified templates")
 	// ErrRenderingTemplates indicates an error rendering the specified templates
 	ErrRenderingTemplates = errors.New("unable to render the specified templates")
+	// ErrDeliveringResponse means headers were sent and body delivery failed.
+	// Log the error without attempting another response. The cause is unwrapped.
+	ErrDeliveringResponse = errors.New("unable to deliver the response")
 )

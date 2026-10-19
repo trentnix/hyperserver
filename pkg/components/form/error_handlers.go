@@ -52,13 +52,6 @@ func HandleFormError(
 	c.Data = f
 
 	if err := c.Render(w, r); err != nil {
-		handleError := util.HttpError
-		if c.ContentManager != nil && c.ContentManager.HandleError != nil {
-			handleError = c.ContentManager.HandleError
-		}
-		if formErrorMessage == "" {
-			formErrorMessage = http.StatusText(http.StatusInternalServerError)
-		}
-		handleError(w, r, formErrorMessage, err, http.StatusInternalServerError)
+		c.HandleRenderError(w, r, formErrorMessage, err)
 	}
 }

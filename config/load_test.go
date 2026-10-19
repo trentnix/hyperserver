@@ -134,6 +134,8 @@ func TestInvalidConfiguration(t *testing.T) {
 		{"multiple documents", "{}\n---\n{}", "", "one YAML document"},
 		{"duplicate keys", "app:\n  name: first\n  name: second", "", "unique keys"},
 		{"case duplicate", "app:\n  name: first\n  Name: second", "", "duplicate"},
+		{"empty environment session name", "{}", "HYPERSERVER_HTTP_SESSION_TYPES_=custom", "invalid session name"},
+		{"dotted environment session name", "{}", "HYPERSERVER_HTTP_SESSION_TYPES_cart.name=custom", "invalid session name"},
 		{"non-string nested key", "http:\n  1: invalid", "", "setting names must be strings"},
 		{"recursive alias", "app: &loop\n  name: *loop", "", "YAML mapping"},
 		{"scalar document", "secret-marker", "", "YAML mapping"},
@@ -175,6 +177,40 @@ func TestInvalidConfiguration(t *testing.T) {
 				t.Fatal("failed load returned partial configuration")
 			}
 		})
+	}
+}
+
+func TestSessionNamesPreserved(t *testing.T) {
+	const file = `HTTP:
+  Session:
+    Types:
+      default: fallback
+      ShoppingCart: chosen
+      shoppingcart: other
+      cart_items: chosen
+`
+	for _, tc := range []struct {
+		name        string
+		environment []string
+		want        map[string]string
+	}{
+		{"file", nil, map[string]string{"default": "fallback", "ShoppingCart": "chosen", "shoppingcart": "other", "cart_items": "chosen"}},
+		{"override", []string{"HYPERSERVER_HTTP_SESSION_TYPES_ShoppingCart=replacement", "HYPERSERVER_HTTP_SESSION_TYPES_cart_items=replacement", "HYPERSERVER_HTTP_SESSION_TYPES_DEFAULT=replacement"}, map[string]string{"default": "replacement", "ShoppingCart": "replacement", "shoppingcart": "other", "cart_items": "replacement"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := readConfig(strings.NewReader(file), tc.environment)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(cfg.HTTP.Session.Types, tc.want) {
+				t.Fatalf("session mappings = %v, want %v", cfg.HTTP.Session.Types, tc.want)
+			}
+		})
+	}
+
+	cfg, err := readConfig(strings.NewReader("{}"), []string{"HYPERSERVER_HTTP_SESSION_TYPES_ShoppingCart=chosen"})
+	if err != nil || cfg.HTTP.Session.Types["ShoppingCart"] != "chosen" {
+		t.Fatalf("environment-only session mapping = %v, error = %v", cfg.HTTP.Session.Types, err)
 	}
 }
 

@@ -35,6 +35,6 @@ func (a *AuthManager) renderVerificationRequest(w http.ResponseWriter, r *http.R
 		Message           string
 	}{needsVerification, message}
 	if err := c.Render(w, r); err != nil {
-		a.contentManager.HandleError(w, r, "Unable to display verification instructions.", err, http.StatusInternalServerError)
+		c.HandleRenderError(w, r, "Unable to display verification instructions.", err)
 	}
 }

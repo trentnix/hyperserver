@@ -201,8 +201,8 @@ func TestRenderReportsDeliveryFailure(t *testing.T) {
 		if want == nil {
 			want = io.ErrShortWrite
 		}
-		if err := c.Render(w, r); !errors.Is(err, want) {
-			t.Fatalf("delivery error = %v, want %v", err, want)
+		if err := c.Render(w, r); !errors.Is(err, want) || !errors.Is(err, ErrDeliveringResponse) || errors.Is(err, ErrRenderingTemplates) {
+			t.Fatalf("delivery error = %v, want ErrDeliveringResponse wrapping %v", err, want)
 		}
 	}
 }

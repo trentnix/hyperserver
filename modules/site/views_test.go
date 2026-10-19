@@ -1,8 +1,10 @@
 package module_site
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +16,7 @@ import (
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/server"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 func siteWithViews(t *testing.T, repository ContactRepository) *SiteModule {
@@ -64,6 +67,49 @@ func TestSitePreparedViews(t *testing.T) {
 				}
 				if strings.Contains(body, "<html>") != (variant != "fragment") {
 					t.Fatal("wrong page/fragment representation", body)
+				}
+			})
+		}
+	}
+}
+
+type failedViewResponse struct {
+	*httptest.ResponseRecorder
+	statuses, writes int
+}
+
+func (w *failedViewResponse) WriteHeader(status int) {
+	w.statuses++
+	w.ResponseRecorder.WriteHeader(status)
+}
+
+func (w *failedViewResponse) Write([]byte) (int, error) {
+	w.writes++
+	return 0, errors.New("connection lost")
+}
+
+func TestSiteDeliveryFailuresDoNotRenderErrorPages(t *testing.T) {
+	m := siteWithViews(t, new(memoryContacts))
+	m.contentManager.HandleError = func(http.ResponseWriter, *http.Request, string, error, int) {
+		t.Fatal("delivery failure called the error-page handler")
+	}
+	for name, handler := range map[string]http.HandlerFunc{
+		"home":      m.Home,
+		"login":     m.Login,
+		"register":  m.Register,
+		"contact":   m.GetContact,
+		"not found": m.NotFound,
+		"message":   func(w http.ResponseWriter, r *http.Request) { m.HandleMessage(w, r, "message") },
+	} {
+		for _, variant := range []string{"page", "fragment", "history"} {
+			t.Run(name+"/"+variant, func(t *testing.T) {
+				var logs bytes.Buffer
+				r := viewRequest("GET", "/", "", variant)
+				r = r.WithContext(logger.Set(r.Context(), slog.New(slog.NewTextHandler(&logs, nil))))
+				w := &failedViewResponse{ResponseRecorder: httptest.NewRecorder()}
+				handler(w, r)
+				if w.statuses != 1 || w.writes != 1 || strings.Count(logs.String(), "connection lost") != 1 {
+					t.Fatalf("statuses=%d writes=%d logs=%s", w.statuses, w.writes, logs.String())
 				}
 			})
 		}

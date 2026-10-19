@@ -25,6 +25,44 @@ func (s *configuredStore) Close() error { s.closed++; return nil }
 
 type configuredMaintenance struct{}
 
+func TestFileAndProgrammaticSessionNamesSelectSameStores(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile("config.yaml", []byte("http:\n  session:\n    types:\n      default: fallback\n      ShoppingCart: chosen\n      shoppingcart: other\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "HYPERSERVER_") {
+			t.Setenv(name, "")
+			if err := os.Unsetenv(name); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	cfg, err := config.GetConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, types := range []map[string]string{cfg.HTTP.Session.Types, {"default": "fallback", "ShoppingCart": "chosen", "shoppingcart": "other"}} {
+		stores := map[string]*configuredStore{"fallback": {}, "chosen": {}, "other": {}}
+		factories := make(map[string]session.StoreFactory)
+		for name, store := range stores {
+			factories[name] = func(context.Context) (session.SessionStore, error) { return store, nil }
+		}
+		manager, err := session.NewSessionManager(t.Context(), types, factories)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = manager.Close() })
+		for name, provider := range map[string]string{"ShoppingCart": "chosen", "shoppingcart": "other", "unmapped": "fallback"} {
+			got, err := manager.Store(name)
+			if err != nil || got != stores[provider] {
+				t.Fatalf("Store(%q) = %v, %v. Want %s", name, got, err, provider)
+			}
+		}
+	}
+}
+
 func (*configuredMaintenance) DeleteExpired(context.Context, int) (int64, error) { return 2, nil }
 
 func configuredSettings() *config.Config {

@@ -283,10 +283,9 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	err = login.Render(w, r)
 	if err != nil {
-		a.contentManager.HandleError(w, r,
+		login.HandleRenderError(w, r,
 			"Unable to display the email authorization service login form",
-			err,
-			http.StatusInternalServerError)
+			err)
 	}
 }
 
@@ -340,10 +339,9 @@ func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 
 	err = register.Render(w, r)
 	if err != nil {
-		a.contentManager.HandleError(w, r,
+		register.HandleRenderError(w, r,
 			"Unable to display the email authorization service registration form",
-			err,
-			http.StatusInternalServerError)
+			err)
 	}
 }
 
@@ -418,10 +416,9 @@ func (a *EmailAuthService) GetResetRequest(w http.ResponseWriter, r *http.Reques
 
 	err = reset.Render(w, r)
 	if err != nil {
-		a.contentManager.HandleError(w, r,
+		reset.HandleRenderError(w, r,
 			"Unable to display the email authorization service password reset request form",
-			err,
-			http.StatusInternalServerError)
+			err)
 		return
 	}
 }
@@ -464,12 +461,11 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 	reset.Data = resetRequestForm
 	err = reset.Render(w, r)
 	if err != nil {
-		a.contentManager.HandleError(
+		reset.HandleRenderError(
 			w,
 			r,
 			"Unable to display the email authorization service reset request form",
-			err,
-			http.StatusInternalServerError)
+			err)
 	}
 }
 
@@ -496,7 +492,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 
 	err = reset.Render(w, r)
 	if err != nil {
-		a.contentManager.HandleError(w, r, resetErrMsg, err, http.StatusInternalServerError)
+		reset.HandleRenderError(w, r, resetErrMsg, err)
 		return
 	}
 }
@@ -573,7 +569,7 @@ func (a *EmailAuthService) GetChange(w http.ResponseWriter, r *http.Request) {
 
 	err = change.Render(w, r)
 	if err != nil {
-		a.contentManager.HandleError(w, r, changeErrMsg, err, http.StatusInternalServerError)
+		change.HandleRenderError(w, r, changeErrMsg, err)
 		return
 	}
 }
@@ -629,11 +625,10 @@ func (a *EmailAuthService) Change(w http.ResponseWriter, r *http.Request, u *use
 	change = a.views[emailChangePasswordFormPartial].Content(r, changeForm)
 	err = change.Render(w, r)
 	if err != nil {
-		a.contentManager.HandleError(
+		change.HandleRenderError(
 			w,
 			r,
 			"The password was updated, but there was an error displaying the change form.",
-			err,
-			http.StatusInternalServerError)
+			err)
 	}
 }

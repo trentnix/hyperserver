@@ -43,6 +43,21 @@ type emailIdentityStore struct {
 	session.RotatingStore
 }
 
+type failedEmailFormResponse struct {
+	*httptest.ResponseRecorder
+	statuses, writes int
+}
+
+func (w *failedEmailFormResponse) WriteHeader(status int) {
+	w.statuses++
+	w.ResponseRecorder.WriteHeader(status)
+}
+
+func (w *failedEmailFormResponse) Write([]byte) (int, error) {
+	w.writes++
+	return 0, errors.New("connection lost")
+}
+
 func emailSessions(t *testing.T, types map[string]string) *session.SessionManager {
 	t.Helper()
 	manager, err := session.NewSessionManager(t.Context(), types, map[string]session.StoreFactory{
@@ -91,6 +106,11 @@ func TestEmailFormsUseStartupTemplates(t *testing.T) {
 				handler(w, r)
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "<form") {
 					t.Fatalf("%s htmx=%t: status=%d body=%s", name, htmx, w.Code, w.Body.String())
+				}
+				failed := &failedEmailFormResponse{ResponseRecorder: httptest.NewRecorder()}
+				handler(failed, r)
+				if failed.statuses != 1 || failed.writes != 1 {
+					t.Fatalf("%s htmx=%t: delivery failure wrote %d statuses and %d bodies", name, htmx, failed.statuses, failed.writes)
 				}
 			}
 		}

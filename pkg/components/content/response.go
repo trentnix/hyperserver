@@ -1,6 +1,7 @@
 package content
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -19,7 +21,8 @@ import (
 // body are written. Notifications are acknowledged after rendering succeeds and
 // before headers are written. HEAD and empty bodies do not acknowledge notifications.
 // HTMX refresh responses skip notification loading because the browser discards their body.
-// Delivery errors can follow partial writes. Call before committing the response.
+// Delivery errors wrap ErrDeliveringResponse and can follow partial writes.
+// Use HandleRenderError for failures. Call Render before committing the response.
 // Use http.ResponseWriter directly for streaming and other specialized responses.
 // History restoration renders a full page without fragment response metadata.
 // Responses vary on HX-Request and HX-History-Restore-Request and default to no-store.
@@ -82,9 +85,28 @@ func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	if _, err := body.WriteTo(w); err != nil {
-		return hs_errors.WithCause(ErrRenderingTemplates, err)
+		return hs_errors.WithCause(ErrDeliveringResponse, err)
 	}
 	return nil
+}
+
+// HandleRenderError logs delivery failures without writing another response.
+// Other Render failures use the configured error handler with HTTP 500, or plain
+// text when no handler is configured. Call only for an error returned by Render.
+func (c *Content) HandleRenderError(w http.ResponseWriter, r *http.Request, message string, err error) {
+	if errors.Is(err, ErrDeliveringResponse) {
+		logger.LogRequestError(r, err)
+		return
+	}
+
+	handleError := util.HttpError
+	if c.ContentManager != nil && c.ContentManager.HandleError != nil {
+		handleError = c.ContentManager.HandleError
+	}
+	if message == "" {
+		message = http.StatusText(http.StatusInternalServerError)
+	}
+	handleError(w, r, message, err, http.StatusInternalServerError)
 }
 
 // applyHeaders runs only after rendering succeeds, or for a bodyless response.

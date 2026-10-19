@@ -229,7 +229,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.Render(w, r); err != nil {
-		a.contentManager.HandleError(w, r, "could not render the login page", err, http.StatusInternalServerError)
+		c.HandleRenderError(w, r, "could not render the login page", err)
 	}
 }
 
@@ -272,7 +272,7 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.Render(w, r); err != nil {
-		a.contentManager.HandleError(w, r, "could not render the registration page", err, http.StatusInternalServerError)
+		c.HandleRenderError(w, r, "could not render the registration page", err)
 	}
 }
 
@@ -660,7 +660,7 @@ func (a *AuthManager) GetVerify(w http.ResponseWriter, r *http.Request) {
 	c.Templates = a.templates[authVerifyTemplate]
 	c.Data = verificationToken
 	if err := c.Render(w, r); err != nil {
-		a.contentManager.HandleError(w, r, "Unable to display the verification form.", err, http.StatusInternalServerError)
+		c.HandleRenderError(w, r, "Unable to display the verification form.", err)
 	}
 }
 

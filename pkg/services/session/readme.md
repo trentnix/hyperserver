@@ -127,6 +127,8 @@ Pass the same manager to auth factories and `authmiddleware.LoadSessionManagemen
 
 `openMySessionStore` must accept `context.Context` and return `(session.SessionStore, error)`. Success means the store is ready for use. If the store is unavailable, the factory must release partial resources and return an error. The manager owns successful results, closes them in reverse initialization order, and closes each selected provider only once. Provider names are case-insensitive. Session names are case-sensitive.
 
+File configuration preserves session names. Environment overrides must use the same spelling, such as `HYPERSERVER_HTTP_SESSION_TYPES_ShoppingCart`. Underscores within the session name are preserved. `HYPERSERVER_HTTP_SESSION_TYPES_DEFAULT` selects the `default` fallback.
+
 A named selection overrides `default`. Unknown selections and ambiguous provider names fail before any factory runs.
 
 Providers can use `NewSession` to create an unsaved value. Pass the same serializer to `EncodedData` and `LoadSession`. A nil serializer selects JSON. Providers remain responsible for identity and expiration checks.
