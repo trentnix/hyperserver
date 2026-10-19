@@ -15,8 +15,10 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/configured"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/messaging/smtp"
+	"github.com/trentnix/hyperserver/pkg/services/middleware"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -32,13 +34,16 @@ type Services struct {
 	MailHealth func(context.Context) error
 }
 
-// Options selects modules and overrides configuration-selected services or factories.
+// Options selects modules, the browser security policy, and service overrides.
 // Supplied services bypass their factories. Additional factories replace matching
 // built-in names and are local to this application.
 type Options struct {
-	Services         Services
-	AccountProviders map[string]user.StorageProvider
-	SessionProviders map[string]session.ConfiguredProvider
+	// ContentSecurityPolicy must match the application's assets and HTMX settings.
+	// Empty omits the Content-Security-Policy header.
+	ContentSecurityPolicy string
+	Services              Services
+	AccountProviders      map[string]user.StorageProvider
+	SessionProviders      map[string]session.ConfiguredProvider
 	// AuthProviders supplies the selected auth module's provider catalog. Nil
 	// selects email/password with this application's services. An empty non-nil
 	// slice selects none. Configuration determines which providers are enabled.
@@ -53,22 +58,22 @@ type Options struct {
 }
 
 // Application owns initialized modules and the services it creates, but not
-// services supplied in Options. Add standard web middleware before serving. Run drains
-// requests before closing modules and then services. Without Run, call Shutdown
-// after consumers stop.
+// services supplied in Options. Run drains requests before closing modules and
+// then services. Without Run, call Shutdown after consumers stop.
 type Application struct {
 	*server.ApplicationServer
 	Services
-	// Handler wraps Web with session loading and, when auth is selected and
-	// enabled, identity loading. Serve this handler, not the bare Web mux.
-	// Route authorization and standard web middleware remain explicit.
+	// Handler wraps Web with standard web middleware, session loading, and,
+	// when auth is selected and enabled, identity loading. Serve this handler,
+	// not the bare Web mux. Modules choose route authorization.
 	Handler http.Handler
 }
 
 // New copies and validates configuration, resolves paths, and opens selected
 // services, then initializes selected modules and binds their routes. It loads
 // optional module configuration, but not the application configuration file.
-// It installs session and identity loading, but no other middleware or listener.
+// It installs standard web middleware around session and identity loading,
+// using the logger from ctx. It does not open a listener.
 // Consumers must validate required services and choose protected routes.
 // All startup shares app.initializationTimeout, or ten seconds if unset. An earlier
 // ctx deadline wins. Failure closes acquired resources with a fresh cleanup
@@ -115,6 +120,11 @@ func New(ctx context.Context, cfg config.Config, options Options) (_ *Applicatio
 	}
 	if err := handlers.Setup(ctx, core, nil, catalog, options.ProviderSelections); err != nil {
 		return nil, fmt.Errorf("prepare modules: %w", err)
+	}
+
+	app.Handler, err = middleware.Web(app.Handler, app.Config.HTTP, options.ContentSecurityPolicy, logger.Get(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("prepare HTTP middleware: %w", err)
 	}
 	return app, nil
 }

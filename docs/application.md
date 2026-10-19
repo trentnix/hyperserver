@@ -49,9 +49,13 @@ If the selected catalog includes `auth` and `auth.enabled` is true, the construc
 
 With `auth.enabled: false`, the constructor removes auth from the selected catalog before dependency resolution. It does not initialize auth, prepare its templates, or bind its routes. Sessions remain available independently.
 
-Serve `app.Handler`, not `app.Web`. The handler attaches selected sessions and, when authentication is active, loads the current identity. Modules still choose protected routes with `auth/middleware.RequireAuthentication(app.Accounts, app.ContentManager)`. The constructor defaults the login destination to `/auth/login` and supplies flash notification loading. Set presentation overrides on `app.ContentManager` in the module-selection callback. Login and home destinations must be local absolute paths.
+Serve `app.Handler`, not `app.Web`. The handler includes the standard web middleware, attaches selected sessions, and, when authentication is active, loads the current identity. Modules still choose protected routes with `auth/middleware.RequireAuthentication(app.Accounts, app.ContentManager)`. The constructor defaults the login destination to `/auth/login` and supplies flash notification loading. Set presentation overrides on `app.ContentManager` in the module-selection callback. Login and home destinations must be local absolute paths.
 
-Standard web middleware, including cross-origin protection and security headers, must still be installed before serving. Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
+The constructor installs `middleware.Web` once, outside session and identity loading. It provides security headers and cross-origin protection and applies the configured trusted proxies, HSTS, and shared rate limit. Set `Options.ContentSecurityPolicy` to match the application's assets. An empty value omits CSP. Do not wrap `app.Handler` with `middleware.Web` again. For a different stack, use the lower-level `server` and middleware APIs.
+
+Attach a `*slog.Logger` with `logger.Set(ctx, log)` before calling `application.New` to enable startup and request logging. Without a logger, requests still receive IDs.
+
+Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
 
 The reference command still uses the explicit setup below.
 
