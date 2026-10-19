@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -11,6 +12,56 @@ type maintenanceFunc func(context.Context, int) (int64, error)
 
 func (f maintenanceFunc) DeleteExpired(ctx context.Context, limit int) (int64, error) {
 	return f(ctx, limit)
+}
+
+type maintenanceValue struct{}
+
+func (maintenanceValue) DeleteExpired(context.Context, int) (int64, error) {
+	return 1, nil
+}
+
+func TestCleanupRejectsTypedNilMaintenance(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		maintenance ExpiredSessionMaintenance
+		invalid     bool
+		count       int64
+	}{
+		{"nil means no cleanup", nil, false, 0},
+		{"nil function", maintenanceFunc(nil), true, 0},
+		{"nil pointer", (*maintenanceValue)(nil), true, 0},
+		{"value", maintenanceValue{}, false, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, closeFails := range []bool{false, true} {
+				closeErr := errors.New("close failed")
+				closes, continued := 0, false
+				factories := map[string]MaintenanceFactory{
+					"a": func(context.Context) (ExpiredSessionMaintenance, func() error, error) {
+						return tc.maintenance, func() error {
+							closes++
+							if closeFails {
+								return closeErr
+							}
+							return nil
+						}, nil
+					},
+					"b": func(context.Context) (ExpiredSessionMaintenance, func() error, error) {
+						continued = true
+						return nil, nil, nil
+					},
+				}
+
+				count, err := CleanupExpired(t.Context(), map[string]string{"a": "a", "b": "b"}, factories, 1)
+				if count != tc.count || closes != 1 || !continued || (err != nil) != (tc.invalid || closeFails) || errors.Is(err, closeErr) != closeFails {
+					t.Fatalf("closeFails=%t: count=%d closes=%d continued=%t error=%v", closeFails, count, closes, continued, err)
+				}
+				if tc.invalid && !strings.Contains(err.Error(), `clean up session store "a": provider returned nil session maintenance`) {
+					t.Fatalf("missing provider error: %v", err)
+				}
+			}
+		})
+	}
 }
 
 func TestCleanupSelectedProviders(t *testing.T) {

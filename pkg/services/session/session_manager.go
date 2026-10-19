@@ -102,7 +102,7 @@ func NewSessionManager(ctx context.Context, types map[string]string, factories m
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("initialize session store %s: %w", name, err), m.Close())
 		}
-		if isNilStore(store) {
+		if isNilService(store) {
 			return nil, errors.Join(fmt.Errorf("session store %q is missing or disabled", name), m.Close())
 		}
 		if closer, ok := store.(io.Closer); ok {
@@ -119,12 +119,12 @@ func NewSessionManager(ctx context.Context, types map[string]string, factories m
 	return m, nil
 }
 
-// isNilStore rejects typed nils before setup calls methods or takes ownership.
-func isNilStore(store SessionStore) bool {
-	if store == nil {
+// isNilService rejects typed nils before calling provider methods.
+func isNilService(service any) bool {
+	if service == nil {
 		return true
 	}
-	switch value := reflect.ValueOf(store); value.Kind() {
+	switch value := reflect.ValueOf(service); value.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return value.IsNil()
 	default:

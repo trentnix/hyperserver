@@ -10,9 +10,10 @@ import (
 )
 
 // MaintenanceFactory opens existing storage without creating or migrating it.
-// A nil maintenance value means that no cleanup is needed. A nil factory means
-// maintenance is unsupported. CleanupExpired calls the returned close function
-// even when opening fails. Factories must honor ctx and release only owned resources.
+// A nil interface means that no cleanup is needed. Typed nils are invalid.
+// A nil factory means maintenance is unsupported. CleanupExpired calls the returned
+// close function even when opening fails. Factories must honor ctx and release only
+// owned resources.
 type MaintenanceFactory func(context.Context) (ExpiredSessionMaintenance, func() error, error)
 
 // CleanupExpired removes one bounded batch from each selected provider.
@@ -67,6 +68,9 @@ func cleanupProvider(ctx context.Context, open MaintenanceFactory, limit int) (c
 	}
 	if maintenance == nil {
 		return 0, nil
+	}
+	if isNilService(maintenance) {
+		return 0, errors.New("provider returned nil session maintenance")
 	}
 	return maintenance.DeleteExpired(ctx, limit)
 }

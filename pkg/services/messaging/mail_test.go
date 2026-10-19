@@ -144,8 +144,9 @@ func TestMailClientRejectsIncompleteMessages(t *testing.T) {
 }
 
 func TestMailClientRequiresDependencies(t *testing.T) {
-	if _, err := NewMailClientWithSender("from@example.invalid", nil); err == nil {
-		t.Fatal("accepted nil sender")
+	client, err := NewMailClientWithSender("from@example.invalid", nil)
+	if client != nil || err == nil {
+		t.Fatalf("nil sender: client=%v error=%v", client, err)
 	}
 }
 

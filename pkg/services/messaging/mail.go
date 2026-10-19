@@ -52,6 +52,7 @@ type (
 )
 
 // NewMailClientWithSender uses the supplied sender without selecting a fallback.
+// Callers must supply a valid sender, not a typed nil inside an interface.
 // Senders can implement ValidateConfig() error for local availability checks.
 // Validation must not contact external services.
 func NewMailClientWithSender(from string, sender MailSender) (*MailClient, error) {
