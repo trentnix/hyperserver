@@ -8,7 +8,7 @@ The [README](../readme.md#account-storage) shows account setup. This guide cover
 
 For accounts that share an existing SQLite pool, supply `user/sqlite.ConfiguredProvider(cfg, pool)` as the `"sqlite"` factory. The pool keeps its existing owner. Without an override, account setup opens and owns its pool.
 
-The reference application's `auth.accountStorage.provider` defaults to `sqlite`, using the application-owned `database.connection`. SQLite accepts no `auth.accountStorage.options`. Unknown names stop startup when authentication is enabled. The web and cleanup commands share [provider selection](../cmd/internal/setup/accounts.go), separate from login providers under `auth.services`.
+The reference application's `auth.accountStorage.provider` defaults to `sqlite`, using `database.connection`. SQLite accepts no `auth.accountStorage.options`. Unknown names stop startup when authentication is enabled. Accounts and SQLite contacts own separate pools. A file connection can point both pools at the same database, but `:memory:` creates a separate database per pool.
 
 Account models and contracts live in [`user`](../pkg/services/user), with SQLite support in [`user/sqlite`](../pkg/services/user/sqlite). See the [README](../readme.md#account-storage) for construction and initialization. Register repository-owned cleanup before initializing consumers. A supplied pool keeps its existing owner.
 
@@ -126,7 +126,7 @@ auth:
       connection: your-provider-connection
 ```
 
-Provider names are case-sensitive. The reference application's [shared setup](../cmd/internal/setup/accounts.go) chooses SQLite as its default and supports additional adapters through `RegisterProvider`. Those choices belong to the commands, not the library. Supplying `AccountRepository` on the reference application's [setup struct](../cmd/web/application.go) bypasses selection and initialization.
+Provider names are case-sensitive. `application.Options.AccountProviders` adds or replaces factories. Supplying `Options.Services.Accounts` bypasses selection and initialization without transferring ownership. The [maintenance command setup](../cmd/internal/setup/accounts.go) selects its providers separately.
 
 `OpenMaintenance` returns [TokenMaintenance](../pkg/services/user/account_repository.go), an optional close function, and an error. It must not create or migrate tables. Each batch closes acquired resources, including on failure. Missing maintenance capabilities return errors rather than skipping cleanup.
 

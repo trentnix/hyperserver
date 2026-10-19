@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestReferenceListenAddress(t *testing.T) {
 	tests := []struct {
@@ -9,10 +12,6 @@ func TestReferenceListenAddress(t *testing.T) {
 		port     uint16
 		want     string
 	}{
-		{name: "empty hostname", port: 8080, want: "127.0.0.1:8080"},
-		{name: "blank hostname", hostname: " \t", port: 8080, want: "127.0.0.1:8080"},
-		{name: "localhost", hostname: "localhost", port: 8080, want: "127.0.0.1:8080"},
-		{name: "uppercase localhost", hostname: "LOCALHOST", port: 8080, want: "127.0.0.1:8080"},
 		{name: "IPv4 loopback", hostname: "127.0.0.1", port: 8080, want: "127.0.0.1:8080"},
 		{name: "IPv4 loopback range", hostname: "127.0.0.2", port: 8080, want: "127.0.0.2:8080"},
 		{name: "IPv6 loopback", hostname: "::1", port: 8080, want: "[::1]:8080"},
@@ -36,8 +35,20 @@ func TestReferenceListenAddress(t *testing.T) {
 	}
 }
 
-func TestReferenceListenAddressRejectsNonLoopback(t *testing.T) {
+func TestReferenceListenAddressRequiresHost(t *testing.T) {
+	for _, host := range []string{"", " \t\n"} {
+		address, err := referenceListenAddress(host, 8080)
+		if address != "" || err == nil || err.Error() != "http.listenHost must be configured" {
+			t.Errorf("referenceListenAddress(%q) = %q, %v", host, address, err)
+		}
+	}
+}
+
+func TestReferenceListenAddressRejectsHostnamesAndNonLoopback(t *testing.T) {
 	for _, hostname := range []string{
+		"localhost",
+		"LOCALHOST",
+		" localhost ",
 		"0.0.0.0",
 		"::",
 		"::ffff:0.0.0.0",
@@ -56,7 +67,10 @@ func TestReferenceListenAddressRejectsNonLoopback(t *testing.T) {
 		t.Run(hostname, func(t *testing.T) {
 			address, err := referenceListenAddress(hostname, 8080)
 			if err == nil {
-				t.Fatal("referenceListenAddress() must reject a non-loopback or invalid hostname")
+				t.Fatal("referenceListenAddress() must reject hostnames and non-loopback addresses")
+			}
+			if !strings.Contains(err.Error(), "http.listenHost must be a loopback IP address, such as 127.0.0.1 or ::1") {
+				t.Errorf("error does not explain accepted addresses: %v", err)
 			}
 			if address != "" {
 				t.Errorf("referenceListenAddress() returned address %q with an error", address)

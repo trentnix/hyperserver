@@ -17,11 +17,8 @@ import (
 // Logging still formats every request, but does not retain the log output.
 func performanceRequests(t testing.TB) (http.Handler, []*http.Request) {
 	t.Helper()
-	h := newHTTPHarness(t)
-	handler, err := applicationHandler(h.app, slog.New(slog.NewJSONHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatal(err)
-	}
+	h := newHTTPHarnessWithLogger(t, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	handler := h.app.Handler
 	base, err := url.Parse(h.baseURL)
 	if err != nil {
 		t.Fatal(err)

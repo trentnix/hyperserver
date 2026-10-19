@@ -11,6 +11,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 func TestCleanupAccountTokensWithoutApplication(t *testing.T) {
@@ -78,7 +79,7 @@ func TestMaintenanceResolvesConfiguredPaths(t *testing.T) {
 		Database: config.DatabaseConfig{Driver: "sqlite3", Connection: "maintenance.db?_timeout=25"},
 	}
 	cfg.App.WorkingDirectory = directory
-	if _, _, err := NewAccountStorage(cfg).Open(t.Context(), db); err != nil {
+	if err := usersqlite.NewAccountRepository(db).Initialize(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(t.Context(), "CREATE TABLE sessions (id TEXT PRIMARY KEY, expires_at TIMESTAMP)"); err != nil {
@@ -104,12 +105,6 @@ func TestMaintenanceResolvesConfiguredPaths(t *testing.T) {
 	}
 }
 
-func accountProviderApplication(name string) *AccountStorage {
-	return NewAccountStorage(&config.Config{Auth: config.AuthConfig{
-		Enabled: true, AccountStorage: config.AccountStorageConfig{Provider: name},
-	}})
-}
-
 type tokenMaintenanceFunc func(context.Context, int) (int64, error)
 
 func (f tokenMaintenanceFunc) DeleteExpiredTokens(ctx context.Context, limit int) (int64, error) {
@@ -117,9 +112,8 @@ func (f tokenMaintenanceFunc) DeleteExpiredTokens(ctx context.Context, limit int
 }
 
 func TestDisabledAccountMaintenanceDoesNotOpenProvider(t *testing.T) {
-	s := accountProviderApplication("custom")
-	s.config.Auth.Enabled = false
-	if err := s.RegisterProvider("custom", AccountProvider{
+	cfg := &config.Config{Auth: config.AuthConfig{AccountStorage: config.AccountStorageConfig{Provider: "custom"}}}
+	providers := map[string]user.StorageProvider{"custom": {
 		Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
 			t.Fatal("disabled accounts opened runtime storage")
 			return nil, nil, nil
@@ -128,10 +122,8 @@ func TestDisabledAccountMaintenanceDoesNotOpenProvider(t *testing.T) {
 			t.Fatal("disabled accounts opened maintenance storage")
 			return nil, nil, nil
 		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if count, err := s.CleanupTokens(t.Context(), 1); count != 0 || err != nil {
+	}}
+	if count, err := cleanupAccountTokens(t.Context(), cfg, 1, providers); count != 0 || err != nil {
 		t.Fatalf("disabled maintenance = %d, %v", count, err)
 	}
 }

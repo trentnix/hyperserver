@@ -8,7 +8,7 @@
 # HTTP addresses, listener settings, and sessions.
 http:
   # Host or unbracketed IP address to listen on. Empty defaults to 127.0.0.1.
-  # The reference application's listener accepts only loopback addresses.
+  # The reference application requires a loopback IP, such as 127.0.0.1 or ::1, not localhost.
   listenHost: "127.0.0.1"
   # TCP port for incoming HTTP requests.
   port: 8080

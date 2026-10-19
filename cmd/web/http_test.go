@@ -20,9 +20,9 @@ import (
 
 	"github.com/trentnix/hyperserver/auth/identity"
 	"github.com/trentnix/hyperserver/auth/password"
-	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/database"
+	framework "github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -123,6 +123,10 @@ type httpHarness struct {
 }
 
 func newHTTPHarness(t testing.TB, configure ...func(*config.Config)) *httpHarness {
+	return newHTTPHarnessWithLogger(t, nil, configure...)
+}
+
+func newHTTPHarnessWithLogger(t testing.TB, log *slog.Logger, configure ...func(*config.Config)) *httpHarness {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -155,13 +159,17 @@ func newHTTPHarness(t testing.TB, configure ...func(*config.Config)) *httpHarnes
 	for _, change := range configure {
 		change(cfg)
 	}
-	if err := cfg.Validate(); err != nil {
+
+	mail := &fakeMailSender{}
+	mailClient, err := messaging.NewMailClientWithSender("test@example.invalid", mail)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := setup.ValidateSessionConfig(cfg); err != nil {
-		t.Fatal(err)
+	logs := &capturedLogs{}
+	if log == nil {
+		log = newTestLogger(logs)
 	}
-	app, err := newApplication(*cfg)
+	app, err := newApplication(logger.Set(t.Context(), log), *cfg, "", framework.Options{Services: framework.Services{Mail: mailClient}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,51 +178,14 @@ func newHTTPHarness(t testing.TB, configure ...func(*config.Config)) *httpHarnes
 			t.Error(err)
 		}
 	})
-	db, err := database.Setup(cfg.Database.Driver, cfg.Database.Connection)
-	if err != nil {
-		t.Fatal(err)
-	}
-	app.ownDatabase(db)
-	if err := db.Ping(); err != nil {
-		t.Fatal(err)
-	}
-
-	mail := &fakeMailSender{}
-	mailClient, err := messaging.NewMailClientWithSender("test@example.invalid", mail)
-	if err != nil {
-		t.Fatal(err)
-	}
-	app.Mail = mailClient
-	if err := initializeSessions(context.Background(), app); err != nil {
-		t.Fatal(err)
-	}
-	if err := initializeAccounts(context.Background(), app, setup.NewAccountStorage(app.Config)); err != nil {
-		t.Fatal(err)
-	}
-	logs := &capturedLogs{}
-	if err := configureRendering(app.ApplicationServer); err != nil {
-		t.Fatal(err)
-	}
-	l := newTestLogger(logs)
-	catalog, err := siteModules(app, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := SetupHandlers(context.Background(), app.ApplicationServer, l, catalog, nil); err != nil {
-		t.Fatal(err)
-	}
 	jar, err := cookiejar.New(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler, err := applicationHandler(app, l)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return &httpHarness{
 		baseURL: "http://127.0.0.1:8080",
 		app:     app, mail: mail, cookies: jar, logs: logs,
-		handler: handler,
+		handler: app.Handler,
 	}
 }
 
@@ -284,7 +255,7 @@ func (f *fakeMailSender) snapshot() []messaging.MailMessage {
 func (h *httpHarness) assertRowCount(t *testing.T, table string, want int) {
 	t.Helper()
 	var count int
-	if err := h.app.Database.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
+	if err := h.app.contactDB.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != want {
@@ -299,10 +270,10 @@ func (h *httpHarness) seedUser(t testing.TB, email string) *user.User {
 		t.Fatal(err)
 	}
 	u := &user.User{Email: email, Password: hash, Verified: true, RegistrationAuthType: "email"}
-	if err := h.app.AccountRepository.Create(context.Background(), u); err != nil {
+	if err := h.app.Accounts.Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	u, err = h.app.AccountRepository.GetByEmail(t.Context(), email)
+	u, err = h.app.Accounts.GetByEmail(t.Context(), email)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +289,7 @@ func registrationForm() url.Values {
 
 func (h *httpHarness) establishSession(t testing.TB, u *user.User) {
 	t.Helper()
-	r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.SessionManager)
+	r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.app.Sessions)
 	w := httptest.NewRecorder()
 	if err := identity.SetAuthenticatedUser(w, r, u); err != nil {
 		t.Fatal(err)

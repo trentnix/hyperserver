@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -10,9 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/services/user"
+	framework "github.com/trentnix/hyperserver/pkg/application"
 )
 
 func TestStartupOutsideRepository(t *testing.T) {
@@ -42,7 +40,7 @@ func TestStartupStoragePaths(t *testing.T) {
 }
 
 // Run in a subprocess to isolate launch directories and configuration loading.
-// Do not preinitialize services: the test must exercise run's actual ordering.
+// Exercise the same constructor as the command, without changing the process directory.
 func checkStartupStoragePaths(t *testing.T) {
 	t.Helper()
 	launch, err := os.Getwd()
@@ -53,62 +51,44 @@ func checkStartupStoragePaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app, err := newApplication(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	// Inspect storage after initialization, then stop before module setup/listening.
-	checked := errors.New("storage checked")
-	app.Config.Auth.AccountStorage.Provider = "path-check"
-	accounts := setup.NewAccountStorage(app.Config)
-	if err := accounts.RegisterProvider("path-check", setup.AccountProvider{
-		Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
-			// This test needs two physical connections to verify path resolution.
-			app.Database.SetMaxOpenConns(2)
-			first, err := app.Database.Conn(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-			defer first.Close()
-			second, err := app.Database.Conn(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-			defer second.Close()
-			want := filepath.Join(cfg.App.WorkingDirectory, "relative.db")
-			for _, conn := range []*sql.Conn{first, second} {
-				var sequence int
-				var name, path string
-				if err := conn.QueryRowContext(ctx, "PRAGMA database_list").Scan(&sequence, &name, &path); err != nil {
-					return nil, nil, err
-				}
-				if path != want {
-					return nil, nil, fmt.Errorf("database path=%q, want %q", path, want)
-				}
-			}
-			if _, err := first.ExecContext(ctx, "CREATE TABLE path_check (id INTEGER)"); err != nil {
-				return nil, nil, err
-			}
-			if _, err := second.ExecContext(ctx, "INSERT INTO path_check VALUES (1)"); err != nil {
-				return nil, nil, err
-			}
-			return nil, nil, checked
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	err = run(context.Background(), app, accounts, "")
+	app, err := newApplication(t.Context(), cfg, "", framework.Options{})
 	if os.Getenv("HS_STARTUP_TEST_HELPER") == "invalid-working-directory" {
-		if err == nil || !strings.Contains(err.Error(), "app.workingDirectory") || app.Database != nil || app.Mail != nil || app.SessionManager != nil {
-			t.Fatalf("invalid working directory acquired services or returned the wrong error: %v", err)
+		if err == nil || !strings.Contains(err.Error(), "app.workingDirectory") || app != nil {
+			t.Fatalf("invalid working directory: app=%v err=%v", app, err)
 		}
 	} else {
-		if !errors.Is(err, checked) {
-			t.Fatalf("storage check failed: %v", err)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if err := app.Database.Ping(); err == nil {
-			t.Fatal("startup failure left the pool open")
+		defer app.Shutdown()
+		app.contactDB.SetMaxOpenConns(2)
+		first, err := app.contactDB.Conn(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer first.Close()
+		second, err := app.contactDB.Conn(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer second.Close()
+		want := filepath.Join(cfg.App.WorkingDirectory, "relative.db")
+		for _, conn := range []*sql.Conn{first, second} {
+			var sequence int
+			var name, path string
+			if err := conn.QueryRowContext(t.Context(), "PRAGMA database_list").Scan(&sequence, &name, &path); err != nil {
+				t.Fatal(err)
+			}
+			if path != want {
+				t.Fatalf("database path=%q, want %q", path, want)
+			}
+		}
+		if _, err := first.ExecContext(t.Context(), "CREATE TABLE path_check (id INTEGER)"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := second.ExecContext(t.Context(), "INSERT INTO path_check VALUES (1)"); err != nil {
+			t.Fatal(err)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(launch, "relative.db")); !errors.Is(err, os.ErrNotExist) {

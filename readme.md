@@ -72,7 +72,7 @@ Trust only the direct proxy peer and restrict backend access to it. Trusting loo
 
 Verified proxy information controls client-IP limits and cookie security. `publicOrigin` alone does not enable TLS or secure cookies. For a custom HTTP stack, install [proxy verification](pkg/requestinfo/request.go) before rate limits and session loading.
 
-Use `middleware.Web(handler, cfg.HTTP, contentSecurityPolicy, log)` for the standard HTTP stack, including security headers and Go's `http.CrossOriginProtection`. Supply session loading inside `handler`. Keep Host and origin headers intact through proxies. For HTTPS-only deployments, `http.hstsMaxAge` enables HSTS for direct or verified proxy HTTPS. The default `0` omits it but does not clear a browser's existing policy.
+`application.New` installs the standard HTTP stack, including security headers and Go's `http.CrossOriginProtection`. Serve `app.Handler`. For explicit setup, use `middleware.Web(handler, cfg.HTTP, contentSecurityPolicy, log)` with session loading inside `handler`. Keep Host and origin headers intact through proxies. For HTTPS-only deployments, `http.hstsMaxAge` enables HSTS for direct or verified proxy HTTPS. The default `0` omits it but does not clear a browser's existing policy.
 
 ## Module registration
 
@@ -89,7 +89,7 @@ func init() {
 
 Factories must return fresh instances without I/O. Application setup supplies shared services and selects a copy of `handlers.Registered()` or a local `[]handlers.Descriptor`. Imports make modules available. The selected catalog controls which modules initialize.
 
-Call `handlers.Setup(ctx, app, routes, catalog, selections)` after configuring services and rendering. It initializes modules, binds routes, and registers reverse-order cleanup. Nil routes use `http.defaultRateLimit`. Explicit routes retain their own defaults. A nil catalog selects no modules. If setup fails, discard the application because its mux may contain routes.
+Select modules through `application.Options.Modules`. `application.New` opens configured services, calls that callback, initializes modules, binds routes, and owns cleanup. The callback can configure shared rendering and supply feature dependencies. For manual startup, use `handlers.Setup` instead. Do not call both setup paths.
 
 Modules use ordinary handlers and return registration errors:
 

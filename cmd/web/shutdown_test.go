@@ -18,8 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trentnix/hyperserver/cmd/internal/setup"
-	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/test/tlstest"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/modules/site/storage"
@@ -81,30 +79,19 @@ func testRunDrainsRequestsBeforeClosingPool(t *testing.T, scheme string) {
 // checkRunShutdown runs in a subprocess to isolate registries, stdout, and cwd.
 func checkRunShutdown(t *testing.T, secure bool) {
 	t.Helper()
-	s := newStartupApplication(t)
-	s.Config.HTTP.Port = 0
-	scheme := "http"
-	transport := &http.Transport{}
-	if secure {
-		cfg, roots := tlstest.Files(t)
-		s.Config.HTTP.TLS = cfg.TLS
-		transport.TLSClientConfig = &tls.Config{RootCAs: roots}
-		scheme = "https"
-	}
-	defer transport.CloseIdleConnections()
+	var s *application
 	started, release := make(chan struct{}), make(chan struct{})
 	handlerFinished := make(chan struct{})
 	var releaseOnce sync.Once
 	releaseRequest := func() { releaseOnce.Do(func() { close(release) }) }
 	var activeSession *session.Session
 	moduleClosed := false
-	var steps []string
 	handlers.Register(handlers.Descriptor{Name: "shutdown-test", New: func() handlers.Handler {
-		return &lifecycleModule{orderedModule: orderedModule{steps: &steps}, close: func(context.Context) error {
+		return &testModule{close: func(context.Context) error {
 			if activeSession == nil && os.Getenv("HS_STARTUP_TEST_HELPER") != "shutdown-timeout" {
 				t.Error("module closed before active request drained")
 			}
-			if err := s.Database.Ping(); err != nil {
+			if err := s.contactDB.Ping(); err != nil {
 				t.Error("module closed after its shared pool:", err)
 			}
 			if activeSession != nil {
@@ -116,6 +103,17 @@ func checkRunShutdown(t *testing.T, secure bool) {
 			return nil
 		}}
 	}})
+	s = newStartupApplication(t)
+	s.Config.HTTP.Port = 0
+	scheme := "http"
+	transport := &http.Transport{}
+	if secure {
+		cfg, roots := tlstest.Files(t)
+		s.Config.HTTP.TLS = cfg.TLS
+		transport.TLSClientConfig = &tls.Config{RootCAs: roots}
+		scheme = "https"
+	}
+	defer transport.CloseIdleConnections()
 	s.Web.HandleFunc("POST /test-shutdown", func(w http.ResponseWriter, r *http.Request) {
 		defer close(handlerFinished)
 		if (r.TLS != nil) != secure {
@@ -124,7 +122,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 		close(started)
 		<-release
 		account := &user.User{Email: "shutdown@example.invalid"}
-		if err := usersqlite.NewAccountRepository(s.Database).Create(r.Context(), account); err != nil {
+		if err := s.Accounts.Create(r.Context(), account); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -153,7 +151,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- run(ctx, s, setup.NewAccountStorage(s.Config), "")
+		done <- run(ctx, s)
 	}()
 	defer func() {
 		cancel()
@@ -218,7 +216,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 		t.Fatalf("run returned before the active request finished: %v", err)
 	default:
 	}
-	if err := s.Database.Ping(); err != nil {
+	if err := s.contactDB.Ping(); err != nil {
 		t.Fatal("run closed the pool before its active request finished:", err)
 	}
 	if os.Getenv("HS_STARTUP_TEST_HELPER") == "shutdown-timeout" {
@@ -233,7 +231,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 		if elapsed := time.Since(shutdownStarted); elapsed < *s.Config.HTTP.ShutdownTimeout {
 			t.Fatalf("draining stopped after %v, before configured timeout %v", elapsed, *s.Config.HTTP.ShutdownTimeout)
 		}
-		if moduleClosed || s.Database.Ping() != nil {
+		if moduleClosed || s.contactDB.Ping() != nil {
 			t.Fatal("run closed shared services while a handler was still running")
 		}
 		releaseRequest()
@@ -251,7 +249,7 @@ func checkRunShutdown(t *testing.T, secure bool) {
 	if !moduleClosed {
 		t.Fatal("run did not close the module")
 	}
-	if err := s.Database.Ping(); err == nil {
+	if err := s.contactDB.Ping(); err == nil {
 		t.Fatal("run returned without closing the application's pool")
 	}
 	if activeSession == nil {
@@ -280,7 +278,8 @@ func shutdownTestDB(t *testing.T) *sql.DB {
 
 func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	db := shutdownTestDB(t)
-	owner := testApplicationWithPool(&server.ApplicationServer{}, db)
+	owner := &server.ApplicationServer{}
+	owner.OnShutdown("shared storage", func(context.Context) error { return db.Close() })
 	if err := usersqlite.PrepareDatabase(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}
@@ -366,63 +365,11 @@ func TestStoppingBorrowerDrainsRequestsAndPreservesPool(t *testing.T) {
 	}
 }
 
-func TestRunClosesPoolOnInitializationFailure(t *testing.T) {
-	for _, failure := range []string{"listen address", "mail setup", "TLS files", "session setup", "account setup"} {
-		t.Run(failure, func(t *testing.T) {
-			db := shutdownTestDB(t)
-			s := testApplicationWithPool(&server.ApplicationServer{Config: &config.Config{}}, db)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			switch failure {
-			case "listen address":
-				s.Config.HTTP.ListenHost = "0.0.0.0"
-			case "mail setup":
-				s.Config.Mail.Timeout = -time.Second
-			case "TLS files":
-				s.Config.HTTP.TLS.Enabled = true
-				s.Config.HTTP.TLS.Certificate = "missing-certificate.pem"
-				s.Config.HTTP.TLS.Key = "missing-key.pem"
-			case "account setup":
-				s.Config.Auth.Enabled = true
-				if _, err := db.Exec("CREATE TABLE usertoken (incompatible TEXT)"); err != nil {
-					t.Fatal(err)
-				}
-			case "session setup":
-				cancel()
-			}
-			if err := run(ctx, s, setup.NewAccountStorage(s.Config), ""); err == nil {
-				t.Fatal("invalid initialization succeeded")
-			}
-			if err := db.Ping(); err == nil {
-				t.Fatal("initialization failure leaked the pool")
-			}
-		})
-	}
-}
-
 func TestServeHTTPReturnsListenerFailure(t *testing.T) {
 	want := errors.New("accept failed")
 	listener := &failedListener{err: want}
 	if err := server.ServeHTTP(context.Background(), &http.Server{}, listener, time.Second); !errors.Is(err, want) {
 		t.Fatalf("serve error = %v, want %v", err, want)
-	}
-}
-
-func TestRunRejectsInvalidShutdownTimeout(t *testing.T) {
-	for _, timeout := range []time.Duration{0, -time.Second} {
-		t.Run(timeout.String(), func(t *testing.T) {
-			cfg := &config.Config{HTTP: config.HTTPConfig{ShutdownTimeout: &timeout}}
-			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "http.shutdownTimeout must be positive") {
-				t.Fatalf("configuration validation = %v", err)
-			}
-			app := testApplicationWithPool(&server.ApplicationServer{Config: cfg}, shutdownTestDB(t))
-			if err := run(context.Background(), app, setup.NewAccountStorage(app.Config), ""); err == nil || !strings.Contains(err.Error(), "http.shutdownTimeout must be positive") {
-				t.Fatalf("startup validation = %v", err)
-			}
-			if app.Database.Ping() == nil {
-				t.Fatal("invalid timeout left the application pool open")
-			}
-		})
 	}
 }
 

@@ -78,5 +78,18 @@ func Setup(ctx context.Context, app *server.ApplicationServer, routes *routing.R
 	}
 
 	app.OnShutdown("modules", func(ctx context.Context) error { return Close(ctx, modules) })
+	if log := logger.Get(ctx); log != nil {
+		var names, capabilities []string
+		for _, module := range modules {
+			names = append(names, module.Name)
+		}
+		for _, descriptor := range catalog {
+			for _, capability := range descriptor.Provides {
+				capabilities = append(capabilities, capability+"="+descriptor.Name)
+			}
+		}
+		log.InfoContext(ctx, "Modules initialized", "modules", names,
+			"capabilityProviders", capabilities, "providerSelections", selections)
+	}
 	return nil
 }

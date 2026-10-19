@@ -1,155 +1,13 @@
 package main
 
 import (
-	"io"
+	"github.com/trentnix/hyperserver/config"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/server"
 )
-
-func TestGlobalRateLimitPrecedesSessionLoading(t *testing.T) {
-	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
-	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 10}
-	logs := &capturedLogs{}
-	handler, err := applicationHandler(app, newTestLogger(logs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The first request is admitted and fails because there are no session services.
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
-	if w.Code != 500 {
-		t.Fatalf("initial status=%d", w.Code)
-	}
-
-	body := &csrfUnreadBody{}
-	r := httptest.NewRequest(http.MethodPost, "/", body)
-	r.AddCookie(&http.Cookie{Name: "auth-user-session", Value: "invalid-token"})
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
-	if w.Code != 429 || body.reads != 0 || len(w.Result().Cookies()) != 0 {
-		t.Fatalf("rejection touched request state: status=%d reads=%d cookies=%v", w.Code, body.reads, w.Result().Cookies())
-	}
-	if w.Header().Get("X-Request-ID") == "" || !strings.Contains(logs.String(), "Request completed") {
-		t.Fatal("rejection was not logged")
-	}
-
-	// A separately composed application must not inherit an exhausted budget.
-	other, err := applicationHandler(app, newTestLogger(logs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	w = httptest.NewRecorder()
-	other.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
-	if w.Code != 500 {
-		t.Fatal("independent handler inherited the global limit")
-	}
-}
-
-func TestApplicationHandlerRejectsInvalidRateLimit(t *testing.T) {
-	for _, limit := range []config.RateLimitConfig{
-		{Enabled: true, Window: time.Minute, MaxClients: 10},
-		{Enabled: true, Requests: 1, MaxClients: 10},
-		{Enabled: true, Requests: 1, Window: time.Minute},
-	} {
-		app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{HTTP: config.HTTPConfig{SharedRateLimit: limit}}, Web: http.NewServeMux()}}
-		handler, err := applicationHandler(app, newTestLogger(&capturedLogs{}))
-		if handler != nil || err == nil || !strings.Contains(err.Error(), "http.sharedRateLimit") {
-			t.Fatalf("handler=%v error=%v", handler, err)
-		}
-	}
-}
-
-func proxyRequest(method, path, client string, form url.Values) *http.Request {
-	r := httptest.NewRequest(method, "http://example.test"+path, strings.NewReader(form.Encode()))
-	r.RemoteAddr = "192.0.2.1:1234"
-	r.Header.Set("X-Forwarded-For", client)
-	r.Header.Set("X-Forwarded-Proto", "https")
-	r.Header.Set("Origin", "https://example.test")
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	return r
-}
-
-func configureTestProxy(cfg *config.Config) {
-	cfg.HTTP.TrustedProxies = []string{"192.0.2.1/32"}
-	cfg.HTTP.PublicOrigin = "https://example.test"
-}
-
-func TestInvalidProxyMetadataPrecedesApplicationWork(t *testing.T) {
-	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
-	configureTestProxy(app.Config)
-	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Minute, MaxClients: 10}
-	handler, err := applicationHandler(app, newTestLogger(&capturedLogs{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := &csrfUnreadBody{}
-	r := proxyRequest(http.MethodPost, "/", "203.0.113.1", nil)
-	r.Header.Del("X-Forwarded-Proto")
-	r.Body = body
-	r.AddCookie(&http.Cookie{Name: "auth-user-session", Value: "invalid-token"})
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
-	if w.Code != 400 || body.reads != 0 || len(w.Result().Cookies()) != 0 {
-		t.Fatalf("invalid metadata: status=%d body reads=%d cookies=%v", w.Code, body.reads, w.Result().Cookies())
-	}
-
-	// Invalid metadata must not consume capacity or reach the missing session service.
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, proxyRequest(http.MethodGet, "/", "203.0.113.1", nil))
-	if w.Code != 500 {
-		t.Fatalf("valid metadata: status=%d, want session initialization failure", w.Code)
-	}
-	app.Config.HTTP.TrustedProxies = []string{"invalid"}
-	if handler, err := applicationHandler(app, newTestLogger(&capturedLogs{})); err == nil || handler != nil {
-		t.Fatal("invalid proxy configuration accepted")
-	}
-}
-
-type csrfUnreadBody struct{ reads int }
-
-func (b *csrfUnreadBody) Read([]byte) (int, error) {
-	b.reads++
-	return 0, io.EOF
-}
-
-func (*csrfUnreadBody) Close() error { return nil }
-
-func TestCSRFRejectsBeforeSessionLoading(t *testing.T) {
-	// Missing storage and session services would fail if CSRF checks ran too late.
-	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
-	app.Web.HandleFunc("POST /mutation", func(http.ResponseWriter, *http.Request) {
-		t.Fatal("rejected request reached its handler")
-	})
-	logs := &capturedLogs{}
-	handler, err := applicationHandler(app, newTestLogger(logs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := &csrfUnreadBody{}
-	r := httptest.NewRequest(http.MethodPost, "http://localhost/mutation", body)
-	r.Header.Set("Origin", "https://attacker.invalid")
-	r.Header.Set("HX-Request", "true")
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	// Neither forwarded headers nor an invalid session cookie must bypass the check.
-	r.Header.Set("X-Forwarded-Host", "attacker.invalid")
-	r.Header.Set("X-Forwarded-Proto", "https")
-	r.AddCookie(&http.Cookie{Name: "auth-user-session", Value: "invalid-token"})
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
-	if w.Code != http.StatusForbidden || body.reads != 0 || len(w.Result().Cookies()) != 0 {
-		t.Fatalf("rejection touched request state: status=%d, body reads=%d, cookies=%v", w.Code, body.reads, w.Result().Cookies())
-	}
-	if w.Header().Get("X-Request-ID") == "" || !strings.Contains(logs.String(), "Request completed") {
-		t.Fatal("rejected request was not logged")
-	}
-}
 
 func assertBrowserHeaders(t *testing.T, w *httptest.ResponseRecorder) {
 	t.Helper()
@@ -199,43 +57,6 @@ func assertReferenceCSP(t *testing.T, policy, page string) {
 	}
 	if !strings.Contains(page, `<script src="`+htmxSource+`"`) {
 		t.Error("the rendered HTMX script must use the pinned local asset")
-	}
-}
-
-func TestSecurityHeadersPrecedeRejections(t *testing.T) {
-	app := &application{ApplicationServer: &server.ApplicationServer{Config: &config.Config{}, Web: http.NewServeMux()}}
-	configureTestProxy(app.Config)
-	app.Config.HTTP.HSTSMaxAge = 86400
-	app.Config.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 2, Window: time.Minute, MaxClients: 10}
-	handler, err := applicationHandler(app, newTestLogger(&capturedLogs{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, status := range []int{400, 403, 500, 429} {
-		r := proxyRequest(http.MethodPost, "/", "203.0.113.1", nil)
-		switch status {
-		case 400:
-			r.Header.Del("X-Forwarded-Proto")
-		case 403:
-			r.Header.Set("Origin", "https://attacker.test")
-		}
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		if w.Code != status {
-			t.Fatalf("status=%d, want %d", w.Code, status)
-		}
-		assertBrowserHeaders(t, w)
-		wantHSTS := "max-age=86400"
-		if status == 400 {
-			wantHSTS = ""
-		}
-		if w.Header().Get("Strict-Transport-Security") != wantHSTS {
-			t.Fatalf("unverified or missing HSTS: %v", w.Header())
-		}
-	}
-	app.Config.HTTP.HSTSMaxAge = -1
-	if handler, err := applicationHandler(app, newTestLogger(&capturedLogs{})); handler != nil || err == nil {
-		t.Fatal("negative HSTS configuration accepted")
 	}
 }
 

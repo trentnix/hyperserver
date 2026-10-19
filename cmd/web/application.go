@@ -3,149 +3,120 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/pkg/database"
-	"github.com/trentnix/hyperserver/pkg/database/sqlite"
+	framework "github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/health"
 	"github.com/trentnix/hyperserver/pkg/server"
-	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/messaging/smtp"
-	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/user"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
-// application owns the reference site's services outside the core runtime.
+// application adds the reference site's contact storage to the configured framework.
 type application struct {
-	*server.ApplicationServer
-	// Database can be borrowed. Use ownDatabase to transfer cleanup to this application.
-	Database *sql.DB
-	Mail     *messaging.MailClient
-	// AccountRepository must be ready before modules and middleware use it.
-	// A supplied repository keeps its existing owner.
-	AccountRepository user.AccountRepository
-	// SessionManager can be borrowed. Use ownSessions to transfer cleanup.
-	SessionManager *session.SessionManager
-	mailHealth     func(context.Context) error
-	contactHealth  func(context.Context) error
+	*framework.Application
+	contactDB     *sql.DB
+	contactHealth func(context.Context) error
 }
 
-func newApplication(cfg config.Config) (*application, error) {
-	core, err := server.NewApplicationServer(cfg)
+func newApplication(ctx context.Context, cfg config.Config, contactDirectory string, options framework.Options) (*application, error) {
+	if _, err := referenceListenAddress(cfg.HTTP.ListenHost, cfg.HTTP.Port); err != nil {
+		return nil, err
+	}
+
+	app := &application{}
+	selectModules := options.Modules
+	options.ContentSecurityPolicy = referenceContentSecurityPolicy
+	options.Modules = func(ctx context.Context, configured *framework.Application) ([]handlers.Descriptor, error) {
+		app.Application = configured
+		if err := configureRendering(configured.ApplicationServer); err != nil {
+			return nil, err
+		}
+		if selectModules != nil {
+			return selectModules(ctx, configured)
+		}
+		return siteModules(ctx, app, configured.Config.FilePath(contactDirectory))
+	}
+	configured, err := framework.New(ctx, cfg, options)
 	if err != nil {
 		return nil, err
 	}
-	return &application{ApplicationServer: core}, nil
+	app.Application = configured
+	mailProvider := "none"
+	if options.Services.Mail != nil {
+		mailProvider = "application-supplied"
+	} else if configured.Mail != nil {
+		mailProvider = "smtp"
+	}
+	logServiceProviders(logger.Get(ctx), app, mailProvider)
+	return app, nil
 }
 
-// ownDatabase transfers pool ownership before its consumers initialize.
-func (s *application) ownDatabase(db *sql.DB) {
-	s.Database = db
-	s.OnShutdown("application database", func(context.Context) error { return db.Close() })
+// run delegates serving and resource ownership to the shared application lifecycle.
+func run(ctx context.Context, s *application) error {
+	return s.Run(ctx, func(ctx context.Context) (*http.Server, net.Listener, error) {
+		return prepareHTTP(ctx, s)
+	})
 }
 
-// initializeDatabase opens and checks the application-owned pool with a startup
-// deadline. Call only when a consumer needs it, before initializing that consumer.
-// A supplied pool keeps its existing owner. Failed setup leaves Database unset
-// and can be retried.
-// Call serially during startup, before serving requests.
-func (s *application) initializeDatabase(ctx context.Context) error {
-	if s.Database != nil {
-		return nil
-	}
+// The reference application's policy allows local assets and Google Fonts.
+// Other applications must select their own policy for their assets and features.
+const referenceContentSecurityPolicy = "default-src 'none'; " +
+	"script-src 'self'; " +
+	"style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; " +
+	"img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; " +
+	"form-action 'self'; frame-ancestors 'none'"
 
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	db, err := openApplicationDatabase(s.Config)
+// prepareHTTP binds the initialized application to its loopback listener.
+func prepareHTTP(ctx context.Context, s *application) (*http.Server, net.Listener, error) {
+	address, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port)
 	if err != nil {
-		return err
-	}
-	err = db.PingContext(ctx)
-	if err == nil {
-		err = ctx.Err()
-	}
-	if err != nil {
-		return errors.Join(fmt.Errorf("connect application database: %w", err), db.Close())
+		return nil, nil, err
 	}
 
-	s.ownDatabase(db)
-	return nil
+	var checks []health.Check
+	if s.contactHealth != nil {
+		checks = append(checks, health.Check{Name: "contacts", Run: s.contactHealth})
+	}
+	if s.MailHealth != nil && s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled && s.Config.Auth.RegisterRequiresVerification {
+		checks = append(checks, health.Check{Name: "mail", Run: s.MailHealth})
+	}
+	handler, err := s.HealthHandler(ctx, 2*time.Second, checks...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	httpServer, err := server.NewHTTPServer(s.Config.HTTP, handler)
+	if err != nil {
+		return nil, nil, err
+	}
+	httpServer.Addr = address
+
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return nil, nil, err
+	}
+	fmt.Printf("Starting server at %s\n", listener.Addr())
+	return httpServer, listener, nil
 }
 
-// openApplicationDatabase selects the web application's configured SQL pool.
-// The caller must ping and close it. Supplied application pools bypass this setup.
-func openApplicationDatabase(cfg *config.Config) (*sql.DB, error) {
-	connection, err := database.ResolveConnection(cfg.Database.Driver, cfg.Database.Connection, cfg.App.WorkingDirectory)
-	if err != nil {
-		return nil, err
+// referenceListenAddress keeps the development application on loopback interfaces.
+// This restriction does not apply to applications built with the framework.
+func referenceListenAddress(listenHost string, port uint16) (string, error) {
+	host := strings.TrimSpace(listenHost)
+	if host == "" {
+		return "", fmt.Errorf("http.listenHost must be configured")
 	}
-	if cfg.Database.Driver == "sqlite3" {
-		return sqlite.Open(connection)
-	}
-	return database.Setup(cfg.Database.Driver, connection)
-}
-
-// initializeAccounts supplies account storage before its consumers initialize.
-// A supplied repository keeps its existing owner and bypasses provider selection.
-func initializeAccounts(ctx context.Context, app *application, accounts *setup.AccountStorage) error {
-	if app.AccountRepository != nil {
-		return nil
-	}
-	repository, cleanup, err := accounts.Open(ctx, app.Database)
-	if err != nil {
-		return err
-	}
-	app.AccountRepository = repository
-	if cleanup != nil {
-		app.OnShutdown("account storage", func(context.Context) error { return cleanup() })
-	}
-	return nil
-}
-
-// initializeSessions prepares selected providers before modules and requests use
-// them. A supplied manager keeps its existing owner. Call serially during startup,
-// after resolving relative storage paths. Failed initialization can be retried.
-func initializeSessions(ctx context.Context, s *application) error {
-	if s.SessionManager != nil {
-		return nil
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return "", fmt.Errorf("reference application http.listenHost must be a loopback IP address, such as 127.0.0.1 or ::1, got %q", listenHost)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	manager, err := setup.NewSessionManager(ctx, s.Config)
-	if err != nil {
-		return err
-	}
-	s.ownSessions(manager)
-	return nil
-}
-
-// ownSessions transfers manager ownership before its consumers initialize.
-func (s *application) ownSessions(manager *session.SessionManager) {
-	s.SessionManager = manager
-	s.OnShutdown("sessions", func(context.Context) error { return manager.Close() })
-}
-
-// initializeMail supplies the reference application's SMTP client unless a client
-// was already supplied. It does not contact the server. Consumers that require
-// delivery must validate configuration before requests are served.
-func initializeMail(s *application) error {
-	if s.Mail != nil {
-		return nil
-	}
-
-	client, checkConnectivity, err := smtp.NewMailClient(s.Config.Mail)
-	if err != nil {
-		return err
-	}
-	s.Mail = client
-	s.mailHealth = checkConnectivity
-	return nil
+	return net.JoinHostPort(ip.String(), strconv.Itoa(int(port))), nil
 }

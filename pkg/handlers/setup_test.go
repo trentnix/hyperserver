@@ -1,8 +1,10 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,11 +18,62 @@ import (
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 type setupModule struct {
 	closingModule
 	routes func(*routing.Routes) error
+}
+
+func TestSetupLogsModulesWithoutChangingDependencyOrder(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		var logs bytes.Buffer
+		ctx := logger.Set(t.Context(), slog.New(slog.NewTextHandler(&logs, nil)))
+		app, err := server.NewApplicationServer(config.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { app.Shutdown() })
+		newModule := func() *setupModule {
+			m := &setupModule{routes: func(*routing.Routes) error { return nil }}
+			m.close = func(context.Context) error { return nil }
+			return m
+		}
+		first, second, consumer := newModule(), newModule(), newModule()
+		first.provide = func() map[string]any { return map[string]any{"storage": first, "ready": first} }
+		second.provide = func() map[string]any { return map[string]any{"storage": second} }
+		consumer.bind = func(deps handlers.Dependencies) error {
+			values, err := handlers.GetDependencies[*setupModule](deps, "storage")
+			if err != nil || len(values) != 2 || values[0] != second || values[1] != first {
+				t.Fatalf("provider order changed: %v, %v", values, err)
+			}
+			return nil
+		}
+		if fail {
+			consumer.routes = func(*routing.Routes) error { return errors.New("route failure") }
+		}
+		catalog := []handlers.Descriptor{
+			{Name: "consumer", New: func() handlers.Handler { return consumer }, Requires: []handlers.Requirement{{Capability: "storage", Multiple: true}}},
+			{Name: "second", New: func() handlers.Handler { return second }, Provides: []string{"storage"}, Requires: []handlers.Requirement{{Capability: "ready"}}},
+			{Name: "first", New: func() handlers.Handler { return first }, Provides: []string{"storage", "ready"}},
+		}
+		err = handlers.Setup(ctx, app, nil, catalog, nil)
+		if (err != nil) != fail {
+			t.Fatalf("setup error=%v, want failure=%t", err, fail)
+		}
+		if fail {
+			if strings.Contains(logs.String(), "Modules initialized") {
+				t.Fatal("failed setup logged success")
+			}
+			continue
+		}
+		for _, want := range []string{"Modules initialized", `modules="[first second consumer]"`, "storage=first", "storage=second", "providerSelections"} {
+			if !strings.Contains(logs.String(), want) {
+				t.Fatalf("diagnostics missing %q: %s", want, &logs)
+			}
+		}
+	}
 }
 
 func TestSetupConfiguredRouteDefaults(t *testing.T) {

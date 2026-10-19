@@ -48,7 +48,7 @@ The proxy preserves Host and origin headers and overwrites forwarding headers. T
 
 `GET /health/live` returns 204 when the process can respond. `GET /health/ready` returns 204 only after startup and while the selected checks pass. It returns a generic 503 during shutdown or a dependency failure. Both forbid caching.
 
-The reference app checks its selected application database, SQLite contact table, account reads, and selected session stores. SMTP connectivity is required when enabled registration requires verification. A TCP probe does not prove that SMTP authentication or delivery will succeed. Custom remote session stores must implement `CheckHealth(context.Context) error` to participate. Other applications can register their own bounded checks with [pkg/health](../pkg/health/health.go), without adopting the reference application's services.
+The framework's [HealthHandler](../pkg/application/health.go) checks accounts and sessions when present. The reference app adds the SQLite contact table and requires SMTP connectivity when enabled registration requires verification. A TCP probe does not prove that SMTP authentication or delivery will succeed. Custom remote session stores must implement `CheckHealth(context.Context) error` to participate. Applications can supply additional bounded checks without adopting the reference application's services.
 
 Probes are read-only and cooperative. They do not prove write permissions, available disk capacity, or future delivery. Check write and delivery failures through the operation's logs and the failure exercises too. The listener starts after initialization and closes before resource cleanup. Docker's 25-second stop grace covers the app's ten-second HTTP drain and ten-second resource cleanup budgets.
 

@@ -13,13 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
+	framework "github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/user"
-	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
 // Use subprocesses to isolate startup exits, working directories, and registries.
@@ -38,51 +36,37 @@ func TestStartupHelperProcess(t *testing.T) {
 		checkRunShutdown(t, os.Getenv("HS_STARTUP_TEST_HELPER") == "shutdown-tls")
 	case "signals":
 		runSignalTestHelper(t)
+
 	case "route-conflict":
-		s := newStartupApplication(t)
 		handlers.Register(handlers.Descriptor{Name: "conflicting-test-module", New: func() handlers.Handler {
-			return &registrationModule{bind: func(routes *routing.Routes) {
+			return &testModule{bind: func(routes *routing.Routes) {
 				routes.HandleFunc("GET /contact", func(http.ResponseWriter, *http.Request) {})
 			}}
 		}})
-		err := run(context.Background(), s, setup.NewAccountStorage(s.Config), "")
-		if err == nil || !strings.Contains(err.Error(), "conflicting-test-module") || !strings.Contains(err.Error(), "conflicts") {
-			t.Fatalf("route conflict = %v", err)
+		cfg, err := config.GetConfig()
+		if err != nil {
+			t.Fatal(err)
 		}
-		if s.Database == nil || s.Database.Ping() == nil {
-			t.Fatal("route conflict did not close the application pool")
+		app, err := newApplication(t.Context(), cfg, "", framework.Options{})
+		if app != nil || err == nil || !strings.Contains(err.Error(), "conflicting-test-module") || !strings.Contains(err.Error(), "conflicts") {
+			t.Fatalf("route conflict: app=%v err=%v", app, err)
 		}
 		fmt.Println("route conflict cleanup passed")
 	case "relative-database", "invalid-working-directory":
 		checkStartupStoragePaths(t)
 	case "listen-failure", "tls-failure":
-		s := newStartupApplication(t)
-		closed := 0
+		var s *application
 		moduleClosed := 0
-		var steps []string
 		handlers.Register(handlers.Descriptor{Name: "owned-test-module", New: func() handlers.Handler {
-			return &lifecycleModule{orderedModule: orderedModule{name: "owned", steps: &steps}, close: func(context.Context) error {
+			return &testModule{close: func(ctx context.Context) error {
 				moduleClosed++
-				if closed != 0 {
-					t.Error("account provider closed before module")
+				if err := s.Sessions.CheckHealth(ctx); err != nil {
+					t.Error("sessions closed before module", err)
 				}
-				return s.Database.Ping()
+				return s.contactDB.PingContext(ctx)
 			}}
 		}})
-		s.Config.Auth.AccountStorage.Provider = "custom"
-		accounts := setup.NewAccountStorage(s.Config)
-		if err := accounts.RegisterProvider("custom", setup.AccountProvider{Open: func(ctx context.Context, _ map[string]string) (user.AccountRepository, func() error, error) {
-			repository := usersqlite.NewAccountRepository(s.Database)
-			if err := repository.Initialize(ctx); err != nil {
-				return nil, nil, err
-			}
-			return repository, func() error {
-				closed++
-				return s.Database.Ping()
-			}, nil
-		}}); err != nil {
-			t.Fatal(err)
-		}
+		s = newStartupApplication(t)
 		wantError := "address already in use"
 		if os.Getenv("HS_STARTUP_TEST_HELPER") == "tls-failure" {
 			wantError = "http.tls: load certificate and key"
@@ -97,63 +81,23 @@ func TestStartupHelperProcess(t *testing.T) {
 			defer listener.Close()
 			s.Config.HTTP.Port = uint16(listener.Addr().(*net.TCPAddr).Port)
 		}
-		if err := run(context.Background(), s, accounts, ""); err == nil || !strings.Contains(err.Error(), wantError) {
+		if err := run(t.Context(), s); err == nil || !strings.Contains(err.Error(), wantError) {
 			t.Fatalf("HTTP startup failure = %v, want %q", err, wantError)
 		}
-		if closed != 1 || moduleClosed != 1 {
-			t.Fatalf("HTTP startup cleanup calls: accounts=%d modules=%d", closed, moduleClosed)
+		if moduleClosed != 1 {
+			t.Fatalf("module cleanup calls=%d", moduleClosed)
 		}
-		if err := s.Database.Ping(); err == nil {
-			t.Fatal("HTTP startup failure left the application's pool open")
+		if s.contactDB.Ping() == nil || s.Sessions.CheckHealth(t.Context()) == nil {
+			t.Fatal("HTTP startup failure left storage open")
 		}
-		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), s.SessionManager)
-		value, err := session.New(r, "auth-user-session")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := value.Save(httptest.NewRecorder(), r); err == nil {
-			t.Fatal("HTTP startup failure left the session pool open")
+		if _, err := s.Accounts.GetByEmail(t.Context(), "reader@example.invalid"); err == nil || !strings.Contains(err.Error(), "database is closed") {
+			t.Fatal("HTTP startup failure left accounts open", err)
 		}
 		fmt.Println("HTTP startup cleanup passed")
 	case "initialize":
 		// Exercise successful initialization without binding a network port.
 		s := newStartupApplication(t)
 		defer s.Shutdown()
-		if _, err := referenceListenAddress(s.Config.HTTP.ListenHost, s.Config.HTTP.Port); err != nil {
-			t.Fatal(err)
-		}
-		if err := s.Config.ResolvePaths(); err != nil {
-			t.Fatal(err)
-		}
-		if err := s.initializeDatabase(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-		if err := initializeMail(s); err != nil {
-			t.Fatal(err)
-		}
-		if err := initializeSessions(context.Background(), s); err != nil {
-			t.Fatal(err)
-		}
-		if err := initializeAccounts(context.Background(), s, setup.NewAccountStorage(s.Config)); err != nil {
-			t.Fatal(err)
-		}
-		var tables int
-		if err := s.Database.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken')`).Scan(&tables); err != nil {
-			t.Fatal(err)
-		}
-		if (s.Config.Auth.Enabled && tables != 2) || (!s.Config.Auth.Enabled && tables != 0) {
-			t.Fatalf("account tables before handler initialization = %d, auth enabled = %t", tables, s.Config.Auth.Enabled)
-		}
-		if err := configureRendering(s.ApplicationServer); err != nil {
-			t.Fatal(err)
-		}
-		catalog, err := siteModules(s, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := SetupHandlers(context.Background(), s.ApplicationServer, nil, catalog, nil); err != nil {
-			t.Fatal(err)
-		}
 		_, pattern := s.Web.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil))
 		if s.Config.Auth.Enabled && pattern != "GET /auth/login" {
 			t.Fatalf("login pattern = %q, want GET /auth/login", pattern)
@@ -162,21 +106,21 @@ func TestStartupHelperProcess(t *testing.T) {
 			t.Fatal("disabled authentication registered a login route")
 		}
 		w := httptest.NewRecorder()
-		s.Web.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+		s.Handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Welcome!") {
 			t.Fatalf("initialized application did not render its homepage: status %d, body %s", w.Code, w.Body.String())
 		}
 		for _, path := range []string{"/css/site.css", "/js/site.js", "/img/hyperserver.png", "/favicon.ico"} {
 			w := httptest.NewRecorder()
-			s.Web.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+			s.Handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
 			if w.Code != http.StatusOK || w.Body.Len() == 0 {
 				t.Fatalf("bundled asset %s: status=%d body=%s", path, w.Code, w.Body.String())
 			}
 		}
 		if s.Config.Auth.Enabled {
 			w := httptest.NewRecorder()
-			r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/auth/login/email", nil), s.SessionManager)
-			s.Web.ServeHTTP(w, r)
+			r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/auth/login/email", nil), s.Sessions)
+			s.Handler.ServeHTTP(w, r)
 			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "login-form") {
 				t.Fatalf("bundled auth template: status=%d body=%s", w.Code, w.Body.String())
 			}
@@ -194,7 +138,7 @@ func newStartupApplication(t *testing.T) *application {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := newApplication(cfg)
+	s, err := newApplication(t.Context(), cfg, "", framework.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +243,7 @@ func TestStartupRejectsUnavailableApplicationDatabase(t *testing.T) {
 	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
 	connection := filepath.Join(t.TempDir(), "missing-directory", "accounts.db")
 	output, err := runStartupProcess(t, yaml, "1", "HYPERSERVER_DATABASE_CONNECTION="+connection)
-	if err == nil || !strings.Contains(string(output), "failed to prepare application database") {
+	if err == nil || !strings.Contains(string(output), "prepare accounts") {
 		t.Fatalf("unavailable application database: error = %v, output = %s", err, output)
 	}
 	if strings.Contains(string(output), "Starting server at") {
@@ -332,7 +276,7 @@ func TestStartupRejectsUnavailableSessionStorage(t *testing.T) {
 	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
 	connection := filepath.Join(t.TempDir(), "missing-directory", "sessions.db")
 	output, err := runStartupProcess(t, yaml, "1", "HYPERSERVER_HTTP_SESSION_STORES_SQLITESTORE_CONNECTION="+connection)
-	if err == nil || !strings.Contains(string(output), "failed to prepare session storage") {
+	if err == nil || !strings.Contains(string(output), "prepare sessions") {
 		t.Fatalf("unavailable session storage: error = %v, output = %s", err, output)
 	}
 	if strings.Contains(string(output), "Starting server at") {

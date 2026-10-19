@@ -8,14 +8,13 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
+	framework "github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
 func main() {
@@ -25,7 +24,7 @@ func main() {
 	contactDirectory := flag.String("contact-directory", "", "store contact submissions as JSON files in this directory instead of SQLite")
 	flag.Parse()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(logger.Set(context.Background(), l), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
 		<-ctx.Done()
@@ -37,22 +36,14 @@ func main() {
 		l.Error("Configuration failed", "error", err)
 		os.Exit(1)
 	}
-	app, err := newApplication(cfg)
+	app, err := newApplication(ctx, cfg, *contactDirectory, framework.Options{})
 	if err != nil {
-		l.Error("Application configuration failed", "error", err)
+		l.Error("Application startup failed", "error", redactLifecycleError(err, &cfg))
 		os.Exit(1)
 	}
-	accounts := setup.NewAccountStorage(app.Config)
-	if err := run(ctx, app, accounts, *contactDirectory); err != nil {
-		l.Error("Application lifecycle failed", "error", redactLifecycleError(err, app))
+	if err := run(ctx, app); err != nil {
+		l.Error("Application lifecycle failed", "error", redactLifecycleError(err, app.Config))
 		os.Exit(1)
 	}
 	l.Info("Application stopped")
-}
-
-// run delegates serving and resource ownership to the shared application lifecycle.
-func run(ctx context.Context, s *application, accounts *setup.AccountStorage, contactDirectory string) error {
-	return s.Run(ctx, func(ctx context.Context) (*http.Server, net.Listener, error) {
-		return prepareHTTP(ctx, s, accounts, contactDirectory)
-	})
 }

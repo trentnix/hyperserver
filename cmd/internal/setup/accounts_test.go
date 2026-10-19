@@ -7,41 +7,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-type suppliedAccountRepository struct{ user.AccountRepository }
-
-func TestAccountOpenTransfersOwnership(t *testing.T) {
-	s := accountProviderApplication("custom")
-	repository := &suppliedAccountRepository{}
-	opens, closes, maintenanceCloses := 0, 0, 0
-	if err := s.RegisterProvider("custom", AccountProvider{
+func TestAccountMaintenanceDoesNotOpenRuntimeStorage(t *testing.T) {
+	cfg := &config.Config{Auth: config.AuthConfig{Enabled: true, AccountStorage: config.AccountStorageConfig{Provider: "custom"}}}
+	closes := 0
+	providers := map[string]user.StorageProvider{"custom": {
 		Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
-			opens++
-			return repository, func() error { closes++; return nil }, nil
+			t.Fatal("maintenance opened runtime storage")
+			return nil, nil, nil
 		},
 		OpenMaintenance: func(context.Context, map[string]string) (user.TokenMaintenance, func() error, error) {
-			return tokenMaintenanceFunc(func(context.Context, int) (int64, error) {
-				return 1, nil
-			}), func() error { maintenanceCloses++; return nil }, nil
+			return tokenMaintenanceFunc(func(context.Context, int) (int64, error) { return 1, nil }), func() error { closes++; return nil }, nil
 		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	got, closeStore, err := s.Open(t.Context(), nil)
-	if err != nil || got != repository || closeStore == nil || opens != 1 || closes != 0 {
-		t.Fatalf("open: repository=%v, cleanup=%t, opens=%d, closes=%d, error=%v", got, closeStore != nil, opens, closes, err)
-	}
-	if count, err := s.CleanupTokens(t.Context(), 1); count != 1 || err != nil {
-		t.Fatalf("maintenance: count=%d, error=%v", count, err)
-	}
-	if opens != 1 || closes != 0 || maintenanceCloses != 1 {
-		t.Fatalf("maintenance changed runtime ownership: opens=%d, closes=%d, maintenance closes=%d", opens, closes, maintenanceCloses)
-	}
-	if err := closeStore(); err != nil || closes != 1 {
-		t.Fatalf("caller cleanup: closes=%d, error=%v", closes, err)
+	}}
+	if count, err := cleanupAccountTokens(t.Context(), cfg, 1, providers); count != 1 || err != nil || closes != 1 {
+		t.Fatalf("maintenance: count=%d closes=%d err=%v", count, closes, err)
 	}
 }
 

@@ -16,13 +16,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/trentnix/hyperserver/auth/password"
-	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/test/sessiontest"
 	site "github.com/trentnix/hyperserver/modules/site"
 	"github.com/trentnix/hyperserver/modules/site/models"
+	framework "github.com/trentnix/hyperserver/pkg/application"
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -91,15 +92,6 @@ func newReplacementHTTPHarness(t *testing.T) (*httpHarness, *replacementAccountR
 		},
 	}
 	cfg.HTTP.Session.Types = map[string]string{"default": "must-not-open"}
-	app, err := newApplication(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.Shutdown(); err != nil {
-			t.Error(err)
-		}
-	})
 	hash, err := password.HashPassword("Password1!")
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +100,6 @@ func newReplacementHTTPHarness(t *testing.T) (*httpHarness, *replacementAccountR
 		ID: "account-id", Email: "person@example.invalid", Password: hash,
 		SessionVersion: 1, RegistrationAuthType: "email", Verified: true,
 	}}
-	app.AccountRepository = accounts
 	store := &replacementSessionStore{records: make(map[string]replacementSessionRecord)}
 	manager, err := session.NewSessionManager(t.Context(), map[string]string{"default": "replacement"}, map[string]session.StoreFactory{
 		"replacement": func(context.Context) (session.SessionStore, error) { return store, nil },
@@ -116,49 +107,34 @@ func newReplacementHTTPHarness(t *testing.T) (*httpHarness, *replacementAccountR
 	if err != nil {
 		t.Fatal(err)
 	}
-	app.ownSessions(manager)
+	t.Cleanup(func() { manager.Close() })
 	mail := &fakeMailSender{}
-	app.Mail, err = messaging.NewMailClientWithSender("sender@example.invalid", mail)
+	mailClient, err := messaging.NewMailClientWithSender("sender@example.invalid", mail)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Supplied services bypass unused provider configuration. No SQL pool is opened.
-	if err := initializeAccounts(t.Context(), app, setup.NewAccountStorage(app.Config)); err != nil {
-		t.Fatal(err)
-	}
-	if err := initializeSessions(t.Context(), app); err != nil {
-		t.Fatal(err)
-	}
-	if err := initializeMail(app); err != nil {
-		t.Fatal(err)
-	}
-	if err := configureRendering(app.ApplicationServer); err != nil {
-		t.Fatal(err)
-	}
-	catalog, err := siteModules(app, "")
-	if err != nil {
-		t.Fatal(err)
-	}
 	contacts := &replacementContacts{}
-	catalog, err = handlers.Replace(catalog, site.Module(func(context.Context) (site.ContactRepository, error) { return contacts, nil }, app.Mail))
-	if err != nil {
-		t.Fatal(err)
-	}
 	logs := &capturedLogs{}
-	log := newTestLogger(logs)
-	if err := SetupHandlers(t.Context(), app.ApplicationServer, log, catalog, nil); err != nil {
-		t.Fatal(err)
-	}
-	handler, err := applicationHandler(app, log)
+	app, err := newApplication(logger.Set(t.Context(), newTestLogger(logs)), cfg, "", framework.Options{
+		Services: framework.Services{Accounts: accounts, Sessions: manager, Mail: mailClient},
+		Modules: func(context.Context, *framework.Application) ([]handlers.Descriptor, error) {
+			return handlers.Replace(handlers.Registered(), site.Module(func(context.Context) (site.ContactRepository, error) { return contacts, nil }, mailClient))
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := app.Shutdown(); err != nil {
+			t.Error(err)
+		}
+	})
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &httpHarness{app: app, handler: handler, baseURL: "http://127.0.0.1:8080", cookies: jar, mail: mail, logs: logs}, accounts, store, contacts
+	return &httpHarness{app: app, handler: app.Handler, baseURL: "http://127.0.0.1:8080", cookies: jar, mail: mail, logs: logs}, accounts, store, contacts
 }
 
 func TestHTTPApplicationSuppliedProviders(t *testing.T) {
@@ -245,7 +221,7 @@ func TestHTTPApplicationSuppliedProviders(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if sessions.closes != 1 || h.app.Database != nil {
+		if sessions.closes != 0 || h.app.contactDB != nil {
 			t.Fatal("incorrect provider ownership or unexpected SQL setup")
 		}
 	}

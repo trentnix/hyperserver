@@ -1,6 +1,6 @@
 # Application setup and modules
 
-The [reference application](../cmd/web/application.go) selects services and owns shared resources. Modules own their internal resources and routes.
+The [reference application](../cmd/web/application.go) uses `application.New` for service startup, modules, middleware, and cleanup. It selects contact storage, presentation, readiness policy, and a loopback listener. Modules own their internal resources and routes.
 
 ## Adding or replacing a feature
 
@@ -57,7 +57,15 @@ Attach a `*slog.Logger` with `logger.Set(ctx, log)` before calling `application.
 
 Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
 
-The reference command still uses the explicit setup below.
+### Health endpoints
+
+`app.HealthHandler(runContext, timeout, checks...)` returns a handler with `GET /health/live` and `GET /health/ready` outside sessions, rate limits, and module routes. Readiness checks the run context, accounts and sessions when present, then the supplied checks. Pass the application's run context, not a startup deadline. Checks share the timeout and must honor cancellation.
+
+The reference application adds contact-storage checks and SMTP connectivity when registration requires email verification. Mail is not a required dependency for every application. Add `health.Check{Name: "mail", Run: app.MailHealth}` only when that probe is available and mail must affect readiness.
+
+### Explicit setup
+
+Use the lower-level APIs below when an application needs a different service lifecycle or HTTP stack.
 
 `server.NewApplicationServer(cfg)` validates and copies configuration and creates the router and content manager. It does not load configuration files or create optional services. The core can run with `config.Config{}`.
 
@@ -193,6 +201,6 @@ Resource-owning modules can implement `Shutdown(context.Context) error`. `Initia
 | HTTP draining | `http.shutdownTimeout`, default `10s`. | Requests already in progress, not module cleanup. |
 | Resource cleanup | `Shutdown()` allows `10s`. `ShutdownContext(ctx)` accepts another deadline. | Reverse-order shutdown hooks. |
 
-Without a caller deadline, `Initialize` uses ten seconds. The reference command's database, account, and session setup have separate ten-second limits. Context deadlines cannot interrupt code that ignores cancellation. Initialization contexts must not be retained for request I/O.
+Without a caller deadline, `Initialize` uses ten seconds. `application.New` and the reference command share one `app.initializationTimeout` across startup. Context deadlines cannot interrupt code that ignores cancellation. Initialization contexts must not be retained for request I/O.
 
 If HTTP draining fails, Run closes HTTP connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. The reference command exits with an error, and a second signal forces exit. Applications must manage hijacked connections separately.

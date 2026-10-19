@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/session/cookie"
 	"github.com/trentnix/hyperserver/pkg/services/session/sqlite"
 )
@@ -43,7 +44,7 @@ func TestSessionSetupRejectsInvalidSelections(t *testing.T) {
 					cfg.HTTP.Session.Stores[strings.ToUpper(provider)] = map[string]string{"enabled": "true"}
 				}
 
-				manager, err := NewSessionManager(t.Context(), cfg)
+				manager, err := configured.NewSessionManager(t.Context(), cfg, nil)
 				if manager != nil {
 					t.Cleanup(func() { manager.Close() })
 				}
@@ -62,12 +63,6 @@ func TestSessionSetupRejectsInvalidSelections(t *testing.T) {
 }
 
 func TestSessionSetupRejectsNilConfig(t *testing.T) {
-	if err := ValidateSessionConfig(nil); err == nil {
-		t.Fatal("validation accepted nil configuration")
-	}
-	if manager, err := NewSessionManager(t.Context(), nil); manager != nil || err == nil {
-		t.Fatalf("NewSessionManager = %v, %v, want nil and an error", manager, err)
-	}
 	if count, err := CleanupSessions(t.Context(), nil, 10); count != 0 || err == nil {
 		t.Fatalf("CleanupSessions = %d, %v, want zero and an error", count, err)
 	}
@@ -81,10 +76,7 @@ func TestSessionSetupSelectsBuiltInProviders(t *testing.T) {
 			cfg.HTTP.Session.Stores["sqliteStore"] = map[string]string{
 				"enabled": "true", "connection": filepath.Join(t.TempDir(), "sessions.db"), "sessiontable": "sessions",
 			}
-			if err := ValidateSessionConfig(cfg); err != nil {
-				t.Fatal(err)
-			}
-			manager, err := NewSessionManager(t.Context(), cfg)
+			manager, err := configured.NewSessionManager(t.Context(), cfg, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
