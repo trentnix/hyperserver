@@ -245,8 +245,6 @@ type replacementSessionRecord struct {
 	expires    time.Time
 }
 
-func (*replacementSessionStore) IsEnabled() bool { return true }
-
 func (s *replacementSessionStore) New(r *http.Request, name string) (*session.Session, error) {
 	if err := r.Context().Err(); err != nil {
 		return nil, err

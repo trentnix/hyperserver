@@ -163,7 +163,7 @@ func TestUnselectedSessionProvidersStayInactive(t *testing.T) {
 		t.Fatal("unselected SQLite provider was opened:", err)
 	}
 	defer m.Close()
-	if store, err := m.Store("anything"); err != nil || !store.IsEnabled() {
+	if store, err := m.Store("anything"); err != nil || store == nil {
 		t.Fatal("manager initialized unselected providers")
 	}
 	m, err = sessions.NewConfiguredManager(context.Background(), &config.Config{}, configuredTestProviders(&config.Config{}))

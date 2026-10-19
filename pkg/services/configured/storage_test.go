@@ -23,8 +23,7 @@ type store struct {
 	closes int
 }
 
-func (*store) IsEnabled() bool { return true }
-func (s *store) Close() error  { s.closes++; return nil }
+func (s *store) Close() error { s.closes++; return nil }
 
 func TestAccountsSelectOnlyConfiguredProvider(t *testing.T) {
 	for _, name := range []string{"custom", "sqlite", "unknown", "disabled"} {

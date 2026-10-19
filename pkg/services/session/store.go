@@ -38,8 +38,6 @@ type (
 		Save(w http.ResponseWriter, r *http.Request, session *Session) error
 		// End ends a session according to the provider's revocation guarantees.
 		End(w http.ResponseWriter, r *http.Request, session *Session) error
-		// IsEnabled reports whether the store is enabled in configuration.
-		IsEnabled() bool
 	}
 )
 

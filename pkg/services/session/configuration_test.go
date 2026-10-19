@@ -21,8 +21,7 @@ type configuredStore struct {
 	closed int
 }
 
-func (*configuredStore) IsEnabled() bool { return true }
-func (s *configuredStore) Close() error  { s.closed++; return nil }
+func (s *configuredStore) Close() error { s.closed++; return nil }
 
 type configuredMaintenance struct{}
 

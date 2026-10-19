@@ -161,7 +161,9 @@ Imports register descriptors, not live modules. Use `handlers.Registered()` for 
 
 `handlers.Setup` resolves dependencies, initializes modules, binds routes, and registers cleanup. Pass nil routes to use `http.defaultRateLimit`, or supply routes with explicit defaults. A nil catalog selects no modules. If setup fails, discard the application because its mux may still contain routes. Use `handlers.Initialize` only when managing route binding and cleanup yourself.
 
-Auth has a separate descriptor catalog. Only configured, enabled providers initialize. An explicit empty catalog does not fall back to imports. Providers implement `AuthService` and the workflow interfaces they support, such as `LoginHandler` or `ResetHandler`. Unsupported routes return 404. Registration without a supporting provider is reported as unavailable.
+Auth has a separate descriptor catalog. Only configured, enabled providers initialize. An explicit empty catalog does not fall back to imports. Providers implement `AuthService` (`AuthType` and `Init`) and their supported workflow interfaces, such as `LoginHandler` or `ResetHandler`. If `Init` fails, startup stops before routes are bound.
+
+Unsupported routes return 404. Registration without a supporting provider is reported as unavailable.
 
 Auth providers configure request handling, not resource lifecycles. Their `Init` can validate settings and prepare templates. It must not open connections, query storage, send mail, or start background work. Application setup supplies those services and owns cleanup. The auth module does not call provider close hooks. Provider `Init` has no context, so custom template filesystems must return promptly.
 

@@ -12,7 +12,6 @@ type healthStore struct {
 	err   error
 }
 
-func (s *healthStore) IsEnabled() bool { return true }
 func (s *healthStore) CheckHealth(ctx context.Context) error {
 	s.calls++
 	if ctx.Err() != nil {

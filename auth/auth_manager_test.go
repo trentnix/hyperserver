@@ -21,25 +21,21 @@ import (
 
 type providerSelectionService struct {
 	AuthService
-	name   string
-	loaded bool
+	name string
 }
 
 func (s *providerSelectionService) AuthType() string { return s.name }
-func (s *providerSelectionService) IsLoaded() bool   { return s.loaded }
 
 func TestGetAuthService(t *testing.T) {
-	first := &providerSelectionService{name: "first", loaded: true}
-	second := &providerSelectionService{name: "second", loaded: true}
-	unloaded := &providerSelectionService{name: "unloaded"}
-	manager := &AuthManager{Services: &Registry{services: []AuthService{first, unloaded, second}}}
+	first := &providerSelectionService{name: "first"}
+	second := &providerSelectionService{name: "second"}
+	manager := &AuthManager{Services: &Registry{services: []AuthService{first, second}}}
 	for _, tc := range []struct {
 		name string
 		want AuthService
 	}{
 		{"first", first},
 		{"second", second},
-		{"unloaded", nil},
 		{"missing", nil},
 		{"", nil},
 	} {
@@ -60,7 +56,6 @@ type verificationTestAuthService struct {
 }
 
 func (*verificationTestAuthService) AuthType() string { return "test-verification" }
-func (*verificationTestAuthService) IsLoaded() bool   { return true }
 func (s *verificationTestAuthService) SendVerificationEmail(context.Context, *user.User, url.URL) error {
 	s.calls++
 	return errors.New("provider error containing secret-token")

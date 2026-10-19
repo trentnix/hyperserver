@@ -202,7 +202,6 @@ func (p *customAuthProvider) Init(*server.ApplicationServer) error {
 	p.initialized = true
 	return p.initErr
 }
-func (p *customAuthProvider) IsLoaded() bool              { return p.initialized }
 func (*customAuthProvider) AuthType() string              { return "custom" }
 func (*customAuthProvider) GetLoginButton() template.HTML { return "custom" }
 func (p *customAuthProvider) GetLogin(w http.ResponseWriter, r *http.Request) {

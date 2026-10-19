@@ -82,7 +82,7 @@ func TestSessionSetupSelectsBuiltInProviders(t *testing.T) {
 			}
 			t.Cleanup(func() { manager.Close() })
 			store, err := manager.Store("user")
-			if err != nil || store == nil || !store.IsEnabled() {
+			if err != nil || store == nil {
 				t.Fatalf("selected store = %T, %v", store, err)
 			}
 			switch provider {

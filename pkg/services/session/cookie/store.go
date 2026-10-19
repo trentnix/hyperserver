@@ -26,14 +26,11 @@ type (
 		TokenLifetime time.Duration
 		// lifetime of the cookie containing the JWT
 		CookieLifetime time.Duration
-
-		// enabled
-		enabled bool
 	}
 )
 
 // Options configures a cookie session store. Application setup decides whether
-// to construct the store. A successful constructor always returns an enabled store.
+// to construct the store.
 type Options struct {
 	// SigningKey signs session cookies. Use at least 32 bytes from a secure random source.
 	SigningKey string
@@ -52,7 +49,6 @@ func NewCookieStore(options Options) (*CookieStore, error) {
 		JwtKey:         []byte(options.SigningKey),
 		TokenLifetime:  options.TokenLifetime,
 		CookieLifetime: options.CookieLifetime,
-		enabled:        true,
 	}, nil
 }
 
@@ -161,9 +157,4 @@ func (c *CookieStore) Save(w http.ResponseWriter, r *http.Request, session *sess
 func (c *CookieStore) End(w http.ResponseWriter, r *http.Request, session *sessions.Session) error {
 	sessions.ExpireCookie(w, r, session.Name)
 	return nil
-}
-
-// IsEnabled reports whether this cookie store was initialized for use.
-func (c *CookieStore) IsEnabled() bool {
-	return c.enabled
 }

@@ -104,6 +104,7 @@ type VerificationEmailSender interface {
 // AuthService identifies and configures an authentication provider. Providers
 // implement the HTTP capabilities they support separately. Providers do not own
 // service resources. The auth module does not call Close or Shutdown on them.
+// Configuration selects providers. Any Init failure stops application startup.
 type AuthService interface {
 	// Init validates settings and prepares templates using supplied services.
 	// It must not open connections, query storage, send mail, start background work,
@@ -112,8 +113,6 @@ type AuthService interface {
 	// Template preparation is synchronous. Init has no cancellation context.
 	// On failure, discard the provider instance. Supplied services remain usable.
 	Init(*server.ApplicationServer) error
-	// IsLoaded reports whether the provider is available for selection.
-	IsLoaded() bool
 	// AuthType returns the provider's route and configuration identifier.
 	AuthType() string
 }
@@ -189,21 +188,6 @@ func Registered() []Descriptor {
 	catalog.RLock()
 	defer catalog.RUnlock()
 	return slices.Clone(catalog.descriptors)
-}
-
-// Loaded returns this application's providers whose IsLoaded method reports true.
-func (r *Registry) Loaded() []AuthService {
-	if r == nil {
-		return nil
-	}
-	var loadedAuthServices []AuthService
-	for _, s := range r.services {
-		if s.IsLoaded() {
-			loadedAuthServices = append(loadedAuthServices, s)
-		}
-	}
-
-	return loadedAuthServices
 }
 
 // GetAuthConfigOptions retrieves the configuration options map for the specified

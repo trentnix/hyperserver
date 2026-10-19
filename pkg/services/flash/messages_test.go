@@ -20,8 +20,6 @@ import (
 
 type validationStore struct{ session.SessionStore }
 
-func (validationStore) IsEnabled() bool { return true }
-
 func TestValidateSessionManager(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

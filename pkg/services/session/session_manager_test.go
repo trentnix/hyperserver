@@ -12,23 +12,34 @@ import (
 
 type managerTestStore struct {
 	SessionStore
-	enabled bool
-	close   func() error
+	close func() error
 }
 
-func (s *managerTestStore) IsEnabled() bool { return s.enabled }
-func (s *managerTestStore) Close() error    { return s.close() }
+func (s *managerTestStore) Close() error { return s.close() }
 func (s *managerTestStore) Get(_ *http.Request, name string) (*Session, error) {
 	return NewSession(s, name), nil
 }
 
-type managerNilSafeStore struct{ managerTestStore }
-
-func (*managerNilSafeStore) IsEnabled() bool { return true }
-
 type managerValueStore struct{ SessionStore }
 
-func (managerValueStore) IsEnabled() bool { return true }
+func TestManagerAcceptsStoreWithoutAvailabilityFlag(t *testing.T) {
+	// mockSessionStore implements only the four session operations.
+	ready := &mockSessionStore{}
+	m, err := NewSessionManager(t.Context(), map[string]string{"default": "custom"}, map[string]StoreFactory{
+		"custom": func(context.Context) (SessionStore, error) { return ready, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := m.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if store, err := m.Store("default"); err != nil || store != ready {
+		t.Fatalf("store = %v, error = %v", store, err)
+	}
+}
 
 func TestManagerAcceptsValueProvider(t *testing.T) {
 	m, err := NewSessionManager(t.Context(), map[string]string{"default": "value"}, map[string]StoreFactory{
@@ -53,7 +64,7 @@ func TestManagerOwnsSelectedProviders(t *testing.T) {
 	store := func(name string) StoreFactory {
 		return func(context.Context) (SessionStore, error) {
 			events = append(events, "open "+name)
-			return &managerTestStore{enabled: true, close: func() error { events = append(events, "close "+name); return nil }}, nil
+			return &managerTestStore{close: func() error { events = append(events, "close "+name); return nil }}, nil
 		}
 	}
 	types := map[string]string{"default": "B", "named": "a", "alias": "A"}
@@ -114,7 +125,7 @@ func TestManagerRejectsInvalidSelectionsBeforeSetup(t *testing.T) {
 
 func TestManagerRollsBackProviderFailures(t *testing.T) {
 	failure, closeFailure := errors.New("setup failed"), errors.New("close failed")
-	for _, reason := range []string{"error", "nil store", "typed-nil store", "typed-nil nil-safe store", "disabled", "canceled during setup", "canceled before setup"} {
+	for _, reason := range []string{"error", "nil store", "typed-nil store", "canceled during setup", "canceled before setup"} {
 		t.Run(reason, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -131,13 +142,11 @@ func TestManagerRollsBackProviderFailures(t *testing.T) {
 							return nil, nil
 						case "typed-nil store":
 							return (*managerTestStore)(nil), nil
-						case "typed-nil nil-safe store":
-							return (*managerNilSafeStore)(nil), nil
 						case "canceled during setup":
 							cancel()
 						}
 					}
-					return &managerTestStore{enabled: name != "b" || reason != "disabled", close: func() error { closed = append(closed, name); return closeFailure }}, nil
+					return &managerTestStore{close: func() error { closed = append(closed, name); return closeFailure }}, nil
 				}
 			}
 			if reason == "canceled before setup" {
@@ -160,7 +169,7 @@ func TestManagerRollsBackProviderFailures(t *testing.T) {
 				t.Fatal("continued after failed setup", opened)
 			}
 			want := []string{"a"}
-			if reason == "disabled" || reason == "canceled during setup" {
+			if reason == "canceled during setup" {
 				want = []string{"b", "a"}
 			}
 			if !reflect.DeepEqual(closed, want) || !errors.Is(err, closeFailure) {
@@ -169,7 +178,7 @@ func TestManagerRollsBackProviderFailures(t *testing.T) {
 			if reason == "error" && !errors.Is(err, failure) {
 				t.Fatal("lost initialization error", err)
 			}
-			if (strings.Contains(reason, "nil") || reason == "disabled") && !strings.Contains(err.Error(), `session store "b" is missing or disabled`) {
+			if strings.Contains(reason, "nil") && !strings.Contains(err.Error(), `session store "b" returned no instance`) {
 				t.Fatal("lost invalid provider error", err)
 			}
 		})

@@ -66,7 +66,6 @@ type moduleProvider struct {
 }
 
 func (*moduleProvider) AuthType() string { return "custom" }
-func (*moduleProvider) IsLoaded() bool   { return true }
 func (p *moduleProvider) Init(app *server.ApplicationServer) error {
 	p.name = app.Config.App.Name
 	return nil
@@ -86,8 +85,6 @@ func moduleConfig() config.Config {
 }
 
 type moduleSessionStore struct{ session.SessionStore }
-
-func (moduleSessionStore) IsEnabled() bool { return true }
 
 type moduleRotatingStore struct {
 	moduleSessionStore
@@ -149,7 +146,6 @@ type minimalProvider struct {
 }
 
 func (*minimalProvider) AuthType() string { return "custom" }
-func (p *minimalProvider) IsLoaded() bool { return p.initialized }
 func (p *minimalProvider) Init(*server.ApplicationServer) error {
 	p.initialized = true
 	return nil

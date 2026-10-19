@@ -204,7 +204,7 @@ func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
 	var loginHTML []template.HTML
 
 	var authServices []LoginHandler
-	for _, service := range a.Services.Loaded() {
+	for _, service := range a.Services.Services() {
 		if handler, ok := service.(LoginHandler); ok {
 			authServices = append(authServices, handler)
 		}
@@ -247,7 +247,7 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	var loginHTML []template.HTML
 
 	var authServices []RegistrationHandler
-	for _, service := range a.Services.Loaded() {
+	for _, service := range a.Services.Services() {
 		if handler, ok := service.(RegistrationHandler); ok {
 			authServices = append(authServices, handler)
 		}
@@ -544,9 +544,9 @@ func (a *AuthManager) recoveryError(w http.ResponseWriter, r *http.Request, mess
 		errors.New(message+": recovery operation failed"), http.StatusInternalServerError)
 }
 
-// getAuthService returns the authService specified by authType (if it is loaded)
+// getAuthService finds a configured provider by its authType.
 func (a *AuthManager) getAuthService(authType string) AuthService {
-	authServices := a.Services.Loaded()
+	authServices := a.Services.Services()
 	for _, service := range authServices {
 		if authType == service.AuthType() {
 			return service

@@ -19,7 +19,6 @@ import (
 // only login and lifecycle methods, with no embedded interfaces or route hook.
 type loginOnlyHTTPProvider struct {
 	accounts user.AccountRepository
-	loaded   bool
 }
 
 var (
@@ -29,10 +28,7 @@ var (
 
 func (*loginOnlyHTTPProvider) AuthType() string { return "login-only" }
 
-func (p *loginOnlyHTTPProvider) IsLoaded() bool { return p.loaded }
-
 func (p *loginOnlyHTTPProvider) Init(*server.ApplicationServer) error {
-	p.loaded = true
 	return nil
 }
 

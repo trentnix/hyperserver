@@ -45,8 +45,7 @@ type sessionStore struct {
 	closed    int
 }
 
-func (*sessionStore) IsEnabled() bool { return true }
-func (s *sessionStore) Close() error  { s.closed++; return nil }
+func (s *sessionStore) Close() error { s.closed++; return nil }
 func (s *sessionStore) New(_ *http.Request, name string) (*session.Session, error) {
 	return session.NewSession(s, name), nil
 }

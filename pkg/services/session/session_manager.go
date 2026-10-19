@@ -43,7 +43,8 @@ func GetSessionManager(r *http.Request) *SessionManager {
 }
 
 // StoreFactory initializes a session store. On failure it must release any
-// partially acquired resources. On success the manager owns the returned store.
+// partially acquired resources. Success means the store is ready for use and
+// the manager owns it. Unavailable stores must return an error.
 // The returned store must not be nil, including a typed nil inside an interface.
 type StoreFactory func(context.Context) (SessionStore, error)
 
@@ -103,13 +104,10 @@ func NewSessionManager(ctx context.Context, types map[string]string, factories m
 			return nil, errors.Join(fmt.Errorf("initialize session store %s: %w", name, err), m.Close())
 		}
 		if isNilService(store) {
-			return nil, errors.Join(fmt.Errorf("session store %q is missing or disabled", name), m.Close())
+			return nil, errors.Join(fmt.Errorf("session store %q returned no instance", name), m.Close())
 		}
 		if closer, ok := store.(io.Closer); ok {
 			m.closers = append(m.closers, closer)
-		}
-		if !store.IsEnabled() {
-			return nil, errors.Join(fmt.Errorf("session store %q is missing or disabled", name), m.Close())
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, errors.Join(err, m.Close())

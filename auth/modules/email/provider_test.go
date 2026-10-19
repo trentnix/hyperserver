@@ -33,8 +33,7 @@ type providerSetupStore struct {
 	closes int
 }
 
-func (*providerSetupStore) IsEnabled() bool { return true }
-func (s *providerSetupStore) Close() error  { s.closes++; return nil }
+func (s *providerSetupStore) Close() error { s.closes++; return nil }
 
 func TestProviderSetupLeavesServiceOwnershipWithApplication(t *testing.T) {
 	for _, tc := range []struct {

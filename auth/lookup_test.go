@@ -27,8 +27,6 @@ type initSessionStore struct {
 	session.RotatingStore
 }
 
-func (initSessionStore) IsEnabled() bool { return true }
-
 func TestAuthManagerInitUsesAccountRepository(t *testing.T) {
 	// Initialization must preserve the supplied reader without calling it.
 	reader := &struct{ user.AccountRepository }{}
@@ -261,7 +259,6 @@ type lookupTestAuthService struct {
 }
 
 func (*lookupTestAuthService) AuthType() string { return "lookup-test" }
-func (*lookupTestAuthService) IsLoaded() bool   { return true }
 func (s *lookupTestAuthService) GetResetRequest(w http.ResponseWriter, r *http.Request) {
 	s.calls++
 	w.WriteHeader(http.StatusNoContent)

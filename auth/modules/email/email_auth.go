@@ -248,12 +248,6 @@ func (a *EmailAuthService) prepareTemplates() error {
 	return nil
 }
 
-// IsLoaded currently always returns true. It does not verify initialization,
-// configuration, or dependency availability.
-func (a *EmailAuthService) IsLoaded() bool {
-	return true
-}
-
 // AuthType returns the auth type for this AuthService implementation
 func (a *EmailAuthService) AuthType() string {
 	return AuthTypeEmail

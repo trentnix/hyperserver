@@ -125,7 +125,9 @@ app.OnShutdown("sessions", func(context.Context) error { return manager.Close() 
 
 Pass the same manager to auth factories and `authmiddleware.LoadSessionManagement(accounts, manager)`, or use `session.WithSessionManager(manager)` when authentication is not needed. Register cleanup only if this application owns the manager.
 
-`openMySessionStore` must accept `context.Context` and return `(session.SessionStore, error)`. It must release partial resources on failure. The manager owns successful results, closes them in reverse initialization order, and closes each selected provider only once. Provider names are case-insensitive. Session names are case-sensitive. A named selection overrides `default`. Unknown selections and ambiguous provider names fail before any factory runs.
+`openMySessionStore` must accept `context.Context` and return `(session.SessionStore, error)`. Success means the store is ready for use. If the store is unavailable, the factory must release partial resources and return an error. The manager owns successful results, closes them in reverse initialization order, and closes each selected provider only once. Provider names are case-insensitive. Session names are case-sensitive.
+
+A named selection overrides `default`. Unknown selections and ambiguous provider names fail before any factory runs.
 
 Providers can use `NewSession` to create an unsaved value. Pass the same serializer to `EncodedData` and `LoadSession`. A nil serializer selects JSON. Providers remain responsible for identity and expiration checks.
 

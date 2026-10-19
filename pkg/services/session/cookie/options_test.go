@@ -55,7 +55,7 @@ func TestConstructorCopiesOptions(t *testing.T) {
 	options.SigningKey = "changed"
 	options.TokenLifetime = time.Hour
 	options.CookieLifetime = time.Hour
-	if !store.IsEnabled() || string(store.JwtKey) != strings.Repeat("s", 32) || store.TokenLifetime != time.Second || store.CookieLifetime != time.Second {
+	if string(store.JwtKey) != strings.Repeat("s", 32) || store.TokenLifetime != time.Second || store.CookieLifetime != time.Second {
 		t.Fatal("constructor did not preserve validated options")
 	}
 }

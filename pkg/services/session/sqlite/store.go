@@ -37,8 +37,6 @@ type (
 		tableName string
 		// database connection
 		db *sql.DB
-		// enabled
-		enabled bool
 	}
 
 	// SQLiteSession is the database representation of an encoded session.
@@ -59,7 +57,7 @@ var (
 )
 
 // Options configures a SQLite session store. Application setup decides whether
-// to construct the store. A successful constructor always returns an enabled store.
+// to construct the store.
 type Options struct {
 	// Connection is a SQLite connection string. Application setup must resolve its path.
 	Connection string
@@ -106,7 +104,6 @@ func NewSQLiteStore(ctx context.Context, options Options) (*SQLiteStore, error) 
 		CookieLifetime: options.CookieLifetime,
 		tableName:      options.Table,
 		db:             db,
-		enabled:        true,
 	}
 	if err := sqliteStore.configureDatabase(ctx); err != nil {
 		return nil, errors.Join(err, db.Close())
@@ -332,11 +329,6 @@ func (s *SQLiteStore) CheckHealth(ctx context.Context) error {
 	}
 	var count int
 	return s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM (SELECT 1 FROM "+quoteIdentifier(s.tableName)+" LIMIT 1)").Scan(&count)
-}
-
-// IsEnabled reports whether this SQLite store was initialized for use.
-func (s *SQLiteStore) IsEnabled() bool {
-	return s.enabled
 }
 
 // Close releases the store's pool. Call it after requests and cleanup work finish.

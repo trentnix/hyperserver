@@ -44,9 +44,6 @@ func RunCommon(t *testing.T, open func(*testing.T) session.SessionStore) {
 	})
 	t.Run("round trip and independent reads", func(t *testing.T) {
 		store := open(t)
-		if !store.IsEnabled() {
-			t.Fatal("test store is disabled")
-		}
 		missing, err := store.Get(request(), "account")
 		if err != nil || missing == nil || !missing.IsNew || len(missing.Data) != 0 {
 			t.Fatalf("missing session = %+v, %v", missing, err)

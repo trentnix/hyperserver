@@ -27,10 +27,6 @@ func (m *mockSessionStore) End(w http.ResponseWriter, r *http.Request, session *
 	return nil
 }
 
-func (m *mockSessionStore) IsEnabled() bool {
-	return true
-}
-
 func TestNewSession(t *testing.T) {
 	mockStore := &mockSessionStore{} // Create a mock session store
 	sessionName := "testSession"

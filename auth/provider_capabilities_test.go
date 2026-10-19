@@ -16,15 +16,12 @@ import (
 
 // These providers intentionally implement no unrelated workflow methods.
 type capabilityProvider struct {
-	name   string
-	loaded bool
-	calls  int
+	name  string
+	calls int
 }
 
 func (p *capabilityProvider) AuthType() string { return p.name }
-func (p *capabilityProvider) IsLoaded() bool   { return p.loaded }
 func (p *capabilityProvider) Init(*server.ApplicationServer) error {
-	p.loaded = true
 	return nil
 }
 func (p *capabilityProvider) respond(w http.ResponseWriter) {
@@ -78,15 +75,14 @@ func (p *changeOnlyProvider) Change(w http.ResponseWriter, _ *http.Request, _ *u
 }
 
 func TestUnsupportedProviderWorkflows(t *testing.T) {
-	provider := &loginOnlyProvider{capabilityProvider: capabilityProvider{name: "login-only", loaded: true}}
-	unloaded := &registrationOnlyProvider{capabilityProvider: capabilityProvider{name: "unloaded"}}
-	noWorkflows := &capabilityProvider{name: "no-workflows", loaded: true}
+	provider := &loginOnlyProvider{capabilityProvider: capabilityProvider{name: "login-only"}}
+	noWorkflows := &capabilityProvider{name: "no-workflows"}
 	manager := &AuthManager{
 		registrationEnabled: true,
-		Services:            &Registry{services: []AuthService{provider, unloaded, noWorkflows}},
+		Services:            &Registry{services: []AuthService{provider, noWorkflows}},
 	}
 	for _, htmx := range []bool{false, true} {
-		for _, name := range []string{"login-only", "unloaded", "unknown", "no-workflows"} {
+		for _, name := range []string{"login-only", "unknown", "no-workflows"} {
 			for _, route := range []struct {
 				method, path string
 				handler      http.HandlerFunc
@@ -118,7 +114,7 @@ func TestUnsupportedProviderWorkflows(t *testing.T) {
 			}
 		}
 	}
-	if provider.calls != 0 || unloaded.calls != 0 {
+	if provider.calls != 0 {
 		t.Fatal("unsupported workflow called a provider")
 	}
 	// No account repository was supplied. Unsupported reset routes must return
@@ -126,7 +122,7 @@ func TestUnsupportedProviderWorkflows(t *testing.T) {
 }
 
 func TestProviderCapabilityDispatch(t *testing.T) {
-	base := capabilityProvider{name: "custom", loaded: true}
+	base := capabilityProvider{name: "custom"}
 	login := &loginOnlyProvider{base}
 	registration := &registrationOnlyProvider{base}
 	reset := &resetOnlyProvider{base}
@@ -164,11 +160,10 @@ func TestProviderCapabilityDispatch(t *testing.T) {
 }
 
 func TestProviderChoicesMatchCapabilities(t *testing.T) {
-	login := &loginOnlyProvider{capabilityProvider: capabilityProvider{name: "login-only", loaded: true}}
-	otherLogin := &loginOnlyProvider{capabilityProvider: capabilityProvider{name: "other-login", loaded: true}}
-	registration := &registrationOnlyProvider{capabilityProvider: capabilityProvider{name: "registration-only", loaded: true}}
-	otherRegistration := &registrationOnlyProvider{capabilityProvider: capabilityProvider{name: "other-registration", loaded: true}}
-	unloaded := &registrationOnlyProvider{capabilityProvider: capabilityProvider{name: "unloaded"}}
+	login := &loginOnlyProvider{capabilityProvider: capabilityProvider{name: "login-only"}}
+	otherLogin := &loginOnlyProvider{capabilityProvider: capabilityProvider{name: "other-login"}}
+	registration := &registrationOnlyProvider{capabilityProvider: capabilityProvider{name: "registration-only"}}
+	otherRegistration := &registrationOnlyProvider{capabilityProvider: capabilityProvider{name: "other-registration"}}
 	for _, tc := range []struct {
 		name         string
 		providers    []AuthService
@@ -179,9 +174,9 @@ func TestProviderChoicesMatchCapabilities(t *testing.T) {
 		{"single login", []AuthService{login, registration}, false, 200, `hx-get="/auth/login/login-only"`},
 		{"multiple logins", []AuthService{login, otherLogin, registration}, false, 200, "login-choice"},
 		{"no login", []AuthService{registration}, false, 404, "404 page not found"},
-		{"single registration", []AuthService{login, registration, unloaded}, true, 200, `hx-get="/auth/register/registration-only"`},
+		{"single registration", []AuthService{login, registration}, true, 200, `hx-get="/auth/register/registration-only"`},
 		{"multiple registrations", []AuthService{login, registration, otherRegistration}, true, 200, "register-choice"},
-		{"no registration", []AuthService{login, unloaded}, true, 403, "Registration is not available."},
+		{"no registration", []AuthService{login}, true, 403, "Registration is not available."},
 		{"no providers", nil, true, 403, "Registration is not available."},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

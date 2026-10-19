@@ -11,11 +11,9 @@ import (
 
 type registryProvider struct {
 	AuthService
-	loaded bool
 }
 
 func (*registryProvider) AuthType() string { return "test" }
-func (p *registryProvider) IsLoaded() bool { return p.loaded }
 
 func registryConfig() *config.Config {
 	c := &config.Config{Auth: config.AuthConfig{Enabled: true, JwtKey: "test-key000000000000000000000000", VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour, Services: map[string]map[string]string{"test": {"enabled": "true"}}}}
@@ -34,10 +32,9 @@ func TestRegistryIsolation(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if len(r.Loaded()) != 0 {
-				t.Error("unloaded provider selected")
+			if len(r.Services()) != 1 {
+				t.Error("enabled provider was not selected")
 			}
-			r.services[0].(*registryProvider).loaded = true
 			registries <- r
 		})
 	}
@@ -45,14 +42,12 @@ func TestRegistryIsolation(t *testing.T) {
 	close(registries)
 	seen := make(map[AuthService]bool)
 	for r := range registries {
-		services := r.Loaded()
+		services := r.Services()
 		if len(services) != 1 || seen[services[0]] {
 			t.Fatal("applications shared providers")
 		}
 		seen[services[0]] = true
 		services[0] = nil
-		copy := r.Services()
-		copy[0] = nil
 		if r.services[0] == nil {
 			t.Fatal("returned list exposed registry storage")
 		}
@@ -61,7 +56,7 @@ func TestRegistryIsolation(t *testing.T) {
 		t.Fatal("not all applications got providers")
 	}
 	var absent *Registry
-	if len(absent.Loaded()) != 0 {
+	if len(absent.Services()) != 0 {
 		t.Fatal("nil registry returned providers")
 	}
 }
@@ -75,6 +70,7 @@ func TestRegistryDisabledProvidersDoNotRunFactories(t *testing.T) {
 	for _, enabled := range []bool{false, true, false, true} {
 		c := registryConfig()
 		c.Auth.Enabled = enabled
+		c.Auth.Services["unused"] = map[string]string{"enabled": "false"}
 		r, err := NewRegistry(c, catalog)
 		if err != nil {
 			t.Fatal(err)

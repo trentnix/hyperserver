@@ -34,8 +34,7 @@ type storeStub struct {
 	close func() error
 }
 
-func (*storeStub) IsEnabled() bool { return true }
-func (s *storeStub) Close() error  { return s.close() }
+func (s *storeStub) Close() error { return s.close() }
 
 type senderStub struct {
 	closes int

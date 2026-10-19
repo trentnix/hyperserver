@@ -34,7 +34,6 @@ import (
 
 type emailSessionStore struct{ session.SessionStore }
 
-func (emailSessionStore) IsEnabled() bool { return true }
 func (s emailSessionStore) Get(_ *http.Request, name string) (*session.Session, error) {
 	return session.NewSession(s, name), nil
 }

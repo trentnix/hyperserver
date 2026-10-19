@@ -116,8 +116,8 @@ func TestGetStoreSelectsCookieStore(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cookie, ok := store.(*cookie.CookieStore); !ok || !cookie.IsEnabled() {
-				t.Fatalf("getStore = %T, want enabled CookieStore", store)
+			if _, ok := store.(*cookie.CookieStore); !ok {
+				t.Fatalf("getStore = %T, want CookieStore", store)
 			}
 		})
 	}
