@@ -1,7 +1,9 @@
 package application
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/trentnix/hyperserver/auth"
@@ -15,7 +17,7 @@ import (
 
 // configureAuthentication supplies services without implicitly selecting modules.
 // The auth module validates its manager and enabled providers during initialization.
-func (a *Application) configureAuthentication(catalog []handlers.Descriptor, providers []auth.Descriptor) ([]handlers.Descriptor, error) {
+func (a *Application) configureAuthentication(ctx context.Context, catalog []handlers.Descriptor, selectProviders func(context.Context, *Application) ([]auth.Descriptor, error)) ([]handlers.Descriptor, error) {
 	a.Handler = a.Web
 	if a.Sessions != nil {
 		a.Handler = session.WithSessionManager(a.Sessions)(a.Handler)
@@ -42,8 +44,18 @@ func (a *Application) configureAuthentication(catalog []handlers.Descriptor, pro
 	if cm.HomeURL == "" || util.SafeRedirectURL(cm.HomeURL, "") != cm.HomeURL {
 		return nil, errors.New("auth home URL must be a local absolute path")
 	}
-	if providers == nil {
-		providers = []auth.Descriptor{emailauth.Provider(a.Accounts, a.Sessions, a.Mail)}
+	var providers []auth.Descriptor
+	if selectProviders == nil {
+		providers = []auth.Descriptor{emailauth.Provider(a.Accounts, a.Sessions, a.Mail, emailauth.Options{})}
+	} else {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		var err error
+		providers, err = selectProviders(ctx, a)
+		if err = errors.Join(err, ctx.Err()); err != nil {
+			return nil, fmt.Errorf("select auth providers: %w", err)
+		}
 	}
 	catalog, err := handlers.Replace(catalog, auth.Module(a.Accounts, a.Sessions, providers))
 	if err != nil {

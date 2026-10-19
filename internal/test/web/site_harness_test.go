@@ -147,7 +147,7 @@ func siteCatalog(h *httpHarness, directory string) ([]handlers.Descriptor, error
 	}
 	return []handlers.Descriptor{
 		site.Module(contacts, h.mailClient),
-		auth.Module(h.accounts, h.sessions, []auth.Descriptor{email.Provider(h.accounts, h.sessions, h.mailClient)}),
+		auth.Module(h.accounts, h.sessions, []auth.Descriptor{email.Provider(h.accounts, h.sessions, h.mailClient, email.Options{})}),
 	}, nil
 }
 

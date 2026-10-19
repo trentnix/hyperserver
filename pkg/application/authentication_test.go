@@ -220,11 +220,13 @@ func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T
 	var providers []*customAuthProvider
 	options := application.Options{
 		Modules: authenticationModules,
-		AuthProviders: []auth.Descriptor{{Name: "custom", New: func() auth.AuthService {
-			p := &customAuthProvider{}
-			providers = append(providers, p)
-			return p
-		}}},
+		AuthProviders: func(context.Context, *application.Application) ([]auth.Descriptor, error) {
+			return []auth.Descriptor{{Name: "custom", New: func() auth.AuthService {
+				p := &customAuthProvider{}
+				providers = append(providers, p)
+				return p
+			}}}, nil
+		},
 	}
 	var apps []*application.Application
 	for range 2 {
@@ -272,12 +274,16 @@ func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
 			case "verification without mail":
 				cfg.Auth.RegisterRequiresVerification = true
 			case "empty providers":
-				options.AuthProviders = []auth.Descriptor{}
+				options.AuthProviders = func(context.Context, *application.Application) ([]auth.Descriptor, error) {
+					return nil, nil
+				}
 			case "unknown provider":
 				cfg.Auth.Services = map[string]map[string]string{"unknown": {"enabled": "true"}}
 			case "provider init":
 				cfg.Auth.Services = map[string]map[string]string{"custom": {"enabled": "true"}}
-				options.AuthProviders = []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return &customAuthProvider{initErr: cause} }}}
+				options.AuthProviders = func(context.Context, *application.Application) ([]auth.Descriptor, error) {
+					return []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return &customAuthProvider{initErr: cause} }}}, nil
+				}
 			}
 			var captured *application.Application
 			options.Modules = func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {

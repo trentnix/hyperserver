@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -45,6 +46,7 @@ type (
 		mailClient        *messaging.MailClient
 		verificationEmail *template.Template
 		resetEmail        *template.Template
+		allowAccount      func(context.Context, string) (bool, error)
 
 		loginButton    template.HTML
 		registerButton template.HTML
@@ -157,16 +159,28 @@ const (
 
 // init makes the provider discoverable without creating application state.
 func init() {
-	auth_services.Register(Provider(nil, nil, nil))
+	auth_services.Register(Provider(nil, nil, nil, Options{}))
+}
+
+// Options supplies application-specific account admission without replacing
+// credential, verification, or session handling.
+type Options struct {
+	// AllowAccount runs after form validation and before account lookup or creation
+	// on login and registration. Nil allows every valid email address. It receives
+	// the submitted address. Use user.EmailKey when comparing account identities.
+	// False rejects admission. Errors fail closed and are logged, never displayed.
+	// The callback runs only during requests and must honor ctx and support concurrent use.
+	// It does not authorize routes, revoke existing sessions, or restrict recovery.
+	AllowAccount func(ctx context.Context, email string) (bool, error)
 }
 
 // Provider supplies email authentication with initialized accounts and sessions,
 // and an optional mail client. The application owns these dependencies.
 // A nil client leaves delivery unavailable. Registration that requires verification
 // rejects unavailable delivery during module initialization.
-func Provider(accounts user.AccountRepository, sessions *session.SessionManager, mail *messaging.MailClient) auth_services.Descriptor {
+func Provider(accounts user.AccountRepository, sessions *session.SessionManager, mail *messaging.MailClient, options Options) auth_services.Descriptor {
 	return auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
-		return &EmailAuthService{accounts: accounts, sessions: sessions, mailClient: mail}
+		return &EmailAuthService{accounts: accounts, sessions: sessions, mailClient: mail, allowAccount: options.AllowAccount}
 	}}
 }
 
@@ -301,6 +315,9 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		form.HandleFormError(w, r, login, loginForm, "Unable to process form data", err)
 		return nil
 	}
+	if !a.admitAccount(w, r, loginForm.Email, login, loginForm) {
+		return nil
+	}
 
 	u, err := a.authenticate(r.Context(), loginForm.Email, loginForm.Password)
 	if errors.Is(err, errInvalidCredentials) {
@@ -361,6 +378,9 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 	err := form.ParseAndValidate(r, registerForm)
 	if err != nil {
 		form.HandleFormError(w, r, register, registerForm, "Unable to process form data", err)
+		return
+	}
+	if !a.admitAccount(w, r, registerForm.Email, register, registerForm) {
 		return
 	}
 

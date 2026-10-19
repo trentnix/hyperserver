@@ -43,10 +43,13 @@ type Options struct {
 	Services              Services
 	AccountProviders      map[string]user.StorageProvider
 	SessionProviders      map[string]session.ConfiguredProvider
-	// AuthProviders supplies the selected auth module's provider catalog. Nil
-	// selects email/password with this application's services. An empty non-nil
-	// slice selects none. Configuration determines which providers are enabled.
-	AuthProviders []auth.Descriptor
+	// AuthProviders selects providers after shared services open and Modules returns,
+	// before module initialization. It runs only when auth is selected
+	// and enabled. Nil uses email/password with this application's services.
+	// An empty returned catalog selects none. Configuration enables providers.
+	// The callback shares the startup deadline. Register any acquired resources
+	// with app.OnShutdown before returning.
+	AuthProviders func(context.Context, *Application) ([]auth.Descriptor, error)
 	// Modules selects a catalog after shared services are ready. Supply feature
 	// dependencies through descriptor factories. A nil callback loads no modules.
 	// Use handlers.Registered explicitly to select the import catalog. Register
@@ -120,7 +123,7 @@ func New(ctx context.Context, cfg config.Config, options Options) (_ *Applicatio
 		app.ContentManager.LoadNotifications = flash.LoadNotifications
 	}
 
-	catalog, err = app.configureAuthentication(catalog, options.AuthProviders)
+	catalog, err = app.configureAuthentication(ctx, catalog, options.AuthProviders)
 	if err != nil {
 		return nil, fmt.Errorf("prepare authentication: %w", err)
 	}

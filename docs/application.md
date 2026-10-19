@@ -45,7 +45,27 @@ if err != nil {
 
 Services, module selection, and module initialization share one `app.initializationTimeout`, defaulting to ten seconds. Set shared rendering overrides in the callback before module setup prepares templates. Register any resources opened by the callback with `app.OnShutdown`. Modules close before those resources and shared services, including on startup failure.
 
-If the selected catalog includes `auth` and `auth.enabled` is true, the constructor supplies its accounts, sessions, and mail. Email/password is the default provider catalog. Enable it with `auth.services.email.enabled`. `Options.AuthProviders` replaces that catalog with explicit factories, which must supply their providers' dependencies. Module initialization validates the enabled providers and required services. Imports alone do not select the auth module.
+If the selected catalog includes `auth` and `auth.enabled` is true, the constructor supplies its accounts, sessions, and mail. Email/password is the default provider catalog. Enable it with `auth.services.email.enabled`. Imports alone do not select the auth module.
+
+For custom providers, `Options.AuthProviders` runs after services open and the module-selection callback returns, before module initialization. It receives the application and shares the startup deadline. A callback error stops startup and closes owned resources. An empty returned catalog selects no providers.
+
+To restrict email registration and login, supply `email.Options.AllowAccount` through that callback. In this example, `settings.AdminEmail` comes from application-owned configuration, and `email` aliases `github.com/trentnix/hyperserver/auth/modules/email`:
+
+```go
+options.AuthProviders = func(ctx context.Context, app *application.Application) ([]auth.Descriptor, error) {
+    return []auth.Descriptor{
+        email.Provider(app.Accounts, app.Sessions, app.Mail, email.Options{
+            AllowAccount: func(ctx context.Context, address string) (bool, error) {
+                return user.EmailKey(address) == user.EmailKey(settings.AdminEmail), nil
+            },
+        }),
+    }, nil
+}
+```
+
+The application or module must validate its settings before startup completes. Admission runs only during requests, after form validation and before account lookup or creation. Authentication initialization does not evaluate the rule, so the module supplying it can initialize afterward. Rules must support concurrent requests and honor cancellation when performing I/O.
+
+A nil rule allows all valid addresses. A denied request redisplays the form with an access-unavailable message. Rule errors fail closed with HTTP 503 and a generic message. Admission does not grant route permissions, revoke existing sessions, or restrict password recovery. Email verification and credential checks still apply.
 
 With `auth.enabled: false`, the constructor removes auth from the selected catalog before dependency resolution. It does not initialize auth, prepare its templates, or bind its routes. Sessions remain available independently.
 
@@ -79,7 +99,7 @@ Pass initialized services through module factories. Use `handlers.Setup(ctx, app
 
 Consumers that require delivery must call the client's `ValidateConfig`. Internationalized domains are converted to IDNA ASCII form for delivery. Non-ASCII mailbox names require the SMTP server's `SMTPUTF8` and `8BITMIME` extensions. Successful sending means server acceptance, not inbox delivery.
 
-For authentication, supply [`auth.Module`](../auth/module.go) with accounts, sessions, and provider descriptors, such as [`email.Provider(accounts, sessions, mailClient)`](../auth/modules/email/provider.go). Set `ContentManager.AuthURL` and `HomeURL`, then initialize the catalog through `handlers.Setup`. Wrap the mux with `authmiddleware.LoadSessionManagement(accounts, sessions)` and protect routes with `authmiddleware.RequireAuthentication(accounts, contentManager)`. For sessions without accounts, use `session.WithSessionManager(sessions)`. Install `flash.LoadNotifications` separately if pages need session-backed notifications. The application owns validation and cleanup in this lower-level path.
+For authentication, supply [`auth.Module`](../auth/module.go) with accounts, sessions, and provider descriptors, such as [`email.Provider(accounts, sessions, mailClient, email.Options{})`](../auth/modules/email/email_auth.go). Set `ContentManager.AuthURL` and `HomeURL`, then initialize the catalog through `handlers.Setup`. Wrap the mux with `authmiddleware.LoadSessionManagement(accounts, sessions)` and protect routes with `authmiddleware.RequireAuthentication(accounts, contentManager)`. For sessions without accounts, use `session.WithSessionManager(sessions)`. Install `flash.LoadNotifications` separately if pages need session-backed notifications. The application owns validation and cleanup in this lower-level path.
 
 [`middleware.Web`](../pkg/services/middleware/web.go) installs logging, security headers, proxy verification, HSTS, the shared rate limit, and cross-origin protection in that order. Supply the application's CSP and logger. Pass `app.Web` for a stateless application or the session-aware handler returned by auth setup. Rejected requests receive security headers and are logged. For a different cross-origin policy or middleware order, compose the individual middleware explicitly.
 
