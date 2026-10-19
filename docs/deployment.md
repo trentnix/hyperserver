@@ -34,7 +34,7 @@ Stop the stack with `docker --context default compose -p hyperserver-rehearsal -
 
 ## Configuration and ownership
 
-[Compose](../deploy/local/compose.yaml) owns process limits, mounts, ports, and shutdown grace. [Settings](../deploy/local/settings.yaml) select application capabilities. [Nginx](../deploy/local/nginx.conf) owns TLS and its bounded HTTP cache. Mailpit captures mail and has no relay configured. Its plaintext SMTP and permissive authentication are strictly local test settings, not production recommendations.
+[Compose](../deploy/local/compose.yaml) owns process limits, mounts, ports, and shutdown grace. [config.yaml](../deploy/local/config.yaml) selects application capabilities. [Nginx](../deploy/local/nginx.conf) owns TLS and its bounded HTTP cache. Mailpit captures mail and has no relay configured. Its plaintext SMTP and permissive authentication are strictly local test settings, not production recommendations.
 
 The app and maintenance command run as the invoking user's numeric UID/GID with dropped capabilities, no privilege escalation, and a read-only root filesystem. Each service has a 256 MiB memory limit, one CPU allowance, and a 128-process limit. Go's memory target is 192 MiB. Docker logs rotate at three 10 MiB files. Nginx has a 16 MiB cache inside a 64 MiB temporary filesystem. Mailpit retains at most 100 messages. SQLite data and backups use host storage without a quota. Monitor available disk space and remove obsolete rehearsal backups yourself.
 

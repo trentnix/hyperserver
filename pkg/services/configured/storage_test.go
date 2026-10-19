@@ -74,9 +74,10 @@ func TestAccountsSelectOnlyConfiguredProvider(t *testing.T) {
 
 func TestOwnedAccountsPersistenceAndCleanup(t *testing.T) {
 	cfg := &config.Config{
-		App:      config.AppConfig{WorkingDirectory: t.TempDir()},
-		Database: config.DatabaseConfig{Driver: "sqlite3", Connection: "accounts.db"},
-		Auth:     config.AuthConfig{Enabled: true},
+		App: config.AppConfig{WorkingDirectory: t.TempDir()},
+		Auth: config.AuthConfig{Enabled: true, AccountStorage: config.AccountStorageConfig{
+			Options: map[string]string{"connection": "accounts.db"},
+		}},
 	}
 	repository, cleanup, err := configured.OpenAccounts(t.Context(), cfg, nil)
 	if err != nil {

@@ -22,6 +22,10 @@ http:
       auth-user-session: sqliteStore
 auth:
   enabled: true
+  accountStorage:
+    provider: sqlite
+    options:
+      connection: /data/hyperserver.db?_journal=WAL&_timeout=1000&_fk=true
   registrationEnabled: true
   registerRequiresVerification: true
   verificationTokenExpiration: 24h

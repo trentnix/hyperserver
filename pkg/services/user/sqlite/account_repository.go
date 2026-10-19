@@ -42,15 +42,6 @@ func scanAccount(row *sql.Row) (*accounts.User, error) {
 var _ accounts.AccountRepository = (*AccountRepository)(nil)
 var _ accounts.TokenMaintenance = (*AccountRepository)(nil)
 
-// ValidateOptions rejects account-specific settings. SQLite uses
-// the application's shared database configuration.
-func ValidateOptions(options map[string]string) error {
-	if len(options) != 0 {
-		return errors.New("auth.accountStorage.options: sqlite uses database configuration and accepts no options")
-	}
-	return nil
-}
-
 // DeleteExpiredTokens removes a bounded batch without initializing or closing storage.
 func (s *AccountRepository) DeleteExpiredTokens(ctx context.Context, limit int) (int64, error) {
 	return DeleteExpiredTokens(ctx, s.db, limit)

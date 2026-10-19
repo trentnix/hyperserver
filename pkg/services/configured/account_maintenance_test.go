@@ -81,8 +81,7 @@ func TestAccountMaintenanceFailureClosesPartialResources(t *testing.T) {
 func TestAccountProviderCatalogIsIndependent(t *testing.T) {
 	directory := t.TempDir()
 	cfg := config.Config{
-		App:      config.AppConfig{WorkingDirectory: directory},
-		Database: config.DatabaseConfig{Driver: "sqlite3", Connection: "accounts.db"},
+		App: config.AppConfig{WorkingDirectory: directory},
 	}
 	first, second := configured.AccountProviders(cfg), configured.AccountProviders(cfg)
 	delete(first, "sqlite")
@@ -93,8 +92,9 @@ func TestAccountProviderCatalogIsIndependent(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(directory, "accounts.db")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("catalog construction touched storage: %v", err)
 	}
-	cfg.Database.Connection = "must-not-open.db"
-	repository, closeRepository, err := provider.Open(t.Context(), nil)
+	cfg.App.WorkingDirectory = filepath.Join(directory, "must-not-open")
+	options := map[string]string{"connection": "accounts.db"}
+	repository, closeRepository, err := provider.Open(t.Context(), options)
 	if closeRepository != nil {
 		t.Cleanup(func() { closeRepository() })
 	}
@@ -105,7 +105,7 @@ func TestAccountProviderCatalogIsIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	maintenance, closeMaintenance, err := provider.OpenMaintenance(t.Context(), nil)
+	maintenance, closeMaintenance, err := provider.OpenMaintenance(t.Context(), options)
 	if closeMaintenance != nil {
 		t.Cleanup(func() { closeMaintenance() })
 	}
@@ -115,7 +115,7 @@ func TestAccountProviderCatalogIsIndependent(t *testing.T) {
 	if count, err := maintenance.DeleteExpiredTokens(t.Context(), 1); err != nil || count != 0 {
 		t.Fatalf("maintenance did not use the runtime schema: count=%d error=%v", count, err)
 	}
-	if _, err := os.Stat(filepath.Join(directory, "must-not-open.db")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(cfg.App.WorkingDirectory); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("factories used mutated configuration: %v", err)
 	}
 }

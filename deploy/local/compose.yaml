@@ -53,7 +53,7 @@ services:
       GOMEMLIMIT: 192MiB
       GOMAXPROCS: "2"
     volumes:
-      - ./settings.yaml:/app/config.yaml:ro
+      - ./config.yaml:/app/config.yaml:ro
       - ./state/data:/data
     stop_grace_period: 25s
     healthcheck:
@@ -72,6 +72,6 @@ services:
     network_mode: none
     env_file: ./state/app.env
     volumes:
-      - ./settings.yaml:/app/config.yaml:ro
+      - ./config.yaml:/app/config.yaml:ro
       - ./state/data:/data
       - ./state/backups:/backups

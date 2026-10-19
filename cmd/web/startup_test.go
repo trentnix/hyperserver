@@ -164,6 +164,9 @@ const startupTestConfig = `http:
       auth-user-session: sqliteStore
 auth:
   enabled: true
+  accountStorage:
+    options:
+      connection: ":memory:"
   registrationEnabled: true
   jwtKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   verificationTokenExpiration: 24h
@@ -235,16 +238,16 @@ func TestStartupAcceptsValidConfiguration(t *testing.T) {
 	}
 }
 
-func TestStartupRejectsUnavailableApplicationDatabase(t *testing.T) {
+func TestStartupRejectsUnavailableAccountStorage(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	yaml := startupTestConfig + fmt.Sprintf("app:\n  workingDirectory: %q\n", root)
 	connection := filepath.Join(t.TempDir(), "missing-directory", "accounts.db")
-	output, err := runStartupProcess(t, yaml, "1", "HYPERSERVER_DATABASE_CONNECTION="+connection)
+	output, err := runStartupProcess(t, yaml, "1", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION="+connection)
 	if err == nil || !strings.Contains(string(output), "prepare accounts") {
-		t.Fatalf("unavailable application database: error = %v, output = %s", err, output)
+		t.Fatalf("unavailable account storage: error = %v, output = %s", err, output)
 	}
 	if strings.Contains(string(output), "Starting server at") {
 		t.Fatalf("startup attempted to listen with unavailable account storage: %s", output)
@@ -254,7 +257,8 @@ func TestStartupRejectsUnavailableApplicationDatabase(t *testing.T) {
 func TestStartupRejectsInvalidAccountProvider(t *testing.T) {
 	for _, tc := range []struct{ name, env, want string }{
 		{"unknown provider", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_PROVIDER=unknown", "auth.accountStorage.provider"},
-		{"unsupported options", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION=unused", "auth.accountStorage.options"},
+		{"unsupported options", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_TYPO=unused", "auth.accountStorage.options"},
+		{"missing connection", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION=", "auth.accountStorage.options.connection"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			output, err := runStartupProcess(t, startupTestConfig, "1", tc.env)

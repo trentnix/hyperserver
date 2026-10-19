@@ -60,7 +60,7 @@ func testRunDrainsRequestsBeforeClosingPool(t *testing.T, scheme string) {
 	if scheme == "https" {
 		mode = "shutdown-tls"
 	}
-	output, err := runStartupProcess(t, yaml, mode, "HYPERSERVER_DATABASE_CONNECTION="+path)
+	output, err := runStartupProcess(t, yaml, mode, "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION="+path)
 	if err != nil || !strings.Contains(string(output), "shutdown ordering passed") {
 		t.Fatalf("application shutdown: error = %v, output = %s", err, output)
 	}

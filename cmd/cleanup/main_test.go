@@ -49,8 +49,9 @@ func cleanupFixture(t *testing.T) (*config.Config, *sql.DB, *sql.DB) {
 			t.Fatal(err)
 		}
 	}
-	cfg := &config.Config{Database: config.DatabaseConfig{Driver: "sqlite3", Connection: accountPath}}
+	cfg := &config.Config{}
 	cfg.Auth.Enabled = true
+	cfg.Auth.AccountStorage.Options = map[string]string{"connection": accountPath}
 	cfg.HTTP.Session.Types = map[string]string{"default": "SQLiteStore", "auth": "sqliteStore"}
 	cfg.HTTP.Session.Stores = map[string]map[string]string{"sqliteStore": {"enabled": "true", "connection": sessionPath, "sessiontable": "sessions"}}
 	return cfg, accounts, sessions
@@ -79,7 +80,7 @@ func TestCleanupRejectsUnsupportedAccountStorage(t *testing.T) {
 			if scenario == "custom provider" {
 				cfg.Auth.AccountStorage.Provider = "custom"
 			} else {
-				cfg.Auth.AccountStorage.Options = map[string]string{"connection": "another-database"}
+				cfg.Auth.AccountStorage.Options["typo"] = "unsupported"
 			}
 			sessions, tokens, err := cleanup(context.Background(), cfg, 2)
 			if err == nil || sessions != 2 || tokens != 0 {
@@ -260,7 +261,7 @@ http:
         enabled: true
         connection: sessions.db
         sessionTable: sessions
-`, filepath.Dir(cfg.Database.Connection))
+`, filepath.Dir(cfg.Auth.AccountStorage.Options["connection"]))
 			if scenario == "partial failure" {
 				yaml += `auth:
   enabled: true

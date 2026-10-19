@@ -29,7 +29,7 @@ func TestStartupStoragePaths(t *testing.T) {
 			if mode == "invalid-working-directory" {
 				working = filepath.Join(working, "missing")
 			}
-			yaml := strings.Replace(startupTestConfig, `connection: ":memory:"`, `connection: "relative.db"`, 1)
+			yaml := strings.ReplaceAll(startupTestConfig, `connection: ":memory:"`, `connection: "relative.db"`)
 			yaml += fmt.Sprintf("app:\n  workingDirectory: %q\n", working)
 			output, err := runStartupProcess(t, yaml, mode)
 			if err != nil || !strings.Contains(string(output), "storage path checks passed") {

@@ -77,7 +77,7 @@ func TestNewWithoutOptionalServices(t *testing.T) {
 func TestNewOpensBuiltInsAndClosesStorage(t *testing.T) {
 	cfg := storageConfig(t)
 	cfg.Auth.AccountStorage.Provider = ""
-	cfg.Database = config.DatabaseConfig{Driver: "sqlite3", Connection: "accounts.db"}
+	cfg.Auth.AccountStorage.Options = map[string]string{"connection": "accounts.db"}
 	cfg.HTTP.Session.JwtKey = strings.Repeat("s", 64)
 	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
 	cfg.HTTP.Session.Types["default"] = "sqlitestore"
@@ -119,7 +119,7 @@ func TestNewOpensBuiltInsAndClosesStorage(t *testing.T) {
 	if err := app.Sessions.CheckHealth(t.Context()); err == nil {
 		t.Fatal("session storage remained open")
 	}
-	if cfg.Auth.AccountStorage.Provider != "" || cfg.Database.Connection != "accounts.db" {
+	if cfg.Auth.AccountStorage.Provider != "" || cfg.Auth.AccountStorage.Options["connection"] != "accounts.db" {
 		t.Fatal("startup changed caller configuration")
 	}
 	app.Config.HTTP.Session.Types["default"] = "changed"

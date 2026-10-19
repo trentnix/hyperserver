@@ -149,6 +149,7 @@ func newHTTPHarnessWithLogger(t testing.TB, log *slog.Logger, configure ...func(
 		},
 	}
 	cfg.HTTP.Session.JwtKey = "http-test-only-session-signing-key"
+	cfg.Auth.AccountStorage.Options = map[string]string{"connection": cfg.Database.Connection}
 	cfg.HTTP.Session.TokenAge = time.Hour
 	cfg.HTTP.Session.CookieAge = time.Hour
 	cfg.HTTP.Session.Stores = map[string]map[string]string{

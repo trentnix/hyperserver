@@ -14,12 +14,13 @@ import (
 )
 
 func TestCleanupAccountTokensWithoutApplication(t *testing.T) {
-	for _, scenario := range []string{"disabled", "invalid limit", "canceled", "unknown provider", "missing storage", "explicit SQLite", "unsupported driver", "unsupported options"} {
+	for _, scenario := range []string{"disabled", "invalid limit", "canceled", "unknown provider", "missing storage", "explicit SQLite", "missing connection", "unsupported options"} {
 		t.Run(scenario, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "accounts.db")
 			cfg := &config.Config{
-				Auth:     config.AuthConfig{Enabled: true},
-				Database: config.DatabaseConfig{Driver: "sqlite3", Connection: path},
+				Auth: config.AuthConfig{Enabled: true, AccountStorage: config.AccountStorageConfig{
+					Options: map[string]string{"connection": path},
+				}},
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -36,10 +37,10 @@ func TestCleanupAccountTokensWithoutApplication(t *testing.T) {
 				cfg.Auth.AccountStorage.Provider = "unknown"
 			case "explicit SQLite":
 				cfg.Auth.AccountStorage.Provider = "sqlite"
-			case "unsupported driver":
-				cfg.Database.Driver = "other"
+			case "missing connection":
+				cfg.Auth.AccountStorage.Options = nil
 			case "unsupported options":
-				cfg.Auth.AccountStorage.Options = map[string]string{"connection": "unsupported"}
+				cfg.Auth.AccountStorage.Options["typo"] = "unsupported"
 			}
 
 			count, err := CleanupAccountTokens(ctx, cfg, limit)
@@ -52,10 +53,10 @@ func TestCleanupAccountTokensWithoutApplication(t *testing.T) {
 			if scenario == "unknown provider" && !strings.Contains(err.Error(), "unknown provider") {
 				t.Fatal("configuration did not select the provider:", err)
 			}
-			if scenario == "unsupported driver" && !strings.Contains(err.Error(), "requires the sqlite3 database driver") {
-				t.Fatal("configuration did not reject the driver:", err)
+			if scenario == "missing connection" && !strings.Contains(err.Error(), "connection is required") {
+				t.Fatal("configuration did not require a connection:", err)
 			}
-			if scenario == "unsupported options" && !strings.Contains(err.Error(), "accepts no options") {
+			if scenario == "unsupported options" && !strings.Contains(err.Error(), "accepts only connection") {
 				t.Fatal("configuration did not reject unsupported options:", err)
 			}
 			if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -74,8 +75,9 @@ func TestMaintenanceResolvesConfiguredPaths(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	cfg := &config.Config{
-		Auth:     config.AuthConfig{Enabled: true},
-		Database: config.DatabaseConfig{Driver: "sqlite3", Connection: "maintenance.db?_timeout=25"},
+		Auth: config.AuthConfig{Enabled: true, AccountStorage: config.AccountStorageConfig{
+			Options: map[string]string{"connection": "maintenance.db?_timeout=25"},
+		}},
 	}
 	cfg.App.WorkingDirectory = directory
 	if err := usersqlite.NewAccountRepository(db).Initialize(t.Context()); err != nil {
@@ -99,7 +101,7 @@ func TestMaintenanceResolvesConfiguredPaths(t *testing.T) {
 			}
 		})
 	}
-	if cfg.Database.Connection != "maintenance.db?_timeout=25" || cfg.HTTP.Session.Stores["sqliteStore"]["connection"] != "maintenance.db?_timeout=25" {
+	if cfg.Auth.AccountStorage.Options["connection"] != "maintenance.db?_timeout=25" || cfg.HTTP.Session.Stores["sqliteStore"]["connection"] != "maintenance.db?_timeout=25" {
 		t.Fatal("maintenance rewrote caller configuration")
 	}
 }

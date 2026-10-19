@@ -32,7 +32,7 @@ func authenticationConfig(t *testing.T) config.Config {
 	t.Helper()
 	cfg := storageConfig(t)
 	cfg.Auth.AccountStorage.Provider = "sqlite"
-	cfg.Database = config.DatabaseConfig{Driver: "sqlite3", Connection: "accounts.db"}
+	cfg.Auth.AccountStorage.Options = map[string]string{"connection": "accounts.db"}
 	cfg.Auth.Services = map[string]map[string]string{"email": {"enabled": "true"}}
 	cfg.Auth.RegistrationEnabled = true
 	cfg.HTTP.PublicOrigin = "http://example.test"

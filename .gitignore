@@ -34,6 +34,7 @@ go.work.sum
 
 # configuration files
 config.yaml
+!/deploy/local/config.yaml
 
 # executable
 /web

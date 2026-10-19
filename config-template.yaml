@@ -112,11 +112,14 @@ http:
 auth:
   # Account persistence, separate from the login providers under services.
   accountStorage:
-    # Empty or omitted selects sqlite, which borrows database.connection.
+    # Empty or omitted selects sqlite.
     # Custom names must be registered by the application before account initialization.
     provider: sqlite
-    # Provider-specific settings. The built-in SQLite provider accepts none.
-    options: {}
+    # Provider-specific settings. SQLite requires connection.
+    options:
+      # Relative paths use the config directory or app.workingDirectory.
+      # Use the same file as database.connection to share storage with contacts.
+      connection: "hyperserver.db?_journal=WAL&_timeout=5000&_fk=true"
   # Capacity for each authentication mutation route, independent of HTTP rate-limit settings.
   rateLimit:
     # Maximum tracked client IPs per route. Defaults to 4096. Must be positive.
@@ -166,7 +169,7 @@ mail:
   # Zero or omitted uses 30s. An earlier request deadline takes precedence.
   timeout: 30s
 
-# Application database settings. The current reference application uses SQLite.
+# Reference application's SQLite contact storage. Accounts and sessions configure their own connections.
 database:
   # Registered SQL driver name. The reference application imports sqlite3.
   driver: "sqlite3"

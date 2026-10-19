@@ -120,7 +120,7 @@ if err := accounts.Initialize(ctx); err != nil {
 
 The repository does not close the supplied pool. Close owned resources after their consumers stop.
 
-The reference application's `auth.accountStorage.provider` selects storage separately from login providers under `auth.services`. Empty selects SQLite using `database.connection`. Other providers require registration in application setup.
+`auth.accountStorage.provider` selects storage separately from login providers under `auth.services`. Empty selects SQLite, which requires `auth.accountStorage.options.connection`. Accounts, sessions, and contacts can use separate databases or name the same file. Other providers require registration in application setup.
 
 Account email matching is case-insensitive. Equivalent Unicode and Punycode domains share a comparison key. The submitted address remains available for display and delivery. See the [exact rules and provider guarantees](docs/storage.md#storage-guarantees).
 
