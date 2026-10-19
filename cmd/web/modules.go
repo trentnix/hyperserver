@@ -7,7 +7,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
-	"github.com/trentnix/hyperserver/pkg/services/flash"
 
 	// Diagnostic and sample routes belong to this module, not the framework.
 	// Production applications must not import it.
@@ -42,11 +41,5 @@ func siteModules(ctx context.Context, app *application, directory string) ([]han
 
 // configureRendering selects the reference site's presentation before module setup.
 func configureRendering(app *server.ApplicationServer) error {
-	if err := site.ConfigureRendering(app.ContentManager, app.Config.Auth.Enabled); err != nil {
-		return err
-	}
-	if app.Config.App.RenderNotifications {
-		app.ContentManager.LoadNotifications = flash.LoadNotifications
-	}
-	return nil
+	return site.ConfigureRendering(app.ContentManager, app.Config.Auth.Enabled)
 }

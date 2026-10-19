@@ -42,10 +42,6 @@ func (a *Application) configureAuthentication(catalog []handlers.Descriptor, pro
 	if cm.HomeURL == "" || util.SafeRedirectURL(cm.HomeURL, "") != cm.HomeURL {
 		return nil, errors.New("auth home URL must be a local absolute path")
 	}
-	if cm.LoadNotifications == nil {
-		cm.LoadNotifications = flash.LoadNotifications
-	}
-
 	if providers == nil {
 		providers = []auth.Descriptor{emailauth.Provider(a.Accounts, a.Sessions, a.Mail)}
 	}

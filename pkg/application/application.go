@@ -15,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/configured"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/messaging/smtp"
@@ -114,6 +115,13 @@ func New(ctx context.Context, cfg config.Config, options Options) (_ *Applicatio
 			return nil, fmt.Errorf("select modules: %w", err)
 		}
 	}
+	if app.Config.App.RenderNotifications && app.ContentManager.LoadNotifications == nil {
+		if err := flash.ValidateSessionManager(app.Sessions); err != nil {
+			return nil, fmt.Errorf("prepare notifications: %w", err)
+		}
+		app.ContentManager.LoadNotifications = flash.LoadNotifications
+	}
+
 	catalog, err = app.configureAuthentication(catalog, options.AuthProviders)
 	if err != nil {
 		return nil, fmt.Errorf("prepare authentication: %w", err)
