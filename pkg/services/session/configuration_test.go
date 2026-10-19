@@ -73,6 +73,82 @@ func configuredSettings() *config.Config {
 	return cfg
 }
 
+func TestMaintenanceOnlyConfiguredProvider(t *testing.T) {
+	opens, closes := 0, 0
+	provider := session.ConfiguredProvider{
+		Validate: func(map[string]string) error {
+			t.Fatal("maintenance ran runtime validation")
+			return nil
+		},
+		OpenMaintenance: func(ctx context.Context, options map[string]string) (session.ExpiredSessionMaintenance, func() error, error) {
+			opens++
+			if ctx != t.Context() || options["location"] != "original" {
+				t.Fatal("lost context or options")
+			}
+			return &configuredMaintenance{}, func() error { closes++; return nil }, nil
+		},
+	}
+	providers := map[string]session.ConfiguredProvider{"Custom": provider, "unused": {}}
+	cfg := configuredSettings()
+	count, err := session.CleanupConfiguredStores(t.Context(), cfg, providers, 10)
+	if err != nil || count != 2 || opens != 1 || closes != 1 {
+		t.Fatalf("count=%d opens=%d closes=%d error=%v", count, opens, closes, err)
+	}
+	if _, err := session.NewConfiguredManager(t.Context(), cfg, providers); err == nil || !strings.Contains(err.Error(), "no runtime factory") {
+		t.Fatalf("runtime accepted maintenance-only provider: %v", err)
+	}
+	provider.OpenMaintenance = nil
+	providers["Custom"] = provider
+	if _, err := session.CleanupConfiguredStores(t.Context(), cfg, providers, 10); err == nil || !strings.Contains(err.Error(), "does not support maintenance") {
+		t.Fatalf("maintenance accepted missing factory: %v", err)
+	}
+	for _, name := range []string{"CUSTOM", " bad ", ""} {
+		invalid := map[string]session.ConfiguredProvider{"Custom": provider, name: provider}
+		if _, err := session.CleanupConfiguredStores(t.Context(), cfg, invalid, 10); err == nil {
+			t.Fatalf("accepted duplicate or invalid provider %q", name)
+		}
+	}
+}
+
+func TestSQLiteConfiguredTableOptionSpellings(t *testing.T) {
+	for _, spelling := range []string{"sessionTable", "sessiontable"} {
+		t.Run(spelling, func(t *testing.T) {
+			cfg := validSessionConfig()
+			provider := sqlite.ConfiguredProvider(*cfg)
+			options := map[string]string{"enabled": "true", "connection": filepath.Join(t.TempDir(), "sessions.db"), spelling: "custom_sessions"}
+			if err := provider.Validate(options); err != nil {
+				t.Fatal(err)
+			}
+			store, err := provider.Open(t.Context(), options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = store.(*sqlite.SQLiteStore).Close() })
+			maintenance, closeStore, err := provider.OpenMaintenance(t.Context(), options)
+			if closeStore != nil {
+				t.Cleanup(func() { _ = closeStore() })
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := maintenance.DeleteExpired(t.Context(), 1); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	provider := sqlite.ConfiguredProvider(*validSessionConfig())
+	options := map[string]string{"connection": "unused.db", "sessionTable": "one", "sessiontable": "two"}
+	if err := provider.Validate(options); err == nil {
+		t.Fatal("validation accepted conflicting table options")
+	}
+	if _, err := provider.Open(t.Context(), options); err == nil {
+		t.Fatal("runtime accepted conflicting table options")
+	}
+	if _, _, err := provider.OpenMaintenance(t.Context(), options); err == nil {
+		t.Fatal("maintenance accepted conflicting table options")
+	}
+}
+
 func TestConfiguredProviderSelectionAndOwnership(t *testing.T) {
 	cfg := configuredSettings()
 	store := &configuredStore{}

@@ -261,6 +261,85 @@ mail:
 	}
 }
 
+func TestProviderOptionNamesPreserved(t *testing.T) {
+	const file = `auth:
+  accountStorage:
+    options: &options
+      bucketName: mixed
+      bucketname: lower
+      api_key: secret
+  services:
+    Custom_Provider: *options
+http:
+  session:
+    stores:
+      Custom_Provider: *options
+`
+	for _, source := range []string{"file", "environment", "override", "empty override"} {
+		t.Run(source, func(t *testing.T) {
+			input := file
+			want := map[string]string{"bucketName": "mixed", "bucketname": "lower", "api_key": "secret"}
+			var environment []string
+			if source != "file" {
+				if source == "environment" {
+					input = "{}"
+				}
+				want["bucketName"], want["api_key"] = "override", "env-secret"
+				if source == "empty override" {
+					want["api_key"] = ""
+				}
+				for _, prefix := range []string{
+					"AUTH_ACCOUNTSTORAGE_OPTIONS__",
+					"AUTH_SERVICES__Custom_Provider__",
+					"HTTP_SESSION_STORES__Custom_Provider__",
+				} {
+					for key, value := range want {
+						environment = append(environment, "HYPERSERVER_"+prefix+key+"="+value)
+					}
+				}
+			}
+			cfg, err := readConfig(strings.NewReader(input), environment)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, options := range map[string]map[string]string{
+				"accounts": cfg.Auth.AccountStorage.Options,
+				"auth":     cfg.Auth.Services["custom_provider"],
+				"sessions": cfg.HTTP.Session.Stores["custom_provider"],
+			} {
+				if !reflect.DeepEqual(options, want) {
+					t.Fatalf("%s options = %v, want %v", name, options, want)
+				}
+			}
+		})
+	}
+}
+
+func TestInvalidExactProviderEnvironmentKeys(t *testing.T) {
+	for _, suffix := range []string{
+		"AUTH_ACCOUNTSTORAGE_OPTIONS__",
+		"AUTH_ACCOUNTSTORAGE_OPTIONS__api.key",
+		"AUTH_SERVICES__custom",
+		"AUTH_SERVICES____key",
+		"AUTH_SERVICES__custom__",
+		"HTTP_SESSION_STORES__custom.name__key",
+		"HTTP_SESSION_STORES__custom__api.key",
+		"HTTP__PORT",
+	} {
+		t.Run(suffix, func(t *testing.T) {
+			cfg, err := readConfig(strings.NewReader("{}"), []string{"HYPERSERVER_" + suffix + "=secret-value"})
+			if err == nil || strings.Contains(err.Error(), "secret-value") || !reflect.DeepEqual(cfg, Config{}) {
+				t.Fatalf("expected sanitized error without partial configuration, got %v, %v", cfg, err)
+			}
+		})
+	}
+	// The exact provider syntax must not reinterpret existing session names.
+	cfg, err := readConfig(strings.NewReader("{}"), []string{"HYPERSERVER_HTTP_SESSION_TYPES_cart__items=custom"})
+	if err != nil || cfg.HTTP.Session.Types["cart__items"] != "custom" {
+		t.Fatalf("session name changed: %v, %v", cfg.HTTP.Session.Types, err)
+	}
+}
+
 func TestConfigYAMLAliases(t *testing.T) {
 	cfg, err := readConfig(strings.NewReader("http:\n  defaultRateLimit: &policy\n    requests: 35\n    window: 2m\n  sharedRateLimit:\n    <<: *policy\n    requests: 50\n"), nil)
 	if err != nil {

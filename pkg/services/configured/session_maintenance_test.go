@@ -32,10 +32,6 @@ func TestSessionMaintenanceSelectsOnlyConfiguredProviders(t *testing.T) {
 					t.Fatal("maintenance ran runtime validation")
 					return nil
 				},
-				Open: func(context.Context, map[string]string) (session.SessionStore, error) {
-					t.Fatal("maintenance opened runtime storage")
-					return nil, nil
-				},
 				OpenMaintenance: func(ctx context.Context, options map[string]string) (session.ExpiredSessionMaintenance, func() error, error) {
 					opens++
 					if options["location"] != "original" {

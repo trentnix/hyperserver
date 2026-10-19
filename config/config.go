@@ -2,6 +2,9 @@
 // GetConfig searches for config.yaml in the working directory and nearby config
 // directories. HYPERSERVER_ environment variables override file values, with
 // underscores separating nested keys, for example HYPERSERVER_HTTP_PORT.
+// Provider options preserve their spelling. Double underscores separate exact
+// map entries, for example HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS__bucketName
+// or HYPERSERVER_AUTH_SERVICES__custom__api_key.
 // Provider packages validate their own configuration.
 package config
 

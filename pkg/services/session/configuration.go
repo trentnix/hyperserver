@@ -13,7 +13,8 @@ import (
 // ConfiguredProvider adapts a store to configuration-driven setup and maintenance.
 // Factories receive private option maps. Open follows StoreFactory's ownership
 // contract. OpenMaintenance follows MaintenanceFactory's contract. Validate must
-// perform no I/O. A nil OpenMaintenance means maintenance is unsupported.
+// perform no I/O. Runtime setup requires Open for enabled stores. Maintenance
+// requires only OpenMaintenance for selected stores.
 type ConfiguredProvider struct {
 	Validate        func(map[string]string) error
 	Open            func(context.Context, map[string]string) (SessionStore, error)
@@ -139,6 +140,9 @@ func ValidateConfiguredStores(c *config.Config, providers map[string]ConfiguredP
 		if !ok {
 			return fmt.Errorf("unknown enabled session store %q", name)
 		}
+		if provider.Open == nil {
+			return fmt.Errorf("session provider %q has no runtime factory", name)
+		}
 		if provider.Validate != nil {
 			if err := provider.Validate(maps.Clone(options)); err != nil {
 				return fmt.Errorf("http.session.stores.%s: %w", name, err)
@@ -177,7 +181,7 @@ func normalizeProviders(providers map[string]ConfiguredProvider) (map[string]Con
 	sort.Strings(names)
 	for _, name := range names {
 		key := strings.ToLower(name)
-		if key == "" || strings.TrimSpace(key) != key || providers[name].Open == nil {
+		if key == "" || strings.TrimSpace(key) != key {
 			return nil, fmt.Errorf("invalid session provider %q", name)
 		}
 		if _, exists := result[key]; exists {

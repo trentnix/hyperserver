@@ -40,6 +40,16 @@ The [loader](config/load.go) reads the first `config.yaml` in `.`, `config`, `..
 
 Configuration loads once. Supplying `config.Config` directly bypasses file loading and its defaults. The reference commands resolve storage and TLS paths relative to the selected config file. `app.workingDirectory` overrides that base without changing the process directory.
 
+Provider option keys keep their exact spelling in YAML and programmatic configuration. For environment overrides, use `__` between provider map entries to preserve option case and underscores:
+
+```sh
+HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS__bucketName=accounts
+HYPERSERVER_HTTP_SESSION_STORES__sqlitestore__sessionTable=sessions
+HYPERSERVER_AUTH_SERVICES__custom__api_key=secret
+```
+
+The existing single-underscore format still addresses lowercase option names, such as `HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION`. Use the exact-key format for mixed-case keys. Provider names in session and auth maps remain case-insensitive. Option names must be nonempty and cannot contain dots.
+
 The template documents settings and defaults. Enabled authentication and signed session stores require independent [signing keys](docs/application.md#signing-keys).
 
 ### Registration and email

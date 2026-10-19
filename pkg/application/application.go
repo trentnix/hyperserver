@@ -1,5 +1,6 @@
 // Package application assembles configured services and modules around the core server.
-// Use server directly for applications that do not need the built-in providers.
+// New is the usual entry point, including for applications without optional services.
+// Use server directly when an application needs to control assembly itself.
 package application
 
 import (

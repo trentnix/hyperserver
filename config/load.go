@@ -151,6 +151,12 @@ func readConfig(reader io.Reader, environment []string) (Config, error) {
 					sessionName = "default"
 				}
 				key = "http.session.types." + sessionName
+			} else if strings.Contains(suffix, "__") {
+				var err error
+				key, err = providerEnvironmentKey(suffix)
+				if err != nil {
+					return Config{}, err
+				}
 			}
 			values[key] = yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
 		}
@@ -173,13 +179,36 @@ func readConfig(reader io.Reader, environment []string) (Config, error) {
 	return c, nil
 }
 
-// Normalize setting names, but preserve case-sensitive session names.
+// providerEnvironmentKey uses __ to separate provider map entries. Option names
+// keep their spelling and underscores instead of using the legacy key conversion.
+func providerEnvironmentKey(suffix string) (string, error) {
+	prefix, entry, _ := strings.Cut(suffix, "__")
+	prefix = strings.ToLower(strings.ReplaceAll(prefix, "_", "."))
+	switch prefix {
+	case "auth.accountstorage.options":
+	case "http.session.stores", "auth.services":
+		provider, option, ok := strings.Cut(entry, "__")
+		if !ok || provider == "" || strings.Contains(provider, ".") {
+			return "", fmt.Errorf("%s: expected provider__option", prefix)
+		}
+		prefix += "." + strings.ToLower(provider)
+		entry = option
+	default:
+		return "", fmt.Errorf("%s: exact option keys require a provider settings map", prefix)
+	}
+	if entry == "" || strings.Contains(entry, ".") {
+		return "", fmt.Errorf("%s: invalid provider option name", prefix)
+	}
+	return prefix + "." + entry, nil
+}
+
+// Normalize framework setting names, but preserve session names and provider options.
 // YAML has already resolved aliases and checked duplicate keys.
 func collectSettings(entries map[string]any, prefix string, values map[string]yaml.Node) error {
 	seen := make(map[string]bool)
 	for name, child := range entries {
 		key := prefix + strings.ToLower(name)
-		if prefix == "http.session.types." {
+		if prefix == "http.session.types." || providerOptionsPrefix(prefix) {
 			key = prefix + name
 		}
 		if seen[key] || name == "" || strings.Contains(name, ".") {
@@ -204,6 +233,18 @@ func collectSettings(entries map[string]any, prefix string, values map[string]ya
 		}
 	}
 	return nil
+}
+
+func providerOptionsPrefix(prefix string) bool {
+	if prefix == "auth.accountstorage.options." {
+		return true
+	}
+	for _, group := range []string{"http.session.stores.", "auth.services."} {
+		if name, ok := strings.CutPrefix(prefix, group); ok && strings.Count(name, ".") == 1 && strings.HasSuffix(name, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 func assignSetting(c *Config, fields map[string]any, key string, node yaml.Node) error {
