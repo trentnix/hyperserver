@@ -1,6 +1,6 @@
 # Sessions
 
-The `session` package defines session values, storage contracts, and request handling. Optional providers implement [cookie](cookie/store.go) and [SQLite](sqlite/store.go) storage. Attach a `SessionManager` to each request before using `session.Get` or `session.New`. See [config-template.yaml](../../../config-template.yaml) for `http.session` configuration.
+The `session` package defines session values, storage contracts, and request handling. Optional providers implement [cookie](cookie/store.go) and [SQLite](sqlite/store.go) storage. `application.New` attaches the configured `SessionManager` through `app.Handler`. With lower-level APIs, attach the manager before using `session.Get` or `session.New`. See [config-template.yaml](../../../config-template.yaml) for `http.session` configuration.
 
 ## Storage and limits
 
@@ -69,7 +69,7 @@ The [cleanup command](../../../cmd/cleanup) removes expired SQLite sessions and 
 
 ## Ownership and extension
 
-Session contracts live in `session`. The built-in implementations live in [`session/sqlite`](sqlite/store.go) and [`session/cookie`](cookie/store.go). Applications choose their available adapters explicitly:
+`application.New` supplies the built-in providers and exposes the configured manager as `app.Sessions`. Use `Options.SessionProviders` to add or replace providers. For lower-level setup, choose the available providers explicitly:
 
 ```go
 providers := map[string]session.ConfiguredProvider{
@@ -79,9 +79,9 @@ providers := map[string]session.ConfiguredProvider{
 manager, err := session.NewConfiguredManager(ctx, cfg, providers)
 ```
 
-`http.session.types` selects from those adapters. Provider names are case-insensitive. `NewConfiguredManager` validates configuration and opens each selected provider once. The manager owns the stores and must be closed after requests stop. Failed setup closes acquired resources. For programmatic setup without configuration, use `NewSessionManager` with store factories directly.
+`http.session.types` selects from those providers. Provider names are case-insensitive. `NewConfiguredManager` validates configuration and opens each selected provider once. The manager owns the stores and must be closed after requests stop. Failed setup closes acquired resources. For programmatic setup without configuration, use `NewSessionManager` with store factories directly.
 
-Custom adapters supply `ConfiguredProvider` callbacks. Validation performs no I/O, and callbacks receive private option maps. `CleanupConfiguredStores` uses the same selection with maintenance factories, without requiring signing keys or initializing schema. The [reference setup](../../../cmd/internal/setup/sessions.go) shares its adapter list between startup and cleanup.
+Custom providers supply `ConfiguredProvider` callbacks. Validation performs no I/O, and callbacks receive private option maps. `CleanupConfiguredStores` uses the same selection with maintenance factories, without requiring signing keys or initializing schema. [configured.SessionProviders](../configured/sessions.go) supplies the built-in catalog used by startup and the cleanup command.
 
 Each SQLite store owns its pool and prepares its table, expiration index, and version metadata in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Session-store transactions use `BEGIN IMMEDIATE`, overriding `_txlock`, so concurrent initializations acquire the write lock before inspecting storage. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
 
@@ -104,9 +104,9 @@ Missing, malformed, dirty, or unsupported versions stop startup without changing
 
 Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Constructors reject signing keys shorter than 32 bytes, placeholders, and lifetimes shorter than one second. Successful constructors return enabled stores. SQLite also requires a connection string and table name. See [signing-key generation](../../../docs/application.md#signing-keys).
 
-The reference application's [session setup](../../../cmd/web/application.go) supplies the manager after resolving its working directory and before initializing modules. Setup has a ten-second timeout, bounded by the caller's context. Setup registers cleanup for managers it creates. A supplied manager keeps its existing owner unless setup explicitly transfers ownership with `ownSessions`. The core has no session-manager field.
+[application.New](../../application/application.go) resolves paths and creates the session manager before initializing modules. Services and modules share `app.initializationTimeout`, defaulting to ten seconds. The constructor registers cleanup for managers it creates. Managers supplied through `Options.Services.Sessions` remain caller-owned.
 
-Register owned managers with `app.OnShutdown` before their consumers initialize. Shutdown hooks close consumers before session stores after requests drain. Give each resource one owner. A closed manager must not be reused.
+With lower-level setup, register owned managers with `app.OnShutdown` before their consumers initialize. Shutdown hooks close consumers before session stores after requests drain. Give each resource one owner. A closed manager must not be reused.
 
 Retrieved sessions are cached in the request context. Do not share their mutable data across concurrent requests. Set manager mappings before serving requests, not while requests are active.
 

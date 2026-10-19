@@ -176,9 +176,8 @@ database:
 
 # Reference application startup, identity, and rendering settings.
 app:
-  # Budget for all module initialization, including module-owned storage setup.
+  # Shared budget for service setup, module selection, and module initialization.
   # Defaults to 10s and must be positive. An earlier parent deadline takes precedence.
-  # Database, account, and session setup retain their separate ten-second limits.
   initializationTimeout: "10s"
   # Application name used in page content and verification emails.
   name: "HyperServer"

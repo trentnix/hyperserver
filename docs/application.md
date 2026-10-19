@@ -199,10 +199,10 @@ Resource-owning modules can implement `Shutdown(context.Context) error`. `Initia
 
 | Budget | Control | Scope |
 | --- | --- | --- |
-| Module initialization | Caller context. Reference command: `app.initializationTimeout`, default `10s`. | All selected modules together. An earlier parent deadline wins. |
+| Application startup | `app.initializationTimeout`, default `10s`. | Service setup, module selection, and module initialization share one deadline. An earlier parent deadline wins. |
 | HTTP draining | `http.shutdownTimeout`, default `10s`. | Requests already in progress, not module cleanup. |
 | Resource cleanup | `Shutdown()` allows `10s`. `ShutdownContext(ctx)` accepts another deadline. | Reverse-order shutdown hooks. |
 
-Without a caller deadline, `Initialize` uses ten seconds. `application.New` and the reference command share one `app.initializationTimeout` across startup. Context deadlines cannot interrupt code that ignores cancellation. Initialization contexts must not be retained for request I/O.
+When called directly, `Initialize` uses the caller's deadline or defaults to ten seconds. Context deadlines cannot interrupt code that ignores cancellation. Initialization contexts must not be retained for request I/O.
 
 If HTTP draining fails, Run closes HTTP connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. The reference command exits with an error, and a second signal forces exit. Applications must manage hijacked connections separately.
