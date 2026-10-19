@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,34 +14,51 @@ import (
 	"testing/fstest"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 func TestAccountAdmissionFailures(t *testing.T) {
 	for _, path := range []string{emailLoginPath, emailRegisterPath} {
 		for _, hx := range []bool{false, true} {
-			for _, mode := range []string{"deny", "error", "allowed with error", "canceled", "cancel in callback", "invalid form", "malformed form", "registration disabled"} {
+			for _, mode := range []string{
+				"deny", "error", "allowed with error",
+				"parse error", "wrapped parse error", "field errors", "wrapped field errors",
+				"canceled", "cancel in callback", "invalid form", "malformed form", "registration disabled",
+			} {
 				if mode == "registration disabled" && path != emailRegisterPath {
 					continue
 				}
 				t.Run(fmt.Sprintf("%s/htmx=%t/%s", path, hx, mode), func(t *testing.T) {
-					ctx, cancel := context.WithCancel(t.Context())
+					var logs bytes.Buffer
+					ctx, cancel := context.WithCancel(logger.Set(t.Context(), slog.New(slog.NewJSONHandler(&logs, nil))))
 					defer cancel()
+					var policyErr error
+					switch mode {
+					case "error", "allowed with error":
+						policyErr = errors.New("private-policy-detail")
+					case "parse error", "wrapped parse error":
+						policyErr = &form.ParseError{StatusCode: http.StatusBadRequest, Message: "private-policy-detail"}
+					case "field errors", "wrapped field errors":
+						policyErr = form.FieldErrors{"email": {"private-policy-detail"}}
+					}
+					if strings.HasPrefix(mode, "wrapped ") {
+						policyErr = fmt.Errorf("policy lookup failed: %w", policyErr)
+					}
+
 					calls := 0
 					options := Options{AllowAccount: func(got context.Context, address string) (bool, error) {
 						calls++
 						if got != ctx || address != "ADMIN@example.com" {
 							t.Fatal("admission lost the request context or checked a different email")
 						}
-						switch mode {
-						case "error", "allowed with error":
-							return mode == "allowed with error", errors.New("private-policy-detail")
-						case "cancel in callback":
+						if mode == "cancel in callback" {
 							cancel()
 							return true, nil
 						}
-						return false, nil
+						return mode == "allowed with error", policyErr
 					}}
 					accounts := &emailAccountRepository{
 						lookup: func(context.Context, string) (*user.User, error) {
@@ -96,6 +115,12 @@ func TestAccountAdmissionFailures(t *testing.T) {
 						status, message = http.StatusBadRequest, ""
 					case "registration disabled":
 						status, message = http.StatusForbidden, ""
+					}
+					if policyErr != nil {
+						status, message = http.StatusServiceUnavailable, "Unable to check account access. Please try again."
+						if !strings.Contains(logs.String(), `"level":"ERROR"`) || !strings.Contains(logs.String(), policyErr.Error()) {
+							t.Fatal("admission error was not logged", logs.String())
+						}
 					}
 					if mode == "canceled" || mode == "invalid form" || mode == "malformed form" || mode == "registration disabled" {
 						wantCalls = 0

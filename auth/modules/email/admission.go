@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
@@ -23,8 +24,9 @@ func (a *EmailAuthService) admitAccount(w http.ResponseWriter, r *http.Request, 
 	}
 	if err != nil {
 		logger.Audit(r.Context(), "account_admission", "failed")
+		logger.LogRequestError(r, fmt.Errorf("account admission: %w", err))
 		page.ResponseStatusCode = http.StatusServiceUnavailable
-		form.HandleFormError(w, r, page, f, "Unable to check account access. Please try again.", err)
+		form.HandleFormError(w, r, page, f, "Unable to check account access. Please try again.", nil)
 		return false
 	}
 	if !allowed {

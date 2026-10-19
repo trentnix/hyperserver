@@ -5,8 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/trentnix/hyperserver/auth"
@@ -16,6 +18,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -112,13 +115,11 @@ func TestAuthenticationSetupWithAccountAdmission(t *testing.T) {
 }
 
 func TestAuthProviderSelectionFailureCleanup(t *testing.T) {
-	for _, mode := range []string{"error", "cancel", "deadline"} {
+	for _, mode := range []string{"error", "cancel"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			cfg := authenticationConfig(t)
-			timeout := time.Second
-			cfg.App.InitializationTimeout = &timeout
 			cause := errors.New("provider selection failed")
 			var captured *application.Application
 			closes := 0
@@ -133,13 +134,8 @@ func TestAuthProviderSelectionFailureCleanup(t *testing.T) {
 						closes++
 						return nil
 					})
-					switch mode {
-					case "cancel":
+					if mode == "cancel" {
 						cancel()
-						return nil, cause
-					case "deadline":
-						<-ctx.Done()
-						return nil, nil // The constructor must still reject expired startup.
 					}
 					return nil, cause
 				},
@@ -147,7 +143,7 @@ func TestAuthProviderSelectionFailureCleanup(t *testing.T) {
 			if app != nil || err == nil || captured == nil || closes != 1 {
 				t.Fatalf("app=%v error=%v captured=%v closes=%d", app, err, captured, closes)
 			}
-			if mode != "deadline" && !errors.Is(err, cause) || mode == "cancel" && !errors.Is(err, context.Canceled) || mode == "deadline" && !errors.Is(err, context.DeadlineExceeded) {
+			if !errors.Is(err, cause) || mode == "cancel" && !errors.Is(err, context.Canceled) {
 				t.Fatal("lost selection or context error", err)
 			}
 			if err := captured.Sessions.CheckHealth(t.Context()); err == nil {
@@ -158,6 +154,51 @@ func TestAuthProviderSelectionFailureCleanup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthProviderSelectionDeadlineCleanup(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// Keep deadline behavior independent of database startup and runner speed.
+		cfg := storageConfig(t)
+		timeout := time.Second
+		cfg.App.InitializationTimeout = &timeout
+		var closed []string
+		var captured *application.Application
+		start := time.Now()
+		app, err := application.New(t.Context(), cfg, application.Options{
+			AccountProviders: map[string]user.StorageProvider{"custom": {Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
+				return &accountStub{}, func() error { closed = append(closed, "accounts"); return nil }, nil
+			}}},
+			SessionProviders: map[string]session.ConfiguredProvider{"custom": {Open: func(context.Context, map[string]string) (session.SessionStore, error) {
+				return &storeStub{close: func() error { closed = append(closed, "sessions"); return nil }}, nil
+			}}},
+			Modules: authenticationModules,
+			AuthProviders: func(ctx context.Context, app *application.Application) ([]auth.Descriptor, error) {
+				captured = app
+				app.OnShutdown("provider resource", func(ctx context.Context) error {
+					if ctx.Err() != nil {
+						t.Error("cleanup received expired startup context")
+					}
+					closed = append(closed, "provider")
+					return nil
+				})
+				<-ctx.Done()
+				return nil, nil // Late success must still abort startup and close resources.
+			},
+		})
+		if app != nil || !errors.Is(err, context.DeadlineExceeded) || captured == nil {
+			t.Fatalf("app=%v error=%v captured=%v", app, err, captured)
+		}
+		if time.Since(start) != timeout {
+			t.Fatalf("elapsed=%v, want %v", time.Since(start), timeout)
+		}
+		if err := captured.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(closed, []string{"provider", "sessions", "accounts"}) {
+			t.Fatal("resources must close once in reverse order", closed)
+		}
+	})
 }
 
 func TestAuthProviderSelectionRequiresActiveAuth(t *testing.T) {
