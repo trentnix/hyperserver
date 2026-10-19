@@ -84,8 +84,8 @@ func prepareHTTP(ctx context.Context, s *application) (*http.Server, net.Listene
 	if s.contactHealth != nil {
 		checks = append(checks, health.Check{Name: "contacts", Run: s.contactHealth})
 	}
-	if s.MailHealth != nil && s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled && s.Config.Auth.RegisterRequiresVerification {
-		checks = append(checks, health.Check{Name: "mail", Run: s.MailHealth})
+	if s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled && s.Config.Auth.RegisterRequiresVerification {
+		checks = append(checks, health.Check{Name: "mail", Run: s.Mail.CheckHealth})
 	}
 	handler, err := s.HealthHandler(ctx, 2*time.Second, checks...)
 	if err != nil {

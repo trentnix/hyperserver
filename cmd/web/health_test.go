@@ -5,7 +5,16 @@ import (
 	"errors"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 )
+
+type healthMailSender struct {
+	messaging.MailSender // Readiness must not send a message.
+	check                func(context.Context) error
+}
+
+func (s healthMailSender) CheckHealth(ctx context.Context) error { return s.check(ctx) }
 
 func TestApplicationHealth(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
@@ -41,10 +50,24 @@ func TestReadinessOptionalMail(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		calls := 0
 		h.app.Config.HTTP.Port = 0
-		h.app.MailHealth = func(context.Context) error { calls++; return errors.New("offline") }
-		h.app.Config.Auth.RegisterRequiresVerification = false
-		for _, required := range []bool{false, true} {
-			h.app.Config.Auth.RegisterRequiresVerification = required
+		mail, err := messaging.NewMailClientWithSender("sender@example.com", healthMailSender{
+			check: func(context.Context) error { calls++; return errors.New("offline") },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, test := range []struct {
+			name     string
+			required bool
+			mail     *messaging.MailClient
+			status   int
+		}{
+			{"optional", false, mail, 204},
+			{"required", true, mail, 503},
+			{"required but missing", true, nil, 503},
+		} {
+			h.app.Mail = test.mail
+			h.app.Config.Auth.RegisterRequiresVerification = test.required
 			h.app.Config.Auth.RegistrationEnabled = true
 			httpServer, listener, err := prepareHTTP(t.Context(), h.app)
 			if err != nil {
@@ -55,12 +78,8 @@ func TestReadinessOptionalMail(t *testing.T) {
 			}
 			w := httptest.NewRecorder()
 			httpServer.Handler.ServeHTTP(w, httptest.NewRequest("GET", "/health/ready", nil))
-			want := 204
-			if required {
-				want = 503
-			}
-			if w.Code != want {
-				t.Fatal(w.Code)
+			if w.Code != test.status {
+				t.Fatalf("%s: status=%d, want %d", test.name, w.Code, test.status)
 			}
 		}
 		if calls != 1 {

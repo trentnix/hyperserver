@@ -15,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/health"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -23,25 +24,29 @@ type healthAccounts struct {
 	err error
 }
 
-func (a *healthAccounts) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+func (a *healthAccounts) CheckHealth(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return err
 	}
-	return nil, a.err
+	return a.err
 }
 
 func TestHealthEndpointsUseSelectedServicesAndRunContext(t *testing.T) {
 	var logs bytes.Buffer
 	ctx, cancel := context.WithCancel(logger.Set(t.Context(), slog.New(slog.NewTextHandler(&logs, nil))))
 	defer cancel()
-	accounts := &healthAccounts{err: user.ErrUserNotFound}
+	accounts := &healthAccounts{}
 	mailCalls := 0
+	mail, err := messaging.NewMailClientWithSender("sender@example.com", &senderStub{check: func(context.Context) error {
+		mailCalls++
+		return errors.New("mail offline")
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	app, err := application.New(ctx, config.Config{}, application.Options{Services: application.Services{
 		Accounts: accounts,
-		MailHealth: func(context.Context) error {
-			mailCalls++
-			return errors.New("mail offline")
-		},
+		Mail:     mail,
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +72,7 @@ func TestHealthEndpointsUseSelectedServicesAndRunContext(t *testing.T) {
 	accounts.err = errors.New("private account failure")
 	check("/health/ready", http.StatusServiceUnavailable)
 	check("/health/live", http.StatusNoContent)
-	accounts.err = nil // A stored account with the probe address also indicates availability.
+	accounts.err = nil
 	check("/health/ready", http.StatusNoContent)
 	extraErr = errors.New("private contact failure")
 	check("/health/ready", http.StatusServiceUnavailable)
@@ -116,6 +121,26 @@ func TestHealthEndpointsBypassAuthAndRateLimits(t *testing.T) {
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatal("closed session storage remained ready")
+	}
+}
+
+func TestHealthSkipsAccountsWithoutProbe(t *testing.T) {
+	// Calling business methods on this repository would panic.
+	app, err := application.New(t.Context(), config.Config{}, application.Options{
+		Services: application.Services{Accounts: &accountStub{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { app.Shutdown() })
+	handler, err := app.HealthHandler(t.Context(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("optional probe: status=%d", w.Code)
 	}
 }
 

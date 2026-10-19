@@ -77,6 +77,23 @@ func (m *MailClient) ValidateConfig() error {
 	return nil
 }
 
+// CheckHealth delegates to senders that implement CheckHealth(context.Context) error.
+// Without that method, it only checks cancellation and client availability.
+// Probes must be read-only, safe for concurrent calls, and honor ctx.
+// A successful probe does not establish that mail can be delivered.
+func (m *MailClient) CheckHealth(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if m == nil || m.sender == nil {
+		return ErrMailUnavailable
+	}
+	if check, ok := m.sender.(interface{ CheckHealth(context.Context) error }); ok {
+		return check.CheckHealth(ctx)
+	}
+	return nil
+}
+
 // Compose starts a message using the configured sender address.
 // Set To, Subject, and Body on the result, then call Send(ctx). Body must contain
 // trusted HTML with dynamic values escaped by the caller.

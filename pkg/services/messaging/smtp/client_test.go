@@ -16,15 +16,15 @@ import (
 )
 
 func TestNewMailClientConfiguration(t *testing.T) {
-	client, probe, err := NewMailClient(config.MailConfig{})
-	if err != nil || client == nil || probe == nil {
-		t.Fatalf("optional mail construction: client=%v probe=%v error=%v", client, probe != nil, err)
+	client, err := NewMailClient(config.MailConfig{})
+	if err != nil || client == nil {
+		t.Fatalf("optional mail construction: client=%v error=%v", client, err)
 	}
-	if client.ValidateConfig() == nil || !errors.Is(probe(t.Context()), messaging.ErrMailUnavailable) {
+	if client.ValidateConfig() == nil || !errors.Is(client.CheckHealth(t.Context()), messaging.ErrMailUnavailable) {
 		t.Fatal("unconfigured mail reported available")
 	}
-	client, probe, err = NewMailClient(config.MailConfig{Timeout: -time.Second})
-	if err == nil || client != nil || probe != nil {
+	client, err = NewMailClient(config.MailConfig{Timeout: -time.Second})
+	if err == nil || client != nil {
 		t.Fatal("failed construction returned usable values")
 	}
 }
@@ -40,7 +40,7 @@ func TestNewMailClientConnectivitySnapshot(t *testing.T) {
 	}
 	cfg := config.MailConfig{Hostname: "127.0.0.1", Port: uint16(listener.Addr().(*net.TCPAddr).Port),
 		FromAddress: "sender@example.invalid", User: "user", Password: "password", Timeout: time.Second}
-	client, probe, err := NewMailClient(cfg)
+	client, err := NewMailClient(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestNewMailClientConnectivitySnapshot(t *testing.T) {
 	if err := client.ValidateConfig(); err != nil {
 		t.Fatal("client retained mutable configuration:", err)
 	}
-	if err := probe(t.Context()); err != nil {
+	if err := client.CheckHealth(t.Context()); err != nil {
 		t.Fatal("probe did not use the configured snapshot:", err)
 	}
 	conn, err := listener.Accept()
@@ -72,7 +72,7 @@ type probeConnection struct {
 
 func (c probeConnection) Close() error { return c.close() }
 
-func TestCheckConnectivityFailures(t *testing.T) {
+func TestCheckHealthFailures(t *testing.T) {
 	for _, mode := range []string{"dial", "close", "canceled before dial", "canceled after dial", "missing host", "missing port"} {
 		t.Run(mode, func(t *testing.T) {
 			cfg := config.MailConfig{Hostname: "::1", Port: 2525}
@@ -106,7 +106,7 @@ func TestCheckConnectivityFailures(t *testing.T) {
 				}
 				return probeConnection{close: func() error { closes++; return cause }}, nil
 			}
-			err = sender.CheckConnectivity(ctx)
+			err = sender.CheckHealth(ctx)
 			want, wantDials, wantCloses := cause, 1, 1
 			switch mode {
 			case "dial":
@@ -127,7 +127,7 @@ func TestCheckConnectivityFailures(t *testing.T) {
 	}
 }
 
-func TestCheckConnectivityDeadlines(t *testing.T) {
+func TestCheckHealthDeadlines(t *testing.T) {
 	for _, test := range []struct {
 		name                     string
 		configured, parent, want time.Duration
@@ -153,7 +153,7 @@ func TestCheckConnectivityDeadlines(t *testing.T) {
 					defer cancel()
 				}
 				start := time.Now()
-				if err := sender.CheckConnectivity(ctx); !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != test.want {
+				if err := sender.CheckHealth(ctx); !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != test.want {
 					t.Fatalf("error=%v elapsed=%s", err, time.Since(start))
 				}
 			})
@@ -161,7 +161,7 @@ func TestCheckConnectivityDeadlines(t *testing.T) {
 	}
 }
 
-func TestCheckConnectivityConcurrentCalls(t *testing.T) {
+func TestCheckHealthConcurrentCalls(t *testing.T) {
 	sender, err := NewSender(config.MailConfig{Hostname: "mail.example.invalid", Port: 2525})
 	if err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func TestCheckConnectivityConcurrentCalls(t *testing.T) {
 	var calls sync.WaitGroup
 	for range 16 {
 		calls.Go(func() {
-			if err := sender.CheckConnectivity(t.Context()); err != nil {
+			if err := sender.CheckHealth(t.Context()); err != nil {
 				t.Error(err)
 			}
 		})

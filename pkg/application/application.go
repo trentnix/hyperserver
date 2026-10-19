@@ -30,9 +30,6 @@ type Services struct {
 	Accounts user.AccountRepository
 	Sessions *session.SessionManager
 	Mail     *messaging.MailClient
-	// MailHealth optionally checks the supplied mail service. The built-in SMTP
-	// probe checks TCP connectivity only, not credentials or delivery.
-	MailHealth func(context.Context) error
 }
 
 // Options selects modules, the browser security policy, and service overrides.
@@ -170,7 +167,7 @@ func (a *Application) openServices(ctx context.Context, options Options) error {
 
 	if a.Mail == nil && a.Config.Mail != (config.MailConfig{}) {
 		var err error
-		a.Mail, a.MailHealth, err = smtp.NewMailClient(a.Config.Mail)
+		a.Mail, err = smtp.NewMailClient(a.Config.Mail)
 		if err != nil {
 			return fmt.Errorf("prepare mail: %w", err)
 		}

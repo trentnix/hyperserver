@@ -61,9 +61,9 @@ Use the returned application's `Run` method to drain requests and close owned re
 
 ### Health endpoints
 
-`app.HealthHandler(runContext, timeout, checks...)` returns a handler with `GET /health/live` and `GET /health/ready` outside sessions, rate limits, and module routes. Readiness checks the run context, accounts and sessions when present, then the supplied checks. Pass the application's run context, not a startup deadline. Checks share the timeout and must honor cancellation.
+`app.HealthHandler(runContext, timeout, checks...)` returns a handler with `GET /health/live` and `GET /health/ready` outside sessions, rate limits, and module routes. Readiness checks the run context, account repositories and session stores that implement `CheckHealth(context.Context) error`, then the supplied checks. Pass the application's run context, not a startup deadline. Checks share the timeout and must honor cancellation.
 
-The reference application adds contact-storage checks and SMTP connectivity when registration requires email verification. Mail is not a required dependency for every application. Add `health.Check{Name: "mail", Run: app.MailHealth}` only when that probe is available and mail must affect readiness.
+The reference application adds contact-storage checks and SMTP connectivity when registration requires email verification. Add `health.Check{Name: "mail", Run: app.Mail.CheckHealth}` when mail must affect readiness. Mail clients delegate to senders that implement the same optional method. Providers without that method are not probed. Custom probes must be read-only, safe for concurrent calls, and honor cancellation.
 
 ### Explicit setup
 
@@ -75,7 +75,7 @@ Prepare shared services, select rendering and middleware, then initialize module
 
 Pass initialized services through module factories. Use `handlers.Setup(ctx, app, nil, catalog, selections)` to initialize modules with configured route defaults. For email/password authentication, use the setup below instead. See the [storage](storage.md) and [session](../pkg/services/session/readme.md#ownership-and-extension) guides for provider construction.
 
-`smtp.NewMailClient(cfg.Mail)` returns a mail client and a connectivity-check function using the same copied settings. Construction performs no network I/O. The application decides whether to use the check for readiness. It only opens and closes a TCP connection, bounded by the caller's deadline and mail timeout. It does not verify TLS, authentication, or delivery. Other senders use `messaging.NewMailClientWithSender`.
+`smtp.NewMailClient(cfg.Mail)` returns a mail client using copied settings. Construction performs no network I/O. Its `CheckHealth` opens and closes a TCP connection, bounded by the caller's deadline and mail timeout. It does not verify TLS, authentication, or delivery. Other senders use `messaging.NewMailClientWithSender`.
 
 Consumers that require delivery must call the client's `ValidateConfig`. Internationalized domains are converted to IDNA ASCII form for delivery. Non-ASCII mailbox names require the SMTP server's `SMTPUTF8` and `8BITMIME` extensions. Successful sending means server acceptance, not inbox delivery.
 

@@ -53,6 +53,16 @@ func (s *AccountRepository) Initialize(ctx context.Context) error {
 	return PrepareDatabase(ctx, s.db)
 }
 
+// CheckHealth checks that the account table can be read without loading an account.
+// It is safe for concurrent calls and honors ctx.
+func (s *AccountRepository) CheckHealth(ctx context.Context) error {
+	if s.db == nil {
+		return database.ErrDatabaseUnavailable
+	}
+	var count int
+	return s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM (SELECT 1 FROM "+userTableName+" LIMIT 1)").Scan(&count)
+}
+
 // GetByID loads an account by ID, or returns [accounts.ErrUserNotFound].
 func (s *AccountRepository) GetByID(ctx context.Context, id string) (*accounts.User, error) {
 	if s.db == nil {

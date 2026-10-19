@@ -37,10 +37,17 @@ type storeStub struct {
 func (*storeStub) IsEnabled() bool { return true }
 func (s *storeStub) Close() error  { return s.close() }
 
-type senderStub struct{ closes int }
+type senderStub struct {
+	closes int
+	check  func(context.Context) error
+}
 
 func (*senderStub) Send(context.Context, messaging.MailMessage) error { return nil }
 func (s *senderStub) Close() error                                    { s.closes++; return nil }
+
+func (s *senderStub) CheckHealth(ctx context.Context) error {
+	return s.check(ctx)
+}
 
 func storageConfig(t *testing.T) config.Config {
 	t.Helper()
@@ -62,7 +69,7 @@ func TestNewWithoutOptionalServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { app.Shutdown() })
-	if app.Accounts != nil || app.Sessions != nil || app.Mail != nil || app.MailHealth != nil {
+	if app.Accounts != nil || app.Sessions != nil || app.Mail != nil {
 		t.Fatal("unconfigured services were created")
 	}
 	if app.Web == nil || app.ContentManager == nil {
@@ -91,7 +98,7 @@ func TestNewOpensBuiltInsAndClosesStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { app.Shutdown() })
-	if app.Mail == nil || app.MailHealth == nil {
+	if app.Mail == nil {
 		t.Fatal("mail setup missing")
 	}
 	if err := app.Mail.ValidateConfig(); err != nil {
@@ -147,10 +154,10 @@ func TestSuppliedServicesBypassFactoriesAndKeepOwnership(t *testing.T) {
 				t.Fatal(err)
 			}
 			probeErr := errors.New("custom probe")
+			sender.check = func(context.Context) error { return probeErr }
 			accounts := &suppliedAccounts{}
 			services := application.Services{
 				Accounts: accounts, Sessions: manager, Mail: mail,
-				MailHealth: func(context.Context) error { return probeErr },
 			}
 			cfg.Mail.Timeout = -time.Second
 			if fail {
@@ -167,7 +174,7 @@ func TestSuppliedServicesBypassFactoriesAndKeepOwnership(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if app.Accounts != services.Accounts || app.Sessions != manager || app.Mail != mail || !errors.Is(app.MailHealth(t.Context()), probeErr) {
+				if app.Accounts != services.Accounts || app.Sessions != manager || app.Mail != mail || !errors.Is(app.Mail.CheckHealth(t.Context()), probeErr) {
 					t.Fatal("supplied services were replaced")
 				}
 				if err := app.Shutdown(); err != nil {
