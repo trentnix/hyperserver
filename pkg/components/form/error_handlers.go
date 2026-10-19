@@ -21,6 +21,7 @@ type ErrorForm interface {
 // to display the specified error. ParseError returns a plain-text rejection
 // without rendering submitted values. FieldErrors render recorded field messages
 // without logging or adding a form-level message. Other errors are logged.
+// Rendering failures use ContentManager.HandleError when configured, or plain text.
 func HandleFormError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -51,6 +52,13 @@ func HandleFormError(
 	c.Data = f
 
 	if err := c.Render(w, r); err != nil {
-		util.HttpError(w, r, formErrorMessage, err, http.StatusInternalServerError)
+		handleError := util.HttpError
+		if c.ContentManager != nil && c.ContentManager.HandleError != nil {
+			handleError = c.ContentManager.HandleError
+		}
+		if formErrorMessage == "" {
+			formErrorMessage = http.StatusText(http.StatusInternalServerError)
+		}
+		handleError(w, r, formErrorMessage, err, http.StatusInternalServerError)
 	}
 }

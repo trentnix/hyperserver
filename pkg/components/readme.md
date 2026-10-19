@@ -124,6 +124,8 @@ if err := form.ParseAndValidate(r, contactForm); err != nil {
 
 A nil error means parsing, binding, and field validation succeeded. Invalid fields return `form.FieldErrors` and remain recorded for templates. `HandleFormError` renders those fields without logging or adding the generic message. Parser failures reject the request without rendering submitted values. Other errors are logged and show the supplied public message. Existing form-level messages remain unchanged by validation.
 
+If rendering fails, `HandleFormError` uses `ContentManager.HandleError`, or a plain-text 500 response when no handler is configured.
+
 Parsing limits decoded fields to 16 KiB and encoded queries to 64 KiB, independently of the route body limit. `ParseAndValidateWithOptions` can change field limits or explicitly disable them. Account and contact forms return 413 for oversized input, 400 for malformed forms, and 415 for unsupported encodings.
 
 Use both ordinary `method`/`action` attributes and HTMX attributes when a form must work without JavaScript. See the [contact template](../../modules/site/templates/html/partials/contact-form.html). Render submitted values and messages through `html/template`. For internationalized email addresses, use `type="text" inputmode="email"` and validate on the server.
