@@ -1,4 +1,4 @@
-package setup
+package configured_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
@@ -43,7 +44,7 @@ func TestCleanupAccountTokensWithoutApplication(t *testing.T) {
 				cfg.Auth.AccountStorage.Options["typo"] = "unsupported"
 			}
 
-			count, err := CleanupAccountTokens(ctx, cfg, limit)
+			count, err := configured.CleanupAccountTokens(ctx, cfg, limit, nil)
 			if count != 0 || (err != nil) != (scenario != "disabled") {
 				t.Fatalf("cleanup: count=%d, error=%v", count, err)
 			}
@@ -91,12 +92,12 @@ func TestMaintenanceResolvesConfiguredPaths(t *testing.T) {
 		"sqliteStore": {"enabled": "true", "connection": "maintenance.db?_timeout=25", "sessiontable": "sessions"},
 	}
 
-	for name, cleanup := range map[string]func(context.Context, *config.Config, int) (int64, error){
-		"accounts": CleanupAccountTokens,
-		"sessions": CleanupSessions,
+	for name, cleanup := range map[string]func() (int64, error){
+		"accounts": func() (int64, error) { return configured.CleanupAccountTokens(t.Context(), cfg, 1, nil) },
+		"sessions": func() (int64, error) { return configured.CleanupSessions(t.Context(), cfg, 1, nil) },
 	} {
 		t.Run(name, func(t *testing.T) {
-			if count, err := cleanup(t.Context(), cfg, 1); err != nil || count != 0 {
+			if count, err := cleanup(); err != nil || count != 0 {
 				t.Fatalf("maintenance did not open configured storage: %d, %v", count, err)
 			}
 		})

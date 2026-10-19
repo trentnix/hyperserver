@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/trentnix/hyperserver/cmd/internal/setup"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 )
 
 func main() {
@@ -48,7 +48,7 @@ func cleanup(ctx context.Context, cfg *config.Config, limit int) (sessions, toke
 	if limit < 1 {
 		return 0, 0, fmt.Errorf("cleanup batch size must be positive")
 	}
-	tokens, tokenErr := setup.CleanupAccountTokens(ctx, cfg, limit)
-	sessions, sessionErr := setup.CleanupSessions(ctx, cfg, limit)
+	tokens, tokenErr := configured.CleanupAccountTokens(ctx, cfg, limit, nil)
+	sessions, sessionErr := configured.CleanupSessions(ctx, cfg, limit, nil)
 	return sessions, tokens, errors.Join(tokenErr, sessionErr)
 }

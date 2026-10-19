@@ -26,6 +26,21 @@ func NewSessionManager(ctx context.Context, cfg *config.Config, additional map[s
 	return session.NewConfiguredManager(ctx, &settings, providers)
 }
 
+// CleanupSessions removes up to limit expired sessions from each selected store
+// using the same defaults and provider overrides as NewSessionManager. Additional
+// factories replace matching names using lowercase keys. Maintenance opens existing
+// storage without creating schema or requiring signing keys, then closes it.
+// Configuration paths must already be resolved. The caller owns the deadline.
+func CleanupSessions(ctx context.Context, cfg *config.Config, limit int, additional map[string]session.ConfiguredProvider) (int64, error) {
+	if cfg == nil {
+		return 0, errors.New("session configuration is required")
+	}
+	settings := cfg.Clone()
+	providers := SessionProviders(settings)
+	maps.Copy(providers, additional)
+	return session.CleanupConfiguredStores(ctx, &settings, providers, limit)
+}
+
 // SessionProviders returns fresh built-in factories for runtime setup, validation,
 // or maintenance. Construction performs no I/O. Callers can add or replace entries.
 func SessionProviders(cfg config.Config) map[string]session.ConfiguredProvider {

@@ -132,12 +132,14 @@ Provider names are case-sensitive. `application.Options.AccountProviders` adds o
 
 `configured.CleanupAccountTokens(ctx, cfg, limit, additional)` uses the same defaults and provider overrides as `configured.OpenAccounts`, without opening a runtime repository. Disabled authentication skips cleanup. For an explicit catalog without built-in defaults, use `user.CleanupConfiguredTokens`. Applications already holding a repository with `TokenMaintenance` can call `DeleteExpiredTokens` directly.
 
+`configured.CleanupSessions(ctx, cfg, limit, additional)` uses the same defaults and provider overrides as `configured.NewSessionManager`. It removes up to `limit` expired sessions from each selected store without initializing runtime stores or schema. For an explicit catalog without built-in defaults, use `session.CleanupConfiguredStores`. Both configured cleanup helpers close the storage they open and use the caller's context for cancellation and deadlines.
+
 ## Expired-record cleanup
 
 Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration as `cmd/web`. Both commands resolve storage paths from that configuration. Each run deletes at most 100 expired rows from each selected server-side session store and, when authentication is enabled, account-token storage. Live records and accounts are unchanged.
 
 Providers own maintenance setup and pool handling. SQLite files and tables must already exist. Cleanup does not create missing files or support in-memory databases.
 
-The supplied command includes the built-in providers. A custom account provider must also be registered in the application's maintenance executable. Unknown providers and missing maintenance capabilities produce an error without falling back to SQLite. Independent session cleanup still runs.
+The supplied command includes the built-in providers. Custom account and session providers must also be supplied to the application's maintenance executable. Unknown providers and missing maintenance capabilities produce an error without falling back to SQLite. Independent session cleanup still runs.
 
 Schedule the command externally for regular cleanup. The server does not run cleanup automatically. The command reports deleted counts and exits with an error if either cleanup fails. Expiration checks still reject expired sessions and tokens before cleanup runs.

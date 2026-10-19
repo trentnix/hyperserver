@@ -1,4 +1,4 @@
-package setup
+package configured_test
 
 import (
 	"os"
@@ -51,7 +51,7 @@ func TestSessionSetupRejectsInvalidSelections(t *testing.T) {
 				if manager != nil || err == nil {
 					t.Fatalf("NewSessionManager = %v, %v, want nil and an error", manager, err)
 				}
-				if count, err := CleanupSessions(t.Context(), cfg, 10); count != 0 || err == nil {
+				if count, err := configured.CleanupSessions(t.Context(), cfg, 10, nil); count != 0 || err == nil {
 					t.Fatalf("CleanupSessions = %d, %v, want zero and an error", count, err)
 				}
 				if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -63,7 +63,7 @@ func TestSessionSetupRejectsInvalidSelections(t *testing.T) {
 }
 
 func TestSessionSetupRejectsNilConfig(t *testing.T) {
-	if count, err := CleanupSessions(t.Context(), nil, 10); count != 0 || err == nil {
+	if count, err := configured.CleanupSessions(t.Context(), nil, 10, nil); count != 0 || err == nil {
 		t.Fatalf("CleanupSessions = %d, %v, want zero and an error", count, err)
 	}
 }
@@ -94,7 +94,7 @@ func TestSessionSetupSelectsBuiltInProviders(t *testing.T) {
 				if _, ok := store.(*sqlite.SQLiteStore); !ok {
 					t.Fatalf("selected store = %T, want SQLiteStore", store)
 				}
-				if count, err := CleanupSessions(t.Context(), cfg, 10); err != nil || count != 0 {
+				if count, err := configured.CleanupSessions(t.Context(), cfg, 10, nil); err != nil || count != 0 {
 					t.Fatalf("cleanup = %d, %v", count, err)
 				}
 			}
