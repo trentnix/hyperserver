@@ -54,6 +54,21 @@ The reference application's [rendering setup](../../cmd/web/modules.go) selects 
 
 Shared response handlers can install `ContentManagerService.PrepareTemplates`. `handlers.Setup` calls it before module initialization. Applications that bypass `Setup` must call the callback themselves before serving.
 
+For standard HTML messages, errors, and not-found responses, select named partials:
+
+```go
+err := content.ConfigureResponses(cm, content.ResponseTemplates{
+    Message:         "message",
+    Error:           "error",
+    NotFound:        "not-found",
+    NotFoundMessage: "That page could not be found.",
+}, content.TemplatePath{FS: templateFiles, Path: "templates/responses.html"})
+```
+
+Return configuration errors to startup. Each partial receives the public message as `.Data`. All three names are required and can select the same partial. The helper installs the preparation callback and three handlers. It rejects an existing preparation callback. Layout overrides apply before startup parsing, and explicit handler overrides remain available afterward.
+
+These responses use `no-store`, set the HTML content type, and discard any preexisting content length. Error causes are logged, not rendered. Error and not-found responses skip notification storage. Rendering failures produce a plain-text 500 without recursively invoking the error handler. Delivery failures are logged without attempting another response. Module-specific form errors and ordinary views continue to use the existing rendering API.
+
 ## HTMX responses
 
 Set response instructions on the request's content:

@@ -222,6 +222,50 @@ func TestModuleTemplateFailureRollsBackStartup(t *testing.T) {
 	}
 }
 
+func TestSetupPreparesConfiguredResponses(t *testing.T) {
+	for _, broken := range []bool{false, true} {
+		t.Run(map[bool]string{false: "valid", true: "invalid"}[broken], func(t *testing.T) {
+			app, err := server.NewApplicationServer(config.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { app.Shutdown() })
+			source := `{{template "response" .}}{{define "response"}}{{.Data}}{{end}}`
+			if broken {
+				source = `{{if}}`
+			}
+			files := fstest.MapFS{"response.html": {Data: []byte(source)}}
+			if err := content.ConfigureResponses(app.ContentManager, content.ResponseTemplates{
+				Message: "response", Error: "response", NotFound: "response",
+			}, content.TemplatePath{FS: files, Path: "response.html"}); err != nil {
+				t.Fatal(err)
+			}
+			initialized := false
+			module := &setupModule{routes: func(*routing.Routes) error { return nil }}
+			module.init = func(context.Context) error {
+				initialized = true
+				w := httptest.NewRecorder()
+				app.ContentManager.HandleMessage(w, httptest.NewRequest("GET", "/", nil), "ready")
+				if w.Code != 200 || w.Body.String() != "ready" {
+					t.Fatal("responses were not prepared before module initialization", w.Code, w.Body)
+				}
+				return nil
+			}
+			module.close = func(context.Context) error { return nil }
+			err = handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{
+				{Name: "test", New: func() handlers.Handler { return module }},
+			}, nil)
+			if broken {
+				if err == nil || initialized || !strings.Contains(err.Error(), "prepare shared response templates") {
+					t.Fatal("invalid response template did not stop startup before initialization", err)
+				}
+			} else if err != nil || !initialized {
+				t.Fatal("valid response setup failed", err)
+			}
+		})
+	}
+}
+
 func TestSetupOwnsRoutesAndCleanup(t *testing.T) {
 	for _, mode := range []string{"defaults", "custom routes", "route error", "route conflict", "canceled route"} {
 		t.Run(mode, func(t *testing.T) {
