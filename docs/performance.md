@@ -45,6 +45,8 @@ HS_TEST_PERFORMANCE=1 go test -v -count=5 ./cmd/web -run '^TestReferenceHeapBudg
 
 [Budgets](performance-budgets.json) allow 25% above baseline medians for allocations and bytes allocated, rounded up. At least five samples are required. The checker reports each range and uses the median so one noisy sample cannot fail the run. It rejects missing benchmarks, malformed metrics, failed runs, and mismatched Go version, OS, architecture, or parallelism. CI checks these budgets, a stripped binary limit of 18,000,000 bytes, and a retained-heap growth limit of 1 MiB after 10,000 requests.
 
+The unchanged allocation, binary-size, and retained-heap limits were revalidated on Go 1.27.3 using the commands above and the same local hardware. The historical baseline remains unchanged. Timing limits were not revalidated.
+
 Latency budgets allow 50% above the baseline median. Add `-timing` to `perfcheck` only on comparable storage and otherwise idle hardware. The checker requires the recorded CPU model, but cannot verify equivalent storage, CPU scheduling, or background load. CI does not enforce timing. Investigate a failure before changing a budget. Remeasure and review the baseline when the toolchain, workload, or intended behavior changes. These are coarse regression guards, not service-level objectives.
 
 ## Profile before optimizing

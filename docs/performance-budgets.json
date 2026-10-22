@@ -1,5 +1,5 @@
 {
-  "go_version": "go1.27.2",
+  "go_version": "go1.27.3",
   "goos": "linux",
   "goarch": "amd64",
   "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
