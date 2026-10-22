@@ -23,11 +23,24 @@ func TestBrowserEditor(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to exercise the editor in a browser")
 	}
 	for _, width := range []string{"390", "900", "1100", "1440", "2560"} {
-		t.Run(width, func(t *testing.T) { testBrowserEditor(t, browser, width) })
+		t.Run(width, func(t *testing.T) { testBrowserEditor(t, browser, width, false) })
 	}
 }
 
-func testBrowserEditor(t *testing.T, browser, width string) {
+// TestBrowserLayout checks the layout breakpoint, ultrawide centering, and minimum
+// page width without repeating the editor and notification flows at every width.
+func TestBrowserLayout(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check responsive layout")
+	}
+	for _, width := range []string{"280", "320", "1679", "1680", "1920", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowserEditor(t, browser, width, true) })
+	}
+}
+
+// testBrowserEditor serves the real blog with isolated data and browser checks.
+func testBrowserEditor(t *testing.T, browser, width string, layoutOnly bool) {
 	t.Helper()
 	h := newHarness(t)
 	h.register(t)
@@ -121,7 +134,11 @@ func testBrowserEditor(t *testing.T, browser, width string) {
 			t.Fatal(err)
 		}
 	}
-	command := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, "--window-size", width+",1000", s.URL+"/auth/login/email")
+	pageURL := s.URL + "/auth/login/email"
+	if layoutOnly {
+		pageURL += "?test-layout=1"
+	}
+	command := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, "--window-size", width+",1000", pageURL)
 	command.Stdout, command.Stderr = log, log
 	if err := command.Start(); err != nil {
 		t.Fatal(err)

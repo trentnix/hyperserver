@@ -36,23 +36,40 @@ document.removeEventListener = function(type, callback, options) {
       const bio = document.querySelector('.profile-details').getBoundingClientRect();
       const article = document.querySelector('article').getBoundingClientRect();
       const archive = document.querySelector('.archive-nav').getBoundingClientRect();
+      const sidebar = document.querySelector('.site-sidebar');
+      const pageWidth = Math.max(320, document.documentElement.clientWidth);
       assert(portrait.right <= bio.left, 'Profile photo must sit beside the bio.');
       assert(Math.abs(portrait.top - bio.top) <= 5, 'Profile photo and bio are not top-aligned.');
-      assert(getComputedStyle(document.body).fontSize === '16px', 'Base typography differs from the original.');
-      assert(document.documentElement.scrollWidth <= innerWidth, 'Page overflows horizontally.');
-      if (innerWidth < 1024) {
-        assert(portrait.width === 80, 'Mobile portrait has the wrong size.');
-        assert(archive.top >= article.bottom, 'Mobile archive must follow the article.');
-        assert(document.querySelector('footer').getBoundingClientRect().top >= archive.bottom, 'Mobile footer must follow the archive.');
-        assert(getComputedStyle(document.querySelector('.archive-jump')).display !== 'none', 'Mobile archive shortcut is hidden.');
+      assert(getComputedStyle(document.body).fontSize === '16px', 'Base typography changed.');
+      assert(document.documentElement.scrollWidth <= pageWidth, 'Page exceeds its minimum width or viewport.');
+      assert(Math.abs(article.width - Math.min(pageWidth, 960)) < 1, 'Article does not respect its maximum width.');
+      assert(Math.abs((article.left + article.right) / 2 - pageWidth / 2) < 1, 'Article is not centered on the screen.');
+      assert(getComputedStyle(document.querySelector('article')).textAlign === 'left', 'Article text must be left-aligned.');
+      assert(portrait.width === 80, 'Profile portrait has the wrong size.');
+      assert(document.querySelector('footer').getBoundingClientRect().top >= article.bottom, 'Footer must follow the article.');
+      if (innerWidth < 1680) {
+        assert(sidebar.getBoundingClientRect().bottom <= article.top, 'Bio and navigation must precede the article when stacked.');
+        assert(archive.top >= profile.getBoundingClientRect().bottom, 'Archive must follow the bio.');
+        assert(getComputedStyle(sidebar).position === 'static', 'Stacked navigation must scroll with the page.');
       } else {
-        const sidebar = document.querySelector('.site-sidebar');
         assert(getComputedStyle(sidebar).position === 'sticky', 'Desktop sidebar must stay visible while reading.');
-        assert(archive.right <= article.left, 'Desktop archive is outside the sidebar.');
-        assert(portrait.width === (innerWidth < 1280 ? 100 : 120), 'Desktop portrait has the wrong size.');
-        if (innerWidth >= 1280 && innerWidth <= 1920) {
-          assert(sidebar.getBoundingClientRect().width === Math.max(420, innerWidth - 1280), 'Desktop columns differ from the original.');
-        }
+        const sidebarBounds = sidebar.getBoundingClientRect();
+        assert(Math.abs(sidebarBounds.left) < 1 && Math.abs(sidebarBounds.right - article.left) < 1, 'Sidebar must fill the entire left section.');
+        assert(Math.abs(profile.getBoundingClientRect().width - sidebar.clientWidth) < 1, 'Bio must use the available sidebar width.');
+        assert(Math.abs(archive.width - sidebar.clientWidth) < 1, 'Navigation must use the available sidebar width.');
+      }
+      if (new URLSearchParams(location.search).has('test-layout')) {
+        const content = document.querySelector('article');
+        const longText = document.createElement('p');
+        longText.textContent = 'LongUnbrokenPostContent'.repeat(100);
+        const code = document.createElement('pre');
+        code.textContent = longText.textContent;
+        content.append(longText, code);
+        assert(document.documentElement.scrollWidth <= pageWidth, 'Long post content widens the page.');
+        assert(code.scrollWidth > code.clientWidth, 'Wide code must scroll inside its own block.');
+        assert(document.body.getBoundingClientRect().width >= 320, 'Page shrank below the mobile minimum.');
+        await report('PASS');
+        return;
       }
       const email = document.querySelector('#email');
       const password = document.querySelector('#password');
@@ -142,6 +159,7 @@ document.removeEventListener = function(type, callback, options) {
     if (stage === 'saved') {
       assert(location.pathname === '/post/s/browser-post', 'Save did not navigate to the post.');
       assert(document.querySelector('.post-body h1')?.textContent === 'Saved heading', 'Published Markdown differs from preview.');
+      assert(getComputedStyle(document.querySelector('.post-heading')).textAlign === 'left', 'Post heading must align with its content.');
       const image = document.querySelector('.post-body img');
       assert(image, 'Published post has no image: ' + document.querySelector('.post-body').innerHTML);
       await wait(() => image?.complete);

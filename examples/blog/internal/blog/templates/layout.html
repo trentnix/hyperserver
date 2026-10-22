@@ -18,7 +18,6 @@
   <div class="site-layout">
     <aside class="site-sidebar">
       <header class="profile">{{ template "blog.profile" . }}</header>
-      <a class="archive-jump" href="#post-archive">Recent Posts</a>
       <nav id="post-archive" class="archive-nav" aria-label="Post archive" hx-get="/posts" hx-trigger="load" hx-swap="innerHTML"><a href="/posts">All posts</a></nav>
     </aside>
     <main id="main-content" class="article-column">
