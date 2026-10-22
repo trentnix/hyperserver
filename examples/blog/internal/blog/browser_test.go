@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,7 +24,7 @@ func TestBrowserEditor(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to exercise the editor in a browser")
 	}
 	for _, width := range []string{"390", "900", "1100", "1440", "2560"} {
-		t.Run(width, func(t *testing.T) { testBrowserEditor(t, browser, width, false) })
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "") })
 	}
 }
 
@@ -35,16 +36,36 @@ func TestBrowserLayout(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check responsive layout")
 	}
 	for _, width := range []string{"280", "320", "1679", "1680", "1920", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowserEditor(t, browser, width, true) })
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "layout") })
 	}
 }
 
-// testBrowserEditor serves the real blog with isolated data and browser checks.
-func testBrowserEditor(t *testing.T, browser, width string, layoutOnly bool) {
+// TestBrowserNavigation checks article swaps and history without replacing the sidebar.
+func TestBrowserNavigation(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check article navigation")
+	}
+	for _, width := range []string{"390", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "navigation") })
+	}
+}
+
+// testBrowser serves the real blog with isolated data and browser checks.
+func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "navigation" {
+		h.login(t)
+		for _, slug := range []string{"first", "second"} {
+			response := h.request(http.MethodPost, "/post", url.Values{
+				"title": {slug + " <post>"}, "slug": {slug}, "content": {"Body of " + slug},
+			}, false)
+			requireStatus(t, response, http.StatusSeeOther)
+		}
+	}
 	loadNotifications := h.app.ContentManager.LoadNotifications
 	h.app.ContentManager.LoadNotifications = func(r *http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 		if r.URL.Query().Get("test-notifications") == "1" {
@@ -55,7 +76,11 @@ func testBrowserEditor(t *testing.T, browser, width string, layoutOnly bool) {
 		}
 		return loadNotifications(r)
 	}
-	script, err := os.ReadFile("testdata/browser.js")
+	scriptFile := "testdata/browser.js"
+	if mode == "navigation" {
+		scriptFile = "testdata/navigation.js"
+	}
+	script, err := os.ReadFile(scriptFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,8 +160,10 @@ func testBrowserEditor(t *testing.T, browser, width string, layoutOnly bool) {
 		}
 	}
 	pageURL := s.URL + "/auth/login/email"
-	if layoutOnly {
+	if mode == "layout" {
 		pageURL += "?test-layout=1"
+	} else if mode == "navigation" {
+		pageURL = s.URL + "/post/s/first"
 	}
 	command := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, "--window-size", width+",1000", pageURL)
 	command.Stdout, command.Stderr = log, log

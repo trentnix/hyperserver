@@ -16,6 +16,7 @@ import (
 const (
 	pagesFile    = "templates/pages.html"
 	responseView = "blog.message"
+	notFoundView = "blog.notFound"
 	loginURL     = "/auth/login/email"
 )
 
@@ -50,25 +51,12 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, access *Access
 		return err
 	}
 	return content.ConfigureResponses(cm, content.ResponseTemplates{
-		Message: responseView, Error: responseView, NotFound: responseView,
-		NotFoundMessage: "That page could not be found.",
+		Message: responseView, Error: responseView, NotFound: notFoundView,
 	}, content.TemplatePath{FS: blogModuleFS, Path: pagesFile})
 }
 
 // navigation holds account links for the current request, not cached account state.
 type navigation struct{ SignedIn, Admin, Registration bool }
-
-// render uses a view prepared during initialization, selecting a full page or
-// HTMX fragment from the request. Post pages also supply the document title.
-func (m *module) render(w http.ResponseWriter, r *http.Request, name string, data any) {
-	page := m.views[name].Content(r, data)
-	if post, ok := data.(postPage); ok {
-		page.Title = post.Title
-	}
-	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display this page.", err)
-	}
-}
 
 // markdown is the only trust boundary for stored post HTML. Goldmark omits raw
 // HTML and unsafe URL schemes. Preview and published posts use the same renderer.

@@ -41,6 +41,111 @@ type mailbox struct {
 	err      error
 }
 
+// TestLoginRedirect checks the short login route for ordinary and HTMX navigation.
+func TestLoginRedirect(t *testing.T) {
+	h := newHarness(t)
+	for _, hx := range []bool{false, true} {
+		w := h.request(http.MethodGet, "/login", nil, hx)
+		status, header := http.StatusSeeOther, "Location"
+		if hx {
+			status, header = http.StatusOK, "HX-Redirect"
+		}
+		requireStatus(t, w, status)
+		if got := w.Header().Get(header); got != loginURL {
+			t.Errorf("HTMX=%v: %s=%q, want %q", hx, header, got, loginURL)
+		}
+	}
+}
+
+// TestPageRenderingFailures checks that handlers report render errors without leaking their cause.
+func TestPageRenderingFailures(t *testing.T) {
+	h := newHarness(t)
+	h.app.ContentManager.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+		return nil, nil, errors.New("private notification failure")
+	}
+	for _, path := range []string{"/", "/about", "/projects", "/posts"} {
+		for _, hx := range []bool{false, true} {
+			w := h.request(http.MethodGet, path, nil, hx)
+			requireStatus(t, w, http.StatusInternalServerError)
+			body := w.Body.String()
+			if !strings.Contains(body, "Unable to display this page.") || strings.Contains(body, "private notification failure") {
+				t.Errorf("path=%s HTMX=%v: unexpected rendering error response: %s", path, hx, body)
+			}
+		}
+	}
+}
+
+// TestNotFoundResponses preserves the blog's message and layout in both response modes.
+func TestNotFoundResponses(t *testing.T) {
+	h := newHarness(t)
+	for _, hx := range []bool{false, true} {
+		for _, path := range []string{"/missing", "/post/s/missing"} {
+			w := h.request(http.MethodGet, path, nil, hx)
+			requireStatus(t, w, http.StatusNotFound)
+			body := w.Body.String()
+			if !strings.Contains(body, `<div class="page-message" role="status">That page could not be found.</div>`) {
+				t.Errorf("path=%s HTMX=%v: missing not-found message in %s", path, hx, body)
+			}
+			if strings.Contains(body, "<html") == hx {
+				t.Errorf("path=%s HTMX=%v: unexpected page layout", path, hx)
+			}
+		}
+	}
+}
+
+// TestReadingResponses preserves full-page navigation and limits fragment titles
+// to requests that replace the article, not the sidebar or editor.
+func TestReadingResponses(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	requireStatus(t, h.request(http.MethodPost, "/post", url.Values{
+		"slug": {"reading"}, "title": {"Reading <post>"}, "content": {"Post body"},
+	}, false), http.StatusSeeOther)
+
+	for _, tt := range []struct {
+		name, path, target, title string
+		hx, restore, full         bool
+	}{
+		{name: "ordinary post", path: "/post/s/reading", full: true, title: "Reading <post>"},
+		{name: "article fragment", path: "/post/s/reading", target: "article-content", hx: true, title: "Reading <post>"},
+		{name: "sidebar fragment", path: "/posts", target: "post-archive", hx: true},
+		{name: "other fragment", path: "/post/s/reading", hx: true},
+		{name: "history restore", path: "/post/s/reading", target: "article-content", hx: true, restore: true, full: true, title: "Reading <post>"},
+		{name: "about page", path: "/about", full: true, title: "About Me"},
+		{name: "about fragment", path: "/about", target: "article-content", hx: true, title: "About Me"},
+		{name: "projects page", path: "/projects", full: true, title: "Projects"},
+		{name: "projects fragment", path: "/projects", target: "article-content", hx: true, title: "Projects"},
+		{name: "archive page", path: "/posts", full: true, title: "Recent Posts"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "https://blog.example"+tt.path, nil)
+			r.Header.Set("HX-Target", tt.target)
+			if tt.hx {
+				r.Header.Set("HX-Request", "true")
+			}
+			if tt.restore {
+				r.Header.Set("HX-History-Restore-Request", "true")
+			}
+			w := httptest.NewRecorder()
+			h.app.Handler.ServeHTTP(w, r)
+			requireStatus(t, w, http.StatusOK)
+
+			body := w.Body.String()
+			if strings.Contains(body, "<html") != tt.full || strings.Contains(body, "hx-history-elt") != tt.full {
+				t.Errorf("full page = %v: unexpected page shell in %s", tt.full, body)
+			}
+			if strings.Contains(body, "<title>") != (tt.title != "") {
+				t.Errorf("title = %q: unexpected title in %s", tt.title, body)
+			}
+			if tt.title != "" && !strings.Contains(body, "<title>Trent Nix | "+html.EscapeString(tt.title)+"</title>") {
+				t.Errorf("missing escaped title %q in %s", tt.title, body)
+			}
+		})
+	}
+}
+
 // TestNotificationRendering keeps page and HTMX notifications consistent and escaped.
 func TestNotificationRendering(t *testing.T) {
 	h := newHarness(t)

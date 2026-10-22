@@ -17,7 +17,7 @@
 <body>
   <div class="site-layout">
     <aside class="site-sidebar">
-      <header class="profile">{{ template "blog.profile" . }}</header>
+      <header class="profile" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top" hx-sync="#article-content:replace">{{ template "blog.profile" . }}</header>
       <nav id="post-archive" class="archive-nav" aria-label="Post archive" hx-get="/posts" hx-trigger="load" hx-swap="innerHTML"><a href="/posts">All posts</a></nav>
     </aside>
     <main id="main-content" class="article-column">
@@ -28,8 +28,8 @@
         <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>
         {{ else }}<a href="/auth/login/email">Log in</a>{{ if .LayoutData.Registration }}<a href="/auth/register/email">Register</a>{{ end }}{{ end }}
       </div>
-      <article class="page-content">{{ renderPartial .PartialName . }}</article>
-      <footer><a href="/">Home</a><a href="/about">About Me</a><a href="/projects">Projects</a></footer>
+      <article id="article-content" class="page-content" hx-history-elt>{{ renderPartial .PartialName . }}</article>
+      <footer hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top" hx-sync="#article-content:replace"><a href="/">Home</a><a href="/about">About Me</a><a href="/projects">Projects</a></footer>
     </main>
   </div>
   <div id="notifications">{{ template "blog.notifications" . }}</div>

@@ -1,4 +1,5 @@
 {{ define "blog.message" }}<div class="page-message" role="status">{{ .Data }}</div>{{ end }}
+{{ define "blog.notFound" }}<div class="page-message" role="status">That page could not be found.</div>{{ end }}
 
 {{ define "blog.post" }}
 <header class="post-heading"><h1>{{ .Data.Title }}</h1><time datetime="{{ .Data.Published.Format "2006-01-02" }}">{{ .Data.Published.Format "January 2, 2006" }}</time></header>
@@ -7,7 +8,7 @@
 {{ end }}
 
 {{ define "blog.archive" }}
-<div class="post-archive"><h2>Recent Posts</h2>
+<div class="post-archive" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top" hx-sync="#article-content:replace"><h2>Recent Posts</h2>
 {{ range .Data }}<h3>{{ .Name }}</h3><ul>{{ range .Posts }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>{{ else }}<p>No posts yet.</p>{{ end }}
 </div>
 {{ end }}

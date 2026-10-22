@@ -1,2 +1,3 @@
+{{ if eq .HTMX.Request.Target "article-content" }}<title>Trent Nix{{ if .Title }} | {{ .Title }}{{ end }}</title>{{ end }}
 {{ renderPartial .PartialName . }}
 <div id="notifications" hx-swap-oob="beforeend">{{ template "blog.notifications" . }}</div>

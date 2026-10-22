@@ -28,9 +28,8 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /post/id/{id}", m.post)
 	routes.HandleFunc("GET /images/{id}", m.image)
 	routes.HandleFunc("GET /rss", m.rss)
-	for _, name := range []string{"about", "projects"} {
-		routes.HandleFunc("GET /"+name, func(w http.ResponseWriter, r *http.Request) { m.render(w, r, name, nil) })
-	}
+	routes.HandleFunc("GET /about", m.about)
+	routes.HandleFunc("GET /projects", m.projects)
 	routes.Handle("GET /post/create", m.requireAdmin(m.editor))
 	routes.Handle("GET /post/update/{id}", m.requireAdmin(m.editor))
 	routes.Handle("GET /post/delete/{id}", m.requireAdmin(m.confirmDelete))
@@ -39,16 +38,42 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("POST /post/delete/{id}", m.requireAdmin(m.delete))
 	routes.HandleWithBodyLimit("POST /post/preview", m.requireAdmin(m.preview), routing.MiB)
 	routes.HandleWithBodyLimit("POST /post/images/upload", m.requireAdmin(m.upload), 10*routing.MiB)
-	routes.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) { util.RedirectToURL(w, r, loginURL) })
+	routes.HandleFunc("GET /login", m.login)
 	routes.HandleFunc("/", m.app.ContentManager.HandleNotFound)
 	return routes.Err()
+}
+
+// about displays the author's biography.
+func (m *module) about(w http.ResponseWriter, r *http.Request) {
+	page := m.views["about"].Content(r, nil)
+	page.Title = "About Me"
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display this page.", err)
+	}
+}
+
+// projects displays the author's projects.
+func (m *module) projects(w http.ResponseWriter, r *http.Request) {
+	page := m.views["projects"].Content(r, nil)
+	page.Title = "Projects"
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display this page.", err)
+	}
+}
+
+// login redirects the short login URL to the email authentication page.
+func (m *module) login(w http.ResponseWriter, r *http.Request) {
+	util.RedirectToURL(w, r, loginURL)
 }
 
 // index displays the newest post, or an empty-state message when none exist.
 func (m *module) index(w http.ResponseWriter, r *http.Request) {
 	post, err := m.posts.Latest(r.Context())
 	if errors.Is(err, errNotFound) {
-		m.render(w, r, "message", "No posts yet.")
+		page := m.views["message"].Content(r, "No posts yet.")
+		if err := page.Render(w, r); err != nil {
+			page.HandleRenderError(w, r, "Unable to display this page.", err)
+		}
 		return
 	}
 	if err != nil {
@@ -81,7 +106,11 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 		m.app.ContentManager.HandleError(w, r, "Unable to display this post.", err, http.StatusInternalServerError)
 		return
 	}
-	m.render(w, r, "post", postPage{p, html})
+	page := m.views["post"].Content(r, postPage{p, html})
+	page.Title = p.Title
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display this page.", err)
+	}
 }
 
 // archive groups post links by month without loading their Markdown bodies.
@@ -91,7 +120,12 @@ func (m *module) archive(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	m.render(w, r, "archive", groupArchive(posts))
+
+	page := m.views["archive"].Content(r, groupArchive(posts))
+	page.Title = "Recent Posts"
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display this page.", err)
+	}
 }
 
 // editor opens a blank form for creation or loads an existing post for editing.
@@ -105,7 +139,11 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	m.render(w, r, "editor", editorPage{Post: p})
+
+	page := m.views["editor"].Content(r, editorPage{Post: p})
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display this page.", err)
+	}
 }
 
 // save validates a submitted draft, persists it, and redirects to its slug URL.
@@ -198,7 +236,11 @@ func (m *module) confirmDelete(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	m.render(w, r, "delete", p)
+
+	page := m.views["delete"].Content(r, p)
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display this page.", err)
+	}
 }
 
 // delete removes an existing post and redirects to the home page only on success.
