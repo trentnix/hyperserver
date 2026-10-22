@@ -51,6 +51,15 @@ func TestBrowserNavigation(t *testing.T) {
 	}
 }
 
+// TestBrowserEditorHistory checks editor initialization after history restoration.
+func TestBrowserEditorHistory(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check editor history restoration")
+	}
+	testBrowser(t, browser, "1100", "editor-history")
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
@@ -77,8 +86,11 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		return loadNotifications(r)
 	}
 	scriptFile := "testdata/browser.js"
-	if mode == "navigation" {
+	switch mode {
+	case "navigation":
 		scriptFile = "testdata/navigation.js"
+	case "editor-history":
+		scriptFile = "testdata/editor-history.js"
 	}
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {

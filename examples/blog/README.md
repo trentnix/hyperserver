@@ -40,5 +40,5 @@ EasyMDE supplies the editor toolbar and upload controls. The server validates al
 ```sh
 GOWORK=off go test ./...
 GOWORK=off go vet ./...
-HS_TEST_FIREFOX=firefox GOWORK=off go test ./internal/blog -run TestBrowserEditor -count=1
+HS_TEST_FIREFOX=firefox GOWORK=off go test ./internal/blog -run '^TestBrowser' -count=1
 ```

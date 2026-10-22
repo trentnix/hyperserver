@@ -54,7 +54,9 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod # Keep CI and local builds on the same Go version.
-          cache-dependency-path: go.sum
+          cache-dependency-path: |
+            go.sum
+            examples/blog/go.sum
 
       - name: Install SQLite migration tool
         env:
@@ -69,6 +71,14 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Test and vet blog
+        working-directory: examples/blog
+        env:
+          GOWORK: 'off'
+        run: |
+          go test -count=1 -timeout=5m ./...
+          go vet ./...
+
       - name: Build and test core without CGO
         env:
           CGO_ENABLED: '0'
@@ -80,6 +90,13 @@ jobs:
         env:
           GORACE: atexit_sleep_ms=0 # Avoid an exit delay for every test subprocess.
         run: go test -race -count=1 -timeout=10m ./...
+
+      - name: Test blog with race detector
+        working-directory: examples/blog
+        env:
+          GOWORK: 'off'
+          GORACE: atexit_sleep_ms=0
+        run: go test -race -count=1 -timeout=5m ./...
 
   performance:
     name: Allocation, memory, and build-size budgets
@@ -144,7 +161,9 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache-dependency-path: |
+            go.sum
+            examples/blog/go.sum
 
       - name: Record browser environment
         env:
@@ -162,6 +181,14 @@ jobs:
             readlink -f "$(command -v firefox)"
             firefox --version
           } | tee "$HS_TEST_BROWSER_ARTIFACTS/environment.txt"
+
+      - name: Test blog in Firefox
+        if: ${{ !inputs.browser_diagnostics }}
+        working-directory: examples/blog
+        env:
+          GOWORK: 'off'
+        run: |
+          go test -v -count=1 -timeout=10m ./internal/blog -run '^TestBrowser' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/blog-tests.log"
 
       - name: Test HTMX and native forms in Firefox
         if: ${{ !inputs.browser_diagnostics }}

@@ -112,6 +112,7 @@
     document.addEventListener(name, event => showRequestError(event.detail,
       'The connection failed. Check whether the operation completed before retrying.'));
   }
-  document.addEventListener('htmx:afterSwap', event => initialize(event.detail.target));
+  // History swaps omit detail.target but still dispatch on the swapped element.
+  document.addEventListener('htmx:afterSwap', event => initialize(event.target));
   initialize(document);
 })();
