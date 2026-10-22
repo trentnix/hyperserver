@@ -23,7 +23,7 @@ func newApplication(ctx context.Context, cfg config.Config) (*application.Applic
 		ContentSecurityPolicy: blog.ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
 			services = app
-			if err := blog.ConfigureRendering(app.ContentManager, access, cfg.Auth.RegistrationEnabled); err != nil {
+			if err := blog.ConfigureRendering(app.ContentManager, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
 			return []handlers.Descriptor{blog.Module(access), auth.Module(nil, nil, nil)}, nil

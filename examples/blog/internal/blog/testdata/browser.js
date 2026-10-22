@@ -56,6 +56,7 @@ document.removeEventListener = function(type, callback, options) {
       }
       const email = document.querySelector('#email');
       const password = document.querySelector('#password');
+      assert(!document.querySelector('a[href="/auth/register/email"]'), 'Registered administrator must not see a registration link.');
       assert(email && password, 'Missing login controls.');
       assert(Math.abs(email.getBoundingClientRect().width - password.getBoundingClientRect().width) < 1, 'Email and password widths differ.');
       assert(getComputedStyle(email).paddingLeft === '12px', 'Email field has no blog styling.');

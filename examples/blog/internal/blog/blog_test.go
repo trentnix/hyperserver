@@ -29,6 +29,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -131,7 +132,7 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 		ContentSecurityPolicy: ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
 			services = app
-			if err := ConfigureRendering(app.ContentManager, access, cfg.Auth.RegistrationEnabled); err != nil {
+			if err := ConfigureRendering(app.ContentManager, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
 			return []handlers.Descriptor{Module(access), auth.Module(nil, nil, nil)}, nil
@@ -266,6 +267,50 @@ func TestRegistrationCanBeDisabledWithoutAdministrator(t *testing.T) {
 	requireStatus(t, h.request("GET", "/setup", nil, false), http.StatusNotFound)
 	if _, err := h.app.Accounts.GetByEmail(t.Context(), "trentnix@gmail.com"); !errors.Is(err, user.ErrUserNotFound) {
 		t.Fatalf("unexpected administrator account: %v", err)
+	}
+}
+
+// TestRegistrationLinkDisappears checks persisted account state before verification
+// and after an application restart, without changing registration configuration.
+func TestRegistrationLinkDisappears(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	check := func() {
+		t.Helper()
+		for _, path := range []string{"/", "/auth/login/email"} {
+			w := h.request(http.MethodGet, path, nil, false)
+			requireStatus(t, w, http.StatusOK)
+			if strings.Contains(w.Body.String(), `href="/auth/register/email"`) {
+				t.Errorf("%s still links registration after the administrator registered", path)
+			}
+		}
+	}
+	check()
+	cfg := *h.app.Config
+	if err := h.app.ShutdownContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	h = startHarness(t, cfg)
+	check()
+}
+
+// unavailableAccounts simulates a lookup failure without changing account storage.
+type unavailableAccounts struct{ user.AccountRepository }
+
+// GetByEmail reports an unavailable store, not an absent administrator.
+func (unavailableAccounts) GetByEmail(context.Context, string) (*user.User, error) {
+	return nil, errors.New("account storage unavailable")
+}
+
+// TestRegistrationLinkHiddenOnLookupFailure keeps storage errors from advertising signup.
+func TestRegistrationLinkHiddenOnLookupFailure(t *testing.T) {
+	cm := contentservice.NewContentManager()
+	if err := ConfigureRendering(cm, &Access{emailKey: user.EmailKey("trentnix@gmail.com")}, unavailableAccounts{}, true); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	if cm.BuildLayoutData(r).(navigation).Registration {
+		t.Fatal("registration link shown when account lookup failed")
 	}
 }
 
