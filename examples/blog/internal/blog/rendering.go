@@ -28,7 +28,8 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, access *Access
 	if err := cm.ApplyDefaults("blog", func(cm *contentservice.ContentManagerService) {
 		cm.RegisterLayouts(contentservice.PageType, blogModuleFS, "templates/layout.html")
 		cm.RegisterLayouts(contentservice.HtmxType, blogModuleFS, "templates/fragment.html")
-		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html")
+		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html")
+		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/notifications.html")
 		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", "/", loginURL
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())

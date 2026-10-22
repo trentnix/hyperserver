@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 )
 
 // TestBrowserEditor exercises the real HTMX and EasyMDE bundles against isolated
@@ -30,6 +32,16 @@ func testBrowserEditor(t *testing.T, browser, width string) {
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	loadNotifications := h.app.ContentManager.LoadNotifications
+	h.app.ContentManager.LoadNotifications = func(r *http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+		if r.URL.Query().Get("test-notifications") == "1" {
+			return []messages.Notification{
+				messages.NewNotification("Saved successfully", messages.NotificationTypeSuccess),
+				messages.NewNotification("Please correct this error", messages.NotificationTypeError),
+			}, nil, nil
+		}
+		return loadNotifications(r)
+	}
 	script, err := os.ReadFile("testdata/browser.js")
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +114,14 @@ func testBrowserEditor(t *testing.T, browser, width string) {
 		t.Fatal(err)
 	}
 	defer log.Close()
-	command := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", t.TempDir(), "--window-size", width+",1000", s.URL+"/auth/login/email")
+	profile := t.TempDir()
+	// Exercise reduced-motion dismissal in the mobile run, with normal fades elsewhere.
+	if width == "390" {
+		if err := os.WriteFile(profile+"/user.js", []byte(`user_pref("ui.prefersReducedMotion", 1);`), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	command := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, "--window-size", width+",1000", s.URL+"/auth/login/email")
 	command.Stdout, command.Stderr = log, log
 	if err := command.Start(); err != nil {
 		t.Fatal(err)

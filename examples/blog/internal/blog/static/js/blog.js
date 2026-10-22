@@ -2,6 +2,15 @@
  * The server validates posts and renders Markdown for both preview and publication. */
 (() => {
   const editors = new WeakMap();
+  document.documentElement.classList.add('js');
+
+  // CSS owns timing, including hover/focus pauses and reduced-motion preferences.
+  // Delegation also handles notifications appended by HTMX out-of-band swaps.
+  document.addEventListener('animationend', event => {
+    if (event.animationName === 'notification-fade' && event.target.matches('.notification--success')) {
+      event.target.remove();
+    }
+  });
 
   function initialize(root) {
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
@@ -54,6 +63,8 @@
   }
 
   document.addEventListener('click', event => {
+    const dismiss = event.target.closest('[data-dismiss-notification]');
+    if (dismiss) dismiss.closest('.notification').remove();
     const close = event.target.closest('[data-close-dialog]');
     if (close) close.closest('dialog').close();
   });

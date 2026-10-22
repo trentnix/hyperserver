@@ -1,0 +1,6 @@
+{{ define "blog.notifications" }}{{ range .Notifications }}
+<div class="notification{{ if .IsSuccess }} notification--success{{ end }}">
+  <p role="{{ if .IsError }}alert{{ else }}status{{ end }}">{{ .Message }}</p>
+  <button class="text-button notification-dismiss" type="button" aria-label="Dismiss notification" data-dismiss-notification>×</button>
+</div>
+{{ end }}{{ end }}

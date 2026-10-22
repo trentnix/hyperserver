@@ -80,7 +80,17 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .editor-toolbar .tool-link::before { content: '↗'; }
 .editor-toolbar .tool-image::before { content: '▧'; }
 .editor-toolbar .tool-preview::before { content: '◉'; }
-#notifications:not(:empty) { position: fixed; bottom: 20px; right: 20px; max-width: min(420px, 90vw); padding: 12px 24px; background: #343d4b; color: white; border-radius: 5px; z-index: 2; }
+/* Only success notifications expire. Without JavaScript, all messages stay visible. */
+#notifications { position: fixed; bottom: 20px; right: 20px; max-width: min(420px, 90vw); display: grid; gap: 10px; z-index: 2; }
+.notification, #notifications > .field-error { margin: 0; padding: 12px 20px; background: #343d4b; color: white; border-radius: 5px; }
+.notification { display: flex; align-items: start; gap: 16px; overflow-wrap: anywhere; }
+.notification p { margin: 0; }
+.notification-dismiss { display: none; flex-shrink: 0; font-size: 1.3em; line-height: 1; text-decoration: none; }
+.js .notification-dismiss { display: block; }
+.js .notification--success { animation: notification-fade .25s ease 5s forwards; }
+.js .notification--success:hover, .js .notification--success:focus-within { animation-play-state: paused; }
+@keyframes notification-fade { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .js .notification--success { animation-duration: 1ms; } }
 
 @media (min-width: 1921px) {
   body { background: url('../img/site-bg.jpg') no-repeat fixed right bottom / 25% auto; }

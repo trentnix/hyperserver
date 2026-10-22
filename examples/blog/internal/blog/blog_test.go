@@ -27,6 +27,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -37,6 +38,39 @@ type mailbox struct {
 	mu       sync.Mutex
 	messages []messaging.MailMessage
 	err      error
+}
+
+// TestNotificationRendering keeps page and HTMX notifications consistent and escaped.
+func TestNotificationRendering(t *testing.T) {
+	h := newHarness(t)
+	h.app.ContentManager.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+		return []messages.Notification{
+			messages.NewNotification("Saved <script>alert(1)</script>", messages.NotificationTypeSuccess),
+			messages.NewNotification("Delivery failed", messages.NotificationTypeError),
+		}, nil, nil
+	}
+	for _, hx := range []bool{false, true} {
+		response := h.request(http.MethodGet, "/about", nil, hx)
+		requireStatus(t, response, http.StatusOK)
+		body := response.Body.String()
+		for _, want := range []string{
+			`class="notification notification--success"`,
+			`role="status">Saved &lt;script&gt;alert(1)&lt;/script&gt;`,
+			`class="notification">`,
+			`role="alert">Delivery failed`,
+			`aria-label="Dismiss notification"`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("HTMX=%v: missing %q in %s", hx, want, body)
+			}
+		}
+		if strings.Count(body, `class="notification notification--success"`) != 1 {
+			t.Errorf("HTMX=%v: only success notifications should expire", hx)
+		}
+		if hx && !strings.Contains(body, `hx-swap-oob="beforeend"`) {
+			t.Error("HTMX notifications must append to the existing notification region")
+		}
+	}
 }
 
 func (m *mailbox) Send(ctx context.Context, message messaging.MailMessage) error {

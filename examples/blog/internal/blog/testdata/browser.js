@@ -59,6 +59,31 @@ document.removeEventListener = function(type, callback, options) {
       assert(email && password, 'Missing login controls.');
       assert(Math.abs(email.getBoundingClientRect().width - password.getBoundingClientRect().width) < 1, 'Email and password widths differ.');
       assert(getComputedStyle(email).paddingLeft === '12px', 'Email field has no blog styling.');
+
+      // Use a real fragment response to exercise out-of-band notification delivery.
+      const target = document.createElement('div');
+      document.body.append(target);
+      await htmx.ajax('GET', '/about?test-notifications=1', {target});
+      target.remove();
+      const success = document.querySelector('.notification--success');
+      const failure = document.querySelector('.notification:not(.notification--success)');
+      assert(success && failure, 'HTMX notifications did not reach the page.');
+      assert(getComputedStyle(success).animationDelay === '5s', 'Success notification has no reading delay.');
+      if (innerWidth === 390) {
+        assert(matchMedia('(prefers-reduced-motion: reduce)').matches, 'Reduced-motion test preference is not active.');
+        assert(parseFloat(getComputedStyle(success).animationDuration) < .01, 'Reduced motion must skip the fade, not the reading delay.');
+      }
+      const dismiss = success.querySelector('button');
+      dismiss.focus();
+      assert(getComputedStyle(success).animationPlayState === 'paused', 'Keyboard focus must pause dismissal.');
+      await new Promise(resolve => setTimeout(resolve, 5500));
+      assert(success.isConnected, 'Focused notification disappeared.');
+      email.focus();
+      await wait(() => !success.isConnected);
+      assert(failure.isConnected, 'Error notification disappeared automatically.');
+      failure.querySelector('button').click();
+      assert(!failure.isConnected, 'Manual dismissal failed.');
+      assert(!document.querySelector('#notifications').textContent.trim(), 'Dismissed notification content remains.');
       email.value = 'draft@example.test';
       password.value = 'unsaved password';
       await htmx.ajax('POST', '/test/plain-error', {target: '#login'});
@@ -73,6 +98,9 @@ document.removeEventListener = function(type, callback, options) {
       return;
     }
     if (stage === 'editor') {
+      const loginNotice = document.querySelector('.notification--success');
+      assert(loginNotice?.textContent.includes('logged in'), 'Login notification is missing.');
+      await wait(() => !loginNotice.isConnected);
       const link = document.querySelector('a[href="/post/create"]');
       assert(link, 'Verified administrator has no New post link.');
       link.click();
@@ -176,6 +204,15 @@ document.removeEventListener = function(type, callback, options) {
       assert(Math.abs(confirm.getBoundingClientRect().top - cancel.getBoundingClientRect().top) < 1, 'Delete controls are not aligned.');
       cancel.click();
       assert(!document.querySelector('dialog[open]'), 'Cancel did not close the delete dialog.');
+      sessionStorage.setItem('blog-test-stage', 'logout');
+      document.querySelector('form[action="/auth/logout"]').requestSubmit();
+      return;
+    }
+    if (stage === 'logout') {
+      const notice = document.querySelector('.notification--success');
+      assert(notice?.textContent.includes('logged out'), 'Logout notification is missing.');
+      await wait(() => !notice.isConnected);
+      assert(!document.querySelector('#notifications').textContent.trim(), 'Logout overlay remains after dismissal.');
       await report('PASS');
     }
   } catch (error) { await report(error.message + '\n' + error.stack); }

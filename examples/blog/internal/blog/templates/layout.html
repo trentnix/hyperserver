@@ -33,7 +33,7 @@
       <footer><a href="/">Home</a><a href="/about">About Me</a><a href="/projects">Projects</a></footer>
     </main>
   </div>
-  <div id="notifications" role="status">{{ range .Notifications }}<p>{{ .Message }}</p>{{ end }}</div>
+  <div id="notifications">{{ template "blog.notifications" . }}</div>
   <div id="dialog-host"></div>
 </body>
 </html>
