@@ -1,0 +1,36 @@
+package main
+
+import (
+	"context"
+	"errors"
+
+	"github.com/trentnix/hyperserver/auth"
+	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/examples/blog/internal/blog"
+	"github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/handlers"
+)
+
+// newApplication selects the blog and authentication modules with one shared
+// administrator rule. The framework initializes and owns the configured services.
+func newApplication(ctx context.Context, cfg config.Config) (*application.Application, error) {
+	if cfg.HTTP.ListenHost == "" || cfg.HTTP.Port == 0 {
+		return nil, errors.New("configure http.listenHost and a nonzero http.port")
+	}
+	access := &blog.Access{}
+	var services *application.Application
+	return application.New(ctx, cfg, application.Options{
+		ContentSecurityPolicy: blog.ContentSecurityPolicy,
+		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
+			services = app
+			if err := blog.ConfigureRendering(app.ContentManager, access, cfg.Auth.RegistrationEnabled); err != nil {
+				return nil, err
+			}
+			return []handlers.Descriptor{blog.Module(access), auth.Module(nil, nil, nil)}, nil
+		},
+		// Provider factories run after Modules, when shared services are available.
+		AuthProviders: []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
+			return blog.NewEmailProvider(services.Accounts, services.Sessions, services.Mail, access)
+		}}},
+	})
+}

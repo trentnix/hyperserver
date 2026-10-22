@@ -1,0 +1,6 @@
+# Copy to config.yaml in this directory. Only this address can register and log in.
+# Publishing also requires email verification.
+adminEmail: trentnix@gmail.com
+storage:
+  provider: sqlite
+  connection: blog-rebuild-posts.db?_journal=WAL&_fk=true

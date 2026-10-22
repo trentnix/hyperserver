@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Trent Nix writes about building and delivering better software.">
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"historyCacheSize":0}'>
+  <title>Trent Nix{{ if .Title }} | {{ .Title }}{{ end }}</title>
+  <link rel="icon" href="/assets/img/favicon.ico">
+  <link rel="alternate" type="application/rss+xml" title="Trent Nix" href="/rss">
+  <link rel="stylesheet" href="/assets/css/blog.css">
+  {{ if .LayoutData.Admin }}<link rel="stylesheet" href="/assets/lib/easymde/easymde.min.css">
+  <script src="/assets/lib/easymde/easymde.min.js" defer></script>{{ end }}
+  <script src="/assets/lib/htmx/htmx.min.js" defer></script>
+  <script src="/assets/js/blog.js" defer></script>
+</head>
+<body>
+  <div class="site-layout">
+    <aside class="site-sidebar">
+      <header class="profile">{{ template "blog.profile" . }}</header>
+      <a class="archive-jump" href="#post-archive">Recent Posts</a>
+      <nav id="post-archive" class="archive-nav" aria-label="Post archive" hx-get="/posts" hx-trigger="load" hx-swap="innerHTML"><a href="/posts">All posts</a></nav>
+    </aside>
+    <main id="main-content" class="article-column">
+      <div class="account-nav">
+        {{ if .LayoutData.Admin }}<a href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a>{{ end }}
+        {{ if .LayoutData.SignedIn }}
+        {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
+        <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>
+        {{ else }}<a href="/auth/login/email">Log in</a>{{ if .LayoutData.Registration }}<a href="/auth/register/email">Register</a>{{ end }}{{ end }}
+      </div>
+      <article class="page-content">{{ renderPartial .PartialName . }}</article>
+      <footer><a href="/">Home</a><a href="/about">About Me</a><a href="/projects">Projects</a></footer>
+    </main>
+  </div>
+  <div id="notifications" role="status">{{ range .Notifications }}<p>{{ .Message }}</p>{{ end }}</div>
+  <div id="dialog-host"></div>
+</body>
+</html>

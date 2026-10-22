@@ -1,0 +1,45 @@
+{{ define "blog.message" }}<div class="page-message" role="status">{{ .Data }}</div>{{ end }}
+
+{{ define "blog.post" }}
+<header class="post-heading"><h1>{{ .Data.Title }}</h1><time datetime="{{ .Data.Published.Format "2006-01-02" }}">{{ .Data.Published.Format "January 2, 2006" }}</time></header>
+{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a> <a href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a></div>{{ end }}
+<div class="post-body">{{ .Data.HTML }}</div>
+{{ end }}
+
+{{ define "blog.archive" }}
+<div class="post-archive"><h2>Recent Posts</h2>
+{{ range .Data }}<h3>{{ .Name }}</h3><ul>{{ range .Posts }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>{{ else }}<p>No posts yet.</p>{{ end }}
+</div>
+{{ end }}
+
+{{ define "blog.about" }}
+<h1>About Me</h1>
+<p>Trent Nix is a Texas-based technologist interested in software project management, software process, and full-stack software development.</p>
+<p>This blog is a place for me to write about software and technology, to share things I'm working on, and to think out loud.</p>
+<p>Need to contact me? Send me an email at <a href="mailto:trentnix@gmail.com">trentnix@gmail.com</a>, or find me on <a href="https://www.linkedin.com/in/trent-nix/">LinkedIn</a>.</p>
+{{ end }}
+
+{{ define "blog.projects" }}<h1>Projects</h1><p>I've got nothing interesting to show.</p>{{ end }}
+
+{{ define "blog.editor" }}
+{{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
+<section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
+<form id="post-form" method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+  <div id="editor-errors" role="alert">{{ .Data.Error }}</div>
+  <label for="post-title">Title</label><input id="post-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
+  <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" {{ if .Data.ID }}required{{ end }} aria-describedby="slug-help">
+  <small id="slug-help">Lowercase words separated by hyphens. Leave empty for an automatic URL when creating a post.</small>
+  <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
+  <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" required>{{ .Data.Markdown }}</textarea>
+  <p class="editor-hint">Posts can contain up to 256 KiB of Markdown. Images: PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels.</p>
+  <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/">Cancel</a>{{ end }}</div>
+</form></section>
+{{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}
+
+{{ define "blog.delete" }}
+{{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
+<h1 id="delete-title">Delete post?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone.</p>
+<form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}"><button type="submit">Delete post</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
+{{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}

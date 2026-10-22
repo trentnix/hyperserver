@@ -1,0 +1,47 @@
+# Copy to config.yaml. Generate two different secrets with: openssl rand -hex 32
+app:
+  name: Trent Nix
+  initializationTimeout: 10s
+  renderNotifications: true
+http:
+  listenHost: 127.0.0.1
+  port: 8086
+  publicOrigin: http://127.0.0.1:8086
+  readTimeout: 10s
+  writeTimeout: 40s
+  idleTimeout: 2m
+  shutdownTimeout: 10s
+  session:
+    jwtKey: REPLACE_WITH_RANDOM_SESSION_KEY
+    tokenAge: 24h
+    cookieAge: 24h
+    stores:
+      sqliteStore:
+        enabled: "true"
+        connection: blog-rebuild-accounts.db?_journal=WAL&_fk=true
+        sessionTable: sessions
+    types:
+      default: sqliteStore
+auth:
+  enabled: true
+  registrationEnabled: true
+  registerRequiresVerification: true
+  jwtKey: REPLACE_WITH_DIFFERENT_RANDOM_AUTH_KEY
+  verificationTokenExpiration: 24h
+  resetTokenExpiration: 1h
+  resetMinimumResponseTime: 2s
+  accountStorage:
+    provider: sqlite
+    options:
+      connection: blog-rebuild-accounts.db?_journal=WAL&_fk=true
+  services:
+    email:
+      enabled: "true"
+# Local Mailpit accepts these credentials when configured with MP_SMTP_AUTH_ACCEPT_ANY.
+mail:
+  hostname: 127.0.0.1
+  port: 1025
+  user: blog
+  password: local-only
+  fromAddress: blog@example.test
+  timeout: 10s

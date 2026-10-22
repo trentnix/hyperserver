@@ -1,0 +1,2 @@
+{{ renderPartial .PartialName . }}
+<div id="notifications" hx-swap-oob="beforeend">{{ range .Notifications }}<p>{{ .Message }}</p>{{ end }}</div>
