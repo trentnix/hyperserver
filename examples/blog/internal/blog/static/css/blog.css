@@ -48,6 +48,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; }
 .post-archive .archive-more { display: inline-block; margin-top: 16px; font-size: .9em; }
 
 @media (max-width: 1679px) {
+  .article-column { padding-bottom: 80px; }
   .page-top:has(.info-page) { min-height: 100vh; }
   .site-layout:has(.info-page) .site-footer { display: none; }
   .page-top:has(.page-content .post-archive) { background-image: none; }
@@ -80,7 +81,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; }
 }
 
 /* Article content. */
-.page-content { padding: 30px 60px; font-size: 1.1em; line-height: 1.4; overflow-wrap: anywhere; text-align: left; }
+.page-content { --content-padding: 60px; padding: 30px var(--content-padding); font-size: 1.1em; line-height: 1.4; overflow-wrap: anywhere; text-align: left; }
 h1 { font-size: 1.8em; line-height: 1.2; margin: 0; }
 h2, h3 { line-height: 1.3; }
 .post-heading time { display: block; color: #696d74; font-size: .7em; }
@@ -93,8 +94,12 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .page-message { padding: 20px 0; }
 
 @media (min-width: 1680px) { .page-content { font-size: 1.2em; line-height: 1.5; } }
+@media (max-width: 1679px) {
+  /* Let article images use the text gutters without enlarging small images. */
+  .post-body > p img { max-width: calc(100% + 2 * var(--content-padding)); margin-inline: 0; position: relative; left: 50%; transform: translateX(-50%); }
+}
 @media (max-width: 767px) {
-  .page-content { padding: 10px 20px 30px; }
+  .page-content { --content-padding: 20px; padding: 10px var(--content-padding) 30px; }
   h1 { font-size: 1.4em; }
 }
 

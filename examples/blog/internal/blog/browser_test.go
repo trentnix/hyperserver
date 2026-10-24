@@ -110,6 +110,16 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/test/image.svg":
+			sizes := map[string][2]int{"large": {3200, 1800}, "small": {160, 100}, "tall": {360, 1800}, "wide": {2400, 320}, "square": {900, 900}, "tiny": {48, 48}}
+			size, ok := sizes[r.URL.Query().Get("size")]
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "image/svg+xml")
+			fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><rect width="100%%" height="100%%" fill="#4477aa"/></svg>`, size[0], size[1])
+			return
 		case "/test/viewport":
 			// Firefox limits ordinary windows to 500px. An iframe gives each
 			// flow an exact viewport, including narrow mobile sizes.

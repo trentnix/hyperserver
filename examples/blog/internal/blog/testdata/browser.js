@@ -57,6 +57,7 @@ document.removeEventListener = function(type, callback, options) {
       if (innerWidth >= 1680) assert(archiveStyle.paddingTop === '80px', 'Sidebar Recent Posts needs 80px of top padding.');
       const sidebar = document.querySelector('.site-sidebar');
       const footer = document.querySelector('.site-footer');
+      assert(getComputedStyle(document.querySelector('.article-column')).paddingBottom === (innerWidth < 1680 ? '80px' : '0px'), 'Extra spacing after the article must apply only below the ultrawide breakpoint.');
       const links = document.querySelector('.site-links');
       const header = document.querySelector('.site-header');
       const main = document.querySelector('#main-content');
@@ -142,6 +143,40 @@ document.removeEventListener = function(type, callback, options) {
         assert(Math.abs(archive.width - sidebar.clientWidth) < 1, 'Navigation must use the available sidebar width.');
       }
       if (new URLSearchParams(location.search).has('test-layout')) {
+        // Exercise natural sizes, linked images, and text sharing an image paragraph.
+        const imagePost = document.createElement('div');
+        imagePost.className = 'post-body';
+        document.querySelector('article').append(imagePost);
+        for (const size of ['large', 'small', 'tall', 'wide', 'square', 'tiny']) {
+          const paragraph = document.createElement('p');
+          const before = document.createTextNode('Text before the image.');
+          const after = document.createTextNode('Text after the image.');
+          const image = document.createElement('img');
+          image.src = '/test/image.svg?size=' + size;
+          const link = document.createElement('a');
+          link.href = image.src;
+          link.append(image);
+          paragraph.append(before, size === 'wide' ? link : image, after);
+          imagePost.append(paragraph);
+          await wait(() => image.complete && image.naturalWidth > 0);
+          const bounds = image.getBoundingClientRect();
+          // Large fixtures can introduce a scrollbar and move the centered column.
+          const articleBounds = document.querySelector('article').getBoundingClientRect();
+          const textWidth = articleBounds.width - 2 * parseFloat(contentPadding);
+          const limit = innerWidth < 1680 ? articleBounds.width : textWidth;
+          const expectedWidth = Math.min(image.naturalWidth, limit);
+          assert(Math.abs(bounds.width - expectedWidth) < 1, `${size} image width at ${innerWidth}px: ${bounds.width}, expected ${expectedWidth}.`);
+          assert(Math.abs((bounds.left + bounds.right) / 2 - (articleBounds.left + articleBounds.right) / 2) < 1, `${size} image is not centered.`);
+          assert(Math.abs(bounds.height - 20 - expectedWidth * image.naturalHeight / image.naturalWidth) < 1, `${size} image aspect ratio changed.`);
+          for (const text of [before, after]) {
+            const range = document.createRange();
+            range.selectNodeContents(text);
+            const textBounds = range.getBoundingClientRect();
+            assert(textBounds.left >= articleBounds.left + parseFloat(contentPadding) - 1 && textBounds.right <= articleBounds.right - parseFloat(contentPadding) + 1, 'Image styling moved text into the gutters.');
+          }
+          assert(document.documentElement.scrollWidth <= Math.max(320, document.documentElement.clientWidth), `${size} image caused horizontal overflow at ${innerWidth}px.`);
+        }
+        imagePost.remove();
         if (innerWidth === 768) {
           frameElement.style.width = '767px';
           await wait(() => !menuToggle.hidden && links.hidden);
