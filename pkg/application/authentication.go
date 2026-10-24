@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"errors"
 	"slices"
 
@@ -15,7 +16,7 @@ import (
 
 // configureAuthentication supplies services without implicitly selecting modules.
 // The auth module validates its manager and enabled providers during initialization.
-func (a *Application) configureAuthentication(catalog []handlers.Descriptor, providers []auth.Descriptor) ([]handlers.Descriptor, error) {
+func (a *Application) configureAuthentication(ctx context.Context, catalog []handlers.Descriptor, selectProviders func(context.Context, *Application) ([]auth.Descriptor, error)) ([]handlers.Descriptor, error) {
 	a.Handler = a.Web
 	if a.Sessions != nil {
 		a.Handler = session.WithSessionManager(a.Sessions)(a.Handler)
@@ -42,8 +43,15 @@ func (a *Application) configureAuthentication(catalog []handlers.Descriptor, pro
 	if cm.HomeURL == "" || util.SafeRedirectURL(cm.HomeURL, "") != cm.HomeURL {
 		return nil, errors.New("auth home URL must be a local absolute path")
 	}
-	if providers == nil {
+	var providers []auth.Descriptor
+	if selectProviders == nil {
 		providers = []auth.Descriptor{emailauth.Provider(a.Accounts, a.Sessions, a.Mail)}
+	} else {
+		var err error
+		providers, err = selectProviders(ctx, a)
+		if err != nil {
+			return nil, err
+		}
 	}
 	catalog, err := handlers.Replace(catalog, auth.Module(a.Accounts, a.Sessions, providers))
 	if err != nil {

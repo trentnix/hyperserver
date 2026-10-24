@@ -218,13 +218,33 @@ func (*customAuthProvider) Login(w http.ResponseWriter, r *http.Request) *user.U
 
 func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T) {
 	var providers []*customAuthProvider
+	var selections []*application.Application
+	var selectedModules *application.Application
 	options := application.Options{
-		Modules: authenticationModules,
-		AuthProviders: []auth.Descriptor{{Name: "custom", New: func() auth.AuthService {
-			p := &customAuthProvider{}
-			providers = append(providers, p)
-			return p
-		}}},
+		Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
+			selectedModules = app
+			return authenticationModules(ctx, app)
+		},
+		AuthProviders: func(ctx context.Context, app *application.Application) ([]auth.Descriptor, error) {
+			if selectedModules != app {
+				t.Fatal("providers selected before modules")
+			}
+			if _, ok := ctx.Deadline(); !ok || ctx.Err() != nil {
+				t.Fatal("provider selection did not receive the startup context")
+			}
+			if app.Accounts == nil || app.Sessions == nil {
+				t.Fatal("shared services are not ready")
+			}
+			if err := app.Sessions.CheckHealth(ctx); err != nil {
+				t.Fatal("sessions are not initialized", err)
+			}
+			selections = append(selections, app)
+			return []auth.Descriptor{{Name: "custom", New: func() auth.AuthService {
+				p := &customAuthProvider{}
+				providers = append(providers, p)
+				return p
+			}}}, nil
+		},
 	}
 	var apps []*application.Application
 	for range 2 {
@@ -239,6 +259,9 @@ func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T
 	}
 	if len(providers) != 2 || providers[0] == providers[1] {
 		t.Fatal("shared auth provider instances")
+	}
+	if len(selections) != 2 || selections[0] != apps[0] || selections[1] != apps[1] {
+		t.Fatal("provider selection did not receive each application exactly once")
 	}
 	for _, app := range apps {
 		request := browserRequests(t, app, false)
@@ -257,12 +280,38 @@ func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T
 	}
 }
 
-func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
-	for _, mode := range []string{"no sessions", "nonrevocable sessions", "verification without mail", "empty providers", "unknown provider", "provider init", "duplicate auth", "login URL", "home URL"} {
+func TestAuthProviderSelectionRequiresEnabledAuthModule(t *testing.T) {
+	for _, mode := range []string{"disabled", "unselected"} {
 		t.Run(mode, func(t *testing.T) {
+			cfg := authenticationConfig(t)
+			options := application.Options{
+				AuthProviders: func(context.Context, *application.Application) ([]auth.Descriptor, error) {
+					t.Fatal("inactive authentication invoked provider selection")
+					return nil, nil
+				},
+			}
+			if mode == "disabled" {
+				cfg.Auth.Enabled = false
+				options.Modules = authenticationModules
+			}
+			app, err := application.New(t.Context(), cfg, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { app.Shutdown() })
+		})
+	}
+}
+
+func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
+	for _, mode := range []string{"no sessions", "nonrevocable sessions", "verification without mail", "empty providers", "nil providers", "provider selection", "provider cancellation", "unknown provider", "provider init", "duplicate auth", "login URL", "home URL"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 			cfg := authenticationConfig(t)
 			options := application.Options{}
 			cause := errors.New("custom provider failed")
+			selectionCleanup := false
 			switch mode {
 			case "no sessions":
 				cfg.HTTP.Session.Types, cfg.HTTP.Session.Stores = nil, nil
@@ -272,12 +321,34 @@ func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
 			case "verification without mail":
 				cfg.Auth.RegisterRequiresVerification = true
 			case "empty providers":
-				options.AuthProviders = []auth.Descriptor{}
+				options.AuthProviders = func(context.Context, *application.Application) ([]auth.Descriptor, error) {
+					return []auth.Descriptor{}, nil
+				}
+			case "nil providers":
+				options.AuthProviders = func(context.Context, *application.Application) ([]auth.Descriptor, error) {
+					return nil, nil
+				}
+			case "provider selection":
+				options.AuthProviders = func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
+					app.OnShutdown("provider selection", func(context.Context) error { selectionCleanup = true; return nil })
+					return nil, cause
+				}
+			case "provider cancellation":
+				cause = context.Canceled
+				options.AuthProviders = func(context.Context, *application.Application) ([]auth.Descriptor, error) {
+					cancel()
+					return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
+						t.Fatal("provider created after cancellation")
+						return nil
+					}}}, nil
+				}
 			case "unknown provider":
 				cfg.Auth.Services = map[string]map[string]string{"unknown": {"enabled": "true"}}
 			case "provider init":
 				cfg.Auth.Services = map[string]map[string]string{"custom": {"enabled": "true"}}
-				options.AuthProviders = []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return &customAuthProvider{initErr: cause} }}}
+				options.AuthProviders = func(context.Context, *application.Application) ([]auth.Descriptor, error) {
+					return []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return &customAuthProvider{initErr: cause} }}}, nil
+				}
 			}
 			var captured *application.Application
 			options.Modules = func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
@@ -293,12 +364,15 @@ func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
 				}
 				return catalog, err
 			}
-			app, err := application.New(t.Context(), cfg, options)
+			app, err := application.New(ctx, cfg, options)
 			if app != nil || err == nil || captured == nil {
 				t.Fatalf("bad auth setup: app=%v err=%v captured=%v", app, err, captured)
 			}
-			if mode == "provider init" && !errors.Is(err, cause) {
+			if (mode == "provider init" || mode == "provider selection" || mode == "provider cancellation") && !errors.Is(err, cause) {
 				t.Fatal("lost provider error", err)
+			}
+			if mode == "provider selection" && !selectionCleanup {
+				t.Fatal("provider selection resources remained open after failure")
 			}
 			if _, err := captured.Accounts.GetByEmail(t.Context(), "reader@example.com"); err == nil || !strings.Contains(err.Error(), "database is closed") {
 				t.Fatal("account storage remained open after failure", err)

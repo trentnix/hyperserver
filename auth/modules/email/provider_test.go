@@ -80,7 +80,7 @@ func TestProviderSetupLeavesServiceOwnershipWithApplication(t *testing.T) {
 				client = nil
 			}
 			descriptor := auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
-				provider := Provider(accounts, sessions, client).New().(*EmailAuthService)
+				provider := New(accounts, sessions, client)
 				if tc.name == "template failure" {
 					provider.TemplateFS = fstest.MapFS{}
 				}
@@ -134,6 +134,13 @@ func TestProviderSuppliesDependencies(t *testing.T) {
 	}
 	accounts := &emailAccountRepository{}
 	sessions := emailSessions(t, map[string]string{"default": "memory"})
+	direct := New(accounts, sessions, client)
+	if direct.accounts != accounts || direct.sessions != sessions || direct.mailClient != client {
+		t.Fatal("constructor did not retain its supplied dependencies")
+	}
+	if other := New(accounts, sessions, client); other == direct {
+		t.Fatal("constructor reused a service instance")
+	}
 	descriptor := Provider(accounts, sessions, client)
 	first, second := descriptor.New().(*EmailAuthService), descriptor.New().(*EmailAuthService)
 	if descriptor.Name != AuthTypeEmail || first == second {

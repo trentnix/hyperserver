@@ -18,19 +18,18 @@ func newApplication(ctx context.Context, cfg config.Config) (*application.Applic
 		return nil, errors.New("configure http.listenHost and a nonzero http.port")
 	}
 	access := &blog.Access{}
-	var services *application.Application
 	return application.New(ctx, cfg, application.Options{
 		ContentSecurityPolicy: blog.ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-			services = app
 			if err := blog.ConfigureRendering(app.ContentManager, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
 			return []handlers.Descriptor{blog.Module(access), auth.Module(nil, nil, nil)}, nil
 		},
-		// Provider factories run after Modules, when shared services are available.
-		AuthProviders: []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
-			return blog.NewEmailProvider(services.Accounts, services.Sessions, services.Mail, access)
-		}}},
+		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
+			return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
+				return blog.NewEmailProvider(app.Accounts, app.Sessions, app.Mail, access)
+			}}}, nil
+		},
 	})
 }

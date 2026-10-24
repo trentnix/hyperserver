@@ -160,13 +160,20 @@ func init() {
 	auth_services.Register(Provider(nil, nil, nil))
 }
 
-// Provider supplies email authentication with initialized accounts and sessions,
+// New supplies email authentication with initialized accounts and sessions,
 // and an optional mail client. The application owns these dependencies.
 // A nil client leaves delivery unavailable. Registration that requires verification
 // rejects unavailable delivery during module initialization.
+// Call Init before serving requests.
+func New(accounts user.AccountRepository, sessions *session.SessionManager, mail *messaging.MailClient) *EmailAuthService {
+	return &EmailAuthService{accounts: accounts, sessions: sessions, mailClient: mail}
+}
+
+// Provider describes email authentication. Each factory call creates a fresh
+// service using New with application-owned dependencies.
 func Provider(accounts user.AccountRepository, sessions *session.SessionManager, mail *messaging.MailClient) auth_services.Descriptor {
 	return auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
-		return &EmailAuthService{accounts: accounts, sessions: sessions, mailClient: mail}
+		return New(accounts, sessions, mail)
 	}}
 }
 

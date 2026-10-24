@@ -45,7 +45,11 @@ if err != nil {
 
 Services, module selection, and module initialization share one `app.initializationTimeout`, defaulting to ten seconds. Set shared rendering overrides in the callback before module setup prepares templates. Register any resources opened by the callback with `app.OnShutdown`. Modules close before those resources and shared services, including on startup failure.
 
-If the selected catalog includes `auth` and `auth.enabled` is true, the constructor supplies its accounts, sessions, and mail. Email/password is the default provider catalog. Enable it with `auth.services.email.enabled`. `Options.AuthProviders` replaces that catalog with explicit factories, which must supply their providers' dependencies. Module initialization validates the enabled providers and required services. Imports alone do not select the auth module.
+If the selected catalog includes `auth` and `auth.enabled` is true, the constructor supplies its accounts, sessions, and mail. Email/password is the default provider catalog. Enable it with `auth.services.email.enabled`. Imports alone do not select the auth module.
+
+For custom authentication, set `Options.AuthProviders` to a callback taking `(context.Context, *application.Application)` and returning `([]auth.Descriptor, error)`. It runs after module selection, before module initialization, with shared services ready. It shares the startup deadline and runs only when auth is selected and enabled. Use the supplied application's services in provider factories and register callback-owned resources with `app.OnShutdown`. An empty result selects no providers, not the defaults.
+
+To wrap the email provider, use `emailauth.New(accounts, sessions, mail)`, which returns `*EmailAuthService` without initializing it. Module initialization validates the enabled providers and required services.
 
 With `auth.enabled: false`, the constructor removes auth from the selected catalog before dependency resolution. It does not initialize auth, prepare its templates, or bind its routes. Sessions remain available independently.
 

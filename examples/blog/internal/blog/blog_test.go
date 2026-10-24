@@ -387,12 +387,10 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 		t.Fatal(err)
 	}
 	access := &Access{}
-	var services *application.Application
 	h.app, err = application.New(t.Context(), cfg, application.Options{
 		Services:              application.Services{Mail: mail},
 		ContentSecurityPolicy: ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-			services = app
 			if err := ConfigureRendering(app.ContentManager, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
@@ -404,9 +402,11 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 			}
 			return []handlers.Descriptor{blog, auth.Module(nil, nil, nil)}, nil
 		},
-		AuthProviders: []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
-			return NewEmailProvider(services.Accounts, services.Sessions, services.Mail, access)
-		}}},
+		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
+			return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
+				return NewEmailProvider(app.Accounts, app.Sessions, app.Mail, access)
+			}}}, nil
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

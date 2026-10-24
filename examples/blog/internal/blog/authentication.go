@@ -28,7 +28,7 @@ type EmailProvider struct {
 // Dependencies remain owned by the application. Access is initialized by the blog
 // module before any request can reach the provider.
 func NewEmailProvider(accounts user.AccountRepository, sessions *session.SessionManager, mail *messaging.MailClient, access *Access) *EmailProvider {
-	email := emailauth.Provider(accounts, sessions, mail).New().(*emailauth.EmailAuthService)
+	email := emailauth.New(accounts, sessions, mail)
 	return &EmailProvider{EmailAuthService: email, access: access}
 }
 
