@@ -15,6 +15,8 @@ openssl rand -hex 32
 
 Put the two different generated keys in `http.session.jwtKey` and `auth.jwtKey`. Both `config.yaml` files and SQLite databases are ignored by Git. Keep any existing local configuration instead of overwriting it.
 
+Set `recentPostCount` in `modules/blog/config.yaml` to the number of Recent Posts links to show. It must be greater than zero. Restart after changing configuration. The All Posts page always lists every post.
+
 Start a local SMTP inbox if one is not already running:
 
 ```sh

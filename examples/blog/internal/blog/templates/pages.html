@@ -8,10 +8,22 @@
 {{ end }}
 
 {{ define "blog.archive" }}
+<section class="post-archive info-page" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<h1>All Posts</h1>
+{{ range .Data }}<h2 class="archive-month">{{ .Name }}</h2>{{ template "blog.postLinks" .Posts }}{{ else }}<p>No posts yet.</p>{{ end }}
+</section>
+{{ end }}
+
+{{ define "blog.recent" }}
 <div class="post-archive" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
 <div class="archive-heading"><h2>Recent Posts</h2><a href="/rss" hx-boost="false" title="RSS feed"><img src="/assets/img/icons/rss.png" width="16" height="16" alt="RSS feed"></a></div>
-{{ range .Data }}<h3>{{ .Name }}</h3><ul>{{ range .Posts }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>{{ else }}<p>No posts yet.</p>{{ end }}
+{{ if .Data }}{{ template "blog.postLinks" .Data }}{{ else }}<p>No posts yet.</p>{{ end }}
+<a class="archive-more" href="/posts">All posts &rarr;</a>
 </div>
+{{ end }}
+
+{{ define "blog.postLinks" }}
+<ul>{{ range . }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>
 {{ end }}
 
 {{ define "blog.about" }}

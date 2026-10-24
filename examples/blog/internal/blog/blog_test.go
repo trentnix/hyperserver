@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"html"
 	"image"
@@ -189,14 +190,15 @@ func TestReadingResponses(t *testing.T) {
 	}{
 		{name: "ordinary post", path: "/post/s/reading", full: true, title: "Reading <post>"},
 		{name: "article fragment", path: "/post/s/reading", target: "article-content", hx: true, title: "Reading <post>"},
-		{name: "sidebar fragment", path: "/posts", target: "post-archive", hx: true},
+		{name: "sidebar fragment", path: "/posts/recent", target: "post-archive", hx: true},
 		{name: "other fragment", path: "/post/s/reading", hx: true},
 		{name: "history restore", path: "/post/s/reading", target: "article-content", hx: true, restore: true, full: true, title: "Reading <post>"},
 		{name: "about page", path: "/about", full: true, title: "About Me"},
 		{name: "about fragment", path: "/about", target: "article-content", hx: true, title: "About Me"},
 		{name: "projects page", path: "/projects", full: true, title: "Projects"},
 		{name: "projects fragment", path: "/projects", target: "article-content", hx: true, title: "Projects"},
-		{name: "archive page", path: "/posts", full: true, title: "Recent Posts"},
+		{name: "archive page", path: "/posts", full: true, title: "All Posts"},
+		{name: "archive fragment", path: "/posts", target: "article-content", hx: true, title: "All Posts"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "https://blog.example"+tt.path, nil)
@@ -222,6 +224,74 @@ func TestReadingResponses(t *testing.T) {
 				t.Errorf("missing escaped title %q in %s", tt.title, body)
 			}
 		})
+	}
+}
+
+// TestRecentPosts keeps navigation short without hiding entries from the archive.
+func TestRecentPosts(t *testing.T) {
+	for _, limit := range []int{1, 3, 10, 20} {
+		t.Run(fmt.Sprintf("limit=%d", limit), func(t *testing.T) {
+			testRecentPosts(t, limit)
+		})
+	}
+}
+
+func testRecentPosts(t *testing.T, limit int) {
+	t.Helper()
+	h := newHarnessWithRecentPostCount(t, limit)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	links := regexp.MustCompile(`<li><a href="/post/s/([^"]+)">`)
+	created := 0
+	for _, count := range []int{0, 1, 10, 12} {
+		for created < count {
+			created++
+			requireStatus(t, h.request(http.MethodPost, "/post", url.Values{
+				"slug": {fmt.Sprintf("post-%02d", created)}, "title": {"Post <title>"}, "content": {"Body"},
+			}, false), http.StatusSeeOther)
+		}
+		for _, path := range []string{"/posts/recent", "/posts"} {
+			t.Run(fmt.Sprintf("%s/%d", path, count), func(t *testing.T) {
+				w := h.request(http.MethodGet, path, nil, true)
+				requireStatus(t, w, http.StatusOK)
+				body := w.Body.String()
+				want := count
+				if path == "/posts/recent" {
+					want = min(count, limit)
+					if !strings.Contains(body, `href="/posts"`) {
+						t.Error("recent posts must link to the full archive")
+					}
+				}
+				matches := links.FindAllStringSubmatch(body, -1)
+				if len(matches) != want {
+					t.Fatalf("got %d post links, want %d", len(matches), want)
+				}
+				for i, match := range matches {
+					if expected := fmt.Sprintf("post-%02d", count-i); match[1] != expected {
+						t.Errorf("link %d = %q, want %q", i, match[1], expected)
+					}
+				}
+				if count == 0 && !strings.Contains(body, "No posts yet.") {
+					t.Error("missing empty state")
+				}
+				if count > 0 && !strings.Contains(body, "Post &lt;title&gt;") {
+					t.Error("post titles must be escaped")
+				}
+			})
+		}
+	}
+}
+
+// TestRecentPostCountRequired rejects missing, zero, and negative counts at startup.
+func TestRecentPostCountRequired(t *testing.T) {
+	for _, count := range []int{0, -1} {
+		m := &module{access: &Access{}, settings: Settings{AdminEmail: "trentnix@gmail.com", RecentPostCount: count}}
+		// Invalid settings must fail before accessing application services or storage.
+		err := m.Init(t.Context(), nil)
+		if err == nil || err.Error() != "blog.recentPostCount must be greater than zero" {
+			t.Errorf("count=%d: got %v", count, err)
+		}
 	}
 }
 
@@ -279,12 +349,18 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessWithRecentPostCount(t, 10)
+}
+
+func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
+	t.Helper()
 	directory := t.TempDir()
 	moduleDirectory := filepath.Join(directory, "modules", "blog")
 	if err := os.MkdirAll(moduleDirectory, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(moduleDirectory, "config.yaml"), []byte("adminEmail: trentnix@gmail.com\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n"), 0600); err != nil {
+	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nrecentPostCount: %d\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
+	if err := os.WriteFile(filepath.Join(moduleDirectory, "config.yaml"), []byte(settings), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cfg := config.Config{}
@@ -723,7 +799,7 @@ func TestNavigationHandlers(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &module{app: h.app.ApplicationServer, views: make(map[string]*content.View)}
-	for _, name := range []string{"post", "archive", "message"} {
+	for _, name := range []string{"post", "archive", "recent", "message"} {
 		m.views[name], err = templates.View(h.app.ContentManager, "blog."+name)
 		if err != nil {
 			t.Fatal(err)
@@ -740,9 +816,11 @@ func TestNavigationHandlers(t *testing.T) {
 		{"empty home", m.index, navigationRepository{err: errNotFound}, http.StatusOK, "No posts yet."},
 		{"latest post", m.index, navigationRepository{latest: Post{Title: "Newest post", Markdown: "Latest body", Published: date}}, http.StatusOK, "Latest body"},
 		{"empty archive", m.archive, navigationRepository{}, http.StatusOK, "No posts yet."},
+		{"empty recent posts", m.recent, navigationRepository{}, http.StatusOK, "No posts yet."},
 		{"archive entries", m.archive, navigationRepository{entries: []ArchiveEntry{{Slug: "older", Title: "Older post", Published: date}}}, http.StatusOK, `/post/s/older`},
 		{"home storage failure", m.index, navigationRepository{err: errors.New("private storage failure")}, http.StatusInternalServerError, "Unable to access blog storage"},
 		{"archive storage failure", m.archive, navigationRepository{err: errors.New("private storage failure")}, http.StatusInternalServerError, "Unable to access blog storage"},
+		{"recent posts storage failure", m.recent, navigationRepository{err: errors.New("private storage failure")}, http.StatusInternalServerError, "Unable to access blog storage"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// List is deliberately unavailable: neither navigation handler needs full post collections.

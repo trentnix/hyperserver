@@ -28,10 +28,20 @@ document.removeEventListener = function(type, callback, options) {
   window.alert = message => report('Unexpected editor alert: ' + message);
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
+    await document.fonts.ready;
+    for (const style of ['400', 'italic 600']) {
+      const faces = await document.fonts.load(style + ' 16px "Source Sans 3"');
+      assert(faces.length > 0 && faces.every(face => face.status === 'loaded'), 'Source Sans 3 must load: ' + style);
+    }
     const requestedWidth = new URLSearchParams(location.search).get('test-width');
     if (requestedWidth) assert(innerWidth === Number(requestedWidth), 'Wrong test viewport: ' + innerWidth + ' instead of ' + requestedWidth);
     const stage = sessionStorage.getItem('blog-test-stage');
     if (!stage) {
+      // Firefox can reuse fonts across documents without recording another request.
+      const fontRequests = performance.getEntriesByType('resource').filter(entry => new URL(entry.name).pathname.endsWith('.woff2'));
+      assert(fontRequests.some(entry => new URL(entry.name).pathname.endsWith('/source-sans-3.woff2')), 'Upright font must load locally.');
+      assert(fontRequests.some(entry => new URL(entry.name).pathname.endsWith('/source-sans-3-italic.woff2')), 'Italic font must load locally.');
+      assert(!performance.getEntriesByType('resource').some(entry => new URL(entry.name).origin !== location.origin), 'Blog assets must not require external requests.');
       await wait(() => document.querySelector('.archive-nav .post-archive'));
       const archiveTitle = document.querySelector('.archive-heading h2').getBoundingClientRect();
       const feedIcon = document.querySelector('.archive-heading img').getBoundingClientRect();
@@ -51,10 +61,15 @@ document.removeEventListener = function(type, callback, options) {
       const header = document.querySelector('.site-header');
       const main = document.querySelector('#main-content');
       const mainStyle = getComputedStyle(main);
-      const backgroundStyle = getComputedStyle(document.body);
+      const pageTop = document.querySelector('.page-top');
+      const backgroundStyle = getComputedStyle(innerWidth >= 1680 ? document.body : pageTop);
       assert(backgroundStyle.backgroundImage.includes('/assets/img/site-bg.jpg'), 'Page must retain its background image at every width.');
       assert(backgroundStyle.backgroundAttachment === 'fixed' && backgroundStyle.backgroundPositionY === '100%', 'Background must stay pinned to the bottom of the viewport.');
-      assert(mainStyle.backgroundImage === 'none', 'Content must not duplicate or clip the viewport background.');
+      assert(mainStyle.backgroundImage === 'none', 'Content must not duplicate the viewport background.');
+      if (innerWidth < 1680) {
+        assert(getComputedStyle(document.body).backgroundImage === 'none', 'The illustration must not extend behind the footer.');
+        assert(!pageTop.contains(footer), 'Footer must sit outside the illustration container.');
+      }
       const menuToggle = document.querySelector('.menu-toggle');
       const profileLinks = document.querySelector('.profile-links');
       assert(profileLinks.textContent.trim().replace(/\s+/g, ' ') === 'About Projects' && !profileLinks.querySelector('img'), 'Profile navigation must use About and Projects text links only.');
@@ -288,7 +303,7 @@ document.removeEventListener = function(type, callback, options) {
       await wait(() => document.querySelector('dialog[open] .CodeMirror'));
       document.querySelector('[data-close-dialog]').click();
       assert(!document.querySelector('dialog[open]'), 'Cancel did not close the dialog.');
-      await htmx.ajax('GET', '/posts', '.archive-nav');
+      await htmx.ajax('GET', '/posts/recent', '.archive-nav');
       assert(!document.querySelector('dialog[open]'), 'An unrelated swap reopened the dialog.');
       document.querySelector('a[href^="/post/update/"]').click();
       await wait(() => document.querySelector('dialog[open] .CodeMirror'));

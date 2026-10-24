@@ -20,9 +20,9 @@ const (
 	loginURL     = "/auth/login/email"
 )
 
-// ContentSecurityPolicy permits bundled scripts and the original site's Google fonts.
+// ContentSecurityPolicy permits bundled scripts, styles, and fonts.
 // Editor-generated inline styles use style attributes, not inline scripts.
-const ContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+const ContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
 // ConfigureRendering selects the blog layout for feature and authentication pages.
 // Call it before module initialization prepares views. The registration flag

@@ -22,7 +22,11 @@ var blogModuleFS embed.FS
 // Settings is loaded from modules/blog/config.yaml during module initialization.
 type Settings struct {
 	AdminEmail string `yaml:"adminEmail"`
-	Storage    struct {
+
+	// RecentPostCount limits sidebar and footer links, not the full archive.
+	RecentPostCount int `yaml:"recentPostCount"`
+
+	Storage struct {
 		Provider   string `yaml:"provider"`
 		Connection string `yaml:"connection"`
 	} `yaml:"storage"`
@@ -81,6 +85,9 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if !form.ValidEmail(m.settings.AdminEmail) {
 		return errors.New("blog.adminEmail must be a valid email address")
 	}
+	if m.settings.RecentPostCount < 1 {
+		return errors.New("blog.recentPostCount must be greater than zero")
+	}
 	if !app.Config.Auth.Enabled || !app.Config.Auth.RegisterRequiresVerification {
 		return errors.New("blog requires authentication and email verification")
 	}
@@ -90,7 +97,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		return err
 	}
 	m.views = make(map[string]*content.View)
-	for _, name := range []string{"post", "archive", "about", "projects", "editor", "delete", "message"} {
+	for _, name := range []string{"post", "archive", "recent", "about", "projects", "editor", "delete", "message"} {
 		view, err := templates.View(app.ContentManager, "blog."+name)
 		if err != nil {
 			return err

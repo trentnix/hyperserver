@@ -11,6 +11,7 @@
     }
   };
   try {
+    await document.fonts.ready;
     assert(!sessionStorage.getItem('navigation-started'), 'Post navigation reloaded the document.');
     sessionStorage.setItem('navigation-started', 'true');
     // HTMX inserts content before its settle phase attaches the new link handlers.
@@ -18,20 +19,29 @@
       !document.querySelector('#post-archive').classList.contains('htmx-settling'));
     const body = document.body;
     const sidebar = document.querySelector('.site-sidebar');
-    const archive = document.querySelector('.post-archive');
+    const archive = document.querySelector('#post-archive .post-archive');
+    for (const link of archive.querySelectorAll('li a')) {
+      const style = getComputedStyle(link);
+      assert(style.display === 'block' && link.getBoundingClientRect().height >= 24, 'Post links need full-row click targets.');
+      assert(style.paddingTop === '2px' && style.paddingBottom === '2px' && style.fontWeight === '400', 'Post links must use compact spacing and regular-weight text.');
+      assert(style.textDecorationLine.includes('underline'), 'Post links must remain visibly identifiable as links.');
+      assert(link.getBoundingClientRect().width <= archive.getBoundingClientRect().width, 'Post links must stay within the reading list.');
+    }
     const article = document.querySelector('#article-content');
     const background = getComputedStyle(body).backgroundImage;
+    const pageTop = document.querySelector('.page-top');
+    const readingBackground = getComputedStyle(pageTop).backgroundImage;
     const main = document.querySelector('#main-content');
     const contentBackground = getComputedStyle(main).backgroundImage;
     const sidebarWidth = sidebar.getBoundingClientRect().width;
     const contentLeft = main.getBoundingClientRect().left;
     const titleTop = document.querySelector('.post-heading').getBoundingClientRect().top;
-    const archiveRequests = () => performance.getEntriesByType('resource').filter(entry => new URL(entry.name).pathname === '/posts').length;
+    const archiveRequests = () => performance.getEntriesByType('resource').filter(entry => new URL(entry.name).pathname === '/posts/recent').length;
     const initialRequests = archiveRequests();
     assert(initialRequests === 1, 'Expected one initial archive request.');
     const unchanged = () => {
       assert(document.body === body && document.querySelector('.site-sidebar') === sidebar, 'Navigation replaced the page shell.');
-      assert(document.querySelector('.post-archive') === archive, 'Navigation replaced Recent Posts.');
+      assert(document.querySelector('#post-archive .post-archive') === archive, 'Navigation replaced Recent Posts.');
       assert(document.querySelector('#article-content') === article, 'Navigation replaced the article container.');
       assert(getComputedStyle(body).backgroundImage === background, 'Navigation changed the background.');
       assert(document.querySelector('#main-content') === main && getComputedStyle(main).backgroundImage === contentBackground, 'Navigation replaced the content background.');
@@ -53,6 +63,11 @@
     };
 
     assert(postVisible('first'), 'Direct post load has the wrong title or content.');
+    const assertHeading = () => {
+      const style = getComputedStyle(article.querySelector('h1'));
+      assert(Math.abs(parseFloat(style.lineHeight) / parseFloat(style.fontSize) - 1.2) < .01, 'Page titles must use consistent line spacing.');
+    };
+    assertHeading();
     archiveVisible(true);
     assert(document.documentElement.scrollHeight > innerHeight, 'First post must require page scrolling.');
     if (innerWidth < 1680) {
@@ -79,6 +94,7 @@
     await wait(() => location.pathname === '/about' && document.title === 'Trent Nix | About Me');
     await headerVisible();
     assert(article.querySelector('h1')?.textContent === 'About Me', 'About navigation missed the article.');
+    assertHeading();
     archiveVisible(innerWidth >= 1680);
     if (innerWidth < 768) {
       assert(menu.hidden && menuToggle.getAttribute('aria-expanded') === 'false', 'Navigation must close the mobile menu.');
@@ -100,6 +116,21 @@
     assert(archive.querySelector('a[href="/rss"]').getAttribute('hx-boost') === 'false', 'Archive RSS link must use ordinary navigation.');
     assert(!document.querySelector('.profile a[href="/rss"]'), 'RSS must not clutter the profile links.');
     assert(document.querySelector('link[rel="alternate"][type="application/rss+xml"]').getAttribute('href') === '/rss', 'Automatic feed discovery must remain available.');
+
+    archive.querySelector('a[href="/posts"]').click();
+    await wait(() => location.pathname === '/posts' && document.title === 'Trent Nix | All Posts');
+    await headerVisible();
+    assert(article.querySelector('h1')?.textContent === 'All Posts', 'All posts link must open the full archive.');
+    assertHeading();
+    if (innerWidth < 1680) assert(getComputedStyle(pageTop).backgroundImage === 'none', 'The full archive must keep its links clear of the illustration.');
+    archiveVisible(innerWidth >= 1680);
+    unchanged();
+    article.querySelector('a[href="/post/s/second"]').click();
+    await wait(() => postVisible('second'));
+    await headerVisible();
+    assert(getComputedStyle(pageTop).backgroundImage === readingBackground, 'Returning to a post must restore its illustration.');
+    archiveVisible(true);
+    unchanged();
 
     // A stale archive link must show a styled error without discarding the sidebar.
     const missing = document.createElement('a');

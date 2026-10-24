@@ -24,6 +24,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets)))
 	routes.HandleFunc("GET /{$}", m.index)
 	routes.HandleFunc("GET /posts", m.archive)
+	routes.HandleFunc("GET /posts/recent", m.recent)
 	routes.HandleFunc("GET /post/s/{slug}", m.post)
 	routes.HandleFunc("GET /post/id/{id}", m.post)
 	routes.HandleFunc("GET /images/{id}", m.image)
@@ -122,6 +123,21 @@ func (m *module) archive(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := m.views["archive"].Content(r, groupArchive(posts))
+	page.Title = "All Posts"
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display this page.", err)
+	}
+}
+
+// recent displays the configured number of newest links for the sidebar or footer.
+func (m *module) recent(w http.ResponseWriter, r *http.Request) {
+	posts, err := m.posts.ListArchive(r.Context())
+	if err != nil {
+		m.storageError(w, r, err)
+		return
+	}
+
+	page := m.views["recent"].Content(r, posts[:min(len(posts), m.settings.RecentPostCount)])
 	page.Title = "Recent Posts"
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
