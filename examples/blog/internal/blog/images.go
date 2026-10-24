@@ -54,7 +54,7 @@ func (m *module) upload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
 	}
-	id, err := m.posts.PutImage(r.Context(), media, data)
+	id, err := m.images.Put(r.Context(), media, data)
 	if err != nil {
 		logger.LogRequestError(r, err)
 		writeJSON(w, r, http.StatusInternalServerError, map[string]string{"error": "Unable to save the image."})
@@ -80,22 +80,21 @@ func imageMedia(data []byte) (string, error) {
 	return "image/" + format, nil
 }
 
-// image serves stored bytes with their validated media type and no MIME sniffing.
-// HEAD requests receive the same headers without the image body.
+// image serves immutable public uploads with browser caching and standard
+// conditional, HEAD, and range responses. Failed lookups must not be cached.
 func (m *module) image(w http.ResponseWriter, r *http.Request) {
-	media, data, err := m.posts.Image(r.Context(), r.PathValue("id"))
+	stored, err := m.images.Open(r.Context(), r.PathValue("id"))
 	if err != nil {
+		w.Header().Set("Cache-Control", "no-store")
 		m.storageError(w, r, err)
 		return
 	}
-	w.Header().Set("Content-Type", media)
+	defer stored.Content.Close()
+	w.Header().Set("Content-Type", stored.MediaType)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	if r.Method != http.MethodHead {
-		if _, err := w.Write(data); err != nil {
-			logger.LogRequestError(r, err)
-		}
-	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("ETag", strconv.Quote(stored.Digest))
+	http.ServeContent(w, r, "", stored.Modified, stored.Content)
 }
 
 // writeJSON sends an editor response and logs encoding or write failures.

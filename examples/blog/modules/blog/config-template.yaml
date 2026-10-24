@@ -3,6 +3,8 @@
 adminEmail: trentnix@gmail.com
 # Number of links in Recent Posts. Must be greater than zero. All posts stays complete.
 recentPostCount: 10
+# Public image files, relative to the application configuration directory. Back up this directory.
+uploadsDirectory: uploads
 storage:
   provider: sqlite
   connection: blog-rebuild-posts.db?_journal=WAL&_fk=true

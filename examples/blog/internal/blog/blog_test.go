@@ -360,7 +360,7 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	if err := os.MkdirAll(moduleDirectory, 0700); err != nil {
 		t.Fatal(err)
 	}
-	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nrecentPostCount: %d\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
+	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nrecentPostCount: %d\nuploadsDirectory: uploads\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
 	if err := os.WriteFile(filepath.Join(moduleDirectory, "config.yaml"), []byte(settings), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -648,7 +648,7 @@ func TestImageUpload(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var body bytes.Buffer
 			writer := multipart.NewWriter(&body)
-			part, err := writer.CreateFormFile("image", "picture.png")
+			part, err := writer.CreateFormFile("image", "../../picture.png")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -672,6 +672,11 @@ func TestImageUpload(t *testing.T) {
 			var result struct{ Data struct{ FilePath string } }
 			if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 				t.Fatal(err)
+			}
+			id := strings.TrimPrefix(result.Data.FilePath, "/images/")
+			saved, err := os.ReadFile(filepath.Join(h.app.Config.App.WorkingDirectory, "uploads", id))
+			if err != nil || !bytes.Equal(saved, tc.data) {
+				t.Fatalf("uploaded image was not saved in the configured directory: %v", err)
 			}
 			w = h.request("GET", result.Data.FilePath, nil, false)
 			requireStatus(t, w, http.StatusOK)

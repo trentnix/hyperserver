@@ -26,6 +26,9 @@ type Settings struct {
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
 
+	// UploadsDirectory holds public images, relative to the application configuration directory.
+	UploadsDirectory string `yaml:"uploadsDirectory"`
+
 	Storage struct {
 		Provider   string `yaml:"provider"`
 		Connection string `yaml:"connection"`
@@ -53,12 +56,13 @@ func (a *Access) IsAdmin(account *user.User) bool {
 	return a != nil && a.emailKey != "" && account != nil && account.Verified && user.EmailKey(account.Email) == a.emailKey
 }
 
-// module owns one application's blog views and post repository.
+// module owns one application's blog views, post repository, and image storage.
 type module struct {
 	settings    Settings
 	access      *Access
 	app         *server.ApplicationServer
 	posts       repository
+	images      imageStore
 	close       func() error
 	views       map[string]*content.View
 	feed        feedCache
@@ -69,7 +73,7 @@ type module struct {
 func init() { handlers.Register(Module(nil)) }
 
 // Module creates application-local blog instances using the supplied access rule.
-// Each instance opens and closes its own post repository. Accounts and sessions
+// Each instance opens and closes its post and image storage. Accounts and sessions
 // remain framework services and can select storage independently.
 func Module(access *Access) handlers.Descriptor {
 	return handlers.Descriptor{Name: "blog", New: func() handlers.Handler { return &module{access: access} }}
@@ -111,12 +115,17 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if err != nil {
 		return fmt.Errorf("open blog storage: %w", err)
 	}
-	m.posts, m.close = posts, close
+	images, err := openImageStore(m.settings.UploadsDirectory, app.Config.App.WorkingDirectory)
+	if err != nil {
+		return errors.Join(fmt.Errorf("open blog uploads: %w", err), close())
+	}
+	m.posts, m.images = posts, images
+	m.close = func() error { return errors.Join(images.Close(), close()) }
 	m.access.emailKey = user.EmailKey(m.settings.AdminEmail)
 	return nil
 }
 
-// Shutdown closes the post repository after requests have drained.
+// Shutdown closes post and image storage after requests have drained.
 // It must only be called after successful initialization.
 func (m *module) Shutdown(context.Context) error { return m.close() }
 

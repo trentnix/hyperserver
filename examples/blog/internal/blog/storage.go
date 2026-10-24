@@ -50,13 +50,9 @@ type repository interface {
 	Save(context.Context, Post) (Post, error)
 	// Delete removes a post or returns errNotFound. Uploaded images remain available.
 	Delete(context.Context, string) error
-	// PutImage stores validated media and returns a new image ID.
-	PutImage(context.Context, string, []byte) (string, error)
-	// Image returns the media type and bytes, or errNotFound for an unknown ID.
-	Image(context.Context, string) (string, []byte, error)
 }
 
-// sqliteRepository stores posts and uploaded images in the blog's SQLite tables.
+// sqliteRepository stores posts in the blog's SQLite table.
 type sqliteRepository struct{ db *sql.DB }
 
 // openRepository keeps storage selection and schema setup inside the blog.
@@ -73,9 +69,6 @@ func openRepository(ctx context.Context, settings Settings, directory string) (r
 CREATE TABLE IF NOT EXISTS blog_posts (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
  summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS blog_images (
- id TEXT PRIMARY KEY, media_type TEXT NOT NULL, data BLOB NOT NULL, created INTEGER NOT NULL
 );`)
 	if err != nil {
 		db.Close()
@@ -205,24 +198,4 @@ func (s *sqliteRepository) Delete(ctx context.Context, id string) error {
 		return errNotFound
 	}
 	return err
-}
-
-// PutImage stores already-validated image bytes under a generated ID.
-func (s *sqliteRepository) PutImage(ctx context.Context, media string, data []byte) (string, error) {
-	// A media suffix lets Markdown editors recognize the returned URL as an image.
-	// IDs are storage keys, never user-supplied filesystem paths.
-	id := rand.Text() + "." + strings.TrimPrefix(media, "image/")
-	_, err := s.db.ExecContext(ctx, "INSERT INTO blog_images(id, media_type, data, created) VALUES (?, ?, ?, ?)", id, media, data, time.Now().Unix())
-	return id, err
-}
-
-// Image returns stored media and bytes, or errNotFound for an unknown image ID.
-func (s *sqliteRepository) Image(ctx context.Context, id string) (string, []byte, error) {
-	var media string
-	var data []byte
-	err := s.db.QueryRowContext(ctx, "SELECT media_type, data FROM blog_images WHERE id=?", id).Scan(&media, &data)
-	if errors.Is(err, sql.ErrNoRows) {
-		err = errNotFound
-	}
-	return media, data, err
 }

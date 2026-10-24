@@ -35,9 +35,11 @@ Set `auth.registrationEnabled: false` after creating the administrator if desire
 
 ## Structure
 
-`application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, and its SQLite post/image repository. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
+`application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, SQLite post repository, and file-based image storage. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
 
 EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when posts are deleted. This prototype does not import old blog databases.
+
+Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Images use content-based filenames and immutable public URLs with a one-year browser cache lifetime. Files must not be edited in place. Upload a new image to change its content.
 
 RSS caches the complete rendered feed. Recent Posts caches only the configured number of entries, not rendered HTML. Both caches are loaded on demand and invalidated after creating, editing, or deleting a post. Feed readers can revalidate with an ETag. Feed links and images use absolute URLs. Run one blog instance per post database. Direct database edits require a restart to refresh the caches.
 
