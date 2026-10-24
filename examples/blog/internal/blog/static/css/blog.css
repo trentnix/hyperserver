@@ -26,7 +26,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: url('../img/sit
 .portrait { display: block; width: 100%; height: auto; border-radius: 50%; }
 .profile-details { margin-top: 5px; }
 .profile-name { font-size: 1.3em; font-weight: 700; }
-.profile-details p { font-size: .9em; margin: 5px 0 15px; }
+.profile-details p { font-size: .9em; margin: 0 0 5px; }
 .profile-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; }
 .profile-links a { text-decoration: underline; text-underline-offset: .18em; }
 .site-links { line-height: 1.6; }
@@ -71,8 +71,6 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: url('../img/sit
   .site-links a { display: block; min-height: 44px; padding: 10px 14px; }
   .profile { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
   .profile-name { font-size: 1.1em; }
-  .profile-details { margin-top: 0; }
-  .profile-details p { margin: 5px 0; }
   .site-footer > .archive-nav { padding: 20px; }
   .post-archive h2 { font-size: 1.2em; line-height: 1.4; }
   .account-nav { padding-inline: 20px; }

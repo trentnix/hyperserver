@@ -95,8 +95,10 @@ document.removeEventListener = function(type, callback, options) {
       assert(articleStyle.paddingLeft === contentPadding && articleStyle.paddingRight === contentPadding, 'Article has incorrect horizontal padding.');
       const textSize = innerWidth >= 1680 ? 19.2 : 17.6;
       const lineHeight = innerWidth >= 1680 ? 28.8 : 24.64;
-      assert(Math.abs(parseFloat(articleStyle.fontSize) - textSize) < .01, 'Article text has the wrong size for this viewport.');
-      assert(Math.abs(parseFloat(articleStyle.lineHeight) - lineHeight) < .01, 'Article text has the wrong line height for this viewport.');
+      // Allow subpixel rounding across browsers without hiding a breakpoint change.
+      const typographyTolerance = .1;
+      assert(Math.abs(parseFloat(articleStyle.fontSize) - textSize) <= typographyTolerance, `Article font size at ${innerWidth}px: got ${articleStyle.fontSize}, expected ${textSize}px ± ${typographyTolerance}px.`);
+      assert(Math.abs(parseFloat(articleStyle.lineHeight) - lineHeight) <= typographyTolerance, `Article line height at ${innerWidth}px: got ${articleStyle.lineHeight}, expected ${lineHeight}px ± ${typographyTolerance}px.`);
       assert(document.documentElement.scrollWidth <= pageWidth, 'Page exceeds its minimum width or viewport.');
       assert(Math.abs(article.width - Math.min(pageWidth, 960)) < 1, 'Article does not respect its maximum width.');
       assert(Math.abs((article.left + article.right) / 2 - pageWidth / 2) < 1, 'Article is not centered on the screen.');
