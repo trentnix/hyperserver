@@ -28,37 +28,117 @@ document.removeEventListener = function(type, callback, options) {
   window.alert = message => report('Unexpected editor alert: ' + message);
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
+    const requestedWidth = new URLSearchParams(location.search).get('test-width');
+    if (requestedWidth) assert(innerWidth === Number(requestedWidth), 'Wrong test viewport: ' + innerWidth + ' instead of ' + requestedWidth);
     const stage = sessionStorage.getItem('blog-test-stage');
     if (!stage) {
       await wait(() => document.querySelector('.archive-nav .post-archive'));
+      const archiveTitle = document.querySelector('.archive-heading h2').getBoundingClientRect();
+      const feedIcon = document.querySelector('.archive-heading img').getBoundingClientRect();
+      assert(Math.abs((archiveTitle.top + archiveTitle.bottom) / 2 - (feedIcon.top + feedIcon.bottom) / 2) < 1, 'RSS icon must be vertically centered with Recent Posts.');
       const profile = document.querySelector('.profile');
       const portrait = profile.querySelector('img').getBoundingClientRect();
       const bio = document.querySelector('.profile-details').getBoundingClientRect();
       const article = document.querySelector('article').getBoundingClientRect();
       const archive = document.querySelector('.archive-nav').getBoundingClientRect();
+      const archiveStyle = getComputedStyle(document.querySelector('.archive-nav'));
+      const archivePadding = innerWidth < 768 || innerWidth >= 1680 ? '20px' : '40px';
+      assert(archiveStyle.paddingLeft === archivePadding && archiveStyle.paddingRight === archivePadding, 'Recent Posts has incorrect horizontal padding.');
+      if (innerWidth >= 1680) assert(archiveStyle.paddingTop === '80px', 'Sidebar Recent Posts needs 80px of top padding.');
       const sidebar = document.querySelector('.site-sidebar');
+      const footer = document.querySelector('.site-footer');
+      const links = document.querySelector('.site-links');
+      const header = document.querySelector('.site-header');
+      const main = document.querySelector('#main-content');
+      const mainStyle = getComputedStyle(main);
+      const backgroundStyle = getComputedStyle(document.body);
+      assert(backgroundStyle.backgroundImage.includes('/assets/img/site-bg.jpg'), 'Page must retain its background image at every width.');
+      assert(backgroundStyle.backgroundAttachment === 'fixed' && backgroundStyle.backgroundPositionY === '100%', 'Background must stay pinned to the bottom of the viewport.');
+      assert(mainStyle.backgroundImage === 'none', 'Content must not duplicate or clip the viewport background.');
+      const menuToggle = document.querySelector('.menu-toggle');
+      const profileLinks = document.querySelector('.profile-links');
+      assert(profileLinks.textContent.trim().replace(/\s+/g, ' ') === 'About Projects' && !profileLinks.querySelector('img'), 'Profile navigation must use About and Projects text links only.');
+      assert(header.contains(links), 'Site links must belong to the header.');
+      assert(getComputedStyle(footer).backgroundColor === 'rgba(0, 0, 0, 0)', 'Footer must have no background color.');
+      if (innerWidth < 768) {
+        assert(profileLinks.getClientRects().length === 0, 'Mobile must hide duplicate profile navigation.');
+        assert(!menuToggle.hidden && links.hidden, 'Mobile menu must start collapsed.');
+        assert(menuToggle.getAttribute('aria-expanded') === 'false', 'Collapsed menu must report its state.');
+        assert(document.querySelector('.header-menu').getBoundingClientRect().top === 0, 'Mobile navigation bar must sit at the top of the page.');
+        assert(menuToggle.getBoundingClientRect().bottom <= profile.getBoundingClientRect().top, 'Mobile menu must precede the profile.');
+        menuToggle.click();
+        assert(!links.hidden && menuToggle.getAttribute('aria-expanded') === 'true', 'Menu button must reveal links.');
+        links.querySelector('a').focus();
+        links.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+        assert(links.hidden && document.activeElement === menuToggle, 'Escape must close the menu and return focus.');
+        menuToggle.click();
+      } else {
+        assert(document.querySelector('.header-menu').getClientRects().length === 0, 'Desktop must hide the separate menu.');
+        assert(profileLinks.getClientRects().length > 0 && profileLinks.getBoundingClientRect().top >= profile.querySelector('p').getBoundingClientRect().bottom, 'Desktop links must appear below the bio.');
+      }
+      const siteLinks = links.querySelectorAll('a');
+      if (innerWidth < 768) {
+        assert(siteLinks[1].getBoundingClientRect().top >= siteLinks[0].getBoundingClientRect().bottom, 'Mobile links must form a vertical list.');
+        const nav = document.querySelector('.header-menu');
+        assert(getComputedStyle(nav).backgroundColor !== getComputedStyle(sidebar).backgroundColor, 'Mobile navigation needs a distinct background.');
+        assert(parseFloat(getComputedStyle(menuToggle).borderTopWidth) > 0 && menuToggle.getBoundingClientRect().height >= 44, 'Mobile menu needs a bordered, touch-sized control.');
+        assert(siteLinks[0].getBoundingClientRect().height >= 44, 'Mobile menu links need touch-sized targets.');
+      }
+      if (innerWidth < 768) menuToggle.click();
+      assert(document.querySelectorAll('#post-archive').length === 1, 'Recent Posts must have one persistent container.');
       const pageWidth = Math.max(320, document.documentElement.clientWidth);
       assert(portrait.right <= bio.left, 'Profile photo must sit beside the bio.');
       assert(Math.abs(portrait.top - bio.top) <= 5, 'Profile photo and bio are not top-aligned.');
       assert(getComputedStyle(document.body).fontSize === '16px', 'Base typography changed.');
+      const articleStyle = getComputedStyle(document.querySelector('article'));
+      const contentPadding = innerWidth < 768 ? '20px' : '60px';
+      assert(articleStyle.paddingLeft === contentPadding && articleStyle.paddingRight === contentPadding, 'Article has incorrect horizontal padding.');
+      const textSize = innerWidth >= 1680 ? 19.2 : 17.6;
+      const lineHeight = innerWidth >= 1680 ? 28.8 : 24.64;
+      assert(Math.abs(parseFloat(articleStyle.fontSize) - textSize) < .01, 'Article text has the wrong size for this viewport.');
+      assert(Math.abs(parseFloat(articleStyle.lineHeight) - lineHeight) < .01, 'Article text has the wrong line height for this viewport.');
       assert(document.documentElement.scrollWidth <= pageWidth, 'Page exceeds its minimum width or viewport.');
       assert(Math.abs(article.width - Math.min(pageWidth, 960)) < 1, 'Article does not respect its maximum width.');
       assert(Math.abs((article.left + article.right) / 2 - pageWidth / 2) < 1, 'Article is not centered on the screen.');
       assert(getComputedStyle(document.querySelector('article')).textAlign === 'left', 'Article text must be left-aligned.');
-      assert(portrait.width === 80, 'Profile portrait has the wrong size.');
-      assert(document.querySelector('footer').getBoundingClientRect().top >= article.bottom, 'Footer must follow the article.');
+      if (innerWidth < 768) {
+        assert(portrait.width === 80, 'Mobile portrait must retain its size.');
+      } else {
+        assert(portrait.width === (innerWidth >= 1680 ? 120 : 100), 'Portrait must be 120px in the sidebar and 100px in the desktop header.');
+        assert(Math.abs(portrait.width - portrait.height) < 1, 'Desktop portrait must remain circular: ' + portrait.width + ' x ' + portrait.height);
+      }
+      assert(footer.getBoundingClientRect().top >= document.querySelector('article').getBoundingClientRect().bottom - 1, 'Footer must follow the article: ' + footer.getBoundingClientRect().top + ' < ' + document.querySelector('article').getBoundingClientRect().bottom);
       if (innerWidth < 1680) {
-        assert(sidebar.getBoundingClientRect().bottom <= article.top, 'Bio and navigation must precede the article when stacked.');
-        assert(archive.top >= profile.getBoundingClientRect().bottom, 'Archive must follow the bio.');
+        assert(sidebar.getBoundingClientRect().bottom <= article.top, 'Bio must precede the article when stacked.');
+        assert(archive.top >= document.querySelector('#main-content').getBoundingClientRect().bottom - 1, 'Recent Posts must follow the content.');
+        assert(footer.contains(document.querySelector('#post-archive')), 'Recent Posts must be inside the footer.');
+        const footerBounds = footer.getBoundingClientRect();
+        assert(Math.abs(footerBounds.left) < 1 && Math.abs(footerBounds.width - pageWidth) < 1, 'Footer background must span the viewport.');
+        assert(footerBounds.bottom >= innerHeight, 'Footer background must reach the bottom of the viewport.');
         assert(getComputedStyle(sidebar).position === 'static', 'Stacked navigation must scroll with the page.');
       } else {
         assert(getComputedStyle(sidebar).position === 'sticky', 'Desktop sidebar must stay visible while reading.');
         const sidebarBounds = sidebar.getBoundingClientRect();
+        assert(sidebar.contains(document.querySelector('#post-archive')), 'Desktop archive must remain inside the sidebar.');
         assert(Math.abs(sidebarBounds.left) < 1 && Math.abs(sidebarBounds.right - article.left) < 1, 'Sidebar must fill the entire left section.');
-        assert(Math.abs(profile.getBoundingClientRect().width - sidebar.clientWidth) < 1, 'Bio must use the available sidebar width.');
+        assert(Math.abs(header.getBoundingClientRect().width - sidebar.clientWidth) < 1, 'Header must use the available sidebar width.');
         assert(Math.abs(archive.width - sidebar.clientWidth) < 1, 'Navigation must use the available sidebar width.');
       }
       if (new URLSearchParams(location.search).has('test-layout')) {
+        if (innerWidth === 768) {
+          frameElement.style.width = '767px';
+          await wait(() => !menuToggle.hidden && links.hidden);
+          assert(profileLinks.getClientRects().length === 0, 'Resizing to mobile must hide profile links.');
+          menuToggle.click();
+          assert(!links.hidden, 'Resized mobile menu must open.');
+          frameElement.style.width = '768px';
+          await wait(() => menuToggle.hidden && !links.hidden);
+          assert(profileLinks.getClientRects().length > 0 && document.querySelector('.header-menu').getClientRects().length === 0, 'Resizing to desktop must restore only profile links.');
+          frameElement.style.width = '767px';
+          await wait(() => !menuToggle.hidden && links.hidden);
+          frameElement.style.width = '768px';
+          await wait(() => menuToggle.hidden && !links.hidden);
+        }
         const content = document.querySelector('article');
         const longText = document.createElement('p');
         longText.textContent = 'LongUnbrokenPostContent'.repeat(100);
@@ -68,6 +148,39 @@ document.removeEventListener = function(type, callback, options) {
         assert(document.documentElement.scrollWidth <= pageWidth, 'Long post content widens the page.');
         assert(code.scrollWidth > code.clientWidth, 'Wide code must scroll inside its own block.');
         assert(document.body.getBoundingClientRect().width >= 320, 'Page shrank below the mobile minimum.');
+        if (innerWidth < 1680) {
+          assert(document.querySelector('#post-archive').getBoundingClientRect().top >= content.getBoundingClientRect().bottom - 1, 'Long content overlaps Recent Posts.');
+          content.textContent = 'Short page';
+          assert(Math.abs(footer.getBoundingClientRect().bottom - innerHeight) < 1, 'Short pages must fill the viewport without a white gap below the footer.');
+          assert(Math.abs(footer.getBoundingClientRect().top - (innerHeight - 200)) < 1, 'Short pages must initially show 200px of the footer.');
+
+          // A long archive extends the document, not its own scroll container.
+          const entries = document.createElement('ul');
+          for (let index = 0; index < 60; index++) {
+            const item = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = '/post/s/example-' + index;
+            link.textContent = 'Example post ' + index;
+            item.append(link);
+            entries.append(item);
+          }
+          document.querySelector('.post-archive').append(entries);
+          assert(Math.abs(footer.getBoundingClientRect().top - (innerHeight - 200)) < 1, 'A long archive must not pull the footer upward.');
+          assert(footer.getBoundingClientRect().height > 200, 'Footer clipped the long archive.');
+          assert(getComputedStyle(footer).overflowY === 'visible', 'Footer must not have an internal scrollbar.');
+          entries.lastElementChild.scrollIntoView({block: 'end'});
+          await wait(() => entries.lastElementChild.getBoundingClientRect().bottom <= innerHeight + 1);
+          assert(scrollY > 0 && footer.scrollTop === 0, 'Scrolling the archive must scroll the page.');
+
+          content.style.minHeight = innerHeight + 'px';
+          scrollTo(0, 0);
+          await wait(() => scrollY === 0);
+          assert(footer.getBoundingClientRect().top >= innerHeight, 'Long content must push the footer below the viewport.');
+          assert(footer.getBoundingClientRect().top >= content.getBoundingClientRect().bottom - 1, 'Footer overlaps long content: ' + footer.getBoundingClientRect().top + ' < ' + content.getBoundingClientRect().bottom);
+          entries.lastElementChild.scrollIntoView({block: 'end'});
+          await wait(() => entries.lastElementChild.getBoundingClientRect().bottom <= innerHeight + 1);
+          assert(scrollY > 0 && footer.scrollTop === 0, 'Long content and archive must share normal page scrolling.');
+        }
         await report('PASS');
         return;
       }
@@ -75,6 +188,9 @@ document.removeEventListener = function(type, callback, options) {
       const password = document.querySelector('#password');
       assert(!document.querySelector('a[href="/auth/register/email"]'), 'Registered administrator must not see a registration link.');
       assert(email && password, 'Missing login controls.');
+      const formWidth = document.querySelector('#login-form').getBoundingClientRect().width;
+      const availableWidth = article.width - parseFloat(articleStyle.paddingLeft) - parseFloat(articleStyle.paddingRight);
+      assert(Math.abs(formWidth - Math.min(540, availableWidth)) < 1, 'Login form must remain centered and bounded without sizing its wrapper.');
       assert(Math.abs(email.getBoundingClientRect().width - password.getBoundingClientRect().width) < 1, 'Email and password widths differ.');
       assert(getComputedStyle(email).paddingLeft === '12px', 'Email field has no blog styling.');
 
@@ -136,6 +252,7 @@ document.removeEventListener = function(type, callback, options) {
       cm.setValue('');
       document.querySelector('#post-form').requestSubmit();
       await wait(() => document.querySelector('#editor-errors').textContent.includes('valid Markdown'));
+      assert(getComputedStyle(document.querySelector('#editor-errors')).color === 'rgb(161, 38, 38)', 'Editor errors must use the shared error style.');
       assert(document.querySelector('.CodeMirror').CodeMirror === cm, 'Save failure replaced the editor.');
       cm.setValue('# Saved heading\n\n');
       cm.setCursor(cm.lineCount(), 0);

@@ -3,6 +3,7 @@ package blog
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,7 +36,7 @@ func TestBrowserLayout(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check responsive layout")
 	}
-	for _, width := range []string{"280", "320", "1679", "1680", "1920", "3440"} {
+	for _, width := range []string{"280", "320", "767", "768", "1679", "1680", "1920", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "layout") })
 	}
 }
@@ -46,7 +47,7 @@ func TestBrowserNavigation(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check article navigation")
 	}
-	for _, width := range []string{"390", "3440"} {
+	for _, width := range []string{"390", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "navigation") })
 	}
 }
@@ -69,8 +70,12 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	if mode == "navigation" {
 		h.login(t)
 		for _, slug := range []string{"first", "second"} {
+			body := "Body of " + slug
+			if slug == "first" {
+				body = strings.Repeat(body+"\n\n", 100)
+			}
 			response := h.request(http.MethodPost, "/post", url.Values{
-				"title": {slug + " <post>"}, "slug": {slug}, "content": {"Body of " + slug},
+				"title": {slug + " <post>"}, "slug": {slug}, "content": {body},
 			}, false)
 			requireStatus(t, response, http.StatusSeeOther)
 		}
@@ -97,8 +102,20 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		t.Fatal(err)
 	}
 	result := make(chan string, 1)
+	pagePath := "/auth/login/email"
+	if mode == "layout" {
+		pagePath += "?test-layout=1&amp;test-width=" + width
+	} else if mode == "navigation" {
+		pagePath = "/post/s/first"
+	}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/test/viewport":
+			// Firefox limits ordinary windows to 500px. An iframe gives each
+			// flow an exact viewport, including narrow mobile sizes.
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprintf(w, `<!DOCTYPE html><iframe src="%s" style="border:0;width:%spx;height:1000px"></iframe>`, pagePath, width)
+			return
 		case "/test/plain-error":
 			http.Error(w, `<img src=x onerror="window.errorInjected=true"> Please try again.`, http.StatusTooManyRequests)
 			return
@@ -149,6 +166,10 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			}
 		}
 		body := recorder.Body.Bytes()
+		// Allow only this test server to frame the page at the requested size.
+		// Production responses still prohibit framing.
+		w.Header().Set("Content-Security-Policy", strings.ReplaceAll(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'", "frame-ancestors 'self'"))
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		if strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/html") {
 			body = bytes.Replace(body, []byte("</head>"), []byte(`<script src="/test/browser.js" defer></script></head>`), 1)
 			w.Header().Del("Content-Length")
@@ -171,13 +192,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			t.Fatal(err)
 		}
 	}
-	pageURL := s.URL + "/auth/login/email"
-	if mode == "layout" {
-		pageURL += "?test-layout=1"
-	} else if mode == "navigation" {
-		pageURL = s.URL + "/post/s/first"
-	}
-	command := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, "--window-size", width+",1000", pageURL)
+	pageURL := s.URL + "/test/viewport"
+	command := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, "--width", width, "--height", "1000", pageURL)
 	command.Stdout, command.Stderr = log, log
 	if err := command.Start(); err != nil {
 		t.Fatal(err)

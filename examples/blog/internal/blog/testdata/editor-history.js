@@ -29,7 +29,7 @@
     sessionStorage.setItem('editor-history-stage', 'restoring');
     await wait(() => document.querySelector('#article-content .CodeMirror'));
     const article = document.querySelector('#article-content');
-    document.querySelector('footer a[href="/about"]').click();
+    document.querySelector('.profile-links a[href="/about"]').click();
     await wait(() => location.pathname === '/about' && article.querySelector('h1')?.textContent === 'About Me');
 
     // Repeated restoration must create one working editor, not duplicate instances.

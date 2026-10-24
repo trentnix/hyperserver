@@ -38,6 +38,8 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, access *Access
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
 			data := navigation{SignedIn: account != nil, Admin: access.IsAdmin(account)}
+			cookie, err := r.Cookie(returningUserCookie)
+			data.ShowLogin = !data.SignedIn && err == nil && cookie.Value == "1"
 			if registration && !data.SignedIn {
 				_, err := accounts.GetByEmail(r.Context(), access.emailKey)
 				data.Registration = errors.Is(err, user.ErrUserNotFound)
@@ -56,7 +58,7 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, access *Access
 }
 
 // navigation holds account links for the current request, not cached account state.
-type navigation struct{ SignedIn, Admin, Registration bool }
+type navigation struct{ SignedIn, Admin, Registration, ShowLogin bool }
 
 // markdown is the only trust boundary for stored post HTML. Goldmark omits raw
 // HTML and unsafe URL schemes. Preview and published posts use the same renderer.

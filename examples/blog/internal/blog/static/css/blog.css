@@ -2,7 +2,6 @@
 @font-face { font-family: Geomanist; src: url('../fonts/geomanist-regular-webfont.woff2') format('woff2'); font-display: swap; }
 :root { color-scheme: light; font-family: 'Source Sans 3', Geomanist, sans-serif; color: #212529; background: #fff; }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; font-size: 16px; }
 a { color: inherit; text-decoration: none; transition: color .2s; }
 a:hover { color: #5cadec; text-decoration: underline; }
 button, input, textarea { font: inherit; }
@@ -10,65 +9,126 @@ button, a { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid #395b88; outline-offset: 3px; }
 
 /* Page layout and navigation. */
-.site-layout { min-height: 100vh; }
+body { margin: 0; min-width: 320px; font-size: 16px; background: url('../img/site-bg.jpg') no-repeat fixed right max(0px, calc((100vw - 960px) / 2)) bottom / min(480px, 70vw) auto; }
+/* Reserve the first 200px of the footer without constraining its full height. */
+.page-top { min-height: calc(100vh - 200px); }
 .site-sidebar { background: #f3f4f8; }
-.profile { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 15px; align-items: start; max-width: 960px; margin: 0 auto; padding: 25px 40px 0; }
-.portrait img { display: block; width: 100%; height: auto; border-radius: 50%; }
+.site-header, .article-column, .site-footer > .archive-nav { max-width: 960px; margin: 0 auto; }
+.site-header { padding: 25px 40px 24px; }
+.header-menu { display: none; }
+.article-column { min-width: 0; width: 100%; }
+.site-footer { min-height: 200px; }
+.site-footer > .archive-nav { padding: 24px 40px; }
+
+.profile { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 15px; align-items: start; min-width: 0; }
+.menu-toggle.text-button { min-height: 44px; padding: 8px 14px; border: 1px solid #bfc8d3; border-radius: 5px; background: #fff; color: #343d4b; font-weight: 600; text-decoration: none; }
+.menu-toggle:hover, .menu-toggle[aria-expanded="true"] { background: #dce3eb; }
+.portrait { display: block; width: 100%; height: auto; border-radius: 50%; }
 .profile-details { margin-top: 5px; }
 .profile-name { font-size: 1.3em; font-weight: 700; }
 .profile-details p { font-size: .9em; margin: 5px 0 15px; }
-.profile-links { display: flex; gap: 8px; margin-top: 10px; }
-.profile-links img { width: 20px; height: 20px; object-fit: contain; vertical-align: middle; }
-.archive-nav { max-width: 960px; margin: 0 auto; padding: 24px 40px; }
+.profile-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; }
+.profile-links a { text-decoration: underline; text-underline-offset: .18em; }
+.site-links { line-height: 1.6; }
+.account-nav { padding: 16px 40px 0; justify-content: flex-end; font-size: .9em; }
+.account-nav form { margin: 0; }
+
+.archive-nav { min-width: 0; overflow-wrap: anywhere; }
+.archive-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 0 16px; }
+.archive-heading img { display: block; }
 .post-archive h2 { font-size: 1.4em; line-height: 1.8; font-weight: 400; margin: 0; }
-.post-archive h3 { font-size: .9em; font-weight: 700; margin: 0; }
-.post-archive ul { list-style: none; margin: 0; padding: 3px 0 10px; }
+.post-archive h3 { font-size: .9em; margin: 0; }
+.post-archive ul, .site-links { list-style: none; margin: 0; padding: 0; }
+.post-archive ul { padding: 3px 0 10px; }
 .post-archive li { min-height: 24px; }
 .post-archive a { color: #00f; }
 .post-archive a:hover { color: #000064; }
-.article-column { min-width: 0; width: 100%; max-width: 960px; margin: 0 auto; }
-.page-content { padding: 30px 40px; font-size: 1.3em; line-height: 1.6; overflow-wrap: anywhere; text-align: left; }
-h1 { font-size: 1.8em; font-weight: 700; line-height: 1.8; margin: 0; }
+
+@media (max-width: 1679px) {
+  .page-top:has(.info-page) { min-height: 100vh; }
+  .site-layout:has(.info-page) .site-footer { display: none; }
+}
+/* Equal outer tracks center the article on the screen, not beside the sidebar.
+ * At 1680px, the sidebar has 360px. Wider screens give it the full left track. */
+@media (min-width: 1680px) {
+  /* Keep the columns stable when navigating between short and long posts. */
+  :root { scrollbar-gutter: stable; }
+  body { background-position: right bottom; background-size: 25% auto; }
+  .site-layout { display: grid; grid-template-columns: minmax(0, 1fr) 960px minmax(0, 1fr); grid-template-rows: auto 1fr; align-items: start; }
+  .page-top { display: contents; }
+  .site-sidebar { grid-row: 1 / 3; position: sticky; top: 0; min-width: 0; height: 100vh; overflow-y: auto; }
+  .site-header { max-width: none; padding-inline: 20px; padding-bottom: 0; }
+  .profile { grid-template-columns: 120px minmax(0, 1fr); }
+  .site-sidebar .archive-nav { padding: 80px 20px 24px; }
+  .article-column { grid-column: 2; grid-row: 1; }
+  .site-footer { grid-column: 2; grid-row: 2; min-height: 0; padding: 20px 0; }
+}
+@media (max-width: 767px) {
+  .site-header { display: flex; flex-direction: column; gap: 12px; padding: 0 20px 20px; }
+  .header-menu { display: block; margin-inline: -20px; padding: 8px 20px; border-bottom: 1px solid #cbd3dd; background: #e7ebf0; text-align: right; }
+  .profile-links { display: none; }
+  .site-links { margin-top: 8px; border: 1px solid #cbd3dd; border-radius: 5px; background: #fff; text-align: left; }
+  .site-links a { display: block; min-height: 44px; padding: 10px 14px; }
+  .profile { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
+  .profile-name { font-size: 1.1em; }
+  .profile-details { margin-top: 0; }
+  .profile-details p { margin: 5px 0; }
+  .site-footer > .archive-nav { padding: 20px; }
+  .post-archive h2 { font-size: 1.2em; line-height: 1.4; }
+  .account-nav { padding-inline: 20px; }
+}
+@media (max-width: 430px) { .post-archive ul { font-size: .9em; } }
+
+/* Article content. */
+.page-content { padding: 30px 60px; font-size: 1.1em; line-height: 1.4; overflow-wrap: anywhere; text-align: left; }
+h1 { font-size: 1.8em; line-height: 1.8; margin: 0; }
 h2, h3 { line-height: 1.3; }
+.post-heading h1 { line-height: 1.2; }
 .post-heading time { display: block; color: #696d74; font-size: .7em; }
 .post-body img { display: block; max-width: 100%; height: auto; padding: 10px 0; margin: 0 auto; }
 .page-content a, footer a { color: #000064; text-decoration: underline; }
-.page-content a:hover, footer a:hover { color: #5cadec; }
+.page-content a:hover { color: #5cadec; }
 pre { overflow-x: auto; background: #f3f4f8; padding: 20px; font-size: .8em; }
 blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px; color: #5f6570; }
-.account-nav, .post-actions, .form-actions { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
-.account-nav { padding: 16px 40px 0; justify-content: flex-end; font-size: .9em; }
-.account-nav form { margin: 0; }
 .post-actions { font-size: .8em; margin-top: 18px; }
-.text-button { border: 0; padding: 0; background: none; color: inherit; text-decoration: underline; text-underline-offset: .18em; cursor: pointer; }
-footer { display: flex; justify-content: center; font-size: 1.3em; line-height: 1.6; padding: 20px 0; }
-footer a + a::before { content: '|'; display: inline-block; margin: 0 15px; color: #212529; }
+.page-message { padding: 20px 0; }
 
-/* Authentication uses the same typography, controls, and spacing as the editor. */
-.auth-email-form, .verification-panel, #login, #register, #reset-request, #reset-password { max-width: 540px; margin: 0 auto; }
-.auth-email-form, .verification-panel { background: #f7f8fa; border-radius: 5px; }
-.auth-email-form { padding: 28px; border: 1px solid #e1e3e8; }
-label { display: block; font-weight: 600; margin-top: 18px; margin-bottom: 6px; }
-input:not([type=hidden]):not([type=checkbox]), textarea { display: block; width: 100%; padding: 10px 12px; color: #212529; border: 1px solid #bfc4cd; border-radius: 3px; background: #fff; }
+@media (min-width: 1680px) { .page-content { font-size: 1.2em; line-height: 1.5; } }
+@media (max-width: 767px) {
+  .page-content { padding: 10px 20px 30px; }
+  h1 { font-size: 1.4em; line-height: 1.4; }
+}
+
+/* Shared controls and form feedback. */
+.account-nav, .post-actions, .form-actions { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.form-actions, .verification-actions { margin-top: 24px; }
+.text-button { border: 0; padding: 0; background: none; color: inherit; text-decoration: underline; text-underline-offset: .18em; cursor: pointer; }
+label { display: block; font-weight: 600; margin: 18px 0 6px; }
+input:not([type=hidden], [type=checkbox]), textarea { display: block; width: 100%; padding: 10px 12px; color: #212529; border: 1px solid #bfc4cd; border-radius: 3px; background: #fff; }
 textarea { resize: vertical; }
-button:not(.text-button):not(.editor-toolbar button) { background: #343d4b; border: 1px solid #343d4b; color: #fff; padding: 9px 18px; border-radius: 3px; cursor: pointer; }
-.auth-email-form button { margin: 22px 0 12px; }
-.auth-email-form a { display: inline-block; font-size: .9em; }
-.field-error, #editor-errors, .verification-status--error { color: #a12626; }
+button:not(.text-button, .editor-toolbar button) { background: #343d4b; border: 1px solid #343d4b; color: #fff; padding: 9px 18px; border-radius: 3px; cursor: pointer; }
+.field-error, .verification-status--error { color: #a12626; }
+.form-hint { color: #626975; font-size: .85em; }
 .form-messages { margin: 16px 0; font-size: .9em; }
 .form-messages ul { padding-left: 20px; }
+
+/* Authentication. */
+.auth-email-form, .verification-panel, #reset-request, #reset-password { max-width: 540px; margin: 0 auto; }
+.auth-email-form, .verification-panel { background: #f7f8fa; border-radius: 5px; }
+.auth-email-form { padding: 28px; border: 1px solid #e1e3e8; }
+.auth-email-form button { margin: 22px 0 12px; }
+.auth-email-form a { display: inline-block; font-size: .9em; }
 .verification-panel { padding: 30px; }
 .verification-panel h1 { font-size: 1.5em; }
-.verification-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; margin-top: 24px; }
-.page-message { padding: 20px 0; }
+.verification-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
+
+@media (max-width: 767px) { .auth-email-form, .verification-panel { padding: 20px; } }
 
 /* Editor and dialogs. */
 dialog { color: inherit; border: 1px solid #d4d7df; border-radius: 6px; padding: 30px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; }
 dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .editor-dialog { width: 1000px; }
 .editor-panel { font-size: 18px; }
-.editor-panel small, .editor-hint { color: #626975; font-size: .85em; }
-.form-actions { margin-top: 24px; }
 .CodeMirror { font-size: 16px; }
 .editor-toolbar button::before { font-family: sans-serif; font-weight: 600; }
 .editor-toolbar .tool-bold::before { content: 'B'; }
@@ -79,6 +139,10 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .editor-toolbar .tool-link::before { content: '↗'; }
 .editor-toolbar .tool-image::before { content: '▧'; }
 .editor-toolbar .tool-preview::before { content: '◉'; }
+
+@media (max-width: 767px) { dialog { padding: 20px; } }
+
+/* Notifications. */
 /* Only success notifications expire. Without JavaScript, all messages stay visible. */
 #notifications { position: fixed; bottom: 20px; right: 20px; max-width: min(420px, 90vw); display: grid; gap: 10px; z-index: 2; }
 .notification, #notifications > .field-error { margin: 0; padding: 12px 20px; background: #343d4b; color: white; border-radius: 5px; }
@@ -90,29 +154,3 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .js .notification--success:hover, .js .notification--success:focus-within { animation-play-state: paused; }
 @keyframes notification-fade { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .js .notification--success { animation-duration: 1ms; } }
-
-/* Equal outer tracks center the article on the screen, not beside the sidebar.
- * At 1680px, the sidebar has 360px. Wider screens give it the full left track. */
-@media (min-width: 1680px) {
-  body { background: url('../img/site-bg.jpg') no-repeat fixed right bottom / 25% auto; }
-  .site-layout { display: grid; grid-template-columns: minmax(0, 1fr) 960px minmax(0, 1fr); align-items: start; }
-  .site-sidebar { position: sticky; top: 0; min-width: 0; height: 100vh; overflow-y: auto; }
-  .profile, .archive-nav { max-width: none; padding-inline: 20px; }
-  .article-column { grid-column: 2; }
-}
-@media (max-width: 767px) {
-  .profile { padding: 20px 20px 0; gap: 10px; }
-  .profile-name { font-size: 1.1em; }
-  .profile-details { margin-top: 0; }
-  .profile-details p { margin-bottom: 5px; }
-  .archive-nav { padding: 20px; }
-  .page-content { padding: 10px 20px 30px; font-size: 1.1em; line-height: 1.4; }
-  h1 { font-size: 1.4em; line-height: 1.4; }
-  .post-archive h2 { font-size: 1.2em; line-height: 1.4; }
-  .post-archive ul { font-size: 1em; }
-  .account-nav { padding-inline: 20px; }
-  footer { font-size: 1.1em; }
-  .auth-email-form, .verification-panel { padding: 20px; }
-  dialog { padding: 20px; }
-}
-@media (max-width: 430px) { .post-archive ul { font-size: .9em; } }

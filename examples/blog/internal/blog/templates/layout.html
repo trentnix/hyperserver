@@ -16,21 +16,33 @@
 </head>
 <body>
   <div class="site-layout">
-    <aside class="site-sidebar">
-      <header class="profile" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top" hx-sync="#article-content:replace">{{ template "blog.profile" . }}</header>
+    <div class="page-top">
+      <aside class="site-sidebar">
+        <header class="site-header" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+          <nav class="header-menu" aria-label="Site links">
+            <button class="menu-toggle text-button" type="button" aria-expanded="false" aria-controls="site-menu" hidden><span aria-hidden="true">☰</span> Menu</button>
+            <ul id="site-menu" class="site-links"><li><a href="/">Home</a></li><li><a href="/about">About Me</a></li><li><a href="/projects">Projects</a></li></ul>
+          </nav>
+          <div class="profile">{{ template "blog.profile" . }}</div>
+        </header>
+      </aside>
+      <main id="main-content" class="article-column">
+        <div class="account-nav">
+          {{ if .LayoutData.Admin }}<a href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a>{{ end }}
+          {{ if .LayoutData.SignedIn }}
+          {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
+          <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>
+          {{ else }}
+          {{ if .LayoutData.ShowLogin }}<a href="/auth/login/email">Log in</a>{{ end }}
+          {{ if .LayoutData.Registration }}<a href="/auth/register/email">Register</a>{{ end }}
+          {{ end }}
+        </div>
+        <article id="article-content" class="page-content" hx-history-elt>{{ renderPartial .PartialName . }}</article>
+      </main>
+    </div>
+    <footer class="site-footer">
       <nav id="post-archive" class="archive-nav" aria-label="Post archive" hx-get="/posts" hx-trigger="load" hx-swap="innerHTML"><a href="/posts">All posts</a></nav>
-    </aside>
-    <main id="main-content" class="article-column">
-      <div class="account-nav">
-        {{ if .LayoutData.Admin }}<a href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a>{{ end }}
-        {{ if .LayoutData.SignedIn }}
-        {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
-        <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>
-        {{ else }}<a href="/auth/login/email">Log in</a>{{ if .LayoutData.Registration }}<a href="/auth/register/email">Register</a>{{ end }}{{ end }}
-      </div>
-      <article id="article-content" class="page-content" hx-history-elt>{{ renderPartial .PartialName . }}</article>
-      <footer hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top" hx-sync="#article-content:replace"><a href="/">Home</a><a href="/about">About Me</a><a href="/projects">Projects</a></footer>
-    </main>
+    </footer>
   </div>
   <div id="notifications">{{ template "blog.notifications" . }}</div>
   <div id="dialog-host"></div>

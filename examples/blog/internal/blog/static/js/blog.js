@@ -4,6 +4,47 @@
   const editors = new WeakMap();
   document.documentElement.classList.add('js');
 
+  // Move one archive to keep visual and keyboard order aligned without reloading it.
+  // This breakpoint matches the sidebar layout in blog.css.
+  const sidebarLayout = matchMedia('(min-width: 1680px)');
+  const archive = document.querySelector('#post-archive');
+  const sidebar = document.querySelector('.site-sidebar');
+  const footer = document.querySelector('.site-footer');
+  function positionArchive() {
+    if (sidebarLayout.matches) sidebar.append(archive);
+    else footer.prepend(archive);
+  }
+  sidebarLayout.addEventListener('change', positionArchive);
+  positionArchive();
+
+  // Keep ordinary links available without JavaScript. Only mobile collapses them.
+  const mobileLayout = matchMedia('(max-width: 767px)');
+  const menuToggle = document.querySelector('.menu-toggle');
+  const menu = document.querySelector('#site-menu');
+  function closeMenu() {
+    menu.hidden = mobileLayout.matches;
+    menuToggle.hidden = !mobileLayout.matches;
+    menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
+  }
+  menuToggle.addEventListener('click', () => {
+    menu.hidden = !menu.hidden;
+    menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
+  });
+  menu.addEventListener('click', event => {
+    if (mobileLayout.matches && event.target.closest('a')) {
+      closeMenu();
+      menuToggle.focus({preventScroll: true});
+    }
+  });
+  document.querySelector('.header-menu').addEventListener('keydown', event => {
+    if (event.key === 'Escape' && mobileLayout.matches && !menu.hidden) {
+      closeMenu();
+      menuToggle.focus();
+    }
+  });
+  mobileLayout.addEventListener('change', closeMenu);
+  closeMenu();
+
   // CSS owns timing, including hover/focus pauses and reduced-motion preferences.
   // Delegation also handles notifications appended by HTMX out-of-band swaps.
   document.addEventListener('animationend', event => {

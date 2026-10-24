@@ -5,12 +5,16 @@ import (
 
 	emailauth "github.com/trentnix/hyperserver/auth/modules/email"
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	"github.com/trentnix/hyperserver/pkg/server"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+// returningUserCookie controls link visibility only. It never grants access.
+const returningUserCookie = "blog_returning_user"
 
 // EmailProvider keeps account admission in the blog. Embedded email authentication
 // still owns credentials, forms, verification, recovery, and password changes.
@@ -46,7 +50,15 @@ func (p *EmailProvider) Login(w http.ResponseWriter, r *http.Request) *user.User
 	if !p.admit(w, r) {
 		return nil
 	}
-	return p.EmailAuthService.Login(w, r)
+	account := p.EmailAuthService.Login(w, r)
+	if account != nil {
+		// Remember accepted credentials, independently of the authentication session.
+		http.SetCookie(w, &http.Cookie{
+			Name: returningUserCookie, Value: "1", Path: "/", MaxAge: 365 * 24 * 60 * 60,
+			HttpOnly: true, Secure: requestinfo.IsHTTPS(r), SameSite: http.SameSiteLaxMode,
+		})
+	}
+	return account
 }
 
 // admit checks the submitted email against the administrator rule.

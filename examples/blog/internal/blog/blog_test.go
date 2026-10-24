@@ -41,6 +41,85 @@ type mailbox struct {
 	err      error
 }
 
+// TestReturningUserNavigation keeps account controls out of a new visitor's menu.
+func TestReturningUserNavigation(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	requireStatus(t, h.request(http.MethodPost, "/post", url.Values{
+		"slug": {"welcome"}, "title": {"Welcome"}, "content": {"Hello"},
+	}, false), http.StatusSeeOther)
+
+	const link = `href="/auth/login/email">Log in</a>`
+	if body := h.request(http.MethodGet, "/post/s/welcome", nil, false).Body.String(); strings.Contains(body, link) || !strings.Contains(body, ">Log out</button>") {
+		t.Fatal("signed-in navigation must show logout instead of login")
+	}
+	requireStatus(t, h.request(http.MethodPost, "/auth/logout", nil, false), http.StatusSeeOther)
+	if h.cookies[returningUserCookie] == nil {
+		t.Fatal("logout removed the returning-user cookie")
+	}
+
+	for _, value := range []string{"1", "", "invalid"} {
+		h.cookies = make(map[string]*http.Cookie)
+		if value != "" {
+			h.cookies[returningUserCookie] = &http.Cookie{Name: returningUserCookie, Value: value}
+		}
+		for _, path := range []string{"/", "/about", "/post/s/welcome", loginURL} {
+			w := h.request(http.MethodGet, path, nil, false)
+			requireStatus(t, w, http.StatusOK)
+			if got := strings.Contains(w.Body.String(), link); got != (value == "1") {
+				t.Errorf("cookie=%q path=%s: login link visible=%v", value, path, got)
+			}
+			if path == loginURL && !strings.Contains(w.Body.String(), `name="password"`) {
+				t.Error("direct login form is unavailable")
+			}
+			for _, cookie := range w.Result().Cookies() {
+				if cookie.Name == returningUserCookie {
+					t.Error("anonymous reading must not issue a returning-user cookie")
+				}
+			}
+		}
+		// Even a forged presentation cookie cannot authorize publishing.
+		requireStatus(t, h.request(http.MethodGet, "/post/create", nil, false), http.StatusForbidden)
+	}
+}
+
+// TestReturningUserCookie checks ordinary and HTMX logins over HTTP and HTTPS.
+func TestReturningUserCookie(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	for _, scheme := range []string{"http", "https"} {
+		for _, hx := range []bool{false, true} {
+			for _, accepted := range []bool{false, true} {
+				values := credentials("trentnix@gmail.com")
+				if !accepted {
+					values.Set("password", "Wrong-Password-123!")
+				}
+				r := httptest.NewRequest(http.MethodPost, scheme+"://blog.example"+loginURL, strings.NewReader(values.Encode()))
+				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				if hx {
+					r.Header.Set("HX-Request", "true")
+				}
+				w := httptest.NewRecorder()
+				h.app.Handler.ServeHTTP(w, r)
+				var remembered *http.Cookie
+				for _, cookie := range w.Result().Cookies() {
+					if cookie.Name == returningUserCookie {
+						remembered = cookie
+					}
+				}
+				if (remembered != nil) != accepted {
+					t.Fatalf("scheme=%s HTMX=%v accepted=%v: cookie=%v", scheme, hx, accepted, remembered)
+				}
+				if remembered != nil && (remembered.Value != "1" || remembered.Path != "/" || remembered.MaxAge != 365*24*60*60 || !remembered.HttpOnly || remembered.Secure != (scheme == "https") || remembered.SameSite != http.SameSiteLaxMode) {
+					t.Errorf("unexpected returning-user cookie: %v", remembered)
+				}
+			}
+		}
+	}
+}
+
 // TestLoginRedirect checks the short login route for ordinary and HTMX navigation.
 func TestLoginRedirect(t *testing.T) {
 	h := newHarness(t)
