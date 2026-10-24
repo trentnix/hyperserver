@@ -61,6 +61,7 @@ type module struct {
 	posts    repository
 	close    func() error
 	views    map[string]*content.View
+	feed     feedCache
 }
 
 // init registers the factory without opening storage or creating runtime state.

@@ -39,6 +39,8 @@ Set `auth.registrationEnabled: false` after creating the administrator if desire
 
 EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when posts are deleted. This prototype does not import old blog databases.
 
+RSS includes every post and caches the rendered XML in memory. Creating, editing, or deleting a post invalidates that instance's cache. Feed readers can revalidate with an ETag. Feed links and images use absolute URLs. Run one blog instance per post database. Direct database edits require a restart to refresh the feed.
+
 ```sh
 GOWORK=off go test ./...
 GOWORK=off go vet ./...

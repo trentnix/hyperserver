@@ -194,6 +194,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		m.editorError(w, r, p, "Unable to save this post. Please try again.", http.StatusInternalServerError)
 		return
 	}
+	m.feed.invalidate()
 	util.RedirectToURL(w, r, "/post/s/"+saved.Slug)
 }
 
@@ -265,6 +266,7 @@ func (m *module) delete(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
+	m.feed.invalidate()
 	util.RedirectToURL(w, r, "/")
 }
 
