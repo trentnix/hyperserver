@@ -5,4 +5,4 @@ Source Sans 3 uses the unmodified upright and italic variable WOFF2 fonts from [
 - `SourceSans3VF-Upright.ttf.woff2` → `source-sans-3.woff2`
 - `SourceSans3VF-Italic.ttf.woff2` → `source-sans-3-italic.woff2`
 
-The [SIL Open Font License](SOURCE-SANS-LICENSE.md) permits redistribution. Both fonts are served locally. The existing Geomanist font and system sans-serif fonts remain fallbacks.
+The [SIL Open Font License](SOURCE-SANS-LICENSE.md) permits redistribution. Both fonts are served locally, with the system sans-serif font as the fallback.
