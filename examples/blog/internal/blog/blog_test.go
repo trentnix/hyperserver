@@ -343,6 +343,7 @@ func (m *mailbox) Send(ctx context.Context, message messaging.MailMessage) error
 
 type harness struct {
 	app     *application.Application
+	blog    *module
 	mail    *mailbox
 	cookies map[string]*http.Cookie
 }
@@ -395,7 +396,13 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 			if err := ConfigureRendering(app.ContentManager, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
-			return []handlers.Descriptor{Module(access), auth.Module(nil, nil, nil)}, nil
+			blog := Module(access)
+			newBlog := blog.New
+			blog.New = func() handlers.Handler {
+				h.blog = newBlog().(*module)
+				return h.blog
+			}
+			return []handlers.Descriptor{blog, auth.Module(nil, nil, nil)}, nil
 		},
 		AuthProviders: []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
 			return NewEmailProvider(services.Accounts, services.Sessions, services.Mail, access)
@@ -791,6 +798,9 @@ func (s navigationRepository) Latest(context.Context) (Post, error) { return s.l
 func (s navigationRepository) ListArchive(context.Context) ([]ArchiveEntry, error) {
 	return s.entries, s.err
 }
+func (s navigationRepository) ListRecent(_ context.Context, limit int) ([]ArchiveEntry, error) {
+	return s.entries[:min(len(s.entries), limit)], s.err
+}
 
 func TestNavigationHandlers(t *testing.T) {
 	h := newHarness(t)
@@ -798,7 +808,7 @@ func TestNavigationHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &module{app: h.app.ApplicationServer, views: make(map[string]*content.View)}
+	m := &module{app: h.app.ApplicationServer, settings: Settings{RecentPostCount: 3}, views: make(map[string]*content.View)}
 	for _, name := range []string{"post", "archive", "recent", "message"} {
 		m.views[name], err = templates.View(h.app.ContentManager, "blog."+name)
 		if err != nil {
@@ -817,6 +827,7 @@ func TestNavigationHandlers(t *testing.T) {
 		{"latest post", m.index, navigationRepository{latest: Post{Title: "Newest post", Markdown: "Latest body", Published: date}}, http.StatusOK, "Latest body"},
 		{"empty archive", m.archive, navigationRepository{}, http.StatusOK, "No posts yet."},
 		{"empty recent posts", m.recent, navigationRepository{}, http.StatusOK, "No posts yet."},
+		{"recent entries", m.recent, navigationRepository{entries: []ArchiveEntry{{Slug: "newest", Title: "Newest post", Published: date}}}, http.StatusOK, `/post/s/newest`},
 		{"archive entries", m.archive, navigationRepository{entries: []ArchiveEntry{{Slug: "older", Title: "Older post", Published: date}}}, http.StatusOK, `/post/s/older`},
 		{"home storage failure", m.index, navigationRepository{err: errors.New("private storage failure")}, http.StatusInternalServerError, "Unable to access blog storage"},
 		{"archive storage failure", m.archive, navigationRepository{err: errors.New("private storage failure")}, http.StatusInternalServerError, "Unable to access blog storage"},
@@ -825,6 +836,7 @@ func TestNavigationHandlers(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// List is deliberately unavailable: neither navigation handler needs full post collections.
 			m.posts = tc.store
+			m.recentPosts.invalidate()
 			r := session.AddSessionManagerToRequestContext(httptest.NewRequest("GET", "/", nil), h.app.Sessions)
 			w := httptest.NewRecorder()
 			tc.handler(w, r)

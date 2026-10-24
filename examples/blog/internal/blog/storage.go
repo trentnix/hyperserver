@@ -39,6 +39,8 @@ type repository interface {
 	Latest(context.Context) (Post, error)
 	// ListArchive returns link metadata newest first, without post bodies.
 	ListArchive(context.Context) ([]ArchiveEntry, error)
+	// ListRecent returns at most limit newest entries. The limit must be positive.
+	ListRecent(context.Context, int) ([]ArchiveEntry, error)
 	// GetByID returns errNotFound when the stable post ID does not exist.
 	GetByID(context.Context, string) (Post, error)
 	// GetBySlug returns errNotFound when the slug does not exist.
@@ -121,7 +123,26 @@ func (s *sqliteRepository) Latest(ctx context.Context) (Post, error) {
 
 // ListArchive returns metadata in the same order as List without loading Markdown.
 func (s *sqliteRepository) ListArchive(ctx context.Context) ([]ArchiveEntry, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT slug, title, published FROM blog_posts ORDER BY published DESC, rowid DESC")
+	return s.listArchive(ctx, 0)
+}
+
+// ListRecent limits the database query, not just the rendered navigation.
+func (s *sqliteRepository) ListRecent(ctx context.Context, limit int) ([]ArchiveEntry, error) {
+	if limit < 1 {
+		return nil, errors.New("recent post limit must be greater than zero")
+	}
+	return s.listArchive(ctx, limit)
+}
+
+// listArchive reads link metadata. A zero limit selects the complete archive.
+func (s *sqliteRepository) listArchive(ctx context.Context, limit int) ([]ArchiveEntry, error) {
+	query := "SELECT slug, title, published FROM blog_posts ORDER BY published DESC, rowid DESC"
+	var args []any
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

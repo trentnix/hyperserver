@@ -131,13 +131,15 @@ func (m *module) archive(w http.ResponseWriter, r *http.Request) {
 
 // recent displays the configured number of newest links for the sidebar or footer.
 func (m *module) recent(w http.ResponseWriter, r *http.Request) {
-	posts, err := m.posts.ListArchive(r.Context())
+	posts, err := m.recentPosts.load(r.Context(), m.settings.RecentPostCount, func() ([]ArchiveEntry, error) {
+		return m.posts.ListRecent(r.Context(), m.settings.RecentPostCount)
+	})
 	if err != nil {
 		m.storageError(w, r, err)
 		return
 	}
 
-	page := m.views["recent"].Content(r, posts[:min(len(posts), m.settings.RecentPostCount)])
+	page := m.views["recent"].Content(r, posts)
 	page.Title = "Recent Posts"
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
@@ -195,6 +197,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.feed.invalidate()
+	m.recentPosts.invalidate()
 	util.RedirectToURL(w, r, "/post/s/"+saved.Slug)
 }
 
@@ -267,6 +270,7 @@ func (m *module) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.feed.invalidate()
+	m.recentPosts.invalidate()
 	util.RedirectToURL(w, r, "/")
 }
 

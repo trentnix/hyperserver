@@ -55,7 +55,7 @@ func TestFeedCacheConcurrentBuild(t *testing.T) {
 				synctest.Wait()
 				for range cap(results) {
 					document := <-results
-					if document == nil || string(document.data) != want || document != cache.document {
+					if document == nil || string(document.data) != want || document != cache.value {
 						t.Fatalf("request did not share the current document: %v", document)
 					}
 				}
@@ -99,7 +99,7 @@ func TestFeedCacheWaitCancellation(t *testing.T) {
 		}
 		close(release)
 		synctest.Wait()
-		if cache.document == nil || string(cache.document.data) != "feed" {
+		if cache.value == nil || string(cache.value.data) != "feed" {
 			t.Fatal("waiting request disturbed the build")
 		}
 		if _, err := cache.load(ctx, "origin", nil); !errors.Is(err, context.Canceled) {
@@ -123,7 +123,7 @@ func TestFeedCacheFailedBuildsRetry(t *testing.T) {
 				}
 				return nil, failure
 			})
-			if err == nil || cache.document != nil || cache.building != nil {
+			if err == nil || cache.value != nil || cache.loading != nil {
 				t.Fatalf("failed build retained state: %v", err)
 			}
 			document, err := cache.load(t.Context(), "origin", func() ([]byte, error) { return []byte("retry"), nil })
@@ -145,7 +145,7 @@ func TestFeedCachePanicReleasesBuild(t *testing.T) {
 		}()
 		cache.load(t.Context(), "origin", func() ([]byte, error) { panic("render failed") })
 	}()
-	if cache.document != nil || cache.building != nil {
+	if cache.value != nil || cache.loading != nil {
 		t.Fatal("panic left cached data or an occupied build slot")
 	}
 	document, err := cache.load(t.Context(), "origin", func() ([]byte, error) { return []byte("retry"), nil })

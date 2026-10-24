@@ -55,13 +55,14 @@ func (a *Access) IsAdmin(account *user.User) bool {
 
 // module owns one application's blog views and post repository.
 type module struct {
-	settings Settings
-	access   *Access
-	app      *server.ApplicationServer
-	posts    repository
-	close    func() error
-	views    map[string]*content.View
-	feed     feedCache
+	settings    Settings
+	access      *Access
+	app         *server.ApplicationServer
+	posts       repository
+	close       func() error
+	views       map[string]*content.View
+	feed        feedCache
+	recentPosts cachedValue[int, []ArchiveEntry]
 }
 
 // init registers the factory without opening storage or creating runtime state.
