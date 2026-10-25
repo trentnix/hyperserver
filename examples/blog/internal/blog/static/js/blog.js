@@ -21,11 +21,22 @@
   const mobileLayout = matchMedia('(max-width: 767px)');
   const menuToggle = document.querySelector('.menu-toggle');
   const menu = document.querySelector('#site-menu');
+  const projectToggle = document.querySelector('.project-toggle');
+  const projectLinks = document.querySelector('#project-links');
   function closeMenu() {
     menu.hidden = mobileLayout.matches;
     menuToggle.hidden = !mobileLayout.matches;
     menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
+    if (projectToggle) {
+      projectLinks.hidden = mobileLayout.matches;
+      projectToggle.hidden = !mobileLayout.matches;
+      projectToggle.setAttribute('aria-expanded', String(!projectLinks.hidden));
+    }
   }
+  projectToggle?.addEventListener('click', () => {
+    projectLinks.hidden = !projectLinks.hidden;
+    projectToggle.setAttribute('aria-expanded', String(!projectLinks.hidden));
+  });
   menuToggle.addEventListener('click', () => {
     menu.hidden = !menu.hidden;
     menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
@@ -55,7 +66,7 @@
 
   function initialize(root) {
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
-    root.querySelectorAll('.project-upload-controls').forEach(controls => { controls.hidden = false; });
+    root.querySelectorAll('.image-upload-controls').forEach(controls => { controls.hidden = false; });
     const textarea = root.querySelector('#post-content');
     if (textarea && window.EasyMDE && !editors.has(textarea)) {
       // EasyMDE replaces native textarea validation. The server remains authoritative.
@@ -104,14 +115,25 @@
     }
   }
 
+  // Project cards store an image ID. Profile fields store the complete URL.
+  function updateImagePreview(picker) {
+    const value = picker.querySelector('[data-image-value]').value.trim();
+    const url = value ? (picker.dataset.imagePrefix || '') + value : picker.dataset.imageDefault;
+    const preview = picker.querySelector('[data-image-preview]');
+    preview.hidden = !url;
+    if (url) preview.src = url;
+    else preview.removeAttribute('src');
+  }
+
   document.addEventListener('click', event => {
-    const remove = event.target.closest('[data-remove-preview]');
+    const remove = event.target.closest('[data-image-reset]');
     if (remove) {
-      const fieldset = remove.closest('[data-project-preview]');
-      fieldset.querySelector('[name="previewImage"]').value = '';
-      fieldset.querySelector('[data-preview-image]').src = '/assets/img/project-default.svg';
-      fieldset.querySelector('input[type="file"]').value = '';
-      fieldset.querySelector('[data-preview-status]').textContent = 'Default image selected. Save the project to apply.';
+      if (remove.form.dataset.uploading) return;
+      const picker = remove.closest('[data-image-picker]');
+      picker.querySelector('[data-image-value]').value = '';
+      picker.querySelector('input[type="file"]').value = '';
+      updateImagePreview(picker);
+      picker.querySelector('[data-image-status]').textContent = 'Selection cleared. Save to apply.';
     }
     const dismiss = event.target.closest('[data-dismiss-notification]');
     if (dismiss) dismiss.closest('.notification').remove();
@@ -119,40 +141,49 @@
     if (close) close.closest('dialog').close();
   });
 
-  // Preview uploads use the same validation and storage as editor images.
-  // Save remains disabled until the upload either succeeds or reports a failure.
+  // Pickers share the editor's validated upload endpoint. Serialize uploads within
+  // each form so Save cannot race another image selection or submit incomplete URLs.
   document.addEventListener('change', async event => {
     const input = event.target;
-    if (!input.matches('[data-project-preview] input[type="file"]') || !input.files.length) return;
-    const fieldset = input.closest('[data-project-preview]');
+    if (input.matches('[data-image-value]')) {
+      updateImagePreview(input.closest('[data-image-picker]'));
+      return;
+    }
+    if (!input.matches('[data-image-picker] input[type="file"]') || !input.files.length) return;
+    const picker = input.closest('[data-image-picker]');
     const form = input.form;
-    const status = fieldset.querySelector('[data-preview-status]');
-    const submit = form.querySelector('[type="submit"]');
-    const remove = fieldset.querySelector('[data-remove-preview]');
+    if (form.dataset.uploading) {
+      input.value = '';
+      return;
+    }
+    const status = picker.querySelector('[data-image-status]');
     const file = input.files[0];
     if (file.size > 8 * 1024 * 1024) {
-      status.textContent = 'Choose an image of at most 8 MiB. The current preview is unchanged.';
+      status.textContent = 'Choose an image of at most 8 MiB. The current image is unchanged.';
       input.value = '';
       return;
     }
     form.dataset.uploading = 'true';
-    input.disabled = submit.disabled = remove.disabled = true;
-    status.textContent = 'Uploading preview image…';
+    const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [type="submit"]')].filter(control => !control.disabled);
+    controls.forEach(control => { control.disabled = true; });
+    status.textContent = 'Uploading image…';
     try {
       const data = new FormData();
       data.append('image', file);
       const response = await fetch('/post/images/upload', {method: 'POST', body: data});
-      if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('Unable to upload the preview image.');
+      if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('Unable to upload the image.');
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Unable to upload the preview image.');
-      fieldset.querySelector('[name="previewImage"]').value = result.data.filePath.slice('/images/'.length);
-      fieldset.querySelector('[data-preview-image]').src = result.data.filePath;
-      status.textContent = 'Preview uploaded. Save the project to apply.';
+      if (!response.ok) throw new Error(result?.error || 'Unable to upload the image.');
+      const path = result?.data?.filePath;
+      if (typeof path !== 'string' || !path.startsWith('/images/')) throw new Error('Invalid image upload response.');
+      picker.querySelector('[data-image-value]').value = path.slice((picker.dataset.imagePrefix || '').length);
+      updateImagePreview(picker);
+      status.textContent = 'Image uploaded. Save to apply.';
     } catch (error) {
-      status.textContent = error.message + ' The current preview is unchanged.';
+      status.textContent = error.message + ' The current image is unchanged.';
     } finally {
       delete form.dataset.uploading;
-      input.disabled = submit.disabled = remove.disabled = false;
+      controls.forEach(control => { control.disabled = false; });
       input.value = '';
     }
   });

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
@@ -21,14 +22,17 @@ var blogModuleFS embed.FS
 
 // Settings is loaded from modules/blog/config.yaml during module initialization.
 type Settings struct {
-	AdminEmail string  `yaml:"adminEmail"`
-	Profile    Profile `yaml:"profile"`
+	AdminEmail string `yaml:"adminEmail"`
 
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
 
 	// UploadsDirectory holds public images, relative to the application configuration directory.
 	UploadsDirectory string `yaml:"uploadsDirectory"`
+
+	// AssetsDirectory optionally serves application-owned files at /local-assets/{name}.
+	// The directory must exist. Relative paths use the application configuration directory.
+	AssetsDirectory string `yaml:"assetsDirectory"`
 
 	Storage struct {
 		Provider   string `yaml:"provider"`
@@ -65,7 +69,10 @@ type module struct {
 	posts        repository
 	projectStore projectRepository
 	pageStore    pageRepository
+	profileStore profileRepository
+	profile      *ProfileState
 	images       imageStore
+	localAssets  *os.Root
 	close        func() error
 	views        map[string]*content.View
 	feed         feedCache
@@ -78,15 +85,14 @@ func init() { handlers.Register(Module(nil, nil)) }
 // Module creates application-local blog instances using the supplied access rule.
 // Each instance opens and closes its content and image storage. Accounts and sessions
 // remain framework services and can select storage independently.
-// settings is populated from the module configuration before Init. Share it with
-// ConfigureRendering and do not modify it after application startup.
-func Module(access *Access, settings *Settings) handlers.Descriptor {
+// Share profile with ConfigureRendering. Each application must supply its own state.
+func Module(access *Access, profile *ProfileState) handlers.Descriptor {
 	return handlers.Descriptor{Name: "blog", New: func() handlers.Handler {
-		selected := settings
+		selected := profile
 		if selected == nil {
-			selected = &Settings{}
+			selected = &ProfileState{}
 		}
-		return &module{access: access, settings: selected}
+		return &module{access: access, settings: &Settings{}, profile: selected}
 	}}
 }
 
@@ -107,9 +113,6 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	}
 	if m.settings.RecentPostCount < 1 {
 		return errors.New("blog.recentPostCount must be greater than zero")
-	}
-	if err := m.settings.Profile.validate(); err != nil {
-		return err
 	}
 	if !app.Config.Auth.Enabled || !app.Config.Auth.RegisterRequiresVerification {
 		return errors.New("blog requires authentication and email verification")
@@ -135,6 +138,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"editor",
 		"delete",
 		"message",
+		"profileEditor",
 	} {
 		view, err := templates.View(app.ContentManager, "blog."+name)
 		if err != nil {
@@ -147,14 +151,43 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if err != nil {
 		return fmt.Errorf("open blog storage: %w", err)
 	}
+	profile, err := store.GetProfile(ctx)
+	if errors.Is(err, errNotFound) {
+		profile, err = Profile{Name: "My Blog"}, nil
+	}
+	if err == nil {
+		err = profile.validate()
+	}
+	if err != nil {
+		return errors.Join(fmt.Errorf("load blog profile: %w", err), closeStore())
+	}
 	images, err := openImageStore(m.settings.UploadsDirectory, app.Config.App.WorkingDirectory)
 	if err != nil {
 		return errors.Join(fmt.Errorf("open blog uploads: %w", err), closeStore())
 	}
+	assets, err := openLocalAssets(m.settings.AssetsDirectory, app.Config.App.WorkingDirectory)
+	if err != nil {
+		return errors.Join(fmt.Errorf("open blog assets: %w", err), images.Close(), closeStore())
+	}
 	m.posts, m.projectStore, m.images = store, store, images
 	m.pageStore = store
-	m.close = func() error { return errors.Join(images.Close(), closeStore()) }
+	m.profileStore = store
+	if m.profile == nil {
+		m.profile = &ProfileState{}
+	}
+	m.profile.mu.Lock()
+	m.profile.value = profile
+	m.profile.mu.Unlock()
+	m.localAssets = assets
+	m.close = func() error {
+		var assetError error
+		if assets != nil {
+			assetError = assets.Close()
+		}
+		return errors.Join(assetError, images.Close(), closeStore())
+	}
 	m.access.emailKey = user.EmailKey(m.settings.AdminEmail)
+	m.configurePageNavigation()
 	return nil
 }
 

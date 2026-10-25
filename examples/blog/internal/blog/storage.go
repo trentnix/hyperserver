@@ -52,7 +52,7 @@ type repository interface {
 	Delete(context.Context, string) error
 }
 
-// sqliteRepository stores posts, projects, and pages in separate blog tables.
+// sqliteRepository stores blog content and the site profile.
 type sqliteRepository struct{ db *sql.DB }
 
 // openRepository keeps storage selection and schema setup inside the blog.
@@ -78,6 +78,10 @@ CREATE TABLE IF NOT EXISTS blog_projects (
 CREATE TABLE IF NOT EXISTS blog_pages (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
  markdown TEXT NOT NULL, published INTEGER NOT NULL CHECK (published IN (0, 1))
+);
+CREATE TABLE IF NOT EXISTS blog_profile (
+ id INTEGER PRIMARY KEY CHECK (id=1), name TEXT NOT NULL, bio TEXT NOT NULL,
+ image_url TEXT NOT NULL, favicon_url TEXT NOT NULL, background_url TEXT NOT NULL
 );`)
 	if err != nil {
 		db.Close()

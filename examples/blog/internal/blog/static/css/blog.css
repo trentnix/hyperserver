@@ -14,7 +14,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; }
 :root { scrollbar-gutter: stable; }
 /* Reserve the first 200px of the footer without constraining its full height. */
 /* Clip the viewport-fixed illustration above the footer so links stay clear. */
-.page-top { min-height: calc(100vh - 200px); background: url('../img/site-bg.jpg') no-repeat fixed right max(0px, calc((100vw - 960px) / 2)) bottom / min(480px, 70vw) auto; }
+.page-top { min-height: calc(100vh - 200px); background: var(--site-background, none) no-repeat fixed right max(0px, calc((100vw - 960px) / 2)) bottom / min(480px, 70vw) auto; }
 .site-sidebar { background: #f3f4f8; }
 .site-header, .article-column, .site-footer > .archive-nav { max-width: 960px; margin: 0 auto; }
 .site-header { padding: 25px 40px 24px; }
@@ -26,13 +26,28 @@ body { margin: 0; min-width: 320px; font-size: 16px; }
 .profile { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 15px; align-items: start; min-width: 0; }
 .menu-toggle.text-button { min-height: 44px; padding: 8px 14px; border: 1px solid #bfc8d3; border-radius: 5px; background: #fff; color: #343d4b; font-weight: 600; text-decoration: none; }
 .menu-toggle:hover, .menu-toggle[aria-expanded="true"] { background: #dce3eb; }
-.portrait { display: block; width: 100%; height: auto; border-radius: 50%; }
+.portrait { display: block; width: 100%; aspect-ratio: 1; height: auto; object-fit: cover; border-radius: 50%; }
 .profile-details { margin-top: 5px; }
 .profile-name { font-size: 1.3em; font-weight: 700; }
 .profile-details p { font-size: .9em; margin: 0 0 5px; }
-.profile-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; }
-.profile-links a { text-decoration: underline; text-underline-offset: .18em; }
-.site-links { line-height: 1.6; }
+.profile-links { margin-top: 16px; font-size: .9em; }
+.profile-links:has(li > ul) { margin-top: 10px; }
+.profile-links > ul { display: flex; flex-wrap: wrap; gap: 6px 20px; list-style: none; margin: 0; padding: 0; }
+.profile-links ul ul { margin-bottom: 0; }
+.profile-links li { min-width: 0; overflow-wrap: anywhere; }
+.profile-links a { display: block; padding-block: 2px; font-weight: 600; }
+.site-links { line-height: 1.4; overflow-wrap: anywhere; text-align: left; }
+.site-links > li + li { margin-top: 6px; }
+.site-links a { display: block; padding-block: 6px; }
+.site-links > li > a, .project-branch > a { font-weight: 600; }
+.project-branch { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.project-branch > a { flex: 1; }
+.project-links { list-style: none; margin: 4px 0 8px 8px; padding: 0 0 0 16px; border-left: 1px solid #c6cdd7; font-size: .9em; }
+.project-links a { color: #505969; }
+.project-links a:hover { color: #212529; }
+.project-toggle.text-button { flex: none; width: 44px; height: 44px; border: 1px solid #d5dbe3; border-radius: 4px; background: #f3f4f8; text-decoration: none; }
+.project-toggle span { display: block; font-size: 1.2em; }
+.project-toggle[aria-expanded=true] span { transform: rotate(180deg); }
 .account-nav { padding: 16px 40px 0; justify-content: flex-end; font-size: .9em; }
 .account-nav form { margin: 0; }
 
@@ -58,13 +73,18 @@ body { margin: 0; min-width: 320px; font-size: 16px; }
 /* Equal outer tracks center the article on the screen, not beside the sidebar.
  * At 1680px, the sidebar has 360px. Wider screens give it the full left track. */
 @media (min-width: 1680px) {
-  body { background: url('../img/site-bg.jpg') no-repeat fixed right bottom / 25% auto; }
+  body { background: var(--site-background, none) no-repeat fixed right bottom / 25% auto; }
   .site-layout { display: grid; grid-template-columns: minmax(0, 1fr) 960px minmax(0, 1fr); grid-template-rows: auto 1fr; align-items: start; }
   .page-top { display: contents; background: none; }
   .site-sidebar { grid-row: 1 / 3; position: sticky; top: 0; min-width: 0; height: 100vh; overflow-y: auto; }
-  .site-header { max-width: none; padding-inline: 20px; padding-bottom: 0; }
+  .site-header { display: flex; flex-direction: column; max-width: none; padding-inline: 20px; padding-bottom: 0; }
+  .header-menu { display: block; order: 1; margin-top: 50px; max-width: 52ch; font-size: .9em; }
+  .site-links > li + li { margin-top: 0; }
+  .header-menu .site-links a { padding-block: 2px; font-weight: 600; }
+  .project-links { margin: 2px 0 4px 6px; padding-left: 12px; font-size: inherit; }
+  .profile-links { display: none; }
   .profile { grid-template-columns: 120px minmax(0, 1fr); }
-  .site-sidebar .archive-nav { padding: 80px 20px 24px; }
+  .site-sidebar .archive-nav { padding: 50px 20px 24px; }
   .article-column { grid-column: 2; grid-row: 1; }
   .article-column:has(.projects-page) { grid-column: 2 / -1; max-width: none; }
   .site-footer { grid-column: 2; grid-row: 2; min-height: 0; padding: 20px 0; }
@@ -73,8 +93,8 @@ body { margin: 0; min-width: 320px; font-size: 16px; }
   .site-header { display: flex; flex-direction: column; gap: 12px; padding: 0 20px 20px; }
   .header-menu { display: block; margin-inline: -20px; padding: 8px 20px; border-bottom: 1px solid #cbd3dd; background: #e7ebf0; text-align: right; }
   .profile-links { display: none; }
-  .site-links { margin-top: 8px; border: 1px solid #cbd3dd; border-radius: 5px; background: #fff; text-align: left; }
-  .site-links a { display: block; min-height: 44px; padding: 10px 14px; }
+  .site-links { margin-top: 8px; padding: 8px 14px; border: 1px solid #cbd3dd; border-radius: 5px; background: #fff; }
+  .site-links a { min-height: 44px; padding-block: 10px; }
   .profile { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
   .profile-name { font-size: 1.1em; }
   .site-footer > .archive-nav { padding: 20px; }
@@ -116,14 +136,14 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .project-card:hover h2 { text-decoration: underline; }
 .project-status { font-size: .8em; color: #626975; margin-bottom: 8px; }
 .project-back { display: inline-block; margin-bottom: 24px; font-size: .85em; }
-.project-preview { min-width: 0; margin: 24px 0; padding: 16px; border: 1px solid #bfc4cd; }
 .project-preview > img { display: block; max-width: 100%; height: auto; aspect-ratio: 8 / 5; object-fit: cover; }
-.project-upload-controls .text-button { margin-top: 12px; }
 .project-publish { display: flex; align-items: center; gap: 10px; }
 @media (min-width: 1680px) { .project-grid { width: 90%; } }
 @media (max-width: 767px) { .project-grid { grid-template-columns: 1fr; } }
 
 /* Shared controls and form feedback. */
+.image-picker { min-width: 0; margin: 24px 0; padding: 16px; border: 1px solid #bfc4cd; }
+.image-upload-controls .text-button { margin-top: 12px; }
 .account-nav, .post-actions, .form-actions { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .form-actions, .verification-actions { margin-top: 24px; }
 .text-button { border: 0; padding: 0; background: none; color: inherit; text-decoration: underline; text-underline-offset: .18em; cursor: pointer; }
@@ -135,6 +155,41 @@ button:not(.text-button, .editor-toolbar button) { background: #343d4b; border: 
 .form-hint { color: #626975; font-size: .85em; }
 .form-messages { margin: 16px 0; font-size: .9em; }
 .form-messages ul { padding-left: 20px; }
+
+/* Site profile. Keep settings readable without changing article typography. */
+.profile-editor { font-size: 16px; line-height: 1.5; }
+.profile-editor h1 { margin-bottom: 8px; }
+.profile-editor h2 { font-size: 1.2em; margin: 30px 0 6px; }
+.profile-editor .form-hint { margin: 8px 0 0; }
+.profile-identity { margin-top: 28px; }
+.profile-editor .profile-image { margin: 22px 0; padding: 20px; border-color: #dce0e6; border-radius: 6px; background: #fff; }
+.profile-image legend { padding: 0 8px; font-weight: 600; }
+.profile-image-row { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 20px; }
+.profile-image-preview { min-width: 0; }
+.profile-image-preview img { display: block; max-width: 100%; object-fit: contain; }
+.profile-image-preview img[hidden], .profile-image-preview img:not([hidden]) + .image-empty { display: none; }
+[data-image-field=imageURL] .profile-image-preview img { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; }
+[data-image-field=faviconURL] .profile-image-row { grid-template-columns: 160px minmax(0, 1fr); }
+[data-image-field=faviconURL] .profile-image-preview { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #dce0e6; border-bottom: 3px solid #dce0e6; border-radius: 8px 8px 0 0; font-size: 13px; background: #f3f4f8; }
+[data-image-field=faviconURL] .profile-image-preview img { width: 16px; height: 16px; flex: none; }
+[data-image-field=backgroundURL] .profile-image-row { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+[data-image-field=backgroundURL] .profile-image-preview { display: grid; place-items: center; height: 180px; padding: 12px; border: 1px solid #dce0e6; border-radius: 4px; background: #fafbfc; }
+[data-image-field=backgroundURL] .profile-image-preview img { width: auto; height: auto; max-height: 154px; }
+.profile-image-controls { min-width: 0; }
+.profile-image-controls .image-upload-controls > label { margin-top: 0; }
+.profile-image input[type=file] { padding: 0; border: 0; background: transparent; font-size: .9em; }
+.profile-image input::file-selector-button { padding: 8px 12px; margin-right: 10px; border: 1px solid #cbd1da; border-radius: 4px; background: #f3f4f8; color: #343d4b; font: inherit; cursor: pointer; }
+.profile-image details { margin-top: 18px; font-size: .9em; }
+.profile-image summary { width: fit-content; color: #626975; cursor: pointer; }
+.profile-image [data-image-status] { margin: 12px 0 0; font-size: .9em; }
+.profile-image [data-image-status]:empty, #profile-errors:empty { display: none; }
+.profile-save { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 28px; padding-top: 24px; border-top: 1px solid #dce0e6; }
+.profile-save .form-hint { margin: 0; }
+@media (max-width: 767px) {
+  .profile-editor .profile-image { padding: 16px; }
+  .profile-image-row, [data-image-field=faviconURL] .profile-image-row { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  [data-image-field=faviconURL] .profile-image-preview { width: 160px; }
+}
 
 /* Authentication. */
 .auth-email-form, .verification-panel, #reset-request, #reset-password { max-width: 540px; margin: 0 auto; }

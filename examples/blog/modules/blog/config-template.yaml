@@ -1,12 +1,9 @@
 # Copy to config.yaml in this directory. Only this address can register and log in.
 # Publishing also requires email verification.
 adminEmail: admin@example.com
-# Public profile used by the header, page titles, metadata, and RSS. Restart after editing.
-profile:
-  name: Example Author
-  bio: Thoughts, projects, and things worth sharing.
-  # Optional local absolute path or HTTPS URL. Empty uses the bundled neutral portrait.
-  imageURL: ""
+# Optional public files at /local-assets/{filename}. Create the directory before enabling.
+# Paths are relative to the application configuration directory. Keep private files elsewhere.
+assetsDirectory: ""
 # Number of links in Recent Posts. Must be greater than zero. All posts stays complete.
 recentPostCount: 10
 # Public image files, relative to the application configuration directory. Back up this directory.

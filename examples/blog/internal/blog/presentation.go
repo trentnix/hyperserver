@@ -5,15 +5,11 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
-	"net/url"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
-	"github.com/trentnix/hyperserver/pkg/util"
 	"github.com/yuin/goldmark"
 )
 
@@ -28,48 +24,14 @@ const (
 // Editor-generated inline styles use style attributes, not inline scripts.
 const ContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
-// Profile supplies the public identity used by shared layouts and RSS.
-// ImageURL can be a local absolute path or an HTTPS URL. Empty uses a neutral portrait.
-type Profile struct {
-	Name     string `yaml:"name"`
-	Bio      string `yaml:"bio"`
-	ImageURL string `yaml:"imageURL"`
-}
-
-// validate rejects incomplete or unsafe profile configuration at startup.
-func (p Profile) validate() error {
-	if strings.TrimSpace(p.Name) == "" || !utf8.ValidString(p.Name) || utf8.RuneCountInString(p.Name) > 240 {
-		return errors.New("blog.profile.name must contain 1–240 characters")
-	}
-	if !utf8.ValidString(p.Bio) || utf8.RuneCountInString(p.Bio) > 500 {
-		return errors.New("blog.profile.bio must contain at most 500 characters")
-	}
-	if p.ImageURL == "" || util.SafeRedirectURL(p.ImageURL, "") == p.ImageURL {
-		return nil
-	}
-	u, err := url.Parse(p.ImageURL)
-	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
-		return errors.New("blog.profile.imageURL must be a local absolute path or HTTPS URL")
-	}
-	return nil
-}
-
-// PortraitURL selects the configured profile image or the bundled neutral image.
-func (p Profile) PortraitURL() string {
-	if p.ImageURL == "" {
-		return "/assets/img/profile-default.svg"
-	}
-	return p.ImageURL
-}
-
 // ConfigureRendering selects the blog layout for feature and authentication pages.
 // Call it before module initialization prepares views. The registration flag
 // permits a registration link only while the administrator account is absent.
 // Account admission and route availability remain the authentication provider's job.
-// settings must be the same application-local value supplied to Module.
-func ConfigureRendering(cm *contentservice.ContentManagerService, settings *Settings, access *Access, accounts user.AccountRepository, registration bool) error {
-	if settings == nil {
-		return errors.New("blog rendering requires settings")
+// profile must be the same application-local state supplied to Module.
+func ConfigureRendering(cm *contentservice.ContentManagerService, profile *ProfileState, access *Access, accounts user.AccountRepository, registration bool) error {
+	if profile == nil {
+		return errors.New("blog rendering requires profile state")
 	}
 	if err := cm.ApplyDefaults("blog", func(cm *contentservice.ContentManagerService) {
 		cm.RegisterLayouts(contentservice.PageType, blogModuleFS, "templates/layout.html")
@@ -79,7 +41,7 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, settings *Sett
 		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", "/", loginURL
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
-			data := navigation{Profile: settings.Profile, SignedIn: account != nil, Admin: access.IsAdmin(account)}
+			data := navigation{Profile: profile.Current(), SignedIn: account != nil, Admin: access.IsAdmin(account)}
 			cookie, err := r.Cookie(returningUserCookie)
 			data.ShowLogin = !data.SignedIn && err == nil && cookie.Value == "1"
 			if registration && !data.SignedIn {
@@ -99,10 +61,39 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, settings *Sett
 	}, content.TemplatePath{FS: blogModuleFS, Path: pagesFile})
 }
 
-// navigation holds account links for the current request, not cached account state.
+// navigation holds the profile and available links for the current request.
 type navigation struct {
 	Profile                                  Profile
+	Pages                                    []Page
+	Projects                                 []Project
 	SignedIn, Admin, Registration, ShowLogin bool
+}
+
+// configurePageNavigation adds published page and project links after storage opens.
+// ConfigureRendering supplies the base navigation, including authentication links.
+func (m *module) configurePageNavigation() {
+	build := m.app.ContentManager.BuildLayoutData
+	m.app.ContentManager.BuildLayoutData = func(r *http.Request) any {
+		data := build(r).(navigation)
+		pages, err := m.pageStore.ListPages(r.Context())
+		if err != nil {
+			logger.LogRequestError(r, err)
+		} else {
+			for _, page := range pages {
+				if page.Published {
+					data.Pages = append(data.Pages, page)
+				}
+			}
+		}
+
+		projects, err := m.projectStore.ListProjects(r.Context(), false)
+		if err != nil {
+			logger.LogRequestError(r, err)
+		} else {
+			data.Projects = projects
+		}
+		return data
+	}
 }
 
 // markdown is the trust boundary for rendered blog content. Goldmark omits raw

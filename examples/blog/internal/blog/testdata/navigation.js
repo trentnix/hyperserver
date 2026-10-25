@@ -95,7 +95,53 @@
 
     const menu = document.querySelector('#site-menu');
     const menuToggle = document.querySelector('.menu-toggle');
-    const pageLinks = innerWidth < 768 ? menu : document.querySelector('.profile-links');
+    const pageLinks = innerWidth < 768 || innerWidth >= 1680 ? menu : document.querySelector('.profile-links');
+    const projectLinks = document.querySelector('#project-links');
+    const projectToggle = document.querySelector('.project-toggle');
+    assert(projectLinks.querySelectorAll('a').length === 6, 'Project tree must list published projects.');
+    if (innerWidth < 768) {
+      menuToggle.click();
+      assert(!projectToggle.hidden && projectLinks.hidden, 'Mobile project tree must start collapsed.');
+      projectToggle.click();
+      assert(!projectLinks.hidden && projectToggle.getAttribute('aria-expanded') === 'true', 'Project toggle did not reveal child links.');
+      projectLinks.querySelector('a[href="/project/s/project-0"]').click();
+      await wait(() => location.pathname === '/project/s/project-0');
+      await headerVisible();
+      assert(menu.hidden && projectLinks.hidden, 'Selecting a project must close the mobile menu.');
+      unchanged();
+    } else if (innerWidth >= 1680) {
+      assert(!projectLinks.hidden && projectToggle.hidden, 'Ultrawide project tree must remain expanded.');
+      for (const link of menu.querySelectorAll('a')) {
+        const style = getComputedStyle(link);
+        assert(style.paddingTop === '2px' && style.paddingBottom === '2px' && style.fontWeight === '600', 'Ultrawide navigation should keep bold links closely spaced.');
+      }
+      const bioGap = menu.getBoundingClientRect().top - document.querySelector('.profile').getBoundingClientRect().bottom;
+      assert(Math.abs(bioGap - 50) < 1, 'Ultrawide navigation needs a 50px gap below the bio.');
+      assert(menu.getBoundingClientRect().bottom <= archive.getBoundingClientRect().top, 'Site navigation overlaps Recent Posts.');
+      const originalWidth = innerWidth;
+      for (const width of [390, 1100, originalWidth]) {
+        window.frameElement.style.width = width + 'px';
+        await wait(() => innerWidth === width && menu.hidden === (width < 768) && projectLinks.hidden === (width < 768));
+        assert(projectToggle.hidden === (width >= 768), 'Resizing left the project toggle in the wrong state.');
+        assert((document.querySelector('.profile-links').getClientRects().length > 0) === (width >= 768 && width < 1680), 'Resizing left duplicate or missing compact navigation.');
+      }
+    } else {
+      assert(menu.getClientRects().length === 0, 'Middle widths must hide the separate menu.');
+      const children = pageLinks.querySelector('.project-links');
+      assert(getComputedStyle(pageLinks).marginTop === '10px', 'Navigation with subpages must sit closer to the bio.');
+      assert(getComputedStyle(children).marginBottom === '0px', 'Subpages must not add space above the header bottom padding.');
+      assert(children.getClientRects().length > 0 && children.querySelectorAll('a').length === 6, 'Middle navigation must show published projects beneath Projects.');
+      assert(children.getBoundingClientRect().top >= pageLinks.querySelector('a[href="/projects"]').getBoundingClientRect().bottom, 'Child links must sit below their parent link.');
+      const listStyle = getComputedStyle(pageLinks.querySelector('ul'));
+      assert(listStyle.display === 'flex' && listStyle.flexWrap === 'wrap' && listStyle.columnGap === '20px', 'Middle navigation must use a compact, wrapping row.');
+      for (const link of pageLinks.querySelectorAll('a')) {
+        assert(getComputedStyle(link).fontWeight === '600', 'Middle navigation links must match the bold ultrawide links.');
+      }
+      children.querySelector('a[href="/project/s/project-0"]').click();
+      await wait(() => location.pathname === '/project/s/project-0');
+      await headerVisible();
+      unchanged();
+    }
     if (innerWidth < 768) menuToggle.click();
     pageLinks.querySelector('a[href="/about"]').click();
     await wait(() => location.pathname === '/about' && document.title === 'Trent Nix | About Me');

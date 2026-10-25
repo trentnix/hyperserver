@@ -360,7 +360,7 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	if err := os.MkdirAll(moduleDirectory, 0700); err != nil {
 		t.Fatal(err)
 	}
-	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nprofile:\n  name: Trent Nix\n  bio: Trent is a technologist interested in building and delivering better software.\nrecentPostCount: %d\nuploadsDirectory: uploads\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
+	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nrecentPostCount: %d\nuploadsDirectory: uploads\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
 	if err := os.WriteFile(filepath.Join(moduleDirectory, "config.yaml"), []byte(settings), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -377,6 +377,9 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	cfg.Auth.AccountStorage = config.AccountStorageConfig{Provider: "sqlite", Options: map[string]string{"connection": "accounts.db?_journal=WAL"}}
 	cfg.Auth.Services = map[string]map[string]string{"email": {"enabled": "true"}}
 	h := startHarness(t, cfg)
+	if err := h.blog.writeProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software.", BackgroundURL: "/assets/img/site-bg.jpg"}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "about", Title: "About Me", Published: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -391,15 +394,15 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 		t.Fatal(err)
 	}
 	access := &Access{}
-	settings := &Settings{}
+	profile := &ProfileState{}
 	h.app, err = application.New(t.Context(), cfg, application.Options{
 		Services:              application.Services{Mail: mail},
 		ContentSecurityPolicy: ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-			if err := ConfigureRendering(app.ContentManager, settings, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
+			if err := ConfigureRendering(app.ContentManager, profile, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
-			blog := Module(access, settings)
+			blog := Module(access, profile)
 			newBlog := blog.New
 			blog.New = func() handlers.Handler {
 				h.blog = newBlog().(*module)
@@ -577,7 +580,7 @@ func (unavailableAccounts) GetByEmail(context.Context, string) (*user.User, erro
 // TestRegistrationLinkHiddenOnLookupFailure keeps storage errors from advertising signup.
 func TestRegistrationLinkHiddenOnLookupFailure(t *testing.T) {
 	cm := contentservice.NewContentManager()
-	if err := ConfigureRendering(cm, &Settings{}, &Access{emailKey: user.EmailKey("trentnix@gmail.com")}, unavailableAccounts{}, true); err != nil {
+	if err := ConfigureRendering(cm, &ProfileState{}, &Access{emailKey: user.EmailKey("trentnix@gmail.com")}, unavailableAccounts{}, true); err != nil {
 		t.Fatal(err)
 	}
 	r := httptest.NewRequest(http.MethodGet, "/", nil)

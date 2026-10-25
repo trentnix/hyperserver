@@ -94,7 +94,7 @@ func TestProjectsHTTP(t *testing.T) {
 				t.Fatal("project response may retain draft content in caches")
 			}
 			for _, path := range []string{"/rss", "/posts/recent"} {
-				if strings.Contains(h.request("GET", path, nil, hx).Body.String(), "Project draft") {
+				if strings.Contains(h.request("GET", path, nil, true).Body.String(), "Project draft") {
 					t.Fatal("projects leaked into post feed", path)
 				}
 			}

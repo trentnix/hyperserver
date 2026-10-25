@@ -16,7 +16,7 @@ type cachedValue[K comparable, V any] struct {
 	loading    chan struct{}
 }
 
-// invalidate discards the value after a committed post change.
+// invalidate discards the value after a committed content change.
 func (c *cachedValue[K, V]) invalidate() {
 	c.mu.Lock()
 	c.generation++

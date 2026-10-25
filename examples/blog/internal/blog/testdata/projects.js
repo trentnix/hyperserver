@@ -54,7 +54,7 @@
       };
       selectFile(new File(['not an image'], 'bad.png', {type: 'image/png'}));
       await wait(() => !form.dataset.uploading);
-      assert(form.elements.previewImage.value === '' && document.querySelector('[data-preview-status]').textContent.includes('unchanged'), 'Invalid upload replaced the preview.');
+      assert(form.elements.previewImage.value === '' && document.querySelector('[data-image-status]').textContent.includes('unchanged'), 'Invalid upload replaced the preview.');
 
       const canvas = document.createElement('canvas');
       canvas.width = 100; canvas.height = 60;
@@ -105,7 +105,7 @@
       await htmx.ajax('GET', edit, '#dialog-host');
       await wait(() => document.querySelector('dialog[open] .CodeMirror'));
       await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
-      document.querySelector('[data-remove-preview]').click();
+      document.querySelector('[data-image-reset]').click();
       const form = document.querySelector('#project-form');
       assert(form.elements.previewImage.value === '', 'Removing the preview retained its ID.');
       form.elements.published.checked = false;

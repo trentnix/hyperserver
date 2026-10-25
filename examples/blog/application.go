@@ -18,14 +18,14 @@ func newApplication(ctx context.Context, cfg config.Config) (*application.Applic
 		return nil, errors.New("configure http.listenHost and a nonzero http.port")
 	}
 	access := &blog.Access{}
-	settings := &blog.Settings{}
+	profile := &blog.ProfileState{}
 	return application.New(ctx, cfg, application.Options{
 		ContentSecurityPolicy: blog.ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-			if err := blog.ConfigureRendering(app.ContentManager, settings, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
+			if err := blog.ConfigureRendering(app.ContentManager, profile, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
-			return []handlers.Descriptor{blog.Module(access, settings), auth.Module(nil, nil, nil)}, nil
+			return []handlers.Descriptor{blog.Module(access, profile), auth.Module(nil, nil, nil)}, nil
 		},
 		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
 			return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {

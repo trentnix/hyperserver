@@ -6,7 +6,7 @@
   <meta name="description" content="{{ .LayoutData.Profile.Bio }}">
   <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"historyCacheSize":0}'>
   <title>{{ .LayoutData.Profile.Name }}{{ if .Title }} | {{ .Title }}{{ end }}</title>
-  <link rel="icon" href="/assets/img/favicon.ico">
+  <link rel="icon" href="{{ .LayoutData.Profile.IconURL }}">
   <link rel="alternate" type="application/rss+xml" title="{{ .LayoutData.Profile.Name }}" href="/rss">
   <link rel="stylesheet" href="/assets/css/blog.css">
   {{ if .LayoutData.Admin }}<link rel="stylesheet" href="/assets/lib/easymde/easymde.min.css">
@@ -14,21 +14,21 @@
   <script src="/assets/lib/htmx/htmx.min.js" defer></script>
   <script src="/assets/js/blog.js" defer></script>
 </head>
-<body>
+<body{{ if .LayoutData.Profile.BackgroundURL }} style="--site-background: url('{{ .LayoutData.Profile.BackgroundURL }}')"{{ end }}>
   <div class="site-layout">
     <div class="page-top">
       <aside class="site-sidebar">
         <header class="site-header" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
           <nav class="header-menu" aria-label="Site links">
             <button class="menu-toggle text-button" type="button" aria-expanded="false" aria-controls="site-menu" hidden><span aria-hidden="true">☰</span> Menu</button>
-            <ul id="site-menu" class="site-links"><li><a href="/">Home</a></li><li><a href="/about">About Me</a></li><li><a href="/projects">Projects</a></li></ul>
+            <ul id="site-menu" class="site-links">{{ template "blog.siteLinks" . }}</ul>
           </nav>
           <div class="profile">{{ template "blog.profile" . }}</div>
         </header>
       </aside>
       <main id="main-content" class="article-column">
         <div class="account-nav">
-          {{ if .LayoutData.Admin }}<a href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a><a href="/pages">Pages</a>{{ end }}
+          {{ if .LayoutData.Admin }}<a href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a>{{ end }}
           {{ if .LayoutData.SignedIn }}
           {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
           <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>

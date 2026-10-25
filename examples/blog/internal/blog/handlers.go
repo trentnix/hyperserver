@@ -22,6 +22,9 @@ func (m *module) Routes(routes *routing.Routes) error {
 		return err
 	}
 	routes.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets)))
+	if m.localAssets != nil {
+		routes.HandleFunc("GET /local-assets/{name}", m.localAsset)
+	}
 	routes.HandleFunc("GET /{$}", m.index)
 	routes.HandleFunc("GET /posts", m.archive)
 	routes.HandleFunc("GET /posts/recent", m.recent)
@@ -29,6 +32,8 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /post/id/{id}", m.post)
 	routes.HandleFunc("GET /images/{id}", m.image)
 	routes.HandleFunc("GET /rss", m.rss)
+	routes.Handle("GET /profile", m.requireAdmin(m.profileEditor))
+	routes.HandleWithBodyLimit("POST /profile", m.requireAdmin(m.saveProfile), routing.MiB)
 	routes.HandleFunc("GET /about", m.page)
 	routes.HandleFunc("GET /page/{slug}", m.page)
 	routes.Handle("GET /pages", m.requireAdmin(m.pages))

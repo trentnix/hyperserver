@@ -68,7 +68,8 @@ func (m *module) buildFeed(ctx context.Context, origin *url.URL) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	channel := feedChannel{Title: m.settings.Profile.Name, Link: origin.String(), Description: m.settings.Profile.Bio}
+	profile := m.profile.Current()
+	channel := feedChannel{Title: profile.Name, Link: origin.String(), Description: profile.Bio}
 	for _, p := range posts {
 		if err := ctx.Err(); err != nil {
 			return nil, err

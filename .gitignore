@@ -43,6 +43,7 @@ config.yaml
 /tmp/
 /deploy/local/state/
 /examples/blog/uploads/
+/examples/blog/assets/
 
 # Local implementation guidance
 /production-readiness-checklist.md

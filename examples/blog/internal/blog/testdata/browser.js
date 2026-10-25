@@ -54,7 +54,7 @@ document.removeEventListener = function(type, callback, options) {
       const archiveStyle = getComputedStyle(document.querySelector('.archive-nav'));
       const archivePadding = innerWidth < 768 || innerWidth >= 1680 ? '20px' : '40px';
       assert(archiveStyle.paddingLeft === archivePadding && archiveStyle.paddingRight === archivePadding, 'Recent Posts has incorrect horizontal padding.');
-      if (innerWidth >= 1680) assert(archiveStyle.paddingTop === '80px', 'Sidebar Recent Posts needs 80px of top padding.');
+      if (innerWidth >= 1680) assert(archiveStyle.paddingTop === '50px', 'Sidebar Recent Posts needs 50px of separation from site navigation.');
       const sidebar = document.querySelector('.site-sidebar');
       const footer = document.querySelector('.site-footer');
       assert(getComputedStyle(document.querySelector('.article-column')).paddingBottom === (innerWidth < 1680 ? '80px' : '0px'), 'Extra spacing after the article must apply only below the ultrawide breakpoint.');
@@ -88,9 +88,13 @@ document.removeEventListener = function(type, callback, options) {
         links.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
         assert(links.hidden && document.activeElement === menuToggle, 'Escape must close the menu and return focus.');
         menuToggle.click();
-      } else {
+      } else if (innerWidth < 1680) {
+        assert(getComputedStyle(profileLinks).marginTop === '16px', 'Flat navigation must retain its spacing below the bio.');
         assert(document.querySelector('.header-menu').getClientRects().length === 0, 'Desktop must hide the separate menu.');
         assert(profileLinks.getClientRects().length > 0 && profileLinks.getBoundingClientRect().top >= profile.querySelector('p').getBoundingClientRect().bottom, 'Desktop links must appear below the bio.');
+      } else {
+        assert(profileLinks.getClientRects().length === 0 && menuToggle.hidden, 'Ultrawide must hide compact links and the hamburger.');
+        assert(!links.hidden && links.getBoundingClientRect().top >= profile.getBoundingClientRect().bottom, 'Ultrawide navigation must sit below the bio.');
       }
       const siteLinks = links.querySelectorAll('a');
       if (innerWidth < 768) {

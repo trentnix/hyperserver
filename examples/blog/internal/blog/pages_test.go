@@ -24,6 +24,139 @@ func pageFields(slug string, published bool) url.Values {
 	return values
 }
 
+// TestAboutNavigation keeps both menus in step with the published About page.
+func TestAboutNavigation(t *testing.T) {
+	for _, hx := range []bool{false, true} {
+		h := newHarness(t)
+		about, err := h.blog.pageStore.GetPageBySlug(t.Context(), "about", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := h.blog.pageStore.DeletePage(t.Context(), about.ID); err != nil {
+			t.Fatal(err)
+		}
+		h.register(t)
+		h.verify(t)
+		h.login(t)
+		cookies := h.cookies
+		check := func(visible bool) {
+			t.Helper()
+			want := 0
+			if visible {
+				want = 2 // The desktop profile and mobile menu.
+			}
+			for _, signedIn := range []bool{false, true} {
+				h.cookies = nil
+				if signedIn {
+					h.cookies = cookies
+				}
+				w := h.request("GET", "/", nil, false)
+				requireStatus(t, w, http.StatusOK)
+				if got := strings.Count(w.Body.String(), `href="/about"`); got != want {
+					t.Fatalf("signedIn=%v: About links=%d, want %d", signedIn, got, want)
+				}
+			}
+			h.cookies = cookies
+		}
+		check(false)
+		status := http.StatusSeeOther
+		if hx {
+			status = http.StatusOK
+		}
+		requireStatus(t, h.request("POST", "/pages", pageFields("about", false), hx), status)
+		check(false)
+		about, err = h.blog.pageStore.GetPageBySlug(t.Context(), "about", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, change := range []struct {
+			slug      string
+			published bool
+		}{
+			{"about", true},
+			{"about", false},
+			{"about", true},
+			{"other-page", true},
+			{"about", true},
+		} {
+			requireStatus(t, h.request("POST", "/pages/"+about.ID, pageFields(change.slug, change.published), hx), status)
+			check(change.slug == "about" && change.published)
+		}
+		requireStatus(t, h.request("POST", "/pages/delete/"+about.ID, nil, hx), status)
+		check(false)
+	}
+}
+
+// TestSiteNavigation exposes published metadata only and preserves project order.
+func TestSiteNavigation(t *testing.T) {
+	h := newHarness(t)
+	for _, page := range []Page{
+		{Slug: "contact", Title: "Contact <us>", Published: true},
+		{Slug: "private-page", Title: "Private page"},
+	} {
+		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, project := range []Project{
+		{Slug: "last", Title: "Last project", Published: true, DisplayOrder: new(20)},
+		{Slug: "first", Title: "First <project>", Published: true, DisplayOrder: new(10)},
+		{Slug: "private-project", Title: "Private project"},
+	} {
+		if _, err := h.blog.projectStore.SaveProject(t.Context(), project); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, signedIn := range []bool{false, true} {
+		if signedIn {
+			h.register(t)
+			h.verify(t)
+			h.login(t)
+		}
+		body := h.request("GET", "/", nil, false).Body.String()
+		if strings.Count(body, `href="/page/contact"`) != 2 || strings.Count(body, `href="/project/s/first"`) != 2 {
+			t.Fatal("navigation is missing page or project links")
+		}
+		if !strings.Contains(body, "Contact &lt;us&gt;") || !strings.Contains(body, "First &lt;project&gt;") {
+			t.Fatal("navigation titles were not escaped")
+		}
+		if strings.Contains(body, "private-page") || strings.Contains(body, "private-project") {
+			t.Fatal("drafts appeared in public navigation")
+		}
+		if strings.Index(body, `href="/project/s/first"`) > strings.Index(body, `href="/project/s/last"`) {
+			t.Fatal("project navigation ignored display order")
+		}
+	}
+	h.blog.projectStore = failingProjects{}
+	body := h.request("GET", "/", nil, false).Body.String()
+	if strings.Contains(body, `id="project-links"`) || strings.Contains(body, "private storage failure") || !strings.Contains(body, `href="/page/contact"`) || !strings.Contains(body, `href="/projects"`) {
+		t.Fatal("project lookup failure broke page navigation or leaked details")
+	}
+}
+
+type unavailablePageNavigation struct{ pageRepository }
+
+func (unavailablePageNavigation) ListPages(context.Context) ([]Page, error) {
+	return []Page{{Slug: "about", Published: true}}, errors.New("private navigation storage failure")
+}
+
+// TestAboutNavigationFailure hides an uncertain link without breaking the page.
+func TestAboutNavigationFailure(t *testing.T) {
+	h := newHarness(t)
+	h.blog.pageStore = unavailablePageNavigation{h.blog.pageStore}
+	for _, path := range []string{"/", loginURL, "/missing"} {
+		w := h.request("GET", path, nil, false)
+		want := http.StatusOK
+		if path == "/missing" {
+			want = http.StatusNotFound
+		}
+		requireStatus(t, w, want)
+		if strings.Contains(w.Body.String(), `href="/about"`) || strings.Contains(w.Body.String(), "private navigation") {
+			t.Fatal("navigation exposed an uncertain link or private error")
+		}
+	}
+}
+
 // TestPagesHTTP checks protected management, draft privacy, About routing, and deletion.
 func TestPagesHTTP(t *testing.T) {
 	for _, hx := range []bool{false, true} {
@@ -81,12 +214,12 @@ func TestPagesHTTP(t *testing.T) {
 				t.Fatal("unsafe or incorrect public page", w.Body)
 			}
 			for _, path := range []string{"/rss", "/posts/recent", "/posts"} {
-				if strings.Contains(h.request("GET", path, nil, hx).Body.String(), "Page draft") {
+				if strings.Contains(h.request("GET", path, nil, true).Body.String(), "Page draft") {
 					t.Fatal("page leaked into post collections", path)
 				}
 			}
-			if strings.Contains(h.request("GET", "/projects", nil, false).Body.String(), "/page/published") {
-				t.Fatal("page automatically appeared in navigation")
+			if strings.Count(h.request("GET", "/projects", nil, false).Body.String(), `href="/page/published"`) != 2 {
+				t.Fatal("published page missing from navigation")
 			}
 			h.cookies = cookies
 

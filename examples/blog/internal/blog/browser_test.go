@@ -83,6 +83,17 @@ func TestBrowserPages(t *testing.T) {
 	}
 }
 
+// TestBrowserProfile checks profile edits across the header, favicon, and background.
+func TestBrowserProfile(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check profile editing")
+	}
+	for _, width := range []string{"390", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "profile") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
@@ -130,6 +141,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/projects.js"
 	case "pages":
 		scriptFile = "testdata/pages.js"
+	case "profile":
+		scriptFile = "testdata/profile.js"
 	}
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {
