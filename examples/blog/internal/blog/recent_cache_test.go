@@ -187,7 +187,7 @@ func TestRecentHandlerCache(t *testing.T) {
 		}
 		return []ArchiveEntry{{Slug: "one", Title: "One <post>"}}, nil
 	}}
-	m := &module{app: h.app.ApplicationServer, settings: Settings{RecentPostCount: 3}, posts: store, views: map[string]*content.View{"recent": view}}
+	m := &module{app: h.app.ApplicationServer, settings: &Settings{RecentPostCount: 3}, posts: store, views: map[string]*content.View{"recent": view}}
 	for i, status := range []int{http.StatusInternalServerError, http.StatusOK, http.StatusOK} {
 		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/posts/recent", nil), h.app.Sessions)
 		if i == 2 {

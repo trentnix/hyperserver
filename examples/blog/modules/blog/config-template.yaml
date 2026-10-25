@@ -1,6 +1,12 @@
 # Copy to config.yaml in this directory. Only this address can register and log in.
 # Publishing also requires email verification.
-adminEmail: trentnix@gmail.com
+adminEmail: admin@example.com
+# Public profile used by the header, page titles, metadata, and RSS. Restart after editing.
+profile:
+  name: Example Author
+  bio: Thoughts, projects, and things worth sharing.
+  # Optional local absolute path or HTTPS URL. Empty uses the bundled neutral portrait.
+  imageURL: ""
 # Number of links in Recent Posts. Must be greater than zero. All posts stays complete.
 recentPostCount: 10
 # Public image files, relative to the application configuration directory. Back up this directory.

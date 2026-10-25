@@ -286,7 +286,7 @@ func testRecentPosts(t *testing.T, limit int) {
 // TestRecentPostCountRequired rejects missing, zero, and negative counts at startup.
 func TestRecentPostCountRequired(t *testing.T) {
 	for _, count := range []int{0, -1} {
-		m := &module{access: &Access{}, settings: Settings{AdminEmail: "trentnix@gmail.com", RecentPostCount: count}}
+		m := &module{access: &Access{}, settings: &Settings{AdminEmail: "trentnix@gmail.com", RecentPostCount: count}}
 		// Invalid settings must fail before accessing application services or storage.
 		err := m.Init(t.Context(), nil)
 		if err == nil || err.Error() != "blog.recentPostCount must be greater than zero" {
@@ -360,7 +360,7 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	if err := os.MkdirAll(moduleDirectory, 0700); err != nil {
 		t.Fatal(err)
 	}
-	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nrecentPostCount: %d\nuploadsDirectory: uploads\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
+	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nprofile:\n  name: Trent Nix\n  bio: Trent is a technologist interested in building and delivering better software.\nrecentPostCount: %d\nuploadsDirectory: uploads\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
 	if err := os.WriteFile(filepath.Join(moduleDirectory, "config.yaml"), []byte(settings), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +376,11 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	cfg.Auth.VerificationTokenExpiration, cfg.Auth.ResetTokenExpiration = time.Hour, time.Hour
 	cfg.Auth.AccountStorage = config.AccountStorageConfig{Provider: "sqlite", Options: map[string]string{"connection": "accounts.db?_journal=WAL"}}
 	cfg.Auth.Services = map[string]map[string]string{"email": {"enabled": "true"}}
-	return startHarness(t, cfg)
+	h := startHarness(t, cfg)
+	if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "about", Title: "About Me", Published: true}); err != nil {
+		t.Fatal(err)
+	}
+	return h
 }
 
 func startHarness(t *testing.T, cfg config.Config) *harness {
@@ -387,14 +391,15 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 		t.Fatal(err)
 	}
 	access := &Access{}
+	settings := &Settings{}
 	h.app, err = application.New(t.Context(), cfg, application.Options{
 		Services:              application.Services{Mail: mail},
 		ContentSecurityPolicy: ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-			if err := ConfigureRendering(app.ContentManager, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
+			if err := ConfigureRendering(app.ContentManager, settings, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
-			blog := Module(access)
+			blog := Module(access, settings)
 			newBlog := blog.New
 			blog.New = func() handlers.Handler {
 				h.blog = newBlog().(*module)
@@ -572,7 +577,7 @@ func (unavailableAccounts) GetByEmail(context.Context, string) (*user.User, erro
 // TestRegistrationLinkHiddenOnLookupFailure keeps storage errors from advertising signup.
 func TestRegistrationLinkHiddenOnLookupFailure(t *testing.T) {
 	cm := contentservice.NewContentManager()
-	if err := ConfigureRendering(cm, &Access{emailKey: user.EmailKey("trentnix@gmail.com")}, unavailableAccounts{}, true); err != nil {
+	if err := ConfigureRendering(cm, &Settings{}, &Access{emailKey: user.EmailKey("trentnix@gmail.com")}, unavailableAccounts{}, true); err != nil {
 		t.Fatal(err)
 	}
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -813,7 +818,7 @@ func TestNavigationHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &module{app: h.app.ApplicationServer, settings: Settings{RecentPostCount: 3}, views: make(map[string]*content.View)}
+	m := &module{app: h.app.ApplicationServer, settings: &Settings{RecentPostCount: 3}, views: make(map[string]*content.View)}
 	for _, name := range []string{"post", "archive", "recent", "message"} {
 		m.views[name], err = templates.View(h.app.ContentManager, "blog."+name)
 		if err != nil {

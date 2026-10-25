@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	errNotFound  = errors.New("post, project, or image not found")
+	errNotFound  = errors.New("blog content not found")
 	errSlugTaken = errors.New("that slug is already used by another post")
 )
 
@@ -52,7 +52,7 @@ type repository interface {
 	Delete(context.Context, string) error
 }
 
-// sqliteRepository stores posts and projects in separate blog tables.
+// sqliteRepository stores posts, projects, and pages in separate blog tables.
 type sqliteRepository struct{ db *sql.DB }
 
 // openRepository keeps storage selection and schema setup inside the blog.
@@ -74,6 +74,10 @@ CREATE TABLE IF NOT EXISTS blog_projects (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
  summary TEXT NOT NULL, markdown TEXT NOT NULL, preview_image TEXT NOT NULL,
  display_order INTEGER, published INTEGER NOT NULL CHECK (published IN (0, 1)), updated INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS blog_pages (
+ id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+ markdown TEXT NOT NULL, published INTEGER NOT NULL CHECK (published IN (0, 1))
 );`)
 	if err != nil {
 		db.Close()

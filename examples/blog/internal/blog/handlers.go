@@ -29,7 +29,15 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /post/id/{id}", m.post)
 	routes.HandleFunc("GET /images/{id}", m.image)
 	routes.HandleFunc("GET /rss", m.rss)
-	routes.HandleFunc("GET /about", m.about)
+	routes.HandleFunc("GET /about", m.page)
+	routes.HandleFunc("GET /page/{slug}", m.page)
+	routes.Handle("GET /pages", m.requireAdmin(m.pages))
+	routes.Handle("GET /pages/create", m.requireAdmin(m.pageEditor))
+	routes.Handle("GET /pages/update/{id}", m.requireAdmin(m.pageEditor))
+	routes.Handle("GET /pages/delete/{id}", m.requireAdmin(m.confirmPageDelete))
+	routes.HandleWithBodyLimit("POST /pages", m.requireAdmin(m.savePage), routing.MiB)
+	routes.HandleWithBodyLimit("POST /pages/{id}", m.requireAdmin(m.savePage), routing.MiB)
+	routes.Handle("POST /pages/delete/{id}", m.requireAdmin(m.deletePage))
 	routes.HandleFunc("GET /projects", m.projects)
 	routes.HandleFunc("GET /project/s/{slug}", m.project)
 	routes.Handle("GET /project/create", m.requireAdmin(m.projectEditor))
@@ -49,15 +57,6 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /login", m.login)
 	routes.HandleFunc("/", m.app.ContentManager.HandleNotFound)
 	return routes.Err()
-}
-
-// about displays the author's biography.
-func (m *module) about(w http.ResponseWriter, r *http.Request) {
-	page := m.views["about"].Content(r, nil)
-	page.Title = "About Me"
-	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display this page.", err)
-	}
 }
 
 // login redirects the short login URL to the email authentication page.

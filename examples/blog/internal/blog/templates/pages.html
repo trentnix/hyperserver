@@ -26,13 +26,45 @@
 <ul>{{ range . }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>
 {{ end }}
 
-{{ define "blog.about" }}
+{{ define "blog.page" }}
 <section class="info-page">
-<h1>About Me</h1>
-<p>Trent Nix is a Texas-based technologist interested in software project management, software process, and full-stack software development.</p>
-<p>This blog is a place for me to write about software and technology, to share things I'm working on, and to think out loud.</p>
-<p>Need to contact me? Send me an email at <a href="mailto:trentnix@gmail.com">trentnix@gmail.com</a>, or find me on <a href="https://www.linkedin.com/in/trent-nix/">LinkedIn</a>.</p>
+{{ if not .Data.Published }}<p class="project-status">Draft — visible only to you</p>{{ end }}
+<h1>{{ .Data.Title }}</h1>
+{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit page</a><a href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a></div>{{ end }}
+<div class="post-body">{{ .Data.HTML }}</div>
 </section>
+{{ end }}
+
+{{ define "blog.pages" }}
+<section class="info-page">
+<h1>Pages</h1>
+<div class="post-actions"><a href="/pages/create" hx-get="/pages/create" hx-target="#dialog-host">New page</a></div>
+<ul>{{ range .Data }}<li><a href="{{ .URL }}">{{ .Title }}</a>{{ if not .Published }} — Draft{{ end }} <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#dialog-host">Edit</a> · <a href="/pages/delete/{{ .ID }}" hx-get="/pages/delete/{{ .ID }}" hx-target="#dialog-host">Delete</a></li>{{ else }}<li>No pages yet.</li>{{ end }}</ul>
+</section>
+{{ end }}
+
+{{ define "blog.pageEditor" }}
+{{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
+<section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit page{{ else }}New page{{ end }}</h1>
+<form id="page-form" method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+  <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
+  <label for="page-title">Title</label><input id="page-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
+  <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" required aria-describedby="slug-help">
+  <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Pages use /page/your-slug. The about slug also uses /about. Changing a slug breaks existing links.</small>
+  <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16">{{ .Data.Markdown }}</textarea>
+  <p class="form-hint">Up to 256 KiB of Markdown. Content can be empty.</p>
+  <label class="project-publish"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish page</label>
+  <p class="form-hint">Drafts are visible only to the administrator. Saving a page does not add a navigation link.</p>
+  <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/pages">Cancel</a>{{ end }}</div>
+</form></section>
+{{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}
+
+{{ define "blog.pageDelete" }}
+{{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
+<h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone. Existing links to this page will stop working.</p>
+<form class="form-actions" method="post" action="/pages/delete/{{ .Data.ID }}"><button type="submit">Delete page</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="{{ .Data.URL }}">Cancel</a>{{ end }}</form>
+{{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
 
 {{ define "blog.projects" }}

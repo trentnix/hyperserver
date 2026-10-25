@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Trent Nix writes about building and delivering better software.">
+  <meta name="description" content="{{ .LayoutData.Profile.Bio }}">
   <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"historyCacheSize":0}'>
-  <title>Trent Nix{{ if .Title }} | {{ .Title }}{{ end }}</title>
+  <title>{{ .LayoutData.Profile.Name }}{{ if .Title }} | {{ .Title }}{{ end }}</title>
   <link rel="icon" href="/assets/img/favicon.ico">
-  <link rel="alternate" type="application/rss+xml" title="Trent Nix" href="/rss">
+  <link rel="alternate" type="application/rss+xml" title="{{ .LayoutData.Profile.Name }}" href="/rss">
   <link rel="stylesheet" href="/assets/css/blog.css">
   {{ if .LayoutData.Admin }}<link rel="stylesheet" href="/assets/lib/easymde/easymde.min.css">
   <script src="/assets/lib/easymde/easymde.min.js" defer></script>{{ end }}
@@ -28,7 +28,7 @@
       </aside>
       <main id="main-content" class="article-column">
         <div class="account-nav">
-          {{ if .LayoutData.Admin }}<a href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a>{{ end }}
+          {{ if .LayoutData.Admin }}<a href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a><a href="/pages">Pages</a>{{ end }}
           {{ if .LayoutData.SignedIn }}
           {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
           <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>

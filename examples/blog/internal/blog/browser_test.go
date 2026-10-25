@@ -72,6 +72,17 @@ func TestBrowserProjects(t *testing.T) {
 	}
 }
 
+// TestBrowserPages checks standalone content management with the shared editor.
+func TestBrowserPages(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check page editing")
+	}
+	for _, width := range []string{"390", "1100"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "pages") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
@@ -117,6 +128,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/editor-history.js"
 	case "projects":
 		scriptFile = "testdata/projects.js"
+	case "pages":
+		scriptFile = "testdata/pages.js"
 	}
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {

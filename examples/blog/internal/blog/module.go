@@ -21,7 +21,8 @@ var blogModuleFS embed.FS
 
 // Settings is loaded from modules/blog/config.yaml during module initialization.
 type Settings struct {
-	AdminEmail string `yaml:"adminEmail"`
+	AdminEmail string  `yaml:"adminEmail"`
+	Profile    Profile `yaml:"profile"`
 
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
@@ -56,13 +57,14 @@ func (a *Access) IsAdmin(account *user.User) bool {
 	return a != nil && a.emailKey != "" && account != nil && account.Verified && user.EmailKey(account.Email) == a.emailKey
 }
 
-// module owns one application's views, post and project repositories, and images.
+// module owns one application's views, content repositories, and images.
 type module struct {
-	settings     Settings
+	settings     *Settings
 	access       *Access
 	app          *server.ApplicationServer
 	posts        repository
 	projectStore projectRepository
+	pageStore    pageRepository
 	images       imageStore
 	close        func() error
 	views        map[string]*content.View
@@ -71,17 +73,25 @@ type module struct {
 }
 
 // init registers the factory without opening storage or creating runtime state.
-func init() { handlers.Register(Module(nil)) }
+func init() { handlers.Register(Module(nil, nil)) }
 
 // Module creates application-local blog instances using the supplied access rule.
 // Each instance opens and closes its content and image storage. Accounts and sessions
 // remain framework services and can select storage independently.
-func Module(access *Access) handlers.Descriptor {
-	return handlers.Descriptor{Name: "blog", New: func() handlers.Handler { return &module{access: access} }}
+// settings is populated from the module configuration before Init. Share it with
+// ConfigureRendering and do not modify it after application startup.
+func Module(access *Access, settings *Settings) handlers.Descriptor {
+	return handlers.Descriptor{Name: "blog", New: func() handlers.Handler {
+		selected := settings
+		if selected == nil {
+			selected = &Settings{}
+		}
+		return &module{access: access, settings: selected}
+	}}
 }
 
 // Configuration supplies the destination for the module's YAML settings.
-func (m *module) Configuration() any { return &m.settings }
+func (m *module) Configuration() any { return m.settings }
 
 // Init validates settings, prepares views, and opens content storage before serving.
 // It initializes the shared administrator rule only after setup succeeds.
@@ -89,11 +99,17 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if m.access == nil {
 		return errors.New("blog requires an access rule")
 	}
+	if m.settings == nil {
+		return errors.New("blog requires settings")
+	}
 	if !form.ValidEmail(m.settings.AdminEmail) {
 		return errors.New("blog.adminEmail must be a valid email address")
 	}
 	if m.settings.RecentPostCount < 1 {
 		return errors.New("blog.recentPostCount must be greater than zero")
+	}
+	if err := m.settings.Profile.validate(); err != nil {
+		return err
 	}
 	if !app.Config.Auth.Enabled || !app.Config.Auth.RegisterRequiresVerification {
 		return errors.New("blog requires authentication and email verification")
@@ -108,7 +124,10 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"post",
 		"archive",
 		"recent",
-		"about",
+		"page",
+		"pages",
+		"pageEditor",
+		"pageDelete",
 		"projects",
 		"project",
 		"projectEditor",
@@ -124,7 +143,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		m.views[name] = view
 	}
 
-	store, closeStore, err := openRepository(ctx, m.settings, app.Config.App.WorkingDirectory)
+	store, closeStore, err := openRepository(ctx, *m.settings, app.Config.App.WorkingDirectory)
 	if err != nil {
 		return fmt.Errorf("open blog storage: %w", err)
 	}
@@ -133,6 +152,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		return errors.Join(fmt.Errorf("open blog uploads: %w", err), closeStore())
 	}
 	m.posts, m.projectStore, m.images = store, store, images
+	m.pageStore = store
 	m.close = func() error { return errors.Join(images.Close(), closeStore()) }
 	m.access.emailKey = user.EmailKey(m.settings.AdminEmail)
 	return nil

@@ -1,6 +1,6 @@
 # Copy to config.yaml. Generate two different secrets with: openssl rand -hex 32
 app:
-  name: Trent Nix
+  name: Blog
   initializationTimeout: 10s
   renderNotifications: true
 http:

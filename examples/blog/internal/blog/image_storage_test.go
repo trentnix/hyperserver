@@ -213,14 +213,14 @@ func TestModuleImageStorageLifecycle(t *testing.T) {
 // TestModuleImageStorageInitFailure rejects invalid upload configuration before serving routes.
 func TestModuleImageStorageInitFailure(t *testing.T) {
 	h := newHarness(t)
-	settings := h.blog.settings
+	settings := *h.blog.settings
 	settings.Storage.Connection = "failed-init.db"
 	if err := os.WriteFile(filepath.Join(h.app.Config.App.WorkingDirectory, "occupied"), nil, 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, directory := range []string{"", "occupied"} {
 		settings.UploadsDirectory = directory
-		m := &module{settings: settings, access: &Access{}}
+		m := &module{settings: &settings, access: &Access{}}
 		err := m.Init(t.Context(), h.app.ApplicationServer)
 		if err == nil || !strings.Contains(err.Error(), "open blog uploads") {
 			t.Fatalf("invalid directory %q: %v", directory, err)

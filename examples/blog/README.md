@@ -29,13 +29,15 @@ Then start the blog:
 GOWORK=off go run .
 ```
 
-Open <http://127.0.0.1:8086/auth/register/email> and register `trentnix@gmail.com`. Other addresses cannot register or log in. Open the verification message in <http://127.0.0.1:8025>, confirm the address, and log in. The **New post** link appears for the verified administrator. Mailpit captures mail locally and does not deliver it to Gmail. Stop the server with Ctrl+C.
+Set `adminEmail` in `modules/blog/config.yaml` to your email address. Open <http://127.0.0.1:8086/auth/register/email> and register that address. Other addresses cannot register or log in. Open the verification message in <http://127.0.0.1:8025>, confirm the address, and log in. The **New post** link appears for the verified administrator.
+
+Mailpit captures mail locally without delivering it externally. Stop the server with Ctrl+C.
 
 Set `auth.registrationEnabled: false` after creating the administrator if desired. Login, recovery, and verification remain available. For deployment, configure real SMTP delivery, independent random signing keys, HTTPS, and `http.publicOrigin`.
 
 ## Structure
 
-`application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, SQLite post and project repositories, and file-based image storage. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
+`application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, SQLite storage for posts, projects, and pages, and file-based image storage. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
 
 EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when posts or projects are deleted. This prototype does not import old blog databases.
 
@@ -48,6 +50,14 @@ RSS caches the complete rendered feed. Recent Posts caches only the configured n
 Open `/projects` and choose **New project** when signed in as the verified administrator. Projects have a title, card description, Markdown detail page, optional preview image, optional display order, and publication checkbox. Explicit display orders appear first, lowest number first. Projects without an order follow, sorted by most recently updated. Update time also breaks ties between matching orders. Unpublished projects remain visible to the administrator but return 404 to other visitors, and projects stay out of RSS and Recent Posts.
 
 Preview images appear only on listing cards. Omitting or removing one selects the bundled default. Uploading, replacing, or removing the preview requires JavaScript, and saving the project applies the selection. All uploaded images are public, even when used by a draft. Project records use a separate table in the blog database, created at startup without changing existing post records.
+
+## Profile and pages
+
+Set `profile.name`, `profile.bio`, and optional `profile.imageURL` in `modules/blog/config.yaml`, then restart. The profile supplies the header, page titles, metadata, and RSS identity. Image URLs must be local absolute paths or HTTPS URLs. An empty image URL uses the bundled neutral portrait.
+
+Sign in as the verified administrator and choose **Pages** to create, edit, publish, or delete standalone Markdown pages. Each page has a title and a unique slug. New pages start as drafts, visible only to the administrator. Pages stay out of RSS and Recent Posts, and creating one does not add a navigation link.
+
+Pages use `/page/{slug}`. The About navigation link uses `/about`, which displays the page with slug `about`. Create and publish that page on a new installation. Missing, deleted, and unpublished pages return 404 to visitors. Changing a slug breaks existing links. Page content can be empty.
 
 ## Tests
 

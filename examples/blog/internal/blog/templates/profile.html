@@ -1,9 +1,9 @@
 {{ define "blog.profile" }}
-<a href="/"><img class="portrait" src="/assets/img/trent-nix-small.jpg" width="120" height="120" alt="Trent Nix"></a>
+<a href="/"><img class="portrait" src="{{ .LayoutData.Profile.PortraitURL }}" width="120" height="120" alt="{{ .LayoutData.Profile.Name }}"></a>
 <div class="profile-details">
-  <a class="profile-name" href="/">Trent Nix</a>
-  <p>Trent is a technologist interested in building and delivering better software.</p>
-  <nav class="profile-links" aria-label="About Trent">
+  <a class="profile-name" href="/">{{ .LayoutData.Profile.Name }}</a>
+  {{ if .LayoutData.Profile.Bio }}<p>{{ .LayoutData.Profile.Bio }}</p>{{ end }}
+  <nav class="profile-links" aria-label="About the author">
     <a href="/about">About</a>
     <a href="/projects">Projects</a>
   </nav>

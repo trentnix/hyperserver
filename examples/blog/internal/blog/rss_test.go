@@ -166,7 +166,7 @@ func (s feedRepository) List(ctx context.Context) ([]Post, error) { return s.lis
 func TestRSSConditionalRequests(t *testing.T) {
 	h := newHarness(t)
 	calls := 0
-	m := &module{app: h.app.ApplicationServer, posts: feedRepository{list: func(context.Context) ([]Post, error) {
+	m := &module{app: h.app.ApplicationServer, settings: h.blog.settings, posts: feedRepository{list: func(context.Context) ([]Post, error) {
 		calls++
 		return []Post{{ID: "one", Slug: "hello", Title: "Hello", Markdown: "Body"}}, nil
 	}}}
@@ -215,7 +215,7 @@ func TestRSSOriginIsolation(t *testing.T) {
 	h.app.Config.HTTP.PublicOrigin = ""
 	calls := 0
 	store := feedRepository{list: func(context.Context) ([]Post, error) { calls++; return nil, nil }}
-	m := &module{app: h.app.ApplicationServer, posts: store}
+	m := &module{app: h.app.ApplicationServer, settings: h.blog.settings, posts: store}
 	for _, secure := range []bool{false, true, true, false} {
 		r := httptest.NewRequest(http.MethodGet, "http://untrusted.example/rss", nil)
 		scheme := "http"
@@ -231,7 +231,7 @@ func TestRSSOriginIsolation(t *testing.T) {
 	if calls != 3 {
 		t.Fatalf("origin cache builds=%d, want 3", calls)
 	}
-	other := &module{app: h.app.ApplicationServer, posts: store}
+	other := &module{app: h.app.ApplicationServer, settings: h.blog.settings, posts: store}
 	other.rss(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/rss", nil))
 	if calls != 4 {
 		t.Fatal("module instances shared cached content")
@@ -242,7 +242,7 @@ func TestRSSOriginIsolation(t *testing.T) {
 func TestRSSStorageFailureDoesNotCache(t *testing.T) {
 	h := newHarness(t)
 	calls := 0
-	m := &module{app: h.app.ApplicationServer, posts: feedRepository{list: func(context.Context) ([]Post, error) {
+	m := &module{app: h.app.ApplicationServer, settings: h.blog.settings, posts: feedRepository{list: func(context.Context) ([]Post, error) {
 		calls++
 		if calls == 1 {
 			return nil, errors.New("private storage failure")
