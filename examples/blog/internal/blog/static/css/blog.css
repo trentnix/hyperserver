@@ -10,6 +10,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 /* Page layout and navigation. */
 body { margin: 0; min-width: 320px; font-size: 16px; }
+/* Keep layout and text wrapping stable when navigation changes page height. */
+:root { scrollbar-gutter: stable; }
 /* Reserve the first 200px of the footer without constraining its full height. */
 /* Clip the viewport-fixed illustration above the footer so links stay clear. */
 .page-top { min-height: calc(100vh - 200px); background: url('../img/site-bg.jpg') no-repeat fixed right max(0px, calc((100vw - 960px) / 2)) bottom / min(480px, 70vw) auto; }
@@ -56,8 +58,6 @@ body { margin: 0; min-width: 320px; font-size: 16px; }
 /* Equal outer tracks center the article on the screen, not beside the sidebar.
  * At 1680px, the sidebar has 360px. Wider screens give it the full left track. */
 @media (min-width: 1680px) {
-  /* Keep the columns stable when navigating between short and long posts. */
-  :root { scrollbar-gutter: stable; }
   body { background: url('../img/site-bg.jpg') no-repeat fixed right bottom / 25% auto; }
   .site-layout { display: grid; grid-template-columns: minmax(0, 1fr) 960px minmax(0, 1fr); grid-template-rows: auto 1fr; align-items: start; }
   .page-top { display: contents; background: none; }
@@ -66,6 +66,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; }
   .profile { grid-template-columns: 120px minmax(0, 1fr); }
   .site-sidebar .archive-nav { padding: 80px 20px 24px; }
   .article-column { grid-column: 2; grid-row: 1; }
+  .article-column:has(.projects-page) { grid-column: 2 / -1; max-width: none; }
   .site-footer { grid-column: 2; grid-row: 2; min-height: 0; padding: 20px 0; }
 }
 @media (max-width: 767px) {
@@ -102,6 +103,25 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
   .page-content { --content-padding: 20px; padding: 10px var(--content-padding) 30px; }
   h1 { font-size: 1.4em; }
 }
+
+/* Project cards and preview controls. */
+.project-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin-top: 30px; }
+.page-content .project-card { display: flex; flex-direction: column; background: #fff; border: 1px solid #e1e5eb; border-radius: 6px; overflow: hidden; color: inherit; text-decoration: none; }
+.project-card > img { display: block; width: 100%; height: auto; aspect-ratio: 8 / 5; object-fit: cover; }
+.project-card-copy { display: flex; flex: 1; flex-direction: column; align-items: start; padding: 22px; }
+.project-card h2 { font-size: 1.25em; margin: 0; }
+.project-card p { font-size: .95em; margin: 12px 0 24px; }
+.project-read { margin-top: auto; font-size: .85em; text-decoration: underline; text-underline-offset: .2em; }
+.project-card:hover { border-color: #7d8d9e; }
+.project-card:hover h2 { text-decoration: underline; }
+.project-status { font-size: .8em; color: #626975; margin-bottom: 8px; }
+.project-back { display: inline-block; margin-bottom: 24px; font-size: .85em; }
+.project-preview { min-width: 0; margin: 24px 0; padding: 16px; border: 1px solid #bfc4cd; }
+.project-preview > img { display: block; max-width: 100%; height: auto; aspect-ratio: 8 / 5; object-fit: cover; }
+.project-upload-controls .text-button { margin-top: 12px; }
+.project-publish { display: flex; align-items: center; gap: 10px; }
+@media (min-width: 1680px) { .project-grid { width: 90%; } }
+@media (max-width: 767px) { .project-grid { grid-template-columns: 1fr; } }
 
 /* Shared controls and form feedback. */
 .account-nav, .post-actions, .form-actions { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }

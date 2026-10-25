@@ -47,7 +47,7 @@ func TestBrowserNavigation(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check article navigation")
 	}
-	for _, width := range []string{"390", "1100", "3440"} {
+	for _, width := range []string{"320", "390", "767", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "navigation") })
 	}
 }
@@ -61,6 +61,17 @@ func TestBrowserEditorHistory(t *testing.T) {
 	testBrowser(t, browser, "1100", "editor-history")
 }
 
+// TestBrowserProjects checks project editing, preview uploads, and responsive cards.
+func TestBrowserProjects(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check project editing")
+	}
+	for _, width := range []string{"390", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "projects") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
@@ -69,6 +80,14 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	h.verify(t)
 	if mode == "navigation" {
 		h.login(t)
+		for i := range 6 {
+			_, err := h.blog.projectStore.SaveProject(t.Context(), Project{
+				Slug: fmt.Sprintf("project-%d", i), Title: "Sample project", Summary: "A project card for navigation layout checks.", Published: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 		for _, slug := range []string{"first", "second"} {
 			body := "Body of " + slug
 			if slug == "first" {
@@ -96,6 +115,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/navigation.js"
 	case "editor-history":
 		scriptFile = "testdata/editor-history.js"
+	case "projects":
+		scriptFile = "testdata/projects.js"
 	}
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {

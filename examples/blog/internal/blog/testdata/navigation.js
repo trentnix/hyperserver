@@ -35,6 +35,9 @@
     const contentBackground = getComputedStyle(main).backgroundImage;
     const sidebarWidth = sidebar.getBoundingClientRect().width;
     const contentLeft = main.getBoundingClientRect().left;
+    const contentWidth = article.getBoundingClientRect().width;
+    const bioWidth = document.querySelector('.profile-details').getBoundingClientRect().width;
+    const menuRight = document.querySelector('.menu-toggle').getBoundingClientRect().right;
     const titleTop = document.querySelector('.post-heading').getBoundingClientRect().top;
     const archiveRequests = () => performance.getEntriesByType('resource').filter(entry => new URL(entry.name).pathname === '/posts/recent').length;
     const initialRequests = archiveRequests();
@@ -49,6 +52,10 @@
       if (innerWidth >= 1680) {
         assert(Math.abs(sidebar.getBoundingClientRect().width - sidebarWidth) < 1, 'Post length changed the sidebar width: ' + sidebarWidth + ' to ' + sidebar.getBoundingClientRect().width);
         assert(Math.abs(main.getBoundingClientRect().left - contentLeft) < 1, 'Post length shifted the content column.');
+      } else {
+        assert(Math.abs(article.getBoundingClientRect().width - contentWidth) < 1, 'Page height changed the text wrapping width.');
+        assert(Math.abs(document.querySelector('.profile-details').getBoundingClientRect().width - bioWidth) < 1, 'Page height changed the bio wrapping width.');
+        if (innerWidth < 768) assert(Math.abs(document.querySelector('.menu-toggle').getBoundingClientRect().right - menuRight) < 1, 'Page height moved the mobile menu.');
       }
     };
     const postVisible = slug => location.pathname === '/post/s/' + slug &&
@@ -96,6 +103,8 @@
     assert(article.querySelector('h1')?.textContent === 'About Me', 'About navigation missed the article.');
     assertHeading();
     archiveVisible(innerWidth >= 1680);
+    const aboutProfileLeft = document.querySelector('.profile-name').getBoundingClientRect().left;
+    const aboutTitleLeft = article.querySelector('h1').getBoundingClientRect().left;
     if (innerWidth < 768) {
       assert(menu.hidden && menuToggle.getAttribute('aria-expanded') === 'false', 'Navigation must close the mobile menu.');
     }
@@ -104,6 +113,9 @@
     pageLinks.querySelector('a[href="/projects"]').click();
     await wait(() => location.pathname === '/projects' && document.title === 'Trent Nix | Projects');
     await headerVisible();
+    assert(document.documentElement.scrollHeight > innerHeight, 'Projects fixture must require scrolling.');
+    assert(Math.abs(document.querySelector('.profile-name').getBoundingClientRect().left - aboutProfileLeft) < 1, 'About-to-Projects navigation shifted the profile.');
+    assert(Math.abs(article.querySelector('h1').getBoundingClientRect().left - aboutTitleLeft) < 1, 'About-to-Projects navigation shifted the content.');
     archiveVisible(innerWidth >= 1680);
     unchanged();
     if (innerWidth < 768) menuToggle.click();

@@ -35,13 +35,21 @@ Set `auth.registrationEnabled: false` after creating the administrator if desire
 
 ## Structure
 
-`application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, SQLite post repository, and file-based image storage. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
+`application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, SQLite post and project repositories, and file-based image storage. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
 
-EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when posts are deleted. This prototype does not import old blog databases.
+EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when posts or projects are deleted. This prototype does not import old blog databases.
 
 Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Images use content-based filenames and immutable public URLs with a one-year browser cache lifetime. Files must not be edited in place. Upload a new image to change its content.
 
 RSS caches the complete rendered feed. Recent Posts caches only the configured number of entries, not rendered HTML. Both caches are loaded on demand and invalidated after creating, editing, or deleting a post. Feed readers can revalidate with an ETag. Feed links and images use absolute URLs. Run one blog instance per post database. Direct database edits require a restart to refresh the caches.
+
+## Projects
+
+Open `/projects` and choose **New project** when signed in as the verified administrator. Projects have a title, card description, Markdown detail page, optional preview image, optional display order, and publication checkbox. Explicit display orders appear first, lowest number first. Projects without an order follow, sorted by most recently updated. Update time also breaks ties between matching orders. Unpublished projects remain visible to the administrator but return 404 to other visitors, and projects stay out of RSS and Recent Posts.
+
+Preview images appear only on listing cards. Omitting or removing one selects the bundled default. Uploading, replacing, or removing the preview requires JavaScript, and saving the project applies the selection. All uploaded images are public, even when used by a draft. Project records use a separate table in the blog database, created at startup without changing existing post records.
+
+## Tests
 
 ```sh
 GOWORK=off go test ./...

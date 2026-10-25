@@ -35,7 +35,69 @@
 </section>
 {{ end }}
 
-{{ define "blog.projects" }}<section class="info-page"><h1>Projects</h1><p>I've got nothing interesting to show.</p></section>{{ end }}
+{{ define "blog.projects" }}
+<section class="info-page projects-page">
+<h1>Projects</h1>
+{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/project/create" hx-get="/project/create" hx-target="#dialog-host">New project</a></div>{{ end }}
+<div class="project-grid" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+{{ range .Data }}<a class="project-card" href="/project/s/{{ .Slug }}">
+  <img src="{{ .PreviewURL }}" alt="" width="800" height="500" loading="lazy">
+  <div class="project-card-copy">{{ if not .Published }}<span class="project-status">Draft</span>{{ end }}<h2>{{ .Title }}</h2><p>{{ .Summary }}</p><span class="project-read">Explore project &rarr;</span></div>
+</a>{{ else }}<p>No projects published yet.</p>{{ end }}
+</div></section>
+{{ end }}
+
+{{ define "blog.project" }}
+<section class="info-page project-page">
+<a class="project-back" href="/projects" hx-get="/projects" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">&larr; Projects</a>
+<header class="post-heading">{{ if not .Data.Published }}<p class="project-status">Draft — visible only to you</p>{{ end }}<h1>{{ .Data.Title }}</h1></header>
+{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/project/update/{{ .Data.ID }}" hx-get="/project/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a><a href="/project/delete/{{ .Data.ID }}" hx-get="/project/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a></div>{{ end }}
+<div class="post-body">{{ .Data.HTML }}</div>
+</section>
+{{ end }}
+
+{{ define "blog.projectEditor" }}
+{{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
+<section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit project{{ else }}New project{{ end }}</h1>
+<form id="project-form" method="post" action="/project{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/project{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+  <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
+  <label for="project-title">Title</label><input id="project-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
+  <label for="project-slug">URL slug</label><input id="project-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" {{ if .Data.ID }}required{{ end }} aria-describedby="slug-help">
+  <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Leave empty for an automatic URL when creating a project.</small>
+  <label for="project-summary">Short description</label><textarea id="project-summary" name="summary" maxlength="2000" rows="2" required>{{ .Data.Summary }}</textarea>
+  <label for="project-order">Display order (optional)</label><input id="project-order" name="displayOrder" type="number" min="0" max="1000000" value="{{ if .Data.DisplayOrder }}{{ .Data.DisplayOrder }}{{ end }}" aria-describedby="order-help">
+  <small id="order-help" class="form-hint">Ordered projects appear first, lowest number first. Leave blank to sort by most recently updated. Update time also breaks ties.</small>
+  <fieldset class="project-preview" data-project-preview>
+    <legend>Preview image</legend>
+    <img src="{{ .Data.PreviewURL }}" alt="Current project card preview" width="320" height="200" data-preview-image>
+    <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}">
+    <div class="project-upload-controls" hidden>
+      <label for="project-image">Upload a preview image</label><input id="project-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="preview-help">
+      <button type="button" class="text-button" data-remove-preview>Use default image</button>
+    </div>
+    <p id="preview-help" class="form-hint">Shown only on the Projects listing, cropped to fit. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Uploads are public, including images used in drafts.</p>
+    <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
+    <p data-preview-status role="status"></p>
+  </fieldset>
+  {{ template "blog.markdownFields" .Data }}
+  <label class="project-publish"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish project</label>
+  <p class="form-hint">Uncheck to save a draft or remove this project from public view.</p>
+  <div class="form-actions"><button type="submit">Save project</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/projects">Cancel</a>{{ end }}</div>
+</form></section>
+{{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}
+
+{{ define "blog.projectDelete" }}
+{{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
+<h1 id="delete-title">Delete project?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone.</p>
+<form class="form-actions" method="post" action="/project/delete/{{ .Data.ID }}"><button type="submit">Delete project</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/project/s/{{ .Data.Slug }}">Cancel</a>{{ end }}</form>
+{{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}
+
+{{ define "blog.markdownFields" }}
+  <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" required>{{ .Markdown }}</textarea>
+  <p class="form-hint">Content can contain up to 256 KiB of Markdown. Images: PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels.</p>
+{{ end }}
 
 {{ define "blog.editor" }}
 {{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
@@ -46,8 +108,7 @@
   <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" {{ if .Data.ID }}required{{ end }} aria-describedby="slug-help">
   <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Leave empty for an automatic URL when creating a post.</small>
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
-  <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" required>{{ .Data.Markdown }}</textarea>
-  <p class="form-hint">Posts can contain up to 256 KiB of Markdown. Images: PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels.</p>
+  {{ template "blog.markdownFields" .Data }}
   <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/">Cancel</a>{{ end }}</div>
 </form></section>
 {{ if .IsHtmx }}</dialog>{{ end }}

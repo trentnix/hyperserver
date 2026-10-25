@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	errNotFound  = errors.New("post or image not found")
+	errNotFound  = errors.New("post, project, or image not found")
 	errSlugTaken = errors.New("that slug is already used by another post")
 )
 
@@ -52,12 +52,12 @@ type repository interface {
 	Delete(context.Context, string) error
 }
 
-// sqliteRepository stores posts in the blog's SQLite table.
+// sqliteRepository stores posts and projects in separate blog tables.
 type sqliteRepository struct{ db *sql.DB }
 
 // openRepository keeps storage selection and schema setup inside the blog.
 // On success, the caller owns the returned close function.
-func openRepository(ctx context.Context, settings Settings, directory string) (repository, func() error, error) {
+func openRepository(ctx context.Context, settings Settings, directory string) (*sqliteRepository, func() error, error) {
 	if settings.Storage.Provider != "sqlite" {
 		return nil, nil, errors.New("blog.storage.provider must be sqlite")
 	}
@@ -69,6 +69,11 @@ func openRepository(ctx context.Context, settings Settings, directory string) (r
 CREATE TABLE IF NOT EXISTS blog_posts (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
  summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS blog_projects (
+ id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+ summary TEXT NOT NULL, markdown TEXT NOT NULL, preview_image TEXT NOT NULL,
+ display_order INTEGER, published INTEGER NOT NULL CHECK (published IN (0, 1)), updated INTEGER NOT NULL
 );`)
 	if err != nil {
 		db.Close()

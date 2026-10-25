@@ -31,6 +31,13 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /rss", m.rss)
 	routes.HandleFunc("GET /about", m.about)
 	routes.HandleFunc("GET /projects", m.projects)
+	routes.HandleFunc("GET /project/s/{slug}", m.project)
+	routes.Handle("GET /project/create", m.requireAdmin(m.projectEditor))
+	routes.Handle("GET /project/update/{id}", m.requireAdmin(m.projectEditor))
+	routes.Handle("GET /project/delete/{id}", m.requireAdmin(m.confirmProjectDelete))
+	routes.HandleWithBodyLimit("POST /project", m.requireAdmin(m.saveProject), routing.MiB)
+	routes.HandleWithBodyLimit("POST /project/{id}", m.requireAdmin(m.saveProject), routing.MiB)
+	routes.Handle("POST /project/delete/{id}", m.requireAdmin(m.deleteProject))
 	routes.Handle("GET /post/create", m.requireAdmin(m.editor))
 	routes.Handle("GET /post/update/{id}", m.requireAdmin(m.editor))
 	routes.Handle("GET /post/delete/{id}", m.requireAdmin(m.confirmDelete))
@@ -48,15 +55,6 @@ func (m *module) Routes(routes *routing.Routes) error {
 func (m *module) about(w http.ResponseWriter, r *http.Request) {
 	page := m.views["about"].Content(r, nil)
 	page.Title = "About Me"
-	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display this page.", err)
-	}
-}
-
-// projects displays the author's projects.
-func (m *module) projects(w http.ResponseWriter, r *http.Request) {
-	page := m.views["projects"].Content(r, nil)
-	page.Title = "Projects"
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}

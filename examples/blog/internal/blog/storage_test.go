@@ -92,7 +92,7 @@ func TestNavigationQueries(t *testing.T) {
 
 	// Dates and ties are explicit so the ordering check never depends on timing.
 	date := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
-	db := store.(*sqliteRepository).db
+	db := store.db
 	for index, post := range []Post{
 		{ID: "first", Slug: "first", Title: "First", Published: date.AddDate(0, -1, 0)},
 		{ID: "second", Slug: "second", Title: "Second", Published: date},

@@ -55,6 +55,7 @@
 
   function initialize(root) {
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
+    root.querySelectorAll('.project-upload-controls').forEach(controls => { controls.hidden = false; });
     const textarea = root.querySelector('#post-content');
     if (textarea && window.EasyMDE && !editors.has(textarea)) {
       // EasyMDE replaces native textarea validation. The server remains authoritative.
@@ -90,11 +91,11 @@
             method: 'POST', body: new URLSearchParams({content: markdown}), signal: previewRequest.signal
           }).then(async response => {
             const html = await response.text();
-            if (!response.ok) throw new Error('Unable to preview this post.');
+            if (!response.ok) throw new Error('Unable to preview this content.');
             // The server uses the same safe Markdown renderer as published posts.
             preview.innerHTML = html;
           }).catch(error => {
-            if (error.name !== 'AbortError') preview.textContent = 'Unable to preview this post.';
+            if (error.name !== 'AbortError') preview.textContent = 'Unable to preview this content.';
           });
           return 'Loading preview…';
         }
@@ -104,11 +105,63 @@
   }
 
   document.addEventListener('click', event => {
+    const remove = event.target.closest('[data-remove-preview]');
+    if (remove) {
+      const fieldset = remove.closest('[data-project-preview]');
+      fieldset.querySelector('[name="previewImage"]').value = '';
+      fieldset.querySelector('[data-preview-image]').src = '/assets/img/project-default.svg';
+      fieldset.querySelector('input[type="file"]').value = '';
+      fieldset.querySelector('[data-preview-status]').textContent = 'Default image selected. Save the project to apply.';
+    }
     const dismiss = event.target.closest('[data-dismiss-notification]');
     if (dismiss) dismiss.closest('.notification').remove();
     const close = event.target.closest('[data-close-dialog]');
     if (close) close.closest('dialog').close();
   });
+
+  // Preview uploads use the same validation and storage as editor images.
+  // Save remains disabled until the upload either succeeds or reports a failure.
+  document.addEventListener('change', async event => {
+    const input = event.target;
+    if (!input.matches('[data-project-preview] input[type="file"]') || !input.files.length) return;
+    const fieldset = input.closest('[data-project-preview]');
+    const form = input.form;
+    const status = fieldset.querySelector('[data-preview-status]');
+    const submit = form.querySelector('[type="submit"]');
+    const remove = fieldset.querySelector('[data-remove-preview]');
+    const file = input.files[0];
+    if (file.size > 8 * 1024 * 1024) {
+      status.textContent = 'Choose an image of at most 8 MiB. The current preview is unchanged.';
+      input.value = '';
+      return;
+    }
+    form.dataset.uploading = 'true';
+    input.disabled = submit.disabled = remove.disabled = true;
+    status.textContent = 'Uploading preview image…';
+    try {
+      const data = new FormData();
+      data.append('image', file);
+      const response = await fetch('/post/images/upload', {method: 'POST', body: data});
+      if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('Unable to upload the preview image.');
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to upload the preview image.');
+      fieldset.querySelector('[name="previewImage"]').value = result.data.filePath.slice('/images/'.length);
+      fieldset.querySelector('[data-preview-image]').src = result.data.filePath;
+      status.textContent = 'Preview uploaded. Save the project to apply.';
+    } catch (error) {
+      status.textContent = error.message + ' The current preview is unchanged.';
+    } finally {
+      delete form.dataset.uploading;
+      input.disabled = submit.disabled = remove.disabled = false;
+      input.value = '';
+    }
+  });
+  document.addEventListener('submit', event => {
+    if (event.target.dataset.uploading) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
   document.addEventListener('htmx:beforeCleanupElement', event => {
     const textarea = event.detail.elt;
     const state = editors.get(textarea);
