@@ -211,6 +211,13 @@
     if (event.target.dataset.uploading) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      return;
+    }
+    const slug = event.target.querySelector('[data-published-slug]');
+    if (slug && slug.value.trim() !== slug.dataset.publishedSlug &&
+        !confirm('Changing this URL can break existing links to this content. Continue?')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
     }
   }, true);
   document.addEventListener('htmx:beforeCleanupElement', event => {

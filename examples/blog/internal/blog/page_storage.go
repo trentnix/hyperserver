@@ -24,6 +24,7 @@ type Page struct {
 	ParentID, Summary, PreviewImage, ChildrenDisplay string
 	DisplayOrder                                     *int
 	Published                                        bool
+	EverPublished                                    bool // Remains true after the page returns to draft.
 	Updated                                          time.Time
 }
 
@@ -51,11 +52,31 @@ type pageRepository interface {
 	ListPages(context.Context, bool) ([]Page, error)
 	GetPageBySlug(context.Context, string, bool) (Page, error)
 	GetPageByID(context.Context, string, bool) (Page, error)
+	// SavePage retains EverPublished once published, regardless of caller-supplied history.
 	SavePage(context.Context, Page) (Page, error)
 	DeletePage(context.Context, string) error
 }
 
-const pageColumns = "id, slug, title, markdown, published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated"
+const pageColumns = "id, slug, title, markdown, published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published"
+
+// initializePagePublicationHistory preserves known publication state on existing
+// installations. Existing drafts do not record whether they were published earlier.
+func initializePagePublicationHistory(ctx context.Context, db *sql.DB) error {
+	var exists bool
+	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_pages') WHERE name='ever_published')").Scan(&exists); err != nil || exists {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE blog_pages ADD COLUMN ever_published INTEGER NOT NULL DEFAULT 0 CHECK (ever_published IN (0, 1));
+UPDATE blog_pages SET ever_published=published;`); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 
 // publishedPages includes only pages reachable through published ancestors.
 const publishedPages = `WITH RECURSIVE visible(id) AS (
@@ -67,7 +88,7 @@ const publishedPages = `WITH RECURSIVE visible(id) AS (
 func scanPage(row interface{ Scan(...any) error }) (Page, error) {
 	var p Page
 	var updated int64
-	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Markdown, &p.Published, &p.ParentID, &p.Summary, &p.PreviewImage, &p.ChildrenDisplay, &p.DisplayOrder, &updated)
+	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Markdown, &p.Published, &p.ParentID, &p.Summary, &p.PreviewImage, &p.ChildrenDisplay, &p.DisplayOrder, &updated, &p.EverPublished)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}
@@ -78,7 +99,7 @@ func scanPage(row interface{ Scan(...any) error }) (Page, error) {
 // ListPages lists visible pages, explicit order first, then most recently updated.
 // Markdown bodies are omitted. includeDrafts allows administrator access.
 func (s *sqliteRepository) ListPages(ctx context.Context, includeDrafts bool) ([]Page, error) {
-	rows, err := s.db.QueryContext(ctx, publishedPages+`SELECT id, slug, title, '', published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated
+	rows, err := s.db.QueryContext(ctx, publishedPages+`SELECT id, slug, title, '', published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published
 FROM blog_pages WHERE ? OR id IN (SELECT id FROM visible)
 ORDER BY display_order IS NULL, display_order, updated DESC, id`, includeDrafts)
 	if err != nil {
@@ -116,12 +137,13 @@ func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
 	}
 	if p.ID == "" {
 		p.ID = rand.Text()
+		p.EverPublished = p.Published
 		_, err = s.db.ExecContext(ctx, `INSERT INTO blog_pages
-(id, slug, title, markdown, published, parent_id, summary, preview_image, children_display, display_order, updated)
-VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano())
+(id, slug, title, markdown, published, parent_id, summary, preview_image, children_display, display_order, updated, ever_published)
+VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.EverPublished)
 	} else {
-		p, err = scanPage(s.db.QueryRowContext(ctx, "UPDATE blog_pages SET slug=?, title=?, markdown=?, published=?, parent_id=NULLIF(?, ''), summary=?, preview_image=?, children_display=?, display_order=?, updated=? WHERE id=? RETURNING "+pageColumns,
-			p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.ID))
+		p, err = scanPage(s.db.QueryRowContext(ctx, "UPDATE blog_pages SET slug=?, title=?, markdown=?, published=?, parent_id=NULLIF(?, ''), summary=?, preview_image=?, children_display=?, display_order=?, updated=?, ever_published=(ever_published OR ?) WHERE id=? RETURNING "+pageColumns,
+			p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.Published, p.ID))
 	}
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {

@@ -164,7 +164,11 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	page := m.views["editor"].Content(r, editorPage{Post: p})
+	data := editorPage{Post: p}
+	if !p.Published.IsZero() {
+		data.PublishedSlug = p.Slug
+	}
+	page := m.views["editor"].Content(r, data)
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}
@@ -291,9 +295,18 @@ func validSlug(slug string) bool {
 func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, message string, status int) {
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
-	page := m.views["editor"].Content(r, editorPage{p, message})
+	data := editorPage{Post: p, Error: message}
+	page := m.views["editor"].Content(r, data)
 	if page.IsHtmx() {
 		page = m.views["message"].Content(r, message)
+	} else if p.ID != "" {
+		stored, err := m.posts.GetByID(r.Context(), p.ID, true)
+		if err != nil {
+			logger.LogRequestError(r, err)
+		} else if !stored.Published.IsZero() {
+			data.PublishedSlug = stored.Slug
+		}
+		page.Data = data
 	}
 	page.ResponseStatusCode = status
 	if err := page.Render(w, r); err != nil {

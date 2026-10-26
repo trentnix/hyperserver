@@ -25,6 +25,7 @@ type pageContent struct {
 	Children         []Page
 	Parents          []Page
 	DisplayOrderText string
+	PublishedSlug    string
 }
 
 // pageLink is one navigation branch. Hidden ancestors hide their entire branch.
@@ -249,6 +250,17 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 	if page.IsHtmx() && status >= 400 {
 		page = m.views["message"].Content(r, message)
 	} else {
+		stored := p
+		if r.Method == http.MethodPost && p.ID != "" {
+			var err error
+			stored, err = m.pageStore.GetPageByID(r.Context(), p.ID, true)
+			if err != nil {
+				logger.LogRequestError(r, err)
+			}
+		}
+		if stored.EverPublished {
+			data.PublishedSlug = stored.Slug
+		}
 		pages, err := m.pageStore.ListPages(r.Context(), true)
 		if err != nil && status < 400 {
 			m.storageError(w, r, err)

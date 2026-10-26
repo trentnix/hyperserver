@@ -62,8 +62,17 @@
       assert(form.elements.published.checked, 'Published post did not open with Publish post checked.');
       form.elements.published.checked = false;
       form.querySelector('.CodeMirror').CodeMirror.setValue('Private edited content.');
+      let warnings = 0;
+      window.confirm = message => {
+        assert(message.includes('Changing this URL'), 'Unexpected confirmation before saving.');
+        warnings++;
+        return warnings > 1;
+      };
+      form.requestSubmit();
+      assert(warnings === 1 && form.isConnected && form.elements.slug.value === '', 'Canceling the URL warning must preserve the editor.');
       sessionStorage.setItem('publication-stage', 'draft');
       form.requestSubmit();
+      assert(warnings === 2, 'Saving a regenerated published URL must ask again after cancellation.');
       return;
     }
     if (stage === 'draft') {

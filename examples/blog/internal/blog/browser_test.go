@@ -107,6 +107,17 @@ func TestBrowserPostPublication(t *testing.T) {
 	}
 }
 
+// TestBrowserSlugWarnings checks publication-aware confirmation without losing edits.
+func TestBrowserSlugWarnings(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check slug warnings")
+	}
+	for _, width := range []string{"390", "1100"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "slug-warnings") })
+	}
+}
+
 // TestBrowserDraftRecovery checks unsaved-edit warnings and browser-local recovery.
 func TestBrowserDraftRecovery(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -232,6 +243,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/post-publication.js"
 	case "post-management":
 		scriptFile = "testdata/post-management.js"
+	case "slug-warnings":
+		scriptFile = "testdata/slug-warnings.js"
 	}
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {

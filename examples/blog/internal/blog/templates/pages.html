@@ -154,8 +154,8 @@
 <form id="page-form" data-draft-owner="{{ .LayoutData.EditorOwner }}" method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   {{ template "blog.draftRecovery" . }}
   <label for="page-title">Title</label><input id="page-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
-  <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens. Changing a slug breaks existing links. Pages use /page/your-slug. About and Projects also use /about and /projects.</small>
+  <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
+  <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }} Pages use /page/your-slug. About and Projects also use /about and /projects.</small>
   <label for="page-parent">Parent page</label><select id="page-parent" name="parentID"><option value="">None — top-level page</option>{{ range .Data.Parents }}<option value="{{ .ID }}"{{ if eq .ID $.Data.ParentID }} selected{{ end }}>{{ .Title }} ({{ .Slug }})</option>{{ end }}</select>
   <label for="page-children">Show subpages on this page</label><select id="page-children" name="childrenDisplay">
     <option value="hidden"{{ if eq .Data.ChildrenDisplay "hidden" }} selected{{ end }}>Do not show</option>
@@ -225,8 +225,8 @@
 <form id="post-form" data-draft-owner="{{ .LayoutData.EditorOwner }}" method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   {{ template "blog.draftRecovery" . }}
   <label for="post-title">Title</label><input id="post-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
-  <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens. Changing a slug breaks existing links.</small>
+  <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
+  <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
   {{ template "blog.markdownFields" .Data }}
   <label class="publish-option"><input type="checkbox" name="published" {{ if not .Data.Draft }}checked{{ end }}> Publish post</label>

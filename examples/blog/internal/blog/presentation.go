@@ -112,7 +112,8 @@ type postPage struct {
 // editorPage retains a draft and any user-facing error for the editing form.
 type editorPage struct {
 	Post
-	Error string
+	Error         string
+	PublishedSlug string
 }
 
 // archiveMonth contains the heading and post links for one archive month.

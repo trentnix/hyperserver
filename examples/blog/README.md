@@ -41,7 +41,7 @@ Set `auth.registrationEnabled: false` after creating the administrator if desire
 
 `application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, SQLite storage for posts and pages, and file-based image storage. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
 
-EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when content is deleted. Storage creates a fresh schema or adds draft support to the existing post table. Older page schemas are not upgraded automatically.
+EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when content is deleted. Storage creates a fresh schema or adds post draft support and page publication history to existing tables. Other older page schemas are not upgraded automatically.
 
 Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Images use content-based filenames and immutable public URLs with a one-year browser cache lifetime. Files must not be edited in place. Upload a new image to change its content.
 
@@ -56,6 +56,8 @@ Open **Posts**, choose **New post**, and write a title and Markdown body. Check 
 Uncheck **Publish post** and save to return a post to drafts. **Move to drafts** on the Posts page and **Publish** or **Unpublish** on a post provide shortcuts without editing its content. The original publication date stays unchanged when editing or republishing. Uploaded images remain public even when their post is a draft.
 
 For posts and pages, leave the slug blank to generate it from the title. The field shows a suggestion while you type. If that slug is taken, saving adds `-2`, `-3`, or the next available number. Custom slugs must be unique. Slugs use lowercase ASCII letters, digits, and hyphens, up to 120 characters. If the title produces no usable slug, enter a custom one. Editing a title preserves the existing slug unless you clear or replace it. Changing a slug breaks existing links.
+
+If content is or was published, the editor asks for confirmation before saving a changed or cleared slug. Never-published drafts do not warn. Without JavaScript, the slug field displays the warning but does not ask for confirmation. Page publication history is retained from this version onward. Existing published pages are marked during startup, but earlier publication of pages already in draft cannot be inferred.
 
 Post and page editors warn before closing or following links with unsaved edits. They also request the browser's reload/close warning, which browsers may suppress. With JavaScript enabled, edits are copied to browser storage after a half-second pause and when leaving the editor. Reopen the same editor to choose **Restore copy** or **Discard copy**. Recovery never changes the server's content until you explicitly save. Failed saves retain the copy. Successful saves remove the current and restored copies.
 

@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS blog_pages (
  parent_id TEXT REFERENCES blog_pages(id) ON DELETE RESTRICT,
  summary TEXT NOT NULL, preview_image TEXT NOT NULL,
  children_display TEXT NOT NULL CHECK (children_display IN ('hidden', 'list', 'blocks')),
- display_order INTEGER CHECK (display_order BETWEEN 0 AND 1000000), updated INTEGER NOT NULL
+ display_order INTEGER CHECK (display_order BETWEEN 0 AND 1000000), updated INTEGER NOT NULL,
+ ever_published INTEGER NOT NULL DEFAULT 0 CHECK (ever_published IN (0, 1))
 );
 CREATE INDEX IF NOT EXISTS blog_pages_parent ON blog_pages(parent_id);
 CREATE TRIGGER IF NOT EXISTS blog_pages_no_cycle BEFORE UPDATE OF parent_id ON blog_pages
@@ -111,6 +112,9 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 	err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_posts') WHERE name='draft')").Scan(&hasDraft)
 	if err == nil && !hasDraft {
 		_, err = db.ExecContext(ctx, "ALTER TABLE blog_posts ADD COLUMN draft INTEGER NOT NULL DEFAULT 0 CHECK (draft IN (0, 1))")
+	}
+	if err == nil {
+		err = initializePagePublicationHistory(ctx, db)
 	}
 	if err != nil {
 		db.Close()
