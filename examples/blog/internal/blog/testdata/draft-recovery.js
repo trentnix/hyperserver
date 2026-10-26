@@ -4,10 +4,10 @@
   if (location.search.includes('draft-peer')) return;
   const report = message => fetch('/test/result', {method: 'POST', body: message});
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
-  const wait = async predicate => {
+  const wait = async (predicate, diagnostics = () => '') => {
     const deadline = Date.now() + 12000;
     while (!predicate()) {
-      if (Date.now() > deadline) throw new Error('Timed out: ' + predicate.toString());
+      if (Date.now() > deadline) throw new Error('Timed out: ' + predicate.toString() + '\n' + diagnostics());
       await new Promise(resolve => setTimeout(resolve, 25));
     }
   };
@@ -27,8 +27,12 @@
     assert(parseFloat(getComputedStyle(status).fontSize) < parseFloat(getComputedStyle(form).fontSize), 'Routine recovery status must use quieter typography than the form.');
     return form;
   };
-  const copies = form => Object.keys(localStorage).filter(key => key.startsWith('hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':' + new URL(form.action).pathname + ':'));
-  const saved = async form => wait(() => form.querySelector('[data-draft-status]').textContent === 'Saved locally. Use Save to apply changes.');
+  const copies = (form, storage = localStorage) => Object.keys(storage).filter(key => key.startsWith('hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':' + new URL(form.action).pathname + ':'));
+  const recoveryDetails = form => JSON.stringify({
+    status: form.querySelector('[data-draft-status]')?.textContent,
+    keys: copies(form, form.ownerDocument.defaultView.localStorage)
+  });
+  const saved = async form => wait(() => form.querySelector('[data-draft-status]').textContent === 'Saved locally. Use Save to apply changes.', () => recoveryDetails(form));
   let prompts = [];
   let consent = false;
   window.confirm = message => { prompts.push(message); return consent; };
@@ -82,12 +86,25 @@
       const peer = document.createElement('iframe');
       peer.src = '/post/create?draft-peer=1';
       document.body.append(peer);
-      await wait(() => peer.contentDocument?.querySelector('.CodeMirror'));
+      // CodeMirror appears before DOMContentLoaded initializes recovery. Wait
+      // for the peer document and recovery before simulating its first edit.
+      await wait(
+        () => peer.contentDocument?.readyState === 'complete' &&
+          peer.contentDocument.querySelector('.CodeMirror')?.CodeMirror &&
+          peer.contentDocument.querySelector('[data-draft-status]:not([hidden])'),
+        () => JSON.stringify({
+          readyState: peer.contentDocument?.readyState,
+          status: peer.contentDocument?.querySelector('[data-draft-status]')?.textContent
+        })
+      );
       const peerForm = peer.contentDocument.querySelector('#post-form');
       peerForm.querySelector('.CodeMirror').CodeMirror.setValue('Writing in another tab.');
-      await wait(() => copies(form).length === 2);
+      await saved(peerForm);
+      await wait(() => copies(form).length === 2,
+        () => 'Original: ' + recoveryDetails(form) + '\nPeer: ' + recoveryDetails(peerForm));
       assert(JSON.parse(localStorage.getItem(key)).fields.content === draft.fields.content, 'Another editor overwrote this copy.');
       const peerKey = copies(form).find(candidate => candidate !== key);
+      assert(JSON.parse(localStorage.getItem(peerKey)).fields.content === 'Writing in another tab.', 'The peer recovery copy must contain its own edits.');
       peer.remove();
       localStorage.removeItem(peerKey);
 
