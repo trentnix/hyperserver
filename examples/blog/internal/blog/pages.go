@@ -196,6 +196,7 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		m.renderPageEditor(w, r, p, "Unable to save this page. Please try again.", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("HX-Trigger", "blog:content-saved")
 	util.RedirectToURL(w, r, saved.URL())
 }
 

@@ -302,6 +302,7 @@ func TestRSSPostChanges(t *testing.T) {
 	_, secondTag := read(2, firstTag)
 	values.Set("slug", "first")
 	values.Set("title", "Edited")
+	values.Set("published", "on")
 	requireStatus(t, h.request(http.MethodPost, "/post/"+id, values, false), http.StatusSeeOther)
 	edited, editedTag := read(2, secondTag)
 	if edited.Channel.Items[1].Title != "Edited" || edited.Channel.Items[1].GUID != first.Channel.Items[0].GUID {

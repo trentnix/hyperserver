@@ -38,11 +38,13 @@
       assert(document.documentElement.scrollWidth <= Math.max(320, document.documentElement.clientWidth), 'Page management exceeds the viewport or minimum width.');
       const bounds = manager.getBoundingClientRect();
       for (const row of manager.querySelectorAll('.page-manager-row')) {
-        const view = row.querySelector('.page-manager-actions a');
         const pageLink = row.querySelector('.page-manager-title a');
-        const label = row.querySelector('.page-manager-draft') ? 'Preview' : 'View';
-        assert(view?.textContent === label && view.href === pageLink.href, 'Page action must link to its view or draft preview.');
-        assert(view.getAttribute('aria-label') === label + ' ' + pageLink.textContent, 'Page view action must identify its page.');
+        assert(pageLink.getAttribute('href') === row.querySelector('.page-manager-title small').textContent, 'Page title must link to its displayed URL.');
+        const links = [...row.querySelectorAll('.page-manager-actions a')];
+        assert(links.map(link => link.textContent).join(',') === 'Edit,Delete', 'Page actions must not duplicate the title link.');
+        for (const link of links) {
+          assert(link.getAttribute('aria-label') === link.textContent + ' ' + pageLink.textContent, 'Page action must identify its page.');
+        }
         const title = row.querySelector('.page-manager-title').getBoundingClientRect();
         const actions = row.querySelector('.page-manager-actions').getBoundingClientRect();
         assert(title.right <= bounds.right + 1 && actions.right <= bounds.right + 1, 'Page title or actions exceed the content width.');

@@ -628,6 +628,7 @@ func TestPublishingAndRecoveryPaths(t *testing.T) {
 		t.Fatal("validation replaces the editor and loses its draft")
 	}
 	post.Set("title", "Edited")
+	post.Set("published", "on")
 	requireStatus(t, h.request("POST", "/post/"+id, post, false), http.StatusSeeOther)
 	w = h.request("GET", "/rss", nil, false)
 	requireStatus(t, w, http.StatusOK)

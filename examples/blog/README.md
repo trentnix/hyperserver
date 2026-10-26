@@ -51,9 +51,13 @@ Run one blog instance per content database. The site profile is loaded at startu
 
 ## Publishing posts
 
-Open **Posts**, choose **New post**, write a title and Markdown body, then **Save draft and preview**. The saved post uses the normal reading layout, but only the verified administrator can view it. The Posts page groups drafts and published posts, with links to preview, edit, and delete them. Choose **Publish** on a draft preview to add the post to the public site, RSS, and archives.
+Open **Posts**, choose **New post**, and write a title and Markdown body. Check **Publish post** to make it live when you choose **Save post**. Leave it unchecked to save a private draft. Existing posts show their current publication setting. The Posts page groups drafts and published posts, with links to preview, edit, and delete them.
 
-Choose **Move to drafts** on the Posts page or **Unpublish** on a published post to return it to drafts. Its content, URL, and original publication date are retained. Republishing keeps that date. Saving edits preserves the post's publication state. Edits to published posts appear immediately. This is not a staged-revision or autosave system. Uploaded images remain public even when their post is a draft.
+Uncheck **Publish post** and save to return a post to drafts. **Move to drafts** on the Posts page and **Publish** or **Unpublish** on a post provide shortcuts without editing its content. The original publication date stays unchanged when editing or republishing. Uploaded images remain public even when their post is a draft.
+
+Post and page editors warn before closing or following links with unsaved edits. They also request the browser's reload/close warning, which browsers may suppress. With JavaScript enabled, edits are copied to browser storage after a half-second pause and when leaving the editor. Reopen the same editor to choose **Restore copy** or **Discard copy**. Recovery never changes the server's content until you explicitly save. Failed saves retain the copy. Successful saves remove the current and restored copies.
+
+Recovery copies are separate for each administrator, editor, and tab. They stay in that browser profile, including after logout, and expire after seven days. Expired copies are removed when an editor next opens. Copies are not encrypted, synced between devices, or a substitute for backups. Browser-history navigation preserves copies even when no warning appears. Storage failures appear in the editor. Use a private browser profile on shared devices, and save to the server before clearing browser data. Profile and authentication forms do not use draft recovery.
 
 Existing posts stay published when storage adds draft support. Back up the content database and uploads before deploying changes.
 

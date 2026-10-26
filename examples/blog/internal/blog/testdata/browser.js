@@ -431,7 +431,12 @@ document.removeEventListener = function(type, callback, options) {
       button.click();
       await wait(() => form.querySelector('[data-request-error]')?.textContent.includes('connection failed'));
       unchanged();
+      const originalConfirm = window.confirm;
+      let leavePrompt = '';
+      window.confirm = message => { leavePrompt = message; return true; };
       document.querySelector('[data-close-dialog]').click();
+      window.confirm = originalConfirm;
+      assert(leavePrompt.includes('without saving'), 'Closing a changed editor must warn about unsaved edits.');
       document.querySelector('a[href^="/post/delete/"]').click();
       await wait(() => document.querySelector('dialog[open] form[action^="/post/delete/"]'));
       const deletion = document.querySelector('dialog[open] form');

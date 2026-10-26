@@ -42,6 +42,8 @@
       await wait(() => location.pathname === '/post/create' && article.querySelector('.CodeMirror'));
       assert(document.querySelector('#article-content') === article, 'History replaced the article container.');
       assert(article.querySelectorAll('.CodeMirror').length === 1, 'History duplicated the editor.');
+      const form = article.querySelector('#post-form');
+      if (attempt > 0) assert(!form.querySelector('[data-draft-recovery]').hidden, 'History restoration must offer the unsaved writing.');
       const editor = article.querySelector('.CodeMirror').CodeMirror;
       editor.setValue('# Restored preview');
       article.querySelector('.tool-preview').click();
@@ -49,6 +51,8 @@
       history.forward();
       await wait(() => location.pathname === '/about' && article.querySelector('h1')?.textContent === 'About Me');
       assert(!article.querySelector('.CodeMirror'), 'History retained the previous editor.');
+      const prefix = 'hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':/post:';
+      assert(Object.keys(localStorage).some(key => key.startsWith(prefix) && JSON.parse(localStorage.getItem(key)).fields.content === '# Restored preview'), 'History navigation lost unsaved writing.');
     }
     await report('PASS');
   } catch (error) { await report(error.message + '\n' + error.stack); }

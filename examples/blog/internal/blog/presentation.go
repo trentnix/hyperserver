@@ -42,6 +42,9 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
 			data := navigation{Profile: profile.Current(), SignedIn: account != nil, Admin: access.IsAdmin(account)}
+			if data.Admin {
+				data.EditorOwner = account.ID
+			}
 			cookie, err := r.Cookie(returningUserCookie)
 			data.ShowLogin = !data.SignedIn && err == nil && cookie.Value == "1"
 			if registration && !data.SignedIn {
@@ -65,6 +68,7 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 type navigation struct {
 	Profile                                  Profile
 	Pages                                    []pageLink
+	EditorOwner                              string
 	SignedIn, Admin, Registration, ShowLogin bool
 }
 

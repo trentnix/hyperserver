@@ -293,6 +293,7 @@ func TestRecentPostChanges(t *testing.T) {
 	id := strings.TrimPrefix(posts.Channel.Items[0].GUID, "https://blog.example/post/id/")
 	values.Set("slug", "changed")
 	values.Set("title", "Edited")
+	values.Set("published", "on")
 	requireStatus(t, h.request(http.MethodPost, "/post/"+id, values, false), http.StatusSeeOther)
 	read("changed", "Edited", 1)
 	requireStatus(t, h.request(http.MethodPost, "/post", values, false), http.StatusConflict)

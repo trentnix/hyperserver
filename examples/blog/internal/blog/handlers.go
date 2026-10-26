@@ -167,11 +167,11 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// save validates a submitted draft, persists it, and redirects to its slug URL.
+// save validates content, saves its selected publication state, and redirects to its slug URL.
 // Validation and storage failures keep parsed draft values available for correction.
 func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	if err := form.ParseWithOptions(r, form.ParseOptions{MaxFieldBytes: maxMarkdownBytes}); err != nil {
-		m.editorError(w, r, Post{ID: r.PathValue("id")}, err.Message, err.StatusCode)
+		m.editorError(w, r, Post{ID: r.PathValue("id"), Draft: true}, err.Message, err.StatusCode)
 		return
 	}
 	p := Post{
@@ -180,8 +180,13 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		Title:    strings.TrimSpace(r.PostForm.Get("title")),
 		Summary:  strings.TrimSpace(r.PostForm.Get("summary")),
 		Markdown: r.PostForm.Get("content"),
+		Draft:    r.PostForm.Get("published") != "on",
 	}
-	if message := validatePost(p); message != "" {
+	message := validatePost(p)
+	if message == "" && r.PostForm.Get("published") != "" && r.PostForm.Get("published") != "on" {
+		message = "Choose whether to publish the post."
+	}
+	if message != "" {
 		m.editorError(w, r, p, message, http.StatusUnprocessableEntity)
 		return
 	}
@@ -201,6 +206,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	}
 	m.feed.invalidate()
 	m.recentPosts.invalidate()
+	w.Header().Set("HX-Trigger", "blog:content-saved")
 	util.RedirectToURL(w, r, "/post/s/"+saved.Slug)
 }
 

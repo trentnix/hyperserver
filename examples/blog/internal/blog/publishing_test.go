@@ -119,6 +119,135 @@ func TestPostPublication(t *testing.T) {
 	}
 }
 
+// TestSavePostPublication applies the checkbox to new posts and edits in both HTTP modes.
+func TestSavePostPublication(t *testing.T) {
+	for _, hx := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ordinary", true: "htmx"}[hx], func(t *testing.T) {
+			h := newHarness(t)
+			h.register(t)
+			h.verify(t)
+			h.login(t)
+			status := http.StatusSeeOther
+			if hx {
+				status = http.StatusOK
+			}
+			values := url.Values{"slug": {"checkbox-post"}, "title": {"Checkbox post"}, "content": {"Published on its first save"}, "published": {"on"}}
+			var post Post
+			var firstPublished time.Time
+			for _, publish := range []bool{true, false, true} {
+				path := "/post"
+				if post.ID != "" {
+					path += "/" + post.ID
+				}
+				if publish {
+					values.Set("published", "on")
+				} else {
+					values.Del("published")
+				}
+				// Warm caches before each change, then verify the resulting public view.
+				for _, path := range []string{"/rss", "/posts/recent"} {
+					requireStatus(t, h.request("GET", path, nil, false), http.StatusOK)
+				}
+				response := h.request("POST", path, values, hx)
+				requireStatus(t, response, status)
+				var err error
+				post, err = h.blog.posts.GetBySlug(t.Context(), "checkbox-post", true)
+				if err != nil || post.Draft == publish || post.Published.IsZero() {
+					t.Fatal("save ignored checkbox or publication date", post, err)
+				}
+				if firstPublished.IsZero() {
+					firstPublished = post.Published
+				} else if !post.Published.Equal(firstPublished) {
+					t.Fatal("save reset the first publication date")
+				}
+				editor := h.request("GET", "/post/update/"+post.ID, nil, hx).Body.String()
+				if strings.Contains(editor, `name="published" checked`) != publish {
+					t.Fatal("editor checkbox does not reflect stored state")
+				}
+				cookies := h.cookies
+				h.cookies = nil
+				for _, path := range []string{"/rss", "/posts/recent", "/posts", "/post/s/checkbox-post"} {
+					response := h.request("GET", path, nil, false)
+					if strings.Contains(response.Body.String(), "Checkbox post") != publish {
+						t.Fatalf("%s does not reflect publication state", path)
+					}
+				}
+				h.cookies = cookies
+			}
+
+			// Invalid checkbox values must not silently create or unpublish a post.
+			values.Set("slug", "invalid-publication")
+			values.Set("published", "invalid")
+			for _, path := range []string{"/post", "/post/" + post.ID} {
+				response := h.request("POST", path, values, hx)
+				requireStatus(t, response, http.StatusUnprocessableEntity)
+				if !strings.Contains(response.Body.String(), "Choose whether to publish the post.") || response.Header().Get("HX-Trigger") != "" {
+					t.Fatal("invalid publication setting must report validation failure without acknowledging a save")
+				}
+			}
+			if _, err := h.blog.posts.GetBySlug(t.Context(), "invalid-publication", true); !errors.Is(err, errNotFound) {
+				t.Fatal("invalid publication setting wrote a post", err)
+			}
+			stored, err := h.blog.posts.GetByID(t.Context(), post.ID, true)
+			if err != nil || stored != post {
+				t.Fatal("invalid publication setting changed the existing post", stored, err)
+			}
+			values.Set("slug", post.Slug)
+
+			// Invalid content retains either checkbox choice without changing storage.
+			values.Set("content", "")
+			for _, publish := range []bool{false, true} {
+				if publish {
+					values.Set("published", "on")
+				} else {
+					values.Del("published")
+				}
+				response := h.request("POST", "/post/"+post.ID, values, hx)
+				requireStatus(t, response, http.StatusUnprocessableEntity)
+				if !hx && strings.Contains(response.Body.String(), `name="published" checked`) != publish {
+					t.Fatal("failed save lost the publication checkbox")
+				}
+				stored, err := h.blog.posts.GetByID(t.Context(), post.ID, true)
+				if err != nil || stored != post {
+					t.Fatal("invalid save changed stored content or visibility", stored, err)
+				}
+			}
+		})
+	}
+}
+
+// TestPostSavePublicationAtomicity keeps content and visibility unchanged on failed writes.
+func TestPostSavePublicationAtomicity(t *testing.T) {
+	h := newHarness(t)
+	store := h.blog.posts
+	post, err := store.Save(t.Context(), Post{Slug: "draft", Title: "Draft", Markdown: "Body", Draft: true})
+	if err != nil || !post.Published.IsZero() {
+		t.Fatal("new draft has a publication date", post, err)
+	}
+	post.Draft = false
+	post, err = store.Save(t.Context(), post)
+	if err != nil || post.Draft || post.Published.IsZero() {
+		t.Fatal("saving a draft as published did not assign its date", post, err)
+	}
+	if _, err := store.Save(t.Context(), Post{Slug: "taken", Title: "Other", Markdown: "Body"}); err != nil {
+		t.Fatal(err)
+	}
+	conflict := post
+	conflict.Slug, conflict.Title, conflict.Draft = "taken", "Changed", true
+	if _, err := store.Save(t.Context(), conflict); !errors.Is(err, errSlugTaken) {
+		t.Fatal("expected slug conflict", err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := store.Save(ctx, conflict); !errors.Is(err, context.Canceled) {
+		t.Fatal("save ignored cancellation", err)
+	}
+	stored, err := store.GetByID(t.Context(), post.ID, true)
+	if err != nil || stored != post {
+		t.Fatal("failed save partially changed content or publication state", stored, err)
+	}
+}
+
 // TestPostManagement covers empty states, navigation, and both lists together.
 func TestPostManagement(t *testing.T) {
 	h := newHarness(t)
@@ -137,7 +266,7 @@ func TestPostManagement(t *testing.T) {
 	}
 
 	for _, slug := range []string{"draft", "published"} {
-		post, err := h.blog.posts.Save(t.Context(), Post{Slug: slug, Title: "<" + slug + ">", Markdown: "Private Markdown"})
+		post, err := h.blog.posts.Save(t.Context(), Post{Slug: slug, Title: "<" + slug + ">", Markdown: "Private Markdown", Draft: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -151,10 +280,13 @@ func TestPostManagement(t *testing.T) {
 		w := h.request("GET", "/post/manage", nil, hx)
 		requireStatus(t, w, http.StatusOK)
 		body := w.Body.String()
-		for _, text := range []string{"&lt;draft&gt;", "&lt;published&gt;", ">Preview</a>", ">View</a>"} {
+		for _, text := range []string{`href="/post/s/draft">&lt;draft&gt;</a>`, `href="/post/s/published">&lt;published&gt;</a>`} {
 			if !strings.Contains(body, text) {
 				t.Fatalf("management page missing %q", text)
 			}
+		}
+		if strings.Contains(body, ">Preview</a>") || strings.Contains(body, ">View</a>") {
+			t.Fatal("management actions duplicate the post title links")
 		}
 		if strings.Contains(body, "Private Markdown") || strings.Contains(body, "No drafts.") || strings.Contains(body, "No published posts yet.") {
 			t.Fatal("management page contains post bodies or incorrect empty states")
@@ -210,7 +342,7 @@ func TestMovePostToDrafts(t *testing.T) {
 // TestPostPublicationAuthorization rejects anonymous and unverified publication.
 func TestPostPublicationAuthorization(t *testing.T) {
 	h := newHarness(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "draft", Title: "Secret", Markdown: "Body"})
+	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "draft", Title: "Secret", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +432,7 @@ func TestPostPublicationCSRF(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "draft", Title: "Secret", Markdown: "Body"})
+	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "draft", Title: "Secret", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,7 +489,7 @@ INSERT INTO blog_posts VALUES ('old', 'old', 'Original title', 'Summary', 'Origi
 func TestPostPublicationStorage(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.posts
-	post, err := store.Save(t.Context(), Post{Slug: "draft", Title: "Draft", Markdown: "Body"})
+	post, err := store.Save(t.Context(), Post{Slug: "draft", Title: "Draft", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,11 +515,11 @@ func TestPostPublicationStorage(t *testing.T) {
 			t.Fatal("concurrent publication changed the timestamp or content")
 		}
 	}
-	// A stale draft edit cannot undo publication or overwrite its timestamp.
+	// Save applies the selected state without overwriting the first publication date.
 	post.Title = "Edited"
 	updated, err := store.Save(t.Context(), post)
-	if err != nil || updated.Draft || !updated.Published.Equal(published.Published) {
-		t.Fatal("saving content changed publication", updated, err)
+	if err != nil || !updated.Draft || !updated.Published.Equal(published.Published) {
+		t.Fatal("saving content ignored the selected state or changed the date", updated, err)
 	}
 	if _, err := store.SetPublished(t.Context(), "missing", true); !errors.Is(err, errNotFound) {
 		t.Fatal("publishing created a missing post", err)
@@ -399,9 +531,9 @@ func TestPostPublicationStorage(t *testing.T) {
 	}
 }
 
-// TestPostPublicationDateAndStaleEdits uses an old date so repeated transitions
+// TestPostPublicationDateAndEdits uses an old date so repeated transitions
 // cannot hide an accidental timestamp reset by finishing within the same second.
-func TestPostPublicationDateAndStaleEdits(t *testing.T) {
+func TestPostPublicationDateAndEdits(t *testing.T) {
 	settings := Settings{}
 	settings.Storage.Provider, settings.Storage.Connection = "sqlite", "posts.db"
 	store, closeStore, err := openRepository(t.Context(), settings, t.TempDir())
@@ -424,16 +556,16 @@ func TestPostPublicationDateAndStaleEdits(t *testing.T) {
 		}
 	}
 
-	// A form opened before unpublishing must not make the post public again.
+	// Saving a checked publication setting republishes content without changing its date.
 	if _, err := store.SetPublished(t.Context(), post.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	post.Title = "Edited after unpublishing"
 	updated, err := store.Save(t.Context(), post)
-	if err != nil || !updated.Draft || !updated.Published.Equal(firstPublished) || updated.Title != post.Title {
-		t.Fatalf("stale edit changed publication state: %+v, %v", updated, err)
+	if err != nil || updated.Draft || !updated.Published.Equal(firstPublished) || updated.Title != post.Title {
+		t.Fatalf("edit ignored publication state or changed the date: %+v, %v", updated, err)
 	}
-	if _, err := store.GetBySlug(t.Context(), post.Slug, false); !errors.Is(err, errNotFound) {
-		t.Fatalf("stale edit exposed a draft: %v", err)
+	if _, err := store.GetBySlug(t.Context(), post.Slug, false); err != nil {
+		t.Fatalf("published edit is not publicly readable: %v", err)
 	}
 }

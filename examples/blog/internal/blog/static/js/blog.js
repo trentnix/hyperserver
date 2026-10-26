@@ -115,6 +115,7 @@
         }
       });
       editors.set(textarea, {editor, cancelPreview: () => previewRequest?.abort()});
+      editor.codemirror.on('change', () => textarea.dispatchEvent(new Event('input', {bubbles: true})));
     }
   }
 
@@ -134,6 +135,7 @@
       if (remove.form.dataset.uploading) return;
       const picker = remove.closest('[data-image-picker]');
       picker.querySelector('[data-image-value]').value = '';
+      picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
       picker.querySelector('input[type="file"]').value = '';
       updateImagePreview(picker);
       picker.querySelector('[data-image-status]').textContent = 'Selection cleared. Save to apply.';
@@ -180,6 +182,7 @@
       const path = result?.data?.filePath;
       if (typeof path !== 'string' || !path.startsWith('/images/')) throw new Error('Invalid image upload response.');
       picker.querySelector('[data-image-value]').value = path.slice((picker.dataset.imagePrefix || '').length);
+      picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
       updateImagePreview(picker);
       status.textContent = 'Image uploaded. Save to apply.';
     } catch (error) {

@@ -85,6 +85,39 @@ func TestBrowserPages(t *testing.T) {
 	}
 }
 
+// TestBrowserPostManagement checks action alignment beside wrapping post titles.
+func TestBrowserPostManagement(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check post management layout")
+	}
+	for _, width := range []string{"320", "767", "768", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "post-management") })
+	}
+}
+
+// TestBrowserPostPublication exercises the publication checkbox through creation and edits.
+func TestBrowserPostPublication(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check post publication")
+	}
+	for _, width := range []string{"390", "1100"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "post-publication") })
+	}
+}
+
+// TestBrowserDraftRecovery checks unsaved-edit warnings and browser-local recovery.
+func TestBrowserDraftRecovery(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check draft recovery")
+	}
+	for _, width := range []string{"390", "1100"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "draft-recovery") })
+	}
+}
+
 // TestBrowserProfile checks profile edits across the header, favicon, and background.
 func TestBrowserProfile(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -113,6 +146,15 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "post-management" {
+		for _, draft := range []bool{true, false} {
+			for i, title := range []string{"Short title", strings.Repeat("A longer post title with several words ", 6), strings.Repeat("W", 240)} {
+				if _, err := h.blog.posts.Save(t.Context(), Post{Slug: fmt.Sprintf("layout-%t-%d", draft, i), Title: title, Markdown: "Body", Draft: draft}); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
 	if mode == "pages" {
 		child, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: h.projectsID, Slug: "sample-project", Title: "A sample project with a longer title", Published: true})
 		if err != nil {
@@ -184,6 +226,12 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/profile.js"
 	case "auth-styles":
 		scriptFile = "testdata/auth-styles.js"
+	case "draft-recovery":
+		scriptFile = "testdata/draft-recovery.js"
+	case "post-publication":
+		scriptFile = "testdata/post-publication.js"
+	case "post-management":
+		scriptFile = "testdata/post-management.js"
 	}
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {
@@ -279,6 +327,10 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		// Allow only this test server to frame the page at the requested size.
 		// Production responses still prohibit framing.
 		w.Header().Set("Content-Security-Policy", strings.ReplaceAll(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'", "frame-ancestors 'self'"))
+		if mode == "draft-recovery" {
+			// A second editor frame exercises separate-tab storage ownership.
+			w.Header().Set("Content-Security-Policy", w.Header().Get("Content-Security-Policy")+"; frame-src 'self'")
+		}
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		if strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/html") {
 			body = bytes.Replace(body, []byte("</head>"), []byte(`<script src="/test/browser.js" defer></script></head>`), 1)

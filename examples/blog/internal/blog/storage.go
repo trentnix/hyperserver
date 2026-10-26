@@ -50,8 +50,8 @@ type repository interface {
 	GetByID(context.Context, string, bool) (Post, error)
 	// GetBySlug returns errNotFound for missing slugs and drafts unless includeDrafts is true.
 	GetBySlug(context.Context, string, bool) (Post, error)
-	// Save creates a draft when ID is empty and updates existing content otherwise.
-	// Updates preserve publication state and time. Conflicts return errSlugTaken.
+	// Save writes content and Draft together, creating a post when ID is empty.
+	// First publication assigns Published. Edits preserve it. Conflicts return errSlugTaken.
 	Save(context.Context, Post) (Post, error)
 	// SetPublished changes visibility without changing content. First publication
 	// assigns Published. Repeated calls preserve it. Missing IDs return errNotFound.
@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 		return nil, nil, err
 	}
 	// Existing installations contain only published posts. Preserve their content
-	// and dates when adding draft support. Save explicitly creates new drafts.
+	// and dates when adding draft support.
 	var hasDraft bool
 	err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_posts') WHERE name='draft')").Scan(&hasDraft)
 	if err == nil && !hasDraft {
@@ -217,8 +217,9 @@ func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDr
 	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE slug=? AND (? OR draft=0)", slug, includeDrafts))
 }
 
-// Save inserts a new draft when ID is empty, generating its ID and any omitted slug.
-// Updates preserve publication state and time and fail if the post no longer exists.
+// Save atomically writes content and publication state, generating IDs and omitted
+// slugs for new posts. First publication assigns the date. Later saves preserve it.
+// Updates fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 	var err error
@@ -227,11 +228,18 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 		if p.Slug == "" {
 			p.Slug = strings.ToLower(p.ID)
 		}
-		p.Draft, p.Published = true, time.Time{}
-		_, err = s.db.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, 0, 1)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown)
+		var published int64
+		p.Published = time.Time{}
+		if !p.Draft {
+			p.Published = time.Now().UTC().Truncate(time.Second)
+			published = p.Published.Unix()
+		}
+		_, err = s.db.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft)
 	} else {
 		// RETURNING avoids a second lookup racing with another edit or deletion.
-		p, err = scanPost(s.db.QueryRowContext(ctx, "UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=? WHERE id=? RETURNING "+postColumns, p.Slug, p.Title, p.Summary, p.Markdown, p.ID))
+		p, err = scanPost(s.db.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?,
+ published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? RETURNING `+postColumns,
+			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, !p.Draft, time.Now().UTC().Unix(), p.ID))
 	}
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {
