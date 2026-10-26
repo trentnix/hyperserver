@@ -70,15 +70,24 @@ CREATE TABLE IF NOT EXISTS blog_posts (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
  summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS blog_projects (
- id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
- summary TEXT NOT NULL, markdown TEXT NOT NULL, preview_image TEXT NOT NULL,
- display_order INTEGER, published INTEGER NOT NULL CHECK (published IN (0, 1)), updated INTEGER NOT NULL
-);
 CREATE TABLE IF NOT EXISTS blog_pages (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
- markdown TEXT NOT NULL, published INTEGER NOT NULL CHECK (published IN (0, 1))
+ markdown TEXT NOT NULL, published INTEGER NOT NULL CHECK (published IN (0, 1)),
+ parent_id TEXT REFERENCES blog_pages(id) ON DELETE RESTRICT,
+ summary TEXT NOT NULL, preview_image TEXT NOT NULL,
+ children_display TEXT NOT NULL CHECK (children_display IN ('hidden', 'list', 'blocks')),
+ display_order INTEGER CHECK (display_order BETWEEN 0 AND 1000000), updated INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS blog_pages_parent ON blog_pages(parent_id);
+CREATE TRIGGER IF NOT EXISTS blog_pages_no_cycle BEFORE UPDATE OF parent_id ON blog_pages
+WHEN NEW.parent_id IS NOT NULL BEGIN
+ SELECT RAISE(ABORT, 'page parent cycle') WHERE NEW.id IN (
+  WITH RECURSIVE ancestors(id, parent_id) AS (
+   SELECT id, parent_id FROM blog_pages WHERE id=NEW.parent_id
+   UNION ALL SELECT p.id, p.parent_id FROM blog_pages p JOIN ancestors a ON p.id=a.parent_id
+  ) SELECT id FROM ancestors
+ );
+END;
 CREATE TABLE IF NOT EXISTS blog_profile (
  id INTEGER PRIMARY KEY CHECK (id=1), name TEXT NOT NULL, bio TEXT NOT NULL,
  image_url TEXT NOT NULL, favicon_url TEXT NOT NULL, background_url TEXT NOT NULL

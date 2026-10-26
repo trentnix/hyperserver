@@ -68,20 +68,46 @@
 {{ end }}
 
 {{ define "blog.page" }}
-<section class="info-page">
-{{ if not .Data.Published }}<p class="project-status">Draft — visible only to you</p>{{ end }}
+<section class="info-page{{ if eq .Data.ChildrenDisplay "blocks" }} page-blocks{{ end }}">
+{{ with .Data.Parent }}<a class="page-back" href="{{ .URL }}" hx-get="{{ .URL }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">&larr; {{ .Title }}</a>{{ end }}
+{{ if not .Data.Published }}<p class="page-status">Draft — visible only to you</p>{{ end }}
 <h1>{{ .Data.Title }}</h1>
-{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit page</a><a href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a></div>{{ end }}
+{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit page</a><a href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a><a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#dialog-host">New subpage</a></div>{{ end }}
 <div class="post-body">{{ .Data.HTML }}</div>
+{{ if ne .Data.ChildrenDisplay "hidden" }}
+<div class="{{ if eq .Data.ChildrenDisplay "blocks" }}page-grid{{ else }}page-preview-list{{ end }}" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+{{ range .Data.Children }}<a class="page-card" href="{{ .URL }}">
+  <img src="{{ .PreviewURL }}" alt="" width="800" height="500" loading="lazy">
+  <div class="page-card-copy">{{ if not .Published }}<span class="page-status">Draft</span>{{ end }}<h2>{{ .Title }}</h2>{{ if .Summary }}<p>{{ .Summary }}</p>{{ end }}<span class="page-read">Explore &rarr;</span></div>
+</a>{{ else }}<p>No subpages published yet.</p>{{ end }}
+</div>
+{{ end }}
 </section>
 {{ end }}
 
 {{ define "blog.pages" }}
-<section class="info-page">
-<h1>Pages</h1>
-<div class="post-actions"><a href="/pages/create" hx-get="/pages/create" hx-target="#dialog-host">New page</a></div>
-<ul>{{ range .Data }}<li><a href="{{ .URL }}">{{ .Title }}</a>{{ if not .Published }} — Draft{{ end }} <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#dialog-host">Edit</a> · <a href="/pages/delete/{{ .ID }}" hx-get="/pages/delete/{{ .ID }}" hx-target="#dialog-host">Delete</a></li>{{ else }}<li>No pages yet.</li>{{ end }}</ul>
+<section class="info-page page-manager">
+<header class="page-manager-heading">
+  <div><h1>Pages</h1><p>Manage your pages and subpages.</p></div>
+  <a class="page-create" href="/pages/create" hx-get="/pages/create" hx-target="#dialog-host">New page</a>
+</header>
+{{ if .Data }}{{ template "blog.pageAdminLinks" .Data }}{{ else }}<p class="page-manager-empty">No pages yet. Create a page to get started.</p>{{ end }}
 </section>
+{{ end }}
+
+{{ define "blog.pageAdminLinks" }}
+<ul class="page-manager-list">
+{{ range . }}<li>
+  <div class="page-manager-row">
+    <div class="page-manager-title"><a href="{{ .URL }}">{{ .Title }}</a><small>{{ .URL }}</small>{{ if not .Published }}<span class="page-manager-draft">Draft</span>{{ end }}</div>
+    <div class="page-manager-actions">
+      <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
+      <a href="/pages/delete/{{ .ID }}" hx-get="/pages/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
+    </div>
+  </div>
+  {{ if .Children }}{{ template "blog.pageAdminLinks" .Children }}{{ end }}
+</li>{{ end }}
+</ul>
 {{ end }}
 
 {{ define "blog.pageEditor" }}
@@ -90,12 +116,34 @@
 <form id="page-form" method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   <label for="page-title">Title</label><input id="page-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
-  <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" required aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Pages use /page/your-slug. The about slug also uses /about. Changing a slug breaks existing links.</small>
+  <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" {{ if .Data.ID }}required{{ end }} aria-describedby="slug-help">
+  <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Leave blank for an automatic URL when creating a page. Pages use /page/your-slug. About and Projects also use /about and /projects.</small>
+  <label for="page-parent">Parent page</label><select id="page-parent" name="parentID"><option value="">None — top-level page</option>{{ range .Data.Parents }}<option value="{{ .ID }}"{{ if eq .ID $.Data.ParentID }} selected{{ end }}>{{ .Title }} ({{ .Slug }})</option>{{ end }}</select>
+  <label for="page-children">Show subpages on this page</label><select id="page-children" name="childrenDisplay">
+    <option value="hidden"{{ if eq .Data.ChildrenDisplay "hidden" }} selected{{ end }}>Do not show</option>
+    <option value="list"{{ if eq .Data.ChildrenDisplay "list" }} selected{{ end }}>Preview list</option>
+    <option value="blocks"{{ if eq .Data.ChildrenDisplay "blocks" }} selected{{ end }}>Preview blocks</option>
+  </select>
+  <p class="form-hint">Preview settings do not affect navigation. Navigation shows top-level pages and their immediate children. A draft parent hides its entire branch from visitors.</p>
+  <label for="page-summary">Short description</label><textarea id="page-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
+  <label for="page-order">Display order (optional)</label><input id="page-order" name="displayOrder" inputmode="numeric" pattern="[0-9]+" value="{{ .Data.DisplayOrderText }}" aria-describedby="order-help">
+  <small id="order-help" class="form-hint">Enter a whole number from 0 to 1,000,000. Ordered siblings appear first, lowest number first. Leave blank to sort by most recently updated. Update time also breaks ties.</small>
+  <fieldset class="image-picker page-preview" data-image-picker data-image-default="/assets/img/project-default.svg" data-image-prefix="/images/">
+    <legend>Preview image</legend>
+    <img src="{{ .Data.PreviewURL }}" alt="Current page card preview" width="320" height="200" data-image-preview>
+    <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
+    <div class="image-upload-controls" hidden>
+      <label for="page-image">Upload a preview image</label><input id="page-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="preview-help">
+      <button type="button" class="text-button" data-image-reset>Use default image</button>
+    </div>
+    <p id="preview-help" class="form-hint">Shown only in parent-page previews, cropped to fit. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Uploads are public, including images used in drafts.</p>
+    <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
+    <p data-image-status role="status"></p>
+  </fieldset>
   <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16">{{ .Data.Markdown }}</textarea>
   <p class="form-hint">Up to 256 KiB of Markdown. Content can be empty.</p>
-  <label class="project-publish"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish page</label>
-  <p class="form-hint">Drafts are visible only to the administrator. Saving a page does not add a navigation link.</p>
+  <label class="page-publish"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish page</label>
+  <p class="form-hint">Uncheck to save a draft or remove this page from public view.</p>
   <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/pages">Cancel</a>{{ end }}</div>
 </form></section>
 {{ if .IsHtmx }}</dialog>{{ end }}
@@ -103,67 +151,8 @@
 
 {{ define "blog.pageDelete" }}
 {{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
-<h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone. Existing links to this page will stop working.</p>
+<h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone. Move or delete its subpages first. Uploaded images are kept.</p>
 <form class="form-actions" method="post" action="/pages/delete/{{ .Data.ID }}"><button type="submit">Delete page</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="{{ .Data.URL }}">Cancel</a>{{ end }}</form>
-{{ if .IsHtmx }}</dialog>{{ end }}
-{{ end }}
-
-{{ define "blog.projects" }}
-<section class="info-page projects-page">
-<h1>Projects</h1>
-{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/project/create" hx-get="/project/create" hx-target="#dialog-host">New project</a></div>{{ end }}
-<div class="project-grid" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
-{{ range .Data }}<a class="project-card" href="/project/s/{{ .Slug }}">
-  <img src="{{ .PreviewURL }}" alt="" width="800" height="500" loading="lazy">
-  <div class="project-card-copy">{{ if not .Published }}<span class="project-status">Draft</span>{{ end }}<h2>{{ .Title }}</h2><p>{{ .Summary }}</p><span class="project-read">Explore project &rarr;</span></div>
-</a>{{ else }}<p>No projects published yet.</p>{{ end }}
-</div></section>
-{{ end }}
-
-{{ define "blog.project" }}
-<section class="info-page project-page">
-<a class="project-back" href="/projects" hx-get="/projects" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">&larr; Projects</a>
-<header class="post-heading">{{ if not .Data.Published }}<p class="project-status">Draft — visible only to you</p>{{ end }}<h1>{{ .Data.Title }}</h1></header>
-{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/project/update/{{ .Data.ID }}" hx-get="/project/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a><a href="/project/delete/{{ .Data.ID }}" hx-get="/project/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a></div>{{ end }}
-<div class="post-body">{{ .Data.HTML }}</div>
-</section>
-{{ end }}
-
-{{ define "blog.projectEditor" }}
-{{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
-<section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit project{{ else }}New project{{ end }}</h1>
-<form id="project-form" method="post" action="/project{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/project{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
-  <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
-  <label for="project-title">Title</label><input id="project-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
-  <label for="project-slug">URL slug</label><input id="project-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" {{ if .Data.ID }}required{{ end }} aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Leave empty for an automatic URL when creating a project.</small>
-  <label for="project-summary">Short description</label><textarea id="project-summary" name="summary" maxlength="2000" rows="2" required>{{ .Data.Summary }}</textarea>
-  <label for="project-order">Display order (optional)</label><input id="project-order" name="displayOrder" type="number" min="0" max="1000000" value="{{ if .Data.DisplayOrder }}{{ .Data.DisplayOrder }}{{ end }}" aria-describedby="order-help">
-  <small id="order-help" class="form-hint">Ordered projects appear first, lowest number first. Leave blank to sort by most recently updated. Update time also breaks ties.</small>
-  <fieldset class="image-picker project-preview" data-image-picker data-image-default="/assets/img/project-default.svg" data-image-prefix="/images/">
-    <legend>Preview image</legend>
-    <img src="{{ .Data.PreviewURL }}" alt="Current project card preview" width="320" height="200" data-image-preview>
-    <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
-    <div class="image-upload-controls" hidden>
-      <label for="project-image">Upload a preview image</label><input id="project-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="preview-help">
-      <button type="button" class="text-button" data-image-reset>Use default image</button>
-    </div>
-    <p id="preview-help" class="form-hint">Shown only on the Projects listing, cropped to fit. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Uploads are public, including images used in drafts.</p>
-    <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
-    <p data-image-status role="status"></p>
-  </fieldset>
-  {{ template "blog.markdownFields" .Data }}
-  <label class="project-publish"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish project</label>
-  <p class="form-hint">Uncheck to save a draft or remove this project from public view.</p>
-  <div class="form-actions"><button type="submit">Save project</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/projects">Cancel</a>{{ end }}</div>
-</form></section>
-{{ if .IsHtmx }}</dialog>{{ end }}
-{{ end }}
-
-{{ define "blog.projectDelete" }}
-{{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
-<h1 id="delete-title">Delete project?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone.</p>
-<form class="form-actions" method="post" action="/project/delete/{{ .Data.ID }}"><button type="submit">Delete project</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/project/s/{{ .Data.Slug }}">Cancel</a>{{ end }}</form>
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
 

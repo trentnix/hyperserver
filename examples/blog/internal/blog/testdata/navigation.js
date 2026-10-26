@@ -96,25 +96,47 @@
     const menu = document.querySelector('#site-menu');
     const menuToggle = document.querySelector('.menu-toggle');
     const pageLinks = innerWidth < 768 || innerWidth >= 1680 ? menu : document.querySelector('.profile-links');
-    const projectLinks = document.querySelector('#project-links');
-    const projectToggle = document.querySelector('.project-toggle');
-    assert(projectLinks.querySelectorAll('a').length === 6, 'Project tree must list published projects.');
+    const projectLinks = document.querySelector('#site-menu .child-links');
+    const projectToggle = document.querySelector('.child-toggle');
+    const checkSubpageTitles = nav => {
+      const long = nav.querySelector('a[href="/page/project-0"]');
+      const short = nav.querySelector('a[href="/page/project-1"]');
+      assert(long.getClientRects().length > 0, 'Truncation check needs a visible menu.');
+      for (const link of [long, short]) {
+        const style = getComputedStyle(link);
+        assert(style.whiteSpace === 'nowrap' && style.textOverflow === 'ellipsis' && style.overflowX === 'hidden', 'Subpage titles must truncate rather than wrap.');
+        assert(link.title === link.textContent, 'The full subpage title must remain available on hover and as link text.');
+      }
+      assert(long.scrollWidth > long.clientWidth, 'Long subpage fixture must exercise truncation.');
+      assert(short.scrollWidth <= short.clientWidth, 'Short titles must fit without truncation.');
+      assert(Math.abs(long.getBoundingClientRect().height - short.getBoundingClientRect().height) < 1, 'Long titles must not add menu rows.');
+      assert(document.documentElement.scrollWidth <= Math.max(320, document.documentElement.clientWidth), 'Subpage titles must not widen the layout.');
+    };
+    assert(projectLinks.querySelectorAll('a').length === 6, 'Navigation must include immediate children only.');
+    for (const nav of [menu, document.querySelector('.profile-links')]) {
+      assert(!nav.querySelector('a[href="/page/project-guide"]') && !nav.querySelector('.child-links .child-links'), 'Navigation must stop at two levels.');
+    }
     if (innerWidth < 768) {
       menuToggle.click();
       assert(!projectToggle.hidden && projectLinks.hidden, 'Mobile project tree must start collapsed.');
       projectToggle.click();
       assert(!projectLinks.hidden && projectToggle.getAttribute('aria-expanded') === 'true', 'Project toggle did not reveal child links.');
-      projectLinks.querySelector('a[href="/project/s/project-0"]').click();
-      await wait(() => location.pathname === '/project/s/project-0');
+      checkSubpageTitles(menu);
+      assert(!projectLinks.querySelector('.child-toggle'), 'Second-level links must not offer hidden descendants.');
+      projectLinks.querySelector('a[href="/page/project-0"]').click();
+      await wait(() => location.pathname === '/page/project-0');
       await headerVisible();
-      assert(menu.hidden && projectLinks.hidden, 'Selecting a project must close the mobile menu.');
+      assert(menu.hidden && projectLinks.hidden, 'Selecting a page must close the mobile branch.');
       unchanged();
     } else if (innerWidth >= 1680) {
       assert(!projectLinks.hidden && projectToggle.hidden, 'Ultrawide project tree must remain expanded.');
+      checkSubpageTitles(menu);
       for (const link of menu.querySelectorAll('a')) {
         const style = getComputedStyle(link);
-        assert(style.paddingTop === '2px' && style.paddingBottom === '2px' && style.fontWeight === '600', 'Ultrawide navigation should keep bold links closely spaced.');
+        const expectedWeight = link.closest('.child-links') ? '400' : '600';
+        assert(style.paddingTop === '2px' && style.paddingBottom === '2px' && style.fontWeight === expectedWeight, 'Ultrawide navigation must keep compact spacing with bold parents and regular-weight subpages.');
       }
+      assert(projectLinks.querySelector('a').getBoundingClientRect().left > menu.querySelector('a[href="/projects"]').getBoundingClientRect().left, 'Ultrawide subpages must remain indented.');
       const bioGap = menu.getBoundingClientRect().top - document.querySelector('.profile').getBoundingClientRect().bottom;
       assert(Math.abs(bioGap - 50) < 1, 'Ultrawide navigation needs a 50px gap below the bio.');
       assert(menu.getBoundingClientRect().bottom <= archive.getBoundingClientRect().top, 'Site navigation overlaps Recent Posts.');
@@ -127,18 +149,32 @@
       }
     } else {
       assert(menu.getClientRects().length === 0, 'Middle widths must hide the separate menu.');
-      const children = pageLinks.querySelector('.project-links');
+      checkSubpageTitles(pageLinks);
+      const children = pageLinks.querySelector('.child-links');
       assert(getComputedStyle(pageLinks).marginTop === '10px', 'Navigation with subpages must sit closer to the bio.');
       assert(getComputedStyle(children).marginBottom === '0px', 'Subpages must not add space above the header bottom padding.');
-      assert(children.getClientRects().length > 0 && children.querySelectorAll('a').length === 6, 'Middle navigation must show published projects beneath Projects.');
+      assert(children.getClientRects().length > 0 && children.querySelectorAll('a').length === 6, 'Middle navigation must show immediate children beneath Projects.');
       assert(children.getBoundingClientRect().top >= pageLinks.querySelector('a[href="/projects"]').getBoundingClientRect().bottom, 'Child links must sit below their parent link.');
       const listStyle = getComputedStyle(pageLinks.querySelector('ul'));
-      assert(listStyle.display === 'flex' && listStyle.flexWrap === 'wrap' && listStyle.columnGap === '20px', 'Middle navigation must use a compact, wrapping row.');
-      for (const link of pageLinks.querySelectorAll('a')) {
-        assert(getComputedStyle(link).fontWeight === '600', 'Middle navigation links must match the bold ultrawide links.');
+      assert(listStyle.display === 'grid' && listStyle.columnGap === '20px', 'Middle navigation must use evenly spaced columns.');
+      const groups = [...pageLinks.querySelectorAll(':scope > ul > li')];
+      assert(groups.length >= 3 && groups.some(group => !group.querySelector('ul')), 'Navigation fixture needs standalone pages alongside a parent page.');
+      const groupWidth = groups[0].getBoundingClientRect().width;
+      assert(Math.abs(groupWidth - 110) < 1, 'Middle navigation columns must stay compact.');
+      for (const group of groups) {
+        assert(Math.abs(group.getBoundingClientRect().width - groupWidth) < 1, 'Subpages must not change their parent navigation column width.');
       }
-      children.querySelector('a[href="/project/s/project-0"]').click();
-      await wait(() => location.pathname === '/project/s/project-0');
+      assert(document.documentElement.scrollWidth <= document.documentElement.clientWidth, 'Navigation columns overflow the viewport.');
+      for (const link of pageLinks.querySelectorAll(':scope > ul > li > a')) {
+        assert(getComputedStyle(link).fontWeight === '600', 'Top-level navigation links must stay bold.');
+      }
+      const parentLeft = pageLinks.querySelector('a[href="/projects"]').getBoundingClientRect().left;
+      for (const link of children.querySelectorAll('a')) {
+        assert(getComputedStyle(link).fontWeight === '400', 'Middle subpage links must use lighter text than their parent.');
+        assert(Math.abs(link.getBoundingClientRect().left - parentLeft) < 1, 'Middle subpage links must align with their parent without a tree indent.');
+      }
+      children.querySelector('a[href="/page/project-0"]').click();
+      await wait(() => location.pathname === '/page/project-0');
       await headerVisible();
       unchanged();
     }

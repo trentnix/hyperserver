@@ -3,33 +3,25 @@
 <div class="profile-details">
   <a class="profile-name" href="/">{{ .LayoutData.Profile.Name }}</a>
   {{ if .LayoutData.Profile.Bio }}<p>{{ .LayoutData.Profile.Bio }}</p>{{ end }}
-  <nav class="profile-links" aria-label="Site links"><ul>
-    {{ template "blog.pageLinks" . }}
-    <li><a href="/projects">Projects</a>
-      {{ if .LayoutData.Projects }}<ul class="project-links">{{ template "blog.projectLinks" . }}</ul>{{ end }}
-    </li>
-  </ul></nav>
+  <nav class="profile-links" aria-label="Site links"><ul>{{ template "blog.compactPageLinks" .LayoutData.Pages }}</ul></nav>
 </div>
 {{ end }}
 
-{{ define "blog.pageLinks" }}
-{{ range .LayoutData.Pages }}<li><a href="{{ .URL }}">{{ if eq .Slug "about" }}About{{ else }}{{ .Title }}{{ end }}</a></li>{{ end }}
-{{ end }}
-
-{{ define "blog.projectLinks" }}
-{{ range .LayoutData.Projects }}<li><a href="/project/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}
+{{ define "blog.compactPageLinks" }}
+{{ range . }}<li><a href="{{ .URL }}"{{ if .ParentID }} title="{{ .Title }}"{{ end }}>{{ .Title }}</a>{{ if .Children }}<ul class="child-links">{{ template "blog.compactPageLinks" .Children }}</ul>{{ end }}</li>{{ end }}
 {{ end }}
 
 {{ define "blog.siteLinks" }}
 <li><a href="/">Home</a></li>
-{{ template "blog.pageLinks" . }}
-<li>
-  <div class="project-branch">
-    <a href="/projects">Projects</a>
-    {{ if .LayoutData.Projects }}<button class="project-toggle text-button" type="button" aria-label="Toggle project links" aria-controls="project-links" aria-expanded="true" hidden><span aria-hidden="true">⌄</span></button>{{ end }}
+{{ template "blog.pageLinks" .LayoutData.Pages }}
+{{ end }}
+
+{{ define "blog.pageLinks" }}
+{{ range . }}<li>
+  <div class="page-branch">
+    <a href="{{ .URL }}"{{ if .ParentID }} title="{{ .Title }}"{{ end }}>{{ .Title }}</a>
+    {{ if .Children }}<button class="child-toggle text-button" type="button" aria-label="Toggle {{ .Title }} links" aria-controls="children-{{ .ID }}" aria-expanded="true" hidden><span aria-hidden="true">⌄</span></button>{{ end }}
   </div>
-  {{ if .LayoutData.Projects }}<ul id="project-links" class="project-links">
-    {{ template "blog.projectLinks" . }}
-  </ul>{{ end }}
-</li>
+  {{ if .Children }}<ul id="children-{{ .ID }}" class="child-links">{{ template "blog.pageLinks" .Children }}</ul>{{ end }}
+</li>{{ end }}
 {{ end }}

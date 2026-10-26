@@ -21,22 +21,25 @@
   const mobileLayout = matchMedia('(max-width: 767px)');
   const menuToggle = document.querySelector('.menu-toggle');
   const menu = document.querySelector('#site-menu');
-  const projectToggle = document.querySelector('.project-toggle');
-  const projectLinks = document.querySelector('#project-links');
+  const childToggles = [...menu.querySelectorAll('.child-toggle')];
   function closeMenu() {
     menu.hidden = mobileLayout.matches;
     menuToggle.hidden = !mobileLayout.matches;
     menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
-    if (projectToggle) {
-      projectLinks.hidden = mobileLayout.matches;
-      projectToggle.hidden = !mobileLayout.matches;
-      projectToggle.setAttribute('aria-expanded', String(!projectLinks.hidden));
+    for (const toggle of childToggles) {
+      const children = document.getElementById(toggle.getAttribute('aria-controls'));
+      children.hidden = mobileLayout.matches;
+      toggle.hidden = !mobileLayout.matches;
+      toggle.setAttribute('aria-expanded', String(!children.hidden));
     }
   }
-  projectToggle?.addEventListener('click', () => {
-    projectLinks.hidden = !projectLinks.hidden;
-    projectToggle.setAttribute('aria-expanded', String(!projectLinks.hidden));
-  });
+  for (const toggle of childToggles) {
+    toggle.addEventListener('click', () => {
+      const children = document.getElementById(toggle.getAttribute('aria-controls'));
+      children.hidden = !children.hidden;
+      toggle.setAttribute('aria-expanded', String(!children.hidden));
+    });
+  }
   menuToggle.addEventListener('click', () => {
     menu.hidden = !menu.hidden;
     menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
@@ -115,7 +118,7 @@
     }
   }
 
-  // Project cards store an image ID. Profile fields store the complete URL.
+  // Page previews store an image ID. Profile fields store the complete URL.
   function updateImagePreview(picker) {
     const value = picker.querySelector('[data-image-value]').value.trim();
     const url = value ? (picker.dataset.imagePrefix || '') + value : picker.dataset.imageDefault;

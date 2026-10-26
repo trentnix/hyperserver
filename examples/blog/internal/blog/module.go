@@ -67,7 +67,6 @@ type module struct {
 	access       *Access
 	app          *server.ApplicationServer
 	posts        repository
-	projectStore projectRepository
 	pageStore    pageRepository
 	profileStore profileRepository
 	profile      *ProfileState
@@ -131,10 +130,6 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"pages",
 		"pageEditor",
 		"pageDelete",
-		"projects",
-		"project",
-		"projectEditor",
-		"projectDelete",
 		"editor",
 		"delete",
 		"message",
@@ -169,7 +164,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if err != nil {
 		return errors.Join(fmt.Errorf("open blog assets: %w", err), images.Close(), closeStore())
 	}
-	m.posts, m.projectStore, m.images = store, store, images
+	m.posts, m.images = store, images
 	m.pageStore = store
 	m.profileStore = store
 	if m.profile == nil {

@@ -64,33 +64,26 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 // navigation holds the profile and available links for the current request.
 type navigation struct {
 	Profile                                  Profile
-	Pages                                    []Page
-	Projects                                 []Project
+	Pages                                    []pageLink
 	SignedIn, Admin, Registration, ShowLogin bool
 }
 
-// configurePageNavigation adds published page and project links after storage opens.
+// configurePageNavigation adds two levels of published pages after storage opens.
 // ConfigureRendering supplies the base navigation, including authentication links.
 func (m *module) configurePageNavigation() {
 	build := m.app.ContentManager.BuildLayoutData
 	m.app.ContentManager.BuildLayoutData = func(r *http.Request) any {
 		data := build(r).(navigation)
-		pages, err := m.pageStore.ListPages(r.Context())
+		pages, err := m.pageStore.ListPages(r.Context(), false)
 		if err != nil {
 			logger.LogRequestError(r, err)
 		} else {
-			for _, page := range pages {
-				if page.Published {
-					data.Pages = append(data.Pages, page)
+			data.Pages = pageTree(pages)
+			for i := range data.Pages {
+				for j := range data.Pages[i].Children {
+					data.Pages[i].Children[j].Children = nil
 				}
 			}
-		}
-
-		projects, err := m.projectStore.ListProjects(r.Context(), false)
-		if err != nil {
-			logger.LogRequestError(r, err)
-		} else {
-			data.Projects = projects
 		}
 		return data
 	}

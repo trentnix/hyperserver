@@ -47,7 +47,7 @@ func TestBrowserNavigation(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check article navigation")
 	}
-	for _, width := range []string{"320", "390", "767", "1100", "3440"} {
+	for _, width := range []string{"320", "390", "767", "768", "1100", "1679", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "navigation") })
 	}
 }
@@ -78,7 +78,7 @@ func TestBrowserPages(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check page editing")
 	}
-	for _, width := range []string{"390", "1100"} {
+	for _, width := range []string{"320", "390", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "pages") })
 	}
 }
@@ -100,15 +100,40 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "pages" {
+		child, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: h.projectsID, Slug: "sample-project", Title: "A sample project with a longer title", Published: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: child.ID, Slug: "sample-guide", Title: "A draft guide"}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if mode == "navigation" {
 		h.login(t)
+		if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "another-page", Title: "Another page with a longer title", Published: true}); err != nil {
+			t.Fatal(err)
+		}
 		for i := range 6 {
-			_, err := h.blog.projectStore.SaveProject(t.Context(), Project{
-				Slug: fmt.Sprintf("project-%d", i), Title: "Sample project", Summary: "A project card for navigation layout checks.", Published: true,
+			title := "Sample project"
+			if i == 0 {
+				title = strings.Repeat("A long project title ", 8) + `"notes" <guide>`
+			} else if i == 1 {
+				title = "Short"
+			}
+			_, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: h.projectsID,
+				Slug: fmt.Sprintf("project-%d", i), Title: title, Summary: "A project card for navigation layout checks.", Published: true,
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
+		}
+		project, err := h.blog.pageStore.GetPageBySlug(t.Context(), "project-0", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: project.ID, Slug: "project-guide", Title: "Project guide", Published: true}); err != nil {
+			t.Fatal(err)
 		}
 		for _, slug := range []string{"first", "second"} {
 			body := "Body of " + slug

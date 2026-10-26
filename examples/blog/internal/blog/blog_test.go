@@ -342,10 +342,11 @@ func (m *mailbox) Send(ctx context.Context, message messaging.MailMessage) error
 }
 
 type harness struct {
-	app     *application.Application
-	blog    *module
-	mail    *mailbox
-	cookies map[string]*http.Cookie
+	app        *application.Application
+	blog       *module
+	mail       *mailbox
+	cookies    map[string]*http.Cookie
+	projectsID string
 }
 
 func newHarness(t *testing.T) *harness {
@@ -380,9 +381,14 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	if err := h.blog.writeProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software.", BackgroundURL: "/assets/img/site-bg.jpg"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "about", Title: "About Me", Published: true}); err != nil {
+	if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "about", Title: "About Me", DisplayOrder: new(0), Published: true}); err != nil {
 		t.Fatal(err)
 	}
+	projects, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "projects", Title: "Projects", Published: true, ChildrenDisplay: "blocks", DisplayOrder: new(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.projectsID = projects.ID
 	return h
 }
 

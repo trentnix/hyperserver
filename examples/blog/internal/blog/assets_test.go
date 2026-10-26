@@ -157,7 +157,7 @@ func TestLocalAssetsInitializationFailure(t *testing.T) {
 	if m.access.emailKey != "" || m.close != nil || m.localAssets != nil {
 		t.Fatal("failed initialization published runtime state")
 	}
-	if _, err := h.blog.pageStore.ListPages(t.Context()); err != nil {
+	if _, err := h.blog.pageStore.ListPages(t.Context(), true); err != nil {
 		t.Fatal("failed initialization closed another application's storage", err)
 	}
 }

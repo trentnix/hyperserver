@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +17,107 @@ import (
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+// TestPageManagement checks empty-state controls and accurate editor guidance.
+func TestPageManagement(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	pages, err := h.blog.pageStore.ListPages(t.Context(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, page := range pages {
+		if err := h.blog.pageStore.DeletePage(t.Context(), page.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, hx := range []bool{false, true} {
+		w := h.request("GET", "/pages", nil, hx)
+		requireStatus(t, w, http.StatusOK)
+		for _, want := range []string{`href="/pages/create"`, "No pages yet. Create a page to get started."} {
+			if !strings.Contains(w.Body.String(), want) {
+				t.Fatalf("empty management screen missing %q", want)
+			}
+		}
+		w = h.request("GET", "/pages/create", nil, hx)
+		requireStatus(t, w, http.StatusOK)
+		if !strings.Contains(w.Body.String(), "Navigation shows top-level pages and their immediate children.") {
+			t.Fatal("editor does not explain the navigation depth limit")
+		}
+	}
+}
+
+// TestPageNavigationTitles keeps both menus tied to editable, escaped content.
+func TestPageNavigationTitles(t *testing.T) {
+	h := newHarness(t)
+	page, err := h.blog.pageStore.GetPageBySlug(t.Context(), "about", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Our story", "Company <history>"} {
+		page.Title = title
+		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+			t.Fatal(err)
+		}
+		body := h.request("GET", "/", nil, false).Body.String()
+		if strings.Count(body, `href="/about">`+html.EscapeString(title)+`</a>`) != 2 {
+			t.Fatal("navigation did not use the stored title", title)
+		}
+	}
+}
+
+// TestPageDisplayOrderInput preserves raw input on ordinary validation failures.
+func TestPageDisplayOrderInput(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	page, err := h.blog.pageStore.GetPageBySlug(t.Context(), "about", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.DisplayOrder = new(42)
+	page, err = h.blog.pageStore.SavePage(t.Context(), page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := regexp.MustCompile(`<input id="page-order"[^>]+>`)
+	for _, value := range []string{"-1", "1000001", "1.5", "not-a-number", strings.Repeat("9", 40), `"><script>`, "", "0", "0005", " 12 "} {
+		t.Run(value, func(t *testing.T) {
+			fields := pageFields(page.Slug, true)
+			fields.Set("displayOrder", value)
+			if value == "" || value == "0" || value == "0005" || value == " 12 " {
+				fields.Set("title", "") // An unrelated failure must preserve valid input too.
+			}
+			w := h.request("POST", "/pages/"+page.ID, fields, false)
+			requireStatus(t, w, http.StatusUnprocessableEntity)
+			field := input.FindString(w.Body.String())
+			if !strings.Contains(field, `value="`+html.EscapeString(value)+`"`) || strings.Contains(field, `type="number"`) {
+				t.Fatal("failed submission lost display order", field)
+			}
+		})
+	}
+	stored, err := h.blog.pageStore.GetPageByID(t.Context(), page.ID, true)
+	if err != nil || !reflect.DeepEqual(stored, page) {
+		t.Fatal("invalid submission changed stored page", err)
+	}
+	for _, order := range []*int{nil, new(0), new(42)} {
+		page.DisplayOrder = order
+		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+			t.Fatal(err)
+		}
+		body := h.request("GET", "/pages/update/"+page.ID, nil, false).Body.String()
+		want := ""
+		if order != nil {
+			want = strconv.Itoa(*order)
+		}
+		if !strings.Contains(input.FindString(body), `value="`+want+`"`) {
+			t.Fatal("editor did not show stored display order", want)
+		}
+	}
+}
 
 // pageFields supplies valid form values, leaving publication unchecked for drafts.
 func pageFields(slug string, published bool) url.Values {
@@ -98,12 +202,12 @@ func TestSiteNavigation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, project := range []Project{
-		{Slug: "last", Title: "Last project", Published: true, DisplayOrder: new(20)},
-		{Slug: "first", Title: "First <project>", Published: true, DisplayOrder: new(10)},
-		{Slug: "private-project", Title: "Private project"},
+	for _, project := range []Page{
+		{Slug: "last", ParentID: h.projectsID, Title: "Last project", Published: true, DisplayOrder: new(20)},
+		{Slug: "first", ParentID: h.projectsID, Title: "First <project>", Published: true, DisplayOrder: new(10)},
+		{Slug: "private-project", ParentID: h.projectsID, Title: "Private project"},
 	} {
-		if _, err := h.blog.projectStore.SaveProject(t.Context(), project); err != nil {
+		if _, err := h.blog.pageStore.SavePage(t.Context(), project); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -114,7 +218,7 @@ func TestSiteNavigation(t *testing.T) {
 			h.login(t)
 		}
 		body := h.request("GET", "/", nil, false).Body.String()
-		if strings.Count(body, `href="/page/contact"`) != 2 || strings.Count(body, `href="/project/s/first"`) != 2 {
+		if strings.Count(body, `href="/page/contact"`) != 2 || strings.Count(body, `href="/page/first"`) != 2 {
 			t.Fatal("navigation is missing page or project links")
 		}
 		if !strings.Contains(body, "Contact &lt;us&gt;") || !strings.Contains(body, "First &lt;project&gt;") {
@@ -123,20 +227,20 @@ func TestSiteNavigation(t *testing.T) {
 		if strings.Contains(body, "private-page") || strings.Contains(body, "private-project") {
 			t.Fatal("drafts appeared in public navigation")
 		}
-		if strings.Index(body, `href="/project/s/first"`) > strings.Index(body, `href="/project/s/last"`) {
+		if strings.Index(body, `href="/page/first"`) > strings.Index(body, `href="/page/last"`) {
 			t.Fatal("project navigation ignored display order")
 		}
 	}
-	h.blog.projectStore = failingProjects{}
+	h.blog.pageStore = unavailablePages{}
 	body := h.request("GET", "/", nil, false).Body.String()
-	if strings.Contains(body, `id="project-links"`) || strings.Contains(body, "private storage failure") || !strings.Contains(body, `href="/page/contact"`) || !strings.Contains(body, `href="/projects"`) {
+	if strings.Contains(body, `class="child-links"`) || strings.Contains(body, "private storage failure") || strings.Contains(body, `href="/page/contact"`) || strings.Contains(body, `href="/projects"`) {
 		t.Fatal("project lookup failure broke page navigation or leaked details")
 	}
 }
 
 type unavailablePageNavigation struct{ pageRepository }
 
-func (unavailablePageNavigation) ListPages(context.Context) ([]Page, error) {
+func (unavailablePageNavigation) ListPages(context.Context, bool) ([]Page, error) {
 	return []Page{{Slug: "about", Published: true}}, errors.New("private navigation storage failure")
 }
 
@@ -276,7 +380,7 @@ func TestPageValidation(t *testing.T) {
 	h.login(t)
 	for _, tt := range []struct{ field, value string }{
 		{"title", ""}, {"title", strings.Repeat("a", 241)}, {"title", string([]byte{0xff})},
-		{"slug", ""}, {"slug", "../bad"}, {"slug", "About"}, {"slug", strings.Repeat("a", 121)},
+		{"slug", "../bad"}, {"slug", "About"}, {"slug", strings.Repeat("a", 121)},
 		{"content", string([]byte{0xff})}, {"content", strings.Repeat("x", maxMarkdownBytes+1)}, {"published", "maybe"},
 	} {
 		for _, hx := range []bool{false, true} {
@@ -294,7 +398,7 @@ func TestPageValidation(t *testing.T) {
 			}
 		}
 	}
-	if pages, err := h.blog.pageStore.ListPages(t.Context()); err != nil || len(pages) != 1 {
+	if pages, err := h.blog.pageStore.ListPages(t.Context(), true); err != nil || len(pages) != 2 {
 		t.Fatal("invalid input persisted", pages, err)
 	}
 	fields := pageFields("about", true)
@@ -312,7 +416,7 @@ func TestPageValidation(t *testing.T) {
 	}
 	fields.Set("slug", "about")
 	requireStatus(t, h.request("POST", "/pages/"+p.ID, fields, false), http.StatusConflict)
-	if saved, err := h.blog.pageStore.GetPageByID(t.Context(), p.ID); err != nil || saved.Slug != "escaped" {
+	if saved, err := h.blog.pageStore.GetPageByID(t.Context(), p.ID, true); err != nil || saved.Slug != "escaped" {
 		t.Fatal("conflict changed page", saved, err)
 	}
 }
@@ -362,10 +466,10 @@ func TestPageOversizedDraft(t *testing.T) {
 			}
 		}
 	}
-	if saved, err := h.blog.pageStore.GetPageByID(t.Context(), original.ID); err != nil || saved != original {
+	if saved, err := h.blog.pageStore.GetPageByID(t.Context(), original.ID, true); err != nil || !reflect.DeepEqual(saved, original) {
 		t.Fatal("rejected update changed storage", saved, err)
 	}
-	if pages, err := h.blog.pageStore.ListPages(t.Context()); err != nil || len(pages) != 1 {
+	if pages, err := h.blog.pageStore.ListPages(t.Context(), true); err != nil || len(pages) != 2 {
 		t.Fatal("rejected creation changed storage", pages, err)
 	}
 }
@@ -397,7 +501,7 @@ func TestPageRequestLimits(t *testing.T) {
 			requireStatus(t, w, tt.status)
 		}
 	}
-	if pages, err := h.blog.pageStore.ListPages(t.Context()); err != nil || len(pages) != 1 {
+	if pages, err := h.blog.pageStore.ListPages(t.Context(), true); err != nil || len(pages) != 2 {
 		t.Fatal("rejected request changed storage", pages, err)
 	}
 	fields := pageFields("boundary", true)
@@ -411,13 +515,13 @@ func TestPageRequestLimits(t *testing.T) {
 // unavailablePages exercises storage errors without exposing implementation details.
 type unavailablePages struct{}
 
-func (unavailablePages) ListPages(context.Context) ([]Page, error) {
+func (unavailablePages) ListPages(context.Context, bool) ([]Page, error) {
 	return nil, errors.New("private storage failure")
 }
 func (unavailablePages) GetPageBySlug(context.Context, string, bool) (Page, error) {
 	return Page{}, errors.New("private storage failure")
 }
-func (unavailablePages) GetPageByID(context.Context, string) (Page, error) {
+func (unavailablePages) GetPageByID(context.Context, string, bool) (Page, error) {
 	return Page{}, errors.New("private storage failure")
 }
 func (unavailablePages) SavePage(context.Context, Page) (Page, error) {
@@ -443,7 +547,9 @@ func TestPageFailures(t *testing.T) {
 			}
 		}
 		for _, path := range []string{"/pages", "/pages/id", "/pages/delete/id"} {
-			w := h.request("POST", path, pageFields("unsaved", true), hx)
+			fields := pageFields("unsaved", true)
+			fields.Set("parentID", "selected-parent")
+			w := h.request("POST", path, fields, hx)
 			requireStatus(t, w, http.StatusInternalServerError)
 			if w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" || strings.Contains(w.Body.String(), "private storage failure") {
 				t.Fatal("incorrect failed-write response")
@@ -454,6 +560,9 @@ func TestPageFailures(t *testing.T) {
 				}
 				if !hx && (!strings.Contains(w.Body.String(), "Page unsaved") || !strings.Contains(w.Body.String(), "A **useful** page.")) {
 					t.Fatal("failed save lost draft")
+				}
+				if !hx && !strings.Contains(w.Body.String(), `value="selected-parent" selected`) {
+					t.Fatal("failed save lost parent selection")
 				}
 			}
 		}
@@ -476,7 +585,7 @@ func TestPageStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeStore()
-	if pages, err := store.ListPages(t.Context()); err != nil || len(pages) != 0 {
+	if pages, err := store.ListPages(t.Context(), true); err != nil || len(pages) != 0 {
 		t.Fatal("unexpected initial pages", pages, err)
 	}
 	if _, err := store.GetPageBySlug(t.Context(), "about", false); !errors.Is(err, errNotFound) {
@@ -519,7 +628,7 @@ func TestPageStorage(t *testing.T) {
 	if _, err := store.GetPageBySlug(t.Context(), "concurrent", false); !errors.Is(err, errNotFound) {
 		t.Fatal("public draft read", err)
 	}
-	if pages, err := store.ListPages(t.Context()); err != nil || len(pages) != 2 || pages[0].Slug != "concurrent" || pages[1].Markdown != "" {
+	if pages, err := store.ListPages(t.Context(), true); err != nil || len(pages) != 2 || pages[0].Slug != "concurrent" || pages[1].Markdown != "" {
 		t.Fatal("incorrect management listing", pages, err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
@@ -527,10 +636,10 @@ func TestPageStorage(t *testing.T) {
 	if _, err := store.SavePage(ctx, p); !errors.Is(err, context.Canceled) {
 		t.Fatal("ignored write cancellation", err)
 	}
-	if _, err := store.ListPages(ctx); !errors.Is(err, context.Canceled) {
+	if _, err := store.ListPages(ctx, true); !errors.Is(err, context.Canceled) {
 		t.Fatal("ignored list cancellation", err)
 	}
-	if _, err := store.GetPageByID(ctx, p.ID); !errors.Is(err, context.Canceled) {
+	if _, err := store.GetPageByID(ctx, p.ID, true); !errors.Is(err, context.Canceled) {
 		t.Fatal("ignored read cancellation", err)
 	}
 	if err := store.DeletePage(ctx, p.ID); !errors.Is(err, context.Canceled) {
@@ -544,7 +653,7 @@ func TestPageStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeAgain()
-	if saved, err := store.GetPageByID(t.Context(), p.ID); err != nil || saved != p {
+	if saved, err := store.GetPageByID(t.Context(), p.ID, true); err != nil || saved != p {
 		t.Fatal("page not preserved", saved, err)
 	}
 	if err := store.DeletePage(t.Context(), p.ID); err != nil {

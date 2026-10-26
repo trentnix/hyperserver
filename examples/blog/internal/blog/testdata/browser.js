@@ -73,7 +73,7 @@ document.removeEventListener = function(type, callback, options) {
       }
       const menuToggle = document.querySelector('.menu-toggle');
       const profileLinks = document.querySelector('.profile-links');
-      assert(profileLinks.textContent.trim().replace(/\s+/g, ' ') === 'About Projects' && !profileLinks.querySelector('img'), 'Profile navigation must use About and Projects text links only.');
+      assert([...profileLinks.querySelectorAll('a')].map(link => link.textContent).join(' ') === 'About Me Projects' && !profileLinks.querySelector('img'), 'Profile navigation must use stored page titles as text links.');
       assert(header.contains(links), 'Site links must belong to the header.');
       assert(getComputedStyle(footer).backgroundColor === 'rgba(0, 0, 0, 0)', 'Footer must have no background color.');
       if (innerWidth < 768) {
