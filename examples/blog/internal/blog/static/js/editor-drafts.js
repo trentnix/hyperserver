@@ -59,7 +59,8 @@
         }
         if (!key.startsWith(state.scope) || key === state.key || state.sources.some(copy => copy.key === key)) continue;
         if (typeof data.baseline !== 'string' || !data.fields || !state.fields.every(field =>
-          field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' : typeof data.fields[field.name] === 'string')) continue;
+          field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' :
+            (field.name === 'previewImage' && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
         copies.push({key, raw, data});
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);
@@ -105,7 +106,7 @@
         if (!state.recovery || (dirty(state) && !confirm('Replace the current edits with this recovery copy?'))) return;
         const copy = state.recovery;
         for (const field of state.fields) {
-          // A checkbox added after this copy was saved keeps its current setting.
+          // Fields added after this copy was saved keep their current settings.
           if (!Object.hasOwn(copy.data.fields, field.name)) continue;
           if (field.type === 'checkbox') field.checked = copy.data.fields[field.name];
           else field.value = copy.data.fields[field.name];

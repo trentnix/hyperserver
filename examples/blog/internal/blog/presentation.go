@@ -64,9 +64,10 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 	}, content.TemplatePath{FS: blogModuleFS, Path: pagesFile})
 }
 
-// navigation holds the profile and available links for the current request.
+// navigation holds the profile, links, and sharing metadata for the current request.
 type navigation struct {
 	Profile                                  Profile
+	Sharing                                  *sharingPreview
 	Pages                                    []pageLink
 	EditorOwner                              string
 	SignedIn, Admin, Registration, ShowLogin bool

@@ -174,7 +174,7 @@
       <label for="page-image">Upload a preview image</label><input id="page-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="preview-help">
       <button type="button" class="text-button" data-image-reset>Use default image</button>
     </div>
-    <p id="preview-help" class="form-hint">Shown only in parent-page previews, cropped to fit. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Uploads are public, including images used in drafts.</p>
+    <p id="preview-help" class="form-hint">Used for parent-page previews and sharing links, not the page body. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Uploads are public, including images used in drafts.</p>
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
     <p data-image-status role="status"></p>
   </fieldset>
@@ -228,6 +228,18 @@
   <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
   <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
+  <fieldset class="image-picker page-preview" data-image-picker data-image-prefix="/images/">
+    <legend>Preview image (optional)</legend>
+    <img {{ if .Data.PreviewURL }}src="{{ .Data.PreviewURL }}"{{ else }}hidden{{ end }} alt="Selected sharing preview" width="320" height="200" data-image-preview>
+    <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
+    <div class="image-upload-controls" hidden>
+      <label for="post-image">Upload a preview image</label><input id="post-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="post-preview-help">
+      <button type="button" class="text-button" data-image-reset>Use automatic selection</button>
+    </div>
+    <p id="post-preview-help" class="form-hint">Used when sharing a link, not in the post body. Without a selection, sharing uses the first suitable content image, then the site portrait. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Uploads are public, including images used in drafts.</p>
+    <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
+    <p data-image-status role="status"></p>
+  </fieldset>
   {{ template "blog.markdownFields" .Data }}
   <label class="publish-option"><input type="checkbox" name="published" {{ if not .Data.Draft }}checked{{ end }}> Publish post</label>
   <p class="form-hint">Uncheck to save a draft or remove this post from public view. When checked, saving makes the content live immediately. Uploaded images are public, including images used in drafts.</p>

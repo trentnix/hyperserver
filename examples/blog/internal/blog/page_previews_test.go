@@ -87,7 +87,12 @@ func TestPagePreviewsHTTP(t *testing.T) {
 			}
 			w = h.request("GET", "/page/published", nil, hx)
 			requireStatus(t, w, http.StatusOK)
-			if strings.Contains(w.Body.String(), imageID) || !strings.Contains(w.Body.String(), "<h1>Details</h1>") {
+			// Sharing metadata may use the preview image, but the visible detail must not.
+			_, detail, fullPage := strings.Cut(w.Body.String(), "</head>")
+			if !fullPage {
+				detail = w.Body.String()
+			}
+			if strings.Contains(detail, imageID) || !strings.Contains(detail, "<h1>Details</h1>") {
 				t.Fatal("detail image leakage or incorrect Markdown", w.Body)
 			}
 			if w.Header().Get("Cache-Control") != "no-store" {

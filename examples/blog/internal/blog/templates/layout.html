@@ -1,9 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns#">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="{{ .LayoutData.Profile.Bio }}">
+  {{ with .LayoutData.Sharing }}
+  <meta property="og:site_name" content="{{ $.LayoutData.Profile.Name }}">
+  <meta property="og:title" content="{{ .Title }}">
+  <meta property="og:description" content="{{ .Description }}">
+  <meta property="og:type" content="{{ .Type }}">
+  <meta property="og:url" content="{{ .URL }}">
+  {{ if .Image }}<meta property="og:image" content="{{ .Image }}">{{ end }}
+  {{ end }}
   <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"historyCacheSize":0}'>
   <title>{{ .LayoutData.Profile.Name }}{{ if .Title }} | {{ .Title }}{{ end }}</title>
   <link rel="icon" href="{{ .LayoutData.Profile.IconURL }}">

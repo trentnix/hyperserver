@@ -113,12 +113,13 @@
       localStorage.setItem(scope + 'broken', '{invalid');
       const foreign = 'hyperserver.blog.draft.v1:other-account:/post:copy';
       localStorage.setItem(foreign, JSON.stringify({...draft, saved: Date.now() + 1000, fields: {...draft.fields, title: 'Someone else'}}));
-      // A copy from before the post publication checkbox must remain recoverable.
+      // Copies from before publication and preview controls must remain recoverable.
       const setItem = Storage.prototype.setItem;
       Storage.prototype.setItem = function(name, value) {
         if (name === key) {
           const data = JSON.parse(value);
           delete data.fields.published;
+          delete data.fields.previewImage;
           value = JSON.stringify(data);
         }
         return setItem.call(this, name, value);
@@ -141,6 +142,7 @@
       assert(form.elements.slug.placeholder === 'recovered-post', 'Restoring a title did not refresh the slug suggestion.');
       assert(form.querySelector('.CodeMirror').CodeMirror.getValue() === 'Unsaved **writing**.', 'Restoring did not update EasyMDE.');
       assert(!form.elements.published.checked, 'Older recovery changed the current publication setting.');
+      assert(form.elements.previewImage.value === '', 'Older recovery changed the current preview selection.');
       change(form, 'slug', 'recovered-post');
       sessionStorage.setItem('recovery-stage', 'post-saved');
       form.requestSubmit();

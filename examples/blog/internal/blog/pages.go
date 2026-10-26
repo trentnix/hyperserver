@@ -107,6 +107,7 @@ func (m *module) page(w http.ResponseWriter, r *http.Request) {
 	}
 	page := m.views["page"].Content(r, data)
 	page.Title = p.Title
+	m.setPageSharing(page, r, p, html, admin)
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}

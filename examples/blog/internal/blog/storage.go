@@ -19,10 +19,19 @@ var (
 
 // Post stores the original Markdown and publication state. Published is the first
 // publication time and stays unchanged when a post is edited or republished.
+// PreviewImage is an optional upload ID used for sharing, not the article body.
 type Post struct {
-	ID, Slug, Title, Summary, Markdown string
-	Published                          time.Time
-	Draft                              bool
+	ID, Slug, Title, Summary, Markdown, PreviewImage string
+	Published                                        time.Time
+	Draft                                            bool
+}
+
+// PreviewURL returns the selected sharing image, or an empty string for automatic selection.
+func (p Post) PreviewURL() string {
+	if p.PreviewImage == "" {
+		return ""
+	}
+	return "/images/" + p.PreviewImage
 }
 
 // ArchiveEntry contains only the link, title, and date shown in the post archive.
@@ -77,7 +86,8 @@ func openRepository(ctx context.Context, settings Settings, directory string) (*
 CREATE TABLE IF NOT EXISTS blog_posts (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
  summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL,
- draft INTEGER NOT NULL DEFAULT 0 CHECK (draft IN (0, 1))
+ draft INTEGER NOT NULL DEFAULT 0 CHECK (draft IN (0, 1)),
+ preview_image TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS blog_pages (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
@@ -116,6 +126,13 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 	if err == nil {
 		err = initializePagePublicationHistory(ctx, db)
 	}
+	if err == nil {
+		var hasPreview bool
+		err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_posts') WHERE name='preview_image')").Scan(&hasPreview)
+		if err == nil && !hasPreview {
+			_, err = db.ExecContext(ctx, "ALTER TABLE blog_posts ADD COLUMN preview_image TEXT NOT NULL DEFAULT ''")
+		}
+	}
 	if err != nil {
 		db.Close()
 		return nil, nil, err
@@ -123,13 +140,13 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 	return &sqliteRepository{db: db}, db.Close, nil
 }
 
-const postColumns = "id, slug, title, summary, markdown, published, draft"
+const postColumns = "id, slug, title, summary, markdown, published, draft, preview_image"
 
 // scanPost decodes a row in postColumns order and maps missing rows to errNotFound.
 func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
 	var published int64
-	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft)
+	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft, &p.PreviewImage)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}
@@ -146,7 +163,7 @@ func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
 
 // ListMetadata returns drafts newest-created first, then posts newest-published first.
 func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
-	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '' FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
 }
 
 // listPosts reads either complete public posts or administration metadata.
@@ -235,12 +252,12 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 			p.Published = time.Now().UTC().Truncate(time.Second)
 			published = p.Published.Unix()
 		}
-		_, err = s.db.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft)
+		_, err = s.db.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft, p.PreviewImage)
 	} else {
 		// RETURNING avoids a second lookup racing with another edit or deletion.
-		p, err = scanPost(s.db.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?,
+		p, err = scanPost(s.db.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?,
  published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? RETURNING `+postColumns,
-			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, !p.Draft, time.Now().UTC().Unix(), p.ID))
+			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, !p.Draft, time.Now().UTC().Unix(), p.ID))
 	}
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {

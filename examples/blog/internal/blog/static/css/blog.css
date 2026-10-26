@@ -148,7 +148,7 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .page-card:hover h2 { text-decoration: underline; }
 .page-status { font-size: .8em; color: #626975; margin-bottom: 8px; }
 .page-back { display: inline-block; margin-bottom: 24px; font-size: .85em; }
-.page-preview > img { display: block; max-width: 100%; height: auto; aspect-ratio: 8 / 5; object-fit: cover; }
+.page-preview > img:not([hidden]) { display: block; max-width: 100%; height: auto; aspect-ratio: 8 / 5; object-fit: cover; }
 .publish-option { display: flex; align-items: center; gap: 10px; }
 .page-preview-list { display: grid; gap: 20px; margin-top: 30px; }
 .page-content .page-preview-list .page-card { flex-direction: row; }

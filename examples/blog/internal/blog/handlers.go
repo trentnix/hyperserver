@@ -75,6 +75,7 @@ func (m *module) index(w http.ResponseWriter, r *http.Request) {
 	post, err := m.posts.Latest(r.Context())
 	if errors.Is(err, errNotFound) {
 		page := m.views["message"].Content(r, "No posts yet.")
+		m.setSharing(page, r, sharingPreview{URL: "/", Type: "website"}, "")
 		if err := page.Render(w, r); err != nil {
 			page.HandleRenderError(w, r, "Unable to display this page.", err)
 		}
@@ -115,6 +116,11 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 	}
 	page := m.views["post"].Content(r, postPage{p, html})
 	page.Title = p.Title
+	if r.URL.Path == "/" {
+		m.setSharing(page, r, sharingPreview{URL: "/", Type: "website"}, "")
+	} else if !p.Draft {
+		m.setSharing(page, r, sharingPreview{Title: p.Title, Description: p.Summary, URL: "/post/s/" + p.Slug, Image: p.PreviewURL(), Type: "article"}, html)
+	}
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}
@@ -130,6 +136,7 @@ func (m *module) archive(w http.ResponseWriter, r *http.Request) {
 
 	page := m.views["archive"].Content(r, groupArchive(posts))
 	page.Title = "All Posts"
+	m.setSharing(page, r, sharingPreview{Title: page.Title, URL: "/posts", Type: "website"}, "")
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}
@@ -182,12 +189,13 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := Post{
-		ID:       r.PathValue("id"),
-		Slug:     strings.TrimSpace(r.PostForm.Get("slug")),
-		Title:    strings.TrimSpace(r.PostForm.Get("title")),
-		Summary:  strings.TrimSpace(r.PostForm.Get("summary")),
-		Markdown: r.PostForm.Get("content"),
-		Draft:    r.PostForm.Get("published") != "on",
+		ID:           r.PathValue("id"),
+		Slug:         strings.TrimSpace(r.PostForm.Get("slug")),
+		Title:        strings.TrimSpace(r.PostForm.Get("title")),
+		Summary:      strings.TrimSpace(r.PostForm.Get("summary")),
+		Markdown:     r.PostForm.Get("content"),
+		PreviewImage: r.PostForm.Get("previewImage"),
+		Draft:        r.PostForm.Get("published") != "on",
 	}
 	generatedSlug := p.Slug == ""
 	if generatedSlug {
@@ -201,6 +209,20 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		m.editorError(w, r, p, message, http.StatusUnprocessableEntity)
 		return
 	}
+	if p.PreviewImage != "" {
+		image, err := m.images.Open(r.Context(), p.PreviewImage)
+		if err != nil {
+			if errors.Is(err, errNotFound) {
+				m.editorError(w, r, p, "Upload a valid preview image or remove it to use automatic selection.", http.StatusUnprocessableEntity)
+			} else {
+				logger.LogRequestError(r, err)
+				m.editorError(w, r, p, "Unable to read the preview image. Please try again.", http.StatusInternalServerError)
+			}
+			return
+		}
+		image.Content.Close()
+	}
+
 	saved, err := m.posts.Save(r.Context(), p)
 	// Let the database settle competing writes. Only generated slugs may change.
 	for suffix := 2; generatedSlug && errors.Is(err, errSlugTaken); suffix++ {

@@ -99,7 +99,7 @@ func TestNavigationQueries(t *testing.T) {
 		{ID: "third", Slug: "third", Title: "Third", Published: date},
 		{ID: "draft", Slug: "draft", Title: "Draft", Published: date.AddDate(0, 1, 0), Draft: true},
 	} {
-		_, err := db.ExecContext(t.Context(), "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?)", post.ID, post.Slug, post.Title, "Summary", "Body", post.Published.Unix(), post.Draft)
+		_, err := db.ExecContext(t.Context(), "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?)", post.ID, post.Slug, post.Title, "Summary", "Body", post.Published.Unix(), post.Draft, "")
 		if err != nil {
 			t.Fatalf("insert %d: %v", index, err)
 		}

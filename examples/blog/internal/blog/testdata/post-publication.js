@@ -28,6 +28,7 @@
     }
     if (stage === 'create') {
       const form = await editor('/post/create');
+      assert(form.querySelector('[data-image-preview]').getClientRects().length === 0, 'New post must not display an empty preview image.');
       assert(!form.elements.published.checked, 'New post must start with Publish post unchecked.');
       assert(form.querySelector('[type="submit"]').textContent === 'Save post', 'Post save label must not force a draft step.');
       form.elements.title.value = 'First Save';
@@ -44,9 +45,31 @@
       const earlier = await fetch('/post', {method: 'POST', headers: {'HX-Request': 'true'}, body: new URLSearchParams({title: 'First Save', content: 'An earlier post with the same title.'})});
       assert(earlier.ok, 'Unable to prepare a title collision.');
       form.elements.published.checked = true;
+      const input = form.querySelector('#post-image');
+      const selectFile = file => {
+        const files = new DataTransfer();
+        files.items.add(file);
+        input.files = files.files;
+        input.dispatchEvent(new Event('change', {bubbles: true}));
+      };
+      selectFile(new File(['invalid'], 'bad.png', {type: 'image/png'}));
+      await wait(() => !form.dataset.uploading);
+      assert(form.elements.previewImage.value === '' && form.querySelector('[data-image-status]').textContent.includes('unchanged'), 'Failed upload changed the preview.');
+      const canvas = document.createElement('canvas');
+      canvas.width = 100; canvas.height = 60;
+      const image = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      selectFile(new File([image], 'preview.png', {type: 'image/png'}));
+      assert(form.querySelector('[type="submit"]').disabled, 'Save must wait for the preview upload.');
+      await wait(() => !form.dataset.uploading);
+      assert(form.elements.previewImage.value.endsWith('.png') && !form.querySelector('[data-image-preview]').hidden, 'Uploaded preview was not selected or displayed.');
+      sessionStorage.setItem('post-preview', form.elements.previewImage.value);
+      await wait(() => form.querySelector('[data-draft-status]').textContent === 'Saved locally. Use Save to apply changes.');
+      const recoveryPrefix = 'hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':/post:';
+      assert(Object.keys(localStorage).some(key => key.startsWith(recoveryPrefix) && JSON.parse(localStorage.getItem(key)).fields.previewImage === form.elements.previewImage.value), 'Recovery copy omitted the selected preview.');
       form.requestSubmit();
       await wait(() => document.querySelector('#editor-errors').textContent.includes('valid Markdown'));
       assert(form.elements.published.checked, 'Validation failure cleared the publication choice.');
+      assert(form.elements.previewImage.value === sessionStorage.getItem('post-preview'), 'Validation failure cleared the preview.');
       form.querySelector('.CodeMirror').CodeMirror.setValue('Public content on the first save.');
       sessionStorage.setItem('publication-stage', 'published');
       form.requestSubmit();
@@ -54,10 +77,16 @@
     }
     if (stage === 'published') {
       assert(location.pathname === '/post/s/first-save-2', 'Generated collision did not navigate to the suffixed URL.');
+      assert(document.querySelector('meta[property="og:image"]').content.endsWith('/images/' + sessionStorage.getItem('post-preview')), 'Saved preview missing from sharing metadata.');
+      assert(!document.querySelector('.post-body img'), 'Sharing preview appeared in article body.');
       const response = await fetch(location.pathname, {credentials: 'omit'});
       assert(response.ok && (await response.text()).includes('Public content on the first save.'), 'Checked first save did not publish the content.');
       const form = await editor(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
       assert(form.elements.slug.value === 'first-save-2' && !form.elements.slug.required, 'Post editor must load its generated slug and allow clearing it.');
+      assert(form.elements.previewImage.value === sessionStorage.getItem('post-preview'), 'Reopening lost the preview.');
+      form.querySelector('[data-image-reset]').click();
+      assert(form.elements.previewImage.value === '' && form.querySelector('[data-image-preview]').hidden, 'Automatic selection did not clear the uploaded preview.');
+      assert(form.querySelector('[data-image-preview]').getClientRects().length === 0, 'Cleared preview image must not occupy layout space.');
       form.elements.slug.value = '';
       assert(form.elements.published.checked, 'Published post did not open with Publish post checked.');
       form.elements.published.checked = false;
@@ -80,6 +109,7 @@
       assert(document.querySelector('.post-body').textContent.includes('Private edited content.'), 'Unpublishing failed to save the content edit.');
       const form = await editor(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
       assert(!form.elements.published.checked, 'Draft opened with Publish post checked.');
+      assert(form.elements.previewImage.value === '', 'Removed preview was not saved.');
       form.elements.published.checked = true;
       sessionStorage.setItem('publication-stage', 'republished');
       form.requestSubmit();

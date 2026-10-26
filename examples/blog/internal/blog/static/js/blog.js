@@ -133,7 +133,7 @@
     }
   }
 
-  // Page previews store an image ID. Profile fields store the complete URL.
+  // Post and page previews store an image ID. Profile fields store the complete URL.
   function updateImagePreview(picker) {
     const value = picker.querySelector('[data-image-value]').value.trim();
     const url = value ? (picker.dataset.imagePrefix || '') + value : picker.dataset.imageDefault;
