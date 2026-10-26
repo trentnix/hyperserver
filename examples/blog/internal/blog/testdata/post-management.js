@@ -50,6 +50,20 @@
     }
     await document.fonts.ready;
     assert(document.documentElement.scrollWidth <= Math.max(320, document.documentElement.clientWidth), 'Post management overflows the viewport.');
+    const accountNav = document.querySelector('nav.account-nav[aria-label="Account"]');
+    assert(accountNav, 'Account links must have a named navigation landmark.');
+    const navBounds = accountNav.getBoundingClientRect();
+    const controls = [...accountNav.querySelectorAll('a, button')];
+    assert(controls.map(control => control.textContent).join(',') === 'Posts,Pages,Site Profile,Log out', 'Account controls changed.');
+    for (const control of controls) {
+      const bounds = control.getBoundingClientRect();
+      assert(bounds.height >= 44 && bounds.left >= navBounds.left - 1 && bounds.right <= navBounds.right + 1, 'Account controls must be touch-friendly and fit the toolbar: ' + JSON.stringify({bounds, navBounds}));
+      assert(Math.abs(bounds.top - controls[0].getBoundingClientRect().top) < 1, 'Account controls should fit on one row at supported widths.');
+    }
+    controls[0].focus();
+    const focusStyle = getComputedStyle(controls[0]);
+    assert(focusStyle.outlineStyle !== 'none' && parseFloat(focusStyle.outlineWidth) >= 2, 'Keyboard focus must remain visible.');
+    controls[0].blur();
     for (const section of document.querySelectorAll('#draft-posts, #published-posts')) {
       const rows = [...section.querySelectorAll('.page-manager-row')];
       assert(rows.length === 3, 'Expected short, long, and unbroken titles.');

@@ -28,7 +28,7 @@
         </header>
       </aside>
       <main id="main-content" class="article-column">
-        <div class="account-nav">
+        <nav class="account-nav" aria-label="Account">
           {{ if .LayoutData.Admin }}<a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a>{{ end }}
           {{ if .LayoutData.SignedIn }}
           {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
@@ -37,7 +37,7 @@
           {{ if .LayoutData.ShowLogin }}<a href="/auth/login/email">Log in</a>{{ end }}
           {{ if .LayoutData.Registration }}<a href="/auth/register/email">Register</a>{{ end }}
           {{ end }}
-        </div>
+        </nav>
         <article id="article-content" class="page-content" hx-history-elt>{{ renderPartial .PartialName . }}</article>
       </main>
     </div>
