@@ -50,6 +50,9 @@
       document.querySelector('.tool-preview').click();
 
       const input = document.querySelector('#page-image');
+      assert(getComputedStyle(input).borderTopWidth === '0px', 'Page upload control has an extra input border.');
+      const fileButton = getComputedStyle(input, '::file-selector-button');
+      assert(fileButton.padding === '8px 12px' && fileButton.borderRadius === '4px', 'Page upload must use shared file-button styling.');
       const selectFile = file => {
         const files = new DataTransfer();
         files.items.add(file);
@@ -66,6 +69,8 @@
       const image = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
       selectFile(new File([image], 'preview.png', {type: 'image/png'}));
       assert(form.querySelector('[type="submit"]').disabled, 'Save was not disabled during upload.');
+      const disabledStyle = getComputedStyle(form.querySelector('[type="submit"]'));
+      assert(disabledStyle.cursor === 'not-allowed' && Number(disabledStyle.opacity) < 1, 'Disabled Save still looks available.');
       await wait(() => !form.dataset.uploading);
       assert(form.elements.previewImage.value.endsWith('.png'), 'Upload did not select a stored image.');
       sessionStorage.setItem('page-image', form.elements.previewImage.value);

@@ -28,7 +28,7 @@
       </aside>
       <main id="main-content" class="article-column">
         <div class="account-nav">
-          {{ if .LayoutData.Admin }}<a href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a>{{ end }}
+          {{ if .LayoutData.Admin }}<a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a>{{ end }}
           {{ if .LayoutData.SignedIn }}
           {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
           <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>

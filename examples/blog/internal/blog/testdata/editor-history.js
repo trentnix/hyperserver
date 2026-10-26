@@ -29,6 +29,10 @@
     sessionStorage.setItem('editor-history-stage', 'restoring');
     await wait(() => document.querySelector('#article-content .CodeMirror'));
     const article = document.querySelector('#article-content');
+    const panelStyle = getComputedStyle(article.querySelector('.editor-panel'));
+    assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Full-page editor typography differs from dialogs.');
+    const cancel = article.querySelector('.form-actions a.button-secondary');
+    assert(cancel && getComputedStyle(cancel).textDecorationLine === 'none', 'Full-page Cancel must retain its secondary button style.');
     document.querySelector('.profile-links a[href="/about"]').click();
     await wait(() => location.pathname === '/about' && article.querySelector('h1')?.textContent === 'About Me');
 

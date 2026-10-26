@@ -291,11 +291,29 @@ document.removeEventListener = function(type, callback, options) {
       const loginNotice = document.querySelector('.notification--success');
       assert(loginNotice?.textContent.includes('logged in'), 'Login notification is missing.');
       await wait(() => !loginNotice.isConnected);
+      const posts = document.querySelector('.account-nav a[href="/post/manage"]');
+      assert(posts && !document.querySelector('.account-nav a[href="/post/create"]'), 'Account navigation must link to Posts, not New post.');
+      const logoutStyle = getComputedStyle(document.querySelector('.account-nav button'));
+      const navStyle = getComputedStyle(posts);
+      for (const property of ['color', 'textDecorationLine', 'fontSize', 'lineHeight', 'transition']) {
+        assert(logoutStyle[property] === navStyle[property], 'Log out differs from navigation links in ' + property);
+      }
+      sessionStorage.setItem('blog-test-stage', 'posts');
+      posts.click();
+      return;
+    }
+    if (stage === 'posts') {
+      assert(document.querySelector('#draft-posts') && document.querySelector('#published-posts'), 'Post management sections are missing.');
       const link = document.querySelector('a[href="/post/create"]');
-      assert(link, 'Verified administrator has no New post link.');
+      assert(link, 'Posts page has no New post link.');
       link.click();
       await wait(() => document.querySelector('dialog[open] .CodeMirror'));
       const cm = document.querySelector('.CodeMirror').CodeMirror;
+      const panelStyle = getComputedStyle(document.querySelector('.editor-panel'));
+      assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Modal editor typography is inconsistent.');
+      const saveStyle = getComputedStyle(document.querySelector('#post-form [type=submit]'));
+      const cancelStyle = getComputedStyle(document.querySelector('#post-form .button-secondary'));
+      assert(saveStyle.backgroundColor !== cancelStyle.backgroundColor && cancelStyle.textDecorationLine === 'none', 'Cancel must be a secondary control.');
       assert(document.querySelector('.CodeMirror').getBoundingClientRect().width > 200, 'Editor initialized while hidden.');
       document.querySelector('#post-title').value = 'Browser post';
       document.querySelector('#post-slug').value = 'browser-post';
@@ -330,9 +348,36 @@ document.removeEventListener = function(type, callback, options) {
       return;
     }
     if (stage === 'saved') {
+      assert(document.querySelector('.post-heading').textContent.includes('Draft preview'), 'New posts must open a private preview.');
+      assert((await fetch('/post/s/browser-post', {credentials: 'omit'})).status === 404, 'Anonymous readers can view a draft.');
+      const posts = await fetch('/post/manage');
+      assert(posts.ok && (await posts.text()).includes('/post/s/browser-post'), 'Saved draft is missing from the Posts page.');
+      sessionStorage.setItem('blog-test-stage', 'published');
+      document.querySelector('form[action^="/post/publish/"]').requestSubmit();
+      return;
+    }
+    if (stage === 'published') {
       assert(location.pathname === '/post/s/browser-post', 'Save did not navigate to the post.');
+      assert(!document.querySelector('.post-heading').textContent.includes('Draft preview'), 'Publishing retained draft status.');
+      assert((await fetch('/post/s/browser-post', {credentials: 'omit'})).ok, 'Published post is not public.');
       assert(document.querySelector('.post-body h1')?.textContent === 'Saved heading', 'Published Markdown differs from preview.');
       assert(getComputedStyle(document.querySelector('.post-heading')).textAlign === 'left', 'Post heading must align with its content.');
+      const actions = [...document.querySelectorAll('.content-actions a, .content-actions button')];
+      assert(actions.map(action => action.textContent).join(',') === 'Edit,Unpublish,Delete', 'Published post actions are incorrect.');
+      const actionStyle = getComputedStyle(actions[0]);
+      assert(actionStyle.textDecorationLine === 'none', 'Post actions should not look like underlined content links.');
+      for (const action of actions.slice(1)) {
+        const style = getComputedStyle(action);
+        for (const property of ['fontSize', 'fontWeight', 'lineHeight', 'textDecorationLine', 'borderRadius', 'borderWidth', 'padding', 'transition']) {
+          assert(style[property] === actionStyle[property], 'Post actions differ in ' + property + '.');
+        }
+        assert(Math.abs(action.getBoundingClientRect().top - actions[0].getBoundingClientRect().top) < 1, 'Post actions are not vertically aligned.');
+      }
+      for (const action of actions) {
+        assert(getComputedStyle(action).borderTopStyle === 'solid', 'Post action must use the shared outlined style.');
+        assert(action.getBoundingClientRect().height >= (innerWidth < 768 ? 44 : 36), 'Post action is too small to interact with.');
+      }
+      assert(actionStyle.backgroundColor !== getComputedStyle(actions[1]).backgroundColor, 'Edit must be emphasized.');
       const image = document.querySelector('.post-body img');
       assert(image, 'Published post has no image: ' + document.querySelector('.post-body').innerHTML);
       await wait(() => image?.complete);
@@ -393,9 +438,45 @@ document.removeEventListener = function(type, callback, options) {
       const confirm = deletion.querySelector('button[type="submit"]');
       const cancel = deletion.querySelector('[data-close-dialog]');
       assert(getComputedStyle(deletion).display === 'flex', 'Delete controls lost their action-row layout.');
+      assert(confirm.classList.contains('button-danger') && cancel.classList.contains('button-secondary'), 'Delete confirmation needs destructive and secondary controls.');
+      assert(getComputedStyle(confirm).backgroundColor !== getComputedStyle(cancel).backgroundColor, 'Delete and Cancel must not look alike.');
       assert(Math.abs(confirm.getBoundingClientRect().top - cancel.getBoundingClientRect().top) < 1, 'Delete controls are not aligned.');
       cancel.click();
       assert(!document.querySelector('dialog[open]'), 'Cancel did not close the delete dialog.');
+      sessionStorage.setItem('blog-test-stage', 'manage-unpublish');
+      location.assign('/post/manage');
+      return;
+    }
+    if (stage === 'manage-unpublish') {
+      const form = document.querySelector('#published-posts form[action^="/post/unpublish/"]');
+      assert(form?.textContent.includes('Move to drafts'), 'Published post has no Move to drafts action.');
+      const moveStyle = getComputedStyle(form.querySelector('button'));
+      const viewStyle = getComputedStyle(form.closest('.page-manager-actions').querySelector('a'));
+      for (const property of ['color', 'textDecorationLine', 'fontSize', 'lineHeight', 'padding', 'transition']) {
+        assert(moveStyle[property] === viewStyle[property], 'Move to drafts differs from neighboring links in ' + property);
+      }
+      assert(document.documentElement.scrollWidth <= innerWidth, 'Post management overflows the viewport.');
+      sessionStorage.setItem('blog-test-stage', 'unpublished');
+      form.requestSubmit();
+      return;
+    }
+    if (stage === 'unpublished') {
+      assert(location.pathname === '/post/manage', 'Move to drafts did not return to Posts.');
+      const draft = document.querySelector('#draft-posts a[href="/post/s/browser-post"]');
+      assert(draft && !document.querySelector('#published-posts a[href="/post/s/browser-post"]'), 'Post did not move from Published to Drafts.');
+      assert((await fetch('/post/s/browser-post', {credentials: 'omit'})).status === 404, 'Unpublished post remains public.');
+      sessionStorage.setItem('blog-test-stage', 'draft-preview');
+      draft.click();
+      return;
+    }
+    if (stage === 'draft-preview') {
+      assert(document.querySelector('.post-heading').textContent.includes('Draft preview'), 'Unpublish did not restore the draft preview.');
+      sessionStorage.setItem('blog-test-stage', 'republished');
+      document.querySelector('form[action^="/post/publish/"]').requestSubmit();
+      return;
+    }
+    if (stage === 'republished') {
+      assert((await fetch('/post/s/browser-post', {credentials: 'omit'})).ok, 'Republished post is not public.');
       sessionStorage.setItem('blog-test-stage', 'logout');
       document.querySelector('form[action="/auth/logout"]').requestSubmit();
       return;

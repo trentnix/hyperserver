@@ -531,6 +531,53 @@ func (unavailablePages) DeletePage(context.Context, string) error {
 	return errors.New("private storage failure")
 }
 
+// TestPageDeleteWithChildren keeps conflict feedback in the confirmation flow.
+func TestPageDeleteWithChildren(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	child, err := h.blog.pageStore.SavePage(t.Context(), Page{
+		ParentID: h.projectsID, Slug: "child", Title: "Child", Published: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/pages/delete/" + h.projectsID
+	for _, hx := range []bool{false, true} {
+		confirmation := h.request("GET", path, nil, hx)
+		requireStatus(t, confirmation, http.StatusOK)
+		if !strings.Contains(confirmation.Body.String(), `hx-target="#page-delete-confirmation" hx-swap="outerHTML"`) {
+			t.Fatal("delete form must target the confirmation contents")
+		}
+
+		w := h.request("POST", path, nil, hx)
+		requireStatus(t, w, http.StatusConflict)
+		body := w.Body.String()
+		if !strings.Contains(body, "This page has subpages.") || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
+			t.Fatal("blocked deletion must explain the conflict without redirecting")
+		}
+		if strings.Contains(body, `action="`+path+`"`) || strings.Contains(body, "Delete page?") || !strings.Contains(body, "Cannot delete page") {
+			t.Fatal("blocked deletion must replace the confirmation with an explanation")
+		}
+		if hx {
+			if strings.Contains(body, "<dialog") || strings.Contains(body, "<form") || strings.Contains(body, "<html") {
+				t.Fatal("HTMX conflict must replace the dialog contents, not the dialog")
+			}
+			if !strings.Contains(body, `data-close-dialog autofocus>OK</button>`) {
+				t.Fatal("blocked deletion must offer an OK button to dismiss the dialog")
+			}
+		} else if !strings.Contains(body, `href="/projects">OK</a>`) {
+			t.Fatal("full-page error must link back to the page")
+		}
+		for _, id := range []string{h.projectsID, child.ID} {
+			if _, err := h.blog.pageStore.GetPageByID(t.Context(), id, true); err != nil {
+				t.Fatalf("blocked deletion changed stored pages: %v", err)
+			}
+		}
+	}
+}
+
 // TestPageFailures preserves drafts on failed saves and denies a different verified user.
 func TestPageFailures(t *testing.T) {
 	h := newHarness(t)

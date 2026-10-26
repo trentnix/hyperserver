@@ -18,10 +18,12 @@ var (
 	errSlugTaken = errors.New("that slug is already used by another post")
 )
 
-// Post stores the original Markdown. Publication time does not change on edits.
+// Post stores the original Markdown and publication state. Published is the first
+// publication time and stays unchanged when a post is edited or republished.
 type Post struct {
 	ID, Slug, Title, Summary, Markdown string
 	Published                          time.Time
+	Draft                              bool
 }
 
 // ArchiveEntry contains only the link, title, and date shown in the post archive.
@@ -33,21 +35,27 @@ type ArchiveEntry struct {
 // repository describes the storage guarantees used by HTTP handlers.
 // Slugs must be unique, including under concurrent writes.
 type repository interface {
-	// List supplies complete posts for RSS, newest first.
+	// List supplies complete published posts for RSS, newest first.
 	List(context.Context) ([]Post, error)
+	// ListMetadata supplies all posts for administration, without summaries or Markdown.
+	// Drafts come first, then published posts newest first.
+	ListMetadata(context.Context) ([]Post, error)
 	// Latest returns errNotFound when no posts have been published.
 	Latest(context.Context) (Post, error)
 	// ListArchive returns link metadata newest first, without post bodies.
 	ListArchive(context.Context) ([]ArchiveEntry, error)
 	// ListRecent returns at most limit newest entries. The limit must be positive.
 	ListRecent(context.Context, int) ([]ArchiveEntry, error)
-	// GetByID returns errNotFound when the stable post ID does not exist.
-	GetByID(context.Context, string) (Post, error)
-	// GetBySlug returns errNotFound when the slug does not exist.
-	GetBySlug(context.Context, string) (Post, error)
-	// Save creates when ID is empty and updates an existing post otherwise.
-	// Updates preserve publication time. Conflicts return errSlugTaken.
+	// GetByID returns errNotFound for missing IDs and drafts unless includeDrafts is true.
+	GetByID(context.Context, string, bool) (Post, error)
+	// GetBySlug returns errNotFound for missing slugs and drafts unless includeDrafts is true.
+	GetBySlug(context.Context, string, bool) (Post, error)
+	// Save creates a draft when ID is empty and updates existing content otherwise.
+	// Updates preserve publication state and time. Conflicts return errSlugTaken.
 	Save(context.Context, Post) (Post, error)
+	// SetPublished changes visibility without changing content. First publication
+	// assigns Published. Repeated calls preserve it. Missing IDs return errNotFound.
+	SetPublished(context.Context, string, bool) (Post, error)
 	// Delete removes a post or returns errNotFound. Uploaded images remain available.
 	Delete(context.Context, string) error
 }
@@ -68,7 +76,8 @@ func openRepository(ctx context.Context, settings Settings, directory string) (*
 	_, err = db.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS blog_posts (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
- summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL
+ summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL,
+ draft INTEGER NOT NULL DEFAULT 0 CHECK (draft IN (0, 1))
 );
 CREATE TABLE IF NOT EXISTS blog_pages (
  id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
@@ -96,26 +105,49 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 		db.Close()
 		return nil, nil, err
 	}
+	// Existing installations contain only published posts. Preserve their content
+	// and dates when adding draft support. Save explicitly creates new drafts.
+	var hasDraft bool
+	err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_posts') WHERE name='draft')").Scan(&hasDraft)
+	if err == nil && !hasDraft {
+		_, err = db.ExecContext(ctx, "ALTER TABLE blog_posts ADD COLUMN draft INTEGER NOT NULL DEFAULT 0 CHECK (draft IN (0, 1))")
+	}
+	if err != nil {
+		db.Close()
+		return nil, nil, err
+	}
 	return &sqliteRepository{db: db}, db.Close, nil
 }
 
-const postColumns = "id, slug, title, summary, markdown, published"
+const postColumns = "id, slug, title, summary, markdown, published, draft"
 
 // scanPost decodes a row in postColumns order and maps missing rows to errNotFound.
 func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
 	var published int64
-	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published)
+	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}
-	p.Published = time.Unix(published, 0).UTC()
+	if published != 0 {
+		p.Published = time.Unix(published, 0).UTC()
+	}
 	return p, err
 }
 
 // List returns complete posts newest first, using insertion order to break ties.
 func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+postColumns+" FROM blog_posts ORDER BY published DESC, rowid DESC")
+	return s.listPosts(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE draft=0 ORDER BY published DESC, rowid DESC")
+}
+
+// ListMetadata returns drafts newest-created first, then posts newest-published first.
+func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
+	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+}
+
+// listPosts reads either complete public posts or administration metadata.
+func (s *sqliteRepository) listPosts(ctx context.Context, query string) ([]Post, error) {
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +165,7 @@ func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
 
 // Latest fetches only the newest post, or returns errNotFound for an empty blog.
 func (s *sqliteRepository) Latest(ctx context.Context) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts ORDER BY published DESC, rowid DESC LIMIT 1"))
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE draft=0 ORDER BY published DESC, rowid DESC LIMIT 1"))
 }
 
 // ListArchive returns metadata in the same order as List without loading Markdown.
@@ -151,7 +183,7 @@ func (s *sqliteRepository) ListRecent(ctx context.Context, limit int) ([]Archive
 
 // listArchive reads link metadata. A zero limit selects the complete archive.
 func (s *sqliteRepository) listArchive(ctx context.Context, limit int) ([]ArchiveEntry, error) {
-	query := "SELECT slug, title, published FROM blog_posts ORDER BY published DESC, rowid DESC"
+	query := "SELECT slug, title, published FROM blog_posts WHERE draft=0 ORDER BY published DESC, rowid DESC"
 	var args []any
 	if limit > 0 {
 		query += " LIMIT ?"
@@ -175,18 +207,18 @@ func (s *sqliteRepository) listArchive(ctx context.Context, limit int) ([]Archiv
 	return entries, rows.Err()
 }
 
-// GetByID looks up a stable post ID, which does not change when its slug changes.
-func (s *sqliteRepository) GetByID(ctx context.Context, id string) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE id=?", id))
+// GetByID looks up a stable post ID, hiding drafts unless includeDrafts is true.
+func (s *sqliteRepository) GetByID(ctx context.Context, id string, includeDrafts bool) (Post, error) {
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE id=? AND (? OR draft=0)", id, includeDrafts))
 }
 
-// GetBySlug looks up an exact slug and returns errNotFound when it is absent.
-func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE slug=?", slug))
+// GetBySlug looks up an exact slug, hiding drafts unless includeDrafts is true.
+func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDrafts bool) (Post, error) {
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE slug=? AND (? OR draft=0)", slug, includeDrafts))
 }
 
-// Save inserts a new post when ID is empty, generating its ID and any omitted slug.
-// Updates preserve publication time and fail if the post no longer exists.
+// Save inserts a new draft when ID is empty, generating its ID and any omitted slug.
+// Updates preserve publication state and time and fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 	var err error
@@ -195,8 +227,8 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 		if p.Slug == "" {
 			p.Slug = strings.ToLower(p.ID)
 		}
-		p.Published = time.Now().UTC().Truncate(time.Second)
-		_, err = s.db.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, p.Published.Unix())
+		p.Draft, p.Published = true, time.Time{}
+		_, err = s.db.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, 0, 1)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown)
 	} else {
 		// RETURNING avoids a second lookup racing with another edit or deletion.
 		p, err = scanPost(s.db.QueryRowContext(ctx, "UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=? WHERE id=? RETURNING "+postColumns, p.Slug, p.Title, p.Summary, p.Markdown, p.ID))
@@ -206,6 +238,12 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 		err = errSlugTaken
 	}
 	return p, err
+}
+
+// SetPublished atomically changes visibility and assigns the first publication date.
+func (s *sqliteRepository) SetPublished(ctx context.Context, id string, published bool) (Post, error) {
+	return scanPost(s.db.QueryRowContext(ctx, "UPDATE blog_posts SET draft=?, published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? RETURNING "+postColumns,
+		!published, published, time.Now().UTC().Unix(), id))
 }
 
 // Delete removes one post or returns errNotFound. Images are retained because

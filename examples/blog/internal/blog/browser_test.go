@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -94,6 +96,17 @@ func TestBrowserProfile(t *testing.T) {
 	}
 }
 
+// TestBrowserAuthStyles compares authentication panels in full-page and HTMX responses.
+func TestBrowserAuthStyles(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check authentication styles")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "auth-styles") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
@@ -144,6 +157,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 				"title": {slug + " <post>"}, "slug": {slug}, "content": {body},
 			}, false)
 			requireStatus(t, response, http.StatusSeeOther)
+			h.publish(t, slug)
 		}
 	}
 	loadNotifications := h.app.ContentManager.LoadNotifications
@@ -168,10 +182,24 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/pages.js"
 	case "profile":
 		scriptFile = "testdata/profile.js"
+	case "auth-styles":
+		scriptFile = "testdata/auth-styles.js"
 	}
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if mode == "auth-styles" {
+		requireStatus(t, h.request("POST", "/auth/reset/request/email", url.Values{"email": {"trentnix@gmail.com"}}, false), http.StatusOK)
+		if len(h.mail.messages) != 2 {
+			t.Fatal("expected one reset email after registration")
+		}
+		link := regexp.MustCompile(`https://blog.example/auth/reset/email\?[^"< ]+`).FindString(h.mail.messages[1].Body)
+		resetURL, err := url.Parse(html.UnescapeString(link))
+		if err != nil || resetURL.Query().Get("token") == "" {
+			t.Fatal("missing reset link", err)
+		}
+		script = bytes.ReplaceAll(script, []byte("__RESET_URL__"), []byte(fmt.Sprintf("%q", resetURL.RequestURI())))
 	}
 	result := make(chan string, 1)
 	pagePath := "/auth/login/email"

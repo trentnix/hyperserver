@@ -10,6 +10,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -46,6 +47,9 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /projects", m.page)
 	routes.HandleFunc("GET /project/s/{slug}", m.page) // Retain published project links.
 	routes.Handle("GET /post/create", m.requireAdmin(m.editor))
+	routes.Handle("GET /post/manage", m.requireAdmin(m.managePosts))
+	routes.Handle("POST /post/publish/{id}", m.requireAdmin(m.publish))
+	routes.Handle("POST /post/unpublish/{id}", m.requireAdmin(m.unpublish))
 	routes.Handle("GET /post/update/{id}", m.requireAdmin(m.editor))
 	routes.Handle("GET /post/delete/{id}", m.requireAdmin(m.confirmDelete))
 	routes.HandleWithBodyLimit("POST /post", m.requireAdmin(m.save), routing.MiB)
@@ -82,12 +86,15 @@ func (m *module) index(w http.ResponseWriter, r *http.Request) {
 
 // post resolves either a readable slug or the stable post ID used in feed links.
 func (m *module) post(w http.ResponseWriter, r *http.Request) {
+	// A saved draft uses the normal post view, but only its administrator can read it.
+	w.Header().Set("Cache-Control", "no-store")
+	includeDrafts := m.access.IsAdmin(user.GetUserFromContext(r.Context()))
 	var p Post
 	var err error
 	if slug := r.PathValue("slug"); slug != "" {
-		p, err = m.posts.GetBySlug(r.Context(), slug)
+		p, err = m.posts.GetBySlug(r.Context(), slug, includeDrafts)
 	} else {
-		p, err = m.posts.GetByID(r.Context(), r.PathValue("id"))
+		p, err = m.posts.GetByID(r.Context(), r.PathValue("id"), includeDrafts)
 	}
 	if err != nil {
 		m.storageError(w, r, err)
@@ -144,10 +151,10 @@ func (m *module) recent(w http.ResponseWriter, r *http.Request) {
 
 // editor opens a blank form for creation or loads an existing post for editing.
 func (m *module) editor(w http.ResponseWriter, r *http.Request) {
-	var p Post
+	p := Post{Draft: true}
 	if id := r.PathValue("id"); id != "" {
 		var err error
-		p, err = m.posts.GetByID(r.Context(), id)
+		p, err = m.posts.GetByID(r.Context(), id, true)
 		if err != nil {
 			m.storageError(w, r, err)
 			return
@@ -247,7 +254,7 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 
 // confirmDelete displays the selected post without changing storage.
 func (m *module) confirmDelete(w http.ResponseWriter, r *http.Request) {
-	p, err := m.posts.GetByID(r.Context(), r.PathValue("id"))
+	p, err := m.posts.GetByID(r.Context(), r.PathValue("id"), true)
 	if err != nil {
 		m.storageError(w, r, err)
 		return

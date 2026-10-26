@@ -272,13 +272,22 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 
 // confirmPageDelete asks for confirmation without changing storage.
 func (m *module) confirmPageDelete(w http.ResponseWriter, r *http.Request) {
-	p, err := m.pageStore.GetPageByID(r.Context(), r.PathValue("id"), true)
-	if err != nil {
-		m.storageError(w, r, err)
-		return
+	m.renderPageDelete(w, r, "", http.StatusOK)
+}
+
+// renderPageDelete keeps conflicts in the open dialog or the full confirmation page.
+func (m *module) renderPageDelete(w http.ResponseWriter, r *http.Request, message string, status int) {
+	page := m.views["pageDelete"].Content(r, pageContent{Error: message})
+	if !page.IsHtmx() || message == "" {
+		p, err := m.pageStore.GetPageByID(r.Context(), r.PathValue("id"), true)
+		if err != nil {
+			m.storageError(w, r, err)
+			return
+		}
+		page.Data = pageContent{Page: p, Error: message}
 	}
-	page := m.views["pageDelete"].Content(r, p)
 	page.Title = "Delete page"
+	page.ResponseStatusCode = status
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}
@@ -288,7 +297,7 @@ func (m *module) confirmPageDelete(w http.ResponseWriter, r *http.Request) {
 func (m *module) deletePage(w http.ResponseWriter, r *http.Request) {
 	if err := m.pageStore.DeletePage(r.Context(), r.PathValue("id")); err != nil {
 		if errors.Is(err, errPageHasChildren) {
-			m.app.ContentManager.HandleError(w, r, err.Error(), nil, http.StatusConflict)
+			m.renderPageDelete(w, r, "This page has subpages. Move or delete its subpages before deleting this page.", http.StatusConflict)
 			return
 		}
 		m.storageError(w, r, err)

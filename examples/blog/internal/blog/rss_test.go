@@ -289,6 +289,7 @@ func TestRSSPostChanges(t *testing.T) {
 	_, emptyTag := read(0, "")
 	values := url.Values{"slug": {"first"}, "title": {"First"}, "content": {"![picture](/images/one)"}}
 	requireStatus(t, h.request(http.MethodPost, "/post", values, false), http.StatusSeeOther)
+	h.publish(t, values.Get("slug"))
 	first, firstTag := read(1, emptyTag)
 	if !strings.Contains(first.Channel.Items[0].Content, `src="https://blog.example/images/one"`) {
 		t.Fatal("feed image is not absolute")
@@ -297,6 +298,7 @@ func TestRSSPostChanges(t *testing.T) {
 	values.Set("slug", "second")
 	values.Set("title", "Second")
 	requireStatus(t, h.request(http.MethodPost, "/post", values, false), http.StatusSeeOther)
+	h.publish(t, values.Get("slug"))
 	_, secondTag := read(2, firstTag)
 	values.Set("slug", "first")
 	values.Set("title", "Edited")

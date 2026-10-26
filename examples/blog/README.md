@@ -31,7 +31,7 @@ Then start the blog:
 GOWORK=off go run .
 ```
 
-Open <http://127.0.0.1:8086/auth/register/email> and register the configured address. Open the verification message in <http://127.0.0.1:8025>, confirm the address, and log in. The **New post** link appears for the verified administrator.
+Open <http://127.0.0.1:8086/auth/register/email> and register the configured address. Open the verification message in <http://127.0.0.1:8025>, confirm the address, and log in. The **Posts** link appears for the verified administrator.
 
 Mailpit captures mail locally without delivering it externally. Stop the server with Ctrl+C.
 
@@ -41,13 +41,21 @@ Set `auth.registrationEnabled: false` after creating the administrator if desire
 
 `application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, SQLite storage for posts and pages, and file-based image storage. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
 
-EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when content is deleted. This prototype creates its schema on a fresh database. It does not upgrade older schemas automatically.
+EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when content is deleted. Storage creates a fresh schema or adds draft support to the existing post table. Older page schemas are not upgraded automatically.
 
 Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Images use content-based filenames and immutable public URLs with a one-year browser cache lifetime. Files must not be edited in place. Upload a new image to change its content.
 
-RSS caches the complete rendered feed. Recent Posts caches only the configured number of entries, not rendered HTML. Both caches are loaded on demand and invalidated after creating, editing, or deleting a post. Profile edits also invalidate RSS. Feed readers can revalidate with an ETag. Feed links and images use absolute URLs.
+RSS caches the complete rendered feed. Recent Posts caches only the configured number of entries, not rendered HTML. Both caches are loaded on demand and invalidated after saving, publishing, unpublishing, or deleting a post. Profile edits also invalidate RSS. Feed readers can revalidate with an ETag. Feed links and images use absolute URLs.
 
 Run one blog instance per content database. The site profile is loaded at startup and refreshed after successful edits. Direct database edits require a restart to refresh the profile and caches.
+
+## Publishing posts
+
+Open **Posts**, choose **New post**, write a title and Markdown body, then **Save draft and preview**. The saved post uses the normal reading layout, but only the verified administrator can view it. The Posts page groups drafts and published posts, with links to preview, edit, and delete them. Choose **Publish** on a draft preview to add the post to the public site, RSS, and archives.
+
+Choose **Move to drafts** on the Posts page or **Unpublish** on a published post to return it to drafts. Its content, URL, and original publication date are retained. Republishing keeps that date. Saving edits preserves the post's publication state. Edits to published posts appear immediately. This is not a staged-revision or autosave system. Uploaded images remain public even when their post is a draft.
+
+Existing posts stay published when storage adds draft support. Back up the content database and uploads before deploying changes.
 
 ## Pages and projects
 

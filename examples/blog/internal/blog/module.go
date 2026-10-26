@@ -124,6 +124,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	m.views = make(map[string]*content.View)
 	for _, name := range []string{
 		"post",
+		"posts",
 		"archive",
 		"recent",
 		"page",

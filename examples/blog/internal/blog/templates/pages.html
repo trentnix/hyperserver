@@ -43,9 +43,44 @@
 {{ end }}
 
 {{ define "blog.post" }}
-<header class="post-heading"><h1>{{ .Data.Title }}</h1><time datetime="{{ .Data.Published.Format "2006-01-02" }}">{{ .Data.Published.Format "January 2, 2006" }}</time></header>
-{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a> <a href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a></div>{{ end }}
+<header class="post-heading"><h1>{{ .Data.Title }}</h1>{{ if .Data.Draft }}<p class="page-status">Draft preview — only you can see this post.</p>{{ else }}<time datetime="{{ .Data.Published.Format "2006-01-02" }}">{{ .Data.Published.Format "January 2, 2006" }}</time>{{ end }}</header>
+{{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Post actions">
+  <a class="action-edit" href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a>
+  {{ if .Data.Draft }}<form method="post" action="/post/publish/{{ .Data.ID }}"><button type="submit" class="text-button">Publish</button></form>{{ else }}<form method="post" action="/post/unpublish/{{ .Data.ID }}"><button type="submit" class="text-button">Unpublish</button></form>{{ end }}
+  <a class="action-delete" href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
+</div>{{ end }}
 <div class="post-body">{{ .Data.HTML }}</div>
+{{ end }}
+
+{{ define "blog.posts" }}
+<section class="info-page page-manager">
+<header class="page-manager-heading">
+  <div><h1>Posts</h1><p>Manage your drafts and published posts.</p></div>
+  <a class="page-create" href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a>
+</header>
+<section id="draft-posts" aria-labelledby="draft-posts-heading">
+  <h2 id="draft-posts-heading">Drafts</h2>
+  {{ if .Data.Drafts }}{{ template "blog.postAdminLinks" .Data.Drafts }}{{ else }}<p class="page-manager-empty">No drafts.</p>{{ end }}
+</section>
+<section id="published-posts" aria-labelledby="published-posts-heading">
+  <h2 id="published-posts-heading">Published</h2>
+  {{ if .Data.Published }}{{ template "blog.postAdminLinks" .Data.Published }}{{ else }}<p class="page-manager-empty">No published posts yet.</p>{{ end }}
+</section>
+</section>
+{{ end }}
+
+{{ define "blog.postAdminLinks" }}
+<ul class="page-manager-list">
+{{ range . }}<li class="page-manager-row">
+  <div class="page-manager-title"><a href="/post/s/{{ .Slug }}">{{ .Title }}</a>{{ if not .Draft }}<small>Published {{ .Published.Format "January 2, 2006" }}</small>{{ end }}</div>
+  <div class="page-manager-actions">
+    <a href="/post/s/{{ .Slug }}" aria-label="{{ if .Draft }}Preview{{ else }}View{{ end }} {{ .Title }}">{{ if .Draft }}Preview{{ else }}View{{ end }}</a>
+    <a href="/post/update/{{ .ID }}" hx-get="/post/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
+    {{ if not .Draft }}<form method="post" action="/post/unpublish/{{ .ID }}?from=posts"><button type="submit" class="text-button" aria-label="Move {{ .Title }} to drafts">Move to drafts</button></form>{{ end }}
+    <a href="/post/delete/{{ .ID }}" hx-get="/post/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
+  </div>
+</li>{{ end }}
+</ul>
 {{ end }}
 
 {{ define "blog.archive" }}
@@ -72,7 +107,11 @@
 {{ with .Data.Parent }}<a class="page-back" href="{{ .URL }}" hx-get="{{ .URL }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">&larr; {{ .Title }}</a>{{ end }}
 {{ if not .Data.Published }}<p class="page-status">Draft — visible only to you</p>{{ end }}
 <h1>{{ .Data.Title }}</h1>
-{{ if .LayoutData.Admin }}<div class="post-actions"><a href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit page</a><a href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a><a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#dialog-host">New subpage</a></div>{{ end }}
+{{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Page actions">
+  <a class="action-edit" href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a>
+  <a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#dialog-host">New subpage</a>
+  <a class="action-delete" href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
+</div>{{ end }}
 <div class="post-body">{{ .Data.HTML }}</div>
 {{ if ne .Data.ChildrenDisplay "hidden" }}
 <div class="{{ if eq .Data.ChildrenDisplay "blocks" }}page-grid{{ else }}page-preview-list{{ end }}" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
@@ -101,6 +140,7 @@
   <div class="page-manager-row">
     <div class="page-manager-title"><a href="{{ .URL }}">{{ .Title }}</a><small>{{ .URL }}</small>{{ if not .Published }}<span class="page-manager-draft">Draft</span>{{ end }}</div>
     <div class="page-manager-actions">
+      <a href="{{ .URL }}" aria-label="{{ if .Published }}View{{ else }}Preview{{ end }} {{ .Title }}">{{ if .Published }}View{{ else }}Preview{{ end }}</a>
       <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
       <a href="/pages/delete/{{ .ID }}" hx-get="/pages/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
     </div>
@@ -144,16 +184,26 @@
   <p class="form-hint">Up to 256 KiB of Markdown. Content can be empty.</p>
   <label class="page-publish"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish page</label>
   <p class="form-hint">Uncheck to save a draft or remove this page from public view.</p>
-  <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/pages">Cancel</a>{{ end }}</div>
+  <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/pages">Cancel</a>{{ end }}</div>
 </form></section>
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
 
 {{ define "blog.pageDelete" }}
-{{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
+{{ if and .IsHtmx (not .Data.Error) }}<dialog aria-labelledby="delete-title">{{ end }}
+<section id="page-delete-confirmation" class="confirmation-panel">
+{{ if .Data.Error }}
+<h1 id="delete-title">Cannot delete page</h1>
+<p role="alert">{{ .Data.Error }}</p>
+<div class="form-actions">{{ if .IsHtmx }}<button type="button" data-close-dialog autofocus>OK</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">OK</a>{{ end }}</div>
+{{ else }}
 <h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone. Move or delete its subpages first. Uploaded images are kept.</p>
-<form class="form-actions" method="post" action="/pages/delete/{{ .Data.ID }}"><button type="submit">Delete page</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="{{ .Data.URL }}">Cancel</a>{{ end }}</form>
-{{ if .IsHtmx }}</dialog>{{ end }}
+<form method="post" action="/pages/delete/{{ .Data.ID }}" hx-post="/pages/delete/{{ .Data.ID }}" hx-target="#page-delete-confirmation" hx-swap="outerHTML">
+<div class="form-actions"><button type="submit" class="button-danger">Delete page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">Cancel</a>{{ end }}</div>
+</form>
+{{ end }}
+</section>
+{{ if and .IsHtmx (not .Data.Error) }}</dialog>{{ end }}
 {{ end }}
 
 {{ define "blog.markdownFields" }}
@@ -171,14 +221,17 @@
   <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Leave empty for an automatic URL when creating a post.</small>
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
   {{ template "blog.markdownFields" .Data }}
-  <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/">Cancel</a>{{ end }}</div>
+  <p class="form-hint">New posts stay private until you publish them. Saving an existing post keeps its publication state. Changes to published posts appear immediately. Uploaded images are public, including images used in drafts.</p>
+  <div class="form-actions"><button type="submit">{{ if .Data.ID }}Save changes{{ else }}Save draft and preview{{ end }}</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/">Cancel</a>{{ end }}</div>
 </form></section>
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
 
 {{ define "blog.delete" }}
 {{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
+<section class="confirmation-panel">
 <h1 id="delete-title">Delete post?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone.</p>
-<form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}"><button type="submit">Delete post</button>{{ if .IsHtmx }}<button type="button" data-close-dialog>Cancel</button>{{ else }}<a href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
+<form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}"><button type="submit" class="button-danger">Delete post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
+</section>
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}

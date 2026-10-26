@@ -278,10 +278,12 @@ func TestRecentPostChanges(t *testing.T) {
 	read("", "", 1)
 	values := url.Values{"slug": {"first"}, "title": {"First"}, "content": {"Body"}}
 	requireStatus(t, h.request(http.MethodPost, "/post", values, false), http.StatusSeeOther)
+	h.publish(t, values.Get("slug"))
 	read("first", "First", 1)
 	values.Set("slug", "second")
 	values.Set("title", "Second")
 	requireStatus(t, h.request(http.MethodPost, "/post", values, false), http.StatusSeeOther)
+	h.publish(t, values.Get("slug"))
 	read("second", "Second", 1)
 
 	var posts feed

@@ -29,7 +29,7 @@ func TestPostStoragePersistenceAndConflicts(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeStore()
-	loaded, err := store.GetBySlug(t.Context(), "hello")
+	loaded, err := store.GetBySlug(t.Context(), "hello", true)
 	if err != nil || loaded != post {
 		t.Fatalf("post did not survive reopening: %v", err)
 	}
@@ -97,10 +97,24 @@ func TestNavigationQueries(t *testing.T) {
 		{ID: "first", Slug: "first", Title: "First", Published: date.AddDate(0, -1, 0)},
 		{ID: "second", Slug: "second", Title: "Second", Published: date},
 		{ID: "third", Slug: "third", Title: "Third", Published: date},
+		{ID: "draft", Slug: "draft", Title: "Draft", Published: date.AddDate(0, 1, 0), Draft: true},
 	} {
-		_, err := db.ExecContext(t.Context(), "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?)", post.ID, post.Slug, post.Title, "Summary", "Body", post.Published.Unix())
+		_, err := db.ExecContext(t.Context(), "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?)", post.ID, post.Slug, post.Title, "Summary", "Body", post.Published.Unix(), post.Draft)
 		if err != nil {
 			t.Fatalf("insert %d: %v", index, err)
+		}
+	}
+	posts, err := store.List(t.Context())
+	if err != nil || len(posts) != 3 || posts[0].ID != "third" || posts[1].ID != "second" || posts[2].ID != "first" {
+		t.Fatalf("published posts = %+v, %v", posts, err)
+	}
+	metadata, err := store.ListMetadata(t.Context())
+	if err != nil || len(metadata) != 4 {
+		t.Fatalf("post metadata = %+v, %v", metadata, err)
+	}
+	for i, id := range []string{"draft", "third", "second", "first"} {
+		if metadata[i].ID != id || metadata[i].Markdown != "" || metadata[i].Summary != "" || metadata[i].Draft != (id == "draft") {
+			t.Fatalf("post metadata %d = %+v", i, metadata[i])
 		}
 	}
 	latest, err := store.Latest(t.Context())
@@ -139,6 +153,9 @@ func TestNavigationQueries(t *testing.T) {
 	if _, err := store.ListRecent(ctx, 1); !errors.Is(err, context.Canceled) {
 		t.Fatalf("ListRecent ignored cancellation: %v", err)
 	}
+	if _, err := store.ListMetadata(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("ListMetadata ignored cancellation: %v", err)
+	}
 	if err := closeStore(); err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +167,9 @@ func TestNavigationQueries(t *testing.T) {
 	}
 	if _, err := store.ListRecent(t.Context(), 1); err == nil {
 		t.Fatal("ListRecent hid storage failure")
+	}
+	if _, err := store.ListMetadata(t.Context()); err == nil {
+		t.Fatal("ListMetadata hid storage failure")
 	}
 }
 

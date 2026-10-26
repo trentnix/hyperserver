@@ -26,6 +26,8 @@
       return;
     }
     const form = document.querySelector('#profile-form');
+    const formStyle = getComputedStyle(form);
+    assert(formStyle.fontSize === '16px' && formStyle.lineHeight === '24px', 'Profile typography differs from other administrative forms.');
     assert(document.documentElement.scrollWidth <= innerWidth, 'Profile controls overflow the viewport.');
     const headerPortrait = document.querySelector('.portrait');
     await headerPortrait.decode();
@@ -50,6 +52,10 @@
       selectFile(field, new File([image], 'profile.png', {type: 'image/png'}));
       assert(form.querySelector('[type="submit"]').disabled, 'Save was not disabled during upload.');
       assert([...form.querySelectorAll('[data-image-picker] input, [data-image-reset]')].every(control => control.disabled), 'Another image can be changed during upload.');
+      for (const control of form.querySelectorAll('button:disabled, input[type=file]:disabled')) {
+        const style = getComputedStyle(control);
+        assert(style.cursor === 'not-allowed' && Number(style.opacity) < 1, 'Disabled upload controls still look available.');
+      }
       const submit = new Event('submit', {bubbles: true, cancelable: true});
       form.dispatchEvent(submit);
       assert(submit.defaultPrevented, 'Pending upload did not block submission.');
@@ -69,6 +75,9 @@
     };
     if (stage === 'edit') {
       for (const fieldset of form.querySelectorAll('[data-image-picker]')) {
+        const input = fieldset.querySelector('input[type=file]');
+        const fileButton = getComputedStyle(input, '::file-selector-button');
+        assert(getComputedStyle(input).borderTopWidth === '0px' && fileButton.padding === '8px 12px' && fileButton.borderRadius === '4px', 'Profile upload must use shared file-button styling.');
         const preview = fieldset.querySelector('.profile-image-preview').getBoundingClientRect();
         const controls = fieldset.querySelector('.profile-image-controls').getBoundingClientRect();
         const stacked = innerWidth < 768 || fieldset.dataset.imageField === 'backgroundURL';

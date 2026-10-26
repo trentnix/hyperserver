@@ -38,13 +38,37 @@
       assert(document.documentElement.scrollWidth <= Math.max(320, document.documentElement.clientWidth), 'Page management exceeds the viewport or minimum width.');
       const bounds = manager.getBoundingClientRect();
       for (const row of manager.querySelectorAll('.page-manager-row')) {
+        const view = row.querySelector('.page-manager-actions a');
+        const pageLink = row.querySelector('.page-manager-title a');
+        const label = row.querySelector('.page-manager-draft') ? 'Preview' : 'View';
+        assert(view?.textContent === label && view.href === pageLink.href, 'Page action must link to its view or draft preview.');
+        assert(view.getAttribute('aria-label') === label + ' ' + pageLink.textContent, 'Page view action must identify its page.');
         const title = row.querySelector('.page-manager-title').getBoundingClientRect();
         const actions = row.querySelector('.page-manager-actions').getBoundingClientRect();
         assert(title.right <= bounds.right + 1 && actions.right <= bounds.right + 1, 'Page title or actions exceed the content width.');
         assert(title.bottom <= actions.top + 1 || title.right <= actions.left, 'Page title overlaps its actions.');
       }
+      const parentRow = manager.querySelector('.page-manager-title a[href="/projects"]').closest('.page-manager-row');
+      parentRow.querySelector('a[href^="/pages/delete/"]').click();
+      await wait(() => document.querySelector('dialog[open] form[action^="/pages/delete/"]'));
+      await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+      const confirmation = document.querySelector('dialog[open]');
+      const deleteForm = confirmation.querySelector('form');
+      deleteForm.requestSubmit();
+      await wait(() => confirmation.querySelector('[role="alert"]')?.textContent.includes('This page has subpages.'));
+      assert(confirmation.isConnected && confirmation.open, 'Blocked deletion replaced or dismissed its dialog.');
+      assert(!confirmation.querySelector('form'), 'Blocked deletion still offers a delete form.');
+      const controls = confirmation.querySelectorAll('button, a');
+      assert(controls.length === 1 && controls[0].textContent === 'OK', 'Blocked deletion must offer only OK.');
+      assert(location.pathname === '/pages' && document.querySelector('.page-manager') === manager, 'Blocked deletion replaced the underlying page.');
+      confirmation.querySelector('[data-close-dialog]').click();
+      await wait(() => !confirmation.open);
+
       document.querySelector('a[href="/pages/create"]').click();
       const form = await editorReady();
+      const panelStyle = getComputedStyle(form.closest('.editor-panel'));
+      assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Page editor typography differs from other forms.');
+      assert(form.querySelector('.button-secondary[data-close-dialog]'), 'Page editor Cancel is not secondary.');
       assert(form.textContent.includes('Navigation shows top-level pages and their immediate children.'), 'Navigation help does not explain the depth limit.');
       assert(!form.elements.published.checked, 'New pages must start as drafts.');
       form.elements.title.value = 'Contact';
@@ -84,8 +108,19 @@
     if (stage === 'published') {
       const response = await fetch('/page/contact', {credentials: 'omit'});
       assert(response.ok && (await response.text()).includes('<strong>contact</strong>'), 'Published page was not readable.');
+      const actions = [...document.querySelectorAll('.content-actions a')];
+      assert(actions.map(action => action.textContent).join(',') === 'Edit,New subpage,Delete', 'Page action order or labels are incorrect.');
+      assert(actions[1].getAttribute('href').startsWith('/pages/create?parent='), 'New subpage lost its parent selection.');
+      for (const action of actions) {
+        const style = getComputedStyle(action);
+        assert(style.textDecorationLine === 'none' && style.borderTopStyle === 'solid', 'Page action must use the compact button style.');
+        assert(action.getBoundingClientRect().height >= (innerWidth < 768 ? 44 : 36), 'Page action is too small to interact with.');
+      }
+      assert(document.documentElement.scrollWidth <= Math.max(320, innerWidth), 'Page actions overflow the viewport.');
       document.querySelector('#article-content a[href^="/pages/delete/"]').click();
       await wait(() => document.querySelector('dialog[open] form[action^="/pages/delete/"]'));
+      await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+      assert(document.querySelector('dialog[open] .button-danger[type=submit]') && document.querySelector('dialog[open] .button-secondary[data-close-dialog]'), 'Page deletion needs destructive and secondary controls.');
       sessionStorage.setItem('page-stage', 'deleted');
       document.querySelector('dialog[open] form').requestSubmit();
       return;

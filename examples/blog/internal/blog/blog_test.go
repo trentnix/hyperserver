@@ -51,6 +51,7 @@ func TestReturningUserNavigation(t *testing.T) {
 	requireStatus(t, h.request(http.MethodPost, "/post", url.Values{
 		"slug": {"welcome"}, "title": {"Welcome"}, "content": {"Hello"},
 	}, false), http.StatusSeeOther)
+	h.publish(t, "welcome")
 
 	const link = `href="/auth/login/email">Log in</a>`
 	if body := h.request(http.MethodGet, "/post/s/welcome", nil, false).Body.String(); strings.Contains(body, link) || !strings.Contains(body, ">Log out</button>") {
@@ -183,6 +184,7 @@ func TestReadingResponses(t *testing.T) {
 	requireStatus(t, h.request(http.MethodPost, "/post", url.Values{
 		"slug": {"reading"}, "title": {"Reading <post>"}, "content": {"Post body"},
 	}, false), http.StatusSeeOther)
+	h.publish(t, "reading")
 
 	for _, tt := range []struct {
 		name, path, target, title string
@@ -250,6 +252,7 @@ func testRecentPosts(t *testing.T, limit int) {
 			requireStatus(t, h.request(http.MethodPost, "/post", url.Values{
 				"slug": {fmt.Sprintf("post-%02d", created)}, "title": {"Post <title>"}, "content": {"Body"},
 			}, false), http.StatusSeeOther)
+			h.publish(t, fmt.Sprintf("post-%02d", created))
 		}
 		for _, path := range []string{"/posts/recent", "/posts"} {
 			t.Run(fmt.Sprintf("%s/%d", path, count), func(t *testing.T) {
@@ -616,6 +619,7 @@ func TestPublishingAndRecoveryPaths(t *testing.T) {
 		t.Fatal("missing edit link")
 	}
 	id := match[1]
+	h.publish(t, "first-post")
 	requireStatus(t, h.request("POST", "/post", post, true), http.StatusConflict)
 	post.Set("title", "")
 	w = h.request("POST", "/post/"+id, post, true)
