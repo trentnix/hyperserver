@@ -67,7 +67,21 @@
     }
   });
 
+  // This is a suggestion, not a reservation. The server resolves collisions on save.
+  function updateSlugPlaceholder(form) {
+    const slug = form?.querySelector('input[name="slug"]');
+    if (!slug) return;
+    const title = form.elements.title.value;
+    const suggestion = title.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase()
+      .replace(/^-+/, '').slice(0, 120).replace(/-+$/, '');
+    slug.placeholder = suggestion || (title.trim() ? 'Enter a custom slug' : 'Generated from title on save');
+  }
+  for (const name of ['input', 'change']) {
+    document.addEventListener(name, event => updateSlugPlaceholder(event.target.closest('form')));
+  }
+
   function initialize(root) {
+    root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
     root.querySelectorAll('.image-upload-controls').forEach(controls => { controls.hidden = false; });
     const textarea = root.querySelector('#post-content');

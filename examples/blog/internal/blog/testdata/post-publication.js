@@ -30,8 +30,19 @@
       const form = await editor('/post/create');
       assert(!form.elements.published.checked, 'New post must start with Publish post unchecked.');
       assert(form.querySelector('[type="submit"]').textContent === 'Save post', 'Post save label must not force a draft step.');
-      form.elements.title.value = 'First-save publication';
-      form.elements.slug.value = 'first-save';
+      form.elements.title.value = 'First Save';
+      assert(form.elements.slug.value === '' && !form.elements.slug.required, 'New post slug must be optional.');
+      for (const [title, slug] of [['  Go & HTMX!  ', 'go-htmx'], ['İGo Kit', 'go-it'], ['世界', 'Enter a custom slug'], ['A'.repeat(119) + ' -- end', 'a'.repeat(119)], ['First Save', 'first-save']]) {
+        form.elements.title.value = title;
+        form.elements.title.dispatchEvent(new Event('input', {bubbles: true}));
+        assert(form.elements.slug.placeholder === slug && form.elements.slug.value === '', 'Slug suggestion must follow the title without entering a value.');
+      }
+      form.elements.slug.value = 'custom-slug';
+      form.elements.title.dispatchEvent(new Event('input', {bubbles: true}));
+      assert(form.elements.slug.value === 'custom-slug', 'Updating the suggestion replaced an explicit slug.');
+      form.elements.slug.value = '';
+      const earlier = await fetch('/post', {method: 'POST', headers: {'HX-Request': 'true'}, body: new URLSearchParams({title: 'First Save', content: 'An earlier post with the same title.'})});
+      assert(earlier.ok, 'Unable to prepare a title collision.');
       form.elements.published.checked = true;
       form.requestSubmit();
       await wait(() => document.querySelector('#editor-errors').textContent.includes('valid Markdown'));
@@ -42,10 +53,12 @@
       return;
     }
     if (stage === 'published') {
-      assert(location.pathname === '/post/s/first-save', 'First save did not navigate to the post.');
+      assert(location.pathname === '/post/s/first-save-2', 'Generated collision did not navigate to the suffixed URL.');
       const response = await fetch(location.pathname, {credentials: 'omit'});
       assert(response.ok && (await response.text()).includes('Public content on the first save.'), 'Checked first save did not publish the content.');
       const form = await editor(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
+      assert(form.elements.slug.value === 'first-save-2' && !form.elements.slug.required, 'Post editor must load its generated slug and allow clearing it.');
+      form.elements.slug.value = '';
       assert(form.elements.published.checked, 'Published post did not open with Publish post checked.');
       form.elements.published.checked = false;
       form.querySelector('.CodeMirror').CodeMirror.setValue('Private edited content.');

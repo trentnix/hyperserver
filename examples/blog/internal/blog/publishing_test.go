@@ -248,6 +248,56 @@ func TestPostSavePublicationAtomicity(t *testing.T) {
 	}
 }
 
+// TestPostDeletion returns to Posts for drafts and published posts in both HTTP modes.
+func TestPostDeletion(t *testing.T) {
+	for _, hx := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ordinary", true: "htmx"}[hx], func(t *testing.T) {
+			h := newHarness(t)
+			h.register(t)
+			h.verify(t)
+			h.login(t)
+			status, header := http.StatusSeeOther, "Location"
+			if hx {
+				status, header = http.StatusOK, "HX-Redirect"
+			}
+			for _, draft := range []bool{true, false} {
+				post, err := h.blog.posts.Save(t.Context(), Post{Slug: "deletable", Title: "Delete me", Markdown: "Body", Draft: draft})
+				if err != nil {
+					t.Fatal(err)
+				}
+				path := "/post/delete/" + post.ID
+				requireStatus(t, h.request("GET", path, nil, hx), http.StatusOK)
+				response := h.request("POST", path, nil, hx)
+				requireStatus(t, response, status)
+				if response.Header().Get(header) != "/post/manage" || response.Body.Len() != 0 {
+					t.Fatal("deletion must navigate to Posts, not render another post", response.Header())
+				}
+				if _, err := h.blog.posts.GetByID(t.Context(), post.ID, true); !errors.Is(err, errNotFound) {
+					t.Fatal("deleted post is still stored", err)
+				}
+				response = h.request("POST", path, nil, hx)
+				requireStatus(t, response, http.StatusNotFound)
+				if response.Header().Get("Location") != "" || response.Header().Get("HX-Redirect") != "" {
+					t.Fatal("failed deletion must not redirect")
+				}
+			}
+			post, err := h.blog.posts.Save(t.Context(), Post{Slug: "retained", Title: "Keep me", Markdown: "Body", Draft: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.blog.posts = &observedPostRepository{repository: h.blog.posts, writeError: errors.New("private deletion failure")}
+			response := h.request("POST", "/post/delete/"+post.ID, nil, hx)
+			requireStatus(t, response, http.StatusInternalServerError)
+			if response.Header().Get("Location") != "" || response.Header().Get("HX-Redirect") != "" || strings.Contains(response.Body.String(), "private deletion failure") {
+				t.Fatal("storage failure redirected or exposed private details")
+			}
+			if _, err := h.blog.posts.GetByID(t.Context(), post.ID, true); err != nil {
+				t.Fatal("failed deletion changed the post", err)
+			}
+		})
+	}
+}
+
 // TestPostManagement covers empty states, navigation, and both lists together.
 func TestPostManagement(t *testing.T) {
 	h := newHarness(t)

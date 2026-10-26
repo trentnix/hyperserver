@@ -18,12 +18,17 @@
     field.dispatchEvent(new Event('input', {bubbles: true}));
   };
   const ready = async () => {
-    await wait(() => document.querySelector('.CodeMirror') && document.querySelector('.draft-recovery:not([hidden])'));
+    await wait(() => document.querySelector('.CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
     await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
-    return document.querySelector('form[data-draft-owner]');
+    const form = document.querySelector('form[data-draft-owner]');
+    const status = form.querySelector('[data-draft-status]');
+    const controls = form.querySelector('[type="submit"]').closest('.form-actions');
+    assert(status.getBoundingClientRect().top >= controls.getBoundingClientRect().bottom, 'Routine recovery status must sit below the save controls.');
+    assert(parseFloat(getComputedStyle(status).fontSize) < parseFloat(getComputedStyle(form).fontSize), 'Routine recovery status must use quieter typography than the form.');
+    return form;
   };
   const copies = form => Object.keys(localStorage).filter(key => key.startsWith('hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':' + new URL(form.action).pathname + ':'));
-  const saved = async form => wait(() => form.querySelector('[data-draft-status]').textContent.includes('Recovery copy saved'));
+  const saved = async form => wait(() => form.querySelector('[data-draft-status]').textContent === 'Saved locally. Use Save to apply changes.');
   let prompts = [];
   let consent = false;
   window.confirm = message => { prompts.push(message); return consent; };
@@ -44,6 +49,7 @@
     }
     if (stage === 'editor') {
       const form = await ready();
+      assert(form.querySelector('[data-draft-recovery]').hidden, 'An empty editor must not show a recovery banner.');
       change(form, 'title', 'Recovered post');
       change(form, 'summary', 'Recovered summary');
       change(form, 'slug', 'invalid slug');
@@ -115,6 +121,7 @@
       assert(copies(form).length === 1, 'Expired or malformed copies remain available.');
       form.querySelector('[data-draft-restore]').click();
       assert(form.elements.title.value === 'Recovered post' && form.elements.summary.value === 'Recovered summary', 'Restoring lost title or summary, or used another account\'s copy.');
+      assert(form.elements.slug.placeholder === 'recovered-post', 'Restoring a title did not refresh the slug suggestion.');
       assert(form.querySelector('.CodeMirror').CodeMirror.getValue() === 'Unsaved **writing**.', 'Restoring did not update EasyMDE.');
       assert(!form.elements.published.checked, 'Older recovery changed the current publication setting.');
       change(form, 'slug', 'recovered-post');
@@ -176,11 +183,16 @@
       };
       change(restored, 'title', 'Storage failure does not lose writing');
       await wait(() => restored.querySelector('[data-draft-status]').textContent.includes('could not be saved'));
+      const failure = restored.querySelector('[data-draft-status]');
+      assert(failure.classList.contains('draft-status--error') && getComputedStyle(failure).animationName === 'none', 'Recovery failures must remain visible and distinct from routine status.');
+      change(restored, 'summary', 'Another edit while storage is unavailable');
+      assert(failure.textContent.includes('could not be saved') && failure.classList.contains('draft-status--error'), 'Typing must not hide a recovery failure.');
       assert(restored.elements.title.value === 'Storage failure does not lose writing', 'Storage failure changed the editor.');
       Storage.prototype.setItem = setItem;
       change(restored, 'title', 'Recovered About');
       change(restored, 'published', true);
       await saved(restored);
+      assert(!failure.classList.contains('draft-status--error'), 'A successful recovery save must clear the failure style.');
       sessionStorage.setItem('recovery-stage', 'page-saved');
       restored.requestSubmit();
       return;

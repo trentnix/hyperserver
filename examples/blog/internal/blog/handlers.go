@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"net/http"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -15,6 +16,8 @@ import (
 )
 
 const maxMarkdownBytes = 256 * 1024
+
+const slugConflictMessage = "This URL slug is already in use. Choose a different one, or leave it blank to generate one from the title."
 
 // Routes binds public reading and explicitly protected publishing endpoints.
 func (m *module) Routes(routes *routing.Routes) error {
@@ -182,6 +185,10 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		Markdown: r.PostForm.Get("content"),
 		Draft:    r.PostForm.Get("published") != "on",
 	}
+	generatedSlug := p.Slug == ""
+	if generatedSlug {
+		p.Slug = slugFromTitle(p.Title)
+	}
 	message := validatePost(p)
 	if message == "" && r.PostForm.Get("published") != "" && r.PostForm.Get("published") != "on" {
 		message = "Choose whether to publish the post."
@@ -191,8 +198,17 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	saved, err := m.posts.Save(r.Context(), p)
+	// Let the database settle competing writes. Only generated slugs may change.
+	for suffix := 2; generatedSlug && errors.Is(err, errSlugTaken); suffix++ {
+		if err = r.Context().Err(); err != nil {
+			break
+		}
+		candidate := p
+		candidate.Slug = numberedSlug(p.Slug, suffix)
+		saved, err = m.posts.Save(r.Context(), candidate)
+	}
 	if errors.Is(err, errSlugTaken) {
-		m.editorError(w, r, p, err.Error(), http.StatusConflict)
+		m.editorError(w, r, p, slugConflictMessage, http.StatusConflict)
 		return
 	}
 	if err != nil {
@@ -211,7 +227,6 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 }
 
 // validatePost returns the first user-facing validation error, or an empty string.
-// Only new posts can omit a slug, which storage then generates.
 func validatePost(p Post) string {
 	if p.Title == "" || !utf8.ValidString(p.Title) || utf8.RuneCountInString(p.Title) > 240 {
 		return "Enter a title of at most 240 characters."
@@ -222,13 +237,39 @@ func validatePost(p Post) string {
 	if strings.TrimSpace(p.Markdown) == "" || len(p.Markdown) > maxMarkdownBytes || !utf8.ValidString(p.Markdown) {
 		return "Enter valid Markdown of at most 256 KiB."
 	}
-	if p.Slug == "" && p.ID == "" {
-		return ""
-	}
 	if !validSlug(p.Slug) {
 		return "Use a slug of at most 120 lowercase letters, numbers, and single hyphens."
 	}
 	return ""
+}
+
+// slugFromTitle uses lowercase ASCII letters and digits, separates other runs
+// with hyphens, and caps the result at 120 bytes. An empty result needs a custom slug.
+func slugFromTitle(title string) string {
+	slug := make([]byte, 0, 120)
+	for _, ch := range title {
+		if len(slug) == 120 {
+			break
+		}
+		if ch >= 'A' && ch <= 'Z' {
+			ch += 'a' - 'A'
+		}
+		if ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' {
+			slug = append(slug, byte(ch))
+		} else if len(slug) > 0 && slug[len(slug)-1] != '-' {
+			slug = append(slug, '-')
+		}
+	}
+	return strings.TrimRight(string(slug), "-")
+}
+
+// numberedSlug appends a collision suffix to a valid base without exceeding 120 bytes.
+func numberedSlug(base string, number int) string {
+	suffix := "-" + strconv.Itoa(number)
+	if len(base)+len(suffix) > 120 {
+		base = base[:120-len(suffix)]
+	}
+	return strings.TrimRight(base, "-") + suffix
 }
 
 // validSlug accepts lowercase ASCII letters and digits separated by single hyphens,
@@ -248,6 +289,8 @@ func validSlug(slug string) bool {
 // editorError keeps an HTMX editor mounted so its unsaved draft survives errors.
 // Ordinary submissions render the form again with the submitted values.
 func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, message string, status int) {
+	// Keep an omitted slug automatic when the user corrects another field.
+	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
 	page := m.views["editor"].Content(r, editorPage{p, message})
 	if page.IsHtmx() {
 		page = m.views["message"].Content(r, message)
@@ -272,7 +315,7 @@ func (m *module) confirmDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// delete removes an existing post and redirects to the home page only on success.
+// delete removes an existing post and returns to post management only on success.
 func (m *module) delete(w http.ResponseWriter, r *http.Request) {
 	if err := m.posts.Delete(r.Context(), r.PathValue("id")); err != nil {
 		m.storageError(w, r, err)
@@ -280,7 +323,7 @@ func (m *module) delete(w http.ResponseWriter, r *http.Request) {
 	}
 	m.feed.invalidate()
 	m.recentPosts.invalidate()
-	util.RedirectToURL(w, r, "/")
+	util.RedirectToURL(w, r, "/post/manage")
 }
 
 // preview renders bounded, UTF-8 Markdown without saving it.

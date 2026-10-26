@@ -126,7 +126,7 @@ func (m *module) pageEditor(w http.ResponseWriter, r *http.Request) {
 }
 
 // savePage validates bounded UTF-8 content and saves a published page or draft.
-// Empty Markdown is allowed. New pages may omit the slug for an automatic URL.
+// Empty Markdown is allowed. An omitted slug is generated from the title.
 func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 	// Parse within the route's body limit, then validate field sizes below.
 	// This keeps complete drafts available when Markdown exceeds its content limit.
@@ -144,6 +144,10 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		Summary:         strings.TrimSpace(r.PostForm.Get("summary")),
 		PreviewImage:    r.PostForm.Get("previewImage"),
 		ChildrenDisplay: r.PostForm.Get("childrenDisplay"),
+	}
+	generatedSlug := p.Slug == ""
+	if generatedSlug {
+		p.Slug = slugFromTitle(p.Title)
 	}
 	if p.ChildrenDisplay == "" {
 		p.ChildrenDisplay = "hidden"
@@ -179,8 +183,17 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	saved, err := m.pageStore.SavePage(r.Context(), p)
+	// Let the database settle competing writes. Only generated slugs may change.
+	for suffix := 2; generatedSlug && errors.Is(err, errPageSlugTaken); suffix++ {
+		if err = r.Context().Err(); err != nil {
+			break
+		}
+		candidate := p
+		candidate.Slug = numberedSlug(p.Slug, suffix)
+		saved, err = m.pageStore.SavePage(r.Context(), candidate)
+	}
 	if errors.Is(err, errPageSlugTaken) {
-		m.renderPageEditor(w, r, p, err.Error(), http.StatusConflict)
+		m.renderPageEditor(w, r, p, slugConflictMessage, http.StatusConflict)
 		return
 	}
 	if errors.Is(err, errPageParent) {
@@ -205,7 +218,7 @@ func validatePage(p Page) string {
 	if p.Title == "" || !utf8.ValidString(p.Title) || utf8.RuneCountInString(p.Title) > 240 {
 		return "Enter a title of at most 240 characters."
 	}
-	if (p.ID != "" || p.Slug != "") && !validSlug(p.Slug) {
+	if !validSlug(p.Slug) {
 		return "Use a slug of at most 120 lowercase letters, numbers, and single hyphens."
 	}
 	if !utf8.ValidString(p.Markdown) || len(p.Markdown) > maxMarkdownBytes {
@@ -230,6 +243,7 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 	if r.Method == http.MethodPost {
 		// Keep invalid input available for correction, not just parsed numbers.
 		data.DisplayOrderText = r.PostForm.Get("displayOrder")
+		data.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
 	}
 	page := m.views["pageEditor"].Content(r, data)
 	if page.IsHtmx() && status >= 400 {

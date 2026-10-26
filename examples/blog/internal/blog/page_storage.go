@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -108,6 +107,7 @@ func (s *sqliteRepository) GetPageByID(ctx context.Context, id string, includeDr
 }
 
 // SavePage creates a page when ID is empty, or updates an existing page atomically.
+// The caller must supply a valid slug.
 func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
 	var err error
 	p.Updated = time.Now().UTC()
@@ -116,9 +116,6 @@ func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
 	}
 	if p.ID == "" {
 		p.ID = rand.Text()
-		if p.Slug == "" {
-			p.Slug = strings.ToLower(p.ID)
-		}
 		_, err = s.db.ExecContext(ctx, `INSERT INTO blog_pages
 (id, slug, title, markdown, published, parent_id, summary, preview_image, children_display, display_order, updated)
 VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano())

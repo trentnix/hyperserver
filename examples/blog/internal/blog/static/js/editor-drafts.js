@@ -13,8 +13,13 @@
   const dirty = state => encoded(state) !== state.baseline;
   const active = state => state.form.isConnected && (!state.form.closest('dialog') || state.form.closest('dialog').open);
 
+  function setStatus(state, message, failed = false) {
+    if (state.status.textContent !== message) state.status.textContent = message;
+    state.status.classList.toggle('draft-status--error', failed);
+  }
+
   function storageFailure(state) {
-    state.status.textContent = 'Recovery copy could not be saved in this browser. Keep this editor open and save your work.';
+    setStatus(state, 'Recovery copy could not be saved. Keep this editor open and save your changes.', true);
   }
 
   // Only remove the exact copy we read. Another tab might still be editing it.
@@ -27,12 +32,13 @@
     try {
       if (!dirty(state)) {
         localStorage.removeItem(state.key);
+        setStatus(state, 'No unsaved changes.');
         return;
       }
       const raw = JSON.stringify({saved: Date.now(), baseline: state.baseline, fields: snapshot(state)});
       if (raw.length > maxLength) throw new Error('Recovery copy too large');
       localStorage.setItem(state.key, raw);
-      state.status.textContent = 'Recovery copy saved in this browser. Changes are not saved to the server.';
+      setStatus(state, 'Saved locally. Use Save to apply changes.');
     } catch {
       storageFailure(state);
     }
@@ -83,12 +89,14 @@
       };
       state.baseline = encoded(state);
       states.set(form, state);
-      form.querySelector('.draft-recovery').hidden = false;
+      state.status.hidden = false;
       offerRecovery(state);
       const changed = () => {
         state.approved = null;
         clearTimeout(state.timer);
-        state.status.textContent = dirty(state) ? 'Unsaved changes. Saving a recovery copy…' : 'No unsaved changes.';
+        if (!state.status.classList.contains('draft-status--error')) {
+          setStatus(state, dirty(state) ? 'Unsaved changes.' : 'No unsaved changes.');
+        }
         state.timer = setTimeout(() => persist(state), 500);
       };
       form.addEventListener('input', changed);
@@ -106,7 +114,7 @@
         if (editor) editor.setValue(form.elements.content.value);
         form.querySelectorAll('[data-image-value]').forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));
         state.sources.push(copy);
-        changed();
+        form.dispatchEvent(new Event('input', {bubbles: true}));
         persist(state);
         offerRecovery(state);
       });

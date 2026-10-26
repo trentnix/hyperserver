@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -51,6 +50,7 @@ type repository interface {
 	// GetBySlug returns errNotFound for missing slugs and drafts unless includeDrafts is true.
 	GetBySlug(context.Context, string, bool) (Post, error)
 	// Save writes content and Draft together, creating a post when ID is empty.
+	// The caller must supply a valid slug.
 	// First publication assigns Published. Edits preserve it. Conflicts return errSlugTaken.
 	Save(context.Context, Post) (Post, error)
 	// SetPublished changes visibility without changing content. First publication
@@ -217,17 +217,14 @@ func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDr
 	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE slug=? AND (? OR draft=0)", slug, includeDrafts))
 }
 
-// Save atomically writes content and publication state, generating IDs and omitted
-// slugs for new posts. First publication assigns the date. Later saves preserve it.
+// Save atomically writes content and publication state, generating IDs for new posts.
+// First publication assigns the date. Later saves preserve it.
 // Updates fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 	var err error
 	if p.ID == "" {
 		p.ID = rand.Text()
-		if p.Slug == "" {
-			p.Slug = strings.ToLower(p.ID)
-		}
 		var published int64
 		p.Published = time.Time{}
 		if !p.Draft {

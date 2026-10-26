@@ -45,7 +45,7 @@ func TestPageNavigationDepth(t *testing.T) {
 	}
 }
 
-// TestPageAutomaticSlug preserves the optional slug used by project creation.
+// TestPageAutomaticSlug uses the title when the page's slug is omitted.
 func TestPageAutomaticSlug(t *testing.T) {
 	h := newHarness(t)
 	h.register(t)
@@ -63,10 +63,10 @@ func TestPageAutomaticSlug(t *testing.T) {
 			created = p
 		}
 	}
-	if !validSlug(created.Slug) || created.ID == "" {
+	if created.Slug != "page" || created.ID == "" {
 		t.Fatal("missing automatic slug", created)
 	}
-	requireStatus(t, h.request("POST", "/pages/"+created.ID, fields, false), http.StatusUnprocessableEntity)
+	requireStatus(t, h.request("POST", "/pages/"+created.ID, fields, false), http.StatusSeeOther)
 }
 
 // TestPageHierarchy checks nested publication, reparenting, and protected deletion.

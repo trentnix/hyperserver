@@ -174,7 +174,7 @@ func TestNavigationQueries(t *testing.T) {
 }
 
 func TestPostValidation(t *testing.T) {
-	base := Post{Title: "Hello", Markdown: "World"}
+	base := Post{Title: "Hello", Slug: "hello", Markdown: "World"}
 	if message := validatePost(base); message != "" {
 		t.Fatal(message)
 	}
@@ -201,6 +201,7 @@ func TestPostValidation(t *testing.T) {
 	}
 	post := base
 	post.ID = "existing"
+	post.Slug = ""
 	if validatePost(post) == "" {
 		t.Fatal("accepted missing slug on edit")
 	}

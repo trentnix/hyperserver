@@ -204,9 +204,13 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 .image-picker input:disabled::file-selector-button { cursor: not-allowed; }
 .field-error, .verification-status--error { color: #a12626; }
 .form-hint { color: #626975; font-size: .85em; }
+#editor-errors:not(:empty) { margin-top: 20px; padding: 12px 16px; border-left: 3px solid currentColor; border-radius: 3px; background: #fff3f2; }
+#editor-errors .page-message { padding: 0; }
 .draft-recovery { margin: 16px 0; padding: 12px 16px; background: #f3f4f8; border-left: 3px solid #cbd1da; }
 .draft-recovery p { margin: 0; }
 .draft-recovery .form-actions { margin-top: 12px; }
+.draft-status { margin: 12px 0 0; color: #626975; font-size: .85em; }
+.draft-status--error { color: #a12626; }
 .form-messages { margin: 16px 0; font-size: .9em; }
 .form-messages ul { padding-left: 20px; }
 

@@ -1,8 +1,24 @@
-// Long titles must wrap in their own column without moving the action controls.
+// Management keeps actions aligned and returns to the list after a confirmed deletion.
 (async () => {
   await new Promise(resolve => document.addEventListener('DOMContentLoaded', () => setTimeout(resolve, 0), {once: true}));
   const report = message => fetch('/test/result', {method: 'POST', body: message});
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const wait = async predicate => {
+    const deadline = Date.now() + 12000;
+    while (!predicate()) {
+      if (Date.now() > deadline) throw new Error('Timed out: ' + predicate.toString());
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  };
+  const deleteFirst = async (section, nextStage) => {
+    const row = document.querySelector(section + ' .page-manager-row');
+    sessionStorage.setItem('deleted-post-url', row.querySelector('.page-manager-title a').getAttribute('href'));
+    row.querySelector('a[href^="/post/delete/"]').click();
+    await wait(() => document.querySelector('dialog[open] form[action^="/post/delete/"]'));
+    await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    sessionStorage.setItem('management-stage', nextStage);
+    document.querySelector('dialog[open] form').requestSubmit();
+  };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
     const stage = sessionStorage.getItem('management-stage');
@@ -16,6 +32,20 @@
     if (stage === 'logged-in') {
       sessionStorage.setItem('management-stage', 'checking');
       location.assign('/post/manage');
+      return;
+    }
+    if (stage === 'draft-deleted' || stage === 'published-deleted') {
+      assert(location.pathname === '/post/manage' && document.querySelector('.page-manager'), 'Deleting a post must return to Posts.');
+      assert(!document.querySelector('dialog[open]') && !document.querySelector('.post-body'), 'Deletion left a dialog open or displayed another post.');
+      assert((await fetch(sessionStorage.getItem('deleted-post-url'))).status === 404, 'Deleted post remains readable.');
+      assert(document.querySelectorAll('#draft-posts .page-manager-row').length === 2, 'Draft deletion removed the wrong number of posts.');
+      if (stage === 'draft-deleted') {
+        assert(document.querySelectorAll('#published-posts .page-manager-row').length === 3, 'Draft deletion affected published posts.');
+        await deleteFirst('#published-posts', 'published-deleted');
+      } else {
+        assert(document.querySelectorAll('#published-posts .page-manager-row').length === 2, 'Published deletion removed the wrong number of posts.');
+        await report('PASS');
+      }
       return;
     }
     await document.fonts.ready;
@@ -52,6 +82,6 @@
         }
       }
     }
-    await report('PASS');
+    await deleteFirst('#draft-posts', 'draft-deleted');
   } catch (error) { await report(error.message + '\n' + error.stack); }
 })();

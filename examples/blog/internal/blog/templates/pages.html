@@ -152,11 +152,10 @@
 {{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
 <section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit page{{ else }}New page{{ end }}</h1>
 <form id="page-form" data-draft-owner="{{ .LayoutData.EditorOwner }}" method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
-  <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   {{ template "blog.draftRecovery" . }}
   <label for="page-title">Title</label><input id="page-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
-  <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" {{ if .Data.ID }}required{{ end }} aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Leave blank for an automatic URL when creating a page. Pages use /page/your-slug. About and Projects also use /about and /projects.</small>
+  <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
+  <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens. Changing a slug breaks existing links. Pages use /page/your-slug. About and Projects also use /about and /projects.</small>
   <label for="page-parent">Parent page</label><select id="page-parent" name="parentID"><option value="">None — top-level page</option>{{ range .Data.Parents }}<option value="{{ .ID }}"{{ if eq .ID $.Data.ParentID }} selected{{ end }}>{{ .Title }} ({{ .Slug }})</option>{{ end }}</select>
   <label for="page-children">Show subpages on this page</label><select id="page-children" name="childrenDisplay">
     <option value="hidden"{{ if eq .Data.ChildrenDisplay "hidden" }} selected{{ end }}>Do not show</option>
@@ -183,7 +182,9 @@
   <p class="form-hint">Up to 256 KiB of Markdown. Content can be empty.</p>
   <label class="publish-option"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish page</label>
   <p class="form-hint">Uncheck to save a draft or remove this page from public view.</p>
+  <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/pages">Cancel</a>{{ end }}</div>
+  <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
 </form></section>
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
@@ -211,12 +212,10 @@
 {{ end }}
 
 {{ define "blog.draftRecovery" }}
-<aside class="draft-recovery" hidden>
-  <p data-draft-status role="status">Unsaved edits are copied to this browser. Use Save to store them on the server.</p>
-  <div data-draft-recovery hidden>
-    <p data-draft-description></p>
-    <div class="form-actions"><button type="button" data-draft-restore>Restore copy</button><button type="button" class="button-secondary" data-draft-discard>Discard copy</button></div>
-  </div>
+<aside class="draft-recovery" data-draft-recovery hidden>
+  <p><strong>Restore unsaved changes?</strong></p>
+  <p data-draft-description></p>
+  <div class="form-actions"><button type="button" data-draft-restore>Restore copy</button><button type="button" class="button-secondary" data-draft-discard>Discard copy</button></div>
 </aside>
 {{ end }}
 
@@ -224,16 +223,17 @@
 {{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
 <section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
 <form id="post-form" data-draft-owner="{{ .LayoutData.EditorOwner }}" method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
-  <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   {{ template "blog.draftRecovery" . }}
   <label for="post-title">Title</label><input id="post-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
-  <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" {{ if .Data.ID }}required{{ end }} aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Lowercase words separated by hyphens. Leave empty for an automatic URL when creating a post.</small>
+  <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
+  <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens. Changing a slug breaks existing links.</small>
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
   {{ template "blog.markdownFields" .Data }}
   <label class="publish-option"><input type="checkbox" name="published" {{ if not .Data.Draft }}checked{{ end }}> Publish post</label>
   <p class="form-hint">Uncheck to save a draft or remove this post from public view. When checked, saving makes the content live immediately. Uploaded images are public, including images used in drafts.</p>
+  <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/">Cancel</a>{{ end }}</div>
+  <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
 </form></section>
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
