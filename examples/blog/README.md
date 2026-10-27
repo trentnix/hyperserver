@@ -41,13 +41,17 @@ Set `auth.registrationEnabled: false` after creating the administrator if desire
 
 `application.go` selects the blog and authentication modules, the response layout, and the blog's email provider. HyperServer opens configured account and session services and owns their lifetime. `internal/blog` owns the administrator rule, templates, handlers, SQLite storage for posts and pages, and file-based image storage. The module loads `modules/blog/config.yaml` through the framework. Storage paths are relative to the application configuration directory.
 
-EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when content is deleted. Storage creates a fresh schema or adds post draft support and page publication history to existing tables. Other older page schemas are not upgraded automatically.
+EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when content is deleted. SQLite startup adds the required columns and indexes existing content's upload references. Other older page schemas are not upgraded automatically.
 
-Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Images use content-based filenames and immutable public URLs with a one-year browser cache lifetime. Files must not be edited in place. Upload a new image to change its content.
+Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Images use content-based filenames. Files must not be edited in place. Upload a new image to change its content.
+
+Only the verified administrator can view new uploads and images used exclusively by drafts. An image becomes public when a published post, publicly visible page, or saved site profile references it. Shared images stay public while any public content still uses them. Unpublishing a parent page hides its descendants' image references too.
+
+Image responses recheck access before returning bytes or a cache-validation response. Previously downloaded copies cannot be recalled, including copies cached under the former one-year policy. Startup rejects overlapping `uploadsDirectory` and `assetsDirectory` paths, including symlinks. Keep uploads outside any other publicly served filesystem directory.
 
 RSS caches the complete rendered feed. Recent Posts caches only the configured number of entries, not rendered HTML. Both caches are loaded on demand and invalidated after saving, publishing, unpublishing, or deleting a post. Profile edits also invalidate RSS. Feed readers can revalidate with an ETag. Feed links and images use absolute URLs.
 
-Run one blog instance per content database. The site profile is loaded at startup and refreshed after successful edits. Direct database edits require a restart to refresh the profile and caches.
+Run one blog instance per content database. The site profile is loaded at startup and refreshed after successful edits. Edit posts and pages through the application. Direct database writes bypass image-reference updates and cache invalidation.
 
 ## Sharing links
 
@@ -75,7 +79,7 @@ Existing posts stay published when storage adds draft support. Back up the conte
 
 Choose **Pages** to create and manage Markdown pages. Each page has a title, unique slug, optional parent, preview description and image, display order, and publication setting. Use **New subpage** on an existing page to select its parent automatically. Pages stay out of RSS and Recent Posts.
 
-Each parent chooses whether to hide subpage previews, show a preview list, or show preview blocks. Blocks use two columns except on mobile. Images appear only in previews, not on the child's content page. An empty image selects the bundled default. Upload controls require JavaScript. Uploaded files are public even when used by a draft.
+Each parent chooses whether to hide subpage previews, show a preview list, or show preview blocks. Blocks use two columns except on mobile. Images appear only in previews, not on the child's content page. An empty image selects the bundled default. Upload controls require JavaScript. Images used only by drafts remain private.
 
 Projects is an ordinary page with slug `projects` and preview blocks enabled. Add individual projects as its subpages. About is a page with slug `about`. Their short URLs are `/projects` and `/about`. Other pages use `/page/{slug}`. Existing `/project/s/{slug}` links remain readable. Changing a slug breaks existing links.
 

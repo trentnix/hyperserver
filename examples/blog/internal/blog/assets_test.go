@@ -161,3 +161,70 @@ func TestLocalAssetsInitializationFailure(t *testing.T) {
 		t.Fatal("failed initialization closed another application's storage", err)
 	}
 }
+
+// TestAssetSeparation rejects equal or nested directories, including symlink aliases.
+func TestAssetSeparation(t *testing.T) {
+	directory := t.TempDir()
+	for _, name := range []string{"uploads/nested", "uploads-public", "public"} {
+		if err := os.MkdirAll(filepath.Join(directory, name), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(directory, "uploads"), filepath.Join(directory, "alias")); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, uploads, assets string
+		reject                bool
+	}{
+		{"disabled", "uploads", "", false},
+		{"siblings", "uploads", "public", false},
+		{"shared prefix", "uploads", "uploads-public", false},
+		{"same", "uploads", "uploads", true},
+		{"absolute alias", "uploads", filepath.Join(directory, "uploads"), true},
+		{"assets inside uploads", "uploads", "uploads/nested", true},
+		{"uploads inside assets", "uploads/nested", "uploads", true},
+		{"symlink alias", "uploads", "alias", true},
+		{"nested symlink", "uploads", "alias/nested", true},
+		{"symlink parent", "alias/nested", "uploads", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			uploads, err := openImageStore(tc.uploads, directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer uploads.Close()
+			assets, err := openLocalAssets(tc.assets, directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if assets != nil {
+				defer assets.Close()
+			}
+			err = validateAssetSeparation(uploads.root, assets)
+			if (err != nil) != tc.reject {
+				t.Fatalf("error=%v, want rejection=%v", err, tc.reject)
+			}
+		})
+	}
+}
+
+// TestOverlappingAssetsInitializationFailure prevents a second route to private uploads.
+func TestOverlappingAssetsInitializationFailure(t *testing.T) {
+	h := newHarness(t)
+	settings := *h.blog.settings
+	settings.AssetsDirectory = settings.UploadsDirectory
+	m := &module{settings: &settings, access: &Access{}}
+	if err := m.Init(t.Context(), h.blog.app); err == nil || !strings.Contains(err.Error(), "must not overlap") {
+		t.Fatal("overlapping directories did not fail initialization", err)
+	}
+	if m.access.emailKey != "" || m.close != nil || m.localAssets != nil || m.images != nil || m.posts != nil {
+		t.Fatal("failed initialization published storage or access")
+	}
+	id, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+	if err != nil {
+		t.Fatal("failed initialization affected another application's uploads", err)
+	}
+	requireStatus(t, h.request("GET", "/images/"+id, nil, false), http.StatusNotFound)
+	requireStatus(t, h.request("GET", "/local-assets/"+id, nil, false), http.StatusNotFound)
+}

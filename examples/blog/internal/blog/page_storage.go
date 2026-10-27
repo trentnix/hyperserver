@@ -130,7 +130,16 @@ func (s *sqliteRepository) GetPageByID(ctx context.Context, id string, includeDr
 // SavePage creates a page when ID is empty, or updates an existing page atomically.
 // The caller must supply a valid slug.
 func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
-	var err error
+	refs, err := imageReferences(p.Markdown, p.URL(), p.PreviewImage)
+	if err != nil {
+		return p, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return p, err
+	}
+	defer tx.Rollback()
+
 	p.Updated = time.Now().UTC()
 	if p.ChildrenDisplay == "" {
 		p.ChildrenDisplay = "hidden"
@@ -138,11 +147,11 @@ func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
 	if p.ID == "" {
 		p.ID = rand.Text()
 		p.EverPublished = p.Published
-		_, err = s.db.ExecContext(ctx, `INSERT INTO blog_pages
+		_, err = tx.ExecContext(ctx, `INSERT INTO blog_pages
 (id, slug, title, markdown, published, parent_id, summary, preview_image, children_display, display_order, updated, ever_published)
 VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.EverPublished)
 	} else {
-		p, err = scanPage(s.db.QueryRowContext(ctx, "UPDATE blog_pages SET slug=?, title=?, markdown=?, published=?, parent_id=NULLIF(?, ''), summary=?, preview_image=?, children_display=?, display_order=?, updated=?, ever_published=(ever_published OR ?) WHERE id=? RETURNING "+pageColumns,
+		p, err = scanPage(tx.QueryRowContext(ctx, "UPDATE blog_pages SET slug=?, title=?, markdown=?, published=?, parent_id=NULLIF(?, ''), summary=?, preview_image=?, children_display=?, display_order=?, updated=?, ever_published=(ever_published OR ?) WHERE id=? RETURNING "+pageColumns,
 			p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.Published, p.ID))
 	}
 	var constraint sqlite3.Error
@@ -151,6 +160,12 @@ VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Title,
 	}
 	if errors.As(err, &constraint) && (constraint.ExtendedCode == sqlite3.ErrConstraintForeignKey || constraint.ExtendedCode == sqlite3.ErrConstraintTrigger) {
 		err = errPageParent
+	}
+	if err == nil {
+		err = replaceImageReferences(ctx, tx, "blog_page_images", p.ID, refs)
+	}
+	if err == nil {
+		err = tx.Commit()
 	}
 	return p, err
 }

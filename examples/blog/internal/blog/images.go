@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 const maxImageBytes = 8 * 1024 * 1024
@@ -80,19 +81,33 @@ func imageMedia(data []byte) (string, error) {
 	return "image/" + format, nil
 }
 
-// image serves immutable public uploads with browser caching and standard
-// conditional, HEAD, and range responses. Failed lookups must not be cached.
+// image checks visibility before serving bytes or conditional responses. Private
+// uploads are administrator-only. Public responses must revalidate their access.
 func (m *module) image(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	admin := m.access.IsAdmin(user.GetUserFromContext(r.Context()))
+	if !admin {
+		public, err := m.publicImage(r, r.PathValue("id"))
+		if err != nil {
+			m.storageError(w, r, err)
+			return
+		}
+		if !public {
+			m.storageError(w, r, errNotFound)
+			return
+		}
+	}
 	stored, err := m.images.Open(r.Context(), r.PathValue("id"))
 	if err != nil {
-		w.Header().Set("Cache-Control", "no-store")
 		m.storageError(w, r, err)
 		return
 	}
 	defer stored.Content.Close()
 	w.Header().Set("Content-Type", stored.MediaType)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	if !admin {
+		w.Header().Set("Cache-Control", "public, no-cache")
+	}
 	w.Header().Set("ETag", strconv.Quote(stored.Digest))
 	http.ServeContent(w, r, "", stored.Modified, stored.Content)
 }

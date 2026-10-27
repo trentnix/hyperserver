@@ -1,12 +1,43 @@
 package blog
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// validateAssetSeparation prevents the public asset route from exposing uploads.
+// Resolve symlinks before comparing directories, including their ancestors.
+func validateAssetSeparation(uploads, assets *os.Root) error {
+	if assets == nil {
+		return nil
+	}
+	paths := make([]string, 0, 2)
+	for _, root := range []*os.Root{uploads, assets} {
+		resolved, err := filepath.EvalSymlinks(root.Name())
+		if err != nil {
+			return err
+		}
+		absolute, err := filepath.Abs(resolved)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, absolute)
+	}
+	for i := range 2 {
+		relative, err := filepath.Rel(paths[i], paths[1-i])
+		if err != nil {
+			return err
+		}
+		if relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return errors.New("blog.assetsDirectory and blog.uploadsDirectory must not overlap")
+		}
+	}
+	return nil
+}
 
 // openLocalAssets opens optional public assets without embedding them in the binary.
 // The caller closes the root after HTTP requests have drained.

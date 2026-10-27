@@ -30,6 +30,9 @@ func TestImageHTTPResponses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := h.blog.posts.Save(t.Context(), Post{Slug: "image", Title: "Image", PreviewImage: id}); err != nil {
+		t.Fatal(err)
+	}
 	request := func(method string, headers map[string]string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, "/images/"+id, nil)
 		for name, value := range headers {
@@ -45,7 +48,7 @@ func TestImageHTTPResponses(t *testing.T) {
 		t.Fatal("incorrect public image response")
 	}
 	etag, modified := first.Header().Get("ETag"), first.Header().Get("Last-Modified")
-	if etag == "" || modified == "" || first.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+	if etag == "" || modified == "" || first.Header().Get("Cache-Control") != "public, no-cache" {
 		t.Fatalf("missing cache headers: %v", first.Header())
 	}
 	for _, method := range []string{http.MethodGet, http.MethodHead} {

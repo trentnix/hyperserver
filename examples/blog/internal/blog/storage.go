@@ -133,6 +133,9 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 			_, err = db.ExecContext(ctx, "ALTER TABLE blog_posts ADD COLUMN preview_image TEXT NOT NULL DEFAULT ''")
 		}
 	}
+	if err == nil {
+		err = initializeImageReferences(ctx, db)
+	}
 	if err != nil {
 		db.Close()
 		return nil, nil, err
@@ -243,7 +246,16 @@ func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDr
 // Updates fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
-	var err error
+	refs, err := imageReferences(p.Markdown, "/post/s/"+p.Slug, p.PreviewImage)
+	if err != nil {
+		return p, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return p, err
+	}
+	defer tx.Rollback()
+
 	if p.ID == "" {
 		p.ID = rand.Text()
 		var published int64
@@ -252,16 +264,22 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 			p.Published = time.Now().UTC().Truncate(time.Second)
 			published = p.Published.Unix()
 		}
-		_, err = s.db.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft, p.PreviewImage)
+		_, err = tx.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft, p.PreviewImage)
 	} else {
 		// RETURNING avoids a second lookup racing with another edit or deletion.
-		p, err = scanPost(s.db.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?,
+		p, err = scanPost(tx.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?,
  published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? RETURNING `+postColumns,
 			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, !p.Draft, time.Now().UTC().Unix(), p.ID))
 	}
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {
 		err = errSlugTaken
+	}
+	if err == nil {
+		err = replaceImageReferences(ctx, tx, "blog_post_images", p.ID, refs)
+	}
+	if err == nil {
+		err = tx.Commit()
 	}
 	return p, err
 }

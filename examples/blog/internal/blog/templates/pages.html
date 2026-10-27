@@ -12,7 +12,7 @@
     <p id="profile-bio-help" class="form-hint">Shown beside your portrait. Up to 500 characters.</p>
   </div>
   <h2>Images</h2>
-  <p id="profile-image-help" class="form-hint">PNG, JPEG, or GIF · Up to 8 MiB and 20 million pixels. Uploaded files are public.</p>
+  <p id="profile-image-help" class="form-hint">PNG, JPEG, or GIF · Up to 8 MiB and 20 million pixels. Selected images become public when you save the profile.</p>
   {{ range .Data.ImageFields }}
   <fieldset class="image-picker profile-image" data-image-picker data-image-field="{{ .Name }}" data-image-default="{{ .DefaultURL }}">
     <legend>{{ .Label }}</legend>
@@ -174,7 +174,7 @@
       <label for="page-image">Upload a preview image</label><input id="page-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="preview-help">
       <button type="button" class="text-button" data-image-reset>Use default image</button>
     </div>
-    <p id="preview-help" class="form-hint">Used for parent-page previews and sharing links, not the page body. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Uploads are public, including images used in drafts.</p>
+    <p id="preview-help" class="form-hint">Used for parent-page previews and sharing links, not the page body. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Draft-only images are private. Images shared with public content remain public.</p>
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
     <p data-image-status role="status"></p>
   </fieldset>
@@ -236,13 +236,13 @@
       <label for="post-image">Upload a preview image</label><input id="post-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="post-preview-help">
       <button type="button" class="text-button" data-image-reset>Use automatic selection</button>
     </div>
-    <p id="post-preview-help" class="form-hint">Used when sharing a link, not in the post body. Without a selection, sharing uses the first suitable content image, then the site portrait. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Uploads are public, including images used in drafts.</p>
+    <p id="post-preview-help" class="form-hint">Used when sharing a link, not in the post body. Without a selection, sharing uses the first suitable content image, then the site portrait. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Draft-only images are private. Images shared with public content remain public.</p>
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
     <p data-image-status role="status"></p>
   </fieldset>
   {{ template "blog.markdownFields" .Data }}
   <label class="publish-option"><input type="checkbox" name="published" {{ if not .Data.Draft }}checked{{ end }}> Publish post</label>
-  <p class="form-hint">Uncheck to save a draft or remove this post from public view. When checked, saving makes the content live immediately. Uploaded images are public, including images used in drafts.</p>
+  <p class="form-hint">Uncheck to save a draft or remove this post from public view. When checked, saving makes the content live immediately. Draft-only images are private. Images shared with public content remain public.</p>
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/">Cancel</a>{{ end }}</div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>

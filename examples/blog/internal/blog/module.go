@@ -27,7 +27,7 @@ type Settings struct {
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
 
-	// UploadsDirectory holds public images, relative to the application configuration directory.
+	// UploadsDirectory holds uploaded images, relative to the application configuration directory.
 	UploadsDirectory string `yaml:"uploadsDirectory"`
 
 	// AssetsDirectory optionally serves application-owned files at /local-assets/{name}.
@@ -71,6 +71,7 @@ type module struct {
 	profileStore profileRepository
 	profile      *ProfileState
 	images       imageStore
+	imageAccess  imageAccessRepository
 	localAssets  *os.Root
 	close        func() error
 	views        map[string]*content.View
@@ -165,9 +166,13 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if err != nil {
 		return errors.Join(fmt.Errorf("open blog assets: %w", err), images.Close(), closeStore())
 	}
+	if err := validateAssetSeparation(images.root, assets); err != nil {
+		return errors.Join(err, assets.Close(), images.Close(), closeStore())
+	}
 	m.posts, m.images = store, images
 	m.pageStore = store
 	m.profileStore = store
+	m.imageAccess = store
 	if m.profile == nil {
 		m.profile = &ProfileState{}
 	}
