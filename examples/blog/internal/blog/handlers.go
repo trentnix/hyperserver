@@ -36,6 +36,8 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /post/id/{id}", m.post)
 	routes.HandleFunc("GET /images/{id}", m.image)
 	routes.HandleFunc("GET /rss", m.rss)
+	routes.HandleFunc("GET /sitemap.xml", m.sitemap)
+	routes.HandleFunc("GET /robots.txt", m.robots)
 	routes.Handle("GET /profile", m.requireAdmin(m.profileEditor))
 	routes.HandleWithBodyLimit("POST /profile", m.requireAdmin(m.saveProfile), routing.MiB)
 	routes.HandleFunc("GET /about", m.page)

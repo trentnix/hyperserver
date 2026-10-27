@@ -63,6 +63,10 @@ Public posts, pages, the home page, and the archive include Open Graph metadata 
 
 Set `http.publicOrigin` to the deployed site's public address. Preview URLs use that configuration, not request host headers. Drafts, descendants of unpublished pages, editors, and account pages do not advertise sharing metadata. HTMX fragments omit it because sharing services fetch the full URL. Individual services control preview appearance and may cache older versions.
 
+`/sitemap.xml` lists the home page, archive, published posts, and publicly visible pages using their canonical URLs. It reads current metadata on each request and excludes drafts and descendants of unpublished pages, even for signed-in administrators. Set `http.publicOrigin` before submitting the sitemap to a search engine. The single-document limit is 50,000 URLs or 50 MiB. Larger sites need multiple sitemaps, which this example does not yet generate.
+
+`/robots.txt` allows crawling and advertises the sitemap at the configured public address. Authentication and publication rules protect private content, not `robots.txt`.
+
 ## Publishing posts
 
 Open **Posts**, choose **New post**, and write a title and Markdown body. Check **Publish post** to make it live when you choose **Save post**. Leave it unchecked to save a private draft. Existing posts show their current publication setting. The Posts page groups drafts and published posts, with links to preview, edit, and delete them.
