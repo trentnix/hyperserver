@@ -114,13 +114,13 @@ func TestTitleSlugs(t *testing.T) {
 				}
 				fields.Set("title", "A Changed Title")
 				fields.Set("slug", "a-useful-guide")
-				response = h.request("POST", path+"/"+id, fields, hx)
+				response = h.submitEditor(t, path+"/"+id, fields, hx)
 				requireStatus(t, response, status)
 				if response.Header().Get(header) != urlPrefix+"a-useful-guide" {
 					t.Fatal("editing the title changed an existing slug")
 				}
 				fields.Del("slug")
-				response = h.request("POST", path+"/"+id, fields, hx)
+				response = h.submitEditor(t, path+"/"+id, fields, hx)
 				requireStatus(t, response, status)
 				if response.Header().Get(header) != urlPrefix+"a-changed-title" {
 					t.Fatal("clearing the slug did not regenerate it from the title")

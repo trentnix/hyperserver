@@ -24,6 +24,7 @@ type Post struct {
 	ID, Slug, Title, Summary, Markdown, PreviewImage string
 	Published                                        time.Time
 	Draft                                            bool
+	Version                                          int64 // Save requires the current version when updating.
 }
 
 // PreviewURL returns the selected sharing image, or an empty string for automatic selection.
@@ -61,6 +62,8 @@ type repository interface {
 	// Save writes content and Draft together, creating a post when ID is empty.
 	// The caller must supply a valid slug.
 	// First publication assigns Published. Edits preserve it. Conflicts return errSlugTaken.
+	// Updates require the current Version or return errEditConflict. Content changes
+	// append a revision in the same transaction as the save and image references.
 	Save(context.Context, Post) (Post, error)
 	// SetPublished changes visibility without changing content. First publication
 	// assigns Published. Repeated calls preserve it. Missing IDs return errNotFound.
@@ -136,6 +139,9 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 	if err == nil {
 		err = initializeImageReferences(ctx, db)
 	}
+	if err == nil {
+		err = initializeRevisions(ctx, db)
+	}
 	if err != nil {
 		db.Close()
 		return nil, nil, err
@@ -143,13 +149,13 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 	return &sqliteRepository{db: db}, db.Close, nil
 }
 
-const postColumns = "id, slug, title, summary, markdown, published, draft, preview_image"
+const postColumns = "id, slug, title, summary, markdown, published, draft, preview_image, version"
 
 // scanPost decodes a row in postColumns order and maps missing rows to errNotFound.
 func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
 	var published int64
-	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft, &p.PreviewImage)
+	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft, &p.PreviewImage, &p.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}
@@ -166,7 +172,7 @@ func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
 
 // ListMetadata returns drafts newest-created first, then posts newest-published first.
 func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
-	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '' FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '', version FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
 }
 
 // listPosts reads either complete public posts or administration metadata.
@@ -243,7 +249,7 @@ func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDr
 
 // Save atomically writes content and publication state, generating IDs for new posts.
 // First publication assigns the date. Later saves preserve it.
-// Updates fail if the post no longer exists.
+// Updates require the current Version and fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 	refs, err := imageReferences(p.Markdown, "/post/s/"+p.Slug, p.PreviewImage)
@@ -264,12 +270,15 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 			p.Published = time.Now().UTC().Truncate(time.Second)
 			published = p.Published.Unix()
 		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft, p.PreviewImage)
+		p.Version = 1
+		_, err = tx.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft, p.PreviewImage, p.Version)
 	} else {
 		// RETURNING avoids a second lookup racing with another edit or deletion.
-		p, err = scanPost(tx.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?,
- published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? RETURNING `+postColumns,
-			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, !p.Draft, time.Now().UTC().Unix(), p.ID))
+		id := p.ID
+		p, err = scanPost(tx.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?, version=version+1,
+ published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? AND version=? RETURNING `+postColumns,
+			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, !p.Draft, time.Now().UTC().Unix(), p.ID, p.Version))
+		err = editError(ctx, tx, "post", id, err)
 	}
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -279,6 +288,9 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 		err = replaceImageReferences(ctx, tx, "blog_post_images", p.ID, refs)
 	}
 	if err == nil {
+		err = recordRevision(ctx, tx, "post", p.ID)
+	}
+	if err == nil {
 		err = tx.Commit()
 	}
 	return p, err
@@ -286,7 +298,7 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 
 // SetPublished atomically changes visibility and assigns the first publication date.
 func (s *sqliteRepository) SetPublished(ctx context.Context, id string, published bool) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "UPDATE blog_posts SET draft=?, published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? RETURNING "+postColumns,
+	return scanPost(s.db.QueryRowContext(ctx, "UPDATE blog_posts SET draft=?, version=version+1, published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? RETURNING "+postColumns,
 		!published, published, time.Now().UTC().Unix(), id))
 }
 

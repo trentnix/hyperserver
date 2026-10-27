@@ -96,7 +96,7 @@ func TestSitemapPublication(t *testing.T) {
 		t.Fatal(err)
 	}
 	check()
-	if _, err := h.blog.posts.SetPublished(t.Context(), draft.ID, true); err != nil {
+	if draft, err = h.blog.posts.SetPublished(t.Context(), draft.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	check("/post/s/draft-post")

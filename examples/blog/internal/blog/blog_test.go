@@ -436,6 +436,22 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 	return h
 }
 
+// submitEditor submits a newly opened editor's version. Tests for stale or missing
+// versions use request directly so they cannot silently acquire a fresh token.
+func (h *harness) submitEditor(t *testing.T, path string, values url.Values, hx bool) *httptest.ResponseRecorder {
+	t.Helper()
+	if prefix, id, ok := strings.Cut(strings.TrimPrefix(path, "/"), "/"); ok {
+		response := h.request("GET", "/"+prefix+"/update/"+id, nil, false)
+		requireStatus(t, response, http.StatusOK)
+		match := regexp.MustCompile(`name="version" value="([0-9]+)"`).FindStringSubmatch(response.Body.String())
+		if len(match) != 2 {
+			t.Fatal("editor has no version token")
+		}
+		values.Set("version", match[1])
+	}
+	return h.request("POST", path, values, hx)
+}
+
 func (h *harness) request(method, path string, values url.Values, hx bool) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "https://blog.example"+path, strings.NewReader(values.Encode()))
 	if values != nil {
@@ -622,14 +638,14 @@ func TestPublishingAndRecoveryPaths(t *testing.T) {
 	h.publish(t, "first-post")
 	requireStatus(t, h.request("POST", "/post", post, true), http.StatusConflict)
 	post.Set("title", "")
-	w = h.request("POST", "/post/"+id, post, true)
+	w = h.submitEditor(t, "/post/"+id, post, true)
 	requireStatus(t, w, http.StatusUnprocessableEntity)
 	if strings.Contains(w.Body.String(), "post-form") {
 		t.Fatal("validation replaces the editor and loses its draft")
 	}
 	post.Set("title", "Edited")
 	post.Set("published", "on")
-	requireStatus(t, h.request("POST", "/post/"+id, post, false), http.StatusSeeOther)
+	requireStatus(t, h.submitEditor(t, "/post/"+id, post, false), http.StatusSeeOther)
 	w = h.request("GET", "/rss", nil, false)
 	requireStatus(t, w, http.StatusOK)
 	var feed feed

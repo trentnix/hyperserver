@@ -4,14 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/util"
-	"golang.org/x/net/html"
 )
 
 // feed is the RSS 2.0 document envelope.
@@ -78,49 +75,15 @@ func (m *module) buildFeed(ctx context.Context, origin *url.URL) ([]byte, error)
 		link.Path = "/post/s/" + p.Slug
 		guid := *origin
 		guid.Path = "/post/id/" + p.ID
-		body, err := feedHTML(p.Markdown, &link)
+		body, err := markdownAt(p.Markdown, &link)
 		if err != nil {
 			return nil, err
 		}
-		channel.Items = append(channel.Items, feedItem{p.Title, link.String(), guid.String(), p.Summary, p.Published.Format(time.RFC1123Z), body})
+		channel.Items = append(channel.Items, feedItem{p.Title, link.String(), guid.String(), p.Summary, p.Published.Format(time.RFC1123Z), string(body)})
 	}
 	data, err := xml.Marshal(feed{Version: "2.0", Channel: channel})
 	if err != nil {
 		return nil, err
 	}
 	return append([]byte(xml.Header), data...), nil
-}
-
-// feedHTML resolves rendered link and image URLs against the post's public URL.
-// The shared Markdown renderer still removes raw HTML and unsafe URL schemes.
-func feedHTML(source string, base *url.URL) (string, error) {
-	rendered, err := markdown(source)
-	if err != nil {
-		return "", err
-	}
-	tokens := html.NewTokenizer(strings.NewReader(string(rendered)))
-	var out strings.Builder
-	for {
-		switch tokens.Next() {
-		case html.ErrorToken:
-			if tokens.Err() == io.EOF {
-				return out.String(), nil
-			}
-			return "", tokens.Err()
-		case html.StartTagToken, html.SelfClosingTagToken:
-			token := tokens.Token()
-			for i, attr := range token.Attr {
-				if attr.Val == "" || !(token.Data == "a" && attr.Key == "href" || token.Data == "img" && attr.Key == "src") {
-					continue
-				}
-				ref, err := url.Parse(attr.Val)
-				if err == nil && !ref.IsAbs() {
-					token.Attr[i].Val = base.ResolveReference(ref).String()
-				}
-			}
-			out.WriteString(token.String())
-		default:
-			out.Write(tokens.Raw())
-		}
-	}
 }

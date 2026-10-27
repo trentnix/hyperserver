@@ -121,13 +121,19 @@
       const actions = [...document.querySelectorAll('.content-actions a')];
       assert(actions.map(action => action.textContent).join(',') === 'Edit,New subpage,Delete', 'Page action order or labels are incorrect.');
       assert(actions[1].getAttribute('href').startsWith('/pages/create?parent='), 'New subpage lost its parent selection.');
+      const menu = document.querySelector('.content-actions .action-menu');
+      assert(!menu.open, 'Page actions must start collapsed.');
+      const more = menu.querySelector('summary');
+      assert(Math.abs(more.getBoundingClientRect().top - actions[0].getBoundingClientRect().top) < 1, 'Page Edit and More must share a row.');
+      more.click();
       for (const action of actions) {
         const style = getComputedStyle(action);
-        assert(style.textDecorationLine === 'none' && style.borderTopStyle === 'solid', 'Page action must use the compact button style.');
+        assert(style.textDecorationLine === 'none', 'Page actions must not look like content links.');
         assert(action.getBoundingClientRect().height >= (innerWidth < 768 ? 44 : 36), 'Page action is too small to interact with.');
       }
       assert(document.documentElement.scrollWidth <= Math.max(320, innerWidth), 'Page actions overflow the viewport.');
       document.querySelector('#article-content a[href^="/pages/delete/"]').click();
+      assert(!menu.open, 'Selecting a page action must close More.');
       await wait(() => document.querySelector('dialog[open] form[action^="/pages/delete/"]'));
       await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
       assert(document.querySelector('dialog[open] .button-danger[type=submit]') && document.querySelector('dialog[open] .button-secondary[data-close-dialog]'), 'Page deletion needs destructive and secondary controls.');
@@ -161,9 +167,10 @@
     assert(document.querySelector('.post-body strong')?.textContent === 'biography', 'About content did not update.');
     const editURL = document.querySelector('#article-content a[href^="/pages/update/"]').getAttribute('href');
     const saveURL = editURL.replace('/pages/update/', '/pages/');
+    const currentEditor = new DOMParser().parseFromString(await (await fetch(editURL)).text(), 'text/html');
     for (const value of ['-1', 'invalid-order', '1000001']) {
       const response = await fetch(saveURL, {method: 'POST', body: new URLSearchParams({
-        title: 'About this site', slug: 'about', content: 'A **biography**.', published: 'on', displayOrder: value
+        title: 'About this site', slug: 'about', content: 'A **biography**.', published: 'on', displayOrder: value, version: currentEditor.querySelector('[name="version"]').value
       })});
       assert(response.status === 422, 'Invalid order was accepted.');
       const html = new DOMParser().parseFromString(await response.text(), 'text/html');

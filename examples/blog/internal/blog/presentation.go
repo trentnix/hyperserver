@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"errors"
 	"html/template"
+	"io"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/yuin/goldmark"
+	"golang.org/x/net/html"
 )
 
 const (
@@ -84,7 +88,7 @@ func (m *module) configurePageNavigation() {
 		if err != nil {
 			logger.LogRequestError(r, err)
 		} else {
-			data.Pages = pageTree(pages)
+			data.Pages = pageTree(pages, nil)
 			for i := range data.Pages {
 				for j := range data.Pages[i].Children {
 					data.Pages[i].Children[j].Children = nil
@@ -105,15 +109,52 @@ func markdown(source string) (template.HTML, error) {
 	return template.HTML(out.String()), nil
 }
 
+// markdownAt renders content for previews and feeds, resolving relative links
+// and images against the content URL rather than the page displaying the preview.
+// The shared Markdown renderer still removes raw HTML and unsafe URL schemes.
+func markdownAt(source string, base *url.URL) (template.HTML, error) {
+	rendered, err := markdown(source)
+	if err != nil {
+		return "", err
+	}
+	tokens := html.NewTokenizer(strings.NewReader(string(rendered)))
+	var out strings.Builder
+	for {
+		switch tokens.Next() {
+		case html.ErrorToken:
+			if tokens.Err() == io.EOF {
+				return template.HTML(out.String()), nil
+			}
+			return "", tokens.Err()
+		case html.StartTagToken, html.SelfClosingTagToken:
+			token := tokens.Token()
+			for i, attr := range token.Attr {
+				if attr.Val == "" || !(token.Data == "a" && attr.Key == "href" || token.Data == "img" && attr.Key == "src") {
+					continue
+				}
+				ref, err := url.Parse(attr.Val)
+				if err == nil && !ref.IsAbs() {
+					token.Attr[i].Val = base.ResolveReference(ref).String()
+				}
+			}
+			out.WriteString(token.String())
+		default:
+			out.Write(tokens.Raw())
+		}
+	}
+}
+
 // postPage pairs stored post data with HTML produced by the Markdown renderer.
 type postPage struct {
 	Post
-	HTML template.HTML
+	HTML       template.HTML
+	HasHistory bool
 }
 
 // editorPage retains a draft and any user-facing error for the editing form.
 type editorPage struct {
 	Post
+	revisionSelection
 	Error         string
 	PublishedSlug string
 }

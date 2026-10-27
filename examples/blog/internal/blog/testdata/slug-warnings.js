@@ -11,6 +11,11 @@
     }
   };
   const save = async (path, fields) => {
+    const parts = path.split('/');
+    if (parts.length === 3) {
+      const editor = new DOMParser().parseFromString(await (await fetch('/' + parts[1] + '/update/' + parts[2])).text(), 'text/html');
+      fields.version = editor.querySelector('[name="version"]').value;
+    }
     const response = await fetch(path, {method: 'POST', headers: {'HX-Request': 'true'}, body: new URLSearchParams(fields)});
     assert(response.ok, 'Unable to prepare content: ' + response.status);
     return response.headers.get('HX-Redirect');

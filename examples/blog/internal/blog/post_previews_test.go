@@ -52,11 +52,11 @@ func TestPostPreviewsHTTP(t *testing.T) {
 			// Invalid selections and storage failures must leave the saved post intact.
 			for _, invalid := range []string{"missing.png", "../../private", "https://other.example/image.png"} {
 				fields.Set("previewImage", invalid)
-				requireStatus(t, h.request("POST", "/post/"+p.ID, fields, hx), http.StatusUnprocessableEntity)
+				requireStatus(t, h.submitEditor(t, "/post/"+p.ID, fields, hx), http.StatusUnprocessableEntity)
 			}
 			fields.Set("previewImage", imageID)
 			fields.Set("title", "")
-			response = h.request("POST", "/post/"+p.ID, fields, hx)
+			response = h.submitEditor(t, "/post/"+p.ID, fields, hx)
 			requireStatus(t, response, http.StatusUnprocessableEntity)
 			if !hx && !strings.Contains(response.Body.String(), `name="previewImage" value="`+imageID+`"`) {
 				t.Fatal("validation failure lost selection")
@@ -64,7 +64,7 @@ func TestPostPreviewsHTTP(t *testing.T) {
 			fields.Set("title", "Preview")
 			images := h.blog.images
 			h.blog.images = failingImageStore{}
-			requireStatus(t, h.request("POST", "/post/"+p.ID, fields, hx), http.StatusInternalServerError)
+			requireStatus(t, h.submitEditor(t, "/post/"+p.ID, fields, hx), http.StatusInternalServerError)
 			h.blog.images = images
 			unchanged, err := h.blog.posts.GetByID(t.Context(), p.ID, true)
 			if err != nil || unchanged != p {
@@ -80,19 +80,19 @@ func TestPostPreviewsHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			fields.Set("previewImage", replacement)
-			requireStatus(t, h.request("POST", "/post/"+p.ID, fields, hx), status)
+			requireStatus(t, h.submitEditor(t, "/post/"+p.ID, fields, hx), status)
 			saved, err := h.blog.posts.GetByID(t.Context(), p.ID, true)
 			if err != nil || saved.PreviewImage != replacement || !saved.Published.Equal(p.Published) {
 				t.Fatal("replacement changed publication date or failed", saved, err)
 			}
 			fields.Del("published")
-			requireStatus(t, h.request("POST", "/post/"+p.ID, fields, hx), status)
+			requireStatus(t, h.submitEditor(t, "/post/"+p.ID, fields, hx), status)
 			if tags := sharingTags(t, h.request("GET", "/post/s/preview", nil, false).Body.String()); len(tags) != 0 {
 				t.Fatal("draft advertised a preview", tags)
 			}
 			fields.Set("published", "on")
 			fields.Set("previewImage", "")
-			requireStatus(t, h.request("POST", "/post/"+p.ID, fields, hx), status)
+			requireStatus(t, h.submitEditor(t, "/post/"+p.ID, fields, hx), status)
 			if tags := sharingTags(t, h.request("GET", "/post/s/preview", nil, false).Body.String()); tags["og:image"] != "https://blog.example/content.jpg" {
 				t.Fatal("removing selection did not restore automatic image", tags)
 			}

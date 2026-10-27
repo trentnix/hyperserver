@@ -26,6 +26,7 @@ type Page struct {
 	Published                                        bool
 	EverPublished                                    bool // Remains true after the page returns to draft.
 	Updated                                          time.Time
+	Version                                          int64 // SavePage requires the current version when updating.
 }
 
 // URL retains the short About and Projects addresses.
@@ -53,11 +54,13 @@ type pageRepository interface {
 	GetPageBySlug(context.Context, string, bool) (Page, error)
 	GetPageByID(context.Context, string, bool) (Page, error)
 	// SavePage retains EverPublished once published, regardless of caller-supplied history.
+	// Updates require the current Version or return errEditConflict. Content changes
+	// append a revision in the same transaction as the save and image references.
 	SavePage(context.Context, Page) (Page, error)
 	DeletePage(context.Context, string) error
 }
 
-const pageColumns = "id, slug, title, markdown, published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published"
+const pageColumns = "id, slug, title, markdown, published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published, version"
 
 // initializePagePublicationHistory preserves known publication state on existing
 // installations. Existing drafts do not record whether they were published earlier.
@@ -88,7 +91,7 @@ const publishedPages = `WITH RECURSIVE visible(id) AS (
 func scanPage(row interface{ Scan(...any) error }) (Page, error) {
 	var p Page
 	var updated int64
-	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Markdown, &p.Published, &p.ParentID, &p.Summary, &p.PreviewImage, &p.ChildrenDisplay, &p.DisplayOrder, &updated, &p.EverPublished)
+	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Markdown, &p.Published, &p.ParentID, &p.Summary, &p.PreviewImage, &p.ChildrenDisplay, &p.DisplayOrder, &updated, &p.EverPublished, &p.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}
@@ -99,7 +102,7 @@ func scanPage(row interface{ Scan(...any) error }) (Page, error) {
 // ListPages lists visible pages, explicit order first, then most recently updated.
 // Markdown bodies are omitted. includeDrafts allows administrator access.
 func (s *sqliteRepository) ListPages(ctx context.Context, includeDrafts bool) ([]Page, error) {
-	rows, err := s.db.QueryContext(ctx, publishedPages+`SELECT id, slug, title, '', published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published
+	rows, err := s.db.QueryContext(ctx, publishedPages+`SELECT id, slug, title, '', published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published, version
 FROM blog_pages WHERE ? OR id IN (SELECT id FROM visible)
 ORDER BY display_order IS NULL, display_order, updated DESC, id`, includeDrafts)
 	if err != nil {
@@ -128,7 +131,7 @@ func (s *sqliteRepository) GetPageByID(ctx context.Context, id string, includeDr
 }
 
 // SavePage creates a page when ID is empty, or updates an existing page atomically.
-// The caller must supply a valid slug.
+// The caller must supply a valid slug and the current Version for updates.
 func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
 	refs, err := imageReferences(p.Markdown, p.URL(), p.PreviewImage)
 	if err != nil {
@@ -146,13 +149,16 @@ func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
 	}
 	if p.ID == "" {
 		p.ID = rand.Text()
+		p.Version = 1
 		p.EverPublished = p.Published
 		_, err = tx.ExecContext(ctx, `INSERT INTO blog_pages
 (id, slug, title, markdown, published, parent_id, summary, preview_image, children_display, display_order, updated, ever_published)
 VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.EverPublished)
 	} else {
-		p, err = scanPage(tx.QueryRowContext(ctx, "UPDATE blog_pages SET slug=?, title=?, markdown=?, published=?, parent_id=NULLIF(?, ''), summary=?, preview_image=?, children_display=?, display_order=?, updated=?, ever_published=(ever_published OR ?) WHERE id=? RETURNING "+pageColumns,
-			p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.Published, p.ID))
+		id := p.ID
+		p, err = scanPage(tx.QueryRowContext(ctx, "UPDATE blog_pages SET slug=?, title=?, markdown=?, published=?, parent_id=NULLIF(?, ''), summary=?, preview_image=?, children_display=?, display_order=?, updated=?, ever_published=(ever_published OR ?), version=version+1 WHERE id=? AND version=? RETURNING "+pageColumns,
+			p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.Published, p.ID, p.Version))
+		err = editError(ctx, tx, "page", id, err)
 	}
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -163,6 +169,9 @@ VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Title,
 	}
 	if err == nil {
 		err = replaceImageReferences(ctx, tx, "blog_page_images", p.ID, refs)
+	}
+	if err == nil {
+		err = recordRevision(ctx, tx, "page", p.ID)
 	}
 	if err == nil {
 		err = tx.Commit()

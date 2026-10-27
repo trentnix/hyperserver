@@ -44,21 +44,22 @@ func TestImageReferencesConcurrentSave(t *testing.T) {
 	for _, kind := range []string{"post", "page"} {
 		t.Run(kind, func(t *testing.T) {
 			var id string
+			var version int64
 			save := func(draft bool) error {
 				preview := "public.png"
 				if draft {
 					preview = "private.png"
 				}
 				if kind == "post" {
-					p, err := store.Save(t.Context(), Post{ID: id, Slug: "concurrent-post", Title: "Post", PreviewImage: preview, Draft: draft})
+					p, err := store.Save(t.Context(), Post{ID: id, Version: version, Slug: "concurrent-post", Title: "Post", PreviewImage: preview, Draft: draft})
 					if err == nil {
-						id = p.ID
+						id, version = p.ID, p.Version
 					}
 					return err
 				}
-				p, err := store.SavePage(t.Context(), Page{ID: id, Slug: "concurrent-page", Title: "Page", PreviewImage: preview, Published: !draft})
+				p, err := store.SavePage(t.Context(), Page{ID: id, Version: version, Slug: "concurrent-page", Title: "Page", PreviewImage: preview, Published: !draft})
 				if err == nil {
-					id = p.ID
+					id, version = p.ID, p.Version
 				}
 				return err
 			}

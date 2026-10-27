@@ -69,9 +69,9 @@ Set `http.publicOrigin` to the deployed site's public address. Preview URLs use 
 
 ## Publishing posts
 
-Open **Posts**, choose **New post**, and write a title and Markdown body. Check **Publish post** to make it live when you choose **Save post**. Leave it unchecked to save a private draft. Existing posts show their current publication setting. The Posts page groups drafts and published posts, with links to preview, edit, and delete them.
+Open **Posts**, choose **New post**, and write a title and Markdown body. Check **Publish** to make it live when you choose **Save post**. Leave it unchecked to save a private draft. Existing posts show their current publication setting. The Posts page groups drafts and published posts, with links to preview, edit, and delete them.
 
-Uncheck **Publish post** and save to return a post to drafts. **Move to drafts** on the Posts page and **Publish** or **Unpublish** on a post provide shortcuts without editing its content. The original publication date stays unchanged when editing or republishing. Uploaded images remain public even when their post is a draft.
+To move a published post to drafts, open its editor, uncheck **Publish**, and save. The original publication date stays unchanged when editing or republishing. Images remain public only while public content or the site profile references them.
 
 For posts and pages, leave the slug blank to generate it from the title. The field shows a suggestion while you type. If that slug is taken, saving adds `-2`, `-3`, or the next available number. Custom slugs must be unique. Slugs use lowercase ASCII letters, digits, and hyphens, up to 120 characters. If the title produces no usable slug, enter a custom one. Editing a title preserves the existing slug unless you clear or replace it. Changing a slug breaks existing links.
 
@@ -81,11 +81,19 @@ Post and page editors warn before closing or following links with unsaved edits.
 
 Recovery copies are separate for each administrator, editor, and tab. They stay in that browser profile, including after logout, and expire after seven days. Expired copies are removed when an editor next opens. Copies are not encrypted, synced between devices, or a substitute for backups. Browser-history navigation preserves copies even when no warning appears. Storage failures appear in the editor. Use a private browser profile on shared devices, and save to the server before clearing browser data. Profile and authentication forms do not use draft recovery.
 
-Existing posts stay published when storage adds draft support. Back up the content database and uploads before deploying changes.
+### Saved versions
+
+Choose **History** from the Posts or Pages list, or under **More** when viewing content. The action appears only when more than one saved version exists. The history page previews saved content, with Markdown source available. Choose **Edit** for the latest version or **Edit this version** for an earlier one. The editor starts with that version's title, summary, Markdown, and preview image. The current slug, publication setting, and page placement stay unchanged. Cancel returns to the selected version in History. Nothing changes until you save. If publication is checked, saving makes the edited content live.
+
+Changed content creates a new version. Unchanged content and settings-only changes do not. Restoring old writing preserves intervening versions. History remains until the post or page is deleted. Existing content gets one initial snapshot when this feature first starts. Earlier versions cannot be recovered. Historical images stay stored but do not become public merely because history references them.
+
+If another tab saves or changes publication after an editor opens, that editor's save is rejected without losing its input. Open the current editor in another tab and compare before saving your changes there. History is server-side saved content. Browser recovery holds unsaved writing.
+
+Back up the content database and uploads before deploying changes.
 
 ## Pages and projects
 
-Choose **Pages** to create and manage Markdown pages. Each page has a title, unique slug, optional parent, preview description and image, display order, and publication setting. Use **New subpage** on an existing page to select its parent automatically. Pages stay out of RSS and Recent Posts.
+Choose **Pages** to create and manage Markdown pages. Each page has a title, unique slug, optional parent, preview description and image, display order, and publication setting. Use **More → New subpage** on an existing page to select its parent automatically. Pages stay out of RSS and Recent Posts.
 
 Each parent chooses whether to hide subpage previews, show a preview list, or show preview blocks. Blocks use two columns except on mobile. Images appear only in previews, not on the child's content page. An empty image selects the bundled default. Upload controls require JavaScript. Images used only by drafts remain private.
 

@@ -79,7 +79,7 @@ func TestPagePreviewsHTTP(t *testing.T) {
 			fields.Set("published", "on")
 			fields.Set("previewImage", imageID)
 			fields.Set("slug", "published")
-			requireStatus(t, h.request("POST", "/pages/"+p.ID, fields, hx), redirectStatus)
+			requireStatus(t, h.submitEditor(t, "/pages/"+p.ID, fields, hx), redirectStatus)
 			h.cookies = nil
 			w = h.request("GET", "/projects", nil, hx)
 			if !strings.Contains(w.Body.String(), "/images/"+imageID) || !strings.Contains(w.Body.String(), "/page/published") {
@@ -110,13 +110,13 @@ func TestPagePreviewsHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			fields.Set("previewImage", replacement)
-			requireStatus(t, h.request("POST", "/pages/"+p.ID, fields, hx), redirectStatus)
+			requireStatus(t, h.submitEditor(t, "/pages/"+p.ID, fields, hx), redirectStatus)
 			if saved, err := h.blog.pageStore.GetPageByID(t.Context(), p.ID, true); err != nil || saved.PreviewImage != replacement || saved.Markdown != fields.Get("content") {
 				t.Fatal("preview replacement failed", saved, err)
 			}
 			fields.Set("previewImage", "")
 			fields.Del("published")
-			requireStatus(t, h.request("POST", "/pages/"+p.ID, fields, hx), redirectStatus)
+			requireStatus(t, h.submitEditor(t, "/pages/"+p.ID, fields, hx), redirectStatus)
 			updated, err := h.blog.pageStore.GetPageByID(t.Context(), p.ID, true)
 			if err != nil || updated.Published || updated.PreviewImage != "" {
 				t.Fatal("unpublish or image removal failed", updated, err)
@@ -312,10 +312,22 @@ func TestPagePreviewSortOrder(t *testing.T) {
 	}
 	assertOrder("zero,ordered-new,ordered-old,unordered-new,unordered-old")
 	// Equal timestamps use ID, not title or unstable row ordering.
-	if _, err := store.db.ExecContext(t.Context(), "UPDATE blog_pages SET updated=?, id=slug WHERE display_order IS NULL", base.UnixNano()); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), "UPDATE blog_pages SET updated=? WHERE display_order IS NULL", base.UnixNano()); err != nil {
 		t.Fatal(err)
 	}
-	assertOrder("zero,ordered-new,ordered-old,unordered-new,unordered-old")
+	pages, err := store.ListPages(t.Context(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousID := ""
+	for _, page := range pages {
+		if page.DisplayOrder == nil {
+			if page.ID < previousID {
+				t.Fatal("equal timestamps did not sort by ID")
+			}
+			previousID = page.ID
+		}
+	}
 }
 
 // TestPagePreviewOptionalOrder checks empty form values, explicit zero, clearing an
@@ -334,7 +346,7 @@ func TestPagePreviewOptionalOrder(t *testing.T) {
 	}
 	for _, value := range []string{"0", "1000000", ""} {
 		fields.Set("displayOrder", value)
-		requireStatus(t, h.request("POST", "/pages/"+p.ID, fields, false), http.StatusSeeOther)
+		requireStatus(t, h.submitEditor(t, "/pages/"+p.ID, fields, false), http.StatusSeeOther)
 		w := h.request("GET", "/pages/update/"+p.ID, nil, false)
 		requireStatus(t, w, http.StatusOK)
 		if !strings.Contains(w.Body.String(), `name="displayOrder" inputmode="numeric" pattern="[0-9]+" value="`+value+`"`) {
@@ -343,7 +355,7 @@ func TestPagePreviewOptionalOrder(t *testing.T) {
 	}
 	for _, invalid := range []string{"-1", "1.5", "1000001", "word", "9999999999999999999999999"} {
 		fields.Set("displayOrder", invalid)
-		requireStatus(t, h.request("POST", "/pages/"+p.ID, fields, true), http.StatusUnprocessableEntity)
+		requireStatus(t, h.submitEditor(t, "/pages/"+p.ID, fields, true), http.StatusUnprocessableEntity)
 	}
 	p, err = h.blog.pageStore.GetPageByID(t.Context(), p.ID, true)
 	if err != nil || p.DisplayOrder != nil {

@@ -113,8 +113,9 @@
 
       const parentID = sessionStorage.getItem('project-parent');
       for (const mode of ['list', 'hidden', 'blocks']) {
+        const editor = new DOMParser().parseFromString(await (await fetch('/pages/update/' + parentID)).text(), 'text/html');
         const saved = await fetch('/pages/' + parentID, {method: 'POST', body: new URLSearchParams({
-          title: 'Projects', slug: 'projects', displayOrder: '1', published: 'on', childrenDisplay: mode
+          title: 'Projects', slug: 'projects', displayOrder: '1', published: 'on', childrenDisplay: mode, version: editor.querySelector('[name="version"]').value
         })});
         assert(saved.ok, 'Parent preview mode could not be saved.');
         await htmx.ajax('GET', '/projects', '#article-content');

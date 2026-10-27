@@ -46,8 +46,10 @@
 <header class="post-heading"><h1>{{ .Data.Title }}</h1>{{ if .Data.Draft }}<p class="page-status">Draft preview — only you can see this post.</p>{{ else }}<time datetime="{{ .Data.Published.Format "2006-01-02" }}">{{ .Data.Published.Format "January 2, 2006" }}</time>{{ end }}</header>
 {{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Post actions">
   <a class="action-edit" href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a>
-  {{ if .Data.Draft }}<form method="post" action="/post/publish/{{ .Data.ID }}"><button type="submit" class="text-button">Publish</button></form>{{ else }}<form method="post" action="/post/unpublish/{{ .Data.ID }}"><button type="submit" class="text-button">Unpublish</button></form>{{ end }}
-  <a class="action-delete" href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
+  <details class="action-menu"><summary>More</summary><div class="action-menu-items">
+    {{ if .Data.HasHistory }}<a href="/history/post/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}
+    <a class="action-delete" href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
+  </div></details>
 </div>{{ end }}
 <div class="post-body">{{ .Data.HTML }}</div>
 {{ end }}
@@ -75,7 +77,7 @@
   <div class="page-manager-title"><a href="/post/s/{{ .Slug }}">{{ .Title }}</a>{{ if not .Draft }}<small>Published {{ .Published.Format "January 2, 2006" }}</small>{{ end }}</div>
   <div class="page-manager-actions">
     <a href="/post/update/{{ .ID }}" hx-get="/post/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
-    {{ if not .Draft }}<form method="post" action="/post/unpublish/{{ .ID }}?from=posts"><button type="submit" class="text-button" aria-label="Move {{ .Title }} to drafts">Move to drafts</button></form>{{ end }}
+    {{ if .HasHistory }}<a href="/history/post/{{ .ID }}" hx-boost="false" aria-label="History for {{ .Title }}">History</a>{{ end }}
     <a href="/post/delete/{{ .ID }}" hx-get="/post/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
   </div>
 </li>{{ end }}
@@ -108,8 +110,11 @@
 <h1>{{ .Data.Title }}</h1>
 {{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Page actions">
   <a class="action-edit" href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a>
-  <a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#dialog-host">New subpage</a>
-  <a class="action-delete" href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
+  <details class="action-menu"><summary>More</summary><div class="action-menu-items">
+    <a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#dialog-host">New subpage</a>
+    {{ if .Data.HasHistory }}<a href="/history/page/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}
+    <a class="action-delete" href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
+  </div></details>
 </div>{{ end }}
 <div class="post-body">{{ .Data.HTML }}</div>
 {{ if ne .Data.ChildrenDisplay "hidden" }}
@@ -140,6 +145,7 @@
     <div class="page-manager-title"><a href="{{ .URL }}">{{ .Title }}</a><small>{{ .URL }}</small>{{ if not .Published }}<span class="page-manager-draft">Draft</span>{{ end }}</div>
     <div class="page-manager-actions">
       <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
+      {{ if .HasHistory }}<a href="/history/page/{{ .ID }}" hx-boost="false" aria-label="History for {{ .Title }}">History</a>{{ end }}
       <a href="/pages/delete/{{ .ID }}" hx-get="/pages/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
     </div>
   </div>
@@ -151,7 +157,9 @@
 {{ define "blog.pageEditor" }}
 {{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
 <section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit page{{ else }}New page{{ end }}</h1>
-<form id="page-form" data-draft-owner="{{ .LayoutData.EditorOwner }}" method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+<form id="page-form" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+  <input type="hidden" name="version" value="{{ .Data.Version }}">
+  {{ template "blog.revisionNotice" . }}
   {{ template "blog.draftRecovery" . }}
   <label for="page-title">Title</label><input id="page-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
   <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
@@ -180,10 +188,10 @@
   </fieldset>
   <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16">{{ .Data.Markdown }}</textarea>
   <p class="form-hint">Up to 256 KiB of Markdown. Content can be empty.</p>
-  <label class="publish-option"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish page</label>
-  <p class="form-hint">Uncheck to save a draft or remove this page from public view.</p>
+  <label class="publish-option"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish</label>
+  <p class="form-hint">Uncheck to move this page to drafts when you save.</p>
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
-  <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/pages">Cancel</a>{{ end }}</div>
+  <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/pages{{ end }}" hx-boost="false">Cancel</a>{{ end }}</div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
 </form></section>
 {{ if .IsHtmx }}</dialog>{{ end }}
@@ -197,7 +205,7 @@
 <p role="alert">{{ .Data.Error }}</p>
 <div class="form-actions">{{ if .IsHtmx }}<button type="button" data-close-dialog autofocus>OK</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">OK</a>{{ end }}</div>
 {{ else }}
-<h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone. Move or delete its subpages first. Uploaded images are kept.</p>
+<h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}” and its saved versions? This cannot be undone. Move or delete its subpages first. Uploaded images are kept.</p>
 <form method="post" action="/pages/delete/{{ .Data.ID }}" hx-post="/pages/delete/{{ .Data.ID }}" hx-target="#page-delete-confirmation" hx-swap="outerHTML">
 <div class="form-actions"><button type="submit" class="button-danger">Delete page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">Cancel</a>{{ end }}</div>
 </form>
@@ -222,7 +230,9 @@
 {{ define "blog.editor" }}
 {{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
 <section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
-<form id="post-form" data-draft-owner="{{ .LayoutData.EditorOwner }}" method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+<form id="post-form" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+  <input type="hidden" name="version" value="{{ .Data.Version }}">
+  {{ template "blog.revisionNotice" . }}
   {{ template "blog.draftRecovery" . }}
   <label for="post-title">Title</label><input id="post-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
   <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
@@ -241,10 +251,10 @@
     <p data-image-status role="status"></p>
   </fieldset>
   {{ template "blog.markdownFields" .Data }}
-  <label class="publish-option"><input type="checkbox" name="published" {{ if not .Data.Draft }}checked{{ end }}> Publish post</label>
-  <p class="form-hint">Uncheck to save a draft or remove this post from public view. When checked, saving makes the content live immediately. Draft-only images are private. Images shared with public content remain public.</p>
+  <label class="publish-option"><input type="checkbox" name="published" {{ if not .Data.Draft }}checked{{ end }}> Publish</label>
+  <p class="form-hint">Uncheck to move this post to drafts when you save. When checked, saving makes the content live immediately. Draft-only images are private. Images shared with public content remain public.</p>
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
-  <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/">Cancel</a>{{ end }}</div>
+  <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/{{ end }}" hx-boost="false">Cancel</a>{{ end }}</div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
 </form></section>
 {{ if .IsHtmx }}</dialog>{{ end }}
@@ -253,8 +263,42 @@
 {{ define "blog.delete" }}
 {{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
 <section class="confirmation-panel">
-<h1 id="delete-title">Delete post?</h1><p>Delete “{{ .Data.Title }}”? This cannot be undone.</p>
+<h1 id="delete-title">Delete post?</h1><p>Delete “{{ .Data.Title }}” and its saved versions? This cannot be undone.</p>
 <form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}"><button type="submit" class="button-danger">Delete post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
 </section>
 {{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}
+
+{{ define "blog.revisionNotice" }}
+{{ with .Data.LoadedRevision }}<aside class="revision-notice" role="status">
+  <strong>Editing a version saved {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}.</strong>
+  <p>Nothing changes until you save.</p>
+</aside>{{ end }}
+{{ end }}
+
+{{ define "blog.history" }}
+<section class="info-page history-page" hx-boost="false">
+  <header class="page-manager-heading"><div><h1>History</h1><p>{{ .Data.Title }}</p></div><a href="{{ .Data.ContentURL }}">Back to {{ .Data.Kind }}</a></header>
+  <p>Saved versions preserve the title, summary, Markdown, and preview image. Loading a version does not save it or change its URL, publication setting, or page placement.</p>
+  <div class="revision-layout">
+    <nav aria-label="Saved versions"><ol class="revision-list">
+    {{ range $index, $revision := .Data.Versions }}<li>
+      <a href="{{ $.Data.URL }}?revision={{ .ID }}"{{ if eq .ID $.Data.Selected.ID }} aria-current="true"{{ end }}>
+        {{ if eq $index 0 }}<span class="revision-latest">Latest saved</span>{{ end }}
+        <time datetime="{{ .RecordedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .RecordedAt.Format "Jan 2, 2006 · 3:04:05 PM UTC" }}</time>
+        <span class="revision-title">{{ .Title }}</span>
+      </a>
+    </li>{{ end }}
+    </ol></nav>
+    <section class="revision-preview" aria-label="Version preview">
+      <div class="form-actions"><a class="button-secondary" href="{{ .Data.EditorURL }}?revision={{ .Data.Selected.ID }}">{{ if .Data.Current }}Edit{{ else }}Edit this version{{ end }}</a></div>
+      {{ if not .Data.Current }}<p class="form-hint">Starts an edit using this version. Nothing changes until you save.</p>{{ end }}
+      <h2>{{ .Data.Selected.Title }}</h2>
+      {{ if .Data.Selected.Summary }}<p class="revision-summary">{{ .Data.Selected.Summary }}</p>{{ end }}
+      {{ if .Data.Selected.PreviewImage }}<figure class="revision-image"><img src="/images/{{ .Data.Selected.PreviewImage }}" alt="Saved preview image"><figcaption>Preview image</figcaption></figure>{{ end }}
+      <div class="revision-body">{{ .Data.HTML }}</div>
+      <details><summary>Markdown source</summary><pre>{{ .Data.Selected.Markdown }}</pre></details>
+    </section>
+  </div>
+</section>
 {{ end }}

@@ -19,6 +19,8 @@ import (
 // pageContent pairs stored content with safe HTML or an editor error.
 type pageContent struct {
 	Page
+	revisionSelection
+	HasHistory       bool
 	HTML             template.HTML
 	Error            string
 	Parent           *Page
@@ -31,11 +33,13 @@ type pageContent struct {
 // pageLink is one navigation branch. Hidden ancestors hide their entire branch.
 type pageLink struct {
 	Page
-	Children []pageLink
+	Children   []pageLink
+	HasHistory bool
 }
 
 // pageTree groups already ordered metadata without loading Markdown bodies.
-func pageTree(pages []Page) []pageLink {
+// Management lists supply history availability. Navigation and parent choices do not.
+func pageTree(pages []Page, history map[string]bool) []pageLink {
 	byParent := make(map[string][]Page)
 	for _, p := range pages {
 		byParent[p.ParentID] = append(byParent[p.ParentID], p)
@@ -44,7 +48,7 @@ func pageTree(pages []Page) []pageLink {
 	branch = func(parent string) []pageLink {
 		var links []pageLink
 		for _, p := range byParent[parent] {
-			links = append(links, pageLink{Page: p, Children: branch(p.ID)})
+			links = append(links, pageLink{Page: p, Children: branch(p.ID), HasHistory: history[p.ID]})
 		}
 		return links
 	}
@@ -58,7 +62,12 @@ func (m *module) pages(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	page := m.views["pages"].Content(r, pageTree(pages))
+	history, err := m.history.HistoryOwners(r.Context(), "page")
+	if err != nil {
+		m.storageError(w, r, err)
+		return
+	}
+	page := m.views["pages"].Content(r, pageTree(pages, history))
 	page.Title = "Pages"
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display pages.", err)
@@ -85,6 +94,13 @@ func (m *module) page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := pageContent{Page: p, HTML: html}
+	if admin {
+		data.HasHistory, err = m.history.HasHistory(r.Context(), "page", p.ID)
+		if err != nil {
+			m.storageError(w, r, err)
+			return
+		}
+	}
 	if p.ParentID != "" {
 		parent, err := m.pageStore.GetPageByID(r.Context(), p.ParentID, admin)
 		if err != nil {
@@ -147,6 +163,8 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		PreviewImage:    r.PostForm.Get("previewImage"),
 		ChildrenDisplay: r.PostForm.Get("childrenDisplay"),
 	}
+	version, validVersion := editorVersion(r)
+	p.Version = version
 	generatedSlug := p.Slug == ""
 	if generatedSlug {
 		p.Slug = slugFromTitle(p.Title)
@@ -168,6 +186,10 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if message != "" {
 		m.renderPageEditor(w, r, p, message, http.StatusUnprocessableEntity)
+		return
+	}
+	if !validVersion {
+		m.renderPageEditor(w, r, p, editConflictMessage, http.StatusConflict)
 		return
 	}
 	if p.PreviewImage != "" {
@@ -196,6 +218,10 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, errPageSlugTaken) {
 		m.renderPageEditor(w, r, p, slugConflictMessage, http.StatusConflict)
+		return
+	}
+	if errors.Is(err, errEditConflict) {
+		m.renderPageEditor(w, r, p, editConflictMessage, http.StatusConflict)
 		return
 	}
 	if errors.Is(err, errPageParent) {
@@ -238,7 +264,18 @@ func validatePage(p Page) string {
 // renderPageEditor keeps the HTMX editor mounted on errors. Ordinary requests
 // redisplay submitted values, including the publication setting.
 func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page, message string, status int) {
-	data := pageContent{Page: p, Error: message}
+	data := pageContent{Page: p, Error: message, revisionSelection: editorRevision(r, "page", p.ID)}
+	if r.Method == http.MethodGet && status == http.StatusOK {
+		selection, err := m.selectRevision(r, "page", p.ID, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
+		if err != nil {
+			m.storageError(w, r, err)
+			return
+		}
+		data.revisionSelection = selection
+		if selected := selection.LoadedRevision; selected != nil {
+			data.Title, data.Summary, data.Markdown, data.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
+		}
+	}
 	if p.DisplayOrder != nil {
 		data.DisplayOrderText = strconv.Itoa(*p.DisplayOrder)
 	}
@@ -281,7 +318,7 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 				}
 			}
 		}
-		choices(pageTree(pages))
+		choices(pageTree(pages, nil))
 		if p.ParentID != "" && !slices.ContainsFunc(data.Parents, func(parent Page) bool { return parent.ID == p.ParentID }) {
 			// Preserve the submitted choice if lookup failed or the parent is invalid.
 			data.Parents = append(data.Parents, Page{ID: p.ParentID, Title: "Unavailable parent"})

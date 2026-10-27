@@ -38,6 +38,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /rss", m.rss)
 	routes.HandleFunc("GET /sitemap.xml", m.sitemap)
 	routes.HandleFunc("GET /robots.txt", m.robots)
+	routes.Handle("GET /history/{kind}/{id}", m.requireAdmin(m.revisions))
 	routes.Handle("GET /profile", m.requireAdmin(m.profileEditor))
 	routes.HandleWithBodyLimit("POST /profile", m.requireAdmin(m.saveProfile), routing.MiB)
 	routes.HandleFunc("GET /about", m.page)
@@ -116,7 +117,15 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 		m.app.ContentManager.HandleError(w, r, "Unable to display this post.", err, http.StatusInternalServerError)
 		return
 	}
-	page := m.views["post"].Content(r, postPage{p, html})
+	data := postPage{Post: p, HTML: html}
+	if m.access.IsAdmin(user.GetUserFromContext(r.Context())) {
+		data.HasHistory, err = m.history.HasHistory(r.Context(), "post", p.ID)
+		if err != nil {
+			m.storageError(w, r, err)
+			return
+		}
+	}
+	page := m.views["post"].Content(r, data)
 	page.Title = p.Title
 	if r.URL.Path == "/" {
 		m.setSharing(page, r, sharingPreview{URL: "/", Type: "website"}, "")
@@ -174,6 +183,15 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := editorPage{Post: p}
+	selection, err := m.selectRevision(r, "post", p.ID, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
+	if err != nil {
+		m.storageError(w, r, err)
+		return
+	}
+	data.revisionSelection = selection
+	if selected := selection.LoadedRevision; selected != nil {
+		data.Title, data.Summary, data.Markdown, data.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
+	}
 	if !p.Published.IsZero() {
 		data.PublishedSlug = p.Slug
 	}
@@ -199,6 +217,8 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		PreviewImage: r.PostForm.Get("previewImage"),
 		Draft:        r.PostForm.Get("published") != "on",
 	}
+	version, validVersion := editorVersion(r)
+	p.Version = version
 	generatedSlug := p.Slug == ""
 	if generatedSlug {
 		p.Slug = slugFromTitle(p.Title)
@@ -209,6 +229,10 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	}
 	if message != "" {
 		m.editorError(w, r, p, message, http.StatusUnprocessableEntity)
+		return
+	}
+	if !validVersion {
+		m.editorError(w, r, p, editConflictMessage, http.StatusConflict)
 		return
 	}
 	if p.PreviewImage != "" {
@@ -237,6 +261,10 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, errSlugTaken) {
 		m.editorError(w, r, p, slugConflictMessage, http.StatusConflict)
+		return
+	}
+	if errors.Is(err, errEditConflict) {
+		m.editorError(w, r, p, editConflictMessage, http.StatusConflict)
 		return
 	}
 	if err != nil {
@@ -319,7 +347,7 @@ func validSlug(slug string) bool {
 func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, message string, status int) {
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
-	data := editorPage{Post: p, Error: message}
+	data := editorPage{Post: p, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
 	page := m.views["editor"].Content(r, data)
 	if page.IsHtmx() {
 		page = m.views["message"].Content(r, message)

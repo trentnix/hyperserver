@@ -167,7 +167,7 @@ func TestSharingPublicContent(t *testing.T) {
 		})
 	}
 	post.Summary, post.Markdown = " ", "No images"
-	if _, err := h.blog.posts.Save(t.Context(), post); err != nil {
+	if post, err = h.blog.posts.Save(t.Context(), post); err != nil {
 		t.Fatal(err)
 	}
 	profile.Bio, profile.ImageURL = "Updated bio", "https://cdn.example/new.jpg"
@@ -240,10 +240,10 @@ func TestCanonicalURLsFollowSlugChanges(t *testing.T) {
 	}
 	for _, slug := range []string{"original", "renamed"} {
 		post.Slug, page.Slug = slug, slug
-		if _, err := h.blog.posts.Save(t.Context(), post); err != nil {
+		if post, err = h.blog.posts.Save(t.Context(), post); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if page, err = h.blog.pageStore.SavePage(t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 		for path, canonical := range map[string]string{
@@ -271,10 +271,10 @@ func TestPageDescriptions(t *testing.T) {
 	}
 	for _, summary := range []string{"", " \t\n", "Updated summary"} {
 		post.Summary, page.Summary = summary, summary
-		if _, err := h.blog.posts.Save(t.Context(), post); err != nil {
+		if post, err = h.blog.posts.Save(t.Context(), post); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if page, err = h.blog.pageStore.SavePage(t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 		want := summary

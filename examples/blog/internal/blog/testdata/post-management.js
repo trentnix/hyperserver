@@ -55,15 +55,63 @@
     const navBounds = accountNav.getBoundingClientRect();
     const controls = [...accountNav.querySelectorAll('a, button')];
     assert(controls.map(control => control.textContent).join(',') === 'Posts,Pages,Site Profile,Log out', 'Account controls changed.');
+    const accountMenu = accountNav.querySelector('.account-menu');
+    const summary = accountMenu.querySelector('summary');
+    const label = accountNav.parentElement.querySelector('.account-label');
+    assert(label && label.getBoundingClientRect().height > 0 && label.textContent === 'Administration', 'Admin toolbar must have a visible label at every viewport width.');
+    const labelBounds = label.getBoundingClientRect();
+    assert(labelBounds.bottom < navBounds.top && Math.abs(labelBounds.left - navBounds.left) < 1, 'Administration caption must sit above the toolbar, aligned with its left edge.');
+    const navStyle = getComputedStyle(accountNav);
+    assert(navStyle.backgroundColor === 'rgb(48, 57, 70)' && navStyle.color === 'rgb(232, 237, 243)', 'Admin toolbar must use light controls on its dark background.');
+    assert(navBounds.height <= 60, 'Admin toolbar must stay compact at every viewport width.');
+    if (innerWidth < 768) {
+      assert(!accountMenu.open && !summary.hidden, 'Mobile admin links must start collapsed.');
+      assert(Math.abs(summary.getBoundingClientRect().top - controls[3].getBoundingClientRect().top) < 1, 'Manage and Log out must share one row.');
+      summary.click();
+      assert(accountMenu.open, 'Manage did not open.');
+      const dropdownBounds = accountMenu.querySelector('.action-menu-items').getBoundingClientRect();
+      assert(Math.abs(dropdownBounds.left - navBounds.left) < 1 && dropdownBounds.top >= navBounds.bottom, 'Mobile admin dropdown must align with the toolbar left edge and open below it.');
+    } else {
+      assert(accountMenu.open && summary.hidden, 'Desktop admin links must stay expanded.');
+      for (const link of accountMenu.querySelectorAll('a')) {
+        assert(parseFloat(getComputedStyle(link).paddingLeft) >= 8 && parseFloat(getComputedStyle(link).paddingRight) >= 8, 'Expanded admin links must have horizontal breathing room.');
+      }
+    }
     for (const control of controls) {
       const bounds = control.getBoundingClientRect();
       assert(bounds.height >= 44 && bounds.left >= navBounds.left - 1 && bounds.right <= navBounds.right + 1, 'Account controls must be touch-friendly and fit the toolbar: ' + JSON.stringify({bounds, navBounds}));
-      assert(Math.abs(bounds.top - controls[0].getBoundingClientRect().top) < 1, 'Account controls should fit on one row at supported widths.');
+      if (innerWidth >= 768) assert(Math.abs(bounds.top - controls[0].getBoundingClientRect().top) < 1, 'Desktop account controls should fit on one row.');
     }
+    const logoutStyle = getComputedStyle(controls[3]);
+    const linkStyle = getComputedStyle(controls[0]);
+    assert(logoutStyle.paddingLeft === linkStyle.paddingLeft && logoutStyle.paddingRight === linkStyle.paddingRight, 'Log out must use the same horizontal padding as the admin links.');
+    assert(Math.abs(controls[3].getBoundingClientRect().right - (navBounds.right - parseFloat(navStyle.paddingRight))) < 1, 'Log out must stay aligned with the toolbar right inset.');
     controls[0].focus();
     const focusStyle = getComputedStyle(controls[0]);
     assert(focusStyle.outlineStyle !== 'none' && parseFloat(focusStyle.outlineWidth) >= 2, 'Keyboard focus must remain visible.');
+    assert(focusStyle.outlineColor === 'rgb(185, 216, 255)', 'Keyboard focus must contrast with the dark toolbar.');
     controls[0].blur();
+    if (innerWidth < 768) {
+      controls[0].focus();
+      controls[0].dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+      assert(!accountMenu.open && document.activeElement === summary, 'Escape must close Manage and restore focus.');
+      summary.click();
+      document.querySelector('.page-manager-heading').click();
+      assert(!accountMenu.open, 'Outside click must close Manage.');
+    } else {
+      document.querySelector('.page-manager-heading').click();
+      assert(accountMenu.open, 'Outside click must not hide desktop admin links.');
+    }
+    const frame = window.frameElement;
+    const originalWidth = frame.style.width;
+    const startedMobile = innerWidth < 768;
+    (startedMobile ? summary : controls[0]).focus();
+    frame.style.width = startedMobile ? '1100px' : '390px';
+    await wait(() => summary.hidden === startedMobile && accountMenu.open === startedMobile);
+    assert(document.activeElement === (startedMobile ? controls[0] : summary), 'Changing layout must move focus to a visible admin control.');
+    frame.style.width = originalWidth;
+    await wait(() => summary.hidden === !startedMobile && accountMenu.open === !startedMobile);
+    assert(document.activeElement === (startedMobile ? summary : controls[0]), 'Returning to the original layout must preserve usable keyboard focus.');
     for (const section of document.querySelectorAll('#draft-posts, #published-posts')) {
       const rows = [...section.querySelectorAll('.page-manager-row')];
       assert(rows.length === 3, 'Expected short, long, and unbroken titles.');
@@ -78,7 +126,7 @@
         for (const link of links) {
           assert(link.getAttribute('aria-label') === link.textContent + ' ' + titleLink.textContent, 'Post action must identify its post.');
         }
-        assert(!!actions.querySelector('form[action^="/post/unpublish/"]') === (section.id === 'published-posts'), 'Only published posts must offer Move to drafts.');
+        assert(!actions.querySelector('form'), 'Publication changes belong in the editor, not the Posts list.');
         const titleBounds = title.getBoundingClientRect();
         const actionBounds = actions.getBoundingClientRect();
         assert(title.scrollWidth <= title.clientWidth + 1 && actions.scrollWidth <= actions.clientWidth + 1, 'Title or actions overflow their column.');

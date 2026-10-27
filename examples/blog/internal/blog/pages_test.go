@@ -58,7 +58,7 @@ func TestPageNavigationTitles(t *testing.T) {
 	}
 	for _, title := range []string{"Our story", "Company <history>"} {
 		page.Title = title
-		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if page, err = h.blog.pageStore.SavePage(t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 		body := h.request("GET", "/", nil, false).Body.String()
@@ -91,7 +91,7 @@ func TestPageDisplayOrderInput(t *testing.T) {
 			if value == "" || value == "0" || value == "0005" || value == " 12 " {
 				fields.Set("title", "") // An unrelated failure must preserve valid input too.
 			}
-			w := h.request("POST", "/pages/"+page.ID, fields, false)
+			w := h.submitEditor(t, "/pages/"+page.ID, fields, false)
 			requireStatus(t, w, http.StatusUnprocessableEntity)
 			field := input.FindString(w.Body.String())
 			if !strings.Contains(field, `value="`+html.EscapeString(value)+`"`) || strings.Contains(field, `type="number"`) {
@@ -105,7 +105,7 @@ func TestPageDisplayOrderInput(t *testing.T) {
 	}
 	for _, order := range []*int{nil, new(0), new(42)} {
 		page.DisplayOrder = order
-		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if page, err = h.blog.pageStore.SavePage(t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 		body := h.request("GET", "/pages/update/"+page.ID, nil, false).Body.String()
@@ -183,7 +183,7 @@ func TestAboutNavigation(t *testing.T) {
 			{"other-page", true},
 			{"about", true},
 		} {
-			requireStatus(t, h.request("POST", "/pages/"+about.ID, pageFields(change.slug, change.published), hx), status)
+			requireStatus(t, h.submitEditor(t, "/pages/"+about.ID, pageFields(change.slug, change.published), hx), status)
 			check(change.slug == "about" && change.published)
 		}
 		requireStatus(t, h.request("POST", "/pages/delete/"+about.ID, nil, hx), status)
@@ -309,7 +309,7 @@ func TestPagesHTTP(t *testing.T) {
 			fields.Set("slug", "published")
 			fields.Set("published", "on")
 			fields.Set("content", "A **useful** page.\n\n<script>alert(1)</script>")
-			requireStatus(t, h.request("POST", "/pages/"+p.ID, fields, hx), status)
+			requireStatus(t, h.submitEditor(t, "/pages/"+p.ID, fields, hx), status)
 			h.cookies = nil
 			requireStatus(t, h.request("GET", "/page/draft", nil, hx), http.StatusNotFound)
 			w = h.request("GET", "/page/published", nil, hx)
@@ -335,7 +335,7 @@ func TestPagesHTTP(t *testing.T) {
 			fields = pageFields("about", false)
 			fields.Set("title", "About this site")
 			fields.Set("content", "")
-			w = h.request("POST", "/pages/"+about.ID, fields, hx)
+			w = h.submitEditor(t, "/pages/"+about.ID, fields, hx)
 			requireStatus(t, w, status)
 			if w.Header().Get(header) != "/about" {
 				t.Fatal("About lost its short URL")
@@ -347,7 +347,7 @@ func TestPagesHTTP(t *testing.T) {
 			}
 			h.cookies = cookies
 			fields.Set("published", "on")
-			requireStatus(t, h.request("POST", "/pages/"+about.ID, fields, hx), status)
+			requireStatus(t, h.submitEditor(t, "/pages/"+about.ID, fields, hx), status)
 			h.cookies = nil
 			for _, path := range []string{"/about", "/page/about"} {
 				w = h.request("GET", path, nil, hx)
@@ -415,7 +415,7 @@ func TestPageValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	fields.Set("slug", "about")
-	requireStatus(t, h.request("POST", "/pages/"+p.ID, fields, false), http.StatusConflict)
+	requireStatus(t, h.submitEditor(t, "/pages/"+p.ID, fields, false), http.StatusConflict)
 	if saved, err := h.blog.pageStore.GetPageByID(t.Context(), p.ID, true); err != nil || saved.Slug != "escaped" {
 		t.Fatal("conflict changed page", saved, err)
 	}
@@ -596,6 +596,7 @@ func TestPageFailures(t *testing.T) {
 		for _, path := range []string{"/pages", "/pages/id", "/pages/delete/id"} {
 			fields := pageFields("unsaved", true)
 			fields.Set("parentID", "selected-parent")
+			fields.Set("version", "1")
 			w := h.request("POST", path, fields, hx)
 			requireStatus(t, w, http.StatusInternalServerError)
 			if w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" || strings.Contains(w.Body.String(), "private storage failure") {

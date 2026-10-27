@@ -184,7 +184,7 @@
       form.querySelector('[data-close-dialog]').click();
       assert(!dialog.open, 'Accepted Cancel did not close the editor.');
       const concurrentSave = await fetch(form.action, {method: 'POST', headers: {'HX-Request': 'true'}, body: new URLSearchParams({
-        title: 'About changed on the server', slug: 'about', content: 'A separately saved version.', childrenDisplay: 'hidden', published: 'on'
+        title: 'About changed on the server', slug: 'about', content: 'A separately saved version.', childrenDisplay: 'hidden', published: 'on', version: form.elements.version.value
       })});
       assert(concurrentSave.ok, 'Unable to prepare a changed server version.');
       await htmx.ajax('GET', editURL, '#dialog-host');

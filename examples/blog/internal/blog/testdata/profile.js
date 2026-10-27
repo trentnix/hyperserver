@@ -22,6 +22,7 @@
     }
     if (stage === 'logged-in') {
       sessionStorage.setItem('profile-stage', 'edit');
+      if (innerWidth < 768) document.querySelector('.account-menu summary').click();
       document.querySelector('.account-nav a[href="/profile"]').click();
       return;
     }

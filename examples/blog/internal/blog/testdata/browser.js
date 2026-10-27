@@ -25,6 +25,17 @@ document.removeEventListener = function(type, callback, options) {
     }
     throw new Error('Timed out at ' + location.pathname + ': ' + predicate.toString());
   };
+  const savePublication = async (edit, published, nextStage) => {
+    edit.click();
+    await wait(() => document.querySelector('dialog[open] #post-form .CodeMirror'));
+    await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    const form = document.querySelector('#post-form');
+    assert(form.querySelector('.publish-option').textContent.trim() === 'Publish', 'Editor must label publication consistently.');
+    form.elements.published.checked = published;
+    form.elements.published.dispatchEvent(new Event('change', {bubbles: true}));
+    sessionStorage.setItem('blog-test-stage', nextStage);
+    form.requestSubmit();
+  };
   window.alert = message => report('Unexpected editor alert: ' + message);
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
@@ -293,6 +304,7 @@ document.removeEventListener = function(type, callback, options) {
       await wait(() => !loginNotice.isConnected);
       const posts = document.querySelector('.account-nav a[href="/post/manage"]');
       assert(posts && !document.querySelector('.account-nav a[href="/post/create"]'), 'Account navigation must link to Posts, not New post.');
+      if (innerWidth < 768) document.querySelector('.account-menu summary').click();
       const logoutStyle = getComputedStyle(document.querySelector('.account-nav button'));
       const navStyle = getComputedStyle(posts);
       for (const property of ['color', 'textDecorationLine', 'fontSize', 'lineHeight', 'transition']) {
@@ -352,8 +364,7 @@ document.removeEventListener = function(type, callback, options) {
       assert((await fetch('/post/s/browser-post', {credentials: 'omit'})).status === 404, 'Anonymous readers can view a draft.');
       const posts = await fetch('/post/manage');
       assert(posts.ok && (await posts.text()).includes('/post/s/browser-post'), 'Saved draft is missing from the Posts page.');
-      sessionStorage.setItem('blog-test-stage', 'published');
-      document.querySelector('form[action^="/post/publish/"]').requestSubmit();
+      await savePublication(document.querySelector('.content-actions .action-edit'), true, 'published');
       return;
     }
     if (stage === 'published') {
@@ -363,20 +374,18 @@ document.removeEventListener = function(type, callback, options) {
       assert(document.querySelector('.post-body h1')?.textContent === 'Saved heading', 'Published Markdown differs from preview.');
       assert(getComputedStyle(document.querySelector('.post-heading')).textAlign === 'left', 'Post heading must align with its content.');
       const actions = [...document.querySelectorAll('.content-actions a, .content-actions button')];
-      assert(actions.map(action => action.textContent).join(',') === 'Edit,Unpublish,Delete', 'Published post actions are incorrect.');
+      assert(actions.map(action => action.textContent).join(',') === 'Edit,Delete', 'Published post actions are incorrect.');
       const actionStyle = getComputedStyle(actions[0]);
       assert(actionStyle.textDecorationLine === 'none', 'Post actions should not look like underlined content links.');
-      for (const action of actions.slice(1)) {
-        const style = getComputedStyle(action);
-        for (const property of ['fontSize', 'fontWeight', 'lineHeight', 'textDecorationLine', 'borderRadius', 'borderWidth', 'padding', 'transition']) {
-          assert(style[property] === actionStyle[property], 'Post actions differ in ' + property + '.');
-        }
-        assert(Math.abs(action.getBoundingClientRect().top - actions[0].getBoundingClientRect().top) < 1, 'Post actions are not vertically aligned.');
-      }
+      const menu = document.querySelector('.content-actions .action-menu');
+      const more = menu.querySelector('summary');
+      assert(!menu.open, 'Secondary actions must start collapsed.');
+      assert(Math.abs(more.getBoundingClientRect().top - actions[0].getBoundingClientRect().top) < 1, 'Edit and More must share a row.');
+      more.click();
       for (const action of actions) {
-        assert(getComputedStyle(action).borderTopStyle === 'solid', 'Post action must use the shared outlined style.');
         assert(action.getBoundingClientRect().height >= (innerWidth < 768 ? 44 : 36), 'Post action is too small to interact with.');
       }
+      assert(actions[1].matches('.action-delete') && getComputedStyle(actions[1]).borderTopStyle === 'solid', 'Delete must be separated at the end of More.');
       assert(actionStyle.backgroundColor !== getComputedStyle(actions[1]).backgroundColor, 'Edit must be emphasized.');
       const image = document.querySelector('.post-body img');
       assert(image, 'Published post has no image: ' + document.querySelector('.post-body').innerHTML);
@@ -437,6 +446,7 @@ document.removeEventListener = function(type, callback, options) {
       document.querySelector('[data-close-dialog]').click();
       window.confirm = originalConfirm;
       assert(leavePrompt.includes('without saving'), 'Closing a changed editor must warn about unsaved edits.');
+      document.querySelector('.content-actions .action-menu summary').click();
       document.querySelector('a[href^="/post/delete/"]').click();
       await wait(() => document.querySelector('dialog[open] form[action^="/post/delete/"]'));
       const deletion = document.querySelector('dialog[open] form');
@@ -453,31 +463,21 @@ document.removeEventListener = function(type, callback, options) {
       return;
     }
     if (stage === 'manage-unpublish') {
-      const form = document.querySelector('#published-posts form[action^="/post/unpublish/"]');
-      assert(form?.textContent.includes('Move to drafts'), 'Published post has no Move to drafts action.');
-      const moveStyle = getComputedStyle(form.querySelector('button'));
-      const viewStyle = getComputedStyle(form.closest('.page-manager-actions').querySelector('a'));
-      for (const property of ['color', 'textDecorationLine', 'fontSize', 'lineHeight', 'padding', 'transition']) {
-        assert(moveStyle[property] === viewStyle[property], 'Move to drafts differs from neighboring links in ' + property);
-      }
+      assert(!document.querySelector('#published-posts form'), 'Posts list must not offer publication shortcuts.');
       assert(document.documentElement.scrollWidth <= innerWidth, 'Post management overflows the viewport.');
-      sessionStorage.setItem('blog-test-stage', 'unpublished');
-      form.requestSubmit();
+      await savePublication(document.querySelector('#published-posts a[href^="/post/update/"]'), false, 'unpublished');
       return;
     }
     if (stage === 'unpublished') {
-      assert(location.pathname === '/post/manage', 'Move to drafts did not return to Posts.');
-      const draft = document.querySelector('#draft-posts a[href="/post/s/browser-post"]');
-      assert(draft && !document.querySelector('#published-posts a[href="/post/s/browser-post"]'), 'Post did not move from Published to Drafts.');
+      assert(location.pathname === '/post/s/browser-post', 'Saving a draft must return to its preview.');
+      const response = await fetch('/post/manage');
+      assert(response.ok, 'Unable to read post management.');
+      const list = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const draft = list.querySelector('#draft-posts a[href="/post/s/browser-post"]');
+      assert(draft && !list.querySelector('#published-posts a[href="/post/s/browser-post"]'), 'Post did not move from Published to Drafts.');
       assert((await fetch('/post/s/browser-post', {credentials: 'omit'})).status === 404, 'Unpublished post remains public.');
-      sessionStorage.setItem('blog-test-stage', 'draft-preview');
-      draft.click();
-      return;
-    }
-    if (stage === 'draft-preview') {
       assert(document.querySelector('.post-heading').textContent.includes('Draft preview'), 'Unpublish did not restore the draft preview.');
-      sessionStorage.setItem('blog-test-stage', 'republished');
-      document.querySelector('form[action^="/post/publish/"]').requestSubmit();
+      await savePublication(document.querySelector('.content-actions .action-edit'), true, 'republished');
       return;
     }
     if (stage === 'republished') {

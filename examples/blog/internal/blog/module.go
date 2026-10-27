@@ -72,6 +72,7 @@ type module struct {
 	profile      *ProfileState
 	images       imageStore
 	imageAccess  imageAccessRepository
+	history      revisionRepository
 	localAssets  *os.Root
 	close        func() error
 	views        map[string]*content.View
@@ -136,6 +137,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"delete",
 		"message",
 		"profileEditor",
+		"history",
 	} {
 		view, err := templates.View(app.ContentManager, "blog."+name)
 		if err != nil {
@@ -173,6 +175,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	m.pageStore = store
 	m.profileStore = store
 	m.imageAccess = store
+	m.history = store
 	if m.profile == nil {
 		m.profile = &ProfileState{}
 	}

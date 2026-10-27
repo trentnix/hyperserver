@@ -8,7 +8,7 @@ import (
 
 // postManagement separates post metadata into the two administration sections.
 type postManagement struct {
-	Drafts, Published []Post
+	Drafts, Published []postPage
 }
 
 // managePosts lists drafts and published posts for the administrator.
@@ -18,12 +18,18 @@ func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
+	history, err := m.history.HistoryOwners(r.Context(), "post")
+	if err != nil {
+		m.storageError(w, r, err)
+		return
+	}
 	var data postManagement
 	for _, post := range posts {
+		entry := postPage{Post: post, HasHistory: history[post.ID]}
 		if post.Draft {
-			data.Drafts = append(data.Drafts, post)
+			data.Drafts = append(data.Drafts, entry)
 		} else {
-			data.Published = append(data.Published, post)
+			data.Published = append(data.Published, entry)
 		}
 	}
 	page := m.views["posts"].Content(r, data)

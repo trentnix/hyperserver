@@ -2,6 +2,7 @@ package blog
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -151,7 +152,7 @@ func TestPageFirstPublicationHistory(t *testing.T) {
 		writers.Go(func() {
 			update := p
 			update.Published, update.EverPublished = published, false
-			if _, err := h.blog.pageStore.SavePage(t.Context(), update); err != nil {
+			if _, err := h.blog.pageStore.SavePage(t.Context(), update); err != nil && !errors.Is(err, errEditConflict) {
 				t.Error(err)
 			}
 		})

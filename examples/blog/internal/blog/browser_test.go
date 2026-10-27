@@ -3,6 +3,7 @@ package blog
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -61,6 +62,18 @@ func TestBrowserEditorHistory(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check editor history restoration")
 	}
 	testBrowser(t, browser, "1100", "editor-history")
+}
+
+// TestBrowserRevisions follows full-page history, loading, recovery, and explicit
+// saving with the real editor. History must never open inside an editor dialog.
+func TestBrowserRevisions(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check revision history")
+	}
+	for _, width := range []string{"390", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "revisions") })
+	}
 }
 
 // TestBrowserProjects checks project editing, preview uploads, and responsive cards.
@@ -229,6 +242,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/navigation.js"
 	case "editor-history":
 		scriptFile = "testdata/editor-history.js"
+	case "revisions":
+		scriptFile = "testdata/revisions.js"
 	case "projects":
 		scriptFile = "testdata/projects.js"
 	case "pages":
@@ -249,6 +264,39 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if mode == "revisions" {
+		var targets []map[string]any
+		store := h.blog.posts.(*sqliteRepository)
+		for _, kind := range []string{"post", "page"} {
+			original := Revision{Title: "Original title", Summary: "Original summary", Markdown: "# Original body"}
+			id, version, err := saveRevisionContent(t.Context(), store, kind, "", 0, original)
+			if err != nil {
+				t.Fatal(err)
+			}
+			list, err := store.ListRevisions(t.Context(), kind, id)
+			if err != nil || len(list) != 1 {
+				t.Fatal(list, err)
+			}
+			_, _, err = saveRevisionContent(t.Context(), store, kind, id, version, Revision{Title: "Current title", Summary: "Current summary\r\nSecond line", Markdown: "Current body\r\nSecond line"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			prefix := "/post"
+			if kind == "page" {
+				prefix = "/pages"
+			}
+			view, manager := "/post/s/history", "/post/manage"
+			if kind == "page" {
+				view, manager = "/page/history", "/pages"
+			}
+			targets = append(targets, map[string]any{"editor": prefix + "/update/" + id, "history": "/history/" + kind + "/" + id, "revision": list[0].ID, "view": view, "manager": manager})
+		}
+		data, err := json.Marshal(targets)
+		if err != nil {
+			t.Fatal(err)
+		}
+		script = bytes.ReplaceAll(script, []byte("__REVISION_TARGETS__"), data)
 	}
 	if mode == "auth-styles" {
 		requireStatus(t, h.request("POST", "/auth/reset/request/email", url.Values{"email": {"trentnix@gmail.com"}}, false), http.StatusOK)

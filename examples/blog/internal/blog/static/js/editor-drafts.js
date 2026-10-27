@@ -85,13 +85,27 @@
       const scope = ownerPrefix + new URL(form.action).pathname + ':';
       const state = {
         form, ownerPrefix, scope, key: scope + crypto.randomUUID(), sources: [],
-        fields: [...form.querySelectorAll('input[name], textarea[name], select[name]')].filter(field => field.type !== 'file'),
+        fields: [...form.querySelectorAll('input[name], textarea[name], select[name]')].filter(field => field.type !== 'file' && field.name !== 'version'),
         status: form.querySelector('[data-draft-status]')
       };
-      state.baseline = encoded(state);
+      // Rejected ordinary submissions contain unsaved input, not a server baseline.
+      state.baseline = form.hasAttribute('data-unsaved') ? '' : encoded(state);
+      // A loaded saved version is an edit, not the current server baseline.
+      // The concurrency token always belongs to the newly opened editor, not a recovery copy.
+      if (form.dataset.currentContent) {
+        const baseline = snapshot(state);
+        for (const [name, value] of Object.entries(JSON.parse(form.dataset.currentContent))) {
+          // Match the browser's input and textarea normalization without changing the editor.
+          const field = form.elements.namedItem(name).cloneNode();
+          field.value = value;
+          baseline[name] = field.value;
+        }
+        state.baseline = JSON.stringify(baseline);
+      }
       states.set(form, state);
       state.status.hidden = false;
       offerRecovery(state);
+      if (dirty(state)) persist(state);
       const changed = () => {
         state.approved = null;
         clearTimeout(state.timer);

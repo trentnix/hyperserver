@@ -148,7 +148,7 @@ func TestSavePostPublication(t *testing.T) {
 				for _, path := range []string{"/rss", "/posts/recent"} {
 					requireStatus(t, h.request("GET", path, nil, false), http.StatusOK)
 				}
-				response := h.request("POST", path, values, hx)
+				response := h.submitEditor(t, path, values, hx)
 				requireStatus(t, response, status)
 				var err error
 				post, err = h.blog.posts.GetBySlug(t.Context(), "checkbox-post", true)
@@ -163,6 +163,14 @@ func TestSavePostPublication(t *testing.T) {
 				editor := h.request("GET", "/post/update/"+post.ID, nil, hx).Body.String()
 				if strings.Contains(editor, `name="published" checked`) != publish {
 					t.Fatal("editor checkbox does not reflect stored state")
+				}
+				if !strings.Contains(editor, "> Publish</label>") || !strings.Contains(editor, "Uncheck to move this post to drafts when you save.") {
+					t.Fatal("editor must explain how the publication checkbox changes visibility")
+				}
+				view := h.request("GET", "/post/s/"+post.Slug, nil, hx)
+				requireStatus(t, view, http.StatusOK)
+				if strings.Contains(view.Body.String(), `action="/post/publish/`) || strings.Contains(view.Body.String(), `action="/post/unpublish/`) {
+					t.Fatal("post view must not offer publication shortcuts")
 				}
 				cookies := h.cookies
 				h.cookies = nil
@@ -179,7 +187,7 @@ func TestSavePostPublication(t *testing.T) {
 			values.Set("slug", "invalid-publication")
 			values.Set("published", "invalid")
 			for _, path := range []string{"/post", "/post/" + post.ID} {
-				response := h.request("POST", path, values, hx)
+				response := h.submitEditor(t, path, values, hx)
 				requireStatus(t, response, http.StatusUnprocessableEntity)
 				if !strings.Contains(response.Body.String(), "Choose whether to publish the post.") || response.Header().Get("HX-Trigger") != "" {
 					t.Fatal("invalid publication setting must report validation failure without acknowledging a save")
@@ -202,7 +210,7 @@ func TestSavePostPublication(t *testing.T) {
 				} else {
 					values.Del("published")
 				}
-				response := h.request("POST", "/post/"+post.ID, values, hx)
+				response := h.submitEditor(t, "/post/"+post.ID, values, hx)
 				requireStatus(t, response, http.StatusUnprocessableEntity)
 				if !hx && strings.Contains(response.Body.String(), `name="published" checked`) != publish {
 					t.Fatal("failed save lost the publication checkbox")
@@ -344,8 +352,8 @@ func TestPostManagement(t *testing.T) {
 		if strings.Count(body, `hx-get="/post/update/`) != 2 || strings.Count(body, `hx-get="/post/delete/`) != 2 {
 			t.Fatal("each post must have edit and delete actions")
 		}
-		if strings.Count(body, `action="/post/unpublish/`) != 1 || !strings.Contains(body, `?from=posts"`) || !strings.Contains(body, ">Move to drafts</button>") {
-			t.Fatal("only the published post must have a Move to drafts action")
+		if strings.Contains(body, `action="/post/unpublish/`) || strings.Contains(body, `action="/post/publish/`) {
+			t.Fatal("publication controls belong in the editor, not the Posts list")
 		}
 	}
 }
@@ -377,6 +385,7 @@ func TestMovePostToDrafts(t *testing.T) {
 			}
 			stored, err := h.blog.posts.GetByID(t.Context(), post.ID, true)
 			post.Draft = true
+			post.Version++
 			if err != nil || stored != post {
 				t.Fatalf("moving to drafts changed more than visibility: %+v, %v", stored, err)
 			}
@@ -561,11 +570,17 @@ func TestPostPublicationStorage(t *testing.T) {
 	close(results)
 	published := <-results
 	for p := range results {
+		p.Version = published.Version // Each successful operation advances the edit version.
 		if p != published {
 			t.Fatal("concurrent publication changed the timestamp or content")
 		}
 	}
 	// Save applies the selected state without overwriting the first publication date.
+	post, err = store.GetByID(t.Context(), post.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	post.Draft = true
 	post.Title = "Edited"
 	updated, err := store.Save(t.Context(), post)
 	if err != nil || !updated.Draft || !updated.Published.Equal(published.Published) {
@@ -607,9 +622,10 @@ func TestPostPublicationDateAndEdits(t *testing.T) {
 	}
 
 	// Saving a checked publication setting republishes content without changing its date.
-	if _, err := store.SetPublished(t.Context(), post.ID, false); err != nil {
+	if post, err = store.SetPublished(t.Context(), post.ID, false); err != nil {
 		t.Fatal(err)
 	}
+	post.Draft = false
 	post.Title = "Edited after unpublishing"
 	updated, err := store.Save(t.Context(), post)
 	if err != nil || updated.Draft || !updated.Published.Equal(firstPublished) || updated.Title != post.Title {

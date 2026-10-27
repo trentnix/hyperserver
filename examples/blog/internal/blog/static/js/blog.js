@@ -59,6 +59,39 @@
   mobileLayout.addEventListener('change', closeMenu);
   closeMenu();
 
+  // Keep one set of admin links: expanded on desktop, a disclosure on mobile.
+  const accountMenu = document.querySelector('.account-menu');
+  function positionAccountMenu() {
+    if (!accountMenu) return;
+    const summary = accountMenu.querySelector('summary');
+    const focused = document.activeElement;
+    const hadFocus = accountMenu.contains(focused);
+    accountMenu.open = !mobileLayout.matches;
+    summary.hidden = !mobileLayout.matches;
+    if (mobileLayout.matches && hadFocus) summary.focus({preventScroll: true});
+    else if (focused === summary) accountMenu.querySelector('a').focus({preventScroll: true});
+  }
+  mobileLayout.addEventListener('change', positionAccountMenu);
+  positionAccountMenu();
+
+  // Native disclosure controls work without JavaScript. Add familiar dismissal
+  // behavior, including for action menus inserted by HTMX navigation.
+  document.addEventListener('click', event => {
+    for (const menu of document.querySelectorAll('.action-menu[open]')) {
+      if (menu.querySelector('summary').hidden) continue;
+      if (!menu.contains(event.target) || event.target.closest('a, button')) menu.open = false;
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const menu = event.target.closest('.action-menu[open]');
+    if (menu && !menu.querySelector('summary').hidden) {
+      menu.open = false;
+      menu.querySelector('summary').focus();
+      event.preventDefault();
+    }
+  });
+
   // CSS owns timing, including hover/focus pauses and reduced-motion preferences.
   // Delegation also handles notifications appended by HTMX out-of-band swaps.
   document.addEventListener('animationend', event => {

@@ -66,7 +66,7 @@ func TestPageAutomaticSlug(t *testing.T) {
 	if created.Slug != "page" || created.ID == "" {
 		t.Fatal("missing automatic slug", created)
 	}
-	requireStatus(t, h.request("POST", "/pages/"+created.ID, fields, false), http.StatusSeeOther)
+	requireStatus(t, h.submitEditor(t, "/pages/"+created.ID, fields, false), http.StatusSeeOther)
 }
 
 // TestPageHierarchy checks nested publication, reparenting, and protected deletion.
@@ -263,7 +263,7 @@ func TestPageChildDisplays(t *testing.T) {
 			if hx {
 				status = http.StatusOK
 			}
-			requireStatus(t, h.request("POST", "/pages/"+parent.ID, fields, hx), status)
+			requireStatus(t, h.submitEditor(t, "/pages/"+parent.ID, fields, hx), status)
 			response := h.request("GET", parent.URL(), nil, hx)
 			requireStatus(t, response, http.StatusOK)
 			body := response.Body.String()
@@ -295,10 +295,10 @@ func TestPageChildDisplays(t *testing.T) {
 		}
 		fields := pageFields(parent.Slug, true)
 		fields.Set("parentID", child.ID)
-		requireStatus(t, h.request("POST", "/pages/"+parent.ID, fields, hx), http.StatusUnprocessableEntity)
+		requireStatus(t, h.submitEditor(t, "/pages/"+parent.ID, fields, hx), http.StatusUnprocessableEntity)
 		requireStatus(t, h.request("POST", "/pages/delete/"+parent.ID, nil, hx), http.StatusConflict)
 		fields.Del("parentID")
 		fields.Set("childrenDisplay", "invalid")
-		requireStatus(t, h.request("POST", "/pages/"+parent.ID, fields, hx), http.StatusUnprocessableEntity)
+		requireStatus(t, h.submitEditor(t, "/pages/"+parent.ID, fields, hx), http.StatusUnprocessableEntity)
 	}
 }

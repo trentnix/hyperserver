@@ -303,7 +303,7 @@ func TestRSSPostChanges(t *testing.T) {
 	values.Set("slug", "first")
 	values.Set("title", "Edited")
 	values.Set("published", "on")
-	requireStatus(t, h.request(http.MethodPost, "/post/"+id, values, false), http.StatusSeeOther)
+	requireStatus(t, h.submitEditor(t, "/post/"+id, values, false), http.StatusSeeOther)
 	edited, editedTag := read(2, secondTag)
 	if edited.Channel.Items[1].Title != "Edited" || edited.Channel.Items[1].GUID != first.Channel.Items[0].GUID {
 		t.Fatal("edit did not preserve stable feed identity")
@@ -311,7 +311,7 @@ func TestRSSPostChanges(t *testing.T) {
 	requireStatus(t, h.request(http.MethodPost, "/post", values, false), http.StatusConflict)
 	requireStatus(t, h.request(http.MethodPost, "/post/delete/missing", nil, false), http.StatusNotFound)
 	values.Set("title", "")
-	requireStatus(t, h.request(http.MethodPost, "/post/"+id, values, false), http.StatusUnprocessableEntity)
+	requireStatus(t, h.submitEditor(t, "/post/"+id, values, false), http.StatusUnprocessableEntity)
 	if tag := h.request(http.MethodGet, "/rss", nil, false).Header().Get("ETag"); tag != editedTag {
 		t.Fatal("rejected write changed the feed")
 	}
@@ -338,14 +338,14 @@ func TestFeedHTML(t *testing.T) {
 		{"`[code](/about)`", `<code>[code](/about)</code>`},
 	} {
 		t.Run(tc.markdown, func(t *testing.T) {
-			got, err := feedHTML(tc.markdown, base)
-			if err != nil || !strings.Contains(got, tc.want) {
+			got, err := markdownAt(tc.markdown, base)
+			if err != nil || !strings.Contains(string(got), tc.want) {
 				t.Fatalf("feed HTML=%q, error=%v, want %q", got, err, tc.want)
 			}
 		})
 	}
-	got, err := feedHTML(`<script>alert(1)</script>`, base)
-	if err != nil || strings.Contains(got, "<script>") {
+	got, err := markdownAt(`<script>alert(1)</script>`, base)
+	if err != nil || strings.Contains(string(got), "<script>") {
 		t.Fatalf("raw HTML was enabled: %q, %v", got, err)
 	}
 }
