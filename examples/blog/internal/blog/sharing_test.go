@@ -62,8 +62,52 @@ func requireDescription(t *testing.T, source, want string) {
 	}
 }
 
+// requireCanonical checks for exactly one canonical link in the head, or none
+// when want is empty. It also rejects empty and duplicate canonical links.
+func requireCanonical(t *testing.T, source, want string) {
+	t.Helper()
+	tokens := html.NewTokenizer(strings.NewReader(source))
+	var found, inHead bool
+	for {
+		switch tokens.Next() {
+		case html.ErrorToken:
+			if found != (want != "") {
+				t.Fatalf("canonical present=%v, want URL %q", found, want)
+			}
+			return
+		case html.EndTagToken:
+			if tokens.Token().Data == "head" {
+				inHead = false
+			}
+		case html.StartTagToken, html.SelfClosingTagToken:
+			token := tokens.Token()
+			if token.Data == "head" {
+				inHead = true
+			}
+			if token.Data != "link" {
+				continue
+			}
+			var rel, href string
+			for _, attr := range token.Attr {
+				switch attr.Key {
+				case "rel":
+					rel = attr.Val
+				case "href":
+					href = attr.Val
+				}
+			}
+			if rel == "canonical" {
+				if found || !inHead || href == "" || href != want {
+					t.Fatalf("unexpected canonical: href=%q, duplicate=%v, inHead=%v, want=%q", href, found, inHead, want)
+				}
+				found = true
+			}
+		}
+	}
+}
+
 // TestSharingPublicContent covers full-page metadata, stable URLs, image priority,
-// description agreement, escaping, and updates.
+// canonical URLs, description agreement, escaping, and updates.
 func TestSharingPublicContent(t *testing.T) {
 	h := newHarness(t)
 	profile := Profile{Name: `A "site" & friends`, Bio: "Site biography", ImageURL: "/local-assets/portrait.jpg"}
@@ -86,10 +130,14 @@ func TestSharingPublicContent(t *testing.T) {
 		path, title, description, kind, target, image string
 	}{
 		{"/", profile.Name, profile.Bio, "website", "/", "/local-assets/portrait.jpg"},
+		{"/?tracking=1", profile.Name, profile.Bio, "website", "/", "/local-assets/portrait.jpg"},
 		{"/posts", "All Posts", profile.Bio, "website", "/posts", "/local-assets/portrait.jpg"},
+		{"/posts?tracking=1", "All Posts", profile.Bio, "website", "/posts", "/local-assets/portrait.jpg"},
+		{"/post/s/shared", post.Title, post.Summary, "article", "/post/s/shared", "/images/photo.png?size=large&crop=1"},
 		{"/post/s/shared?tracking=1", post.Title, post.Summary, "article", "/post/s/shared", "/images/photo.png?size=large&crop=1"},
 		{"/post/id/" + post.ID, post.Title, post.Summary, "article", "/post/s/shared", "/images/photo.png?size=large&crop=1"},
 		{p.URL(), p.Title, p.Summary, "website", p.URL(), "/images/" + imageID},
+		{p.URL() + "?tracking=1", p.Title, p.Summary, "website", p.URL(), "/images/" + imageID},
 		{"/project/s/featured", p.Title, p.Summary, "website", p.URL(), "/images/" + imageID},
 		{"/page/about", "About Me", profile.Bio, "website", "/about", "/local-assets/portrait.jpg"},
 		{"/projects", "Projects", profile.Bio, "website", "/projects", "/local-assets/portrait.jpg"},
@@ -97,6 +145,7 @@ func TestSharingPublicContent(t *testing.T) {
 		t.Run(tc.path, func(t *testing.T) {
 			response := h.request("GET", tc.path, nil, false)
 			requireStatus(t, response, http.StatusOK)
+			requireCanonical(t, response.Body.String(), "https://blog.example"+tc.target)
 			tags := sharingTags(t, response.Body.String())
 			for key, want := range map[string]string{"og:site_name": profile.Name, "og:title": tc.title, "og:description": tc.description, "og:type": tc.kind, "og:url": "https://blog.example" + tc.target, "og:image": "https://blog.example" + tc.image} {
 				if tags[key] != want {
@@ -108,6 +157,7 @@ func TestSharingPublicContent(t *testing.T) {
 				t.Fatal("metadata escaped incorrectly")
 			}
 			fragment := h.request("GET", tc.path, nil, true).Body.String()
+			requireCanonical(t, fragment, "")
 			if tags := sharingTags(t, fragment); len(tags) != 0 {
 				t.Fatal("fragment contains sharing metadata", tags)
 			}
@@ -139,7 +189,7 @@ func TestSharingPublicContent(t *testing.T) {
 	}
 }
 
-// TestSharingVisibility prevents metadata on private content, forms, and errors.
+// TestSharingVisibility prevents public metadata on private content, forms, and errors.
 func TestSharingVisibility(t *testing.T) {
 	h := newHarness(t)
 	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "private-post", Title: "Private post", Summary: "Private post summary", Markdown: "Body", Draft: true})
@@ -162,12 +212,47 @@ func TestSharingVisibility(t *testing.T) {
 		}
 		for _, path := range []string{"/post/s/private-post", parent.URL(), child.URL(), "/missing", "/post/s/missing", "/auth/login/email", "/auth/register/email", "/auth/reset/request/email", "/post/manage", "/pages", "/profile", "/post/create", "/post/update/" + post.ID, "/pages/update/" + child.ID} {
 			response := h.request("GET", path, nil, false)
+			requireCanonical(t, response.Body.String(), "")
 			if tags := sharingTags(t, response.Body.String()); len(tags) != 0 {
 				t.Fatalf("admin=%v path=%s exposed sharing metadata: %v", admin, path, tags)
 			}
 			if tags := metadataTags(t, response.Body.String(), "name", "description"); len(tags) != 0 && tags["description"] != h.blog.profile.Current().Bio {
 				t.Fatalf("admin=%v path=%s exposed a private description: %v", admin, path, tags)
 			}
+		}
+	}
+}
+
+// TestCanonicalURLsFollowSlugChanges uses current slugs, including for a signed-in
+// administrator viewing public content through the stable post-ID route.
+func TestCanonicalURLsFollowSlugChanges(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "original", Title: "Post"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "original", Title: "Page", Published: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, slug := range []string{"original", "renamed"} {
+		post.Slug, page.Slug = slug, slug
+		if _, err := h.blog.posts.Save(t.Context(), post); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+			t.Fatal(err)
+		}
+		for path, canonical := range map[string]string{
+			"/post/id/" + post.ID: "https://blog.example/post/s/" + slug,
+			page.URL():            "https://blog.example" + page.URL(),
+		} {
+			response := h.request("GET", path, nil, false)
+			requireStatus(t, response, http.StatusOK)
+			requireCanonical(t, response.Body.String(), canonical)
 		}
 	}
 }
@@ -210,6 +295,7 @@ func TestPageDescriptions(t *testing.T) {
 			response := h.request("GET", path, nil, false)
 			requireStatus(t, response, http.StatusOK)
 			requireDescription(t, response.Body.String(), "Updated summary")
+			requireCanonical(t, response.Body.String(), "")
 			if tags := sharingTags(t, response.Body.String()); len(tags) != 0 {
 				t.Fatal("unavailable public URL advertised Open Graph metadata", tags)
 			}
@@ -233,6 +319,7 @@ func TestSharingOriginAndDefaults(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.app.Handler.ServeHTTP(w, r)
 	requireStatus(t, w, http.StatusOK)
+	requireCanonical(t, w.Body.String(), "https://blog.example/")
 	tags := sharingTags(t, w.Body.String())
 	if tags["og:url"] != "https://blog.example/" || tags["og:title"] != "My Blog" || tags["og:image"] != "" || strings.Contains(tags["og:site_name"], "Trent") {
 		t.Fatal("incorrect origin or neutral defaults", tags)
@@ -240,6 +327,7 @@ func TestSharingOriginAndDefaults(t *testing.T) {
 	h.blog.app.Config.HTTP.PublicOrigin = "invalid origin"
 	w = h.request("GET", "/about", nil, false)
 	requireStatus(t, w, http.StatusOK)
+	requireCanonical(t, w.Body.String(), "")
 	if tags := sharingTags(t, w.Body.String()); len(tags) != 0 {
 		t.Fatal("invalid public origin advertised metadata", tags)
 	}
@@ -286,6 +374,7 @@ func TestSharingVisibilityFailure(t *testing.T) {
 	h.blog.pageStore = sharingLookupFailure{h.blog.pageStore}
 	w := h.request("GET", "/about", nil, false)
 	requireStatus(t, w, http.StatusOK)
+	requireCanonical(t, w.Body.String(), "")
 	if tags := sharingTags(t, w.Body.String()); len(tags) != 0 {
 		t.Fatal("failed visibility check advertised metadata", tags)
 	}

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="{{ .LayoutData.Description }}">
   {{ with .LayoutData.Sharing }}
+  <link rel="canonical" href="{{ .URL }}">
   <meta property="og:site_name" content="{{ $.LayoutData.Profile.Name }}">
   <meta property="og:title" content="{{ .Title }}">
   <meta property="og:description" content="{{ .Description }}">
