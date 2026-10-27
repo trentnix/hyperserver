@@ -16,6 +16,12 @@ import (
 // sharingTags reads metadata as a crawler would, including HTML entity decoding.
 func sharingTags(t *testing.T, source string) map[string]string {
 	t.Helper()
+	return metadataTags(t, source, "property", "og:")
+}
+
+// metadataTags reads selected meta tags and rejects duplicate keys.
+func metadataTags(t *testing.T, source, attribute, prefix string) map[string]string {
+	t.Helper()
 	tags := make(map[string]string)
 	tokens := html.NewTokenizer(strings.NewReader(source))
 	for {
@@ -29,16 +35,16 @@ func sharingTags(t *testing.T, source string) map[string]string {
 			}
 			var property, value string
 			for _, attr := range token.Attr {
-				if attr.Key == "property" {
+				if attr.Key == attribute {
 					property = attr.Val
 				}
 				if attr.Key == "content" {
 					value = attr.Val
 				}
 			}
-			if strings.HasPrefix(property, "og:") {
+			if strings.HasPrefix(property, prefix) {
 				if _, exists := tags[property]; exists {
-					t.Fatal("duplicate sharing property", property)
+					t.Fatal("duplicate metadata", property)
 				}
 				tags[property] = value
 			}
@@ -46,15 +52,25 @@ func sharingTags(t *testing.T, source string) map[string]string {
 	}
 }
 
+// requireDescription checks the ordinary description independently of Open Graph tags.
+func requireDescription(t *testing.T, source, want string) {
+	t.Helper()
+	tags := metadataTags(t, source, "name", "description")
+	got, exists := tags["description"]
+	if !exists || got != want {
+		t.Fatalf("description=%q (present=%v), want %q", got, exists, want)
+	}
+}
+
 // TestSharingPublicContent covers full-page metadata, stable URLs, image priority,
-// escaping, and updates without changing the independent search-description tag.
+// description agreement, escaping, and updates.
 func TestSharingPublicContent(t *testing.T) {
 	h := newHarness(t)
 	profile := Profile{Name: `A "site" & friends`, Bio: "Site biography", ImageURL: "/local-assets/portrait.jpg"}
 	if err := h.blog.writeProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "shared", Title: `Title " /><script>alert(1)</script>`, Summary: "Summary & details", Markdown: "![Vector](/vector.svg)\n\n![Photo](/images/photo.png?size=large&crop=1)"})
+	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "shared", Title: `Title " /><script>alert(1)</script>`, Summary: `Summary " /><script>alert(1)</script> & details`, Markdown: "![Vector](/vector.svg)\n\n![Photo](/images/photo.png?size=large&crop=1)"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,11 +103,16 @@ func TestSharingPublicContent(t *testing.T) {
 					t.Errorf("%s=%q, want %q", key, tags[key], want)
 				}
 			}
-			if strings.Contains(response.Body.String(), "<script>alert(1)</script>") || !strings.Contains(response.Body.String(), `<meta name="description" content="Site biography">`) {
-				t.Fatal("metadata escaped incorrectly or changed the unrelated description tag")
+			requireDescription(t, response.Body.String(), tc.description)
+			if strings.Contains(response.Body.String(), "<script>alert(1)</script>") {
+				t.Fatal("metadata escaped incorrectly")
 			}
-			if tags := sharingTags(t, h.request("GET", tc.path, nil, true).Body.String()); len(tags) != 0 {
+			fragment := h.request("GET", tc.path, nil, true).Body.String()
+			if tags := sharingTags(t, fragment); len(tags) != 0 {
 				t.Fatal("fragment contains sharing metadata", tags)
+			}
+			if tags := metadataTags(t, fragment, "name", "description"); len(tags) != 0 {
+				t.Fatal("fragment contains a description tag", tags)
 			}
 		})
 	}
@@ -103,7 +124,9 @@ func TestSharingPublicContent(t *testing.T) {
 	if err := h.blog.writeProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
-	tags := sharingTags(t, h.request("GET", "/post/s/shared", nil, false).Body.String())
+	body := h.request("GET", "/post/s/shared", nil, false).Body.String()
+	requireDescription(t, body, profile.Bio)
+	tags := sharingTags(t, body)
 	if tags["og:description"] != profile.Bio || tags["og:image"] != profile.ImageURL {
 		t.Fatal("content or profile changes left stale metadata", tags)
 	}
@@ -119,15 +142,15 @@ func TestSharingPublicContent(t *testing.T) {
 // TestSharingVisibility prevents metadata on private content, forms, and errors.
 func TestSharingVisibility(t *testing.T) {
 	h := newHarness(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "private-post", Title: "Private post", Markdown: "Body", Draft: true})
+	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "private-post", Title: "Private post", Summary: "Private post summary", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	parent, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "private-page", Title: "Private page"})
+	parent, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "private-page", Title: "Private page", Summary: "Private page summary"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "hidden-child", Title: "Hidden child", ParentID: parent.ID, Published: true})
+	child, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "hidden-child", Title: "Hidden child", Summary: "Hidden child summary", ParentID: parent.ID, Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,8 +165,60 @@ func TestSharingVisibility(t *testing.T) {
 			if tags := sharingTags(t, response.Body.String()); len(tags) != 0 {
 				t.Fatalf("admin=%v path=%s exposed sharing metadata: %v", admin, path, tags)
 			}
+			if tags := metadataTags(t, response.Body.String(), "name", "description"); len(tags) != 0 && tags["description"] != h.blog.profile.Current().Bio {
+				t.Fatalf("admin=%v path=%s exposed a private description: %v", admin, path, tags)
+			}
 		}
 	}
+}
+
+// TestPageDescriptions checks summary edits, blank fallbacks, and independence
+// from the public URL needed by Open Graph metadata.
+func TestPageDescriptions(t *testing.T) {
+	h := newHarness(t)
+	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "description", Title: "Post"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "description", Title: "Page", Published: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, summary := range []string{"", " \t\n", "Updated summary"} {
+		post.Summary, page.Summary = summary, summary
+		if _, err := h.blog.posts.Save(t.Context(), post); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+			t.Fatal(err)
+		}
+		want := summary
+		if strings.TrimSpace(want) == "" {
+			want = h.blog.profile.Current().Bio
+		}
+		for _, path := range []string{"/post/s/description", page.URL()} {
+			response := h.request("GET", path, nil, false)
+			requireStatus(t, response, http.StatusOK)
+			requireDescription(t, response.Body.String(), want)
+		}
+	}
+
+	for _, origin := range []string{"invalid origin", ""} {
+		h.blog.app.Config.HTTP.PublicOrigin = origin
+		h.blog.app.Config.HTTP.ListenHost = "0.0.0.0"
+		for _, path := range []string{"/post/s/description", page.URL()} {
+			response := h.request("GET", path, nil, false)
+			requireStatus(t, response, http.StatusOK)
+			requireDescription(t, response.Body.String(), "Updated summary")
+			if tags := sharingTags(t, response.Body.String()); len(tags) != 0 {
+				t.Fatal("unavailable public URL advertised Open Graph metadata", tags)
+			}
+		}
+	}
+	if err := h.blog.writeProfile(t.Context(), Profile{Name: "My Blog"}); err != nil {
+		t.Fatal(err)
+	}
+	requireDescription(t, h.request("GET", "/", nil, false).Body.String(), "")
 }
 
 // TestSharingOriginAndDefaults checks trusted URLs, neutral defaults, and failure isolation.

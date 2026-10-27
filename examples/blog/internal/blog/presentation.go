@@ -42,6 +42,7 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
 			data := navigation{Profile: profile.Current(), SignedIn: account != nil, Admin: access.IsAdmin(account)}
+			data.Description = data.Profile.Bio
 			if data.Admin {
 				data.EditorOwner = account.ID
 			}
@@ -69,7 +70,7 @@ type navigation struct {
 	Profile                                  Profile
 	Sharing                                  *sharingPreview
 	Pages                                    []pageLink
-	EditorOwner                              string
+	EditorOwner, Description                 string
 	SignedIn, Admin, Registration, ShowLogin bool
 }
 

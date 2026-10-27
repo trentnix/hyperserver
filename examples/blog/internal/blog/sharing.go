@@ -20,24 +20,26 @@ type sharingPreview struct {
 	Title, Description, URL, Image, Type string
 }
 
-// setSharing uses configured public URLs, never request host or forwarded headers.
-// Metadata is optional: a URL configuration error must not hide readable content.
+// setSharing supplies the public description and Open Graph preview. Preview URLs
+// use configuration, never request headers. URL errors do not suppress descriptions.
 func (m *module) setSharing(c *content.Content, r *http.Request, preview sharingPreview, rendered template.HTML) {
 	if c.IsHtmx() {
 		return
 	}
-	base, err := util.BuildPublicURL(r, m.app.Config.HTTP, preview.URL, nil)
-	if err != nil {
-		logger.LogRequestError(r, err)
-		return
-	}
-
 	data := c.LayoutData.(navigation)
 	if preview.Title == "" {
 		preview.Title = data.Profile.Name
 	}
 	if strings.TrimSpace(preview.Description) == "" {
 		preview.Description = data.Profile.Bio
+	}
+	data.Description = preview.Description
+	c.LayoutData = data
+
+	base, err := util.BuildPublicURL(r, m.app.Config.HTTP, preview.URL, nil)
+	if err != nil {
+		logger.LogRequestError(r, err)
+		return
 	}
 	preview.URL = base.String()
 	preview.Image = sharingImageURL(preview.Image, base)

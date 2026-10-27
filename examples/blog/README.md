@@ -55,6 +55,8 @@ Run one blog instance per content database. The site profile is loaded at startu
 
 ## Sharing links
 
+Public posts and pages use their summary for the HTML description tag, falling back to the site bio when the summary is blank. The home page and archive use the site bio.
+
 Public posts, pages, the home page, and the archive include Open Graph metadata in full-page HTML. Post and page previews use their title and summary, falling back to the site bio for an empty summary. Posts and pages prefer their uploaded preview image. Otherwise, content uses its first suitable Markdown image, then the site portrait. Choose or remove the preview image in the editor. It does not appear in the article body. SVGs are skipped. If no suitable image exists, the preview has text only. Images must be publicly accessible for sharing services to retrieve them.
 
 Set `http.publicOrigin` to the deployed site's public address. Preview URLs use that configuration, not request host headers. Drafts, descendants of unpublished pages, editors, and account pages do not advertise sharing metadata. HTMX fragments omit it because sharing services fetch the full URL. Individual services control preview appearance and may cache older versions.
