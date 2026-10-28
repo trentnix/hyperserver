@@ -45,8 +45,13 @@ func (m *module) rss(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	document, err := m.feed.load(r.Context(), origin.String(), func() ([]byte, error) {
-		return m.buildFeed(r.Context(), origin)
+	document, err := m.feed.loadUntil(r.Context(), origin.String(), func() ([]byte, time.Time, error) {
+		next, err := m.posts.NextPublication(r.Context())
+		if err != nil {
+			return nil, time.Time{}, err
+		}
+		data, err := m.buildFeed(r.Context(), origin)
+		return data, next, err
 	})
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"html"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -12,6 +13,56 @@ import (
 	"strings"
 	"testing"
 )
+
+// TestRevisionPreview keeps targeted selection separate from navigation and history restoration.
+func TestRevisionPreview(t *testing.T) {
+	for _, kind := range []string{"post", "page"} {
+		t.Run(kind, func(t *testing.T) {
+			h := newHarness(t)
+			id, versions := revisionDeleteFixture(t, h, kind)
+			h.register(t)
+			h.login(t)
+			h.verify(t)
+			path := "/history/" + kind + "/" + id + "?revision=" + strconv.FormatInt(versions[1].ID, 10)
+			request := func(path string, hx, restore bool) *httptest.ResponseRecorder {
+				r := httptest.NewRequest("GET", "https://blog.example"+path, nil)
+				r.Header.Set("HX-Target", "revision-preview")
+				r.Header.Set("HX-Request", strconv.FormatBool(hx))
+				r.Header.Set("HX-History-Restore-Request", strconv.FormatBool(restore))
+				for _, cookie := range h.cookies {
+					r.AddCookie(cookie)
+				}
+				w := httptest.NewRecorder()
+				h.app.Handler.ServeHTTP(w, r)
+				return w
+			}
+			for _, tc := range []struct{ hx, restore, fragment bool }{{true, false, true}, {false, false, false}, {true, true, false}} {
+				w := request(path, tc.hx, tc.restore)
+				requireStatus(t, w, http.StatusOK)
+				body := w.Body.String()
+				if !strings.Contains(body, "<h2>Third</h2>") || strings.Contains(body, `class="revision-list"`) == tc.fragment || strings.Contains(body, "<!DOCTYPE html>") == tc.fragment {
+					t.Fatal("incorrect preview/full-page rendering", body)
+				}
+				wantURL := ""
+				if tc.fragment {
+					wantURL = path
+				}
+				if w.Header().Get("HX-Replace-Url") != wantURL || w.Header().Get("Cache-Control") != "no-store" || !strings.Contains(w.Header().Get("Vary"), "HX-Target") {
+					t.Fatal("incorrect preview headers", w.Header())
+				}
+			}
+			missing := request(strings.Split(path, "?")[0]+"?revision=999999", true, false)
+			requireStatus(t, missing, http.StatusNotFound)
+			if missing.Header().Get("HX-Replace-Url") != "" {
+				t.Fatal("missing revision changed the history URL")
+			}
+			h.blog.history = failedHistory{revisionRepository: h.blog.history}
+			requireStatus(t, request(path, true, false), http.StatusInternalServerError)
+			h.cookies = nil
+			requireStatus(t, request(path, true, false), http.StatusForbidden)
+		})
+	}
+}
 
 // revisionForm reads the saved fields that History loads into the real editor.
 // Settings are asserted separately so restoration cannot quietly reset them.
@@ -158,7 +209,7 @@ func TestRevisionHTTP(t *testing.T) {
 			if values.Get("title") != original.Title || values.Get("summary") != original.Summary || values.Get("content") != original.Markdown || values.Get("previewImage") != imageID || values.Get("slug") != "current-url" || values.Get("version") != strconv.FormatInt(version, 10) {
 				t.Fatal("loaded editor has wrong content or settings", values)
 			}
-			if !strings.Contains(body, "Editing a version saved") || !strings.Contains(body, "Nothing changes until you save.") || !strings.Contains(body, "data-current-content=") || strings.Contains(body, `name="published" checked`) {
+			if !strings.Contains(body, "Editing a version saved") || !strings.Contains(body, "Nothing changes until you save.") || !strings.Contains(body, "data-current-content=") || strings.Contains(body, `name="published" checked`) || strings.Contains(body, `value="on" selected`) {
 				t.Fatal("loaded version changed publication or lacks unsaved-work guidance")
 			}
 			if kind == "post" {

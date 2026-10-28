@@ -84,16 +84,19 @@ func (s *sqliteRepository) ImageIsPublic(ctx context.Context, references ...stri
 		return false, nil
 	}
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(references)), ",")
-	args := make([]any, 0, 2*len(references))
-	for range 2 {
+	args := make([]any, 0, 2*len(references)+1)
+	for i := range 2 {
 		for _, reference := range references {
 			args = append(args, reference)
+		}
+		if i == 0 {
+			args = append(args, s.now().Unix())
 		}
 	}
 
 	var public bool
 	err := s.db.QueryRowContext(ctx, publishedPages+`SELECT
-EXISTS(SELECT 1 FROM blog_post_images i JOIN blog_posts p ON p.id=i.owner_id WHERE i.url IN (`+placeholders+`) AND p.draft=0)
+EXISTS(SELECT 1 FROM blog_post_images i JOIN blog_posts p ON p.id=i.owner_id WHERE i.url IN (`+placeholders+`) AND p.draft=0 AND p.published<=?)
 OR EXISTS(SELECT 1 FROM blog_page_images i JOIN visible v ON v.id=i.owner_id WHERE i.url IN (`+placeholders+`))`, args...).Scan(&public)
 	return public, err
 }

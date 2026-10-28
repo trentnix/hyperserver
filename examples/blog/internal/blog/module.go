@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
@@ -78,6 +79,7 @@ type module struct {
 	views        map[string]*content.View
 	feed         feedCache
 	recentPosts  cachedValue[int, []ArchiveEntry]
+	now          func() time.Time
 }
 
 // init registers the factory without opening storage or creating runtime state.
@@ -138,6 +140,8 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"message",
 		"profileEditor",
 		"history",
+		"revisionPreview",
+		"revisionDelete",
 	} {
 		view, err := templates.View(app.ContentManager, "blog."+name)
 		if err != nil {

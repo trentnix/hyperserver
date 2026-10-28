@@ -27,11 +27,12 @@
       document.querySelector('#password').value = 'Sample-Password-123!';
       sessionStorage.setItem('slug-warnings-login', 'true');
       document.querySelector('#login-form').requestSubmit();
+      await Promise.resolve();
       return;
     }
     let prompts = [];
     let consent = true;
-    window.confirm = message => { prompts.push(message); return consent; };
+    window.blogConfirm = (options, proceed) => { prompts.push(options.message); if (consent) queueMicrotask(proceed); };
     for (const kind of ['post', 'pages']) {
       for (const state of ['new', 'draft', 'published', 'unpublished']) {
         const original = kind + '-' + state;
@@ -72,6 +73,7 @@
           consent = false;
           const before = submissions;
           form.requestSubmit();
+          await Promise.resolve();
           assert(prompts.length === (shouldWarn ? 1 : 0), 'Incorrect confirmation count for ' + kind + '/' + state + '/' + value);
           assert(submissions === before + (shouldWarn ? 0 : 1), 'Canceled warning allowed submission.');
           assert(form.isConnected && slug.value === value && form.elements.content.value === 'Writing that must not be lost.', 'Confirmation discarded unsaved fields.');
@@ -79,11 +81,13 @@
             assert(prompts[0].includes('Changing this URL'), 'Confirmation does not explain the URL change.');
             consent = true;
             form.requestSubmit();
+            await Promise.resolve();
             assert(submissions === before + 1 && prompts.length === 2, 'Accepting the warning did not allow submission.');
           }
         }
         consent = true;
         form.querySelector('[data-close-dialog]').click();
+        await Promise.resolve();
       }
     }
     await report('PASS');

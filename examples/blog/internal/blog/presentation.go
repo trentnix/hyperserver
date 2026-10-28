@@ -149,14 +149,20 @@ type postPage struct {
 	Post
 	HTML       template.HTML
 	HasHistory bool
+	Scheduled  bool
 }
 
 // editorPage retains a draft and any user-facing error for the editing form.
 type editorPage struct {
 	Post
 	revisionSelection
-	Error         string
-	PublishedSlug string
+	Error                      string
+	PublishedSlug              string
+	ScheduledSlug              string
+	ScheduledAt                int64
+	Publication                string
+	ScheduleDate, ScheduleTime string
+	CanSchedule                bool
 }
 
 // archiveMonth contains the heading and post links for one archive month.

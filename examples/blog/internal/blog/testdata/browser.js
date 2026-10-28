@@ -30,8 +30,8 @@ document.removeEventListener = function(type, callback, options) {
     await wait(() => document.querySelector('dialog[open] #post-form .CodeMirror'));
     await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
     const form = document.querySelector('#post-form');
-    assert(form.querySelector('.publish-option').textContent.trim() === 'Publish', 'Editor must label publication consistently.');
-    form.elements.published.checked = published;
+    assert(form.querySelector('label[for="post-publication"]').textContent.trim() === 'Publish', 'Editor must label publication clearly.');
+    form.elements.published.value = published ? 'on' : '';
     form.elements.published.dispatchEvent(new Event('change', {bubbles: true}));
     sessionStorage.setItem('blog-test-stage', nextStage);
     form.requestSubmit();
@@ -440,11 +440,12 @@ document.removeEventListener = function(type, callback, options) {
       button.click();
       await wait(() => form.querySelector('[data-request-error]')?.textContent.includes('connection failed'));
       unchanged();
-      const originalConfirm = window.confirm;
+      const originalConfirm = window.blogConfirm;
       let leavePrompt = '';
-      window.confirm = message => { leavePrompt = message; return true; };
+      window.blogConfirm = (options, proceed) => { leavePrompt = options.title; queueMicrotask(proceed); };
       document.querySelector('[data-close-dialog]').click();
-      window.confirm = originalConfirm;
+      await Promise.resolve();
+      window.blogConfirm = originalConfirm;
       assert(leavePrompt.includes('without saving'), 'Closing a changed editor must warn about unsaved edits.');
       document.querySelector('.content-actions .action-menu summary').click();
       document.querySelector('a[href^="/post/delete/"]').click();

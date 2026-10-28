@@ -76,6 +76,17 @@ func TestBrowserRevisions(t *testing.T) {
 	}
 }
 
+// TestBrowserRevisionNavigation keeps long history lists and scroll positions intact during selection.
+func TestBrowserRevisionNavigation(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check in-place history selection")
+	}
+	for _, width := range []string{"390", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "revision-navigation") })
+	}
+}
+
 // TestBrowserProjects checks project editing, preview uploads, and responsive cards.
 func TestBrowserProjects(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -109,7 +120,7 @@ func TestBrowserPostManagement(t *testing.T) {
 	}
 }
 
-// TestBrowserPostPublication exercises the publication checkbox through creation and edits.
+// TestBrowserPostPublication exercises publication choices through creation and edits.
 func TestBrowserPostPublication(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
 	if browser == "" {
@@ -117,6 +128,17 @@ func TestBrowserPostPublication(t *testing.T) {
 	}
 	for _, width := range []string{"390", "1100"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "post-publication") })
+	}
+}
+
+// TestBrowserScheduling checks UTC scheduling, editor visibility, and cancellation.
+func TestBrowserScheduling(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check scheduled publication")
+	}
+	for _, width := range []string{"320", "390", "1100"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "scheduling") })
 	}
 }
 
@@ -128,6 +150,17 @@ func TestBrowserSlugWarnings(t *testing.T) {
 	}
 	for _, width := range []string{"390", "1100"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "slug-warnings") })
+	}
+}
+
+// TestBrowserConfirmations exercises real styled confirmations and their default actions.
+func TestBrowserConfirmations(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check editor confirmations")
+	}
+	for _, width := range []string{"320", "390", "1100"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "confirmations") })
 	}
 }
 
@@ -244,6 +277,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/editor-history.js"
 	case "revisions":
 		scriptFile = "testdata/revisions.js"
+	case "revision-navigation":
+		scriptFile = "testdata/revision-navigation.js"
 	case "projects":
 		scriptFile = "testdata/projects.js"
 	case "pages":
@@ -254,8 +289,12 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/auth-styles.js"
 	case "draft-recovery":
 		scriptFile = "testdata/draft-recovery.js"
+	case "confirmations":
+		scriptFile = "testdata/confirmations.js"
 	case "post-publication":
 		scriptFile = "testdata/post-publication.js"
+	case "scheduling":
+		scriptFile = "testdata/scheduling.js"
 	case "post-management":
 		scriptFile = "testdata/post-management.js"
 	case "slug-warnings":
@@ -265,7 +304,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mode == "revisions" {
+	if mode == "revisions" || mode == "revision-navigation" {
 		var targets []map[string]any
 		store := h.blog.posts.(*sqliteRepository)
 		for _, kind := range []string{"post", "page"} {
@@ -278,9 +317,17 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			if err != nil || len(list) != 1 {
 				t.Fatal(list, err)
 			}
-			_, _, err = saveRevisionContent(t.Context(), store, kind, id, version, Revision{Title: "Current title", Summary: "Current summary\r\nSecond line", Markdown: "Current body\r\nSecond line"})
+			_, version, err = saveRevisionContent(t.Context(), store, kind, id, version, Revision{Title: "Current title", Summary: "Current summary\r\nSecond line", Markdown: "Current body\r\nSecond line"})
 			if err != nil {
 				t.Fatal(err)
+			}
+			if mode == "revision-navigation" {
+				for i := 3; i <= 40; i++ {
+					_, version, err = saveRevisionContent(t.Context(), store, kind, id, version, Revision{Title: fmt.Sprintf("Version %d", i), Markdown: "Saved writing"})
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
 			}
 			prefix := "/post"
 			if kind == "page" {
@@ -333,7 +380,11 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			// Firefox limits ordinary windows to 500px. An iframe gives each
 			// flow an exact viewport, including narrow mobile sizes.
 			w.Header().Set("Content-Type", "text/html")
-			fmt.Fprintf(w, `<!DOCTYPE html><iframe src="%s" style="border:0;width:%spx;height:1000px"></iframe>`, pagePath, width)
+			height := 1000
+			if mode == "scheduling" {
+				height = 600 // A short viewport exposes clipped time options at the editor's scroll limit.
+			}
+			fmt.Fprintf(w, `<!DOCTYPE html><iframe src="%s" style="border:0;width:%spx;height:%dpx"></iframe>`, pagePath, width, height)
 			return
 		case "/test/plain-error":
 			http.Error(w, `<img src=x onerror="window.errorInjected=true"> Please try again.`, http.StatusTooManyRequests)

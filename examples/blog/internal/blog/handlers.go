@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
@@ -39,6 +40,8 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /sitemap.xml", m.sitemap)
 	routes.HandleFunc("GET /robots.txt", m.robots)
 	routes.Handle("GET /history/{kind}/{id}", m.requireAdmin(m.revisions))
+	routes.Handle("GET /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.confirmRevisionDelete))
+	routes.Handle("POST /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.deleteRevision))
 	routes.Handle("GET /profile", m.requireAdmin(m.profileEditor))
 	routes.HandleWithBodyLimit("POST /profile", m.requireAdmin(m.saveProfile), routing.MiB)
 	routes.HandleFunc("GET /about", m.page)
@@ -117,7 +120,7 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 		m.app.ContentManager.HandleError(w, r, "Unable to display this post.", err, http.StatusInternalServerError)
 		return
 	}
-	data := postPage{Post: p, HTML: html}
+	data := postPage{Post: p, HTML: html, Scheduled: p.Scheduled(m.currentTime())}
 	if m.access.IsAdmin(user.GetUserFromContext(r.Context())) {
 		data.HasHistory, err = m.history.HasHistory(r.Context(), "post", p.ID)
 		if err != nil {
@@ -129,7 +132,7 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 	page.Title = p.Title
 	if r.URL.Path == "/" {
 		m.setSharing(page, r, sharingPreview{URL: "/", Type: "website"}, "")
-	} else if !p.Draft {
+	} else if !p.Draft && !data.Scheduled {
 		m.setSharing(page, r, sharingPreview{Title: p.Title, Description: p.Summary, URL: "/post/s/" + p.Slug, Image: p.PreviewURL(), Type: "article"}, html)
 	}
 	if err := page.Render(w, r); err != nil {
@@ -155,8 +158,13 @@ func (m *module) archive(w http.ResponseWriter, r *http.Request) {
 
 // recent displays the configured number of newest links for the sidebar or footer.
 func (m *module) recent(w http.ResponseWriter, r *http.Request) {
-	posts, err := m.recentPosts.load(r.Context(), m.settings.RecentPostCount, func() ([]ArchiveEntry, error) {
-		return m.posts.ListRecent(r.Context(), m.settings.RecentPostCount)
+	posts, err := m.recentPosts.loadUntil(r.Context(), m.settings.RecentPostCount, func() ([]ArchiveEntry, time.Time, error) {
+		next, err := m.posts.NextPublication(r.Context())
+		if err != nil {
+			return nil, time.Time{}, err
+		}
+		posts, err := m.posts.ListRecent(r.Context(), m.settings.RecentPostCount)
+		return posts, next, err
 	})
 	if err != nil {
 		m.storageError(w, r, err)
@@ -182,7 +190,7 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data := editorPage{Post: p}
+	data := m.postEditorData(p)
 	selection, err := m.selectRevision(r, "post", p.ID, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
 	if err != nil {
 		m.storageError(w, r, err)
@@ -191,9 +199,6 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	data.revisionSelection = selection
 	if selected := selection.LoadedRevision; selected != nil {
 		data.Title, data.Summary, data.Markdown, data.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
-	}
-	if !p.Published.IsZero() {
-		data.PublishedSlug = p.Slug
 	}
 	page := m.views["editor"].Content(r, data)
 	if err := page.Render(w, r); err != nil {
@@ -219,13 +224,14 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	}
 	version, validVersion := editorVersion(r)
 	p.Version = version
+	publicationError := m.readPublication(r, &p)
 	generatedSlug := p.Slug == ""
 	if generatedSlug {
 		p.Slug = slugFromTitle(p.Title)
 	}
 	message := validatePost(p)
-	if message == "" && r.PostForm.Get("published") != "" && r.PostForm.Get("published") != "on" {
-		message = "Choose whether to publish the post."
+	if message == "" {
+		message = publicationError
 	}
 	if message != "" {
 		m.editorError(w, r, p, message, http.StatusUnprocessableEntity)
@@ -265,6 +271,10 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, errEditConflict) {
 		m.editorError(w, r, p, editConflictMessage, http.StatusConflict)
+		return
+	}
+	if errors.Is(err, errAlreadyPublished) {
+		m.editorError(w, r, p, "This post has already been published. Choose Draft or Now.", http.StatusUnprocessableEntity)
 		return
 	}
 	if err != nil {
@@ -347,7 +357,9 @@ func validSlug(slug string) bool {
 func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, message string, status int) {
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
-	data := editorPage{Post: p, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
+	data := editorPage{Post: p, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
+	data.Publication = r.PostForm.Get("published")
+	data.ScheduleDate, data.ScheduleTime = r.PostForm.Get("publishDate"), r.PostForm.Get("publishTime")
 	page := m.views["editor"].Content(r, data)
 	if page.IsHtmx() {
 		page = m.views["message"].Content(r, message)
@@ -355,8 +367,10 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 		stored, err := m.posts.GetByID(r.Context(), p.ID, true)
 		if err != nil {
 			logger.LogRequestError(r, err)
-		} else if !stored.Published.IsZero() {
-			data.PublishedSlug = stored.Slug
+		} else {
+			publication := m.postEditorData(stored)
+			data.PublishedSlug, data.CanSchedule = publication.PublishedSlug, publication.CanSchedule
+			data.ScheduledSlug, data.ScheduledAt = publication.ScheduledSlug, publication.ScheduledAt
 		}
 		page.Data = data
 	}

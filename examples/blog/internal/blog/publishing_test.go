@@ -119,7 +119,7 @@ func TestPostPublication(t *testing.T) {
 	}
 }
 
-// TestSavePostPublication applies the checkbox to new posts and edits in both HTTP modes.
+// TestSavePostPublication applies publication choices in both HTTP modes.
 func TestSavePostPublication(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ordinary", true: "htmx"}[hx], func(t *testing.T) {
@@ -153,7 +153,7 @@ func TestSavePostPublication(t *testing.T) {
 				var err error
 				post, err = h.blog.posts.GetBySlug(t.Context(), "checkbox-post", true)
 				if err != nil || post.Draft == publish || post.Published.IsZero() {
-					t.Fatal("save ignored checkbox or publication date", post, err)
+					t.Fatal("save ignored publication choice or date", post, err)
 				}
 				if firstPublished.IsZero() {
 					firstPublished = post.Published
@@ -161,11 +161,11 @@ func TestSavePostPublication(t *testing.T) {
 					t.Fatal("save reset the first publication date")
 				}
 				editor := h.request("GET", "/post/update/"+post.ID, nil, hx).Body.String()
-				if strings.Contains(editor, `name="published" checked`) != publish {
-					t.Fatal("editor checkbox does not reflect stored state")
+				if strings.Contains(editor, `value="on" selected`) != publish {
+					t.Fatal("editor publication choice does not reflect stored state")
 				}
-				if !strings.Contains(editor, "> Publish</label>") || !strings.Contains(editor, "Uncheck to move this post to drafts when you save.") {
-					t.Fatal("editor must explain how the publication checkbox changes visibility")
+				if !strings.Contains(editor, ">Publish</label>") || !strings.Contains(editor, "Changes take effect when you save. Choose Draft to keep the post private.") {
+					t.Fatal("editor must explain how publication choices change visibility")
 				}
 				view := h.request("GET", "/post/s/"+post.Slug, nil, hx)
 				requireStatus(t, view, http.StatusOK)
@@ -183,7 +183,7 @@ func TestSavePostPublication(t *testing.T) {
 				h.cookies = cookies
 			}
 
-			// Invalid checkbox values must not silently create or unpublish a post.
+			// Invalid publication values must not silently create or unpublish a post.
 			values.Set("slug", "invalid-publication")
 			values.Set("published", "invalid")
 			for _, path := range []string{"/post", "/post/" + post.ID} {
@@ -202,7 +202,7 @@ func TestSavePostPublication(t *testing.T) {
 			}
 			values.Set("slug", post.Slug)
 
-			// Invalid content retains either checkbox choice without changing storage.
+			// Invalid content retains either publication choice without changing storage.
 			values.Set("content", "")
 			for _, publish := range []bool{false, true} {
 				if publish {
@@ -212,8 +212,8 @@ func TestSavePostPublication(t *testing.T) {
 				}
 				response := h.submitEditor(t, "/post/"+post.ID, values, hx)
 				requireStatus(t, response, http.StatusUnprocessableEntity)
-				if !hx && strings.Contains(response.Body.String(), `name="published" checked`) != publish {
-					t.Fatal("failed save lost the publication checkbox")
+				if !hx && strings.Contains(response.Body.String(), `value="on" selected`) != publish {
+					t.Fatal("failed save lost the publication choice")
 				}
 				stored, err := h.blog.posts.GetByID(t.Context(), post.ID, true)
 				if err != nil || stored != post {

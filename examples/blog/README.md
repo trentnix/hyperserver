@@ -45,7 +45,7 @@ EasyMDE supplies the editor toolbar and upload controls. The server validates al
 
 Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Images use content-based filenames. Files must not be edited in place. Upload a new image to change its content.
 
-Only the verified administrator can view new uploads and images used exclusively by drafts. An image becomes public when a published post, publicly visible page, or saved site profile references it. Shared images stay public while any public content still uses them. Unpublishing a parent page hides its descendants' image references too.
+Only the verified administrator can view new uploads and images used exclusively by drafts or scheduled posts. An image becomes public when a published post, publicly visible page, or saved site profile references it. Shared images stay public while any public content still uses them. Unpublishing a parent page hides its descendants' image references too.
 
 Image responses recheck access before returning bytes or a cache-validation response. Previously downloaded copies cannot be recalled, including copies cached under the former one-year policy. Startup rejects overlapping `uploadsDirectory` and `assetsDirectory` paths, including symlinks. Keep uploads outside any other publicly served filesystem directory.
 
@@ -61,7 +61,7 @@ Public pages include a canonical link to their preferred URL, without tracking p
 
 Public posts, pages, the home page, and the archive include Open Graph metadata in full-page HTML. Post and page previews use their title and summary, falling back to the site bio for an empty summary. Posts and pages prefer their uploaded preview image. Otherwise, content uses its first suitable Markdown image, then the site portrait. Choose or remove the preview image in the editor. It does not appear in the article body. SVGs are skipped. If no suitable image exists, the preview has text only. Images must be publicly accessible for sharing services to retrieve them.
 
-Set `http.publicOrigin` to the deployed site's public address. Preview URLs use that configuration, not request host headers. Drafts, descendants of unpublished pages, editors, and account pages do not advertise sharing metadata. HTMX fragments omit it because sharing services fetch the full URL. Individual services control preview appearance and may cache older versions.
+Set `http.publicOrigin` to the deployed site's public address. Preview URLs use that configuration, not request host headers. Drafts, scheduled posts, descendants of unpublished pages, editors, and account pages do not advertise sharing metadata. HTMX fragments omit it because sharing services fetch the full URL. Individual services control preview appearance and may cache older versions.
 
 `/sitemap.xml` lists the home page, archive, published posts, and publicly visible pages using their canonical URLs. It reads current metadata on each request and excludes drafts and descendants of unpublished pages, even for signed-in administrators. Set `http.publicOrigin` before submitting the sitemap to a search engine. The single-document limit is 50,000 URLs or 50 MiB. Larger sites need multiple sitemaps, which this example does not yet generate.
 
@@ -69,9 +69,11 @@ Set `http.publicOrigin` to the deployed site's public address. Preview URLs use 
 
 ## Publishing posts
 
-Open **Posts**, choose **New post**, and write a title and Markdown body. Check **Publish** to make it live when you choose **Save post**. Leave it unchecked to save a private draft. Existing posts show their current publication setting. The Posts page groups drafts and published posts, with links to preview, edit, and delete them.
+Open **Posts**, choose **New post**, and write a title and Markdown body. Under **Publish**, choose **Draft**, **Now**, or **Schedule**, then **Save post**. For **Schedule**, enter a future date and time in UTC. Scheduling is available only for posts that have never been published. The Posts page groups drafts, scheduled posts, and published posts.
 
-To move a published post to drafts, open its editor, uncheck **Publish**, and save. The original publication date stays unchanged when editing or republishing. Images remain public only while public content or the site profile references them.
+To remove a post from public view or cancel a schedule, choose **Draft** and save. The original publication date stays unchanged when editing or republishing. Canceling before a scheduled time clears that date. Images remain public only while public content or the site profile references them.
+
+Scheduled posts become public at their saved time, without a background worker. The home page, archive, feed, sitemap, and image handler use the same visibility rule. RSS and Recent Posts caches expire at the next publication time. A server restart does not lose schedules. The server clock must be accurate.
 
 For posts and pages, leave the slug blank to generate it from the title. The field shows a suggestion while you type. If that slug is taken, saving adds `-2`, `-3`, or the next available number. Custom slugs must be unique. Slugs use lowercase ASCII letters, digits, and hyphens, up to 120 characters. If the title produces no usable slug, enter a custom one. Editing a title preserves the existing slug unless you clear or replace it. Changing a slug breaks existing links.
 
@@ -83,9 +85,11 @@ Recovery copies are separate for each administrator, editor, and tab. They stay 
 
 ### Saved versions
 
-Choose **History** from the Posts or Pages list, or under **More** when viewing content. The action appears only when more than one saved version exists. The history page previews saved content, with Markdown source available. Choose **Edit** for the latest version or **Edit this version** for an earlier one. The editor starts with that version's title, summary, Markdown, and preview image. The current slug, publication setting, and page placement stay unchanged. Cancel returns to the selected version in History. Nothing changes until you save. If publication is checked, saving makes the edited content live.
+Choose **History** from the Posts or Pages list, or under **More** when viewing content. The action appears only when more than one saved version exists. Selecting a version updates its preview in place without scrolling or replacing the list. The URL retains the selection for refreshes and bookmarks. Without JavaScript, revision links load a full page.
 
-Changed content creates a new version. Unchanged content and settings-only changes do not. Restoring old writing preserves intervening versions. History remains until the post or page is deleted. Existing content gets one initial snapshot when this feature first starts. Earlier versions cannot be recovered. Historical images stay stored but do not become public merely because history references them.
+Choose **Edit** for the latest version or **Edit this version** for an earlier one. The editor starts with that version's title, summary, Markdown, and preview image. The current slug, publication setting, and page placement stay unchanged. Cancel returns to the selected version in History. Nothing changes until you save. If publication is checked, saving makes the edited content live.
+
+Changed content creates a new version. Unchanged content and settings-only changes do not. Restoring old writing preserves intervening versions. In History, **Delete revision** permanently removes an older version after confirmation. The latest version cannot be deleted. Deleting history leaves current content and publication settings unchanged and does not remove uploaded images, backups, or browser recovery copies. Deleting a post or page removes all its history. Existing content gets one initial snapshot when this feature first starts. Earlier versions cannot be recovered. Historical images stay stored but do not become public merely because history references them.
 
 If another tab saves or changes publication after an editor opens, that editor's save is rejected without losing its input. Open the current editor in another tab and compare before saving your changes there. History is server-side saved content. Browser recovery holds unsaved writing.
 

@@ -146,6 +146,28 @@ func (s *sqliteRepository) ListRevisions(ctx context.Context, kind, id string) (
 	return result, rows.Err()
 }
 
+// DeleteRevision removes an older snapshot without changing its owner or edit token.
+// The latest-version guard is part of the delete so concurrent saves and deletes
+// cannot remove the current snapshot.
+func (s *sqliteRepository) DeleteRevision(ctx context.Context, kind, id string, number int64) error {
+	_, table, err := revisionTable(kind)
+	if err != nil {
+		return err
+	}
+	result, err := s.db.ExecContext(ctx, "DELETE FROM "+table+" WHERE owner_id=? AND id=? AND id < (SELECT MAX(id) FROM "+table+" WHERE owner_id=?)", id, number, id)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil || count > 0 {
+		return err
+	}
+	if _, err := s.GetRevision(ctx, kind, id, number); err != nil {
+		return err
+	}
+	return errCurrentRevision
+}
+
 // GetRevision requires both owner and revision IDs to prevent cross-content loads.
 func (s *sqliteRepository) GetRevision(ctx context.Context, kind, id string, number int64) (Revision, error) {
 	_, table, err := revisionTable(kind)

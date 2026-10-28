@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -159,6 +160,10 @@ func TestRecentCacheWaitCancellation(t *testing.T) {
 type recentRepository struct {
 	repository
 	read func(context.Context, int) ([]ArchiveEntry, error)
+}
+
+func (s recentRepository) NextPublication(context.Context) (time.Time, error) {
+	return time.Time{}, nil
 }
 
 func (s recentRepository) ListRecent(ctx context.Context, limit int) ([]ArchiveEntry, error) {

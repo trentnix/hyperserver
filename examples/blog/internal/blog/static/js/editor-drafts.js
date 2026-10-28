@@ -24,7 +24,10 @@
 
   // Only remove the exact copy we read. Another tab might still be editing it.
   function removeCopy(copy) {
-    if (localStorage.getItem(copy.key) === copy.raw) localStorage.removeItem(copy.key);
+    const current = localStorage.getItem(copy.key);
+    if (current !== null && current !== copy.raw) return false;
+    localStorage.removeItem(copy.key);
+    return true;
   }
 
   function persist(state) {
@@ -44,6 +47,13 @@
     }
   }
 
+  // A scheduled copy may outlive publication, when Schedule is no longer offered.
+  function unavailablePublication(state, copy) {
+    const field = state.form.elements.published;
+    return field?.tagName === 'SELECT' && Object.hasOwn(copy.data.fields, 'published') &&
+      ![...field.options].some(option => option.value === copy.data.fields.published);
+  }
+
   // Read only this account's copies. Expired or malformed copies are not restored.
   function offerRecovery(state) {
     try {
@@ -58,9 +68,18 @@
           continue;
         }
         if (!key.startsWith(state.scope) || key === state.key || state.sources.some(copy => copy.key === key)) continue;
+        // Older post copies used a checkbox. Keep those copies usable with the
+        // publication selector, without changing page checkbox recovery.
+        if (state.form.elements.published?.tagName === 'SELECT' && typeof data.fields?.published === 'boolean') {
+          data.fields.published = data.fields.published ? 'on' : '';
+        }
+        // Split copies saved by the former combined date/time control.
+        if (typeof data.fields?.publishAt === 'string' && data.fields.publishDate === undefined && data.fields.publishTime === undefined) {
+          [data.fields.publishDate, data.fields.publishTime = ''] = data.fields.publishAt.split('T');
+        }
         if (typeof data.baseline !== 'string' || !data.fields || !state.fields.every(field =>
           field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' :
-            (field.name === 'previewImage' && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
+            (['previewImage', 'published', 'publishDate', 'publishTime'].includes(field.name) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
         copies.push({key, raw, data});
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);
@@ -70,7 +89,8 @@
         const data = state.recovery.data;
         state.form.querySelector('[data-draft-description]').textContent =
           'An unsaved copy from ' + new Date(data.saved).toLocaleString() + ' is available.' +
-          (data.baseline !== state.baseline ? ' The server version or initial settings have changed. Restoring replaces the fields in this editor only.' : '');
+          (data.baseline !== state.baseline ? ' The server version or initial settings have changed. Restoring replaces the fields in this editor only.' : '') +
+          (unavailablePublication(state, state.recovery) ? ' The saved publication choice is no longer available. Your current publication setting will be kept.' : '');
       }
     } catch {
       storageFailure(state);
@@ -116,12 +136,14 @@
       };
       form.addEventListener('input', changed);
       form.addEventListener('change', changed);
-      form.querySelector('[data-draft-restore]').addEventListener('click', () => {
-        if (!state.recovery || (dirty(state) && !confirm('Replace the current edits with this recovery copy?'))) return;
+      function restoreCopy() {
+        if (!active(state) || !state.recovery) return;
         const copy = state.recovery;
+        const keepPublication = unavailablePublication(state, copy);
         for (const field of state.fields) {
           // Fields added after this copy was saved keep their current settings.
           if (!Object.hasOwn(copy.data.fields, field.name)) continue;
+          if (field.name === 'published' && keepPublication) continue;
           if (field.type === 'checkbox') field.checked = copy.data.fields[field.name];
           else field.value = copy.data.fields[field.name];
         }
@@ -131,24 +153,49 @@
         state.sources.push(copy);
         form.dispatchEvent(new Event('input', {bubbles: true}));
         persist(state);
-        offerRecovery(state);
+        state.recovery = null;
+        form.querySelector('[data-draft-recovery]').hidden = true;
+        if (!state.status.classList.contains('draft-status--error')) {
+          setStatus(state, 'Copy restored. Save to apply changes.');
+        }
+      }
+      form.querySelector('[data-draft-restore]').addEventListener('click', () => {
+        if (!state.recovery) return;
+        if (dirty(state)) {
+          window.blogConfirm({title: 'Replace your current edits?', message: 'Restoring this browser copy replaces the fields in this editor. It does not change the saved post or page until you save.', action: 'Restore copy', cancel: 'Keep editing'}, restoreCopy);
+        } else restoreCopy();
       });
       form.querySelector('[data-draft-discard]').addEventListener('click', () => {
-        if (!state.recovery || !confirm('Permanently discard this recovery copy?')) return;
-        try {
-          removeCopy(state.recovery);
-          offerRecovery(state);
-        } catch { storageFailure(state); }
+        const copy = state.recovery;
+        if (!copy) return;
+        window.blogConfirm({title: 'Discard this browser copy?', message: 'This removes the selected recovery copy from this browser. Your current edits and saved content will not change.', action: 'Discard copy', cancel: 'Keep copy'}, () => {
+          if (!active(state) || state.recovery !== copy) return;
+          try {
+            if (!removeCopy(copy)) {
+              offerRecovery(state);
+              setStatus(state, 'This copy changed in another tab and was not discarded.', true);
+              return;
+            }
+            state.recovery = null;
+            form.querySelector('[data-draft-recovery]').hidden = true;
+            setStatus(state, 'Browser copy discarded.');
+          } catch { setStatus(state, 'Browser copy could not be discarded. Try again.', true); }
+        });
       });
     });
   }
 
-  function allowLeave(candidates) {
+  function allowLeave(candidates, proceed) {
     const changed = [...candidates].filter(state => active(state) && dirty(state) && state.approved !== encoded(state));
     changed.forEach(persist);
-    if (changed.length && !confirm('Leave without saving your edits to the server? Any available recovery copy will stay in this browser.')) return false;
-    changed.forEach(state => { state.approved = encoded(state); });
-    return true;
+    if (!changed.length) return true;
+    const snapshots = changed.map(state => encoded(state));
+    window.blogConfirm({title: 'Leave without saving?', message: 'Your edits have not been saved to the server. Any available recovery copy will stay in this browser.', action: 'Leave without saving', cancel: 'Keep editing'}, () => {
+      if (changed.some((state, index) => !active(state) || encoded(state) !== snapshots[index])) return;
+      changed.forEach((state, index) => { state.approved = snapshots[index]; });
+      proceed();
+    });
+    return false;
   }
 
   document.addEventListener('click', event => {
@@ -156,20 +203,21 @@
     const link = event.target.closest('a[href]');
     if (!close && (!link || link.hasAttribute('download') || link.target === '_blank' || event.ctrlKey || event.metaKey || event.shiftKey || link.getAttribute('href').startsWith('#'))) return;
     const candidates = close ? [...states.values()].filter(state => close.closest('dialog').contains(state.form)) : states.values();
-    if (!allowLeave(candidates)) {
+    if (!allowLeave(candidates, () => { if ((close || link).isConnected) (close || link).click(); })) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
   }, true);
   document.addEventListener('cancel', event => {
-    if (!allowLeave([...states.values()].filter(state => event.target.contains(state.form)))) event.preventDefault();
+    const dialog = event.target;
+    if (!allowLeave([...states.values()].filter(state => dialog.contains(state.form)), () => { if (dialog.isConnected) dialog.close(); })) event.preventDefault();
   }, true);
   document.addEventListener('submit', event => {
     const state = states.get(event.target);
     if (state) {
       persist(state);
       state.approved = null;
-    } else if (!allowLeave(states.values())) {
+    } else if (!allowLeave(states.values(), () => { if (event.target.isConnected) event.target.requestSubmit(event.submitter ?? undefined); })) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
@@ -182,7 +230,7 @@
   });
   document.addEventListener('htmx:confirm', event => {
     const target = event.detail.target;
-    if (target && !allowLeave([...states.values()].filter(state => target.contains(state.form)))) event.preventDefault();
+    if (target && !allowLeave([...states.values()].filter(state => target.contains(state.form)), () => event.detail.issueRequest(true))) event.preventDefault();
   });
   window.addEventListener('beforeunload', event => {
     const changed = [...states.values()].filter(state => active(state) && dirty(state));

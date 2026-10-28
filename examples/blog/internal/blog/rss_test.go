@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
@@ -161,6 +162,10 @@ type feedRepository struct {
 }
 
 func (s feedRepository) List(ctx context.Context) ([]Post, error) { return s.list(ctx) }
+
+func (s feedRepository) NextPublication(context.Context) (time.Time, error) {
+	return time.Time{}, nil
+}
 
 // TestRSSConditionalRequests checks standard HTTP validators without rebuilding XML.
 func TestRSSConditionalRequests(t *testing.T) {

@@ -13,18 +13,28 @@ import (
 )
 
 var (
-	errNotFound  = errors.New("blog content not found")
-	errSlugTaken = errors.New("that slug is already used by another post")
+	errNotFound         = errors.New("blog content not found")
+	errSlugTaken        = errors.New("that slug is already used by another post")
+	errAlreadyPublished = errors.New("only posts that have never been published can be scheduled")
 )
 
 // Post stores the original Markdown and publication state. Published is the first
-// publication time and stays unchanged when a post is edited or republished.
+// publication time, or the planned time for a scheduled post. Once reached, that
+// date stays unchanged when a post is edited or republished.
 // PreviewImage is an optional upload ID used for sharing, not the article body.
 type Post struct {
 	ID, Slug, Title, Summary, Markdown, PreviewImage string
 	Published                                        time.Time
 	Draft                                            bool
 	Version                                          int64 // Save requires the current version when updating.
+}
+
+// Scheduled reports whether the post is awaiting its first publication.
+func (p Post) Scheduled(now time.Time) bool { return !p.Draft && p.Published.After(now) }
+
+// WasPublished distinguishes past publication from a future schedule.
+func (p Post) WasPublished(now time.Time) bool {
+	return !p.Published.IsZero() && !p.Published.After(now)
 }
 
 // PreviewURL returns the selected sharing image, or an empty string for automatic selection.
@@ -47,7 +57,7 @@ type repository interface {
 	// List supplies complete published posts for RSS, newest first.
 	List(context.Context) ([]Post, error)
 	// ListMetadata supplies all posts for administration, without summaries or Markdown.
-	// Drafts come first, then published posts newest first.
+	// Drafts come first, then scheduled and published posts newest first.
 	ListMetadata(context.Context) ([]Post, error)
 	// Latest returns errNotFound when no posts have been published.
 	Latest(context.Context) (Post, error)
@@ -55,25 +65,32 @@ type repository interface {
 	ListArchive(context.Context) ([]ArchiveEntry, error)
 	// ListRecent returns at most limit newest entries. The limit must be positive.
 	ListRecent(context.Context, int) ([]ArchiveEntry, error)
-	// GetByID returns errNotFound for missing IDs and drafts unless includeDrafts is true.
+	// NextPublication returns the next scheduled time, or zero if none remain.
+	NextPublication(context.Context) (time.Time, error)
+	// GetByID hides drafts and scheduled posts unless includeDrafts is true.
 	GetByID(context.Context, string, bool) (Post, error)
-	// GetBySlug returns errNotFound for missing slugs and drafts unless includeDrafts is true.
+	// GetBySlug hides drafts and scheduled posts unless includeDrafts is true.
 	GetBySlug(context.Context, string, bool) (Post, error)
 	// Save writes content and Draft together, creating a post when ID is empty.
 	// The caller must supply a valid slug.
-	// First publication assigns Published. Edits preserve it. Conflicts return errSlugTaken.
+	// A future Published schedules first publication. Once reached, that date stays
+	// unchanged. Rescheduling published content returns errAlreadyPublished.
+	// Conflicting slugs return errSlugTaken.
 	// Updates require the current Version or return errEditConflict. Content changes
 	// append a revision in the same transaction as the save and image references.
 	Save(context.Context, Post) (Post, error)
-	// SetPublished changes visibility without changing content. First publication
-	// assigns Published. Repeated calls preserve it. Missing IDs return errNotFound.
+	// SetPublished immediately publishes or hides content, replacing any pending
+	// schedule. Past publication dates stay unchanged. Missing IDs return errNotFound.
 	SetPublished(context.Context, string, bool) (Post, error)
 	// Delete removes a post or returns errNotFound. Uploaded images remain available.
 	Delete(context.Context, string) error
 }
 
 // sqliteRepository stores blog content and the site profile.
-type sqliteRepository struct{ db *sql.DB }
+type sqliteRepository struct {
+	db  *sql.DB
+	now func() time.Time
+}
 
 // openRepository keeps storage selection and schema setup inside the blog.
 // On success, the caller owns the returned close function.
@@ -146,7 +163,7 @@ CREATE TABLE IF NOT EXISTS blog_profile (
 		db.Close()
 		return nil, nil, err
 	}
-	return &sqliteRepository{db: db}, db.Close, nil
+	return &sqliteRepository{db: db, now: time.Now}, db.Close, nil
 }
 
 const postColumns = "id, slug, title, summary, markdown, published, draft, preview_image, version"
@@ -167,7 +184,7 @@ func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 
 // List returns complete posts newest first, using insertion order to break ties.
 func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
-	return s.listPosts(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE draft=0 ORDER BY published DESC, rowid DESC")
+	return s.listPosts(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC", s.now().Unix())
 }
 
 // ListMetadata returns drafts newest-created first, then posts newest-published first.
@@ -176,8 +193,8 @@ func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
 }
 
 // listPosts reads either complete public posts or administration metadata.
-func (s *sqliteRepository) listPosts(ctx context.Context, query string) ([]Post, error) {
-	rows, err := s.db.QueryContext(ctx, query)
+func (s *sqliteRepository) listPosts(ctx context.Context, query string, args ...any) ([]Post, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +212,17 @@ func (s *sqliteRepository) listPosts(ctx context.Context, query string) ([]Post,
 
 // Latest fetches only the newest post, or returns errNotFound for an empty blog.
 func (s *sqliteRepository) Latest(ctx context.Context) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE draft=0 ORDER BY published DESC, rowid DESC LIMIT 1"))
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC LIMIT 1", s.now().Unix()))
+}
+
+// NextPublication bounds the lifetime of public caches without a background timer.
+func (s *sqliteRepository) NextPublication(ctx context.Context) (time.Time, error) {
+	var next sql.NullInt64
+	err := s.db.QueryRowContext(ctx, "SELECT MIN(published) FROM blog_posts WHERE draft=0 AND published>?", s.now().Unix()).Scan(&next)
+	if err != nil || !next.Valid {
+		return time.Time{}, err
+	}
+	return time.Unix(next.Int64, 0).UTC(), nil
 }
 
 // ListArchive returns metadata in the same order as List without loading Markdown.
@@ -213,8 +240,8 @@ func (s *sqliteRepository) ListRecent(ctx context.Context, limit int) ([]Archive
 
 // listArchive reads link metadata. A zero limit selects the complete archive.
 func (s *sqliteRepository) listArchive(ctx context.Context, limit int) ([]ArchiveEntry, error) {
-	query := "SELECT slug, title, published FROM blog_posts WHERE draft=0 ORDER BY published DESC, rowid DESC"
-	var args []any
+	query := "SELECT slug, title, published FROM blog_posts WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC"
+	args := []any{s.now().Unix()}
 	if limit > 0 {
 		query += " LIMIT ?"
 		args = append(args, limit)
@@ -237,18 +264,18 @@ func (s *sqliteRepository) listArchive(ctx context.Context, limit int) ([]Archiv
 	return entries, rows.Err()
 }
 
-// GetByID looks up a stable post ID, hiding drafts unless includeDrafts is true.
+// GetByID hides drafts and scheduled posts unless includeDrafts is true.
 func (s *sqliteRepository) GetByID(ctx context.Context, id string, includeDrafts bool) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE id=? AND (? OR draft=0)", id, includeDrafts))
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE id=? AND (? OR (draft=0 AND published<=?))", id, includeDrafts, s.now().Unix()))
 }
 
-// GetBySlug looks up an exact slug, hiding drafts unless includeDrafts is true.
+// GetBySlug hides drafts and scheduled posts unless includeDrafts is true.
 func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDrafts bool) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE slug=? AND (? OR draft=0)", slug, includeDrafts))
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE slug=? AND (? OR (draft=0 AND published<=?))", slug, includeDrafts, s.now().Unix()))
 }
 
 // Save atomically writes content and publication state, generating IDs for new posts.
-// First publication assigns the date. Later saves preserve it.
+// A future Published schedules first publication. Once reached, that date stays unchanged.
 // Updates require the current Version and fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
@@ -262,12 +289,20 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 	}
 	defer tx.Rollback()
 
+	now := s.now().UTC().Truncate(time.Second)
+	var publication int64
+	if !p.Draft {
+		publication = now.Unix()
+		if p.Published.After(now) {
+			publication = p.Published.Unix()
+		}
+	}
 	if p.ID == "" {
 		p.ID = rand.Text()
 		var published int64
 		p.Published = time.Time{}
 		if !p.Draft {
-			p.Published = time.Now().UTC().Truncate(time.Second)
+			p.Published = time.Unix(publication, 0).UTC()
 			published = p.Published.Unix()
 		}
 		p.Version = 1
@@ -276,9 +311,12 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 		// RETURNING avoids a second lookup racing with another edit or deletion.
 		id := p.ID
 		p, err = scanPost(tx.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?, version=version+1,
- published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? AND version=? RETURNING `+postColumns,
-			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, !p.Draft, time.Now().UTC().Unix(), p.ID, p.Version))
+ published=CASE WHEN published>0 AND published<=? THEN published ELSE ? END WHERE id=? AND version=? RETURNING `+postColumns,
+			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, now.Unix(), publication, p.ID, p.Version))
 		err = editError(ctx, tx, "post", id, err)
+		if err == nil && publication > now.Unix() && p.WasPublished(now) {
+			return p, errAlreadyPublished
+		}
 	}
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -296,10 +334,15 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 	return p, err
 }
 
-// SetPublished atomically changes visibility and assigns the first publication date.
+// SetPublished immediately publishes or hides content, replacing any pending schedule.
 func (s *sqliteRepository) SetPublished(ctx context.Context, id string, published bool) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "UPDATE blog_posts SET draft=?, version=version+1, published=CASE WHEN ? AND published=0 THEN ? ELSE published END WHERE id=? RETURNING "+postColumns,
-		!published, published, time.Now().UTC().Unix(), id))
+	now := s.now().Unix()
+	var date int64
+	if published {
+		date = now
+	}
+	return scanPost(s.db.QueryRowContext(ctx, "UPDATE blog_posts SET draft=?, version=version+1, published=CASE WHEN published>0 AND published<=? THEN published ELSE ? END WHERE id=? RETURNING "+postColumns,
+		!published, now, date, id))
 }
 
 // Delete removes one post or returns errNotFound. Images are retained because

@@ -835,6 +835,9 @@ type navigationRepository struct {
 }
 
 func (s navigationRepository) Latest(context.Context) (Post, error) { return s.latest, s.err }
+func (s navigationRepository) NextPublication(context.Context) (time.Time, error) {
+	return time.Time{}, s.err
+}
 func (s navigationRepository) ListArchive(context.Context) ([]ArchiveEntry, error) {
 	return s.entries, s.err
 }

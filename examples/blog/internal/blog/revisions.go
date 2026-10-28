@@ -9,9 +9,12 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 )
 
 var errEditConflict = errors.New("content changed since the editor was opened")
+var errCurrentRevision = errors.New("the current revision cannot be deleted")
 
 const editConflictMessage = "A newer version was saved while this editor was open. Your edits have not been saved. Open the current editor in another tab to compare before trying again."
 
@@ -23,10 +26,12 @@ type Revision struct {
 	RecordedAt                             time.Time
 }
 
-// revisionRepository reads saved versions. Content repositories record them atomically on save.
+// revisionRepository reads and removes saved versions. Content repositories record them atomically on save.
 type revisionRepository interface {
 	ListRevisions(context.Context, string, string) ([]Revision, error)
 	GetRevision(context.Context, string, string, int64) (Revision, error)
+	// DeleteRevision must atomically protect the latest snapshot and leave current content unchanged.
+	DeleteRevision(context.Context, string, string, int64) error
 	HasHistory(context.Context, string, string) (bool, error)
 	HistoryOwners(context.Context, string) (map[string]bool, error)
 }
@@ -76,7 +81,7 @@ func (m *module) selectRevision(r *http.Request, kind, id string, current Revisi
 	return selection, err
 }
 
-// historyPage describes a read-only history page, never an editor dialog.
+// historyPage describes saved versions and their preview, not an editor.
 type historyPage struct {
 	Title, URL, EditorURL string
 	ContentURL, Kind      string
@@ -139,7 +144,16 @@ func (m *module) revisions(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Versions, data.Current = versions, selected == versions[0].ID
 	data.ContentURL = contentPath
-	page := m.views["history"].Content(r, data)
+	request := htmx.GetRequest(r)
+	view := "history"
+	if request.Enabled && !request.HistoryRestore && request.Target == "revision-preview" {
+		view = "revisionPreview"
+	}
+	page := m.views[view].Content(r, data)
+	page.Headers = map[string]string{"Vary": htmx.HeaderTarget}
+	if view == "revisionPreview" {
+		page.HTMX.Response = &htmx.Response{ReplaceURL: data.URL + "?revision=" + strconv.FormatInt(selected, 10)}
+	}
 	page.Title = "History — " + data.Title
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display saved versions.", err)

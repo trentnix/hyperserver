@@ -1,4 +1,4 @@
-// Posts use the same publication checkbox workflow as pages, including the first save.
+// Publication choices apply on the first save and on subsequent edits.
 (async () => {
   await new Promise(resolve => document.addEventListener('DOMContentLoaded', () => setTimeout(resolve, 0), {once: true}));
   const report = message => fetch('/test/result', {method: 'POST', body: message});
@@ -29,7 +29,7 @@
     if (stage === 'create') {
       const form = await editor('/post/create');
       assert(form.querySelector('[data-image-preview]').getClientRects().length === 0, 'New post must not display an empty preview image.');
-      assert(!form.elements.published.checked, 'New post must start with Publish post unchecked.');
+      assert(form.elements.published.value === '', 'New post must start as a draft.');
       assert(form.querySelector('[type="submit"]').textContent === 'Save post', 'Post save label must not force a draft step.');
       form.elements.title.value = 'First Save';
       assert(form.elements.slug.value === '' && !form.elements.slug.required, 'New post slug must be optional.');
@@ -44,7 +44,7 @@
       form.elements.slug.value = '';
       const earlier = await fetch('/post', {method: 'POST', headers: {'HX-Request': 'true'}, body: new URLSearchParams({title: 'First Save', content: 'An earlier post with the same title.'})});
       assert(earlier.ok, 'Unable to prepare a title collision.');
-      form.elements.published.checked = true;
+      form.elements.published.value = 'on';
       const input = form.querySelector('#post-image');
       const selectFile = file => {
         const files = new DataTransfer();
@@ -68,7 +68,7 @@
       assert(Object.keys(localStorage).some(key => key.startsWith(recoveryPrefix) && JSON.parse(localStorage.getItem(key)).fields.previewImage === form.elements.previewImage.value), 'Recovery copy omitted the selected preview.');
       form.requestSubmit();
       await wait(() => document.querySelector('#editor-errors').textContent.includes('valid Markdown'));
-      assert(form.elements.published.checked, 'Validation failure cleared the publication choice.');
+      assert(form.elements.published.value === 'on', 'Validation failure cleared the publication choice.');
       assert(form.elements.previewImage.value === sessionStorage.getItem('post-preview'), 'Validation failure cleared the preview.');
       form.querySelector('.CodeMirror').CodeMirror.setValue('Public content on the first save.');
       sessionStorage.setItem('publication-stage', 'published');
@@ -88,14 +88,14 @@
       assert(form.elements.previewImage.value === '' && form.querySelector('[data-image-preview]').hidden, 'Automatic selection did not clear the uploaded preview.');
       assert(form.querySelector('[data-image-preview]').getClientRects().length === 0, 'Cleared preview image must not occupy layout space.');
       form.elements.slug.value = '';
-      assert(form.elements.published.checked, 'Published post did not open with Publish post checked.');
-      form.elements.published.checked = false;
+      assert(form.elements.published.value === 'on', 'Published post did not retain its publication setting.');
+      form.elements.published.value = '';
       form.querySelector('.CodeMirror').CodeMirror.setValue('Private edited content.');
       let warnings = 0;
-      window.confirm = message => {
-        assert(message.includes('Changing this URL'), 'Unexpected confirmation before saving.');
+      window.blogConfirm = (options, proceed) => {
+        assert(options.message.includes('Changing this URL'), 'Unexpected confirmation before saving.');
         warnings++;
-        return warnings > 1;
+        if (warnings > 1) queueMicrotask(proceed);
       };
       form.requestSubmit();
       assert(warnings === 1 && form.isConnected && form.elements.slug.value === '', 'Canceling the URL warning must preserve the editor.');
@@ -108,9 +108,9 @@
       assert((await fetch(location.pathname, {credentials: 'omit'})).status === 404, 'Unchecked save left the post public.');
       assert(document.querySelector('.post-body').textContent.includes('Private edited content.'), 'Unpublishing failed to save the content edit.');
       const form = await editor(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
-      assert(!form.elements.published.checked, 'Draft opened with Publish post checked.');
+      assert(form.elements.published.value === '', 'Draft opened with the wrong publication setting.');
       assert(form.elements.previewImage.value === '', 'Removed preview was not saved.');
-      form.elements.published.checked = true;
+      form.elements.published.value = 'on';
       sessionStorage.setItem('publication-stage', 'republished');
       form.requestSubmit();
       return;

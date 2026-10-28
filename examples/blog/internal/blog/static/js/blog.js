@@ -77,18 +77,23 @@
   // Native disclosure controls work without JavaScript. Add familiar dismissal
   // behavior, including for action menus inserted by HTMX navigation.
   document.addEventListener('click', event => {
-    for (const menu of document.querySelectorAll('.action-menu[open]')) {
+    for (const menu of document.querySelectorAll('.action-menu[open], .post-time-menu[open]')) {
       if (menu.querySelector('summary').hidden) continue;
       if (!menu.contains(event.target) || event.target.closest('a, button')) menu.open = false;
     }
   });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
-    const menu = event.target.closest('.action-menu[open]');
+    const menu = event.target.closest('.action-menu[open], .post-time-menu[open]');
     if (menu && !menu.querySelector('summary').hidden) {
       menu.open = false;
-      menu.querySelector('summary').focus();
+      menu.querySelector('summary').focus({preventScroll: true});
       event.preventDefault();
+    }
+  });
+  document.addEventListener('focusin', event => {
+    for (const menu of document.querySelectorAll('.post-time-menu[open]')) {
+      if (!menu.contains(event.target)) menu.open = false;
     }
   });
 
@@ -109,11 +114,56 @@
       .replace(/^-+/, '').slice(0, 120).replace(/-+$/, '');
     slug.placeholder = suggestion || (title.trim() ? 'Enter a custom slug' : 'Generated from title on save');
   }
+  function updatePublication(form) {
+    const field = form?.querySelector('[data-publication-time]');
+    if (!field) return;
+    field.hidden = form.elements.published.value !== 'scheduled';
+    for (const input of field.querySelectorAll('input')) {
+      input.disabled = field.hidden;
+      input.required = !field.hidden;
+    }
+    const menu = field.querySelector('.post-time-menu');
+    menu.hidden = false;
+    if (field.hidden) menu.open = false;
+  }
+  document.addEventListener('change', event => {
+    const choices = event.target.closest('[data-time-choice]');
+    if (!choices?.value) return;
+    const input = choices.form.elements.publishTime;
+    input.value = choices.value;
+    // Hide the list before resetting its selection so the browser cannot scroll
+    // the dialog to the first option. Returning focus must not move it either.
+    choices.closest('details').open = false;
+    choices.value = '';
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+    // Return to the toggle, not the text input, so touch selection does not
+    // summon the mobile keyboard and reposition the dialog.
+    choices.closest('details').querySelector('summary').focus({preventScroll: true});
+  });
+  document.addEventListener('click', event => {
+    const toggle = event.target.closest('.post-time-menu summary');
+    if (!toggle || toggle.parentElement.open) return;
+    const menu = toggle.parentElement;
+    const field = menu.closest('.post-time-field').getBoundingClientRect();
+    const dialog = menu.closest('dialog')?.getBoundingClientRect();
+    const above = field.top - Math.max(0, dialog?.top ?? 0);
+    const below = Math.min(innerHeight, dialog?.bottom ?? innerHeight) - field.bottom;
+    const opensBelow = above < Math.min(200, below);
+    // Keep options inside the scroll viewport. Native option clicks otherwise
+    // scroll the dialog to expose the clipped part of the list.
+    menu.classList.toggle('post-time-menu-below', opensBelow);
+    menu.style.setProperty('--time-menu-height', Math.max(44, (opensBelow ? below : above) - 8) + 'px');
+  });
   for (const name of ['input', 'change']) {
-    document.addEventListener(name, event => updateSlugPlaceholder(event.target.closest('form')));
+    document.addEventListener(name, event => {
+      const form = event.target.closest('form');
+      updateSlugPlaceholder(form);
+      updatePublication(form);
+    });
   }
 
   function initialize(root) {
+    root.querySelectorAll('#post-form').forEach(updatePublication);
     root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
     root.querySelectorAll('.image-upload-controls').forEach(controls => { controls.hidden = false; });
@@ -240,17 +290,31 @@
       input.value = '';
     }
   });
+  const approvedSlugs = new WeakMap();
   document.addEventListener('submit', event => {
     if (event.target.dataset.uploading) {
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
     }
-    const slug = event.target.querySelector('[data-published-slug]');
-    if (slug && slug.value.trim() !== slug.dataset.publishedSlug &&
-        !confirm('Changing this URL can break existing links to this content. Continue?')) {
+    const slug = event.target.querySelector('[data-published-slug], [data-scheduled-slug]');
+    let publishedSlug = slug?.dataset.publishedSlug;
+    // A scheduled post can become public while its editor remains open.
+    if (slug?.dataset.scheduledSlug !== undefined && Date.now() >= Number(slug.dataset.scheduledAt) * 1000) {
+      publishedSlug = slug.dataset.scheduledSlug;
+    }
+    const approved = approvedSlugs.get(event.target);
+    approvedSlugs.delete(event.target);
+    if (publishedSlug !== undefined && slug.value.trim() !== publishedSlug && approved !== slug.value) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      const form = event.target;
+      const value = slug.value;
+      window.blogConfirm({title: 'Change this URL?', message: 'Changing this URL can break existing links to this content.', action: 'Save with new URL', cancel: 'Keep editing'}, () => {
+        if (!form.isConnected || slug.value !== value) return;
+        approvedSlugs.set(form, value);
+        form.requestSubmit(event.submitter ?? undefined);
+      });
     }
   }, true);
   document.addEventListener('htmx:beforeCleanupElement', event => {
@@ -297,7 +361,29 @@
     document.addEventListener(name, event => showRequestError(event.detail,
       'The connection failed. Check whether the operation completed before retrying.'));
   }
+  document.addEventListener('blog:revision-deleted', event => {
+    const dialog = event.target.closest('dialog');
+    if (dialog) {
+      dialog.close();
+      dialog.remove();
+    }
+    for (const link of document.querySelectorAll('.revision-list a')) {
+      if (link.dataset.revision === event.detail.revision) link.closest('li').remove();
+    }
+    htmx.ajax('GET', event.detail.next, {target: '#revision-preview', swap: 'innerHTML show:none'});
+  });
+
   // History swaps omit detail.target but still dispatch on the swapped element.
-  document.addEventListener('htmx:afterSwap', event => initialize(event.target));
+  document.addEventListener('htmx:afterSwap', event => {
+    initialize(event.target);
+    if (event.target.id !== 'revision-preview') return;
+    const selected = event.target.querySelector('[data-revision]')?.dataset.revision;
+    if (!selected) return;
+    // Keep the list in place. Only mark a version after its preview arrives.
+    for (const link of document.querySelectorAll('.revision-list a')) {
+      if (link.dataset.revision === selected) link.setAttribute('aria-current', 'true');
+      else link.removeAttribute('aria-current');
+    }
+  });
   initialize(document);
 })();

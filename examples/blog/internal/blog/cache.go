@@ -3,6 +3,7 @@ package blog
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // cachedValue holds one read-only value, not a map of entries. Changing the key
@@ -14,6 +15,16 @@ type cachedValue[K comparable, V any] struct {
 	value      V
 	ready      bool
 	loading    chan struct{}
+	expires    time.Time
+	now        func() time.Time
+}
+
+// currentTime permits deterministic expiry tests without a timer or worker.
+func (c *cachedValue[K, V]) currentTime() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Now()
 }
 
 // invalidate discards the value after a committed content change.
@@ -29,13 +40,23 @@ func (c *cachedValue[K, V]) invalidate() {
 // values. Callers must not modify published values. Waiting requests can cancel
 // without cancelling another request's build.
 func (c *cachedValue[K, V]) load(ctx context.Context, key K, build func() (V, error)) (V, error) {
+	return c.loadUntil(ctx, key, func() (V, time.Time, error) {
+		value, err := build()
+		return value, time.Time{}, err
+	})
+}
+
+// loadUntil caches a value only until the publication boundary returned by build.
+// The builder must read that boundary before reading content. If publication
+// occurs during the build, rebuild discards the result and retries.
+func (c *cachedValue[K, V]) loadUntil(ctx context.Context, key K, build func() (V, time.Time, error)) (V, error) {
 	var zero V
 	for {
 		if err := ctx.Err(); err != nil {
 			return zero, err
 		}
 		c.mu.Lock()
-		if c.ready && c.key == key {
+		if c.ready && c.key == key && (c.expires.IsZero() || c.currentTime().Before(c.expires)) {
 			value := c.value
 			c.mu.Unlock()
 			return value, nil
@@ -58,7 +79,7 @@ func (c *cachedValue[K, V]) load(ctx context.Context, key K, build func() (V, er
 
 // rebuild retries when invalidation occurs during a build. Errors are not cached.
 // Releasing the slot on every exit also wakes waiting requests after a panic.
-func (c *cachedValue[K, V]) rebuild(ctx context.Context, key K, build func() (V, error)) (V, error) {
+func (c *cachedValue[K, V]) rebuild(ctx context.Context, key K, build func() (V, time.Time, error)) (V, error) {
 	defer func() {
 		c.mu.Lock()
 		close(c.loading)
@@ -74,7 +95,7 @@ func (c *cachedValue[K, V]) rebuild(ctx context.Context, key K, build func() (V,
 		generation := c.generation
 		c.mu.Unlock()
 
-		value, err := build()
+		value, expires, err := build()
 		if err == nil {
 			err = ctx.Err()
 		}
@@ -83,9 +104,10 @@ func (c *cachedValue[K, V]) rebuild(ctx context.Context, key K, build func() (V,
 		}
 
 		c.mu.Lock()
-		changed := generation != c.generation
+		changed := generation != c.generation || (!expires.IsZero() && !c.currentTime().Before(expires))
 		if !changed {
 			c.key, c.value, c.ready = key, value, true
+			c.expires = expires
 		}
 		c.mu.Unlock()
 		if !changed {

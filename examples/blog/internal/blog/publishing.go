@@ -6,12 +6,12 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// postManagement separates post metadata into the two administration sections.
+// postManagement separates drafts, scheduled posts, and published posts.
 type postManagement struct {
-	Drafts, Published []postPage
+	Drafts, Scheduled, Published []postPage
 }
 
-// managePosts lists drafts and published posts for the administrator.
+// managePosts lists all publication states for the administrator.
 func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
 	posts, err := m.posts.ListMetadata(r.Context())
 	if err != nil {
@@ -24,10 +24,13 @@ func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var data postManagement
+	now := m.currentTime()
 	for _, post := range posts {
-		entry := postPage{Post: post, HasHistory: history[post.ID]}
+		entry := postPage{Post: post, HasHistory: history[post.ID], Scheduled: post.Scheduled(now)}
 		if post.Draft {
 			data.Drafts = append(data.Drafts, entry)
+		} else if entry.Scheduled {
+			data.Scheduled = append(data.Scheduled, entry)
 		} else {
 			data.Published = append(data.Published, entry)
 		}

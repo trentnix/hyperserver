@@ -1,4 +1,4 @@
-// Full document navigation is intentional: saved history is a page, not a dialog.
+// History is a page. Selecting a version replaces only its preview.
 (async () => {
   await new Promise(resolve => document.addEventListener('DOMContentLoaded', () => setTimeout(resolve, 0), {once: true}));
   const targets = __REVISION_TARGETS__;
@@ -17,7 +17,7 @@
   const phase = sessionStorage.getItem('revision-stage');
   let consent = false;
   const prompts = [];
-  window.confirm = message => { prompts.push(message); return consent; };
+  window.blogConfirm = (options, proceed) => { prompts.push(options.message); if (consent) queueMicrotask(proceed); };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
     if (!phase) {
@@ -25,6 +25,7 @@
       document.querySelector('#password').value = 'Sample-Password-123!';
       stage('logged-in');
       document.querySelector('#login-form').requestSubmit();
+      await Promise.resolve();
       return;
     }
     if (phase === 'logged-in') {
@@ -51,6 +52,7 @@
       assert(!menu.open && history.getBoundingClientRect().height === 0, 'Secondary actions must start collapsed.');
       assert(Math.abs(edit.getBoundingClientRect().top - more.getBoundingClientRect().top) < 1, 'Edit and More must stay on one row.');
       more.click();
+      await Promise.resolve();
       assert(menu.open && history.getBoundingClientRect().height >= (innerWidth < 768 ? 44 : 36), 'History must be an accessible menu action.');
       const panel = menu.querySelector('.action-menu-items').getBoundingClientRect();
       assert(panel.left >= 0 && panel.right <= innerWidth, 'Action menu overflows the viewport.');
@@ -58,10 +60,13 @@
       history.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
       assert(!menu.open && document.activeElement === more, 'Escape must close More and restore focus.');
       more.click();
+      await Promise.resolve();
       document.querySelector('.post-body').click();
+      await Promise.resolve();
       assert(!menu.open, 'Clicking outside must close More.');
       stage('editor');
       edit.click();
+      await Promise.resolve();
     }
     if (phase === 'editor' || phase === 'view') {
       await wait(() => document.querySelector('.CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
@@ -74,12 +79,16 @@
       assert(!form.querySelector('a[href^="/history/"]'), 'Editors must not offer History.');
       const cancel = form.querySelector('[data-close-dialog]');
       cancel.click();
+      await Promise.resolve();
       assert(prompts.length === 1 && location.pathname === editorPath, 'Closing the editor lost unsaved writing without confirmation.');
       consent = true;
       cancel.click();
+      await Promise.resolve();
       stage('history');
       document.querySelector('.content-actions .action-menu summary').click();
+      await Promise.resolve();
       document.querySelector('.content-actions a[href="' + target.history + '"]').click();
+      await Promise.resolve();
       return;
     }
     if (phase === 'current-editor') {
@@ -90,6 +99,7 @@
       assert(cancel.getAttribute('href') === target.history + location.search, 'Cancel lost the selected current version.');
       stage('current-return');
       cancel.click();
+      await Promise.resolve();
       return;
     }
     if (phase === 'history' || phase === 'current-return' || phase === 'selected') {
@@ -106,10 +116,13 @@
         assert(preview.querySelector('h2').textContent === 'Current title' && preview.querySelector('.form-actions a').textContent === 'Edit', 'Current saved version must offer Edit.');
         stage('current-editor');
         preview.querySelector('.form-actions a').click();
+        await Promise.resolve();
       } else if (phase === 'current-return') {
         stage('selected');
         list.querySelector('a[href$="revision=' + target.revision + '"]').click();
-      } else {
+        await wait(() => preview.querySelector('h2').textContent === 'Original title');
+      }
+      if (phase === 'current-return' || phase === 'selected') {
         assert(preview.querySelector('h2').textContent === 'Original title', 'Selected preview has the wrong title.');
         assert(preview.querySelector('.form-actions a').textContent === 'Edit this version', 'Earlier writing must offer Edit this version.');
         // Older browser copies must never overwrite the newly opened editor token.
@@ -120,9 +133,11 @@
           localStorage.setItem(key, JSON.stringify(copy));
         }
         preview.querySelector('summary').click();
+        await Promise.resolve();
         assert(preview.querySelector('details').open && preview.querySelector('pre').textContent === '# Original body', 'Markdown source is unavailable.');
         stage('loaded');
         preview.querySelector('a').click();
+        await Promise.resolve();
       }
       return;
     }
@@ -132,7 +147,8 @@
       const editor = form.querySelector('.CodeMirror').CodeMirror;
       assert(!document.querySelector('dialog') && location.pathname === target.editor, 'Loaded writing must open the ordinary editor page.');
       assert(form.elements.title.value === 'Original title' && editor.getValue() === '# Original body', 'Old content was not loaded.');
-      assert(form.elements.slug.value === 'history' && form.elements.published.checked && form.elements.version.value === '2', 'Loading changed current settings or edit version.');
+      const published = form.elements.published;
+      assert(form.elements.slug.value === 'history' && (published.type === 'checkbox' ? published.checked : published.value === 'on') && form.elements.version.value === '2', 'Loading changed current settings or edit version.');
       assert(form.querySelector('.revision-notice').textContent.includes('Editing a version saved') && form.querySelector('.revision-notice').textContent.includes('Nothing changes until you save.'), 'Historical editor lacks context.');
       assert(!form.querySelector('[data-draft-recovery]').hidden, 'Loading history discarded the unsaved local copy.');
       // Native form submissions can store CRLF. Browser controls normalize it
@@ -149,9 +165,11 @@
       form.dispatchEvent(new Event('input', {bubbles: true}));
       assert(form.querySelector('.form-actions a').getAttribute('href') === target.history + '?revision=' + target.revision, 'Cancel must return to the selected earlier version.');
       form.querySelector('.form-actions a').click();
+      await Promise.resolve();
       assert(prompts.length === 1 && location.pathname === target.editor, 'Loaded writing must count as unsaved before any typing.');
       consent = true;
       form.querySelector('[data-draft-restore]').click();
+      await Promise.resolve();
       assert(form.elements.title.value === 'Unsaved local writing' && form.elements.version.value === '2', 'Recovery lost writing or replaced the fresh edit token.');
       form.elements.title.value = 'Original title';
       form.elements.summary.value = 'Original summary';
@@ -159,6 +177,7 @@
       form.dispatchEvent(new Event('input', {bubbles: true}));
       stage('saved');
       form.requestSubmit();
+      await Promise.resolve();
       return;
     }
     if (phase === 'saved') {
@@ -205,10 +224,12 @@
       const cancel = form.querySelector('.form-actions a');
       assert(cancel.getAttribute('href') === target.history + '?revision=' + target.revision, 'Failed save lost its history return link.');
       cancel.click();
+      await Promise.resolve();
       assert(prompts.length === 1, 'Rejected writing lost the unsaved-navigation warning.');
       consent = true;
       stage('conflict-list');
       cancel.click();
+      await Promise.resolve();
       return;
     }
     if (phase === 'conflict-list') {
@@ -218,6 +239,38 @@
     }
     if (phase === 'conflict-history') {
       assert(document.querySelectorAll('.revision-list li').length === 3, 'Rejected save added a history entry.');
+      assert(!document.querySelector('.revision-preview a[hx-get]'), 'Current version must not offer deletion.');
+      stage('delete-middle');
+      document.querySelectorAll('.revision-list a')[1].click();
+      await wait(() => document.querySelector('.revision-preview h2').textContent === 'Current title' && !document.querySelector('.revision-preview').classList.contains('htmx-settling'));
+    }
+    if (phase === 'conflict-history' || phase === 'delete-middle' || phase === 'delete-last') {
+      for (let remaining = document.querySelectorAll('.revision-list li').length; remaining > 1; remaining--) {
+        const remove = document.querySelector('.revision-preview a[hx-get]');
+        assert(remove?.textContent === 'Delete revision', 'Earlier version must offer deletion.');
+        remove.click();
+        await wait(() => document.querySelector('#dialog-host dialog[open]') && !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+        let dialog = document.querySelector('#dialog-host dialog');
+        const cancel = dialog.querySelector('[data-close-dialog]');
+        assert(document.activeElement === cancel, 'Revision deletion must focus Cancel by default.');
+        assert(dialog.textContent.includes('This cannot be undone.'), 'Deletion needs a permanent-removal warning.');
+        assert(dialog.getBoundingClientRect().left >= 0 && dialog.getBoundingClientRect().right <= innerWidth, 'Confirmation overflows the viewport.');
+        cancel.click();
+        await wait(() => !document.querySelector('#dialog-host dialog[open]'));
+        assert(document.querySelectorAll('.revision-list li').length === remaining, 'Cancel removed history.');
+        remove.click();
+        await wait(() => document.querySelector('#dialog-host dialog[open]') && !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+        dialog = document.querySelector('#dialog-host dialog');
+        stage(remaining === 2 ? 'deleted-history' : 'delete-last');
+        dialog.querySelector('button[type="submit"]').click();
+        if (remaining > 2) await wait(() => document.querySelectorAll('.revision-list li').length === remaining - 1 && !document.querySelector('dialog[open]') && document.querySelector('.revision-preview h2').textContent === 'Original title' && !document.querySelector('.revision-preview').classList.contains('htmx-settling'));
+      }
+      return;
+    }
+    if (phase === 'deleted-history') {
+      assert(location.pathname === target.view, 'Deleting the last older revision must return to the content.');
+      assert(document.querySelector('.post-title, .page-title, h1')?.textContent.includes('Original title'), 'History deletion changed current writing.');
+      assert(!document.querySelector('.content-actions a[href="' + target.history + '"]'), 'History action remains without earlier versions.');
       if (index + 1 < targets.length) {
         sessionStorage.setItem('revision-index', String(index + 1));
         stage('list');
