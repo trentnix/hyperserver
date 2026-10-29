@@ -54,7 +54,10 @@
     assert(accountNav, 'Account links must have a named navigation landmark.');
     const navBounds = accountNav.getBoundingClientRect();
     const controls = [...accountNav.querySelectorAll('a, button')];
-    assert(controls.map(control => control.textContent).join(',') === 'Posts,Pages,Site Profile,Log out', 'Account controls changed.');
+    assert(controls.map(control => control.textContent).join(',') === 'Posts,Pages,Site Profile,Media,Log out', 'Account controls changed: ' + controls.map(control => control.textContent).join(','));
+    assert(accountNav.querySelector('a[href="/media"]')?.textContent === 'Media', 'Media must open the library.');
+    const logout = accountNav.querySelector('form[action="/auth/logout"] button[type="submit"]');
+    assert(logout, 'Account toolbar must offer a logout action.');
     const accountMenu = accountNav.querySelector('.account-menu');
     const summary = accountMenu.querySelector('summary');
     const label = accountNav.parentElement.querySelector('.account-label');
@@ -66,7 +69,7 @@
     assert(navBounds.height <= 60, 'Admin toolbar must stay compact at every viewport width.');
     if (innerWidth < 768) {
       assert(!accountMenu.open && !summary.hidden, 'Mobile admin links must start collapsed.');
-      assert(Math.abs(summary.getBoundingClientRect().top - controls[3].getBoundingClientRect().top) < 1, 'Manage and Log out must share one row.');
+      assert(Math.abs(summary.getBoundingClientRect().top - logout.getBoundingClientRect().top) < 1, 'Manage and Log out must share one row.');
       summary.click();
       assert(accountMenu.open, 'Manage did not open.');
       const dropdownBounds = accountMenu.querySelector('.action-menu-items').getBoundingClientRect();
@@ -82,10 +85,10 @@
       assert(bounds.height >= 44 && bounds.left >= navBounds.left - 1 && bounds.right <= navBounds.right + 1, 'Account controls must be touch-friendly and fit the toolbar: ' + JSON.stringify({bounds, navBounds}));
       if (innerWidth >= 768) assert(Math.abs(bounds.top - controls[0].getBoundingClientRect().top) < 1, 'Desktop account controls should fit on one row.');
     }
-    const logoutStyle = getComputedStyle(controls[3]);
+    const logoutStyle = getComputedStyle(logout);
     const linkStyle = getComputedStyle(controls[0]);
     assert(logoutStyle.paddingLeft === linkStyle.paddingLeft && logoutStyle.paddingRight === linkStyle.paddingRight, 'Log out must use the same horizontal padding as the admin links.');
-    assert(Math.abs(controls[3].getBoundingClientRect().right - (navBounds.right - parseFloat(navStyle.paddingRight))) < 1, 'Log out must stay aligned with the toolbar right inset.');
+    assert(Math.abs(logout.getBoundingClientRect().right - (navBounds.right - parseFloat(navStyle.paddingRight))) < 1, 'Log out must stay aligned with the toolbar right inset.');
     controls[0].focus();
     const focusStyle = getComputedStyle(controls[0]);
     assert(focusStyle.outlineStyle !== 'none' && parseFloat(focusStyle.outlineWidth) >= 2, 'Keyboard focus must remain visible.');
