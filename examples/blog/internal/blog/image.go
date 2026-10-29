@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -8,11 +9,38 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/trentnix/hyperserver/pkg/imaging"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 const maxImageBytes = 8 * 1024 * 1024
+
+// imageUpload groups the original and generated copies stored as one upload.
+type imageUpload = imaging.Result
+
+// prepareImage applies blog limits and translates processing failures into editor messages.
+func prepareImage(ctx context.Context, data []byte) (imageUpload, error) {
+	upload, err := imaging.Process(ctx, data, imaging.Options{
+		MaxBytes: maxImageBytes, MaxPixels: 20_000_000,
+		DisplaySize: 2048, ThumbnailSize: 480, JPEGQuality: 85,
+	})
+	switch {
+	case errors.Is(err, imaging.ErrByteLimit):
+		err = errors.New("Choose an image of at most 8 MiB.")
+	case errors.Is(err, imaging.ErrPixelLimit):
+		err = errors.New("Images must contain at most 20 million pixels.")
+	case errors.Is(err, imaging.ErrFormat):
+		err = errors.New("Choose a valid PNG, JPEG, or GIF.")
+	case errors.Is(err, imaging.ErrInvalidImage):
+		err = errors.New("The image is incomplete or damaged.")
+	case errors.Is(err, imaging.ErrOrientation):
+		err = errors.New("Unable to read image orientation. Export the image without metadata and try again.")
+	case errors.Is(err, imaging.ErrAnimation):
+		err = errors.New("Animated PNGs are not supported. Use an animated GIF instead.")
+	}
+	return upload, err
+}
 
 // upload accepts EasyMDE's image field and returns its documented JSON response.
 // Both compressed size and decoded dimensions are bounded before decoding pixels.

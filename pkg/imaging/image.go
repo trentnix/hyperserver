@@ -1,4 +1,5 @@
-package blog
+// Package imaging prepares bounded JPEG, PNG, and GIF uploads without storage or HTTP dependencies.
+package imaging
 
 import (
 	"bytes"
@@ -15,41 +16,81 @@ import (
 	"golang.org/x/image/draw"
 )
 
-const displayImageSize = 2048
-const thumbnailImageSize = 480
-const imageJPEGQuality = 85
+// Options sets upload limits and output dimensions. Every field must be set.
+type Options struct {
+	// MaxBytes limits the encoded upload size.
+	MaxBytes int
+	// MaxPixels limits decoded width multiplied by height.
+	MaxPixels int64
+	// DisplaySize and ThumbnailSize limit each copy's longest edge.
+	// ThumbnailSize must not exceed DisplaySize.
+	DisplaySize, ThumbnailSize int
+	// JPEGQuality must be from 1 to 100. PNG encoding is lossless.
+	JPEGQuality int
+}
 
-// imageUpload is one validated original and its ready-to-serve copies.
-// GIFs retain their bytes, including animation and metadata, in every representation.
-type imageUpload struct {
+func (o Options) validate() error {
+	if o.MaxBytes <= 0 || o.MaxPixels <= 0 || o.DisplaySize <= 0 || o.ThumbnailSize <= 0 {
+		return errors.New("image limits and dimensions must be positive")
+	}
+	if o.ThumbnailSize > o.DisplaySize {
+		return errors.New("thumbnail size must not exceed display size")
+	}
+	if o.JPEGQuality < 1 || o.JPEGQuality > 100 {
+		return errors.New("JPEG quality must be from 1 to 100")
+	}
+	return nil
+}
+
+// Result contains validated original bytes and ready-to-serve copies.
+// Original aliases the input. Copies may share backing storage, especially for
+// small images and GIFs. Treat all returned bytes as read-only.
+type Result struct {
 	MediaType                    string
 	Original, Display, Thumbnail []byte
 }
 
-// prepareImage validates limits before decoding, applies orientation, and encodes
-// metadata-free JPEG/PNG copies. It does not read storage or decide visibility.
-func prepareImage(ctx context.Context, data []byte) (imageUpload, error) {
+// Processing errors let callers choose their own response text.
+var (
+	ErrByteLimit    = errors.New("image exceeds encoded byte limit")
+	ErrPixelLimit   = errors.New("image exceeds decoded pixel limit")
+	ErrFormat       = errors.New("unsupported or unrecognized image format")
+	ErrInvalidImage = errors.New("incomplete or damaged image")
+	ErrOrientation  = errors.New("invalid image orientation metadata")
+	ErrAnimation    = errors.New("animated PNG is not supported")
+)
+
+// Process validates an upload, corrects orientation, and creates JPEG/PNG copies
+// without metadata. It never enlarges or crops images. GIF bytes, including all
+// frames and metadata, remain unchanged after first-frame validation.
+// Calls are independent and safe to run concurrently. Callers must bound concurrent
+// work to control memory use. Cancellation is checked between I/O and processing
+// stages, not during every decoder or resizer operation.
+func Process(ctx context.Context, data []byte, options Options) (Result, error) {
 	if err := ctx.Err(); err != nil {
-		return imageUpload{}, err
+		return Result{}, err
 	}
-	if len(data) > maxImageBytes {
-		return imageUpload{}, errors.New("Choose an image of at most 8 MiB.")
+	if err := options.validate(); err != nil {
+		return Result{}, err
+	}
+	if len(data) > options.MaxBytes {
+		return Result{}, ErrByteLimit
 	}
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || (format != "png" && format != "jpeg" && format != "gif") {
-		return imageUpload{}, errors.New("Choose a valid PNG, JPEG, or GIF.")
+		return Result{}, ErrFormat
 	}
-	if cfg.Width < 1 || cfg.Height < 1 || int64(cfg.Width)*int64(cfg.Height) > 20_000_000 {
-		return imageUpload{}, errors.New("Images must contain at most 20 million pixels.")
+	if cfg.Width < 1 || cfg.Height < 1 || int64(cfg.Width) > options.MaxPixels/int64(cfg.Height) {
+		return Result{}, ErrPixelLimit
 	}
 	pixels, _, err := image.Decode(contextReader{ctx, bytes.NewReader(data)})
 	if err != nil {
 		if ctx.Err() != nil {
-			return imageUpload{}, ctx.Err()
+			return Result{}, ctx.Err()
 		}
-		return imageUpload{}, errors.New("The image is incomplete or damaged.")
+		return Result{}, ErrInvalidImage
 	}
-	upload := imageUpload{MediaType: "image/" + format, Original: data}
+	upload := Result{MediaType: "image/" + format, Original: data}
 	if format == "gif" {
 		upload.Display, upload.Thumbnail = data, data
 		return upload, ctx.Err()
@@ -75,19 +116,19 @@ func prepareImage(ctx context.Context, data []byte) (imageUpload, error) {
 		Warnf: func(string, ...any) { metadataWarning = true },
 	})
 	if err != nil || metadataWarning {
-		return imageUpload{}, errors.New("Unable to read image orientation. Export the image without metadata and try again.")
+		return Result{}, ErrOrientation
 	}
 	if metadata.ImageConfig.FrameCount > 1 {
-		return imageUpload{}, errors.New("Animated PNGs are not supported. Use an animated GIF instead.")
+		return Result{}, ErrAnimation
 	}
 	pixels = orientedImage(pixels, orientation)
-	if upload.Display, err = encodeImage(ctx, pixels, format, displayImageSize); err != nil {
-		return imageUpload{}, err
+	if upload.Display, err = encodeImage(ctx, pixels, format, options.DisplaySize, options.JPEGQuality); err != nil {
+		return Result{}, err
 	}
-	if max(pixels.Bounds().Dx(), pixels.Bounds().Dy()) <= thumbnailImageSize {
+	if max(pixels.Bounds().Dx(), pixels.Bounds().Dy()) <= options.ThumbnailSize {
 		upload.Thumbnail = upload.Display
-	} else if upload.Thumbnail, err = encodeImage(ctx, pixels, format, thumbnailImageSize); err != nil {
-		return imageUpload{}, err
+	} else if upload.Thumbnail, err = encodeImage(ctx, pixels, format, options.ThumbnailSize, options.JPEGQuality); err != nil {
+		return Result{}, err
 	}
 	return upload, ctx.Err()
 }
@@ -148,7 +189,7 @@ func orientedImage(pixels image.Image, orientation uint16) image.Image {
 
 // encodeImage bounds the longest edge without enlarging or cropping. Re-encoding
 // uses only pixel data, so originals' EXIF, GPS, and text metadata are not copied.
-func encodeImage(ctx context.Context, pixels image.Image, format string, limit int) ([]byte, error) {
+func encodeImage(ctx context.Context, pixels image.Image, format string, limit, quality int) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -163,7 +204,7 @@ func encodeImage(ctx context.Context, pixels image.Image, format string, limit i
 	writer := contextWriter{ctx, &output}
 	var err error
 	if format == "jpeg" {
-		err = jpeg.Encode(writer, pixels, &jpeg.Options{Quality: imageJPEGQuality})
+		err = jpeg.Encode(writer, pixels, &jpeg.Options{Quality: quality})
 	} else {
 		err = png.Encode(writer, pixels)
 	}

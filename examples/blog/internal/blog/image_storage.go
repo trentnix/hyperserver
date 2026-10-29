@@ -223,6 +223,20 @@ type imageSection struct {
 	io.Closer
 }
 
+// contextWriter lets storage writes stop between chunks.
+type contextWriter struct {
+	ctx context.Context
+	io.Writer
+}
+
+// Write stops a staged upload when the request is canceled.
+func (w contextWriter) Write(p []byte) (int, error) {
+	if err := w.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return w.Writer.Write(p)
+}
+
 // mediaFile describes an upload without opening or decoding its contents.
 type mediaFile struct {
 	ID       string

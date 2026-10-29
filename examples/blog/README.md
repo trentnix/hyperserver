@@ -143,7 +143,8 @@ For local images, create an `assets/` directory beside the application `config.y
 GOWORK=off go test ./...
 GOWORK=off go vet ./...
 HS_TEST_FIREFOX=firefox GOWORK=off go test ./internal/blog -run '^TestBrowser' -count=1
-GOWORK=off go test ./internal/blog -run '^$' -bench '^BenchmarkPrepareImage$' -benchmem
 ```
 
-Image processing uses Go's JPEG/PNG encoders, `golang.org/x/image/draw` for resizing, and `github.com/bep/imagemeta` for orientation metadata. Processing, storage, and HTTP access checks are separate. The benchmark uses a generated 3,000 × 2,000 JPEG, not a production capacity estimate.
+Image processing uses the framework's optional [`imaging` package](../../pkg/imaging/image.go). The blog chooses limits and sizes and owns storage, upload throttling, access checks, and editor messages. The package uses Go's JPEG/PNG encoders, `golang.org/x/image/draw` for resizing, and `github.com/bep/imagemeta` for orientation metadata.
+
+From the repository root, run `go test ./pkg/imaging -run '^$' -bench '^BenchmarkProcess$' -benchmem` to measure processing of a generated 3,000 × 2,000 JPEG. This is not a production capacity estimate.

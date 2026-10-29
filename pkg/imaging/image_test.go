@@ -1,0 +1,347 @@
+package imaging
+
+import (
+	"bytes"
+	"context"
+	"encoding/binary"
+	"errors"
+	"hash/crc32"
+	"image"
+	"image/color"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
+	"sync"
+	"testing"
+)
+
+// encodeTestImage produces real decoder inputs without external fixture files.
+func encodeTestImage(t testing.TB, pixels image.Image, format string) []byte {
+	t.Helper()
+	var data bytes.Buffer
+	var err error
+	if format == "jpeg" {
+		err = jpeg.Encode(&data, pixels, &jpeg.Options{Quality: 98})
+	} else {
+		err = png.Encode(&data, pixels)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data.Bytes()
+}
+
+// TestImageCopies checks aspect ratio, no upscaling, transparency, and both formats.
+func TestImageCopies(t *testing.T) {
+	for _, tc := range []struct {
+		name, format  string
+		width, height int
+	}{
+		{"small", "png", 30, 20},
+		{"wide", "png", 2600, 650},
+		{"tall", "jpeg", 650, 2600},
+		{"thin", "png", 2400, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pixels := image.NewNRGBA(image.Rect(0, 0, tc.width, tc.height))
+			for y := range tc.height {
+				for x := range tc.width {
+					pixels.SetNRGBA(x, y, color.NRGBA{50, 100, 150, 128})
+				}
+			}
+			data := encodeTestImage(t, pixels, tc.format)
+			upload, err := processTestImage(t.Context(), data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(upload.Original, data) || upload.MediaType != "image/"+tc.format {
+				t.Fatal("original changed")
+			}
+			for _, part := range []struct {
+				data  []byte
+				limit int
+			}{{upload.Display, 2048}, {upload.Thumbnail, 480}} {
+				decoded, format, err := image.Decode(bytes.NewReader(part.data))
+				if err != nil {
+					t.Fatal(err)
+				}
+				width, height := tc.width, tc.height
+				if longest := max(width, height); longest > part.limit {
+					width, height = max(1, width*part.limit/longest), max(1, height*part.limit/longest)
+				}
+				if format != tc.format || decoded.Bounds() != image.Rect(0, 0, width, height) {
+					t.Fatalf("wrong copy: %s %v", format, decoded.Bounds())
+				}
+				if format == "png" {
+					_, _, _, alpha := decoded.At(0, 0).RGBA()
+					if alpha != 128*257 {
+						t.Fatalf("transparency changed: %d", alpha)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestImageOrientation checks every EXIF transform, including reflected rotations.
+func TestImageOrientation(t *testing.T) {
+	pixels := image.NewGray(image.Rect(5, 7, 8, 9))
+	copy(pixels.Pix, []byte{1, 2, 3, 4, 5, 6})
+	for i, want := range [][]byte{{1, 2, 3, 4, 5, 6}, {3, 2, 1, 6, 5, 4}, {6, 5, 4, 3, 2, 1}, {4, 5, 6, 1, 2, 3}, {1, 4, 2, 5, 3, 6}, {4, 1, 5, 2, 6, 3}, {6, 3, 5, 2, 4, 1}, {3, 6, 2, 5, 1, 4}} {
+		oriented := orientedImage(pixels, uint16(i+1))
+		var got []byte
+		b := oriented.Bounds()
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Max.X; x++ {
+				got = append(got, color.GrayModel.Convert(oriented.At(x, y)).(color.Gray).Y)
+			}
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("orientation %d: %v, want %v", i+1, got, want)
+		}
+	}
+}
+
+// jpegWithOrientation adds a minimal EXIF IFD and a private comment to a JPEG.
+func jpegWithOrientation(data []byte, orientation uint16) []byte {
+	exif := append([]byte{'E', 'x', 'i', 'f', 0, 0}, orientationMetadata(orientation)...)
+	var result bytes.Buffer
+	result.Write(data[:2])
+	for _, part := range []struct {
+		marker byte
+		data   []byte
+	}{{0xe1, exif}, {0xfe, []byte("private metadata")}} {
+		result.Write([]byte{0xff, part.marker, byte((len(part.data) + 2) >> 8), byte(len(part.data) + 2)})
+		result.Write(part.data)
+	}
+	result.Write(data[2:])
+	return result.Bytes()
+}
+
+// orientationMetadata encodes a minimal TIFF IFD for JPEG and PNG EXIF fixtures.
+func orientationMetadata(orientation uint16) []byte {
+	data := []byte{'I', 'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	binary.LittleEndian.PutUint16(data[18:20], orientation)
+	return data
+}
+
+// TestImageEXIF verifies that decoding applies orientation and drops metadata.
+func TestImageEXIF(t *testing.T) {
+	data := encodeTestImage(t, image.NewRGBA(image.Rect(0, 0, 40, 20)), "jpeg")
+	for orientation := uint16(1); orientation <= 8; orientation++ {
+		upload, err := processTestImage(t.Context(), jpegWithOrientation(data, orientation))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(upload.Display))
+		width, height := 40, 20
+		if orientation >= 5 {
+			width, height = height, width
+		}
+		if err != nil || cfg.Width != width || cfg.Height != height {
+			t.Fatalf("orientation %d: %+v %v", orientation, cfg, err)
+		}
+		for _, copy := range [][]byte{upload.Display, upload.Thumbnail} {
+			if bytes.Contains(copy, []byte("Exif")) || bytes.Contains(copy, []byte("private metadata")) {
+				t.Fatal("copy retained metadata")
+			}
+		}
+	}
+	if _, err := processTestImage(t.Context(), jpegWithOrientation(data, 9)); !errors.Is(err, ErrOrientation) {
+		t.Fatalf("orientation error: %v", err)
+	}
+}
+
+// pngWithChunk inserts a well-formed metadata or animation chunk after IHDR.
+func pngWithChunk(data []byte, name string, payload []byte) []byte {
+	chunk := make([]byte, 12+len(payload))
+	binary.BigEndian.PutUint32(chunk, uint32(len(payload)))
+	copy(chunk[4:], name)
+	copy(chunk[8:], payload)
+	binary.BigEndian.PutUint32(chunk[len(chunk)-4:], crc32.ChecksumIEEE(chunk[4:len(chunk)-4]))
+	return append(append(append([]byte{}, data[:33]...), chunk...), data[33:]...)
+}
+
+func TestImagePNGMetadataAndAnimation(t *testing.T) {
+	data := testPNG(t)
+	upload, err := processTestImage(t.Context(), pngWithChunk(data, "tEXt", []byte("Comment\x00private metadata")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(upload.Display, []byte("private metadata")) {
+		t.Fatal("PNG retained metadata")
+	}
+	animation := make([]byte, 8)
+	binary.BigEndian.PutUint32(animation, 2)
+	if _, err := processTestImage(t.Context(), pngWithChunk(data, "acTL", animation)); !errors.Is(err, ErrAnimation) {
+		t.Fatalf("animation error: %v", err)
+	}
+	data = encodeTestImage(t, image.NewNRGBA(image.Rect(0, 0, 30, 20)), "png")
+	upload, err = processTestImage(t.Context(), pngWithChunk(data, "eXIf", orientationMetadata(6)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(upload.Display))
+	if err != nil || cfg.Width != 20 || cfg.Height != 30 || bytes.Contains(upload.Display, []byte("eXIf")) {
+		t.Fatalf("PNG orientation: %+v %v", cfg, err)
+	}
+}
+
+// TestImageGIFPreserved checks frame timing and bytes survive without transcoding.
+func TestImageGIFPreserved(t *testing.T) {
+	palette := color.Palette{color.Transparent, color.White}
+	first := image.NewPaletted(image.Rect(0, 0, 3, 2), palette)
+	second := image.NewPaletted(first.Bounds(), palette)
+	second.SetColorIndex(0, 0, 1)
+	var data bytes.Buffer
+	if err := gif.EncodeAll(&data, &gif.GIF{Image: []*image.Paletted{first, second}, Delay: []int{10, 20}, LoopCount: 2}); err != nil {
+		t.Fatal(err)
+	}
+	upload, err := processTestImage(t.Context(), data.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(upload.Original, data.Bytes()) || !bytes.Equal(upload.Display, data.Bytes()) || !bytes.Equal(upload.Thumbnail, data.Bytes()) {
+		t.Fatal("GIF modified")
+	}
+}
+
+func TestImageProcessingFailures(t *testing.T) {
+	for _, tc := range []struct {
+		data []byte
+		want error
+	}{
+		{nil, ErrFormat},
+		{[]byte("invalid"), ErrFormat},
+		{testPNG(t)[:40], ErrInvalidImage},
+		{make([]byte, 8*1024*1024+1), ErrByteLimit},
+	} {
+		if _, err := processTestImage(t.Context(), tc.data); !errors.Is(err, tc.want) {
+			t.Fatalf("processing error: %v, want %v", err, tc.want)
+		}
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := processTestImage(ctx, testPNG(t)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation: %v", err)
+	}
+	if _, err := encodeImage(ctx, image.NewRGBA(image.Rect(0, 0, 1, 1)), "png", 10, 85); !errors.Is(err, context.Canceled) {
+		t.Fatalf("encoder cancellation: %v", err)
+	}
+}
+
+// BenchmarkProcess measures a repeatable camera-sized JPEG workload.
+func BenchmarkProcess(b *testing.B) {
+	pixels := image.NewRGBA(image.Rect(0, 0, 3000, 2000))
+	for y := range 2000 {
+		for x := range 3000 {
+			pixels.SetRGBA(x, y, color.RGBA{uint8(x), uint8(y), uint8(x + y), 255})
+		}
+	}
+	data := encodeTestImage(b, pixels, "jpeg")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := processTestImage(b.Context(), data); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// testOptions matches the blog workload while keeping the processor independent.
+func testOptions() Options {
+	return Options{MaxBytes: 8 * 1024 * 1024, MaxPixels: 20_000_000, DisplaySize: 2048, ThumbnailSize: 480, JPEGQuality: 85}
+}
+
+func processTestImage(ctx context.Context, data []byte) (Result, error) {
+	return Process(ctx, data, testOptions())
+}
+
+func testPNG(t testing.TB) []byte {
+	t.Helper()
+	return encodeTestImage(t, image.NewRGBA(image.Rect(0, 0, 2, 2)), "png")
+}
+
+// TestProcessOptions checks limits before decode and rejects invalid policies.
+func TestProcessOptions(t *testing.T) {
+	data := testPNG(t)
+	for _, tc := range []struct {
+		name   string
+		change func(*Options)
+	}{
+		{"bytes", func(o *Options) { o.MaxBytes = 0 }},
+		{"pixels", func(o *Options) { o.MaxPixels = -1 }},
+		{"display", func(o *Options) { o.DisplaySize = 0 }},
+		{"thumbnail", func(o *Options) { o.ThumbnailSize = -1 }},
+		{"oversized thumbnail", func(o *Options) { o.ThumbnailSize = o.DisplaySize + 1 }},
+		{"quality low", func(o *Options) { o.JPEGQuality = 0 }},
+		{"quality high", func(o *Options) { o.JPEGQuality = 101 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := testOptions()
+			tc.change(&o)
+			if _, err := Process(t.Context(), data, o); err == nil {
+				t.Fatal("invalid options accepted")
+			}
+		})
+	}
+	options := testOptions()
+	options.MaxBytes = len(data) - 1
+	if _, err := Process(t.Context(), data, options); !errors.Is(err, ErrByteLimit) {
+		t.Fatalf("byte limit: %v", err)
+	}
+	options.MaxBytes, options.MaxPixels = len(data), 3
+	if _, err := Process(t.Context(), data, options); !errors.Is(err, ErrPixelLimit) {
+		t.Fatalf("pixel limit: %v", err)
+	}
+	options.MaxPixels = 4
+	if _, err := Process(t.Context(), data, options); err != nil {
+		t.Fatalf("exact limits rejected: %v", err)
+	}
+}
+
+// TestProcessCustomSizes confirms applications can choose their own image policy.
+func TestProcessCustomSizes(t *testing.T) {
+	data := encodeTestImage(t, image.NewRGBA(image.Rect(0, 0, 100, 50)), "jpeg")
+	for _, quality := range []int{1, 100} {
+		options := testOptions()
+		options.DisplaySize, options.ThumbnailSize, options.JPEGQuality = 40, 10, quality
+		result, err := Process(t.Context(), data, options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			data          []byte
+			width, height int
+		}{{result.Display, 40, 20}, {result.Thumbnail, 10, 5}} {
+			cfg, _, err := image.DecodeConfig(bytes.NewReader(tc.data))
+			if err != nil || cfg.Width != tc.width || cfg.Height != tc.height {
+				t.Fatalf("custom dimensions: %+v, %v", cfg, err)
+			}
+		}
+	}
+}
+
+// TestProcessConcurrent verifies that processing does not modify shared input or state.
+func TestProcessConcurrent(t *testing.T) {
+	data := jpegWithOrientation(encodeTestImage(t, image.NewRGBA(image.Rect(0, 0, 40, 20)), "jpeg"), 6)
+	original := bytes.Clone(data)
+	var workers sync.WaitGroup
+	for range 4 {
+		workers.Go(func() {
+			result, err := Process(t.Context(), data, testOptions())
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			cfg, _, err := image.DecodeConfig(bytes.NewReader(result.Display))
+			if err != nil || cfg.Width != 20 || cfg.Height != 40 {
+				t.Errorf("oriented copy: %+v, %v", cfg, err)
+			}
+		})
+	}
+	workers.Wait()
+	if !bytes.Equal(data, original) {
+		t.Fatal("processing changed the original")
+	}
+}

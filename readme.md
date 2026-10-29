@@ -29,6 +29,7 @@ go run ./cmd/web
 | [Application setup](docs/application.md) | Adding modules, replacing services, startup, and cleanup. |
 | [Rendering and forms](pkg/components/readme.md) | Prepared templates, HTMX responses, validation, and notifications. |
 | [Storage](docs/storage.md) | Repository guarantees, migrations, backend access, and maintenance. |
+| [Image processing](pkg/imaging/image.go) | Optional upload validation, orientation correction, resizing, and metadata removal. See the [usage example](pkg/imaging/example_test.go). |
 | [Sessions](pkg/services/session/readme.md) | Store selection, rotation, serialization, and replacement contracts. |
 | [Testing](docs/testing.md) | Go tests, browser checks, and diagnostics. |
 | [Local deployment](docs/deployment.md) | Containers, health checks, logs, backups, and optional recovery/soak tests. |

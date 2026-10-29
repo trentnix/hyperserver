@@ -34,6 +34,20 @@ func OptimizeImages(ctx context.Context, directory, workingDirectory string) (in
 	return len(files), nil
 }
 
+// contextReader lets offline maintenance notice cancellation between reads.
+type contextReader struct {
+	ctx context.Context
+	io.Reader
+}
+
+// Read stops maintenance when its context is canceled.
+func (r contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.Reader.Read(p)
+}
+
 // optimizeStoredImage verifies original identity before replacing any stored bytes.
 func optimizeStoredImage(ctx context.Context, store *fileImageStore, id string) error {
 	original, err := store.OpenVariant(ctx, id, originalImage)
