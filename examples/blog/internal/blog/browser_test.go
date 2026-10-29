@@ -197,12 +197,39 @@ func TestBrowserAuthStyles(t *testing.T) {
 	}
 }
 
+// TestBrowserMediaCleanup exercises review, cancellation, deletion, and responsive layout.
+func TestBrowserMediaCleanup(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check media cleanup")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "media-cleanup") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "media-cleanup" {
+		mediaUpload(t, h.blog, "unused browser image")
+		historical := mediaUpload(t, h.blog, "historical browser image")
+		post, err := h.blog.posts.Save(t.Context(), Post{Slug: "historical-image", Title: "Historical image", Markdown: "![Old](/images/" + historical.ID + ")", PreviewImage: historical.ID, Draft: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		post.Markdown, post.PreviewImage = "No images", ""
+		if _, err := h.blog.posts.Save(t.Context(), post); err != nil {
+			t.Fatal(err)
+		}
+		used := mediaUpload(t, h.blog, "saved browser image")
+		if _, err := h.blog.posts.Save(t.Context(), Post{Slug: "image", Title: "Saved image", PreviewImage: used.ID, Draft: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if mode == "post-management" {
 		for _, draft := range []bool{true, false} {
 			for i, title := range []string{"Short title", strings.Repeat("A longer post title with several words ", 6), strings.Repeat("W", 240)} {
@@ -271,6 +298,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "media-cleanup":
+		scriptFile = "testdata/media-cleanup.js"
 	case "navigation":
 		scriptFile = "testdata/navigation.js"
 	case "editor-history":

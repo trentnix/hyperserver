@@ -146,6 +146,9 @@ func (m *module) pageEditor(w http.ResponseWriter, r *http.Request) {
 // savePage validates bounded UTF-8 content and saves a published page or draft.
 // Empty Markdown is allowed. An omitted slug is generated from the title.
 func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
+	m.mediaMu.RLock()
+	defer m.mediaMu.RUnlock()
+
 	// Parse within the route's body limit, then validate field sizes below.
 	// This keeps complete drafts available when Markdown exceeds its content limit.
 	if err := form.ParseWithOptions(r, form.ParseOptions{MaxFieldBytes: routing.MiB}); err != nil {
@@ -206,6 +209,16 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		image.Content.Close()
 	}
 
+	if err := m.checkContentImages(r, p.Markdown, p.URL()); err != nil {
+		message, status := "Unable to check uploaded images. Please try again.", http.StatusInternalServerError
+		if errors.Is(err, errMissingMedia) {
+			message, status = err.Error(), http.StatusUnprocessableEntity
+		} else {
+			logger.LogRequestError(r, err)
+		}
+		m.renderPageEditor(w, r, p, message, status)
+		return
+	}
 	saved, err := m.pageStore.SavePage(r.Context(), p)
 	// Let the database settle competing writes. Only generated slugs may change.
 	for suffix := 2; generatedSlug && errors.Is(err, errPageSlugTaken); suffix++ {
@@ -266,7 +279,7 @@ func validatePage(p Page) string {
 func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page, message string, status int) {
 	data := pageContent{Page: p, Error: message, revisionSelection: editorRevision(r, "page", p.ID)}
 	if r.Method == http.MethodGet && status == http.StatusOK {
-		selection, err := m.selectRevision(r, "page", p.ID, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
+		selection, err := m.selectRevision(r, "page", p.ID, p.URL(), Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
 		if err != nil {
 			m.storageError(w, r, err)
 			return

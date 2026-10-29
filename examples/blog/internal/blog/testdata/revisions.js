@@ -56,6 +56,7 @@
       assert(menu.open && history.getBoundingClientRect().height >= (innerWidth < 768 ? 44 : 36), 'History must be an accessible menu action.');
       const panel = menu.querySelector('.action-menu-items').getBoundingClientRect();
       assert(panel.left >= 0 && panel.right <= innerWidth, 'Action menu overflows the viewport.');
+      assert(getComputedStyle(menu.querySelector('.action-delete')).borderTopWidth === '1px', 'Delete needs a divider after other actions.');
       history.focus();
       history.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
       assert(!menu.open && document.activeElement === more, 'Escape must close More and restore focus.');
@@ -271,6 +272,12 @@
       assert(location.pathname === target.view, 'Deleting the last older revision must return to the content.');
       assert(document.querySelector('.post-title, .page-title, h1')?.textContent.includes('Original title'), 'History deletion changed current writing.');
       assert(!document.querySelector('.content-actions a[href="' + target.history + '"]'), 'History action remains without earlier versions.');
+      const menu = document.querySelector('.content-actions .action-menu');
+      menu.querySelector('summary').click();
+      const remove = menu.querySelector('.action-delete');
+      const style = getComputedStyle(remove);
+      assert(style.borderTopWidth === (remove.previousElementSibling ? '1px' : '0px'), 'A lone Delete action must not have a divider.');
+      assert(style.marginTop === (remove.previousElementSibling ? '4px' : '0px'), 'A lone Delete action must not have separator spacing.');
       if (index + 1 < targets.length) {
         sessionStorage.setItem('revision-index', String(index + 1));
         stage('list');

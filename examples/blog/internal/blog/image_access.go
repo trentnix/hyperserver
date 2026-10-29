@@ -22,6 +22,18 @@ type imageAccessRepository interface {
 // publicImage allows only references from public content or the saved site profile.
 // The request host never decides whether an absolute reference belongs to this site.
 func (m *module) publicImage(r *http.Request, id string) (bool, error) {
+	references := m.imageLookupReferences(r, id)
+	profile := m.profile.Current()
+	for _, raw := range []string{profile.ImageURL, profile.FaviconURL, profile.BackgroundURL} {
+		if ref := imageReference(raw, "/"); ref != "" && slices.Contains(references, ref) {
+			return true, nil
+		}
+	}
+	return m.imageAccess.ImageIsPublic(r.Context(), references...)
+}
+
+// imageLookupReferences identifies local uploads without trusting request host headers.
+func (m *module) imageLookupReferences(r *http.Request, id string) []string {
 	local := "/images/" + id
 	references := []string{local}
 	// Root-relative references do not require a public origin. If no trusted
@@ -40,13 +52,7 @@ func (m *module) publicImage(r *http.Request, id string) (bool, error) {
 			references = append(references, imageReference(public.String(), "/"))
 		}
 	}
-	profile := m.profile.Current()
-	for _, raw := range []string{profile.ImageURL, profile.FaviconURL, profile.BackgroundURL} {
-		if ref := imageReference(raw, "/"); ref != "" && slices.Contains(references, ref) {
-			return true, nil
-		}
-	}
-	return m.imageAccess.ImageIsPublic(r.Context(), references...)
+	return references
 }
 
 // imageReference normalizes upload references for lookup. Queries and fragments

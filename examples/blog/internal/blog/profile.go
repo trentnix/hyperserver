@@ -139,6 +139,10 @@ func (m *module) saveProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := m.writeProfile(r.Context(), p); err != nil {
+		if errors.Is(err, errMissingMedia) {
+			m.renderProfileEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
 		logger.LogRequestError(r, err)
 		m.renderProfileEditor(w, r, p, "Unable to save the site profile. Please try again.", http.StatusInternalServerError)
 		return
@@ -150,8 +154,14 @@ func (m *module) saveProfile(w http.ResponseWriter, r *http.Request) {
 // writeProfile serializes persistence and publication so concurrent saves cannot
 // leave rendering behind the database. A failed write preserves the previous state.
 func (m *module) writeProfile(ctx context.Context, p Profile) error {
+	m.mediaMu.RLock()
+	defer m.mediaMu.RUnlock()
+
 	m.profile.saveMu.Lock()
 	defer m.profile.saveMu.Unlock()
+	if err := m.checkMediaReferences(ctx, []string{p.ImageURL, p.FaviconURL, p.BackgroundURL}); err != nil {
+		return err
+	}
 	if err := m.profileStore.SaveProfile(ctx, p); err != nil {
 		return err
 	}

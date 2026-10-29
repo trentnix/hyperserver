@@ -43,6 +43,11 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("GET /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.confirmRevisionDelete))
 	routes.Handle("POST /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.deleteRevision))
 	routes.Handle("GET /profile", m.requireAdmin(m.profileEditor))
+	routes.Handle("GET /media/unused", m.requireAdmin(m.unusedMedia))
+	routes.Handle("GET /media/delete-unused", m.requireAdmin(m.confirmUnusedMediaDelete))
+	routes.HandleWithBodyLimit("POST /media/delete-unused", m.requireAdmin(m.deleteUnusedMedia), routing.MiB)
+	routes.Handle("GET /media/delete/{id}", m.requireAdmin(m.confirmMediaDelete))
+	routes.Handle("POST /media/delete/{id}", m.requireAdmin(m.deleteMedia))
 	routes.HandleWithBodyLimit("POST /profile", m.requireAdmin(m.saveProfile), routing.MiB)
 	routes.HandleFunc("GET /about", m.page)
 	routes.HandleFunc("GET /page/{slug}", m.page)
@@ -191,7 +196,7 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := m.postEditorData(p)
-	selection, err := m.selectRevision(r, "post", p.ID, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
+	selection, err := m.selectRevision(r, "post", p.ID, "/post/s/"+p.Slug, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -209,6 +214,9 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 // save validates content, saves its selected publication state, and redirects to its slug URL.
 // Validation and storage failures keep parsed draft values available for correction.
 func (m *module) save(w http.ResponseWriter, r *http.Request) {
+	m.mediaMu.RLock()
+	defer m.mediaMu.RUnlock()
+
 	if err := form.ParseWithOptions(r, form.ParseOptions{MaxFieldBytes: maxMarkdownBytes}); err != nil {
 		m.editorError(w, r, Post{ID: r.PathValue("id"), Draft: true}, err.Message, err.StatusCode)
 		return
@@ -255,6 +263,16 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		image.Content.Close()
 	}
 
+	if err := m.checkContentImages(r, p.Markdown, "/post/s/"+p.Slug); err != nil {
+		message, status := "Unable to check uploaded images. Please try again.", http.StatusInternalServerError
+		if errors.Is(err, errMissingMedia) {
+			message, status = err.Error(), http.StatusUnprocessableEntity
+		} else {
+			logger.LogRequestError(r, err)
+		}
+		m.editorError(w, r, p, message, status)
+		return
+	}
 	saved, err := m.posts.Save(r.Context(), p)
 	// Let the database settle competing writes. Only generated slugs may change.
 	for suffix := 2; generatedSlug && errors.Is(err, errSlugTaken); suffix++ {

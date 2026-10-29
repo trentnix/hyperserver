@@ -345,11 +345,81 @@
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
 
+{{ define "blog.media" }}
+<section class="page-manager" hx-boost="false">
+  <header class="page-manager-heading"><h1>Media cleanup</h1>{{ if .Data.Files }}<a class="page-create" href="/media/delete-unused">Delete all unused</a>{{ end }}</header>
+  <p>Save any open editors before cleanup. Unsaved edits and browser recovery copies cannot be checked. Deleting an image is permanent.</p>
+  {{ with .Data.Message }}<p class="field-error" role="alert">{{ . }}</p>{{ end }}
+  <h2>Unused uploads</h2>
+  <p>These uploads are not used by saved posts, pages, the site profile, or saved versions. Drafts and scheduled posts are included in the check.</p>
+  <ul class="page-manager-list media-list" aria-label="Unused uploads">
+  {{ range .Data.Files }}<li class="page-manager-row">
+    <div class="media-details"><img src="/images/{{ .ID }}" alt="Unused upload" loading="lazy"><div class="page-manager-title"><a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ .ID }}</a><small>{{ .Size }} bytes · Uploaded {{ .Modified.UTC.Format "Jan 2, 2006 at 3:04 PM UTC" }}</small></div></div>
+    <div class="page-manager-actions"><a href="/media/delete/{{ .ID }}">Delete</a></div>
+  </li>{{ else }}<li class="page-manager-empty">No unused uploads.</li>{{ end }}
+  </ul>
+  {{ if .Data.History }}
+  <h2>Used only by history</h2>
+  <p>These images are not used by current content. Deleting one leaves its saved versions intact, but their image will no longer be available. Bulk cleanup does not delete these images.</p>
+  <ul class="page-manager-list media-list" aria-label="Historical uploads">
+  {{ range .Data.History }}<li class="page-manager-row">
+    <div class="media-details"><img src="/images/{{ .ID }}" alt="Historical upload" loading="lazy"><div class="page-manager-title"><a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ .ID }}</a><small>{{ .Size }} bytes · Used by {{ len .History }} saved versions</small></div></div>
+    <div class="page-manager-actions"><a href="/media/delete/{{ .ID }}">Review deletion</a></div>
+  </li>{{ end }}
+  </ul>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ define "blog.mediaDelete" }}
+<section class="confirmation-panel" hx-boost="false">
+  <h1>Delete image?</h1>
+  <div class="revision-image"><img src="/images/{{ .Data.ID }}" alt="Image selected for deletion"></div>
+  <p>This permanently deletes the uploaded file. Unsaved editors and browser recovery copies may still use it. Save those changes first.</p>
+  {{ if .Data.History }}
+  <p>This image is used by the following saved versions. Their writing will remain, but the image will no longer be available.</p>
+  <ul>{{ range .Data.History }}<li><a href="{{ .URL }}">{{ .Title }} — {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}</a></li>{{ end }}</ul>
+  {{ end }}
+  <form class="form-actions" method="post" action="/media/delete/{{ .Data.ID }}">
+    <input type="hidden" name="version" value="{{ .Data.Version }}">
+    {{ if .Data.History }}<label class="media-history-confirmation"><input type="checkbox" name="deleteHistory" value="true" required> Delete this image even though saved versions use it.</label>{{ end }}
+    <button type="submit" class="button-danger">Delete image</button><a href="/media/unused" class="button-secondary" autofocus>Cancel</a>
+  </form>
+</section>
+{{ end }}
+
+{{ define "blog.mediaDeleteAll" }}
+<section class="confirmation-panel" hx-boost="false">
+  <h1>Delete unused images?</h1>
+  {{ if .Data.Files }}
+  <p>This permanently deletes up to <strong>{{ len .Data.Files }} {{ if eq (len .Data.Files) 1 }}image{{ else }}images{{ end }}</strong> totaling <strong>{{ .Data.Bytes }} bytes</strong>.</p>
+  {{ if .Data.Remaining }}<p>Additional images outside this batch: {{ .Data.Remaining }}. Review those after this batch finishes.</p>{{ end }}
+  <p>Save open editors first. Unsaved edits and browser recovery copies cannot be checked.</p>
+  <p>Images now in use, uploaded again, or already removed will be skipped. New uploads are not included.</p>
+  <form class="form-actions" method="post" action="/media/delete-unused">
+    {{ range .Data.Files }}<input type="hidden" name="file" value="{{ .ID }}:{{ .Version }}">{{ end }}
+    <button type="submit" class="button-danger">Delete {{ len .Data.Files }} {{ if eq (len .Data.Files) 1 }}image{{ else }}images{{ end }}</button><a href="/media/unused" class="button-secondary" autofocus>Cancel</a>
+  </form>
+  {{ else }}<p>No unused uploads.</p><a href="/media/unused">Back to Media</a>{{ end }}
+</section>
+{{ end }}
+
+{{ define "blog.mediaDeleteResult" }}
+<section class="confirmation-panel" hx-boost="false">
+  <h1>{{ if .Data.Failed }}Cleanup stopped{{ else }}Cleanup complete{{ end }}</h1>
+  <p role="status">Deleted: {{ .Data.Deleted }}. Skipped: {{ .Data.Skipped }}. Not processed: {{ .Data.Remaining }}.</p>
+  {{ if .Data.Skipped }}<p>Skipped images were in use, uploaded again, or already removed.</p>{{ end }}
+  {{ if .Data.Failed }}<p class="field-error" role="alert">A storage error stopped cleanup. Review the remaining images before trying again. Deleted files cannot be restored here.</p>{{ end }}
+  <a class="button-secondary" href="/media/unused">Back to Media</a>
+</section>
+{{ end }}
+
 {{ define "blog.revisionNotice" }}
 {{ with .Data.LoadedRevision }}<aside class="revision-notice" role="status">
   <strong>Editing a version saved {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}.</strong>
   <p>Nothing changes until you save.</p>
 </aside>{{ end }}
+{{ if .Data.MissingImages }}<p class="field-error" role="status">This version references images that are no longer available. Replace or remove their references before saving.</p>{{ end }}
 {{ end }}
 
 {{ define "blog.revisionDelete" }}
@@ -394,7 +464,8 @@
       {{ if not .Data.Current }}<p class="form-hint">Starts an edit using this version. Nothing changes until you save.</p>{{ end }}
       <h2>{{ .Data.Selected.Title }}</h2>
       {{ if .Data.Selected.Summary }}<p class="revision-summary">{{ .Data.Selected.Summary }}</p>{{ end }}
-      {{ if .Data.Selected.PreviewImage }}<figure class="revision-image"><img src="/images/{{ .Data.Selected.PreviewImage }}" alt="Saved preview image"><figcaption>Preview image</figcaption></figure>{{ end }}
+      {{ if .Data.MissingImages }}<p class="revision-notice">Some images in this version are no longer available. The saved writing has not changed.</p>{{ end }}
+      {{ if .Data.Selected.PreviewImage }}<figure class="revision-image">{{ if .Data.MissingPreview }}<span class="missing-image">Image deleted</span>{{ else }}<img src="/images/{{ .Data.Selected.PreviewImage }}" alt="Saved preview image">{{ end }}<figcaption>Preview image</figcaption></figure>{{ end }}
       <div class="revision-body">{{ .Data.HTML }}</div>
       <details><summary>Markdown source</summary><pre>{{ .Data.Selected.Markdown }}</pre></details>
     </div>

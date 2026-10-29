@@ -43,6 +43,7 @@ type revisionSelection struct {
 	CurrentContent string
 	RevisionID     int64
 	HistoryURL     string
+	MissingImages  bool
 }
 
 // editorRevision keeps the selected history location through ordinary failed
@@ -60,7 +61,7 @@ func editorRevision(r *http.Request, kind, id string) revisionSelection {
 
 // selectRevision reads only a version belonging to this content. Empty selection
 // opens the ordinary editor. The JSON is escaped by html/template in an attribute.
-func (m *module) selectRevision(r *http.Request, kind, id string, current Revision) (revisionSelection, error) {
+func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, current Revision) (revisionSelection, error) {
 	raw := r.URL.Query().Get("revision")
 	if raw == "" {
 		return revisionSelection{}, nil
@@ -73,6 +74,11 @@ func (m *module) selectRevision(r *http.Request, kind, id string, current Revisi
 	if err != nil {
 		return revisionSelection{}, err
 	}
+	missing, err := m.revisionMissingImages(r.Context(), selected, contentPath)
+	if err != nil {
+		return revisionSelection{}, err
+	}
+	selection.MissingImages = len(missing) > 0
 	baseline, err := json.Marshal(map[string]string{
 		"title": current.Title, "summary": current.Summary,
 		"content": current.Markdown, "previewImage": current.PreviewImage,
@@ -83,12 +89,13 @@ func (m *module) selectRevision(r *http.Request, kind, id string, current Revisi
 
 // historyPage describes saved versions and their preview, not an editor.
 type historyPage struct {
-	Title, URL, EditorURL string
-	ContentURL, Kind      string
-	Versions              []Revision
-	Selected              Revision
-	Current               bool
-	HTML                  template.HTML
+	Title, URL, EditorURL         string
+	ContentURL, Kind              string
+	Versions                      []Revision
+	Selected                      Revision
+	Current                       bool
+	HTML                          template.HTML
+	MissingImages, MissingPreview bool
 }
 
 // revisions shows administrator-only history without modifying content or publication.
@@ -137,6 +144,15 @@ func (m *module) revisions(w http.ResponseWriter, r *http.Request) {
 	data.Selected, err = m.history.GetRevision(r.Context(), kind, id, selected)
 	if err == nil {
 		data.HTML, err = markdownAt(data.Selected.Markdown, &url.URL{Path: contentPath})
+	}
+	if err == nil {
+		var missing map[string]bool
+		missing, err = m.revisionMissingImages(r.Context(), data.Selected, contentPath)
+		if err == nil {
+			data.MissingImages = len(missing) > 0
+			data.MissingPreview = missing["/images/"+data.Selected.PreviewImage]
+			data.HTML, err = markMissingImages(data.HTML, missing)
+		}
 	}
 	if err != nil {
 		m.storageError(w, r, err)

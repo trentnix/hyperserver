@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
@@ -64,22 +65,27 @@ func (a *Access) IsAdmin(account *user.User) bool {
 
 // module owns one application's views, content repositories, and images.
 type module struct {
-	settings     *Settings
-	access       *Access
-	app          *server.ApplicationServer
-	posts        repository
-	pageStore    pageRepository
-	profileStore profileRepository
-	profile      *ProfileState
-	images       imageStore
-	imageAccess  imageAccessRepository
-	history      revisionRepository
-	localAssets  *os.Root
-	close        func() error
-	views        map[string]*content.View
-	feed         feedCache
-	recentPosts  cachedValue[int, []ArchiveEntry]
-	now          func() time.Time
+	settings        *Settings
+	access          *Access
+	app             *server.ApplicationServer
+	posts           repository
+	pageStore       pageRepository
+	profileStore    profileRepository
+	profile         *ProfileState
+	images          imageStore
+	media           mediaStore
+	mediaReferences mediaReferenceRepository
+	imageAccess     imageAccessRepository
+	history         revisionRepository
+	localAssets     *os.Root
+	close           func() error
+	views           map[string]*content.View
+	feed            feedCache
+	recentPosts     cachedValue[int, []ArchiveEntry]
+	now             func() time.Time
+
+	// mediaMu prevents cleanup from racing with uploads or saves of image references.
+	mediaMu sync.RWMutex
 }
 
 // init registers the factory without opening storage or creating runtime state.
@@ -142,6 +148,10 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"history",
 		"revisionPreview",
 		"revisionDelete",
+		"media",
+		"mediaDelete",
+		"mediaDeleteAll",
+		"mediaDeleteResult",
 	} {
 		view, err := templates.View(app.ContentManager, "blog."+name)
 		if err != nil {
@@ -176,6 +186,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		return errors.Join(err, assets.Close(), images.Close(), closeStore())
 	}
 	m.posts, m.images = store, images
+	m.media, m.mediaReferences = images, store
 	m.pageStore = store
 	m.profileStore = store
 	m.imageAccess = store

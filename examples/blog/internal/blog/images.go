@@ -21,6 +21,9 @@ const maxImageBytes = 8 * 1024 * 1024
 // upload accepts EasyMDE's image field and returns its documented JSON response.
 // Both compressed size and decoded dimensions are bounded before decoding pixels.
 func (m *module) upload(w http.ResponseWriter, r *http.Request) {
+	m.mediaMu.RLock()
+	defer m.mediaMu.RUnlock()
+
 	if err := r.ParseMultipartForm(1024 * 1024); err != nil {
 		if r.MultipartForm != nil {
 			defer r.MultipartForm.RemoveAll()

@@ -43,7 +43,7 @@
           <nav class="account-nav" aria-label="Account">
             {{ if .LayoutData.Admin }}<details class="account-menu action-menu" open>
               <summary>Manage</summary>
-              <div class="action-menu-items"><a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a></div>
+              <div class="action-menu-items"><a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media/unused">Media</a></div>
             </details>{{ end }}
             {{ if .LayoutData.SignedIn }}
             {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}

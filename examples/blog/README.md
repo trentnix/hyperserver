@@ -49,6 +49,14 @@ Only the verified administrator can view new uploads and images used exclusively
 
 Image responses recheck access before returning bytes or a cache-validation response. Previously downloaded copies cannot be recalled, including copies cached under the former one-year policy. Startup rejects overlapping `uploadsDirectory` and `assetsDirectory` paths, including symlinks. Keep uploads outside any other publicly served filesystem directory.
 
+Choose **Media** to review unused uploads and delete them individually or with **Delete all unused**. Bulk confirmation shows the image count and total bytes, with at most 5,000 images per batch. Only the confirmed files are considered. New uploads are excluded, and files now referenced, uploaded again, or already removed are skipped. The result reports deleted, skipped, and unprocessed counts, including partial storage failures.
+
+Current posts, pages, previews, and profile images protect their uploads, including drafts and scheduled posts. Images used only by history appear separately. You can delete one after reviewing the affected versions and confirming that their image will become unavailable. Bulk cleanup excludes these images. History keeps the writing unchanged and marks missing images in its preview. Editing an affected version requires replacing or removing missing image references before saving.
+
+Deletion checks references again and cannot overlap a content save or upload. A repeated upload invalidates an older deletion confirmation. Cleanup does not touch bundled assets, local assets, or backups.
+
+Save open editors before cleanup. The server cannot inspect unsaved edits or browser recovery copies. If cleanup removes an image from an unsaved editor, upload it again or remove its reference before saving. Matching upload URLs on an old domain are conservatively retained. Run only one blog instance against the content database and uploads directory.
+
 RSS caches the complete rendered feed. Recent Posts caches only the configured number of entries, not rendered HTML. Both caches are loaded on demand and invalidated after saving, publishing, unpublishing, or deleting a post. Profile edits also invalidate RSS. Feed readers can revalidate with an ETag. Feed links and images use absolute URLs.
 
 Run one blog instance per content database. The site profile is loaded at startup and refreshed after successful edits. Edit posts and pages through the application. Direct database writes bypass image-reference updates and cache invalidation.
