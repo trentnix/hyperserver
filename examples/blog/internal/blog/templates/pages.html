@@ -24,6 +24,7 @@
       </div>
       <div class="profile-image-controls">
         <div class="image-upload-controls" hidden>
+          <button type="button" class="button-secondary" data-media-browse>Choose existing</button>
           <label for="upload-{{ .Name }}">Choose {{ if eq .Name "imageURL" }}a portrait{{ else if eq .Name "faviconURL" }}a favicon{{ else }}a background{{ end }}</label><input id="upload-{{ .Name }}" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="profile-image-help help-{{ .Name }}">
           <button type="button" class="text-button" data-image-reset>{{ if .DefaultURL }}Use default image{{ else }}Remove background{{ end }}</button>
         </div>
@@ -183,6 +184,7 @@
     <img src="{{ .Data.PreviewURL }}" alt="Current page card preview" width="320" height="200" data-image-preview>
     <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
     <div class="image-upload-controls" hidden>
+      <button type="button" class="button-secondary" data-media-browse>Choose existing</button>
       <label for="page-image">Upload a preview image</label><input id="page-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="preview-help">
       <button type="button" class="text-button" data-image-reset>Use default image</button>
     </div>
@@ -247,6 +249,7 @@
     <img {{ if .Data.PreviewURL }}src="{{ .Data.PreviewURL }}"{{ else }}hidden{{ end }} alt="Selected sharing preview" width="320" height="200" data-image-preview>
     <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
     <div class="image-upload-controls" hidden>
+      <button type="button" class="button-secondary" data-media-browse>Choose existing</button>
       <label for="post-image">Upload a preview image</label><input id="post-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="post-preview-help">
       <button type="button" class="text-button" data-image-reset>Use automatic selection</button>
     </div>
@@ -345,9 +348,50 @@
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
 
+{{ define "blog.mediaLibrary" }}
+<section class="page-manager media-library" data-media-library hx-boost="false">
+  {{ if not .Data.Picking }}
+  <header class="page-manager-heading"><h1>Media</h1><a class="page-create" href="/media/unused">Clean up uploads</a></header>
+  <form class="media-upload" data-media-upload method="post" action="/post/images/upload" enctype="multipart/form-data" hidden>
+    <label for="library-upload">Upload an image</label>
+    <p class="form-hint" id="library-upload-help">PNG, JPEG, or GIF, up to 8 MiB. Uploads stay private until used in published content or the site profile.</p>
+    <div class="form-actions"><input id="library-upload" name="image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="library-upload-help" required><button type="submit">Upload image</button></div>
+    <p role="status" data-upload-status></p>
+  </form>
+  {{ end }}
+  <p class="form-hint">{{ if .Data.Picking }}Choose an image, then save your edits to use it.{{ else }}Select an image to see where it is used.{{ end }} Newest uploads first.</p>
+  <ul class="media-grid">
+  {{ range .Data.Files }}<li>
+    {{ if $.Data.Picking }}<a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ else }}<a href="/media/{{ .ID }}">{{ end }}<img src="/images/{{ .ID }}" alt="Uploaded image {{ .ID }}" loading="lazy" width="240" height="160"></a>
+    <span class="media-filename" title="{{ .ID }}">{{ .ID }}</span>
+    <small>{{ .Size }} bytes · {{ .Modified.UTC.Format "Jan 2, 2006" }}</small>
+    {{ if $.Data.Picking }}<button type="button" data-media-select="{{ .ID }}">Use image</button>{{ end }}
+  </li>{{ else }}<li class="page-manager-empty">No uploaded images.</li>{{ end }}
+  </ul>
+  <nav class="media-pagination" aria-label="Media pages">
+    {{ if .Data.Previous }}{{ if .Data.Picking }}<button type="button" data-media-page="{{ .Data.Previous }}">Previous</button>{{ else }}<a href="{{ .Data.Previous }}">Previous</a>{{ end }}{{ end }}
+    <span>Page {{ .Data.Page }} of {{ .Data.Pages }}</span>
+    {{ if .Data.Next }}{{ if .Data.Picking }}<button type="button" data-media-page="{{ .Data.Next }}">Next</button>{{ else }}<a href="{{ .Data.Next }}">Next</a>{{ end }}{{ end }}
+  </nav>
+</section>
+{{ end }}
+
+{{ define "blog.mediaDetail" }}
+<section class="page-manager" hx-boost="false">
+  <header class="page-manager-heading"><h1>Image details</h1><a href="/media">Back to Media</a></header>
+  <div class="revision-image"><a href="/images/{{ .Data.ID }}" target="_blank" rel="noopener"><img src="/images/{{ .Data.ID }}" alt="Selected upload"></a></div>
+  <h2>Current uses</h2>
+  <ul>{{ range .Data.Usage.Content }}<li><a href="{{ .URL }}">{{ .Title }}</a></li>{{ else }}<li>Not used by saved posts, pages, or the site profile.</li>{{ end }}</ul>
+  {{ if .Data.Usage.History }}<h2>Saved versions</h2><ul>{{ range .Data.Usage.History }}<li><a href="{{ .URL }}">{{ .Title }} — {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}</a></li>{{ end }}</ul>{{ end }}
+  <p class="form-hint">Unsaved edits and browser recovery copies are not included.</p>
+  {{ if not .Data.Usage.Current }}<div class="content-actions"><a class="action-delete" href="/media/delete/{{ .Data.ID }}">Review deletion</a></div>{{ end }}
+</section>
+{{ end }}
+
 {{ define "blog.media" }}
 <section class="page-manager" hx-boost="false">
   <header class="page-manager-heading"><h1>Media cleanup</h1>{{ if .Data.Files }}<a class="page-create" href="/media/delete-unused">Delete all unused</a>{{ end }}</header>
+  <p><a href="/media">Browse uploads</a></p>
   <p>Save any open editors before cleanup. Unsaved edits and browser recovery copies cannot be checked. Deleting an image is permanent.</p>
   {{ with .Data.Message }}<p class="field-error" role="alert">{{ . }}</p>{{ end }}
   <h2>Unused uploads</h2>

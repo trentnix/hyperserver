@@ -168,7 +168,7 @@
       return;
     }
     assert(stage === 'background', 'Unexpected profile stage.');
-    const target = innerWidth >= 1680 ? document.body : document.querySelector('.page-top');
+    const target = document.body;
     assert(getComputedStyle(target).backgroundImage.includes(sessionStorage.getItem('backgroundURL')), 'Uploaded background was not rendered.');
     assert(document.querySelector('.portrait').getAttribute('src') === sessionStorage.getItem('imageURL'), 'Replacement portrait was not saved.');
     const feed = await (await fetch('/rss')).text();

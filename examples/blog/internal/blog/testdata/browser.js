@@ -74,13 +74,13 @@ document.removeEventListener = function(type, callback, options) {
       const main = document.querySelector('#main-content');
       const mainStyle = getComputedStyle(main);
       const pageTop = document.querySelector('.page-top');
-      const backgroundStyle = getComputedStyle(innerWidth >= 1680 ? document.body : pageTop);
+      const backgroundStyle = getComputedStyle(document.body);
       assert(backgroundStyle.backgroundImage.includes('/assets/img/site-bg.jpg'), 'Page must retain its background image at every width.');
       assert(backgroundStyle.backgroundAttachment === 'fixed' && backgroundStyle.backgroundPositionY === '100%', 'Background must stay pinned to the bottom of the viewport.');
       assert(mainStyle.backgroundImage === 'none', 'Content must not duplicate the viewport background.');
       if (innerWidth < 1680) {
-        assert(getComputedStyle(document.body).backgroundImage === 'none', 'The illustration must not extend behind the footer.');
-        assert(!pageTop.contains(footer), 'Footer must sit outside the illustration container.');
+        assert(getComputedStyle(pageTop).backgroundImage === 'none', 'The illustration must belong to the body so the footer cannot clip it.');
+        assert(!pageTop.contains(footer), 'Footer must sit outside the minimum-height content section.');
       }
       const menuToggle = document.querySelector('.menu-toggle');
       const profileLinks = document.querySelector('.profile-links');
@@ -257,7 +257,7 @@ document.removeEventListener = function(type, callback, options) {
       assert(email && password, 'Missing login controls.');
       const formWidth = document.querySelector('#login-form').getBoundingClientRect().width;
       const availableWidth = article.width - parseFloat(articleStyle.paddingLeft) - parseFloat(articleStyle.paddingRight);
-      assert(Math.abs(formWidth - Math.min(540, availableWidth)) < 1, 'Login form must remain centered and bounded without sizing its wrapper.');
+      assert(Math.abs(formWidth - Math.min(440, availableWidth)) < 1, 'Login form must stay within its maximum width and available content space.');
       assert(Math.abs(email.getBoundingClientRect().width - password.getBoundingClientRect().width) < 1, 'Email and password widths differ.');
       assert(getComputedStyle(email).paddingLeft === '12px', 'Email field has no blog styling.');
 
@@ -385,7 +385,7 @@ document.removeEventListener = function(type, callback, options) {
       for (const action of actions) {
         assert(action.getBoundingClientRect().height >= (innerWidth < 768 ? 44 : 36), 'Post action is too small to interact with.');
       }
-      assert(actions[1].matches('.action-delete') && getComputedStyle(actions[1]).borderTopStyle === 'solid', 'Delete must be separated at the end of More.');
+      assert(actions[1].matches('.action-delete') && parseFloat(getComputedStyle(actions[1]).borderTopWidth) === 0, 'A lone Delete action must not have a divider.');
       assert(actionStyle.backgroundColor !== getComputedStyle(actions[1]).backgroundColor, 'Edit must be emphasized.');
       const image = document.querySelector('.post-body img');
       assert(image, 'Published post has no image: ' + document.querySelector('.post-body').innerHTML);

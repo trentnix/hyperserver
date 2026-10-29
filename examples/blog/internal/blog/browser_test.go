@@ -208,12 +208,28 @@ func TestBrowserMediaCleanup(t *testing.T) {
 	}
 }
 
+// TestBrowserMediaLibrary checks reuse without losing unsaved content at each layout size.
+func TestBrowserMediaLibrary(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check media reuse")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "media-library") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "media-library" {
+		for i := range mediaPageSize + 1 {
+			mediaUpload(t, h.blog, fmt.Sprintf("library image %d", i))
+		}
+	}
 	if mode == "media-cleanup" {
 		mediaUpload(t, h.blog, "unused browser image")
 		historical := mediaUpload(t, h.blog, "historical browser image")
@@ -298,6 +314,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "media-library":
+		scriptFile = "testdata/media-library.js"
 	case "media-cleanup":
 		scriptFile = "testdata/media-cleanup.js"
 	case "navigation":

@@ -21,8 +21,13 @@
       return;
     }
     if (stage === 'logged-in') {
-      sessionStorage.setItem('media-stage', 'list');
+      sessionStorage.setItem('media-stage', 'library');
       if (innerWidth < 768) document.querySelector('.account-menu summary').click();
+      document.querySelector('a[href="/media"]').click();
+      return;
+    }
+    if (stage === 'library') {
+      sessionStorage.setItem('media-stage', 'list');
       document.querySelector('a[href="/media/unused"]').click();
       return;
     }

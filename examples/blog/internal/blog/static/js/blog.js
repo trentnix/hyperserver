@@ -167,6 +167,7 @@
     root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
     root.querySelectorAll('.image-upload-controls').forEach(controls => { controls.hidden = false; });
+    root.querySelectorAll('[data-media-upload]').forEach(form => { form.hidden = false; });
     const textarea = root.querySelector('#post-content');
     if (textarea && window.EasyMDE && !editors.has(textarea)) {
       // EasyMDE replaces native textarea validation. The server remains authoritative.
@@ -192,6 +193,9 @@
           {name: 'unordered-list', action: EasyMDE.toggleUnorderedList, className: 'tool-list', title: 'List'},
           {name: 'link', action: EasyMDE.drawLink, className: 'tool-link', title: 'Link'},
           {name: 'upload-image', action: EasyMDE.drawUploadedImage, className: 'tool-image', title: 'Upload image'},
+          {name: 'media-library', action: () => openMediaLibrary(path => {
+            if (textarea.isConnected) editor.codemirror.replaceSelection(`![](${path})`);
+          }), className: 'tool-library', title: 'Choose existing image'},
           '|',
           {name: 'preview', action: EasyMDE.togglePreview, className: 'tool-preview', title: 'Preview'}
         ],
@@ -216,6 +220,116 @@
     }
   }
 
+  // A separate native dialog keeps the current editor and its unsaved writing intact.
+  // Cancel pending reads when paging or closing. Selection never uploads another copy.
+  function openMediaLibrary(select) {
+    if (document.querySelector('.media-browser')) return;
+    const opener = document.activeElement;
+    const dialog = document.createElement('dialog');
+    dialog.className = 'media-browser';
+    dialog.setAttribute('aria-labelledby', 'media-browser-title');
+    dialog.innerHTML = '<header class="page-manager-heading"><h2 id="media-browser-title">Choose an image</h2><button type="button" data-close-dialog autofocus>Cancel</button></header><p role="status" data-media-status></p><div data-media-results></div>';
+    const results = dialog.querySelector('[data-media-results]');
+    const status = dialog.querySelector('[data-media-status]');
+    let request;
+    let choosing = false;
+    async function load(path) {
+      request?.abort();
+      request = new AbortController();
+      results.replaceChildren();
+      status.textContent = 'Loading images…';
+      try {
+        const response = await fetch(path, {headers: {'HX-Request': 'true'}, signal: request.signal});
+        if (!response.ok) throw new Error('Unable to load images. Close the library and try again.');
+        const document = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const library = document.querySelector('[data-media-library]');
+        if (!library) throw new Error('Unable to load images. Sign in again if your session has expired.');
+        if (!dialog.open) return;
+        results.replaceChildren(library);
+        status.textContent = '';
+        results.scrollTop = 0;
+      } catch (error) {
+        if (error.name !== 'AbortError') status.textContent = error.message;
+      }
+    }
+    dialog.addEventListener('click', async event => {
+      const page = event.target.closest('[data-media-page]');
+      if (page) {
+        event.preventDefault();
+        if (!choosing) load(page.dataset.mediaPage);
+        return;
+      }
+      const button = event.target.closest('[data-media-select]');
+      if (!button || choosing) return;
+      const id = button.dataset.mediaSelect;
+      if (!/^[a-f0-9]{64}\.(png|jpeg|gif)$/.test(id)) return;
+      choosing = true;
+      button.disabled = true;
+      status.textContent = 'Checking image…';
+      try {
+        // Cleanup can remove an image after the library was opened. Saving also
+        // checks references, because choosing an image does not reserve it.
+        const path = '/images/' + id;
+        const response = await fetch(path, {method: 'HEAD', signal: request.signal});
+        if (response.status === 404) throw new Error('This image is no longer available. Choose another image or reopen the library.');
+        if (!response.ok) throw new Error('Unable to check this image. Try again, or sign in again if your session has expired.');
+        if (!dialog.open) return;
+        select(path);
+        dialog.close();
+      } catch (error) {
+        if (error.name !== 'AbortError') status.textContent = error.message;
+      } finally {
+        choosing = false;
+        button.disabled = false;
+      }
+    });
+    dialog.addEventListener('close', () => {
+      request?.abort();
+      dialog.remove();
+      if (opener?.isConnected) opener.focus({preventScroll: true});
+    }, {once: true});
+    document.body.append(dialog);
+    dialog.showModal();
+    load('/media?pick=1');
+  }
+
+  // The library and profile controls use the same validated upload endpoint as the editor.
+  async function uploadImage(file) {
+    if (file.size > 8 * 1024 * 1024) throw new Error('Choose an image of at most 8 MiB.');
+    const data = new FormData();
+    data.append('image', file);
+    const response = await fetch('/post/images/upload', {method: 'POST', body: data});
+    if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('Unable to upload the image.');
+    const result = await response.json();
+    if (!response.ok) throw new Error(result?.error || 'Unable to upload the image.');
+    const path = result?.data?.filePath;
+    if (typeof path !== 'string' || !/^\/images\/[a-f0-9]{64}\.(png|jpeg|gif)$/.test(path)) throw new Error('Invalid image upload response.');
+    return path;
+  }
+
+  document.addEventListener('submit', async event => {
+    const form = event.target;
+    if (!form.matches('[data-media-upload]')) return;
+    event.preventDefault();
+    if (form.dataset.uploading) return;
+    const input = form.elements.image;
+    if (!input.files.length) return;
+    const button = form.querySelector('[type=submit]');
+    const status = form.querySelector('[data-upload-status]');
+    form.dataset.uploading = 'true';
+    input.disabled = button.disabled = true;
+    status.textContent = 'Uploading image…';
+    try {
+      const path = await uploadImage(input.files[0]);
+      location.assign('/media/' + path.slice('/images/'.length));
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      delete form.dataset.uploading;
+      input.disabled = button.disabled = false;
+    }
+  });
+
   // Post and page previews store an image ID. Profile fields store the complete URL.
   function updateImagePreview(picker) {
     const value = picker.querySelector('[data-image-value]').value.trim();
@@ -227,6 +341,19 @@
   }
 
   document.addEventListener('click', event => {
+    const browse = event.target.closest('[data-media-browse]');
+    if (browse && !browse.form.dataset.uploading) {
+      const picker = browse.closest('[data-image-picker]');
+      openMediaLibrary(path => {
+        if (!picker.isConnected || browse.form.dataset.uploading) return;
+        const input = picker.querySelector('[data-image-value]');
+        input.value = path.slice((picker.dataset.imagePrefix || '').length);
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        input.dispatchEvent(new Event('change', {bubbles: true}));
+        picker.querySelector('input[type="file"]').value = '';
+        picker.querySelector('[data-image-status]').textContent = 'Image selected. Save to apply.';
+      });
+    }
     const remove = event.target.closest('[data-image-reset]');
     if (remove) {
       if (remove.form.dataset.uploading) return;
@@ -266,18 +393,11 @@
       return;
     }
     form.dataset.uploading = 'true';
-    const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [type="submit"]')].filter(control => !control.disabled);
+    const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [data-media-browse], [type="submit"]')].filter(control => !control.disabled);
     controls.forEach(control => { control.disabled = true; });
     status.textContent = 'Uploading image…';
     try {
-      const data = new FormData();
-      data.append('image', file);
-      const response = await fetch('/post/images/upload', {method: 'POST', body: data});
-      if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('Unable to upload the image.');
-      const result = await response.json();
-      if (!response.ok) throw new Error(result?.error || 'Unable to upload the image.');
-      const path = result?.data?.filePath;
-      if (typeof path !== 'string' || !path.startsWith('/images/')) throw new Error('Invalid image upload response.');
+      const path = await uploadImage(file);
       picker.querySelector('[data-image-value]').value = path.slice((picker.dataset.imagePrefix || '').length);
       picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
       updateImagePreview(picker);

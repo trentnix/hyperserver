@@ -29,8 +29,6 @@
     }
     const article = document.querySelector('#article-content');
     const background = getComputedStyle(body).backgroundImage;
-    const pageTop = document.querySelector('.page-top');
-    const readingBackground = getComputedStyle(pageTop).backgroundImage;
     const main = document.querySelector('#main-content');
     const contentBackground = getComputedStyle(main).backgroundImage;
     const sidebarWidth = sidebar.getBoundingClientRect().width;
@@ -46,7 +44,8 @@
       assert(document.body === body && document.querySelector('.site-sidebar') === sidebar, 'Navigation replaced the page shell.');
       assert(document.querySelector('#post-archive .post-archive') === archive, 'Navigation replaced Recent Posts.');
       assert(document.querySelector('#article-content') === article, 'Navigation replaced the article container.');
-      assert(getComputedStyle(body).backgroundImage === background, 'Navigation changed the background.');
+      const expectedBackground = innerWidth < 1680 && article.querySelector('.post-archive') ? 'none' : background;
+      assert(getComputedStyle(body).backgroundImage === expectedBackground, 'Navigation changed the background unexpectedly.');
       assert(document.querySelector('#main-content') === main && getComputedStyle(main).backgroundImage === contentBackground, 'Navigation replaced the content background.');
       assert(archiveRequests() === initialRequests, 'Navigation fetched Recent Posts again.');
       if (innerWidth >= 1680) {
@@ -216,13 +215,13 @@
     await headerVisible();
     assert(article.querySelector('h1')?.textContent === 'All Posts', 'All posts link must open the full archive.');
     assertHeading();
-    if (innerWidth < 1680) assert(getComputedStyle(pageTop).backgroundImage === 'none', 'The full archive must keep its links clear of the illustration.');
+    if (innerWidth < 1680) assert(getComputedStyle(body).backgroundImage === 'none', 'The full archive must keep its links clear of the illustration.');
     archiveVisible(innerWidth >= 1680);
     unchanged();
     article.querySelector('a[href="/post/s/second"]').click();
     await wait(() => postVisible('second'));
     await headerVisible();
-    assert(getComputedStyle(pageTop).backgroundImage === readingBackground, 'Returning to a post must restore its illustration.');
+    assert(getComputedStyle(body).backgroundImage === background, 'Returning to a post must restore its illustration.');
     archiveVisible(true);
     unchanged();
 

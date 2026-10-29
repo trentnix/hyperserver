@@ -129,7 +129,7 @@ type mediaFile struct {
 // Version detects uploads replaced after a cleanup page was loaded.
 func (f mediaFile) Version() int64 { return f.Modified.UnixNano() }
 
-// mediaStore limits cleanup to generated upload files, never application assets.
+// mediaStore browses and removes generated upload files, never application assets.
 type mediaStore interface {
 	List(context.Context) ([]mediaFile, error)
 	Remove(context.Context, string, int64) error

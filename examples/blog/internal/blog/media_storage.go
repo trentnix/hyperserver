@@ -3,6 +3,7 @@ package blog
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +17,13 @@ type mediaReferenceRepository interface {
 // mediaUsage distinguishes protected current content from removable historical uses.
 type mediaUsage struct {
 	Current bool
+	Content []mediaReference
 	History []mediaRevision
+}
+
+// mediaReference identifies saved content that currently uses an upload.
+type mediaReference struct {
+	URL, Title string
 }
 
 // mediaRevision links an upload to the saved writing that would lose it.
@@ -43,19 +50,29 @@ func referencedImageID(reference string) string {
 // Historical relative URLs resolve against their owner's current URL, as in the editor.
 func (s *sqliteRepository) ReferencedImages(ctx context.Context) (map[string]mediaUsage, error) {
 	used := make(map[string]mediaUsage)
-	rows, err := s.db.QueryContext(ctx, `SELECT url FROM blog_post_images UNION SELECT url FROM blog_page_images
-UNION SELECT image_url FROM blog_profile UNION SELECT favicon_url FROM blog_profile UNION SELECT background_url FROM blog_profile`)
+	rows, err := s.db.QueryContext(ctx, `SELECT i.url, '/post/update/' || p.id AS location, p.title FROM blog_post_images i JOIN blog_posts p ON p.id=i.owner_id
+UNION SELECT i.url, '/pages/update/' || p.id, p.title FROM blog_page_images i JOIN blog_pages p ON p.id=i.owner_id
+UNION SELECT image_url, '/profile', 'Site portrait' FROM blog_profile
+UNION SELECT favicon_url, '/profile', 'Site favicon' FROM blog_profile
+UNION SELECT background_url, '/profile', 'Site background' FROM blog_profile
+ORDER BY location, title, url`)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		var reference string
-		if err := rows.Scan(&reference); err != nil {
+		var content mediaReference
+		if err := rows.Scan(&reference, &content.URL, &content.Title); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		if id := referencedImageID(reference); id != "" {
-			used[id] = mediaUsage{Current: true}
+			usage := used[id]
+			usage.Current = true
+			if !slices.Contains(usage.Content, content) {
+				usage.Content = append(usage.Content, content)
+			}
+			used[id] = usage
 		}
 	}
 	err = rows.Err()
