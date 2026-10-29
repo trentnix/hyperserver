@@ -70,7 +70,7 @@ func TestReturningUserNavigation(t *testing.T) {
 		for _, path := range []string{"/", "/about", "/post/s/welcome", loginURL} {
 			w := h.request(http.MethodGet, path, nil, false)
 			requireStatus(t, w, http.StatusOK)
-			if got := strings.Contains(w.Body.String(), link); got != (value == "1") {
+			if got := strings.Contains(w.Body.String(), link); got != (value == "1" && path != loginURL) {
 				t.Errorf("cookie=%q path=%s: login link visible=%v", value, path, got)
 			}
 			if path == loginURL && !strings.Contains(w.Body.String(), `name="password"`) {
@@ -84,6 +84,45 @@ func TestReturningUserNavigation(t *testing.T) {
 		}
 		// Even a forged presentation cookie cannot authorize publishing.
 		requireStatus(t, h.request(http.MethodGet, "/post/create", nil, false), http.StatusForbidden)
+	}
+}
+
+// TestAuthFormNavigation keeps login below registration, including validation responses.
+func TestAuthFormNavigation(t *testing.T) {
+	h := newHarness(t)
+	const link = `href="/auth/login/email">Log in</a>`
+	for _, returning := range []bool{false, true} {
+		if returning {
+			h.cookies[returningUserCookie] = &http.Cookie{Name: returningUserCookie, Value: "1"}
+		}
+		for _, hx := range []bool{false, true} {
+			login := h.request("GET", loginURL, nil, hx)
+			requireStatus(t, login, http.StatusOK)
+			if strings.Contains(login.Body.String(), link) {
+				t.Fatal("login page links to itself")
+			}
+			for _, method := range []string{"GET", "POST"} {
+				response := h.request(method, "/auth/register/email", url.Values{"email": {"trentnix@gmail.com"}}, hx)
+				requireStatus(t, response, http.StatusOK)
+				body := response.Body.String()
+				if method == "POST" && !strings.Contains(body, "This field is required.") {
+					t.Fatal("expected registration validation errors")
+				}
+				start := strings.Index(body, `id="register-form"`)
+				if start < 0 {
+					t.Fatal("registration form missing")
+				}
+				end := strings.Index(body[start:], "</form>")
+				if end < 0 {
+					t.Fatal("registration form not closed")
+				}
+				footerEnd := strings.Index(body[start+end:], "</div>")
+				linkAt := strings.Index(body, link)
+				if strings.Count(body, link) != 1 || linkAt <= start+end || linkAt >= start+end+footerEnd {
+					t.Fatal("login link must appear exactly once, below the form inside the registration wrapper")
+				}
+			}
+		}
 	}
 }
 

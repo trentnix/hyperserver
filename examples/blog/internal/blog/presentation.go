@@ -40,8 +40,8 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 	if err := cm.ApplyDefaults("blog", func(cm *contentservice.ContentManagerService) {
 		cm.RegisterLayouts(contentservice.PageType, blogModuleFS, "templates/layout.html")
 		cm.RegisterLayouts(contentservice.HtmxType, blogModuleFS, "templates/fragment.html")
-		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html")
-		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/notifications.html")
+		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html")
+		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/notifications.html", "templates/auth.html")
 		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", "/", loginURL
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
@@ -52,6 +52,10 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 			}
 			cookie, err := r.Cookie(returningUserCookie)
 			data.ShowLogin = !data.SignedIn && err == nil && cookie.Value == "1"
+			switch r.URL.Path {
+			case "/auth/login", loginURL, "/auth/register", "/auth/register/email":
+				data.ShowLogin = false
+			}
 			if registration && !data.SignedIn {
 				_, err := accounts.GetByEmail(r.Context(), access.emailKey)
 				data.Registration = errors.Is(err, user.ErrUserNotFound)

@@ -323,13 +323,31 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 }
 
 /* Authentication. */
-.auth-email-form, #reset-request-form, #reset-password-form, .verification-panel { max-width: 540px; margin: 0 auto; padding: 28px; border: 1px solid #e1e3e8; border-radius: 5px; background: #f7f8fa; }
-:is(.auth-email-form, #reset-request-form, #reset-password-form) button { margin: 22px 0 12px; }
-.auth-email-form a { display: inline-block; font-size: .9em; }
+.auth-form-footer { max-width: 440px; margin: 0; font-size: 14px; line-height: 1.5; }
+.auth-form-footer a { display: inline-block; padding-block: 6px; text-underline-offset: .2em; }
+.auth-email-form, #reset-request-form, #reset-password-form { max-width: 440px; margin: 0; }
+.auth-email-form { padding-top: 32px; }
+:is(.auth-email-form, #reset-request-form, #reset-password-form) {
+  label { margin: 24px 0 8px; color: #343d4b; }
+  label:first-child { margin-top: 0; }
+  input { min-height: 46px; border-color: #cbd1da; border-radius: 6px; }
+  input[aria-invalid=true], input.input-error { border-color: #a12626; }
+  button { min-height: 44px; min-width: 120px; margin: 28px 0 12px; border-radius: 6px; font-weight: 600; }
+  button:hover { background: #495569; border-color: #495569; }
+  a { display: inline-block; padding-block: 6px; font-size: .9em; text-underline-offset: .2em; }
+  .field-error { display: block; margin-top: 6px; font-size: .9em; }
+  .form-messages { padding: 12px 16px; border-left: 3px solid #cbd1da; background: #f3f4f8; }
+  .form-messages ul { margin: 0; padding: 0; list-style: none; }
+  .form-messages li + li { margin-top: 6px; }
+}
+.verification-panel { max-width: 540px; margin: 0 auto; padding: 28px; border: 1px solid #e1e3e8; border-radius: 5px; background: #f7f8fa; }
 .verification-panel h1 { font-size: 1.5em; }
 .verification-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
 
-@media (max-width: 767px) { .auth-email-form, #reset-request-form, #reset-password-form, .verification-panel { padding: 20px; } }
+@media (min-width: 768px) and (max-width: 1679px) {
+  .auth-email-form, .auth-form-footer { margin-inline: auto; }
+}
+@media (max-width: 767px) { .verification-panel { padding: 20px; } }
 
 /* Editor and dialogs. */
 dialog { color: inherit; border: 1px solid #d4d7df; border-radius: 6px; padding: 30px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; }

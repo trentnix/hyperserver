@@ -1,0 +1,27 @@
+{{/* Keep the login link with registration when HTMX replaces validation responses. */}}
+{{ define "auth.partial.email.register.form" }}
+{{ with .Data }}
+<div id="register" class="container">
+  <form id="register-form" class="auth-email-form" method="post" action="{{ .ActionUrl }}" hx-post="{{ .ActionUrl }}" hx-target="#register" hx-swap="outerHTML">
+    {{ if .HasInfoMessages }}<div class="form-messages"><ul>{{ range .GetInfoMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}
+    {{ if .HasSuccessMessages }}<div class="form-messages"><ul>{{ range .GetSuccessMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}
+
+    <label for="email">Email</label>
+    <input type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" id="email" name="email" value="{{ .Email }}" required{{ if .HasFieldErrors "Email" }} aria-invalid="true"{{ end }}>
+    {{ range .GetFieldErrors "Email" }}<span class="field-error">{{ . }}</span>{{ end }}
+
+    <label for="password">Password</label>
+    <input type="password" autocomplete="new-password" id="password" name="password" required{{ if .HasFieldErrors "Password" }} aria-invalid="true"{{ end }}>
+    {{ range .GetFieldErrors "Password" }}<span class="field-error">{{ . }}</span>{{ end }}
+
+    <label for="passwordMatch">Confirm Password</label>
+    <input type="password" autocomplete="new-password" id="passwordMatch" name="passwordMatch" required{{ if .HasFieldErrors "PasswordMatch" }} aria-invalid="true"{{ end }}>
+    {{ range .GetFieldErrors "PasswordMatch" }}<span class="field-error">{{ . }}</span>{{ end }}
+
+    <button type="submit">Register</button>
+    {{ if .HasErrorMessages }}<div class="form-messages" role="alert"><ul>{{ range .GetErrorMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}
+  </form>
+  <p class="auth-form-footer"><a href="/auth/login/email">Log in</a></p>
+</div>
+{{ else }}<p>Unable to display registration details.</p>{{ end }}
+{{ end }}
