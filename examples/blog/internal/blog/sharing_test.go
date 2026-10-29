@@ -118,7 +118,7 @@ func TestSharingPublicContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	imageID, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+	imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 	if err != nil {
 		t.Fatal(err)
 	}

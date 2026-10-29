@@ -29,7 +29,7 @@ func mediaUpload(t *testing.T, m *module, label string) mediaFile {
 	if err := png.Encode(&data, pixels); err != nil {
 		t.Fatal(err)
 	}
-	id, err := m.images.Put(t.Context(), "image/png", data.Bytes())
+	id, err := m.images.Put(t.Context(), testImageUpload("image/png", data.Bytes()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestMediaCleanupHTTP(t *testing.T) {
 // TestMediaFileSafety checks generated names, replacement detection, cancellation, and filesystem failures.
 func TestMediaFileSafety(t *testing.T) {
 	s := newTestImageStore(t)
-	id, err := s.Put(t.Context(), "image/png", []byte("image"))
+	id, err := s.Put(t.Context(), testImageUpload("image/png", []byte("image")))
 	if err != nil {
 		t.Fatal(err)
 	}

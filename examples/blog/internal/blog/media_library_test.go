@@ -70,6 +70,21 @@ func TestMediaDetail(t *testing.T) {
 	requireStatus(t, h.request("GET", path, nil, false), http.StatusInternalServerError)
 }
 
+// TestMediaSizeLabel keeps card metadata readable without losing the stored-size unit.
+func TestMediaSizeLabel(t *testing.T) {
+	for _, tc := range []struct {
+		size int64
+		want string
+	}{
+		{0, "0 B"}, {1, "1 B"}, {1023, "1023 B"}, {1024, "1.0 KiB"},
+		{1536, "1.5 KiB"}, {1024 * 1024, "1.0 MiB"}, {1536 * 1024, "1.5 MiB"},
+	} {
+		if got := (mediaFile{Size: tc.size}).SizeLabel(); got != tc.want {
+			t.Errorf("%d bytes: %s, want %s", tc.size, got, tc.want)
+		}
+	}
+}
+
 // TestMediaLibrary protects private uploads and bounds both response variants.
 func TestMediaLibrary(t *testing.T) {
 	h := newHarness(t)
@@ -93,6 +108,9 @@ func TestMediaLibrary(t *testing.T) {
 		requireStatus(t, w, http.StatusOK)
 		if !strings.Contains(w.Body.String(), `data-media-select="`+f.ID+`"`) || w.Header().Get("Cache-Control") != "no-store" {
 			t.Fatal("missing selection or private cache policy")
+		}
+		if !strings.Contains(w.Body.String(), `src="/images/`+f.ID+`?variant=thumbnail"`) {
+			t.Fatal("library requested the full image instead of a thumbnail")
 		}
 	}
 	files := make([]mediaFile, mediaPageSize+1)

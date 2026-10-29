@@ -2,12 +2,25 @@ package blog
 
 import (
 	"cmp"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
 )
 
 const mediaPageSize = 24
+
+// SizeLabel formats total stored bytes for the media cards, not the download size.
+func (f mediaFile) SizeLabel() string {
+	switch {
+	case f.Size >= 1024*1024:
+		return fmt.Sprintf("%.1f MiB", float64(f.Size)/(1024*1024))
+	case f.Size >= 1024:
+		return fmt.Sprintf("%.1f KiB", float64(f.Size)/1024)
+	default:
+		return fmt.Sprintf("%d B", f.Size)
+	}
+}
 
 // mediaDetailPage pairs an upload with its current and historical references.
 type mediaDetailPage struct {

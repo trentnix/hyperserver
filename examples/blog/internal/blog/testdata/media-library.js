@@ -69,6 +69,15 @@
       editor.setValue('Keep this writing.\n\n');
       editor.setCursor({line: 2, ch: 0});
       const browse = form.querySelector('[data-media-browse]');
+      const preview = form.querySelector('.page-preview');
+      const frame = preview.querySelector('.preview-image-frame');
+      const previewBounds = preview.getBoundingClientRect();
+      assert(frame.getBoundingClientRect().width === 160, 'Editor preview should remain a compact thumbnail.');
+      for (const control of preview.querySelectorAll('input[type=file], button')) {
+        const box = control.getBoundingClientRect();
+        assert(box.left >= previewBounds.left && box.right <= previewBounds.right, 'Preview controls must fit the editor at every viewport.');
+      }
+      if (stage === 'post') assert(getComputedStyle(frame.querySelector('.image-empty')).display !== 'none', 'An empty post selection should explain the automatic image.');
       await open(browse);
       library().querySelector('[data-close-dialog]').click();
       await wait(() => !document.querySelector('.media-browser'));
@@ -81,9 +90,12 @@
       const choice = library().querySelector('[data-media-select]');
       const id = choice.dataset.mediaSelect;
       choice.click();
-      await wait(() => !library());
+      // close() clears open before the close event removes the dialog. Wait for
+      // removal before clicking another chooser, which guards against duplicates.
+      await wait(() => !document.querySelector('.media-browser'));
       assert(form.elements.previewImage.value === id, 'Preview selection stored the wrong ID.');
       assert(form.querySelector('[data-image-preview]').getAttribute('src') === '/images/' + id, 'Preview did not update.');
+      if (stage === 'post') assert(getComputedStyle(frame.querySelector('.image-empty')).display === 'none', 'The automatic-image placeholder must disappear after selection.');
       assert(form.elements.title.value === 'Unsaved ' + stage && editor.getValue() === 'Keep this writing.\n\n', 'Selection lost unsaved writing.');
       const bodyImage = await choose(form.querySelector('.tool-library'));
       assert(editor.getValue().includes('![](/images/' + bodyImage + ')'), 'Existing image was not inserted into Markdown.');
@@ -105,6 +117,17 @@
     if (stage === 'upload') {
       const form = document.querySelector('[data-media-upload]');
       assert(form && !form.hidden, 'Media page must offer direct uploads.');
+      const bounds = form.getBoundingClientRect();
+      for (const control of form.querySelectorAll('input, button')) {
+        const box = control.getBoundingClientRect();
+        assert(box.left >= bounds.left && box.right <= bounds.right, 'Upload controls must fit the panel at every viewport.');
+      }
+      if (innerWidth >= 768) assert(bounds.height < 200, 'Desktop upload panel should leave the images in view.');
+      for (const card of document.querySelectorAll('.media-card')) {
+        assert(card.querySelector('.media-filename') && card.querySelector('time'), 'Image and metadata must share the details link.');
+        assert(getComputedStyle(card.querySelector('time')).whiteSpace === 'nowrap', 'Dates must not split across lines.');
+        assert(card.querySelector('.media-card-meta').textContent.match(/(?:B|KiB|MiB) stored/), 'Cards must show readable storage units.');
+      }
       assert(document.querySelector('a[href="/media/unused"]').classList.contains('page-create'), 'Cleanup must use the management button style.');
       const input = form.elements.image;
       const chooseFile = file => { const transfer = new DataTransfer(); transfer.items.add(file); input.files = transfer.files; };
@@ -171,7 +194,7 @@
     await wait(() => library()?.querySelector('[data-media-status]').textContent.includes('no longer available'));
     assert(form.elements.imageURL.value === previous, 'Failed selection overwrote the previous value.');
     library().querySelector('[data-close-dialog]').click();
-    await wait(() => !library());
+    await wait(() => !document.querySelector('.media-browser'));
     const listed = await fetch('/media?pick=1');
     const remaining = new DOMParser().parseFromString(await listed.text(), 'text/html');
     assert(remaining.querySelectorAll('[data-media-select]').length === 24 && remaining.body.textContent.includes('Page 1 of 1'), 'Selection uploaded additional copies.');

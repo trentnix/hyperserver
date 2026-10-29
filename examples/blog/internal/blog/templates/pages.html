@@ -181,16 +181,21 @@
   <small id="order-help" class="form-hint">Enter a whole number from 0 to 1,000,000. Ordered siblings appear first, lowest number first. Leave blank to sort by most recently updated. Update time also breaks ties.</small>
   <fieldset class="image-picker page-preview" data-image-picker data-image-default="/assets/img/project-default.svg" data-image-prefix="/images/">
     <legend>Preview image</legend>
-    <img src="{{ .Data.PreviewURL }}" alt="Current page card preview" width="320" height="200" data-image-preview>
+    <p class="form-hint">Used for parent-page previews and sharing links, not the page body.</p>
     <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
-    <div class="image-upload-controls" hidden>
-      <button type="button" class="button-secondary" data-media-browse>Choose existing</button>
-      <label for="page-image">Upload a preview image</label><input id="page-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="preview-help">
-      <button type="button" class="text-button" data-image-reset>Use default image</button>
+    <div class="preview-image-row">
+      <div class="preview-image-frame"><img src="{{ .Data.PreviewURL }}" alt="Current page card preview" width="160" height="100" data-image-preview></div>
+      <div class="preview-image-controls">
+        <div class="image-upload-controls" hidden>
+          <div class="form-actions"><button type="button" class="button-secondary" data-media-browse>Choose existing</button><input id="page-image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" aria-describedby="preview-help"></div>
+          <button type="button" class="text-button" data-image-reset>Use default image</button>
+        </div>
+        <p class="form-hint">Leave the selection empty to use the default card image. Sharing can use a content image or the site portrait.</p>
+        <p data-image-status role="status"></p>
+      </div>
     </div>
-    <p id="preview-help" class="form-hint">Used for parent-page previews and sharing links, not the page body. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Draft-only images are private. Images shared with public content remain public.</p>
+    <details class="preview-image-help"><summary>Image requirements and privacy</summary><p id="preview-help" class="form-hint">PNG, JPEG, or GIF · Up to 8 MiB and 20 million pixels. Draft-only images are private. Images shared with public content remain public.</p></details>
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
-    <p data-image-status role="status"></p>
   </fieldset>
   <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16">{{ .Data.Markdown }}</textarea>
   <p class="form-hint">Up to 256 KiB of Markdown. Content can be empty.</p>
@@ -245,17 +250,22 @@
   <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
   <fieldset class="image-picker page-preview" data-image-picker data-image-prefix="/images/">
-    <legend>Preview image (optional)</legend>
-    <img {{ if .Data.PreviewURL }}src="{{ .Data.PreviewURL }}"{{ else }}hidden{{ end }} alt="Selected sharing preview" width="320" height="200" data-image-preview>
+    <legend>Preview image <span>(optional)</span></legend>
+    <p class="form-hint">Used when sharing a link, not in the post body.</p>
     <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
-    <div class="image-upload-controls" hidden>
-      <button type="button" class="button-secondary" data-media-browse>Choose existing</button>
-      <label for="post-image">Upload a preview image</label><input id="post-image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="post-preview-help">
-      <button type="button" class="text-button" data-image-reset>Use automatic selection</button>
+    <div class="preview-image-row">
+      <div class="preview-image-frame"><img {{ if .Data.PreviewURL }}src="{{ .Data.PreviewURL }}"{{ else }}hidden{{ end }} alt="Selected sharing preview" width="160" height="100" data-image-preview><span class="image-empty">Automatic image</span></div>
+      <div class="preview-image-controls">
+        <div class="image-upload-controls" hidden>
+          <div class="form-actions"><button type="button" class="button-secondary" data-media-browse>Choose existing</button><input id="post-image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" aria-describedby="post-preview-help"></div>
+          <button type="button" class="text-button" data-image-reset>Use automatic selection</button>
+        </div>
+        <p class="form-hint">Without a selection, sharing uses the first suitable content image, then the site portrait.</p>
+        <p data-image-status role="status"></p>
+      </div>
     </div>
-    <p id="post-preview-help" class="form-hint">Used when sharing a link, not in the post body. Without a selection, sharing uses the first suitable content image, then the site portrait. PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. Draft-only images are private. Images shared with public content remain public.</p>
+    <details class="preview-image-help"><summary>Image requirements and privacy</summary><p id="post-preview-help" class="form-hint">PNG, JPEG, or GIF · Up to 8 MiB and 20 million pixels. Draft-only images are private. Images shared with public content remain public.</p></details>
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
-    <p data-image-status role="status"></p>
   </fieldset>
   {{ template "blog.markdownFields" .Data }}
   <label for="post-publication">Publish</label>
@@ -351,20 +361,24 @@
 {{ define "blog.mediaLibrary" }}
 <section class="page-manager media-library" data-media-library hx-boost="false">
   {{ if not .Data.Picking }}
-  <header class="page-manager-heading"><h1>Media</h1><a class="page-create" href="/media/unused">Clean up uploads</a></header>
+  <header class="page-manager-heading"><h1>Media</h1><a class="page-create media-cleanup-link" href="/media/unused">Clean up uploads</a></header>
   <form class="media-upload" data-media-upload method="post" action="/post/images/upload" enctype="multipart/form-data" hidden>
-    <label for="library-upload">Upload an image</label>
-    <p class="form-hint" id="library-upload-help">PNG, JPEG, or GIF, up to 8 MiB. Uploads stay private until used in published content or the site profile.</p>
+    <div class="media-upload-heading"><label for="library-upload">Upload an image</label><span id="library-upload-help">PNG, JPEG, or GIF · Up to 8 MiB</span></div>
     <div class="form-actions"><input id="library-upload" name="image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="library-upload-help" required><button type="submit">Upload image</button></div>
+    <p class="form-hint">Private until used in published content or the site profile.</p>
     <p role="status" data-upload-status></p>
   </form>
   {{ end }}
   <p class="form-hint">{{ if .Data.Picking }}Choose an image, then save your edits to use it.{{ else }}Select an image to see where it is used.{{ end }} Newest uploads first.</p>
   <ul class="media-grid">
   {{ range .Data.Files }}<li>
-    {{ if $.Data.Picking }}<a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ else }}<a href="/media/{{ .ID }}">{{ end }}<img src="/images/{{ .ID }}" alt="Uploaded image {{ .ID }}" loading="lazy" width="240" height="160"></a>
-    <span class="media-filename" title="{{ .ID }}">{{ .ID }}</span>
-    <small>{{ .Size }} bytes · {{ .Modified.UTC.Format "Jan 2, 2006" }}</small>
+    {{ if $.Data.Picking }}<a class="media-card" href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ else }}<a class="media-card" href="/media/{{ .ID }}">{{ end }}
+      <img src="/images/{{ .ID }}?variant=thumbnail" alt="Uploaded image {{ .ID }}" loading="lazy" width="240" height="160">
+      <span class="media-card-caption">
+        <span class="media-filename" title="{{ .ID }}">{{ .ID }}</span>
+        <span class="media-card-meta"><span title="Total storage, including the original and generated copies">{{ .SizeLabel }} stored</span><time datetime="{{ .Modified.UTC.Format "2006-01-02" }}">{{ .Modified.UTC.Format "Jan 2, 2006" }}</time></span>
+      </span>
+    </a>
     {{ if $.Data.Picking }}<button type="button" data-media-select="{{ .ID }}">Use image</button>{{ end }}
   </li>{{ else }}<li class="page-manager-empty">No uploaded images.</li>{{ end }}
   </ul>
@@ -380,6 +394,7 @@
 <section class="page-manager" hx-boost="false">
   <header class="page-manager-heading"><h1>Image details</h1><a href="/media">Back to Media</a></header>
   <div class="revision-image"><a href="/images/{{ .Data.ID }}" target="_blank" rel="noopener"><img src="/images/{{ .Data.ID }}" alt="Selected upload"></a></div>
+  <p><a href="/images/{{ .Data.ID }}?variant=original" download>Download original</a></p>
   <h2>Current uses</h2>
   <ul>{{ range .Data.Usage.Content }}<li><a href="{{ .URL }}">{{ .Title }}</a></li>{{ else }}<li>Not used by saved posts, pages, or the site profile.</li>{{ end }}</ul>
   {{ if .Data.Usage.History }}<h2>Saved versions</h2><ul>{{ range .Data.Usage.History }}<li><a href="{{ .URL }}">{{ .Title }} — {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}</a></li>{{ end }}</ul>{{ end }}
@@ -398,7 +413,7 @@
   <p>These uploads are not used by saved posts, pages, the site profile, or saved versions. Drafts and scheduled posts are included in the check.</p>
   <ul class="page-manager-list media-list" aria-label="Unused uploads">
   {{ range .Data.Files }}<li class="page-manager-row">
-    <div class="media-details"><img src="/images/{{ .ID }}" alt="Unused upload" loading="lazy"><div class="page-manager-title"><a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ .ID }}</a><small>{{ .Size }} bytes · Uploaded {{ .Modified.UTC.Format "Jan 2, 2006 at 3:04 PM UTC" }}</small></div></div>
+    <div class="media-details"><img src="/images/{{ .ID }}?variant=thumbnail" alt="Unused upload" loading="lazy"><div class="page-manager-title"><a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ .ID }}</a><small>{{ .Size }} stored bytes · Uploaded {{ .Modified.UTC.Format "Jan 2, 2006 at 3:04 PM UTC" }}</small></div></div>
     <div class="page-manager-actions"><a href="/media/delete/{{ .ID }}">Delete</a></div>
   </li>{{ else }}<li class="page-manager-empty">No unused uploads.</li>{{ end }}
   </ul>
@@ -407,7 +422,7 @@
   <p>These images are not used by current content. Deleting one leaves its saved versions intact, but their image will no longer be available. Bulk cleanup does not delete these images.</p>
   <ul class="page-manager-list media-list" aria-label="Historical uploads">
   {{ range .Data.History }}<li class="page-manager-row">
-    <div class="media-details"><img src="/images/{{ .ID }}" alt="Historical upload" loading="lazy"><div class="page-manager-title"><a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ .ID }}</a><small>{{ .Size }} bytes · Used by {{ len .History }} saved versions</small></div></div>
+    <div class="media-details"><img src="/images/{{ .ID }}?variant=thumbnail" alt="Historical upload" loading="lazy"><div class="page-manager-title"><a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ .ID }}</a><small>{{ .Size }} stored bytes · Used by {{ len .History }} saved versions</small></div></div>
     <div class="page-manager-actions"><a href="/media/delete/{{ .ID }}">Review deletion</a></div>
   </li>{{ end }}
   </ul>

@@ -12,6 +12,7 @@ import (
 	"html"
 	"image"
 	"image/png"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -748,13 +749,22 @@ func TestImageUpload(t *testing.T) {
 				t.Fatal(err)
 			}
 			id := strings.TrimPrefix(result.Data.FilePath, "/images/")
-			saved, err := os.ReadFile(filepath.Join(h.app.Config.App.WorkingDirectory, "uploads", id))
-			if err != nil || !bytes.Equal(saved, tc.data) {
+			saved, err := h.blog.images.OpenVariant(t.Context(), id, originalImage)
+			if err != nil {
 				t.Fatalf("uploaded image was not saved in the configured directory: %v", err)
+			}
+			original, err := io.ReadAll(saved.Content)
+			saved.Content.Close()
+			if err != nil || !bytes.Equal(original, tc.data) {
+				t.Fatalf("original changed: %v", err)
+			}
+			prepared, err := prepareImage(t.Context(), tc.data)
+			if err != nil {
+				t.Fatal(err)
 			}
 			w = h.request("GET", result.Data.FilePath, nil, false)
 			requireStatus(t, w, http.StatusOK)
-			if !bytes.Equal(w.Body.Bytes(), tc.data) || w.Header().Get("Content-Type") != "image/png" {
+			if !bytes.Equal(w.Body.Bytes(), prepared.Display) || w.Header().Get("Content-Type") != "image/png" {
 				t.Fatal("image roundtrip failed")
 			}
 			w = h.request("HEAD", result.Data.FilePath, nil, false)
@@ -861,7 +871,7 @@ func TestImagePixelLimit(t *testing.T) {
 	binary.BigEndian.PutUint32(data[16:20], 5000)
 	binary.BigEndian.PutUint32(data[20:24], 5000)
 	binary.BigEndian.PutUint32(data[29:33], crc32.ChecksumIEEE(data[12:29]))
-	if _, err := imageMedia(data); err == nil || !strings.Contains(err.Error(), "20 million") {
+	if _, err := prepareImage(t.Context(), data); err == nil || !strings.Contains(err.Error(), "20 million") {
 		t.Fatalf("pixel limit not enforced: %v", err)
 	}
 }

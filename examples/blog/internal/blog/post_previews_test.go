@@ -18,7 +18,7 @@ func TestPostPreviewsHTTP(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ordinary", true: "HTMX"}[hx], func(t *testing.T) {
 			h := newHarness(t)
-			imageID, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+			imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -75,7 +75,7 @@ func TestPostPreviewsHTTP(t *testing.T) {
 			if err := png.Encode(&data, image.NewRGBA(image.Rect(0, 0, 3, 3))); err != nil {
 				t.Fatal(err)
 			}
-			replacement, err := images.Put(t.Context(), "image/png", data.Bytes())
+			replacement, err := images.Put(t.Context(), testImageUpload("image/png", data.Bytes()))
 			if err != nil {
 				t.Fatal(err)
 			}

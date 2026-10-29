@@ -72,7 +72,7 @@ func TestPagePreviewsHTTP(t *testing.T) {
 			if err := png.Encode(&imageData, image.NewRGBA(image.Rect(0, 0, 20, 10))); err != nil {
 				t.Fatal(err)
 			}
-			imageID, err := h.blog.images.Put(t.Context(), "image/png", imageData.Bytes())
+			imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", imageData.Bytes()))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,7 +105,7 @@ func TestPagePreviewsHTTP(t *testing.T) {
 			}
 			h.cookies = cookies
 			// Replacing a preview changes the card reference without changing its body.
-			replacement, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+			replacement, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 			if err != nil {
 				t.Fatal(err)
 			}

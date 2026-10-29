@@ -26,7 +26,7 @@ func testPNG(t *testing.T) []byte {
 func TestImageHTTPResponses(t *testing.T) {
 	h := newHarness(t)
 	data := testPNG(t)
-	id, err := h.blog.images.Put(t.Context(), "image/png", data)
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,9 +47,9 @@ func TestImageHTTPResponses(t *testing.T) {
 	if !bytes.Equal(first.Body.Bytes(), data) || first.Header().Get("Content-Type") != "image/png" || first.Header().Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatal("incorrect public image response")
 	}
-	etag, modified := first.Header().Get("ETag"), first.Header().Get("Last-Modified")
-	if etag == "" || modified == "" || first.Header().Get("Cache-Control") != "public, no-cache" {
-		t.Fatalf("missing cache headers: %v", first.Header())
+	etag := first.Header().Get("ETag")
+	if etag == "" || first.Header().Get("Last-Modified") != "" || first.Header().Get("Cache-Control") != "public, no-cache" {
+		t.Fatalf("incorrect cache headers: %v", first.Header())
 	}
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
 		for _, headers := range []map[string]string{
@@ -57,7 +57,6 @@ func TestImageHTTPResponses(t *testing.T) {
 			{"If-None-Match": "W/" + etag},
 			{"If-None-Match": `"old", ` + etag},
 			{"If-None-Match": "*"},
-			{"If-Modified-Since": modified},
 		} {
 			w := request(method, headers)
 			requireStatus(t, w, http.StatusNotModified)
@@ -71,7 +70,7 @@ func TestImageHTTPResponses(t *testing.T) {
 	if head.Body.Len() != 0 || head.Header().Get("Content-Length") != first.Header().Get("Content-Length") {
 		t.Fatal("HEAD must describe the image without sending bytes")
 	}
-	w := request(http.MethodGet, map[string]string{"If-None-Match": `"different"`, "If-Modified-Since": modified})
+	w := request(http.MethodGet, map[string]string{"If-None-Match": `"different"`, "If-Modified-Since": "Wed, 21 Oct 2099 07:28:00 GMT"})
 	requireStatus(t, w, http.StatusOK)
 	if !bytes.Equal(w.Body.Bytes(), data) {
 		t.Fatal("mismatched ETag did not return the image")
@@ -101,12 +100,16 @@ func TestImageHTTPResponses(t *testing.T) {
 
 type failingImageStore struct{}
 
-func (failingImageStore) Put(context.Context, string, []byte) (string, error) {
+func (failingImageStore) Put(context.Context, imageUpload) (string, error) {
 	return "", errors.New("private image storage failure")
 }
 
 func (failingImageStore) Open(context.Context, string) (storedImage, error) {
 	return storedImage{}, errors.New("private image storage failure")
+}
+
+func (s failingImageStore) OpenVariant(ctx context.Context, id string, _ imageVariant) (storedImage, error) {
+	return s.Open(ctx, id)
 }
 
 // TestImageStorageHTTPFailures checks errors from the replaceable image storage boundary.

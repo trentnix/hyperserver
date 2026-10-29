@@ -74,7 +74,7 @@ func TestScheduledPublication(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	image, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+	image, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 	if err != nil {
 		t.Fatal(err)
 	}

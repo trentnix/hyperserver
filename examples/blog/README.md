@@ -43,13 +43,25 @@ Set `auth.registrationEnabled: false` after creating the administrator if desire
 
 EasyMDE supplies the editor toolbar and upload controls. The server validates all submissions and renders preview and published Markdown with Goldmark. Raw HTML is disabled. Uploaded images remain stored when content is deleted. SQLite startup adds the required columns and indexes existing content's upload references. Other older page schemas are not upgraded automatically.
 
-Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Images use content-based filenames. Files must not be edited in place. Upload a new image to change its content.
+Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Each upload is one uncompressed ZIP bundle containing its original, display copy, and thumbnail. The original's hash determines the filename and stable image URL. The handler serves individual image bytes, not the bundle. Do not edit stored files in place.
+
+Uploads produce a display copy with a maximum 2,048-pixel edge and a 480-pixel thumbnail, without enlargement or cropping. JPEG copies use quality 85. PNG copies retain transparency. EXIF orientation is applied before resizing, and JPEG/PNG copies omit metadata, including location data. GIFs keep their original bytes, animation, dimensions, and metadata. Animated PNGs are rejected rather than flattened. Only one upload is processed at a time. A concurrent upload receives a retry message.
+
+Originals remain available to the verified administrator through **Download original** in Media. Public image URLs serve display copies, and library previews request thumbnails. Both copies follow the content visibility rules below. Cleanup removes the original and copies together. Media sizes include all stored copies. Bundled and local assets are not processed.
+
+For existing uploads or a change to the processing settings, stop the blog and run this command from this directory before restarting:
+
+```sh
+GOWORK=off go run ./cmd/optimize-images
+```
+
+The command uses the existing configuration, preserves originals, URLs, and upload dates, and replaces each image atomically. If it fails, it reports the number completed and leaves the failed image unchanged. It can be rerun. Legacy uploads are not served publicly until processed. Keep an uploads backup before running maintenance.
 
 Only the verified administrator can view new uploads and images used exclusively by drafts or scheduled posts. An image becomes public when a published post, publicly visible page, or saved site profile references it. Shared images stay public while any public content still uses them. Unpublishing a parent page hides its descendants' image references too.
 
 Image responses recheck access before returning bytes or a cache-validation response. Previously downloaded copies cannot be recalled, including copies cached under the former one-year policy. Startup rejects overlapping `uploadsDirectory` and `assetsDirectory` paths, including symlinks. Keep uploads outside any other publicly served filesystem directory.
 
-Choose **Media** to upload images or browse existing uploads, newest first, with 24 images per page. Select an image to see links to its current uses and saved versions. Use **Choose existing** beside a preview or profile image, or **Choose existing image** in the Markdown toolbar, to reuse a file without uploading another copy. Cancel leaves the editor unchanged. Selection takes effect only when you save and does not change image visibility by itself. Thumbnail previews use the original files.
+Choose **Media** to upload images or browse existing uploads, newest first, with 24 images per page. Select an image to see links to its current uses and saved versions. Use **Choose existing** beside a preview or profile image, or **Choose existing image** in the Markdown toolbar, to reuse a file without uploading another copy. Cancel leaves the editor unchanged. Selection takes effect only when you save and does not change image visibility by itself.
 
 Choose **Clean up uploads** in Media to review unused images and delete them individually or with **Delete all unused**. Bulk confirmation shows the image count and total bytes, with at most 5,000 images per batch. Only the confirmed files are considered. New uploads are excluded, and files now referenced, uploaded again, or already removed are skipped. The result reports deleted, skipped, and unprocessed counts, including partial storage failures.
 
@@ -131,4 +143,7 @@ For local images, create an `assets/` directory beside the application `config.y
 GOWORK=off go test ./...
 GOWORK=off go vet ./...
 HS_TEST_FIREFOX=firefox GOWORK=off go test ./internal/blog -run '^TestBrowser' -count=1
+GOWORK=off go test ./internal/blog -run '^$' -bench '^BenchmarkPrepareImage$' -benchmem
 ```
+
+Image processing uses Go's JPEG/PNG encoders, `golang.org/x/image/draw` for resizing, and `github.com/bep/imagemeta` for orientation metadata. Processing, storage, and HTTP access checks are separate. The benchmark uses a generated 3,000 × 2,000 JPEG, not a production capacity estimate.

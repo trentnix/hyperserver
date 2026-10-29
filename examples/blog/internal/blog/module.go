@@ -86,6 +86,8 @@ type module struct {
 
 	// mediaMu prevents cleanup from racing with uploads or saves of image references.
 	mediaMu sync.RWMutex
+	// imageProcessing bounds decode/resize memory to one upload per application.
+	imageProcessing chan struct{}
 }
 
 // init registers the factory without opening storage or creating runtime state.
@@ -188,6 +190,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		return errors.Join(err, assets.Close(), images.Close(), closeStore())
 	}
 	m.posts, m.images = store, images
+	m.imageProcessing = make(chan struct{}, 1)
 	m.media, m.mediaReferences = images, store
 	m.pageStore = store
 	m.profileStore = store

@@ -15,7 +15,7 @@ import (
 // including drafts, publication, shared references, deletion, and administrator access.
 func TestImageAccessLifecycle(t *testing.T) {
 	h := newHarness(t)
-	id, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestImageAccessLifecycle(t *testing.T) {
 // TestPageImageAccess follows the complete ancestry and profile's current URLs.
 func TestPageImageAccess(t *testing.T) {
 	h := newHarness(t)
-	id, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestImageReferenceParsing(t *testing.T) {
 		}
 	}
 	h := newHarness(t)
-	id, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestImageReferenceDefaultPorts(t *testing.T) {
 	} {
 		t.Run(tc.origin+tc.authority, func(t *testing.T) {
 			h := newHarness(t)
-			id, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+			id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -281,7 +281,7 @@ func TestImageReferenceDefaultPorts(t *testing.T) {
 // TestProfileImageIPv6DefaultPort keeps IPv6 brackets when building URL aliases.
 func TestProfileImageIPv6DefaultPort(t *testing.T) {
 	h := newHarness(t)
-	id, err := h.blog.images.Put(t.Context(), "image/png", testPNG(t))
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
 	if err != nil {
 		t.Fatal(err)
 	}
