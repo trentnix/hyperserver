@@ -26,7 +26,7 @@ services:
     tmpfs: ["/tmp:size=64m,mode=1777"]
   mail:
     <<: *limits
-    image: axllent/mailpit@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
+    image: axllent/mailpit@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
     network_mode: service:edge
     environment:
       MP_SMTP_BIND_ADDR: 127.0.0.1:1025
