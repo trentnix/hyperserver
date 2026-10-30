@@ -105,6 +105,29 @@
       for (const image of JSON.parse(sessionStorage.getItem('bulk-images'))) {
         assert((await fetch(image)).status === 404, 'Bulk-deleted image is still served.');
       }
+      const back = document.querySelector('.confirmation-panel a');
+      assert(back.textContent === 'Back to Media' && back.getAttribute('href') === '/media', 'Cleanup result must return to media management.');
+      sessionStorage.setItem('media-stage', 'returned-to-media');
+      back.click();
+      return;
+    }
+    if (stage === 'returned-to-media') {
+      assert(location.pathname === '/media' && document.querySelector('h1').textContent === 'Media', 'Back to Media did not open media management.');
+      sessionStorage.setItem('media-stage', 'empty-confirmation');
+      location.assign('/media/delete-unused');
+      return;
+    }
+    if (stage === 'empty-confirmation') {
+      const panel = document.querySelector('.confirmation-panel');
+      assert(panel.textContent.includes('No unused uploads.'), 'Empty confirmation is missing.');
+      const back = panel.querySelector('a');
+      assert(back.textContent === 'Back to Media' && back.getAttribute('href') === '/media', 'Empty confirmation must return to media management.');
+      sessionStorage.setItem('media-stage', 'empty-returned-to-media');
+      back.click();
+      return;
+    }
+    if (stage === 'empty-returned-to-media') {
+      assert(location.pathname === '/media' && document.querySelector('h1').textContent === 'Media', 'Empty confirmation did not return to media management.');
       sessionStorage.setItem('media-stage', 'history-list');
       location.assign('/media/unused');
       return;

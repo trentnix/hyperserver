@@ -749,6 +749,10 @@ func TestImageUpload(t *testing.T) {
 				t.Fatal(err)
 			}
 			id := strings.TrimPrefix(result.Data.FilePath, "/images/")
+			metadata, err := h.blog.mediaMetadata.GetMediaMetadata(t.Context(), id)
+			if err != nil || metadata.Filename != "picture.png" {
+				t.Fatal("upload filename was not retained safely", metadata, err)
+			}
 			saved, err := h.blog.images.OpenVariant(t.Context(), id, originalImage)
 			if err != nil {
 				t.Fatalf("uploaded image was not saved in the configured directory: %v", err)

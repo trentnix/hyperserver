@@ -168,39 +168,42 @@
   {{ template "blog.draftRecovery" . }}
   <label for="page-title">Title</label><input id="page-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
   <label for="page-slug">URL slug</label><input id="page-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }} Pages use /page/your-slug. About and Projects also use /about and /projects.</small>
+  <small id="slug-help" class="form-hint">Leave blank to use the title.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
   <label for="page-parent">Parent page</label><select id="page-parent" name="parentID"><option value="">None — top-level page</option>{{ range .Data.Parents }}<option value="{{ .ID }}"{{ if eq .ID $.Data.ParentID }} selected{{ end }}>{{ .Title }} ({{ .Slug }})</option>{{ end }}</select>
   <label for="page-children">Show subpages on this page</label><select id="page-children" name="childrenDisplay">
     <option value="hidden"{{ if eq .Data.ChildrenDisplay "hidden" }} selected{{ end }}>Do not show</option>
     <option value="list"{{ if eq .Data.ChildrenDisplay "list" }} selected{{ end }}>Preview list</option>
     <option value="blocks"{{ if eq .Data.ChildrenDisplay "blocks" }} selected{{ end }}>Preview blocks</option>
   </select>
-  <p class="form-hint">Preview settings do not affect navigation. Navigation shows top-level pages and their immediate children. A draft parent hides its entire branch from visitors.</p>
+  <p class="form-hint">Navigation shows top-level pages and their immediate children. Draft parents hide subpages.</p>
   <label for="page-summary">Short description</label><textarea id="page-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
   <label for="page-order">Display order (optional)</label><input id="page-order" name="displayOrder" inputmode="numeric" pattern="[0-9]+" value="{{ .Data.DisplayOrderText }}" aria-describedby="order-help">
-  <small id="order-help" class="form-hint">Enter a whole number from 0 to 1,000,000. Ordered siblings appear first, lowest number first. Leave blank to sort by most recently updated. Update time also breaks ties.</small>
+  <small id="order-help" class="form-hint">0–1,000,000, lowest first. Leave blank for newest updated.</small>
   <fieldset class="image-picker page-preview" data-image-picker data-image-default="/assets/img/project-default.svg" data-image-prefix="/images/">
     <legend>Preview image</legend>
-    <p class="form-hint">Used for parent-page previews and sharing links, not the page body.</p>
+    <p class="form-hint">For page cards and sharing links.</p>
     <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
     <div class="preview-image-row">
-      <div class="preview-image-frame"><img src="{{ .Data.PreviewURL }}" alt="Current page card preview" width="160" height="100" data-image-preview></div>
+      <div class="preview-image-selection">
+        <div class="preview-image-frame"><img src="{{ .Data.PreviewURL }}" alt="Current page card preview" width="160" height="100" data-image-preview></div>
+        <div class="image-upload-controls" hidden><button type="button" class="text-button" data-image-reset>Use default image</button></div>
+      </div>
       <div class="preview-image-controls">
         <div class="image-upload-controls" hidden>
-          <div class="form-actions"><button type="button" class="button-secondary" data-media-browse>Choose existing</button><input id="page-image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" aria-describedby="preview-help"></div>
-          <button type="button" class="text-button" data-image-reset>Use default image</button>
+          <div class="preview-image-actions"><button type="button" data-image-upload aria-describedby="preview-help">Upload image</button><button type="button" data-media-browse>Browse library</button></div>
+          <input id="page-image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" hidden>
         </div>
-        <p class="form-hint">Leave the selection empty to use the default card image. Sharing can use a content image or the site portrait.</p>
+        <p class="form-hint">Use default image restores the card placeholder. Shared links use a page image or the site portrait.</p>
         <p data-image-status role="status"></p>
       </div>
     </div>
-    <details class="preview-image-help"><summary>Image requirements and privacy</summary><p id="preview-help" class="form-hint">PNG, JPEG, or GIF · Up to 8 MiB and 20 million pixels. Draft-only images are private. Images shared with public content remain public.</p></details>
+    <p id="preview-help" class="preview-image-help form-hint">PNG, JPEG, or GIF images up to 8 MiB and 20 million pixels stay private unless used in public content.</p>
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
   </fieldset>
   <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16">{{ .Data.Markdown }}</textarea>
-  <p class="form-hint">Up to 256 KiB of Markdown. Content can be empty.</p>
   <label class="publish-option"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish</label>
   <p class="form-hint">Uncheck to move this page to drafts when you save.</p>
+  {{ template "blog.editorHelp" . }}
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/pages{{ end }}" hx-boost="false">Cancel</a>{{ end }}</div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
@@ -227,7 +230,14 @@
 
 {{ define "blog.markdownFields" }}
   <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" required>{{ .Markdown }}</textarea>
-  <p class="form-hint">Content can contain up to 256 KiB of Markdown. Images: PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels.</p>
+{{ end }}
+
+{{ define "blog.editorHelp" }}
+<details class="editor-help form-hint">
+  <summary>Writing tips</summary>
+  <p>Custom slugs use lowercase letters, digits, and hyphens. Generated slugs add a number when needed to stay unique.</p>
+  <p>Content can contain up to 256 KiB of Markdown. Image limits also apply to uploads in the editor.</p>
+</details>
 {{ end }}
 
 {{ define "blog.draftRecovery" }}
@@ -247,24 +257,27 @@
   {{ template "blog.draftRecovery" . }}
   <label for="post-title">Title</label><input id="post-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
   <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }}{{ if .Data.ScheduledSlug }} data-scheduled-slug="{{ .Data.ScheduledSlug }}" data-scheduled-at="{{ .Data.ScheduledAt }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Leave blank to generate from the title. A number is added if needed to keep the URL unique. Custom slugs use lowercase letters, digits, and hyphens.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
+  <small id="slug-help" class="form-hint">Leave blank to use the title.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
   <fieldset class="image-picker page-preview" data-image-picker data-image-prefix="/images/">
     <legend>Preview image <span>(optional)</span></legend>
-    <p class="form-hint">Used when sharing a link, not in the post body.</p>
+    <p class="form-hint">For sharing links, not the post body.</p>
     <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
     <div class="preview-image-row">
-      <div class="preview-image-frame"><img {{ if .Data.PreviewURL }}src="{{ .Data.PreviewURL }}"{{ else }}hidden{{ end }} alt="Selected sharing preview" width="160" height="100" data-image-preview><span class="image-empty">Automatic image</span></div>
+      <div class="preview-image-selection">
+        <div class="preview-image-frame"><img {{ if .Data.PreviewURL }}src="{{ .Data.PreviewURL }}"{{ else }}hidden{{ end }} alt="Selected sharing preview" width="160" height="100" data-image-preview><span class="image-empty">Default image</span></div>
+        <div class="image-upload-controls" hidden><button type="button" class="text-button" data-image-reset>Use default image</button></div>
+      </div>
       <div class="preview-image-controls">
         <div class="image-upload-controls" hidden>
-          <div class="form-actions"><button type="button" class="button-secondary" data-media-browse>Choose existing</button><input id="post-image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" aria-describedby="post-preview-help"></div>
-          <button type="button" class="text-button" data-image-reset>Use automatic selection</button>
+          <div class="preview-image-actions"><button type="button" data-image-upload aria-describedby="post-preview-help">Upload image</button><button type="button" data-media-browse>Browse library</button></div>
+          <input id="post-image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" hidden>
         </div>
-        <p class="form-hint">Without a selection, sharing uses the first suitable content image, then the site portrait.</p>
+        <p class="form-hint">By default, the preview uses the first suitable image in the post, or the site portrait if none is available.</p>
         <p data-image-status role="status"></p>
       </div>
     </div>
-    <details class="preview-image-help"><summary>Image requirements and privacy</summary><p id="post-preview-help" class="form-hint">PNG, JPEG, or GIF · Up to 8 MiB and 20 million pixels. Draft-only images are private. Images shared with public content remain public.</p></details>
+    <p id="post-preview-help" class="preview-image-help form-hint">PNG, JPEG, or GIF images up to 8 MiB and 20 million pixels stay private unless used in public content.</p>
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
   </fieldset>
   {{ template "blog.markdownFields" .Data }}
@@ -342,6 +355,7 @@
     <p class="form-hint" id="schedule-help">When Schedule is selected, your post stays private until this time. Use UTC, not your device’s time zone.</p>
   </div>{{ end }}
   <p class="form-hint">Changes take effect when you save. Choose Draft to keep the post private.</p>
+  {{ template "blog.editorHelp" . }}
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/{{ end }}" hx-boost="false">Cancel</a>{{ end }}</div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
@@ -363,24 +377,34 @@
   {{ if not .Data.Picking }}
   <header class="page-manager-heading"><h1>Media</h1><a class="page-create media-cleanup-link" href="/media/unused">Clean up uploads</a></header>
   <form class="media-upload" data-media-upload method="post" action="/post/images/upload" enctype="multipart/form-data" hidden>
-    <div class="media-upload-heading"><label for="library-upload">Upload an image</label><span id="library-upload-help">PNG, JPEG, or GIF · Up to 8 MiB</span></div>
-    <div class="form-actions"><input id="library-upload" name="image" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="library-upload-help" required><button type="submit">Upload image</button></div>
-    <p class="form-hint">Private until used in published content or the site profile.</p>
-    <p role="status" data-upload-status></p>
+    <details>
+      <summary>Upload image</summary>
+      <div class="media-upload-fields">
+        <p id="library-upload-help" class="form-hint">PNG, JPEG, or GIF, up to 8 MiB. Private until used in published content or the site profile.</p>
+        <div class="form-actions"><input id="library-upload" name="image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Image file" aria-describedby="library-upload-help" required><button type="submit">Upload image</button></div>
+        <p role="status" data-upload-status></p>
+      </div>
+    </details>
   </form>
   {{ end }}
-  <p class="form-hint">{{ if .Data.Picking }}Choose an image, then save your edits to use it.{{ else }}Select an image to see where it is used.{{ end }} Newest uploads first.</p>
+  <form class="media-filters" data-media-filters method="get" action="/media">
+    {{ if .Data.Picking }}<input type="hidden" name="pick" value="1">{{ end }}
+    <div class="media-search"><label for="media-search">Search images</label><input id="media-search" type="search" name="q" value="{{ .Data.Query.Search }}" maxlength="240" placeholder="Name or post/page title"></div>
+    <div><label for="media-usage">Usage</label><select id="media-usage" name="usage"><option value="">All images</option><option value="current"{{ if eq .Data.Query.Usage "current" }} selected{{ end }}>Current content</option><option value="history"{{ if eq .Data.Query.Usage "history" }} selected{{ end }}>History only</option><option value="unused"{{ if eq .Data.Query.Usage "unused" }} selected{{ end }}>Unused</option></select></div>
+    <button type="submit">Search</button>
+  </form>
+  {{ if .Data.Query.Active }}<p class="media-clear-filters"><a href="{{ .Data.ClearURL }}"{{ if .Data.Picking }} data-media-page="{{ .Data.ClearURL }}"{{ end }}>Clear filters</a></p>{{ end }}
+  <p class="form-hint" role="status">{{ .Data.Total }} {{ if eq .Data.Total 1 }}image{{ else }}images{{ end }}{{ if .Data.Query.Active }} found{{ end }} · Newest first.{{ if .Data.Picking }} Choose an image, then save your edits to use it.{{ end }}</p>
   <ul class="media-grid">
   {{ range .Data.Files }}<li>
-    {{ if $.Data.Picking }}<a class="media-card" href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ else }}<a class="media-card" href="/media/{{ .ID }}">{{ end }}
-      <img src="/images/{{ .ID }}?variant=thumbnail" alt="Uploaded image {{ .ID }}" loading="lazy" width="240" height="160">
+    {{ if $.Data.Picking }}<button type="button" class="media-card" data-media-select="{{ .ID }}" aria-label="Select {{ .Name }}">{{ else }}<a class="media-card" href="/media/{{ .ID }}">{{ end }}
+      <img src="/images/{{ .ID }}?variant=thumbnail" alt="" loading="lazy" width="240" height="160">
       <span class="media-card-caption">
-        <span class="media-filename" title="{{ .ID }}">{{ .ID }}</span>
+        <span class="media-filename" title="{{ .Name }}">{{ .Name }}</span>
         <span class="media-card-meta"><span title="Total storage, including the original and generated copies">{{ .SizeLabel }} stored</span><time datetime="{{ .Modified.UTC.Format "2006-01-02" }}">{{ .Modified.UTC.Format "Jan 2, 2006" }}</time></span>
       </span>
-    </a>
-    {{ if $.Data.Picking }}<button type="button" data-media-select="{{ .ID }}">Use image</button>{{ end }}
-  </li>{{ else }}<li class="page-manager-empty">No uploaded images.</li>{{ end }}
+    {{ if $.Data.Picking }}</button>{{ else }}</a>{{ end }}
+  </li>{{ else }}<li class="page-manager-empty">{{ if .Data.Query.Active }}No images match these filters. Try a different name or clear the filters.{{ else }}No uploaded images.{{ end }}</li>{{ end }}
   </ul>
   <nav class="media-pagination" aria-label="Media pages">
     {{ if .Data.Previous }}{{ if .Data.Picking }}<button type="button" data-media-page="{{ .Data.Previous }}">Previous</button>{{ else }}<a href="{{ .Data.Previous }}">Previous</a>{{ end }}{{ end }}
@@ -393,11 +417,32 @@
 {{ define "blog.mediaDetail" }}
 <section class="page-manager" hx-boost="false">
   <header class="page-manager-heading"><h1>Image details</h1><a href="/media">Back to Media</a></header>
-  <div class="revision-image"><a href="/images/{{ .Data.ID }}" target="_blank" rel="noopener"><img src="/images/{{ .Data.ID }}" alt="Selected upload"></a></div>
-  <p><a href="/images/{{ .Data.ID }}?variant=original" download>Download original</a></p>
-  <h2>Current uses</h2>
-  <ul>{{ range .Data.Usage.Content }}<li><a href="{{ .URL }}">{{ .Title }}</a></li>{{ else }}<li>Not used by saved posts, pages, or the site profile.</li>{{ end }}</ul>
-  {{ if .Data.Usage.History }}<h2>Saved versions</h2><ul>{{ range .Data.Usage.History }}<li><a href="{{ .URL }}">{{ .Title }} — {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}</a></li>{{ end }}</ul>{{ end }}
+  <div class="media-detail-layout">
+  <figure class="media-detail-preview">
+    <a href="/images/{{ .Data.ID }}" target="_blank" rel="noopener"><img src="/images/{{ .Data.ID }}" alt="Selected upload"></a>
+    <figcaption><a href="/images/{{ .Data.ID }}?variant=original" download>Download original</a></figcaption>
+  </figure>
+  <div class="media-detail-info">
+  <form class="media-label-form" method="post" action="/media/{{ .Data.ID }}">
+    <input type="hidden" name="version" value="{{ .Data.Version }}">
+    <label for="media-label">Image label</label><input id="media-label" name="label" value="{{ .Data.Label }}" maxlength="240" aria-describedby="media-label-help">
+    <p id="media-label-help" class="form-hint">Used in Media and the image chooser, not as image alt text. Leave blank to use the original filename or image ID.</p>
+    {{ with .Data.Filename }}<p class="form-hint">Original filename: {{ . }}</p>{{ end }}
+    {{ with .Data.Error }}<p class="field-error" role="alert">{{ . }}</p>{{ end }}
+    <div class="form-actions"><button type="submit">Save label</button>{{ if .Data.Error }}<a href="/media/{{ .Data.ID }}">Reload details</a>{{ end }}</div>
+  </form>
+  </div>
+  </div>
+  <div class="media-detail-usage">
+    <section>
+      <h2>Current uses</h2>
+      {{ if .Data.Usage.Content }}<ul>{{ range .Data.Usage.Content }}<li><a href="{{ .URL }}">{{ .Title }}</a></li>{{ end }}</ul>{{ else }}<p class="form-hint">Not used by saved posts, pages, or the site profile.</p>{{ end }}
+    </section>
+    <section>
+      <h2>Saved versions</h2>
+      {{ if .Data.Usage.History }}<ul>{{ range .Data.Usage.History }}<li><a href="{{ .URL }}">{{ .Title }} — {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}</a></li>{{ end }}</ul>{{ else }}<p class="form-hint">No saved versions use this image.</p>{{ end }}
+    </section>
+  </div>
   <p class="form-hint">Unsaved edits and browser recovery copies are not included.</p>
   {{ if not .Data.Usage.Current }}<div class="content-actions"><a class="action-delete" href="/media/delete/{{ .Data.ID }}">Review deletion</a></div>{{ end }}
 </section>
@@ -459,7 +504,7 @@
     {{ range .Data.Files }}<input type="hidden" name="file" value="{{ .ID }}:{{ .Version }}">{{ end }}
     <button type="submit" class="button-danger">Delete {{ len .Data.Files }} {{ if eq (len .Data.Files) 1 }}image{{ else }}images{{ end }}</button><a href="/media/unused" class="button-secondary" autofocus>Cancel</a>
   </form>
-  {{ else }}<p>No unused uploads.</p><a href="/media/unused">Back to Media</a>{{ end }}
+  {{ else }}<p>No unused uploads.</p><a href="/media">Back to Media</a>{{ end }}
 </section>
 {{ end }}
 
@@ -469,7 +514,7 @@
   <p role="status">Deleted: {{ .Data.Deleted }}. Skipped: {{ .Data.Skipped }}. Not processed: {{ .Data.Remaining }}.</p>
   {{ if .Data.Skipped }}<p>Skipped images were in use, uploaded again, or already removed.</p>{{ end }}
   {{ if .Data.Failed }}<p class="field-error" role="alert">A storage error stopped cleanup. Review the remaining images before trying again. Deleted files cannot be restored here.</p>{{ end }}
-  <a class="button-secondary" href="/media/unused">Back to Media</a>
+  <a class="button-secondary" href="/media">Back to Media</a>
 </section>
 {{ end }}
 

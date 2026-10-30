@@ -96,6 +96,11 @@ func (m *module) upload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, http.StatusInternalServerError, map[string]string{"error": "Unable to save the image."})
 		return
 	}
+	if err := m.mediaMetadata.RememberMedia(r.Context(), id, uploadFilename(files[0].Filename)); err != nil {
+		logger.LogRequestError(r, err)
+		writeJSON(w, r, http.StatusInternalServerError, map[string]string{"error": "Unable to save the image details. Retry the upload."})
+		return
+	}
 	// EasyMDE's upload contract requires 200, not 201.
 	writeJSON(w, r, http.StatusOK, map[string]any{"data": map[string]string{"filePath": "/images/" + id}})
 }

@@ -75,6 +75,7 @@ type module struct {
 	images          imageStore
 	media           mediaStore
 	mediaReferences mediaReferenceRepository
+	mediaMetadata   mediaMetadataRepository
 	imageAccess     imageAccessRepository
 	history         revisionRepository
 	localAssets     *os.Root
@@ -192,6 +193,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	m.posts, m.images = store, images
 	m.imageProcessing = make(chan struct{}, 1)
 	m.media, m.mediaReferences = images, store
+	m.mediaMetadata = store
 	m.pageStore = store
 	m.profileStore = store
 	m.imageAccess = store

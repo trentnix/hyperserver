@@ -149,3 +149,56 @@ func TestImageStorageHTTPFailures(t *testing.T) {
 		t.Fatal("failed upload exposed storage details or a success URL")
 	}
 }
+
+// TestImageUploadMetadataFailure reports naming failure without deleting an existing upload.
+func TestImageUploadMetadataFailure(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	data := testPNG(t)
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := h.blog.mediaMetadata
+	h.blog.mediaMetadata = failedMediaMetadata{}
+	upload := func() *httptest.ResponseRecorder {
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		part, err := writer.CreateFormFile("image", "Retry.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(data); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		r := httptest.NewRequest("POST", "/post/images/upload", &body)
+		r.Header.Set("Content-Type", writer.FormDataContentType())
+		for _, cookie := range h.cookies {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		h.app.Handler.ServeHTTP(w, r)
+		return w
+	}
+	w := upload()
+	requireStatus(t, w, http.StatusInternalServerError)
+	if strings.Contains(w.Body.String(), "private metadata") || strings.Contains(w.Body.String(), "filePath") || !strings.Contains(w.Body.String(), "Retry") {
+		t.Fatal("incorrect upload failure")
+	}
+	stored, err := h.blog.images.Open(t.Context(), id)
+	if err != nil {
+		t.Fatal("metadata failure removed the existing upload", err)
+	}
+	stored.Content.Close()
+	h.blog.mediaMetadata = metadata
+	requireStatus(t, upload(), http.StatusOK)
+	name, err := metadata.GetMediaMetadata(t.Context(), id)
+	if err != nil || name.Filename != "Retry.png" {
+		t.Fatal("retry did not recover", name, err)
+	}
+}

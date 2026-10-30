@@ -201,6 +201,8 @@
   document.addEventListener('click', event => {
     const close = event.target.closest('[data-close-dialog]');
     const link = event.target.closest('a[href]');
+    // Chooser pagination and filtering replace only the image results, not an editor.
+    if (link?.matches('.media-browser [data-media-page]')) return;
     if (!close && (!link || link.hasAttribute('download') || link.target === '_blank' || event.ctrlKey || event.metaKey || event.shiftKey || link.getAttribute('href').startsWith('#'))) return;
     const candidates = close ? [...states.values()].filter(state => close.closest('dialog').contains(state.form)) : states.values();
     if (!allowLeave(candidates, () => { if ((close || link).isConnected) (close || link).click(); })) {
@@ -213,6 +215,7 @@
     if (!allowLeave([...states.values()].filter(state => dialog.contains(state.form)), () => { if (dialog.isConnected) dialog.close(); })) event.preventDefault();
   }, true);
   document.addEventListener('submit', event => {
+    if (event.target.matches('.media-browser [data-media-filters]')) return;
     const state = states.get(event.target);
     if (state) {
       persist(state);

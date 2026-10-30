@@ -233,25 +233,39 @@
     const status = dialog.querySelector('[data-media-status]');
     let request;
     let choosing = false;
-    async function load(path) {
+    let loading = false;
+    async function load(path, focusSearch = false) {
       request?.abort();
-      request = new AbortController();
-      results.replaceChildren();
+      const current = new AbortController();
+      request = current;
+      loading = true;
+      results.setAttribute('aria-busy', 'true');
       status.textContent = 'Loading images…';
       try {
-        const response = await fetch(path, {headers: {'HX-Request': 'true'}, signal: request.signal});
+        const response = await fetch(path, {headers: {'HX-Request': 'true'}, signal: current.signal});
         if (!response.ok) throw new Error('Unable to load images. Close the library and try again.');
         const document = new DOMParser().parseFromString(await response.text(), 'text/html');
         const library = document.querySelector('[data-media-library]');
         if (!library) throw new Error('Unable to load images. Sign in again if your session has expired.');
-        if (!dialog.open) return;
+        if (!dialog.open || current !== request || current.signal.aborted) return;
         results.replaceChildren(library);
         status.textContent = '';
         results.scrollTop = 0;
+        if (focusSearch) library.querySelector('[data-media-filters] button').focus({preventScroll: true});
       } catch (error) {
-        if (error.name !== 'AbortError') status.textContent = error.message;
+        if (error.name !== 'AbortError' && current === request && dialog.open) status.textContent = error.message;
+      } finally {
+        if (current === request) {
+          loading = false;
+          results.removeAttribute('aria-busy');
+        }
       }
     }
+    dialog.addEventListener('submit', event => {
+      if (!event.target.matches('[data-media-filters]')) return;
+      event.preventDefault();
+      if (!choosing) load('/media?' + new URLSearchParams(new FormData(event.target)), true);
+    });
     dialog.addEventListener('click', async event => {
       const page = event.target.closest('[data-media-page]');
       if (page) {
@@ -260,7 +274,7 @@
         return;
       }
       const button = event.target.closest('[data-media-select]');
-      if (!button || choosing) return;
+      if (!button || choosing || loading) return;
       const id = button.dataset.mediaSelect;
       if (!/^[a-f0-9]{64}\.(png|jpeg|gif)$/.test(id)) return;
       choosing = true;
@@ -341,6 +355,10 @@
   }
 
   document.addEventListener('click', event => {
+    const upload = event.target.closest('[data-image-upload]');
+    if (upload && !upload.form.dataset.uploading) {
+      upload.closest('[data-image-picker]').querySelector('input[type="file"]').click();
+    }
     const browse = event.target.closest('[data-media-browse]');
     if (browse && !browse.form.dataset.uploading) {
       const picker = browse.closest('[data-image-picker]');
@@ -358,8 +376,10 @@
     if (remove) {
       if (remove.form.dataset.uploading) return;
       const picker = remove.closest('[data-image-picker]');
-      picker.querySelector('[data-image-value]').value = '';
-      picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
+      const input = picker.querySelector('[data-image-value]');
+      if (!input.value.trim()) return;
+      input.value = '';
+      input.dispatchEvent(new Event('input', {bubbles: true}));
       picker.querySelector('input[type="file"]').value = '';
       updateImagePreview(picker);
       picker.querySelector('[data-image-status]').textContent = 'Selection cleared. Save to apply.';
@@ -393,7 +413,7 @@
       return;
     }
     form.dataset.uploading = 'true';
-    const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [data-media-browse], [type="submit"]')].filter(control => !control.disabled);
+    const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [data-image-upload], [data-media-browse], [type="submit"]')].filter(control => !control.disabled);
     controls.forEach(control => { control.disabled = true; });
     status.textContent = 'Uploading image…';
     try {
