@@ -1,100 +1,47 @@
 package blog
 
 import (
-	"context"
 	"errors"
-	"io/fs"
-	"math"
+	"html/template"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-const maxMarkdownBytes = 256 * 1024
-
-const slugConflictMessage = "This URL slug is already in use. Choose a different one, or leave it blank to generate one from the title."
-
-// Routes binds public reading and explicitly protected publishing endpoints.
-func (m *module) Routes(routes *routing.Routes) error {
-	assets, err := fs.Sub(blogModuleFS, "static")
-	if err != nil {
-		return err
-	}
-	routes.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets)))
-	if m.localAssets != nil {
-		routes.HandleFunc("GET /local-assets/{name}", m.localAsset)
-	}
-	routes.HandleFunc("GET /{$}", m.index)
-	routes.HandleFunc("GET /posts", m.archive)
-	searchRoutes, err := routes.WithRateLimit(ratelimit.Policy{Requests: searchRequestsPerMinute, Window: time.Minute, MaxClients: 4096})
-	if err != nil {
-		return err
-	}
-	searchRoutes.HandleFunc("GET /search", m.search)
-	routes.HandleFunc("GET /posts/recent", m.recent)
-	routes.HandleFunc("GET /post/s/{slug}", m.post)
-	routes.HandleFunc("GET /post/id/{id}", m.post)
-	routes.HandleFunc("GET /images/{id}", m.image)
-	routes.HandleFunc("GET /rss", m.rss)
-	routes.HandleFunc("GET /sitemap.xml", m.sitemap)
-	routes.HandleFunc("GET /robots.txt", m.robots)
-	routes.Handle("GET /history/{kind}/{id}", m.requireAdmin(m.revisions))
-	routes.Handle("GET /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.confirmRevisionDelete))
-	routes.HandleWithBodyLimit("POST /history/{kind}/{id}/restore", m.requireAdmin(m.restoreRevision), routing.MiB)
-	routes.Handle("POST /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.deleteRevision))
-	routes.Handle("GET /profile", m.requireAdmin(m.profileEditor))
-	routes.Handle("GET /profile/history", m.requireAdmin(m.profileHistory))
-	routes.Handle("GET /profile/history/delete/{revision}", m.requireAdmin(m.confirmProfileRevisionDelete))
-	routes.Handle("POST /profile/history/delete/{revision}", m.requireAdmin(m.deleteProfileRevision))
-	routes.Handle("GET /media", m.requireAdmin(m.mediaLibrary))
-	routes.Handle("GET /media/{id}", m.requireAdmin(m.mediaDetail))
-	routes.Handle("POST /media/{id}", m.requireAdmin(m.renameMedia))
-	routes.Handle("GET /media/unused", m.requireAdmin(m.unusedMedia))
-	routes.Handle("GET /media/delete-unused", m.requireAdmin(m.confirmUnusedMediaDelete))
-	routes.HandleWithBodyLimit("POST /media/delete-unused", m.requireAdmin(m.deleteUnusedMedia), routing.MiB)
-	routes.Handle("GET /media/delete/{id}", m.requireAdmin(m.confirmMediaDelete))
-	routes.Handle("POST /media/delete/{id}", m.requireAdmin(m.deleteMedia))
-	routes.HandleWithBodyLimit("POST /profile", m.requireAdmin(m.saveProfile), routing.MiB)
-	routes.HandleWithBodyLimit("POST /profile/restore", m.requireAdmin(m.restoreProfile), routing.MiB)
-	routes.HandleFunc("GET /about", m.page)
-	routes.HandleFunc("GET /page/{slug}", m.page)
-	routes.Handle("GET /pages", m.requireAdmin(m.pages))
-	routes.Handle("GET /pages/create", m.requireAdmin(m.pageEditor))
-	routes.Handle("GET /pages/update/{id}", m.requireAdmin(m.pageEditor))
-	routes.Handle("GET /pages/delete/{id}", m.requireAdmin(m.confirmPageDelete))
-	routes.HandleWithBodyLimit("POST /pages", m.requireAdmin(m.savePage), routing.MiB)
-	routes.HandleWithBodyLimit("POST /pages/{id}", m.requireAdmin(m.savePage), routing.MiB)
-	routes.Handle("POST /pages/delete/{id}", m.requireAdmin(m.deletePage))
-	routes.HandleFunc("GET /projects", m.page)
-	routes.HandleFunc("GET /project/s/{slug}", m.page) // Retain published project links.
-	routes.Handle("GET /post/create", m.requireAdmin(m.editor))
-	routes.Handle("GET /post/manage", m.requireAdmin(m.managePosts))
-	routes.Handle("POST /post/publish/{id}", m.requireAdmin(m.publish))
-	routes.Handle("POST /post/unpublish/{id}", m.requireAdmin(m.unpublish))
-	routes.Handle("GET /post/update/{id}", m.requireAdmin(m.editor))
-	routes.Handle("GET /post/delete/{id}", m.requireAdmin(m.confirmDelete))
-	routes.HandleWithBodyLimit("POST /post", m.requireAdmin(m.save), routing.MiB)
-	routes.HandleWithBodyLimit("POST /post/{id}", m.requireAdmin(m.save), routing.MiB)
-	routes.Handle("POST /post/delete/{id}", m.requireAdmin(m.delete))
-	routes.HandleWithBodyLimit("POST /post/preview", m.requireAdmin(m.preview), routing.MiB)
-	routes.HandleWithBodyLimit("POST /post/images/upload", m.requireAdmin(m.upload), 10*routing.MiB)
-	routes.HandleFunc("GET /login", m.login)
-	routes.HandleFunc("/", m.app.ContentManager.HandleNotFound)
-	return routes.Err()
+// postPage pairs stored post data with HTML produced by the Markdown renderer.
+type postPage struct {
+	Post
+	HTML       template.HTML
+	HasHistory bool
+	Scheduled  bool
 }
 
-// login redirects the short login URL to the email authentication page.
-func (m *module) login(w http.ResponseWriter, r *http.Request) {
-	util.RedirectToURL(w, r, loginURL)
+// editorPage retains a draft and any user-facing error for the editing form.
+type editorPage struct {
+	Post
+	revisionSelection
+	Error                      string
+	PublishedSlug              string
+	ScheduledSlug              string
+	ScheduledAt                int64
+	Publication                string
+	ScheduleDate, ScheduleTime string
+	CanSchedule                bool
+}
+
+// PreviewField configures the shared image picker for post sharing.
+func (p editorPage) PreviewField() previewImageField {
+	return previewImageField{
+		InputID: "post-image", Value: p.PreviewImage, URL: p.PreviewURL(), Optional: true,
+		Description: "For sharing links, not the post body.",
+		Help:        "By default, the preview uses the first suitable image in the post, or the site portrait if none is available.",
+	}
 }
 
 // index displays the newest post, or an empty-state message when none exist.
@@ -161,84 +108,6 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 	}
 }
 
-const archivePageSize = 30
-
-// archive groups one page of public post links by month without loading bodies.
-func (m *module) archive(w http.ResponseWriter, r *http.Request) {
-	number := 1
-	if raw := r.URL.Query().Get("page"); raw != "" {
-		var err error
-		number, err = strconv.Atoi(raw)
-		if err != nil || number < 1 || number-1 > math.MaxInt/archivePageSize {
-			http.Error(w, "Page must be a positive whole number.", http.StatusBadRequest)
-			return
-		}
-	}
-	posts, err := m.loadArchivePage(r.Context(), number)
-	if err != nil {
-		m.storageError(w, r, err)
-		return
-	}
-	if number > 1 && len(posts) == 0 {
-		m.storageError(w, r, errNotFound)
-		return
-	}
-	data := archivePage{Number: number}
-	if number > 1 {
-		data.Previous = archiveURL(number - 1)
-	}
-	if len(posts) > archivePageSize {
-		data.Next = archiveURL(number + 1)
-		posts = posts[:archivePageSize]
-	}
-	data.Months = groupArchive(posts)
-
-	page := m.views["archive"].Content(r, data)
-	page.Title = "All Posts"
-	if number > 1 {
-		page.Title += " — Page " + strconv.Itoa(number)
-	}
-	m.setSharing(page, r, sharingPreview{Title: page.Title, URL: archiveURL(number), Type: "website"}, "")
-	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display this page.", err)
-	}
-}
-
-// archiveURL gives the first page one canonical address, without query parameters.
-func archiveURL(number int) string {
-	if number == 1 {
-		return "/posts"
-	}
-	return "/posts?page=" + strconv.Itoa(number)
-}
-
-// recent displays the configured number of newest links for the sidebar or footer.
-func (m *module) recent(w http.ResponseWriter, r *http.Request) {
-	posts, err := m.loadRecent(r.Context())
-	if err != nil {
-		m.storageError(w, r, err)
-		return
-	}
-
-	page := m.views["recent"].Content(r, posts)
-	page.Title = "Recent Posts"
-	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display this page.", err)
-	}
-}
-
-// loadRecent shares the bounded, publication-aware cache between pages and fragments.
-func (m *module) loadRecent(ctx context.Context) ([]ArchiveEntry, error) {
-	return m.recentPosts.loadUntil(ctx, m.settings.RecentPostCount, func() ([]ArchiveEntry, time.Time, error) {
-		next, err := m.posts.NextPublication(ctx)
-		if err != nil {
-			return nil, time.Time{}, err
-		}
-		posts, err := m.posts.ListRecent(ctx, m.settings.RecentPostCount)
-		return posts, next, err
-	})
-}
-
 // editor opens a blank form for creation or loads an existing post for editing.
 func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	p := Post{Draft: true}
@@ -274,10 +143,9 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 // save validates content, saves its selected publication state, and redirects to its slug URL.
 // Validation and storage failures keep parsed draft values available for correction.
 func (m *module) save(w http.ResponseWriter, r *http.Request) {
-	m.mediaMu.RLock()
-	defer m.mediaMu.RUnlock()
-
-	if err := form.ParseWithOptions(r, form.ParseOptions{MaxFieldBytes: maxMarkdownBytes}); err != nil {
+	// Parse within the route's body limit. Content validation then retains the
+	// complete submitted draft when Markdown exceeds its smaller writing limit.
+	if err := form.ParseWithOptions(r, form.ParseOptions{MaxFieldBytes: routing.MiB}); err != nil {
 		m.editorError(w, r, Post{ID: r.PathValue("id"), Draft: true}, err.Message, err.StatusCode)
 		return
 	}
@@ -290,58 +158,19 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		PreviewImage: r.PostForm.Get("previewImage"),
 		Draft:        r.PostForm.Get("published") != "on",
 	}
-	version, validVersion := editorVersion(r)
-	p.Version = version
+	if version, valid := editorVersion(r); valid {
+		p.Version = version
+	}
 	publicationError := m.readPublication(r, &p)
-	generatedSlug := p.Slug == ""
-	if generatedSlug {
-		p.Slug = slugFromTitle(p.Title)
-	}
-	message := validatePost(p)
-	if message == "" {
-		message = publicationError
-	}
-	if message != "" {
-		m.editorError(w, r, p, message, http.StatusUnprocessableEntity)
+	if publicationError != "" {
+		m.editorError(w, r, p, publicationError, http.StatusUnprocessableEntity)
 		return
 	}
-	if !validVersion {
-		m.editorError(w, r, p, editConflictMessage, http.StatusConflict)
+	saved, err := m.writePost(r.Context(), p)
+	var invalid contentError
+	if errors.As(err, &invalid) || errors.Is(err, errMissingMedia) {
+		m.editorError(w, r, p, err.Error(), http.StatusUnprocessableEntity)
 		return
-	}
-	if p.PreviewImage != "" {
-		image, err := m.images.Open(r.Context(), p.PreviewImage)
-		if err != nil {
-			if errors.Is(err, errNotFound) {
-				m.editorError(w, r, p, "Upload a valid preview image or remove it to use automatic selection.", http.StatusUnprocessableEntity)
-			} else {
-				logger.LogRequestError(r, err)
-				m.editorError(w, r, p, "Unable to read the preview image. Please try again.", http.StatusInternalServerError)
-			}
-			return
-		}
-		image.Content.Close()
-	}
-
-	if err := m.checkContentImages(r, p.Markdown, "/post/s/"+p.Slug); err != nil {
-		message, status := "Unable to check uploaded images. Please try again.", http.StatusInternalServerError
-		if errors.Is(err, errMissingMedia) {
-			message, status = err.Error(), http.StatusUnprocessableEntity
-		} else {
-			logger.LogRequestError(r, err)
-		}
-		m.editorError(w, r, p, message, status)
-		return
-	}
-	saved, err := m.posts.Save(r.Context(), p)
-	// Let the database settle competing writes. Only generated slugs may change.
-	for suffix := 2; generatedSlug && errors.Is(err, errSlugTaken); suffix++ {
-		if err = r.Context().Err(); err != nil {
-			break
-		}
-		candidate := p
-		candidate.Slug = numberedSlug(p.Slug, suffix)
-		saved, err = m.posts.Save(r.Context(), candidate)
 	}
 	if errors.Is(err, errSlugTaken) {
 		m.editorError(w, r, p, slugConflictMessage, http.StatusConflict)
@@ -364,71 +193,8 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		m.editorError(w, r, p, "Unable to save this post. Please try again.", http.StatusInternalServerError)
 		return
 	}
-	m.feed.invalidate()
-	m.recentPosts.invalidate()
-	m.archivePosts.invalidate()
 	w.Header().Set("HX-Trigger", "blog:content-saved")
 	util.RedirectToURL(w, r, "/post/s/"+saved.Slug)
-}
-
-// validatePost returns the first user-facing validation error, or an empty string.
-func validatePost(p Post) string {
-	if p.Title == "" || !utf8.ValidString(p.Title) || utf8.RuneCountInString(p.Title) > 240 {
-		return "Enter a title of at most 240 characters."
-	}
-	if !utf8.ValidString(p.Summary) || utf8.RuneCountInString(p.Summary) > 2000 {
-		return "Keep the summary under 2,000 characters."
-	}
-	if strings.TrimSpace(p.Markdown) == "" || len(p.Markdown) > maxMarkdownBytes || !utf8.ValidString(p.Markdown) {
-		return "Enter valid Markdown of at most 256 KiB."
-	}
-	if !validSlug(p.Slug) {
-		return "Use a slug of at most 120 lowercase letters, numbers, and single hyphens."
-	}
-	return ""
-}
-
-// slugFromTitle uses lowercase ASCII letters and digits, separates other runs
-// with hyphens, and caps the result at 120 bytes. An empty result needs a custom slug.
-func slugFromTitle(title string) string {
-	slug := make([]byte, 0, 120)
-	for _, ch := range title {
-		if len(slug) == 120 {
-			break
-		}
-		if ch >= 'A' && ch <= 'Z' {
-			ch += 'a' - 'A'
-		}
-		if ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' {
-			slug = append(slug, byte(ch))
-		} else if len(slug) > 0 && slug[len(slug)-1] != '-' {
-			slug = append(slug, '-')
-		}
-	}
-	return strings.TrimRight(string(slug), "-")
-}
-
-// numberedSlug appends a collision suffix to a valid base without exceeding 120 bytes.
-func numberedSlug(base string, number int) string {
-	suffix := "-" + strconv.Itoa(number)
-	if len(base)+len(suffix) > 120 {
-		base = base[:120-len(suffix)]
-	}
-	return strings.TrimRight(base, "-") + suffix
-}
-
-// validSlug accepts lowercase ASCII letters and digits separated by single hyphens,
-// with no leading or trailing hyphen and a maximum length of 120 bytes.
-func validSlug(slug string) bool {
-	if slug == "" || len(slug) > 120 || strings.HasPrefix(slug, "-") || strings.HasSuffix(slug, "-") || strings.Contains(slug, "--") {
-		return false
-	}
-	for _, ch := range slug {
-		if !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch <= '9') && ch != '-' {
-			return false
-		}
-	}
-	return true
 }
 
 // editorError keeps an HTMX editor mounted so its unsaved draft survives errors.
@@ -483,9 +249,7 @@ func (m *module) delete(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	m.feed.invalidate()
-	m.recentPosts.invalidate()
-	m.archivePosts.invalidate()
+	m.invalidatePosts()
 	finishContentDelete(w, r, "post", "/post/manage")
 }
 

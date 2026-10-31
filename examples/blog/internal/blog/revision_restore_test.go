@@ -39,7 +39,7 @@ func TestRestoreRevisionHTTP(t *testing.T) {
 						t.Fatal(err)
 					}
 					p.Draft, p.Slug = hx, "current-url"
-					beforePost, err = store.Save(t.Context(), p)
+					beforePost, err = savePostFixture(store, t.Context(), p)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -55,7 +55,7 @@ func TestRestoreRevisionHTTP(t *testing.T) {
 					}
 					p.Published, p.Slug, p.ParentID = !hx, "current-url", h.projectsID
 					p.ChildrenDisplay, p.DisplayOrder = "blocks", new(7)
-					beforePage, err = store.SavePage(t.Context(), p)
+					beforePage, err = savePageFixture(store, t.Context(), p)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -124,14 +124,14 @@ func TestRestoreRevisionHTTP(t *testing.T) {
 // failedRestorePost rejects persistence after validation to test failure reporting.
 type failedRestorePost struct{ repository }
 
-func (failedRestorePost) Save(context.Context, Post) (Post, error) {
+func (failedRestorePost) Save(context.Context, Post, []string) (Post, error) {
 	return Post{}, errors.New("private write failure")
 }
 
 // failedRestorePage rejects persistence after validation to test failure reporting.
 type failedRestorePage struct{ pageRepository }
 
-func (failedRestorePage) SavePage(context.Context, Page) (Page, error) {
+func (failedRestorePage) SavePage(context.Context, Page, []string) (Page, error) {
 	return Page{}, errors.New("private write failure")
 }
 
@@ -191,7 +191,7 @@ func TestRestoreRevisionFailures(t *testing.T) {
 func TestRestoreScheduledRevision(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.posts.(*sqliteRepository)
-	p, err := store.Save(t.Context(), Post{Slug: "scheduled", Title: "Original", Markdown: "Original body", Published: time.Now().Add(time.Hour)})
+	p, err := savePostFixture(store, t.Context(), Post{Slug: "scheduled", Title: "Original", Markdown: "Original body", Published: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestRestoreScheduledRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.Title = "Current"
-	p, err = store.Save(t.Context(), p)
+	p, err = savePostFixture(store, t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}

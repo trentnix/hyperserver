@@ -204,11 +204,11 @@ type slugFailureStore struct {
 	save func(string) error
 }
 
-func (s slugFailureStore) Save(_ context.Context, p Post) (Post, error) {
+func (s slugFailureStore) Save(_ context.Context, p Post, refs []string) (Post, error) {
 	return p, s.save(p.Slug)
 }
 
-func (s slugFailureStore) SavePage(_ context.Context, p Page) (Page, error) {
+func (s slugFailureStore) SavePage(_ context.Context, p Page, refs []string) (Page, error) {
 	return p, s.save(p.Slug)
 }
 

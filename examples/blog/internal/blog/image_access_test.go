@@ -50,12 +50,12 @@ func TestImageAccessLifecycle(t *testing.T) {
 	if admin.Header().Get("Cache-Control") != "no-store" || !bytes.Equal(admin.Body.Bytes(), testPNG(t)) {
 		t.Fatal("administrator preview was missing or cacheable")
 	}
-	p, err := h.blog.posts.Save(t.Context(), Post{Slug: "draft-image", Title: "Draft", Draft: true, Markdown: "![Draft](/images/" + id + ")"})
+	p, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "draft-image", Title: "Draft", Draft: true, Markdown: "![Draft](/images/" + id + ")"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	checkPrivate()
-	if p, err = h.blog.posts.SetPublished(t.Context(), p.ID, true); err != nil {
+	if p, err = setPostPublication(h.blog.posts, t.Context(), p.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	public := request("GET", nil)
@@ -65,12 +65,12 @@ func TestImageAccessLifecycle(t *testing.T) {
 	}
 	etag := public.Header().Get("ETag")
 	requireStatus(t, request("GET", map[string]string{"If-None-Match": etag}), http.StatusNotModified)
-	if p, err = h.blog.posts.SetPublished(t.Context(), p.ID, false); err != nil {
+	if p, err = setPostPublication(h.blog.posts, t.Context(), p.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	checkPrivate()
 	requireStatus(t, request("GET", map[string]string{"If-None-Match": etag, "Range": "bytes=0-7"}), http.StatusNotFound)
-	shared, err := h.blog.posts.Save(t.Context(), Post{Slug: "shared-image", Title: "Shared", PreviewImage: id})
+	shared, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "shared-image", Title: "Shared", PreviewImage: id})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,12 +81,12 @@ func TestImageAccessLifecycle(t *testing.T) {
 	checkPrivate()
 	// Editing the last public reference revokes access without deleting the file.
 	p.Draft, p.PreviewImage, p.Markdown = false, id, ""
-	if p, err = h.blog.posts.Save(t.Context(), p); err != nil {
+	if p, err = savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	requireStatus(t, request("GET", nil), http.StatusOK)
 	p.PreviewImage = ""
-	if p, err = h.blog.posts.Save(t.Context(), p); err != nil {
+	if p, err = savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	checkPrivate()
@@ -104,27 +104,27 @@ func TestPageImageAccess(t *testing.T) {
 		t.Helper()
 		requireStatus(t, h.request("GET", "/images/"+id, nil, false), status)
 	}
-	parent, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "parent", Title: "Parent"})
+	parent, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "parent", Title: "Parent"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "child", Title: "Child", ParentID: parent.ID, Published: true, PreviewImage: id})
+	child, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "child", Title: "Child", ParentID: parent.ID, Published: true, PreviewImage: id})
 	if err != nil {
 		t.Fatal(err)
 	}
 	check(http.StatusNotFound)
 	parent.Published = true
-	if parent, err = h.blog.pageStore.SavePage(t.Context(), parent); err != nil {
+	if parent, err = savePageFixture(h.blog.pageStore, t.Context(), parent); err != nil {
 		t.Fatal(err)
 	}
 	check(http.StatusOK)
 	parent.Published = false
-	if parent, err = h.blog.pageStore.SavePage(t.Context(), parent); err != nil {
+	if parent, err = savePageFixture(h.blog.pageStore, t.Context(), parent); err != nil {
 		t.Fatal(err)
 	}
 	check(http.StatusNotFound)
 	child.ParentID, child.PreviewImage, child.Markdown = "", "", "![Image](../images/"+id+")"
-	if _, err := h.blog.pageStore.SavePage(t.Context(), child); err != nil {
+	if _, err := savePageFixture(h.blog.pageStore, t.Context(), child); err != nil {
 		t.Fatal(err)
 	}
 	check(http.StatusOK)
@@ -187,7 +187,7 @@ func TestImageReferenceParsing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := h.blog.posts.Save(t.Context(), Post{Slug: "external", Title: "External", Markdown: "![Image](https://other.example/images/" + id + ")"})
+	p, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "external", Title: "External", Markdown: "![Image](https://other.example/images/" + id + ")"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestImageReferenceParsing(t *testing.T) {
 	h.app.Handler.ServeHTTP(w, r)
 	requireStatus(t, w, http.StatusNotFound)
 	p.Markdown = "![Image](https://blog.example/images/" + id + ")"
-	if p, err = h.blog.posts.Save(t.Context(), p); err != nil {
+	if p, err = savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	requireStatus(t, h.request("GET", "/images/"+id, nil, false), http.StatusOK)
@@ -207,7 +207,7 @@ func TestImageReferenceParsing(t *testing.T) {
 	h.blog.app.Config.HTTP.ListenHost = "0.0.0.0"
 	requireStatus(t, h.request("GET", "/images/"+id, nil, false), http.StatusNotFound)
 	p.Markdown = "![Image](/images/" + id + ")"
-	if p, err = h.blog.posts.Save(t.Context(), p); err != nil {
+	if p, err = savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	requireStatus(t, h.request("GET", "/images/"+id, nil, false), http.StatusOK)
@@ -245,7 +245,7 @@ func TestImageReferenceDefaultPorts(t *testing.T) {
 			if tc.public {
 				status = http.StatusOK
 			}
-			post, err := h.blog.posts.Save(t.Context(), Post{Slug: "port-test", Title: "Port test", Markdown: "![Image](" + ref + ")"})
+			post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "port-test", Title: "Port test", Markdown: "![Image](" + ref + ")"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -253,7 +253,7 @@ func TestImageReferenceDefaultPorts(t *testing.T) {
 			if err := h.blog.posts.Delete(t.Context(), post.ID); err != nil {
 				t.Fatal(err)
 			}
-			page, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "port-test", Title: "Port test", Published: true, Markdown: "![Image](" + ref + ")"})
+			page, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "port-test", Title: "Port test", Published: true, Markdown: "![Image](" + ref + ")"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -330,13 +330,13 @@ func TestImageReferenceTransactions(t *testing.T) {
 			var version int64
 			save := func(source string) error {
 				if kind == "post" {
-					p, err := store.Save(t.Context(), Post{ID: id, Version: version, Slug: "post", Title: "Post", Markdown: source})
+					p, err := savePostFixture(store, t.Context(), Post{ID: id, Version: version, Slug: "post", Title: "Post", Markdown: source})
 					if err == nil {
 						id, version = p.ID, p.Version
 					}
 					return err
 				}
-				p, err := store.SavePage(t.Context(), Page{ID: id, Version: version, Slug: "page", Title: "Page", Published: true, Markdown: source})
+				p, err := savePageFixture(store, t.Context(), Page{ID: id, Version: version, Slug: "page", Title: "Page", Published: true, Markdown: source})
 				if err == nil {
 					id, version = p.ID, p.Version
 				}
@@ -397,10 +397,10 @@ func TestImageReferenceBackfill(t *testing.T) {
 		if draft {
 			slug = "draft"
 		}
-		if _, err := store.Save(t.Context(), Post{Slug: slug, Title: slug, Draft: draft, PreviewImage: slug + ".png"}); err != nil {
+		if _, err := savePostFixture(store, t.Context(), Post{Slug: slug, Title: slug, Draft: draft, PreviewImage: slug + ".png"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := store.SavePage(t.Context(), Page{Slug: slug, Title: slug, Published: !draft, Markdown: "![Image](/images/page-" + slug + ".png)"}); err != nil {
+		if _, err := savePageFixture(store, t.Context(), Page{Slug: slug, Title: slug, Published: !draft, Markdown: "![Image](/images/page-" + slug + ".png)"}); err != nil {
 			t.Fatal(err)
 		}
 	}

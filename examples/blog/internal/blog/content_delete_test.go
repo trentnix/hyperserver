@@ -58,13 +58,13 @@ func TestContentDeleteResponses(t *testing.T) {
 				slug := fmt.Sprintf("delete-%s-%d", kind, i)
 				var id string
 				if kind == "post" {
-					p, err := h.blog.posts.Save(t.Context(), Post{Slug: slug, Title: "Needle post", Draft: true})
+					p, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: slug, Title: "Needle post", Draft: true})
 					if err != nil {
 						t.Fatal(err)
 					}
 					id = p.ID
 				} else {
-					p, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: slug, Title: "Needle page"})
+					p, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: slug, Title: "Needle page"})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -109,7 +109,7 @@ func TestContentDeleteResponses(t *testing.T) {
 // hierarchy rules, or storage prevent a deletion.
 func TestContentDeleteListFailures(t *testing.T) {
 	h := newHarness(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "delete-protected", Title: "Protected", Draft: true})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "delete-protected", Title: "Protected", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestContentDeleteListFailures(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "protected-child", Title: "Child", ParentID: h.projectsID}); err != nil {
+	if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "protected-child", Title: "Child", ParentID: h.projectsID}); err != nil {
 		t.Fatal(err)
 	}
 	w := h.deleteRequest("/pages/delete/"+h.projectsID, "https://blog.example/pages", true, false)

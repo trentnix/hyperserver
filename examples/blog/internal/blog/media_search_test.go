@@ -141,12 +141,12 @@ func TestMediaSearchHTTP(t *testing.T) {
 	if err := h.blog.mediaMetadata.RememberMedia(t.Context(), unused.ID, "100%_Été.png"); err != nil {
 		t.Fatal(err)
 	}
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "references", Title: "Old forest", Draft: true, PreviewImage: historical.ID})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "references", Title: "Old forest", Draft: true, PreviewImage: historical.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	post.Title, post.PreviewImage = "New mountain", current.ID
-	if _, err := h.blog.posts.Save(t.Context(), post); err != nil {
+	if _, err := savePostFixture(h.blog.posts, t.Context(), post); err != nil {
 		t.Fatal(err)
 	}
 	ids := regexp.MustCompile(`data-media-select="([^"]+)"`)

@@ -39,7 +39,7 @@ func TestContentMatcher(t *testing.T) {
 // states. The matching pages are children of an unrelated draft parent.
 func seedContentSearch(t *testing.T, h *harness) {
 	t.Helper()
-	parent, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "hidden-parent", Title: "Unrelated parent"})
+	parent, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "hidden-parent", Title: "Unrelated parent"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,11 +53,11 @@ func seedContentSearch(t *testing.T, h *harness) {
 		if i == 0 {
 			published = time.Now().Add(time.Hour)
 		}
-		_, err := h.blog.posts.Save(t.Context(), Post{Slug: fmt.Sprintf("search-%d", i), Title: entry.title, Summary: entry.summary, Markdown: entry.body, Draft: i == 1, Published: published})
+		_, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: fmt.Sprintf("search-%d", i), Title: entry.title, Summary: entry.summary, Markdown: entry.body, Draft: i == 1, Published: published})
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = h.blog.pageStore.SavePage(t.Context(), Page{Slug: fmt.Sprintf("search-%d", i), Title: entry.title, Summary: entry.summary, Markdown: entry.body, Published: i != 1, ParentID: parent.ID, DisplayOrder: new(i)})
+		_, err = savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: fmt.Sprintf("search-%d", i), Title: entry.title, Summary: entry.summary, Markdown: entry.body, Published: i != 1, ParentID: parent.ID, DisplayOrder: new(i)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -105,7 +105,7 @@ func TestContentSearchStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.Title, p.Summary, p.Markdown = "Changed title", "", ""
-	if _, err := h.blog.posts.Save(t.Context(), p); err != nil {
+	if _, err := savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	page, err := h.blog.pageStore.GetPageByID(t.Context(), pages[0].ID, true)
@@ -113,7 +113,7 @@ func TestContentSearchStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	page.Title, page.Summary, page.Markdown = "Changed title", "", ""
-	if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+	if _, err := savePageFixture(h.blog.pageStore, t.Context(), page); err != nil {
 		t.Fatal(err)
 	}
 	if matches, err := h.blog.posts.SearchPosts(t.Context(), "needle"); err != nil || len(matches) != 2 {
@@ -254,7 +254,7 @@ func TestPostSearchGroups(t *testing.T) {
 			case "title":
 				p.Title = "needle " + p.Title
 			}
-			if _, err := h.blog.posts.Save(t.Context(), p); err != nil {
+			if _, err := savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 				t.Fatal(err)
 			}
 		}

@@ -26,11 +26,11 @@ func TestMediaDetail(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "Not used by saved posts") || !strings.Contains(w.Body.String(), "/media/delete/"+f.ID) || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("unused upload must show its status and offer deletion privately")
 	}
-	p, err := h.blog.posts.Save(t.Context(), Post{Title: "Draft <post>", Slug: "media-detail", Markdown: "![Image](/images/" + f.ID + ")", PreviewImage: f.ID, Draft: true})
+	p, err := savePostFixture(h.blog.posts, t.Context(), Post{Title: "Draft <post>", Slug: "media-detail", Markdown: "![Image](/images/" + f.ID + ")", PreviewImage: f.ID, Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := h.blog.pageStore.SavePage(t.Context(), Page{Title: "Draft page", Slug: "media-detail", Markdown: "Text", PreviewImage: f.ID})
+	page, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Title: "Draft page", Slug: "media-detail", Markdown: "Text", PreviewImage: f.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestMediaDetail(t *testing.T) {
 		t.Fatal("details must escape titles, link history, and protect current uses")
 	}
 	p.Markdown, p.PreviewImage = "No image", ""
-	if _, err := h.blog.posts.Save(t.Context(), p); err != nil {
+	if _, err := savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	used, err = h.blog.mediaReferences.ReferencedImages(t.Context())

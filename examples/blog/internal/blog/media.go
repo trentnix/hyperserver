@@ -196,12 +196,3 @@ func (m *module) missingMedia(ctx context.Context, references []string) (map[str
 	}
 	return missing, ctx.Err()
 }
-
-// checkContentImages validates rendered Markdown references without changing the source.
-func (m *module) checkContentImages(r *http.Request, source, contentPath string) error {
-	refs, err := imageReferences(source, contentPath, "")
-	if err != nil {
-		return err
-	}
-	return m.checkMediaReferences(r.Context(), refs)
-}

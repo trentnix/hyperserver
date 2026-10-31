@@ -99,7 +99,7 @@ func seedPublicSearch(t *testing.T, h *harness) {
 		{Slug: "private-draft", Title: "Needle private draft", Draft: true},
 		{Slug: "future-post", Title: "Needle future post", Published: time.Now().Add(24 * time.Hour)},
 	} {
-		if _, err := h.blog.posts.Save(t.Context(), p); err != nil {
+		if _, err := savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -107,7 +107,7 @@ func seedPublicSearch(t *testing.T, h *harness) {
 		{Slug: "summary-match", Title: "Summary match", Summary: "A needle in the summary", Published: true},
 		{Slug: "private-page", Title: "Needle private page"},
 	} {
-		if _, err := h.blog.pageStore.SavePage(t.Context(), p); err != nil {
+		if _, err := savePageFixture(h.blog.pageStore, t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -116,7 +116,7 @@ func seedPublicSearch(t *testing.T, h *harness) {
 		t.Fatal(err)
 	}
 	for _, slug := range []string{"private-child", "private-grandchild"} {
-		parent, err = h.blog.pageStore.SavePage(t.Context(), Page{Slug: slug, Title: "Needle " + slug, Published: true, ParentID: parent.ID})
+		parent, err = savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: slug, Title: "Needle " + slug, Published: true, ParentID: parent.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -144,7 +144,7 @@ func TestPublicSearchStorage(t *testing.T) {
 			t.Fatalf("query %q: %+v, %v", query, got, err)
 		}
 	}
-	p, err := store.Save(t.Context(), Post{Slug: "unicode", Title: "Straße %_"})
+	p, err := savePostFixture(store, t.Context(), Post{Slug: "unicode", Title: "Straße %_"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestPublicSearchStorage(t *testing.T) {
 		}
 	}
 	p.Title = "Changed"
-	if _, err := store.Save(t.Context(), p); err != nil {
+	if _, err := savePostFixture(store, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := store.SearchPublic(t.Context(), "STRASSE"); err != nil || got.Total != 0 {
@@ -165,7 +165,7 @@ func TestPublicSearchStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	page.Summary = "Changed"
-	if _, err := store.SavePage(t.Context(), page); err != nil {
+	if _, err := savePageFixture(store, t.Context(), page); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := store.SearchPublic(t.Context(), "needle"); err != nil || got.Total != 2 {
@@ -192,12 +192,12 @@ func TestPublicSearchLimit(t *testing.T) {
 	h := newHarness(t)
 	advance := publicationClock(h, time.Now().Add(-24*time.Hour))
 	store := h.blog.posts.(*sqliteRepository)
-	if _, err := store.Save(t.Context(), Post{Slug: "title-match", Title: "Needle title"}); err != nil {
+	if _, err := savePostFixture(store, t.Context(), Post{Slug: "title-match", Title: "Needle title"}); err != nil {
 		t.Fatal(err)
 	}
 	advance(time.Now().Add(-23 * time.Hour))
 	for i := range searchResultLimit + 5 {
-		if _, err := store.Save(t.Context(), Post{Slug: fmt.Sprintf("body-%03d", i), Title: "Body", Markdown: "needle"}); err != nil {
+		if _, err := savePostFixture(store, t.Context(), Post{Slug: fmt.Sprintf("body-%03d", i), Title: "Body", Markdown: "needle"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -222,14 +222,14 @@ func TestPublicSearchPublication(t *testing.T) {
 	start := time.Now().Truncate(time.Second)
 	advance := publicationClock(h, start)
 	store := h.blog.posts.(*sqliteRepository)
-	if _, err := store.Save(t.Context(), Post{Slug: "scheduled", Title: "Needle scheduled", Published: start.Add(time.Hour)}); err != nil {
+	if _, err := savePostFixture(store, t.Context(), Post{Slug: "scheduled", Title: "Needle scheduled", Published: start.Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
-	parent, err := store.SavePage(t.Context(), Page{Slug: "parent", Title: "Parent", Published: true})
+	parent, err := savePageFixture(store, t.Context(), Page{Slug: "parent", Title: "Parent", Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.SavePage(t.Context(), Page{Slug: "child", Title: "Needle child", Published: true, ParentID: parent.ID}); err != nil {
+	if _, err := savePageFixture(store, t.Context(), Page{Slug: "child", Title: "Needle child", Published: true, ParentID: parent.ID}); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
@@ -242,7 +242,7 @@ func TestPublicSearchPublication(t *testing.T) {
 		}
 	}
 	parent.Published = false
-	if _, err := store.SavePage(t.Context(), parent); err != nil {
+	if _, err := savePageFixture(store, t.Context(), parent); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := store.SearchPublic(t.Context(), "needle"); err != nil || got.Total != 1 || got.Items[0].Slug != "scheduled" {
@@ -291,7 +291,7 @@ func TestPublicSearchHTTP(t *testing.T) {
 			}
 		}
 	}
-	if _, err := h.blog.posts.Save(t.Context(), Post{Slug: "escaping", Title: `<script>needle</script>`, Summary: `<img src=x onerror=alert(1)>`}); err != nil {
+	if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "escaping", Title: `<script>needle</script>`, Summary: `<img src=x onerror=alert(1)>`}); err != nil {
 		t.Fatal(err)
 	}
 	w := h.request("GET", "/search?q=needle", nil, true)
@@ -315,7 +315,7 @@ func TestReaderSearchOmission(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	p, err := h.blog.posts.Save(t.Context(), Post{Slug: "reader-search", Title: "Reader search"})
+	p, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "reader-search", Title: "Reader search"})
 	if err != nil {
 		t.Fatal(err)
 	}

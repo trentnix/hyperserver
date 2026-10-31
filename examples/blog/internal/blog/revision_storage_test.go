@@ -11,10 +11,10 @@ import (
 // saveRevisionContent exercises the same content contract for posts and pages.
 func saveRevisionContent(ctx context.Context, store *sqliteRepository, kind, id string, version int64, content Revision) (string, int64, error) {
 	if kind == "post" {
-		p, err := store.Save(ctx, Post{ID: id, Version: version, Slug: "history", Title: content.Title, Summary: content.Summary, Markdown: content.Markdown, PreviewImage: content.PreviewImage})
+		p, err := savePostFixture(store, ctx, Post{ID: id, Version: version, Slug: "history", Title: content.Title, Summary: content.Summary, Markdown: content.Markdown, PreviewImage: content.PreviewImage})
 		return p.ID, p.Version, err
 	}
-	p, err := store.SavePage(ctx, Page{ID: id, Version: version, Slug: "history", Title: content.Title, Summary: content.Summary, Markdown: content.Markdown, PreviewImage: content.PreviewImage, Published: true})
+	p, err := savePageFixture(store, ctx, Page{ID: id, Version: version, Slug: "history", Title: content.Title, Summary: content.Summary, Markdown: content.Markdown, PreviewImage: content.PreviewImage, Published: true})
 	return p.ID, p.Version, err
 }
 
@@ -64,7 +64,7 @@ func TestRevisionStorage(t *testing.T) {
 					t.Fatal(err)
 				}
 				p.Slug, p.Draft = "new-url", true
-				p, err = store.Save(t.Context(), p)
+				p, err = savePostFixture(store, t.Context(), p)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -75,7 +75,7 @@ func TestRevisionStorage(t *testing.T) {
 					t.Fatal(err)
 				}
 				p.Slug, p.Published, p.ParentID, p.ChildrenDisplay, p.DisplayOrder = "new-url", false, h.projectsID, "blocks", new(7)
-				p, err = store.SavePage(t.Context(), p)
+				p, err = savePageFixture(store, t.Context(), p)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -146,14 +146,14 @@ func TestRevisionSaveAtomicity(t *testing.T) {
 				t.Fatal(err)
 			}
 			if kind == "post" {
-				if _, err := store.Save(t.Context(), Post{Slug: "uncommitted", Title: "Failed create"}); err == nil {
+				if _, err := savePostFixture(store, t.Context(), Post{Slug: "uncommitted", Title: "Failed create"}); err == nil {
 					t.Fatal("failed snapshot accepted a new post")
 				}
 				if _, err := store.GetBySlug(t.Context(), "uncommitted", true); !errors.Is(err, errNotFound) {
 					t.Fatal("failed create left a post behind", err)
 				}
 			} else {
-				if _, err := store.SavePage(t.Context(), Page{Slug: "uncommitted", Title: "Failed create"}); err == nil {
+				if _, err := savePageFixture(store, t.Context(), Page{Slug: "uncommitted", Title: "Failed create"}); err == nil {
 					t.Fatal("failed snapshot accepted a new page")
 				}
 				if _, err := store.GetPageBySlug(t.Context(), "uncommitted", true); !errors.Is(err, errNotFound) {
@@ -225,16 +225,16 @@ func TestRevisionSaveAtomicity(t *testing.T) {
 // a publication shortcut used in another tab. Visibility changes do not add snapshots.
 func TestPublicationInvalidatesEditor(t *testing.T) {
 	store := newHarness(t).blog.posts.(*sqliteRepository)
-	p, err := store.Save(t.Context(), Post{Slug: "publication", Title: "Original", Markdown: "Body"})
+	p, err := savePostFixture(store, t.Context(), Post{Slug: "publication", Title: "Original", Markdown: "Body"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := store.SetPublished(t.Context(), p.ID, false)
+	current, err := setPostPublication(store, t.Context(), p.ID, false)
 	if err != nil || current.Version != p.Version+1 {
 		t.Fatal("publication did not invalidate old editors", current, err)
 	}
 	p.Title = "Stale edit"
-	if _, err := store.Save(t.Context(), p); !errors.Is(err, errEditConflict) {
+	if _, err := savePostFixture(store, t.Context(), p); !errors.Is(err, errEditConflict) {
 		t.Fatal("stale editor reversed publication", err)
 	}
 	stored, err := store.GetByID(t.Context(), p.ID, true)

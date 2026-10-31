@@ -16,6 +16,13 @@ import (
 
 const maxImageBytes = 8 * 1024 * 1024
 
+// previewImageField supplies content-specific copy to the shared editor picker.
+type previewImageField struct {
+	InputID, Value, URL, DefaultURL string
+	Description, Help               string
+	Optional                        bool
+}
+
 // imageUpload groups the original and generated copies stored as one upload.
 type imageUpload = imaging.Result
 

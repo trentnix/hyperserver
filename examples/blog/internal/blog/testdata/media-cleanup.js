@@ -108,6 +108,8 @@
       }
       const back = document.querySelector('.confirmation-panel a');
       assert(back.textContent === 'Back to Media' && back.getAttribute('href') === '/media', 'Cleanup result must return to media management.');
+      const style = getComputedStyle(back);
+      assert(style.display === 'inline-flex' && style.backgroundColor === 'rgb(243, 244, 248)' && parseFloat(style.paddingTop) > 0, 'Standalone return action lost its shared secondary button styling.');
       sessionStorage.setItem('media-stage', 'returned-to-media');
       back.click();
       return;

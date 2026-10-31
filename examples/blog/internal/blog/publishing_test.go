@@ -22,7 +22,7 @@ func (h *harness) publish(t *testing.T, slug string) Post {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requireStatus(t, h.request("POST", "/post/publish/"+post.ID, nil, false), http.StatusSeeOther)
+	requireStatus(t, h.request("POST", "/post/"+post.ID, postFields(post, true), false), http.StatusSeeOther)
 	post, err = h.blog.posts.GetByID(t.Context(), post.ID, true)
 	if err != nil || post.Draft || post.Published.IsZero() {
 		t.Fatal("post was not published", post, err)
@@ -100,7 +100,7 @@ func TestPostPublication(t *testing.T) {
 			checkVisibility(false) // Warm empty public caches before publication.
 			var firstPublished Post
 			for _, action := range []string{"publish", "publish", "unpublish", "unpublish", "publish"} {
-				w := h.request("POST", "/post/"+action+"/"+post.ID, nil, hx)
+				w := h.request("POST", "/post/"+post.ID, postFields(post, action == "publish"), hx)
 				requireStatus(t, w, status)
 				if w.Header().Get(header) != "/post/s/private-post" {
 					t.Fatal("publication did not redirect")
@@ -114,6 +114,7 @@ func TestPostPublication(t *testing.T) {
 				} else if !stored.Published.Equal(firstPublished.Published) {
 					t.Fatal("publication date changed")
 				}
+				post = stored
 				checkVisibility(action == "publish")
 			}
 		})
@@ -229,26 +230,26 @@ func TestSavePostPublication(t *testing.T) {
 func TestPostSavePublicationAtomicity(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.posts
-	post, err := store.Save(t.Context(), Post{Slug: "draft", Title: "Draft", Markdown: "Body", Draft: true})
+	post, err := savePostFixture(store, t.Context(), Post{Slug: "draft", Title: "Draft", Markdown: "Body", Draft: true})
 	if err != nil || !post.Published.IsZero() {
 		t.Fatal("new draft has a publication date", post, err)
 	}
 	post.Draft = false
-	post, err = store.Save(t.Context(), post)
+	post, err = savePostFixture(store, t.Context(), post)
 	if err != nil || post.Draft || post.Published.IsZero() {
 		t.Fatal("saving a draft as published did not assign its date", post, err)
 	}
-	if _, err := store.Save(t.Context(), Post{Slug: "taken", Title: "Other", Markdown: "Body"}); err != nil {
+	if _, err := savePostFixture(store, t.Context(), Post{Slug: "taken", Title: "Other", Markdown: "Body"}); err != nil {
 		t.Fatal(err)
 	}
 	conflict := post
 	conflict.Slug, conflict.Title, conflict.Draft = "taken", "Changed", true
-	if _, err := store.Save(t.Context(), conflict); !errors.Is(err, errSlugTaken) {
+	if _, err := savePostFixture(store, t.Context(), conflict); !errors.Is(err, errSlugTaken) {
 		t.Fatal("expected slug conflict", err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := store.Save(ctx, conflict); !errors.Is(err, context.Canceled) {
+	if _, err := savePostFixture(store, ctx, conflict); !errors.Is(err, context.Canceled) {
 		t.Fatal("save ignored cancellation", err)
 	}
 	stored, err := store.GetByID(t.Context(), post.ID, true)
@@ -270,7 +271,7 @@ func TestPostDeletion(t *testing.T) {
 				status, header = http.StatusOK, "HX-Redirect"
 			}
 			for _, draft := range []bool{true, false} {
-				post, err := h.blog.posts.Save(t.Context(), Post{Slug: "deletable", Title: "Delete me", Markdown: "Body", Draft: draft})
+				post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "deletable", Title: "Delete me", Markdown: "Body", Draft: draft})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -290,7 +291,7 @@ func TestPostDeletion(t *testing.T) {
 					t.Fatal("failed deletion must not redirect")
 				}
 			}
-			post, err := h.blog.posts.Save(t.Context(), Post{Slug: "retained", Title: "Keep me", Markdown: "Body", Draft: true})
+			post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "retained", Title: "Keep me", Markdown: "Body", Draft: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -328,12 +329,12 @@ func TestPostManagement(t *testing.T) {
 	}
 
 	for _, slug := range []string{"draft", "published"} {
-		post, err := h.blog.posts.Save(t.Context(), Post{Slug: slug, Title: "<" + slug + ">", Markdown: "Private Markdown", Draft: true})
+		post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: slug, Title: "<" + slug + ">", Markdown: "Private Markdown", Draft: true})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if slug == "published" {
-			if _, err := h.blog.posts.SetPublished(t.Context(), post.ID, true); err != nil {
+			if _, err := setPostPublication(h.blog.posts, t.Context(), post.ID, true); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -362,7 +363,7 @@ func TestPostManagement(t *testing.T) {
 	}
 }
 
-// TestMovePostToDrafts returns management actions to the list without allowing open redirects.
+// TestMovePostToDrafts saves visibility through the editor without changing content or the publication date.
 func TestMovePostToDrafts(t *testing.T) {
 	h := newHarness(t)
 	h.register(t)
@@ -373,17 +374,14 @@ func TestMovePostToDrafts(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		for _, source := range []string{"posts", "https://attacker.example"} {
 			post := h.publish(t, "managed-post")
-			path := "/post/unpublish/" + post.ID + "?" + url.Values{"from": {source}}.Encode()
-			w := h.request("POST", path, nil, hx)
+			path := "/post/" + post.ID + "?" + url.Values{"from": {source}}.Encode()
+			w := h.request("POST", path, postFields(post, false), hx)
 			status, header := http.StatusSeeOther, "Location"
 			if hx {
 				status, header = http.StatusOK, "HX-Redirect"
 			}
 			requireStatus(t, w, status)
 			want := "/post/s/" + post.Slug
-			if source == "posts" {
-				want = "/post/manage"
-			}
 			if got := w.Header().Get(header); got != want {
 				t.Fatalf("redirect = %q, want %q", got, want)
 			}
@@ -405,7 +403,7 @@ func TestMovePostToDrafts(t *testing.T) {
 // TestPostPublicationAuthorization rejects anonymous and unverified publication.
 func TestPostPublicationAuthorization(t *testing.T) {
 	h := newHarness(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "draft", Title: "Secret", Markdown: "Body", Draft: true})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "draft", Title: "Secret", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +414,7 @@ func TestPostPublicationAuthorization(t *testing.T) {
 		}
 		for _, hx := range []bool{false, true} {
 			for _, action := range []string{"publish", "unpublish"} {
-				w := h.request("POST", "/post/"+action+"/"+post.ID, nil, hx)
+				w := h.request("POST", "/post/"+post.ID, postFields(post, action == "publish"), hx)
 				requireStatus(t, w, http.StatusForbidden)
 				if w.Header().Get("Cache-Control") != "no-store" {
 					t.Fatal("authorization failure is cacheable")
@@ -432,7 +430,7 @@ func TestPostPublicationAuthorization(t *testing.T) {
 // failedPublicationRepository fails publication and management listing without changing content.
 type failedPublicationRepository struct{ repository }
 
-func (failedPublicationRepository) SetPublished(context.Context, string, bool) (Post, error) {
+func (failedPublicationRepository) Save(context.Context, Post, []string) (Post, error) {
 	return Post{}, errors.New("private publication failure")
 }
 
@@ -458,7 +456,7 @@ func TestPostPublicationFailures(t *testing.T) {
 	h.blog.posts = failedPublicationRepository{store}
 	for _, hx := range []bool{false, true} {
 		for _, action := range []string{"publish", "unpublish"} {
-			w := h.request("POST", "/post/"+action+"/"+post.ID, nil, hx)
+			w := h.request("POST", "/post/"+post.ID, postFields(post, action == "publish"), hx)
 			requireStatus(t, w, http.StatusInternalServerError)
 			if strings.Contains(w.Body.String(), "private publication") || w.Header().Get("Location") != "" || w.Header().Get("HX-Redirect") != "" {
 				t.Fatal("publication failure leaked details or redirected")
@@ -489,7 +487,7 @@ func TestPostPublicationFailures(t *testing.T) {
 	h.blog.posts = store
 	for _, hx := range []bool{false, true} {
 		for _, action := range []string{"publish", "unpublish"} {
-			requireStatus(t, h.request("POST", "/post/"+action+"/missing", nil, hx), http.StatusNotFound)
+			requireStatus(t, h.request("POST", "/post/missing", postFields(post, action == "publish"), hx), http.StatusNotFound)
 		}
 	}
 }
@@ -500,16 +498,17 @@ func TestPostPublicationCSRF(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "draft", Title: "Secret", Markdown: "Body", Draft: true})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "draft", Title: "Secret", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []string{"publish", "unpublish"} {
-		path := "/post/" + action + "/" + post.ID
+	for _, published := range []bool{true, false} {
+		path := "/post/" + post.ID
 		if w := h.request("GET", path, nil, false); w.Code == http.StatusOK {
 			t.Fatal("GET accepted a publication action")
 		}
-		r := httptest.NewRequest("POST", "https://blog.example"+path, nil)
+		r := httptest.NewRequest("POST", "https://blog.example"+path, strings.NewReader(postFields(post, published).Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Set("Origin", "https://attacker.example")
 		for _, cookie := range h.cookies {
 			r.AddCookie(cookie)
@@ -557,7 +556,7 @@ INSERT INTO blog_posts VALUES ('old', 'old', 'Original title', 'Summary', 'Origi
 func TestPostPublicationStorage(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.posts
-	post, err := store.Save(t.Context(), Post{Slug: "draft", Title: "Draft", Markdown: "Body", Draft: true})
+	post, err := savePostFixture(store, t.Context(), Post{Slug: "draft", Title: "Draft", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -568,22 +567,22 @@ func TestPostPublicationStorage(t *testing.T) {
 	results := make(chan Post, 8)
 	for range 8 {
 		wg.Go(func() {
-			p, err := store.SetPublished(t.Context(), post.ID, true)
-			if err != nil {
+			candidate := post
+			candidate.Draft = false
+			p, err := savePostFixture(store, t.Context(), candidate)
+			if err == nil {
+				results <- p
+			} else if !errors.Is(err, errEditConflict) {
 				t.Error(err)
 			}
-			results <- p
 		})
 	}
 	wg.Wait()
 	close(results)
-	published := <-results
-	for p := range results {
-		p.Version = published.Version // Each successful operation advances the edit version.
-		if p != published {
-			t.Fatal("concurrent publication changed the timestamp or content")
-		}
+	if len(results) != 1 {
+		t.Fatalf("concurrent edits produced %d winners, want 1", len(results))
 	}
+	published := <-results
 	// Save applies the selected state without overwriting the first publication date.
 	post, err = store.GetByID(t.Context(), post.ID, true)
 	if err != nil {
@@ -591,16 +590,16 @@ func TestPostPublicationStorage(t *testing.T) {
 	}
 	post.Draft = true
 	post.Title = "Edited"
-	updated, err := store.Save(t.Context(), post)
+	updated, err := savePostFixture(store, t.Context(), post)
 	if err != nil || !updated.Draft || !updated.Published.Equal(published.Published) {
 		t.Fatal("saving content ignored the selected state or changed the date", updated, err)
 	}
-	if _, err := store.SetPublished(t.Context(), "missing", true); !errors.Is(err, errNotFound) {
+	if _, err := setPostPublication(store, t.Context(), "missing", true); !errors.Is(err, errNotFound) {
 		t.Fatal("publishing created a missing post", err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := store.SetPublished(ctx, post.ID, false); !errors.Is(err, context.Canceled) {
+	if _, err := setPostPublication(store, ctx, post.ID, false); !errors.Is(err, context.Canceled) {
 		t.Fatal("publication ignored cancellation", err)
 	}
 }
@@ -615,7 +614,7 @@ func TestPostPublicationDateAndEdits(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { closeStore() })
-	post, err := store.Save(t.Context(), Post{Slug: "post", Title: "Post", Markdown: "Body"})
+	post, err := savePostFixture(store, t.Context(), Post{Slug: "post", Title: "Post", Markdown: "Body"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -624,19 +623,19 @@ func TestPostPublicationDateAndEdits(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, published := range []bool{true, false, false, true} {
-		post, err = store.SetPublished(t.Context(), post.ID, published)
+		post, err = setPostPublication(store, t.Context(), post.ID, published)
 		if err != nil || post.Draft == published || !post.Published.Equal(firstPublished) {
 			t.Fatalf("publication %t changed the original date or visibility: %+v, %v", published, post, err)
 		}
 	}
 
 	// Saving a checked publication setting republishes content without changing its date.
-	if post, err = store.SetPublished(t.Context(), post.ID, false); err != nil {
+	if post, err = setPostPublication(store, t.Context(), post.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	post.Draft = false
 	post.Title = "Edited after unpublishing"
-	updated, err := store.Save(t.Context(), post)
+	updated, err := savePostFixture(store, t.Context(), post)
 	if err != nil || updated.Draft || !updated.Published.Equal(firstPublished) || updated.Title != post.Title {
 		t.Fatalf("edit ignored publication state or changed the date: %+v, %v", updated, err)
 	}

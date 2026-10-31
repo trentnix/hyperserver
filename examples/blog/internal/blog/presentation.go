@@ -1,21 +1,14 @@
 package blog
 
 import (
-	"bytes"
 	"errors"
-	"html/template"
-	"io"
 	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
-	"github.com/yuin/goldmark"
-	"golang.org/x/net/html"
 )
 
 const (
@@ -81,6 +74,8 @@ func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templa
 	return content.PrepareTemplates(cm,
 		content.TemplatePath{FS: blogModuleFS, Path: responsesFile},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/posts.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/post-editor.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/page-editor.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/search.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/pages.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/media.html"},
@@ -110,13 +105,14 @@ func (m *module) configurePageNavigation() {
 	m.app.ContentManager.BuildLayoutData = func(r *http.Request) any {
 		data := build(r).(navigation)
 		hx := htmx.GetRequest(r)
-		if !hx.Enabled || hx.HistoryRestore {
-			var err error
-			data.Recent, err = m.loadRecent(r.Context())
-			if err != nil {
-				data.RecentUnavailable = true
-				logger.LogRequestError(r, err)
-			}
+		if hx.Enabled && !hx.HistoryRestore {
+			return data
+		}
+		var err error
+		data.Recent, err = m.loadRecent(r.Context())
+		if err != nil {
+			data.RecentUnavailable = true
+			logger.LogRequestError(r, err)
 		}
 		pages, err := m.pageStore.ListPages(r.Context(), false)
 		if err != nil {
@@ -131,98 +127,4 @@ func (m *module) configurePageNavigation() {
 		}
 		return data
 	}
-}
-
-// markdown is the trust boundary for rendered blog content. Goldmark omits raw
-// HTML and unsafe URL schemes. Previews and published pages use the same renderer.
-func markdown(source string) (template.HTML, error) {
-	var out bytes.Buffer
-	if err := goldmark.New().Convert([]byte(source), &out); err != nil {
-		return "", err
-	}
-	return template.HTML(out.String()), nil
-}
-
-// markdownAt renders content for previews and feeds, resolving relative links
-// and images against the content URL rather than the page displaying the preview.
-// The shared Markdown renderer still removes raw HTML and unsafe URL schemes.
-func markdownAt(source string, base *url.URL) (template.HTML, error) {
-	rendered, err := markdown(source)
-	if err != nil {
-		return "", err
-	}
-	tokens := html.NewTokenizer(strings.NewReader(string(rendered)))
-	var out strings.Builder
-	for {
-		switch tokens.Next() {
-		case html.ErrorToken:
-			if tokens.Err() == io.EOF {
-				return template.HTML(out.String()), nil
-			}
-			return "", tokens.Err()
-		case html.StartTagToken, html.SelfClosingTagToken:
-			token := tokens.Token()
-			for i, attr := range token.Attr {
-				if attr.Val == "" || !(token.Data == "a" && attr.Key == "href" || token.Data == "img" && attr.Key == "src") {
-					continue
-				}
-				ref, err := url.Parse(attr.Val)
-				if err == nil && !ref.IsAbs() {
-					token.Attr[i].Val = base.ResolveReference(ref).String()
-				}
-			}
-			out.WriteString(token.String())
-		default:
-			out.Write(tokens.Raw())
-		}
-	}
-}
-
-// postPage pairs stored post data with HTML produced by the Markdown renderer.
-type postPage struct {
-	Post
-	HTML       template.HTML
-	HasHistory bool
-	Scheduled  bool
-}
-
-// editorPage retains a draft and any user-facing error for the editing form.
-type editorPage struct {
-	Post
-	revisionSelection
-	Error                      string
-	PublishedSlug              string
-	ScheduledSlug              string
-	ScheduledAt                int64
-	Publication                string
-	ScheduleDate, ScheduleTime string
-	CanSchedule                bool
-}
-
-// archivePage contains one bounded page of month-grouped links and adjacent URLs.
-type archivePage struct {
-	Months         []archiveMonth
-	Number         int
-	Previous, Next string
-}
-
-// archiveMonth contains the heading and post links for one archive month.
-type archiveMonth struct {
-	Name  string
-	Posts []ArchiveEntry
-}
-
-// groupArchive groups adjacent entries by publication month, preserving order.
-// Posts must already be sorted by publication time.
-func groupArchive(posts []ArchiveEntry) []archiveMonth {
-	var months []archiveMonth
-	for _, post := range posts {
-		name := post.Published.Format("January 2006")
-		if len(months) == 0 || months[len(months)-1].Name != name {
-			months = append(months, archiveMonth{Name: name})
-		}
-		last := &months[len(months)-1]
-		last.Posts = append(last.Posts, post)
-	}
-	return months
 }

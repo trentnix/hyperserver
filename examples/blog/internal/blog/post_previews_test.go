@@ -130,7 +130,7 @@ INSERT INTO blog_posts VALUES ('old', 'old', 'Title', 'Summary', 'Body', 1700000
 			t.Fatal("upgrade or reopen changed post", p, err)
 		}
 		p.PreviewImage = "selected.png"
-		if _, err := store.Save(t.Context(), p); err != nil {
+		if _, err := savePostFixture(store, t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 		if err := closeStore(); err != nil {

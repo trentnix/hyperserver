@@ -170,13 +170,13 @@ func TestDeleteRevisionHTTP(t *testing.T) {
 				// Exercise published content through ordinary requests and drafts through HTMX.
 				if hx {
 					if kind == "post" {
-						if _, err := h.blog.posts.SetPublished(t.Context(), id, false); err != nil {
+						if _, err := setPostPublication(h.blog.posts, t.Context(), id, false); err != nil {
 							t.Fatal(err)
 						}
 					} else {
 						p := revisionOwner(t, h, kind, id).(Page)
 						p.Published, p.ParentID, p.DisplayOrder, p.ChildrenDisplay = false, h.projectsID, new(7), "blocks"
-						if _, err := h.blog.pageStore.SavePage(t.Context(), p); err != nil {
+						if _, err := savePageFixture(h.blog.pageStore, t.Context(), p); err != nil {
 							t.Fatal(err)
 						}
 					}

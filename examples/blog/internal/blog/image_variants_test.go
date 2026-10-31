@@ -76,7 +76,7 @@ func TestImageVariantAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := h.blog.posts.Save(t.Context(), Post{Title: "Image", Slug: "image", PreviewImage: id, Draft: true})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Title: "Image", Slug: "image", PreviewImage: id, Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestImageVariantAccess(t *testing.T) {
 	for _, variant := range []string{"display", "thumbnail", "original", "../original"} {
 		requireStatus(t, request(variant, map[string]string{"If-None-Match": "*"}), http.StatusNotFound)
 	}
-	if _, err := h.blog.posts.SetPublished(t.Context(), post.ID, true); err != nil {
+	if _, err := setPostPublication(h.blog.posts, t.Context(), post.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	var etags []string
@@ -128,7 +128,7 @@ func TestImageVariantAccess(t *testing.T) {
 	if !bytes.Equal(w.Body.Bytes(), upload.Original) || w.Header().Get("Cache-Control") != "no-store" || !strings.HasPrefix(w.Header().Get("Content-Disposition"), "attachment;") {
 		t.Fatal("original not privately downloadable")
 	}
-	if _, err := h.blog.posts.SetPublished(t.Context(), post.ID, false); err != nil {
+	if _, err := setPostPublication(h.blog.posts, t.Context(), post.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, variant := range []string{"display", "thumbnail", "original"} {
@@ -160,7 +160,7 @@ func TestImageRegenerationCacheValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.blog.posts.Save(t.Context(), Post{Title: "Image", Slug: "image", PreviewImage: id}); err != nil {
+	if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Title: "Image", Slug: "image", PreviewImage: id}); err != nil {
 		t.Fatal(err)
 	}
 	request := func(variant string, headers map[string]string) *httptest.ResponseRecorder {

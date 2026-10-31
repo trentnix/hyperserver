@@ -17,7 +17,7 @@ func TestPostStoragePersistenceAndConflicts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := store.Save(t.Context(), Post{Slug: "hello", Title: "Hello", Markdown: "World"})
+	post, err := savePostFixture(store, t.Context(), Post{Slug: "hello", Title: "Hello", Markdown: "World"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestPostStoragePersistenceAndConflicts(t *testing.T) {
 		t.Fatalf("post did not survive reopening: %v", err)
 	}
 	loaded.Title = "Changed"
-	updated, err := store.Save(t.Context(), loaded)
+	updated, err := savePostFixture(store, t.Context(), loaded)
 	if err != nil || !updated.Published.Equal(post.Published) {
 		t.Fatalf("edit changed publication time: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestPostStoragePersistenceAndConflicts(t *testing.T) {
 	results := make(chan error, 4)
 	for range 4 {
 		wg.Go(func() {
-			_, err := store.Save(t.Context(), Post{Slug: "one-winner", Title: "Concurrent", Markdown: "Post"})
+			_, err := savePostFixture(store, t.Context(), Post{Slug: "one-winner", Title: "Concurrent", Markdown: "Post"})
 			results <- err
 		})
 	}
@@ -67,7 +67,7 @@ func TestPostStoragePersistenceAndConflicts(t *testing.T) {
 	if err := store.Delete(t.Context(), post.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Save(t.Context(), post); !errors.Is(err, errNotFound) {
+	if _, err := savePostFixture(store, t.Context(), post); !errors.Is(err, errNotFound) {
 		t.Fatalf("edit recreated a deleted post: %v", err)
 	}
 }

@@ -1,7 +1,7 @@
 {{ define "blog.mediaLibrary" }}
 <section class="page-manager media-library" data-media-library hx-boost="false">
   {{ if not .Data.Picking }}
-  <header class="page-manager-heading"><h1>Media</h1><a class="page-create media-cleanup-link" href="/media/unused">Clean up uploads</a></header>
+  <header class="page-manager-heading"><h1>Media</h1><a class="button-primary page-create media-cleanup-link" href="/media/unused">Clean up uploads</a></header>
   <form class="media-upload" data-media-upload method="post" action="/post/images/upload" enctype="multipart/form-data">
     <details>
       <summary>Upload image</summary>
@@ -76,7 +76,7 @@
 
 {{ define "blog.media" }}
 <section class="page-manager" hx-boost="false">
-  <header class="page-manager-heading"><h1>Media cleanup</h1>{{ if .Data.Files }}<a class="page-create" href="/media/delete-unused">Delete all unused</a>{{ end }}</header>
+  <header class="page-manager-heading"><h1>Media cleanup</h1>{{ if .Data.Files }}<a class="button-primary page-create" href="/media/delete-unused">Delete all unused</a>{{ end }}</header>
   <p><a href="/media">Browse uploads</a></p>
   <p>Save any open editors before cleanup. Unsaved edits and browser recovery copies cannot be checked. Deleting an image is permanent.</p>
   {{ with .Data.Message }}<p class="field-error" role="alert">{{ . }}</p>{{ end }}

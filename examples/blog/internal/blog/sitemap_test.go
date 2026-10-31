@@ -40,17 +40,17 @@ func TestSitemapPublication(t *testing.T) {
 	h := newHarness(t)
 	savePage := func(p Page) Page {
 		t.Helper()
-		p, err := h.blog.pageStore.SavePage(t.Context(), p)
+		p, err := savePageFixture(h.blog.pageStore, t.Context(), p)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return p
 	}
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "public-post", Title: "Public post"})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "public-post", Title: "Public post"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	draft, err := h.blog.posts.Save(t.Context(), Post{Slug: "draft-post", Title: "Draft post", Draft: true})
+	draft, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "draft-post", Title: "Draft post", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,16 +92,16 @@ func TestSitemapPublication(t *testing.T) {
 	savePage(parent)
 	check("/post/s/public-post")
 
-	if _, err := h.blog.posts.SetPublished(t.Context(), post.ID, false); err != nil {
+	if _, err := setPostPublication(h.blog.posts, t.Context(), post.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	check()
-	if draft, err = h.blog.posts.SetPublished(t.Context(), draft.ID, true); err != nil {
+	if draft, err = setPostPublication(h.blog.posts, t.Context(), draft.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	check("/post/s/draft-post")
 	draft.Slug, draft.Draft = "renamed", false
-	if _, err := h.blog.posts.Save(t.Context(), draft); err != nil {
+	if _, err := savePostFixture(h.blog.posts, t.Context(), draft); err != nil {
 		t.Fatal(err)
 	}
 	check("/post/s/renamed")

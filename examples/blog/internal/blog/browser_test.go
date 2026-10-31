@@ -333,46 +333,46 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	if mode == "media-cleanup" {
 		mediaUpload(t, h.blog, "unused browser image")
 		historical := mediaUpload(t, h.blog, "historical browser image")
-		post, err := h.blog.posts.Save(t.Context(), Post{Slug: "historical-image", Title: "Historical image", Markdown: "![Old](/images/" + historical.ID + ")", PreviewImage: historical.ID, Draft: true})
+		post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "historical-image", Title: "Historical image", Markdown: "![Old](/images/" + historical.ID + ")", PreviewImage: historical.ID, Draft: true})
 		if err != nil {
 			t.Fatal(err)
 		}
 		post.Markdown, post.PreviewImage = "No images", ""
-		if _, err := h.blog.posts.Save(t.Context(), post); err != nil {
+		if _, err := savePostFixture(h.blog.posts, t.Context(), post); err != nil {
 			t.Fatal(err)
 		}
 		used := mediaUpload(t, h.blog, "saved browser image")
-		if _, err := h.blog.posts.Save(t.Context(), Post{Slug: "image", Title: "Saved image", PreviewImage: used.ID, Draft: true}); err != nil {
+		if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "image", Title: "Saved image", PreviewImage: used.ID, Draft: true}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if mode == "admin-navigation" {
 		seedContentSearch(t, h)
-		if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "visible-child", Title: "Visible child", ParentID: h.projectsID, Published: true}); err != nil {
+		if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "visible-child", Title: "Visible child", ParentID: h.projectsID, Published: true}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if mode == "post-management" {
 		for _, draft := range []bool{true, false} {
 			for i, title := range []string{"Short title", strings.Repeat("A longer post title with several words ", 6), strings.Repeat("W", 240)} {
-				if _, err := h.blog.posts.Save(t.Context(), Post{Slug: fmt.Sprintf("layout-%t-%d", draft, i), Title: title, Markdown: "Body", Draft: draft}); err != nil {
+				if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: fmt.Sprintf("layout-%t-%d", draft, i), Title: title, Markdown: "Body", Draft: draft}); err != nil {
 					t.Fatal(err)
 				}
 			}
 		}
 	}
 	if mode == "pages" {
-		child, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: h.projectsID, Slug: "sample-project", Title: "A sample project with a longer title", Published: true})
+		child, err := savePageFixture(h.blog.pageStore, t.Context(), Page{ParentID: h.projectsID, Slug: "sample-project", Title: "A sample project with a longer title", Published: true})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: child.ID, Slug: "sample-guide", Title: "A draft guide"}); err != nil {
+		if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{ParentID: child.ID, Slug: "sample-guide", Title: "A draft guide"}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if mode == "navigation" {
 		h.login(t)
-		if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "another-page", Title: "Another page with a longer title", Published: true}); err != nil {
+		if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "another-page", Title: "Another page with a longer title", Published: true}); err != nil {
 			t.Fatal(err)
 		}
 		for i := range 6 {
@@ -382,7 +382,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			} else if i == 1 {
 				title = "Short"
 			}
-			_, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: h.projectsID,
+			_, err := savePageFixture(h.blog.pageStore, t.Context(), Page{ParentID: h.projectsID,
 				Slug: fmt.Sprintf("project-%d", i), Title: title, Summary: "A project card for navigation layout checks.", Published: true,
 			})
 			if err != nil {
@@ -393,7 +393,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := h.blog.pageStore.SavePage(t.Context(), Page{ParentID: project.ID, Slug: "project-guide", Title: "Project guide", Published: true}); err != nil {
+		if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{ParentID: project.ID, Slug: "project-guide", Title: "Project guide", Published: true}); err != nil {
 			t.Fatal(err)
 		}
 		for _, slug := range []string{"first", "second"} {

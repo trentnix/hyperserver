@@ -17,6 +17,7 @@
   <script src="/assets/js/editor-drafts.js" defer></script>{{ end }}
   <script src="/assets/lib/htmx/htmx.min.js" defer></script>
   <script src="/assets/js/blog.js" defer></script>
+  {{ if .LayoutData.Admin }}<script type="module" src="/assets/js/admin.js"></script>{{ end }}
 </head>
 <body{{ if .LayoutData.Profile.BackgroundURL }} style="--site-background: url('{{ .LayoutData.Profile.BackgroundURL }}')"{{ end }}>
   <div class="site-layout">

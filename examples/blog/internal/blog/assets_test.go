@@ -22,7 +22,7 @@ func TestLinkHoverContrast(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, selector := range []string{"a:hover", ".page-content a:hover"} {
+	for _, selector := range []string{"a:hover", ":where(.page-content) a:hover"} {
 		pattern := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(selector) + ` \{ color: #([0-9a-f]{6});`)
 		match := pattern.FindSubmatch(css)
 		if len(match) != 2 {

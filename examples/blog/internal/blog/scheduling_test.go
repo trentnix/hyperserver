@@ -148,7 +148,7 @@ func TestScheduleChanges(t *testing.T) {
 	store := h.blog.posts
 	save := func(p Post) Post {
 		t.Helper()
-		p, err := store.Save(t.Context(), p)
+		p, err := savePostFixture(store, t.Context(), p)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,7 +159,7 @@ func TestScheduleChanges(t *testing.T) {
 	post.Published = start.Add(2 * time.Hour)
 	post = save(post)
 	stale.Published = start.Add(3 * time.Hour)
-	if _, err := store.Save(t.Context(), stale); !errors.Is(err, errEditConflict) {
+	if _, err := savePostFixture(store, t.Context(), stale); !errors.Is(err, errEditConflict) {
 		t.Fatal("stale editor overwrote the newer schedule", err)
 	}
 	next, err := store.NextPublication(t.Context())
@@ -180,7 +180,7 @@ func TestScheduleChanges(t *testing.T) {
 	advance(post.Published)
 	original := post
 	post.Published = start.Add(3 * time.Hour)
-	if _, err := store.Save(t.Context(), post); !errors.Is(err, errAlreadyPublished) {
+	if _, err := savePostFixture(store, t.Context(), post); !errors.Is(err, errAlreadyPublished) {
 		t.Fatal("rescheduled an already-published post", err)
 	}
 	stored, err := store.GetByID(t.Context(), post.ID, true)
@@ -197,7 +197,7 @@ func TestScheduleChanges(t *testing.T) {
 		t.Fatal("republishing reset the first publication date")
 	}
 	early := save(Post{Slug: "early", Title: "Early", Markdown: "Body", Published: start.Add(5 * time.Hour)})
-	early, err = store.SetPublished(t.Context(), early.ID, true)
+	early, err = setPostPublication(store, t.Context(), early.ID, true)
 	if err != nil || !early.Published.Equal(start.Add(4*time.Hour)) {
 		t.Fatal("publish now did not replace the future schedule", early, err)
 	}
@@ -264,7 +264,7 @@ func TestScheduleEditorWarnings(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "scheduled", Title: "Scheduled", Markdown: "Body", Published: start.Add(time.Hour)})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "scheduled", Title: "Scheduled", Markdown: "Body", Published: start.Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func TestScheduleSurvivesRestart(t *testing.T) {
 	}
 	start := time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)
 	store.now = func() time.Time { return start }
-	_, saveErr := store.Save(t.Context(), Post{Slug: "restart", Title: "Restart", Published: start.Add(time.Hour)})
+	_, saveErr := savePostFixture(store, t.Context(), Post{Slug: "restart", Title: "Restart", Published: start.Add(time.Hour)})
 	if err := closeStore(); err != nil || saveErr != nil {
 		t.Fatal(saveErr, err)
 	}

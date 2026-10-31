@@ -34,11 +34,14 @@ func (m *module) restoreRevision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = m.restoreRevisionContent(r.Context(), kind, id, version, selected)
+	var invalid contentError
 	switch {
 	case errors.Is(err, errEditConflict):
 		m.renderRevisions(w, r, "The content changed since you opened History. Review the latest version before restoring.", http.StatusConflict)
 	case errors.Is(err, errMissingMedia):
 		m.renderRevisions(w, r, "This version references deleted images. Edit this version to replace or remove them before saving.", http.StatusUnprocessableEntity)
+	case errors.As(err, &invalid):
+		m.renderRevisions(w, r, err.Error(), http.StatusUnprocessableEntity)
 	case errors.Is(err, errNotFound):
 		m.storageError(w, r, err)
 	case err != nil:
@@ -52,11 +55,8 @@ func (m *module) restoreRevision(w http.ResponseWriter, r *http.Request) {
 // restoreRevisionContent preserves current settings and checks media under the same lock as ordinary saves.
 // Repository version checks prevent intervening edits from being overwritten.
 func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, version int64, selected Revision) error {
-	m.mediaMu.RLock()
-	defer m.mediaMu.RUnlock()
 	var current Revision
 	var currentVersion int64
-	var path string
 	var save func() error
 	switch kind {
 	case "post":
@@ -65,15 +65,10 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 			return err
 		}
 		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage}
-		currentVersion, path = p.Version, "/post/s/"+p.Slug
+		currentVersion = p.Version
 		p.Title, p.Summary, p.Markdown, p.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
 		save = func() error {
-			_, err := m.posts.Save(ctx, p)
-			if err == nil {
-				m.feed.invalidate()
-				m.recentPosts.invalidate()
-				m.archivePosts.invalidate()
-			}
+			_, err := m.writePost(ctx, p)
 			return err
 		}
 	case "page":
@@ -82,10 +77,10 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 			return err
 		}
 		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage}
-		currentVersion, path = p.Version, p.URL()
+		currentVersion = p.Version
 		p.Title, p.Summary, p.Markdown, p.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
 		save = func() error {
-			_, err := m.pageStore.SavePage(ctx, p)
+			_, err := m.writePage(ctx, p)
 			return err
 		}
 	default:
@@ -96,13 +91,6 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 	}
 	if selected.sameContent(current) {
 		return nil
-	}
-	missing, err := m.revisionMissingImages(ctx, selected, path)
-	if err != nil {
-		return err
-	}
-	if len(missing) > 0 {
-		return errMissingMedia
 	}
 	return save()
 }

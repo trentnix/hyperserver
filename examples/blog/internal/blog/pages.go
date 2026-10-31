@@ -30,6 +30,15 @@ type pageContent struct {
 	PublishedSlug    string
 }
 
+// PreviewField configures the shared picker for page cards and sharing.
+func (p pageContent) PreviewField() previewImageField {
+	return previewImageField{
+		InputID: "page-image", Value: p.PreviewImage, URL: p.PreviewURL(), DefaultURL: defaultPagePreviewURL,
+		Description: "For page cards and sharing links.",
+		Help:        "Use default image restores the card placeholder. Shared links use a page image or the site portrait.",
+	}
+}
+
 // pageLink is one navigation branch. Hidden ancestors hide their entire branch.
 type pageLink struct {
 	Page
@@ -172,9 +181,6 @@ func (m *module) pageEditor(w http.ResponseWriter, r *http.Request) {
 // savePage validates bounded UTF-8 content and saves a published page or draft.
 // Empty Markdown is allowed. An omitted slug is generated from the title.
 func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
-	m.mediaMu.RLock()
-	defer m.mediaMu.RUnlock()
-
 	// Parse within the route's body limit, then validate field sizes below.
 	// This keeps complete drafts available when Markdown exceeds its content limit.
 	if err := form.ParseWithOptions(r, form.ParseOptions{MaxFieldBytes: routing.MiB}); err != nil {
@@ -192,16 +198,13 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		PreviewImage:    r.PostForm.Get("previewImage"),
 		ChildrenDisplay: r.PostForm.Get("childrenDisplay"),
 	}
-	version, validVersion := editorVersion(r)
-	p.Version = version
-	generatedSlug := p.Slug == ""
-	if generatedSlug {
-		p.Slug = slugFromTitle(p.Title)
+	if version, valid := editorVersion(r); valid {
+		p.Version = version
 	}
 	if p.ChildrenDisplay == "" {
 		p.ChildrenDisplay = "hidden"
 	}
-	message := validatePage(p)
+	var message string
 	if value := strings.TrimSpace(r.PostForm.Get("displayOrder")); value != "" {
 		order, err := strconv.Atoi(value)
 		if err == nil && order >= 0 && order <= 1_000_000 {
@@ -217,43 +220,11 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		m.renderPageEditor(w, r, p, message, http.StatusUnprocessableEntity)
 		return
 	}
-	if !validVersion {
-		m.renderPageEditor(w, r, p, editConflictMessage, http.StatusConflict)
+	saved, err := m.writePage(r.Context(), p)
+	var invalid contentError
+	if errors.As(err, &invalid) || errors.Is(err, errMissingMedia) {
+		m.renderPageEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity)
 		return
-	}
-	if p.PreviewImage != "" {
-		image, err := m.images.Open(r.Context(), p.PreviewImage)
-		if err != nil {
-			if errors.Is(err, errNotFound) {
-				m.renderPageEditor(w, r, p, "Upload a valid preview image or remove it to use the default.", http.StatusUnprocessableEntity)
-			} else {
-				logger.LogRequestError(r, err)
-				m.renderPageEditor(w, r, p, "Unable to read the preview image. Please try again.", http.StatusInternalServerError)
-			}
-			return
-		}
-		image.Content.Close()
-	}
-
-	if err := m.checkContentImages(r, p.Markdown, p.URL()); err != nil {
-		message, status := "Unable to check uploaded images. Please try again.", http.StatusInternalServerError
-		if errors.Is(err, errMissingMedia) {
-			message, status = err.Error(), http.StatusUnprocessableEntity
-		} else {
-			logger.LogRequestError(r, err)
-		}
-		m.renderPageEditor(w, r, p, message, status)
-		return
-	}
-	saved, err := m.pageStore.SavePage(r.Context(), p)
-	// Let the database settle competing writes. Only generated slugs may change.
-	for suffix := 2; generatedSlug && errors.Is(err, errPageSlugTaken); suffix++ {
-		if err = r.Context().Err(); err != nil {
-			break
-		}
-		candidate := p
-		candidate.Slug = numberedSlug(p.Slug, suffix)
-		saved, err = m.pageStore.SavePage(r.Context(), candidate)
 	}
 	if errors.Is(err, errPageSlugTaken) {
 		m.renderPageEditor(w, r, p, slugConflictMessage, http.StatusConflict)
@@ -278,26 +249,6 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("HX-Trigger", "blog:content-saved")
 	util.RedirectToURL(w, r, saved.URL())
-}
-
-// validatePage returns the first invalid-field message, or an empty string.
-func validatePage(p Page) string {
-	if p.Title == "" || !utf8.ValidString(p.Title) || utf8.RuneCountInString(p.Title) > 240 {
-		return "Enter a title of at most 240 characters."
-	}
-	if !validSlug(p.Slug) {
-		return "Use a slug of at most 120 lowercase letters, numbers, and single hyphens."
-	}
-	if !utf8.ValidString(p.Markdown) || len(p.Markdown) > maxMarkdownBytes {
-		return "Enter valid Markdown of at most 256 KiB."
-	}
-	if !utf8.ValidString(p.Summary) || utf8.RuneCountInString(p.Summary) > 2000 {
-		return "Enter a preview description of at most 2,000 characters."
-	}
-	if p.ChildrenDisplay != "hidden" && p.ChildrenDisplay != "list" && p.ChildrenDisplay != "blocks" {
-		return "Choose hidden, preview list, or preview blocks for subpages."
-	}
-	return ""
 }
 
 // renderPageEditor keeps the HTMX editor mounted on errors. Ordinary requests

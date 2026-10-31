@@ -13,11 +13,11 @@ import (
 // TestPageNavigationDepth limits menus, not page access or administrator tools.
 func TestPageNavigationDepth(t *testing.T) {
 	h := newHarness(t)
-	child, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "child", Title: "Child", ParentID: h.projectsID, Published: true, ChildrenDisplay: "list"})
+	child, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "child", Title: "Child", ParentID: h.projectsID, Published: true, ChildrenDisplay: "list"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	grandchild, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "grandchild", Title: "Grandchild", ParentID: child.ID, Published: true})
+	grandchild, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "grandchild", Title: "Grandchild", ParentID: child.ID, Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,30 +77,30 @@ func TestPageHierarchy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := store.SavePage(t.Context(), Page{Slug: "child", Title: "Child", ParentID: root.ID, Published: true})
+	child, err := savePageFixture(store, t.Context(), Page{Slug: "child", Title: "Child", ParentID: root.ID, Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	grandchild, err := store.SavePage(t.Context(), Page{Slug: "grandchild", Title: "Grandchild", ParentID: child.ID, Published: true})
+	grandchild, err := savePageFixture(store, t.Context(), Page{Slug: "grandchild", Title: "Grandchild", ParentID: child.ID, Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, parent := range []string{root.ID, child.ID, grandchild.ID, "missing"} {
 		invalid := root
 		invalid.ParentID = parent
-		if _, err := store.SavePage(t.Context(), invalid); !errors.Is(err, errPageParent) {
+		if _, err := savePageFixture(store, t.Context(), invalid); !errors.Is(err, errPageParent) {
 			t.Fatalf("parent %s: %v", parent, err)
 		}
 	}
 	if err := store.DeletePage(t.Context(), root.ID); !errors.Is(err, errPageHasChildren) {
 		t.Fatal("deleted parent", err)
 	}
-	if _, err := store.SavePage(t.Context(), Page{Slug: "orphan", ParentID: "missing"}); !errors.Is(err, errPageParent) {
+	if _, err := savePageFixture(store, t.Context(), Page{Slug: "orphan", ParentID: "missing"}); !errors.Is(err, errPageParent) {
 		t.Fatal("created orphan", err)
 	}
 
 	root.Published = false
-	if _, err := store.SavePage(t.Context(), root); err != nil {
+	if _, err := savePageFixture(store, t.Context(), root); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range []Page{root, child, grandchild} {
@@ -128,7 +128,7 @@ func TestPageHierarchy(t *testing.T) {
 		t.Fatal("draft branch leaked into navigation")
 	}
 	child.ParentID = ""
-	if _, err := store.SavePage(t.Context(), child); err != nil {
+	if _, err := savePageFixture(store, t.Context(), child); err != nil {
 		t.Fatal(err)
 	}
 	requireStatus(t, h.request("GET", grandchild.URL(), nil, false), http.StatusOK)
@@ -169,18 +169,18 @@ func TestPagePublicationDuringRead(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				child, err := store.SavePage(t.Context(), Page{Slug: "child", Title: "Child", ParentID: parent.ID, Published: true})
+				child, err := savePageFixture(store, t.Context(), Page{Slug: "child", Title: "Child", ParentID: parent.ID, Published: true})
 				if err != nil {
 					t.Fatal(err)
 				}
 				h.blog.pageStore = editedPageRepository{pageRepository: store, afterLookup: func() {
 					parent.Published = false
 					parent.Title = "Private parent title"
-					if _, err := store.SavePage(t.Context(), parent); err != nil {
+					if _, err := savePageFixture(store, t.Context(), parent); err != nil {
 						t.Fatal(err)
 					}
 					child.Summary = "Private child summary"
-					if _, err := store.SavePage(t.Context(), child); err != nil {
+					if _, err := savePageFixture(store, t.Context(), child); err != nil {
 						t.Fatal(err)
 					}
 				}}
@@ -202,11 +202,11 @@ func TestPagePublicationDuringRead(t *testing.T) {
 func TestConcurrentPageParents(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.pageStore
-	a, err := store.SavePage(t.Context(), Page{Slug: "a"})
+	a, err := savePageFixture(store, t.Context(), Page{Slug: "a"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := store.SavePage(t.Context(), Page{Slug: "b"})
+	b, err := savePageFixture(store, t.Context(), Page{Slug: "b"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestConcurrentPageParents(t *testing.T) {
 	for _, p := range []Page{a, b} {
 		wg.Go(func() {
 			<-start
-			_, err := store.SavePage(t.Context(), p)
+			_, err := savePageFixture(store, t.Context(), p)
 			results <- err
 		})
 	}
@@ -247,11 +247,11 @@ func TestPageChildDisplays(t *testing.T) {
 		h.register(t)
 		h.verify(t)
 		h.login(t)
-		parent, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "portfolio", Title: "Portfolio", Markdown: "Parent body", Published: true})
+		parent, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "portfolio", Title: "Portfolio", Markdown: "Parent body", Published: true})
 		if err != nil {
 			t.Fatal(err)
 		}
-		child, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "child", Title: "Child", Summary: "Preview description", Markdown: "Child body", ParentID: parent.ID, Published: true})
+		child, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "child", Title: "Child", Summary: "Preview description", Markdown: "Child body", ParentID: parent.ID, Published: true})
 		if err != nil {
 			t.Fatal(err)
 		}

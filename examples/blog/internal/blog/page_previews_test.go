@@ -193,7 +193,7 @@ func TestPagePreviewStorage(t *testing.T) {
 		{Slug: "first", Title: "B", DisplayOrder: &firstOrder, Published: true},
 		{Slug: "draft", Title: "C", DisplayOrder: &firstOrder},
 	} {
-		if _, err := store.SavePage(t.Context(), p); err != nil {
+		if _, err := savePageFixture(store, t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -204,7 +204,7 @@ func TestPagePreviewStorage(t *testing.T) {
 	if _, err := store.GetPageBySlug(t.Context(), "draft", false); !errors.Is(err, errNotFound) {
 		t.Fatal("draft visible", err)
 	}
-	if _, err := store.SavePage(t.Context(), Page{ID: "missing"}); !errors.Is(err, errNotFound) {
+	if _, err := savePageFixture(store, t.Context(), Page{ID: "missing"}); !errors.Is(err, errNotFound) {
 		t.Fatal("update inserted missing project", err)
 	}
 
@@ -214,7 +214,7 @@ func TestPagePreviewStorage(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := store.SavePage(t.Context(), Page{Slug: "concurrent"})
+			_, err := savePageFixture(store, t.Context(), Page{Slug: "concurrent"})
 			results <- err
 		}()
 	}
@@ -267,7 +267,7 @@ func TestPagePreviewSortOrder(t *testing.T) {
 		{"ordered-new", &ten, 2 * time.Hour},
 		{"zero", &zero, 0},
 	} {
-		p, err := store.SavePage(t.Context(), Page{Slug: item.slug, DisplayOrder: item.order, Published: true})
+		p, err := savePageFixture(store, t.Context(), Page{Slug: item.slug, DisplayOrder: item.order, Published: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -301,19 +301,19 @@ func TestPagePreviewSortOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldUpdated := p.Updated
-	unchanged, err := store.SavePage(t.Context(), p)
+	unchanged, err := savePageFixture(store, t.Context(), p)
 	if err != nil || unchanged.Updated != p.Updated || unchanged.Version != p.Version {
 		t.Fatal("unchanged save altered page order or edit token", unchanged, err)
 	}
 	assertOrder("zero,ordered-new,ordered-old,unordered-new,unordered-old")
 	p.Title = "Updated title"
-	p, err = store.SavePage(t.Context(), p)
+	p, err = savePageFixture(store, t.Context(), p)
 	if err != nil || !p.Updated.After(oldUpdated) {
 		t.Fatal("save did not update timestamp", p, err)
 	}
 	assertOrder("zero,ordered-old,ordered-new,unordered-new,unordered-old")
 	p.DisplayOrder = nil
-	if _, err := store.SavePage(t.Context(), p); err != nil {
+	if _, err := savePageFixture(store, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	assertOrder("zero,ordered-new,ordered-old,unordered-new,unordered-old")
@@ -392,7 +392,7 @@ func TestPagePreviewStorageFailures(t *testing.T) {
 // draft access or publishing, even if that account has verified its email.
 func TestPagePreviewOtherAccount(t *testing.T) {
 	h := newHarness(t)
-	p, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "private", Title: "Private draft"})
+	p, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "private", Title: "Private draft"})
 	if err != nil {
 		t.Fatal(err)
 	}

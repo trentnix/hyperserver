@@ -24,7 +24,7 @@ func seedArchive(t *testing.T, h *harness, count int) {
 	for i := range count {
 		published := now.Add(-time.Duration(i) * 24 * time.Hour)
 		store.now = func() time.Time { return published }
-		_, err := h.blog.posts.Save(t.Context(), Post{
+		_, err := savePostFixture(h.blog.posts, t.Context(), Post{
 			Slug: fmt.Sprintf("archive-%03d", i), Title: fmt.Sprintf("Archive <%03d>", i),
 			Markdown: "Body not needed by the archive",
 		})
@@ -37,7 +37,7 @@ func seedArchive(t *testing.T, h *harness, count int) {
 		{Slug: "private-draft", Title: "Private draft", Draft: true},
 		{Slug: "private-scheduled", Title: "Private scheduled", Published: now.Add(time.Hour)},
 	} {
-		if _, err := h.blog.posts.Save(t.Context(), p); err != nil {
+		if _, err := savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 	}

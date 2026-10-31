@@ -25,10 +25,24 @@
 {{ define "blog.searchForm" }}
 <form class="management-search reader-search-form" role="search" method="get" action="/search" hx-get="/search" hx-target="#article-content" hx-sync="#article-content:replace" hx-push-url="true">
   <div><label><span>Search Site</span><input type="search" name="q" value="{{ . }}" maxlength="240" placeholder="Search"></label></div>
-  <button type="submit">Search</button>
+  <button type="submit" class="button-secondary">Search</button>
 </form>
 {{ end }}
 
 {{ define "blog.postLinks" }}
 <ul>{{ range . }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>
+{{ end }}
+
+{{ define "blog.archive" }}
+<section class="post-archive info-page" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<header><h1>All Posts</h1>{{ template "blog.searchForm" "" }}</header>
+{{ range .Data.Months }}<h2 class="archive-month">{{ .Name }}</h2>{{ template "blog.postLinks" .Posts }}{{ else }}<p>No posts yet.</p>{{ end }}
+{{ if or .Data.Previous .Data.Next }}
+<nav class="archive-pagination" aria-label="Archive pages">
+  {{ if .Data.Previous }}<a href="{{ .Data.Previous }}" rel="prev"><span aria-hidden="true">←</span> Newer posts</a>{{ end }}
+  <span class="archive-page-number">Page {{ .Data.Number }}</span>
+  {{ if .Data.Next }}<a href="{{ .Data.Next }}" rel="next">Older posts <span aria-hidden="true">→</span></a>{{ end }}
+</nav>
+{{ end }}
+</section>
 {{ end }}

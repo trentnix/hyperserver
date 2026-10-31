@@ -300,11 +300,11 @@ func (s *observedPostRepository) ListArchivePage(ctx context.Context, limit, off
 	return s.repository.ListArchivePage(ctx, limit, offset)
 }
 
-func (s *observedPostRepository) Save(ctx context.Context, post Post) (Post, error) {
+func (s *observedPostRepository) Save(ctx context.Context, post Post, refs []string) (Post, error) {
 	if s.writeError != nil {
 		return Post{}, s.writeError
 	}
-	return s.repository.Save(ctx, post)
+	return s.repository.Save(ctx, post, refs)
 }
 
 func (s *observedPostRepository) Delete(ctx context.Context, id string) error {

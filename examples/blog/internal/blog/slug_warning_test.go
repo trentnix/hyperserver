@@ -28,24 +28,24 @@ func TestSlugWarningHistory(t *testing.T) {
 				}
 				if state != "new" {
 					if kind == "post" {
-						p, err := h.blog.posts.Save(t.Context(), Post{Slug: slug, Title: "Title", Markdown: "Body", Draft: state == "draft"})
+						p, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: slug, Title: "Title", Markdown: "Body", Draft: state == "draft"})
 						if err != nil {
 							t.Fatal(err)
 						}
 						if state == "unpublished" {
-							if _, err := h.blog.posts.SetPublished(t.Context(), p.ID, false); err != nil {
+							if _, err := setPostPublication(h.blog.posts, t.Context(), p.ID, false); err != nil {
 								t.Fatal(err)
 							}
 						}
 						editor, action = "/post/update/"+p.ID, "/post/"+p.ID
 					} else {
-						p, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: slug, Title: "Title", Published: state != "draft"})
+						p, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: slug, Title: "Title", Published: state != "draft"})
 						if err != nil {
 							t.Fatal(err)
 						}
 						if state == "unpublished" {
 							p.Published, p.EverPublished = false, false
-							if _, err := h.blog.pageStore.SavePage(t.Context(), p); err != nil {
+							if _, err := savePageFixture(h.blog.pageStore, t.Context(), p); err != nil {
 								t.Fatal(err)
 							}
 						}
@@ -111,7 +111,7 @@ INSERT INTO blog_pages VALUES ('draft', 'draft', 'Draft', '', 0, NULL, '', '', '
 			t.Fatal("upgrade invented draft history", draft, err)
 		}
 		live.Published, live.EverPublished = false, false
-		live, err = store.SavePage(t.Context(), live)
+		live, err = savePageFixture(store, t.Context(), live)
 		if err != nil || !live.EverPublished || live.Published {
 			t.Fatal("unpublishing discarded history", live, err)
 		}
@@ -125,12 +125,12 @@ INSERT INTO blog_pages VALUES ('draft', 'draft', 'Draft', '', 0, NULL, '', '', '
 // through subsequent saves. Failed writes must not record a publication.
 func TestPageFirstPublicationHistory(t *testing.T) {
 	h := newHarness(t)
-	p, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "never-live", Title: "Draft", EverPublished: true})
+	p, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "never-live", Title: "Draft", EverPublished: true})
 	if err != nil || p.EverPublished {
 		t.Fatal("new draft trusted caller-supplied history", p, err)
 	}
 	p.Published, p.Slug = true, "about"
-	if _, err := h.blog.pageStore.SavePage(t.Context(), p); err != errPageSlugTaken {
+	if _, err := savePageFixture(h.blog.pageStore, t.Context(), p); err != errPageSlugTaken {
 		t.Fatal("expected slug conflict", err)
 	}
 	p, err = h.blog.pageStore.GetPageByID(t.Context(), p.ID, true)
@@ -138,12 +138,12 @@ func TestPageFirstPublicationHistory(t *testing.T) {
 		t.Fatal("failed write changed history", p, err)
 	}
 	p.Published = true
-	p, err = h.blog.pageStore.SavePage(t.Context(), p)
+	p, err = savePageFixture(h.blog.pageStore, t.Context(), p)
 	if err != nil || !p.EverPublished {
 		t.Fatal("first publication was not recorded", p, err)
 	}
 	p.Published, p.EverPublished = false, false
-	p, err = h.blog.pageStore.SavePage(t.Context(), p)
+	p, err = savePageFixture(h.blog.pageStore, t.Context(), p)
 	if err != nil || !p.EverPublished {
 		t.Fatal("subsequent draft save discarded history", p, err)
 	}
@@ -152,7 +152,7 @@ func TestPageFirstPublicationHistory(t *testing.T) {
 		writers.Go(func() {
 			update := p
 			update.Published, update.EverPublished = published, false
-			if _, err := h.blog.pageStore.SavePage(t.Context(), update); err != nil && !errors.Is(err, errEditConflict) {
+			if _, err := savePageFixture(h.blog.pageStore, t.Context(), update); err != nil && !errors.Is(err, errEditConflict) {
 				t.Error(err)
 			}
 		})

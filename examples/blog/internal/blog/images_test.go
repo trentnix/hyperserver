@@ -30,7 +30,7 @@ func TestImageHTTPResponses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.blog.posts.Save(t.Context(), Post{Slug: "image", Title: "Image", PreviewImage: id}); err != nil {
+	if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "image", Title: "Image", PreviewImage: id}); err != nil {
 		t.Fatal(err)
 	}
 	request := func(method string, headers map[string]string) *httptest.ResponseRecorder {

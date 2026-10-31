@@ -12,7 +12,7 @@ import (
 func TestImageReferenceDeduplication(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.posts.(*sqliteRepository)
-	p, err := store.Save(t.Context(), Post{Slug: "repeated", Title: "Repeated", PreviewImage: "same.png",
+	p, err := savePostFixture(store, t.Context(), Post{Slug: "repeated", Title: "Repeated", PreviewImage: "same.png",
 		Markdown: "![One](/images/same.png)\n\n![Two](/images/same.png?size=2)\n\n[Download](/images/same.png#download)"})
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +23,7 @@ func TestImageReferenceDeduplication(t *testing.T) {
 	}
 	p.PreviewImage = ""
 	p.Markdown = "![Remaining](/images/same.png)"
-	if _, err := store.Save(t.Context(), p); err != nil {
+	if _, err := savePostFixture(store, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	if public, err := store.ImageIsPublic(t.Context(), "/images/same.png"); err != nil || !public {
@@ -51,13 +51,13 @@ func TestImageReferencesConcurrentSave(t *testing.T) {
 					preview = "private.png"
 				}
 				if kind == "post" {
-					p, err := store.Save(t.Context(), Post{ID: id, Version: version, Slug: "concurrent-post", Title: "Post", PreviewImage: preview, Draft: draft})
+					p, err := savePostFixture(store, t.Context(), Post{ID: id, Version: version, Slug: "concurrent-post", Title: "Post", PreviewImage: preview, Draft: draft})
 					if err == nil {
 						id, version = p.ID, p.Version
 					}
 					return err
 				}
-				p, err := store.SavePage(t.Context(), Page{ID: id, Version: version, Slug: "concurrent-page", Title: "Page", PreviewImage: preview, Published: !draft})
+				p, err := savePageFixture(store, t.Context(), Page{ID: id, Version: version, Slug: "concurrent-page", Title: "Page", PreviewImage: preview, Published: !draft})
 				if err == nil {
 					id, version = p.ID, p.Version
 				}
@@ -97,7 +97,7 @@ func TestImageReferencesConcurrentSave(t *testing.T) {
 func TestImageReferenceBackfillFailure(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.posts.(*sqliteRepository)
-	if _, err := store.Save(t.Context(), Post{Slug: "existing", Title: "Existing", PreviewImage: "existing.png"}); err != nil {
+	if _, err := savePostFixture(store, t.Context(), Post{Slug: "existing", Title: "Existing", PreviewImage: "existing.png"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.db.ExecContext(t.Context(), `DROP TABLE blog_post_images; DROP TABLE blog_page_images;

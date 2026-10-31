@@ -131,7 +131,7 @@ func TestMediaHistoryConfirmationCannotBypassCurrentUse(t *testing.T) {
 			if err := h.blog.writeProfile(t.Context(), Profile{Name: "Profile", Version: h.blog.profile.Current().Version}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := h.blog.posts.Save(t.Context(), Post{Title: "Current", Slug: "current", Draft: true, PreviewImage: f.ID}); err != nil {
+			if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Title: "Current", Slug: "current", Draft: true, PreviewImage: f.ID}); err != nil {
 				t.Fatal(err)
 			}
 		} else if err := h.blog.writeProfile(t.Context(), Profile{Name: "Profile", ImageURL: "/images/" + f.ID, Version: h.blog.profile.Current().Version}); err != nil {

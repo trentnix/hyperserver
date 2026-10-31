@@ -163,7 +163,7 @@ func TestSharingPublicContent(t *testing.T) {
 	if err := h.blog.writeProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "shared", Title: `Title " /><script>alert(1)</script>`, Summary: `Summary " /><script>alert(1)</script> & details`, Markdown: "![Vector](/vector.svg)\n\n![Photo](/images/photo.png?size=large&crop=1)"})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "shared", Title: `Title " /><script>alert(1)</script>`, Summary: `Summary " /><script>alert(1)</script> & details`, Markdown: "![Vector](/vector.svg)\n\n![Photo](/images/photo.png?size=large&crop=1)"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestSharingPublicContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "featured", Title: "Featured", Published: true, Summary: "Page summary", PreviewImage: imageID, Markdown: "![Other](/other.jpg)"})
+	p, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "featured", Title: "Featured", Published: true, Summary: "Page summary", PreviewImage: imageID, Markdown: "![Other](/other.jpg)"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestSharingPublicContent(t *testing.T) {
 		})
 	}
 	post.Summary, post.Markdown = " ", "No images"
-	if post, err = h.blog.posts.Save(t.Context(), post); err != nil {
+	if post, err = savePostFixture(h.blog.posts, t.Context(), post); err != nil {
 		t.Fatal(err)
 	}
 	profile.Bio, profile.ImageURL = "Updated bio", "https://cdn.example/new.jpg"
@@ -242,7 +242,7 @@ func TestSharingPublicContent(t *testing.T) {
 		t.Fatal("content or profile changes left stale metadata", tags)
 	}
 	p.PreviewImage = ""
-	if _, err := h.blog.pageStore.SavePage(t.Context(), p); err != nil {
+	if _, err := savePageFixture(h.blog.pageStore, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	if tags := sharingTags(t, h.request("GET", p.URL(), nil, false).Body.String()); tags["og:image"] != "https://blog.example/other.jpg" {
@@ -253,15 +253,15 @@ func TestSharingPublicContent(t *testing.T) {
 // TestSharingVisibility prevents public metadata on private content, forms, and errors.
 func TestSharingVisibility(t *testing.T) {
 	h := newHarness(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "private-post", Title: "Private post", Summary: "Private post summary", Markdown: "Body", Draft: true})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "private-post", Title: "Private post", Summary: "Private post summary", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	parent, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "private-page", Title: "Private page", Summary: "Private page summary"})
+	parent, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "private-page", Title: "Private page", Summary: "Private page summary"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "hidden-child", Title: "Hidden child", Summary: "Hidden child summary", ParentID: parent.ID, Published: true})
+	child, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "hidden-child", Title: "Hidden child", Summary: "Hidden child summary", ParentID: parent.ID, Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,20 +297,20 @@ func TestCanonicalURLsFollowSlugChanges(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "original", Title: "Post"})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "original", Title: "Post"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "original", Title: "Page", Published: true})
+	page, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "original", Title: "Page", Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, slug := range []string{"original", "renamed"} {
 		post.Slug, page.Slug = slug, slug
-		if post, err = h.blog.posts.Save(t.Context(), post); err != nil {
+		if post, err = savePostFixture(h.blog.posts, t.Context(), post); err != nil {
 			t.Fatal(err)
 		}
-		if page, err = h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if page, err = savePageFixture(h.blog.pageStore, t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 		for path, canonical := range map[string]string{
@@ -328,20 +328,20 @@ func TestCanonicalURLsFollowSlugChanges(t *testing.T) {
 // from the public URL needed by Open Graph metadata.
 func TestPageDescriptions(t *testing.T) {
 	h := newHarness(t)
-	post, err := h.blog.posts.Save(t.Context(), Post{Slug: "description", Title: "Post"})
+	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "description", Title: "Post"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "description", Title: "Page", Published: true})
+	page, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "description", Title: "Page", Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, summary := range []string{"", " \t\n", "Updated summary"} {
 		post.Summary, page.Summary = summary, summary
-		if post, err = h.blog.posts.Save(t.Context(), post); err != nil {
+		if post, err = savePostFixture(h.blog.posts, t.Context(), post); err != nil {
 			t.Fatal(err)
 		}
-		if page, err = h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if page, err = savePageFixture(h.blog.pageStore, t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 		want := summary

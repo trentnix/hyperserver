@@ -57,17 +57,17 @@ func TestMediaReferences(t *testing.T) {
 		if state == "scheduled" {
 			p.Published = time.Now().Add(time.Hour)
 		}
-		if _, err := m.posts.Save(t.Context(), p); err != nil {
+		if _, err := savePostFixture(m.posts, t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 	}
-	parent, err := m.pageStore.SavePage(t.Context(), Page{Slug: "hidden", Title: "Hidden"})
+	parent, err := savePageFixture(m.pageStore, t.Context(), Page{Slug: "hidden", Title: "Hidden"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, published := range []bool{false, true} {
 		id := add(fmt.Sprint("page", published))
-		if _, err := m.pageStore.SavePage(t.Context(), Page{Slug: fmt.Sprint("child-", published), Title: "Child", Published: published, ParentID: parent.ID, PreviewImage: id}); err != nil {
+		if _, err := savePageFixture(m.pageStore, t.Context(), Page{Slug: fmt.Sprint("child-", published), Title: "Child", Published: published, ParentID: parent.ID, PreviewImage: id}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -79,21 +79,21 @@ func TestMediaReferences(t *testing.T) {
 	for _, kind := range []string{"post", "page"} {
 		body, preview := add(kind+" history body"), add(kind+" history preview")
 		if kind == "post" {
-			p, err := m.posts.Save(t.Context(), Post{Slug: "history", Title: "Old", Markdown: "![Old](../../images/" + body + ")", PreviewImage: preview, Draft: true})
+			p, err := savePostFixture(m.posts, t.Context(), Post{Slug: "history", Title: "Old", Markdown: "![Old](../../images/" + body + ")", PreviewImage: preview, Draft: true})
 			if err != nil {
 				t.Fatal(err)
 			}
 			p.Markdown, p.PreviewImage = "No images", ""
-			if _, err := m.posts.Save(t.Context(), p); err != nil {
+			if _, err := savePostFixture(m.posts, t.Context(), p); err != nil {
 				t.Fatal(err)
 			}
 		} else {
-			p, err := m.pageStore.SavePage(t.Context(), Page{Slug: "history", Title: "Old", Markdown: "![Old](../images/" + body + ")", PreviewImage: preview})
+			p, err := savePageFixture(m.pageStore, t.Context(), Page{Slug: "history", Title: "Old", Markdown: "![Old](../images/" + body + ")", PreviewImage: preview})
 			if err != nil {
 				t.Fatal(err)
 			}
 			p.Markdown, p.PreviewImage = "No images", ""
-			if _, err := m.pageStore.SavePage(t.Context(), p); err != nil {
+			if _, err := savePageFixture(m.pageStore, t.Context(), p); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -132,21 +132,21 @@ func TestMediaHistoryRelease(t *testing.T) {
 			f := mediaUpload(t, h.blog, kind)
 			var id string
 			if kind == "post" {
-				p, err := h.blog.posts.Save(t.Context(), Post{Slug: "history", Title: "Old", PreviewImage: f.ID, Draft: true})
+				p, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "history", Title: "Old", PreviewImage: f.ID, Draft: true})
 				if err != nil {
 					t.Fatal(err)
 				}
 				id, p.PreviewImage = p.ID, ""
-				if _, err := h.blog.posts.Save(t.Context(), p); err != nil {
+				if _, err := savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				p, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "history", Title: "Old", PreviewImage: f.ID})
+				p, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "history", Title: "Old", PreviewImage: f.ID})
 				if err != nil {
 					t.Fatal(err)
 				}
 				id, p.PreviewImage = p.ID, ""
-				if _, err := h.blog.pageStore.SavePage(t.Context(), p); err != nil {
+				if _, err := savePageFixture(h.blog.pageStore, t.Context(), p); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -210,7 +210,7 @@ func TestMediaCleanupHTTP(t *testing.T) {
 	requireStatus(t, h.request("POST", base, nil, false), http.StatusBadRequest)
 
 	// A reference added after confirmation must win over the old deletion form.
-	p, err := h.blog.posts.Save(t.Context(), Post{Slug: "retained", Title: "Retained", Draft: true, PreviewImage: f.ID})
+	p, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "retained", Title: "Retained", Draft: true, PreviewImage: f.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,14 +376,14 @@ type blockedPostSave struct {
 	entered, release chan struct{}
 }
 
-func (s blockedPostSave) Save(ctx context.Context, p Post) (Post, error) {
+func (s blockedPostSave) Save(ctx context.Context, p Post, refs []string) (Post, error) {
 	close(s.entered)
 	select {
 	case <-s.release:
 	case <-ctx.Done():
 		return Post{}, ctx.Err()
 	}
-	return s.repository.Save(ctx, p)
+	return s.repository.Save(ctx, p, refs)
 }
 
 type blockedPageSave struct {
@@ -391,14 +391,14 @@ type blockedPageSave struct {
 	entered, release chan struct{}
 }
 
-func (s blockedPageSave) SavePage(ctx context.Context, p Page) (Page, error) {
+func (s blockedPageSave) SavePage(ctx context.Context, p Page, refs []string) (Page, error) {
 	close(s.entered)
 	select {
 	case <-s.release:
 	case <-ctx.Done():
 		return Page{}, ctx.Err()
 	}
-	return s.pageRepository.SavePage(ctx, p)
+	return s.pageRepository.SavePage(ctx, p, refs)
 }
 
 // TestMediaCleanupDuringContentSave keeps a validated image until its post or page commits.

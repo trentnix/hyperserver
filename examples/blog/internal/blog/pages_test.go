@@ -58,7 +58,7 @@ func TestPageNavigationTitles(t *testing.T) {
 	}
 	for _, title := range []string{"Our story", "Company <history>"} {
 		page.Title = title
-		if page, err = h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if page, err = savePageFixture(h.blog.pageStore, t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 		body := h.request("GET", "/", nil, false).Body.String()
@@ -79,7 +79,7 @@ func TestPageDisplayOrderInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	page.DisplayOrder = new(42)
-	page, err = h.blog.pageStore.SavePage(t.Context(), page)
+	page, err = savePageFixture(h.blog.pageStore, t.Context(), page)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestPageDisplayOrderInput(t *testing.T) {
 	}
 	for _, order := range []*int{nil, new(0), new(42)} {
 		page.DisplayOrder = order
-		if page, err = h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if page, err = savePageFixture(h.blog.pageStore, t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 		body := h.request("GET", "/pages/update/"+page.ID, nil, false).Body.String()
@@ -198,7 +198,7 @@ func TestSiteNavigation(t *testing.T) {
 		{Slug: "contact", Title: "Contact <us>", Published: true},
 		{Slug: "private-page", Title: "Private page"},
 	} {
-		if _, err := h.blog.pageStore.SavePage(t.Context(), page); err != nil {
+		if _, err := savePageFixture(h.blog.pageStore, t.Context(), page); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -207,7 +207,7 @@ func TestSiteNavigation(t *testing.T) {
 		{Slug: "first", ParentID: h.projectsID, Title: "First <project>", Published: true, DisplayOrder: new(10)},
 		{Slug: "private-project", ParentID: h.projectsID, Title: "Private project"},
 	} {
-		if _, err := h.blog.pageStore.SavePage(t.Context(), project); err != nil {
+		if _, err := savePageFixture(h.blog.pageStore, t.Context(), project); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -527,7 +527,7 @@ func (unavailablePages) GetPageBySlug(context.Context, string, bool) (Page, erro
 func (unavailablePages) GetPageByID(context.Context, string, bool) (Page, error) {
 	return Page{}, errors.New("private storage failure")
 }
-func (unavailablePages) SavePage(context.Context, Page) (Page, error) {
+func (unavailablePages) SavePage(context.Context, Page, []string) (Page, error) {
 	return Page{}, errors.New("private storage failure")
 }
 func (unavailablePages) DeletePage(context.Context, string) error {
@@ -540,7 +540,7 @@ func TestPageDeleteWithChildren(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	child, err := h.blog.pageStore.SavePage(t.Context(), Page{
+	child, err := savePageFixture(h.blog.pageStore, t.Context(), Page{
 		ParentID: h.projectsID, Slug: "child", Title: "Child", Published: true,
 	})
 	if err != nil {
@@ -642,11 +642,11 @@ func TestPageStorage(t *testing.T) {
 	if _, err := store.GetPageBySlug(t.Context(), "about", false); !errors.Is(err, errNotFound) {
 		t.Fatal("missing page", err)
 	}
-	if _, err := store.SavePage(t.Context(), Page{ID: "missing"}); !errors.Is(err, errNotFound) {
+	if _, err := savePageFixture(store, t.Context(), Page{ID: "missing"}); !errors.Is(err, errNotFound) {
 		t.Fatal("updated missing page", err)
 	}
 
-	p, err := store.SavePage(t.Context(), Page{Slug: "about", Title: "About", Markdown: "Biography", Published: true})
+	p, err := savePageFixture(store, t.Context(), Page{Slug: "about", Title: "About", Markdown: "Biography", Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -659,7 +659,7 @@ func TestPageStorage(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := store.SavePage(t.Context(), Page{Slug: "concurrent", Title: "A draft"})
+			_, err := savePageFixture(store, t.Context(), Page{Slug: "concurrent", Title: "A draft"})
 			results <- err
 		}()
 	}
@@ -684,7 +684,7 @@ func TestPageStorage(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := store.SavePage(ctx, p); !errors.Is(err, context.Canceled) {
+	if _, err := savePageFixture(store, ctx, p); !errors.Is(err, context.Canceled) {
 		t.Fatal("ignored write cancellation", err)
 	}
 	if _, err := store.ListPages(ctx, true); !errors.Is(err, context.Canceled) {

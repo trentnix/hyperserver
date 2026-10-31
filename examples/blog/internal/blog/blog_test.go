@@ -466,10 +466,10 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	if err := h.blog.writeProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software.", BackgroundURL: "/assets/img/site-bg.jpg"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "about", Title: "About Me", DisplayOrder: new(0), Published: true}); err != nil {
+	if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "about", Title: "About Me", DisplayOrder: new(0), Published: true}); err != nil {
 		t.Fatal(err)
 	}
-	projects, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "projects", Title: "Projects", Published: true, ChildrenDisplay: "blocks", DisplayOrder: new(1)})
+	projects, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "projects", Title: "Projects", Published: true, ChildrenDisplay: "blocks", DisplayOrder: new(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -845,7 +845,7 @@ func TestMailFailurePreservesVerificationRequirement(t *testing.T) {
 
 type failingRepository struct{ repository }
 
-func (failingRepository) Save(context.Context, Post) (Post, error) {
+func (failingRepository) Save(context.Context, Post, []string) (Post, error) {
 	return Post{}, errors.New("private storage failure")
 }
 

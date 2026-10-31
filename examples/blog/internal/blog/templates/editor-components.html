@@ -25,3 +25,27 @@
 </aside>{{ end }}
 {{ if .Data.MissingImages }}<p class="field-error" role="status">This version references images that are no longer available. Replace or remove their references before saving.</p>{{ end }}
 {{ end }}
+
+{{ define "blog.previewImage" }}
+  <fieldset class="image-picker page-preview" data-image-picker data-image-prefix="/images/"{{ if .DefaultURL }} data-image-default="{{ .DefaultURL }}"{{ end }}>
+    <legend>Preview image {{ if .Optional }}<span>(optional)</span>{{ end }}</legend>
+    <p class="form-hint">{{ .Description }}</p>
+    <input type="hidden" name="previewImage" value="{{ .Value }}" data-image-value>
+    <div class="preview-image-row">
+      <div class="preview-image-selection">
+        <div class="preview-image-frame"><img {{ if .URL }}src="{{ .URL }}"{{ else }}hidden{{ end }} alt="Selected preview image" width="160" height="100" data-image-preview>{{ if not .DefaultURL }}<span class="image-empty">Default image</span>{{ end }}</div>
+        <div class="image-upload-controls" hidden><button type="button" class="text-button" data-image-reset>Use default image</button></div>
+      </div>
+      <div class="preview-image-controls">
+        <div class="image-upload-controls" hidden>
+          <div class="preview-image-actions"><button type="button" class="button-secondary" data-image-upload aria-describedby="{{ .InputID }}-help">Upload image</button><button type="button" class="button-secondary" data-media-browse>Browse library</button></div>
+          <input id="{{ .InputID }}" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" hidden>
+        </div>
+        <p class="form-hint">{{ .Help }}</p>
+        <p data-image-status role="status"></p>
+      </div>
+    </div>
+    <p id="{{ .InputID }}-help" class="preview-image-help form-hint">PNG, JPEG, or GIF images up to 8 MiB and 20 million pixels stay private unless used in public content.</p>
+    <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
+  </fieldset>
+{{ end }}

@@ -31,7 +31,7 @@ func TestHistoryPublicationStatus(t *testing.T) {
 			store.now, h.blog.now = func() time.Time { return now }, func() time.Time { return now }
 			var id string
 			if tc.kind == "post" {
-				p, err := store.Save(t.Context(), Post{Slug: "status", Title: "Earlier writing", Markdown: "Body", Draft: true})
+				p, err := savePostFixture(store, t.Context(), Post{Slug: "status", Title: "Earlier writing", Markdown: "Body", Draft: true})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -39,18 +39,18 @@ func TestHistoryPublicationStatus(t *testing.T) {
 				if strings.HasPrefix(tc.status, "Scheduled") {
 					p.Published = now.Add(time.Hour)
 				}
-				p, err = store.Save(t.Context(), p)
+				p, err = savePostFixture(store, t.Context(), p)
 				if err != nil {
 					t.Fatal(err)
 				}
 				id = p.ID
 			} else {
-				p, err := store.SavePage(t.Context(), Page{Slug: "status", Title: "Earlier writing"})
+				p, err := savePageFixture(store, t.Context(), Page{Slug: "status", Title: "Earlier writing"})
 				if err != nil {
 					t.Fatal(err)
 				}
 				p.Title, p.Published = "Current writing", tc.status == "Published"
-				p, err = store.SavePage(t.Context(), p)
+				p, err = savePageFixture(store, t.Context(), p)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -191,7 +191,7 @@ func TestRevisionHTTP(t *testing.T) {
 					t.Fatal(err)
 				}
 				post.Slug, post.Draft = "current-url", true
-				post, err = store.Save(t.Context(), post)
+				post, err = savePostFixture(store, t.Context(), post)
 				version = post.Version
 			} else {
 				prefix = "/pages"
@@ -200,7 +200,7 @@ func TestRevisionHTTP(t *testing.T) {
 					t.Fatal(err)
 				}
 				page.Slug, page.Published, page.ParentID, page.ChildrenDisplay, page.DisplayOrder = "current-url", false, h.projectsID, "blocks", new(7)
-				page, err = store.SavePage(t.Context(), page)
+				page, err = savePageFixture(store, t.Context(), page)
 				version = page.Version
 			}
 			if err != nil {
@@ -455,7 +455,7 @@ func TestHistoryActions(t *testing.T) {
 						t.Fatal(err)
 					}
 					p.ParentID = h.projectsID
-					p, err = store.SavePage(t.Context(), p)
+					p, err = savePageFixture(store, t.Context(), p)
 					if err != nil {
 						t.Fatal(err)
 					}
