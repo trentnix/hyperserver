@@ -12,6 +12,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/imaging"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 const maxImageBytes = 8 * 1024 * 1024
@@ -52,13 +53,38 @@ func prepareImage(ctx context.Context, data []byte) (imageUpload, error) {
 // upload accepts EasyMDE's image field and returns its documented JSON response.
 // Both compressed size and decoded dimensions are bounded before decoding pixels.
 func (m *module) upload(w http.ResponseWriter, r *http.Request) {
+	id, status, err := m.storeUpload(w, r)
+	if err != nil {
+		writeJSON(w, r, status, map[string]string{"error": err.Error()})
+		return
+	}
+	// EasyMDE's upload contract requires 200, not 201.
+	writeJSON(w, r, http.StatusOK, map[string]any{"data": map[string]string{"filePath": "/images/" + id}})
+}
+
+// uploadMedia supports ordinary and HTMX forms without exposing the editor's JSON API.
+func (m *module) uploadMedia(w http.ResponseWriter, r *http.Request) {
+	id, status, err := m.storeUpload(w, r)
+	if err == nil {
+		util.RedirectToURL(w, r, "/media/"+id)
+		return
+	}
+	page := m.views["mediaUploadError"].Content(r, err.Error())
+	page.Title, page.ResponseStatusCode = "Upload image", status
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display the upload error.", err)
+	}
+}
+
+// storeUpload bounds processing and stores the image and its browsing metadata.
+// Returned errors are safe to display. Storage details are logged here.
+func (m *module) storeUpload(w http.ResponseWriter, r *http.Request) (string, int, error) {
 	select {
 	case m.imageProcessing <- struct{}{}:
 		defer func() { <-m.imageProcessing }()
 	default:
 		w.Header().Set("Retry-After", "1")
-		writeJSON(w, r, http.StatusTooManyRequests, map[string]string{"error": "Another image is being processed. Try again shortly."})
-		return
+		return "", http.StatusTooManyRequests, errors.New("Another image is being processed. Try again shortly.")
 	}
 
 	if err := r.ParseMultipartForm(1024 * 1024); err != nil {
@@ -70,46 +96,38 @@ func (m *module) upload(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &limit) {
 			status = http.StatusRequestEntityTooLarge
 		}
-		writeJSON(w, r, status, map[string]string{"error": "Unable to read the image upload."})
-		return
+		return "", status, errors.New("Unable to read the image upload.")
 	}
 	defer r.MultipartForm.RemoveAll()
 	files := r.MultipartForm.File["image"]
 	if len(files) != 1 || len(r.MultipartForm.File) != 1 || files[0].Size > maxImageBytes {
-		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": "Choose one PNG, JPEG, or GIF of at most 8 MiB."})
-		return
+		return "", http.StatusUnprocessableEntity, errors.New("Choose one PNG, JPEG, or GIF of at most 8 MiB.")
 	}
 	file, err := files[0].Open()
 	if err != nil {
-		writeJSON(w, r, http.StatusBadRequest, map[string]string{"error": "Unable to open the image."})
-		return
+		return "", http.StatusBadRequest, errors.New("Unable to open the image.")
 	}
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxImageBytes+1))
 	if err != nil || len(data) > maxImageBytes {
-		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": "Unable to read the image, or it exceeds 8 MiB."})
-		return
+		return "", http.StatusUnprocessableEntity, errors.New("Unable to read the image, or it exceeds 8 MiB.")
 	}
 	upload, err := prepareImage(r.Context(), data)
 	if err != nil {
-		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-		return
+		return "", http.StatusUnprocessableEntity, err
 	}
 	m.mediaMu.RLock()
 	defer m.mediaMu.RUnlock()
 	id, err := m.images.Put(r.Context(), upload)
 	if err != nil {
 		logger.LogRequestError(r, err)
-		writeJSON(w, r, http.StatusInternalServerError, map[string]string{"error": "Unable to save the image."})
-		return
+		return "", http.StatusInternalServerError, errors.New("Unable to save the image.")
 	}
 	if err := m.mediaMetadata.RememberMedia(r.Context(), id, uploadFilename(files[0].Filename)); err != nil {
 		logger.LogRequestError(r, err)
-		writeJSON(w, r, http.StatusInternalServerError, map[string]string{"error": "Unable to save the image details. Retry the upload."})
-		return
+		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
 	}
-	// EasyMDE's upload contract requires 200, not 201.
-	writeJSON(w, r, http.StatusOK, map[string]any{"data": map[string]string{"filePath": "/images/" + id}})
+	return id, http.StatusOK, nil
 }
 
 // image checks visibility before serving bytes or conditional responses. Private

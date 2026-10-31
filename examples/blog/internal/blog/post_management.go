@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -20,21 +21,33 @@ func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Search must be at most 240 characters.", http.StatusBadRequest)
 		return
 	}
+	data, err := m.postManagement(r.Context(), query)
+	if err != nil {
+		m.storageError(w, r, err)
+		return
+	}
+	page := m.views["posts"].Content(r, data)
+	page.Title = "Posts"
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display posts.", err)
+	}
+}
+
+// postManagement loads the same grouped results for navigation and deletion updates.
+func (m *module) postManagement(ctx context.Context, query string) (postManagement, error) {
 	var posts []Post
 	var err error
 	if query == "" {
-		posts, err = m.posts.ListMetadata(r.Context())
+		posts, err = m.posts.ListMetadata(ctx)
 	} else {
-		posts, err = m.posts.SearchPosts(r.Context(), query)
+		posts, err = m.posts.SearchPosts(ctx, query)
 	}
 	if err != nil {
-		m.storageError(w, r, err)
-		return
+		return postManagement{}, err
 	}
-	history, err := m.history.HistoryOwners(r.Context(), "post")
+	history, err := m.history.HistoryOwners(ctx, "post")
 	if err != nil {
-		m.storageError(w, r, err)
-		return
+		return postManagement{}, err
 	}
 	data := postManagement{Query: query, Total: len(posts)}
 	now := m.currentTime()
@@ -48,9 +61,5 @@ func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
 			data.Published = append(data.Published, entry)
 		}
 	}
-	page := m.views["posts"].Content(r, data)
-	page.Title = "Posts"
-	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display posts.", err)
-	}
+	return data, nil
 }

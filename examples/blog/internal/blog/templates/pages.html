@@ -33,12 +33,16 @@
   <div><label for="page-search">Search pages</label><input id="page-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
   <button type="submit" class="button-secondary">Search</button>
 </form>
+<div id="management-results">{{ template "blog.pageResults" . }}</div>
+</section>
+{{ end }}
+
+{{ define "blog.pageResults" }}
 <div class="management-search-results">
   <p role="status" data-result-count="{{ .Data.Total }}">{{ .Data.Total }} {{ if eq .Data.Total 1 }}page{{ else }}pages{{ end }} found.</p>
   {{ if .Data.Query }}<p class="management-search-clear"><a href="/pages" hx-get="/pages" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">Clear search</a></p>{{ end }}
 </div>
 {{ if .Data.Pages }}{{ template "blog.pageAdminLinks" .Data.Pages }}{{ else }}<p class="page-manager-empty">{{ if .Data.Query }}No pages match your search.{{ else }}No pages yet. Create a page to get started.{{ end }}</p>{{ end }}
-</section>
 {{ end }}
 
 {{ define "blog.pageAdminLinks" }}
@@ -66,7 +70,7 @@
 <div class="form-actions">{{ if .IsHtmx }}<button type="button" data-close-dialog autofocus>OK</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">OK</a>{{ end }}</div>
 {{ else }}
 <h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}” and its saved versions? This cannot be undone. Move or delete its subpages first. Uploaded images are kept.</p>
-<form method="post" action="/pages/delete/{{ .Data.ID }}" hx-post="/pages/delete/{{ .Data.ID }}" hx-target="#page-delete-confirmation" hx-swap="outerHTML">
+<form method="post" action="/pages/delete/{{ .Data.ID }}" hx-post="/pages/delete/{{ .Data.ID }}" hx-target="#page-delete-confirmation" hx-swap="outerHTML" hx-sync="#article-content:replace">
 <div class="form-actions"><button type="submit" class="button-danger">Delete page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">Cancel</a>{{ end }}</div>
 </form>
 {{ end }}

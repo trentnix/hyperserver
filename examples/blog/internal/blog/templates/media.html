@@ -1,25 +1,25 @@
 {{ define "blog.mediaLibrary" }}
-<section class="page-manager media-library" data-media-library hx-boost="false">
+<section class="page-manager media-library" data-media-library hx-boost="false"{{ if .Data.Picking }} hx-target="#media-results" hx-swap="innerHTML show:none settle:0" hx-sync="#media-results:replace"{{ end }}>
   {{ if not .Data.Picking }}
   <header class="page-manager-heading"><h1>Media</h1><a class="button-primary page-create media-cleanup-link" href="/media/unused">Clean up uploads</a></header>
-  <form class="media-upload" data-media-upload method="post" action="/post/images/upload" enctype="multipart/form-data">
+  <form class="media-upload" data-media-upload method="post" action="/media/upload" enctype="multipart/form-data" hx-post="/media/upload" hx-encoding="multipart/form-data" hx-target="#library-upload-status" hx-swap="innerHTML" hx-disabled-elt="find input, find button" hx-sync="this:drop">
     <details>
       <summary>Upload image</summary>
       <div class="media-upload-fields">
         <p id="library-upload-help" class="form-hint">PNG, JPEG, or GIF, up to 8 MiB. Private until used in published content or the site profile.</p>
         <div class="form-actions"><input id="library-upload" name="image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Image file" aria-describedby="library-upload-help" required><button type="submit">Upload image</button></div>
-        <p role="status" data-upload-status></p>
+        <div id="library-upload-status" role="status" data-upload-status></div>
       </div>
     </details>
   </form>
   {{ end }}
-  <form class="media-filters" data-media-filters method="get" action="/media">
+  <form class="media-filters" data-media-filters method="get" action="/media"{{ if .Data.Picking }} hx-get="/media"{{ end }}>
     {{ if .Data.Picking }}<input type="hidden" name="pick" value="1">{{ end }}
     <div class="media-search"><label for="media-search">Search images</label><input id="media-search" type="search" name="q" value="{{ .Data.Query.Search }}" maxlength="240" placeholder="Name or post/page title"></div>
     <div><label for="media-usage">Usage</label><select id="media-usage" name="usage"><option value="">All images</option><option value="current"{{ if eq .Data.Query.Usage "current" }} selected{{ end }}>Current content</option><option value="history"{{ if eq .Data.Query.Usage "history" }} selected{{ end }}>History only</option><option value="unused"{{ if eq .Data.Query.Usage "unused" }} selected{{ end }}>Unused</option></select></div>
     <button type="submit">Search</button>
   </form>
-  {{ if .Data.Query.Active }}<p class="media-clear-filters"><a href="{{ .Data.ClearURL }}"{{ if .Data.Picking }} data-media-page="{{ .Data.ClearURL }}"{{ end }}>Clear filters</a></p>{{ end }}
+  {{ if .Data.Query.Active }}<p class="media-clear-filters"><a href="{{ .Data.ClearURL }}"{{ if .Data.Picking }} hx-get="{{ .Data.ClearURL }}" data-media-page="{{ .Data.ClearURL }}"{{ end }}>Clear filters</a></p>{{ end }}
   <p class="form-hint" role="status">{{ .Data.Total }} {{ if eq .Data.Total 1 }}image{{ else }}images{{ end }}{{ if .Data.Query.Active }} found{{ end }} · Newest first.{{ if .Data.Picking }} Choose an image, then save your edits to use it.{{ end }}</p>
   <ul class="media-grid">
   {{ range .Data.Files }}<li>
@@ -33,11 +33,17 @@
   </li>{{ else }}<li class="page-manager-empty">{{ if .Data.Query.Active }}No images match these filters. Try a different name or clear the filters.{{ else }}No uploaded images.{{ end }}</li>{{ end }}
   </ul>
   <nav class="media-pagination" aria-label="Media pages">
-    {{ if .Data.Previous }}{{ if .Data.Picking }}<button type="button" data-media-page="{{ .Data.Previous }}">Previous</button>{{ else }}<a href="{{ .Data.Previous }}">Previous</a>{{ end }}{{ end }}
+    {{ if .Data.Previous }}{{ if .Data.Picking }}<button type="button" hx-get="{{ .Data.Previous }}" data-media-page="{{ .Data.Previous }}">Previous</button>{{ else }}<a href="{{ .Data.Previous }}">Previous</a>{{ end }}{{ end }}
     <span>Page {{ .Data.Page }} of {{ .Data.Pages }}</span>
-    {{ if .Data.Next }}{{ if .Data.Picking }}<button type="button" data-media-page="{{ .Data.Next }}">Next</button>{{ else }}<a href="{{ .Data.Next }}">Next</a>{{ end }}{{ end }}
+    {{ if .Data.Next }}{{ if .Data.Picking }}<button type="button" hx-get="{{ .Data.Next }}" data-media-page="{{ .Data.Next }}">Next</button>{{ else }}<a href="{{ .Data.Next }}">Next</a>{{ end }}{{ end }}
   </nav>
 </section>
+{{ end }}
+
+{{ define "blog.mediaUploadError" }}
+{{ if not .IsHtmx }}<h1>Upload image</h1>{{ end }}
+<p class="field-error" role="alert">{{ .Data }}</p>
+{{ if not .IsHtmx }}<a href="/media">Back to Media</a>{{ end }}
 {{ end }}
 
 {{ define "blog.mediaDetail" }}

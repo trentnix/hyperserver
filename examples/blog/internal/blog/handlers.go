@@ -250,7 +250,7 @@ func (m *module) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.invalidatePosts()
-	finishContentDelete(w, r, "post", "/post/manage")
+	m.finishContentDelete(w, r, "post", "/post/manage")
 }
 
 // preview renders bounded, UTF-8 Markdown without saving it.

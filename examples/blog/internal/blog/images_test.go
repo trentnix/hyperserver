@@ -22,6 +22,66 @@ func testPNG(t *testing.T) []byte {
 	return data.Bytes()
 }
 
+// TestMediaUploadForms keeps ordinary and HTMX uploads separate from EasyMDE's JSON contract.
+func TestMediaUploadForms(t *testing.T) {
+	h := newHarness(t)
+	request := func(data []byte, hx bool) *httptest.ResponseRecorder {
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		part, err := writer.CreateFormFile("image", "picture.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(data); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		r := httptest.NewRequest(http.MethodPost, "/media/upload", &body)
+		r.Header.Set("Content-Type", writer.FormDataContentType())
+		if hx {
+			r.Header.Set("HX-Request", "true")
+			r.Header.Set("HX-Target", "library-upload-status")
+		}
+		for _, cookie := range h.cookies {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		h.app.Handler.ServeHTTP(w, r)
+		return w
+	}
+	requireStatus(t, request(testPNG(t), false), http.StatusForbidden)
+	h.register(t)
+	h.login(t)
+	requireStatus(t, request(testPNG(t), true), http.StatusForbidden)
+	h.verify(t)
+	for _, hx := range []bool{false, true} {
+		failure := request([]byte("not an image"), hx)
+		requireStatus(t, failure, http.StatusUnprocessableEntity)
+		if !strings.Contains(failure.Body.String(), "Choose a valid PNG") || !strings.HasPrefix(failure.Header().Get("Content-Type"), "text/html") || strings.Contains(failure.Body.String(), "<!DOCTYPE") == hx {
+			t.Fatal("upload error must use the appropriate HTML response", failure.Body.String())
+		}
+		response := request(testPNG(t), hx)
+		status, header := http.StatusSeeOther, "Location"
+		if hx {
+			status, header = http.StatusOK, "HX-Redirect"
+		}
+		requireStatus(t, response, status)
+		path := response.Header().Get(header)
+		if !strings.HasPrefix(path, "/media/") || response.Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("upload must navigate to private image details", response.Header())
+		}
+		requireStatus(t, h.request("GET", path, nil, false), http.StatusOK)
+	}
+	h.blog.images = failingImageStore{}
+	failed := request(testPNG(t), true)
+	requireStatus(t, failed, http.StatusInternalServerError)
+	if strings.Contains(failed.Body.String(), "private image") || failed.Header().Get("HX-Redirect") != "" {
+		t.Fatal("failed upload exposed storage details or reported success")
+	}
+}
+
 // TestImageHTTPResponses exercises the public route, including standard file response semantics.
 func TestImageHTTPResponses(t *testing.T) {
 	h := newHarness(t)

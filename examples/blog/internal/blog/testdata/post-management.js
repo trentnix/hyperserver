@@ -29,7 +29,7 @@
     await wait(() => !row.isConnected && !document.querySelector('dialog[open]'));
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     assert(document.body === body && document.querySelector('.page-manager') === list, 'Deletion reloaded or replaced the management list.');
-    assert(document.activeElement === focus, 'Deletion did not focus the adjacent actions.');
+    assert(document.activeElement === focus || (focus?.tagName === 'A' && document.activeElement?.getAttribute('href') === focus.getAttribute('href')), 'Deletion did not focus the adjacent actions.');
     const expected = Math.min(before, Math.max(0, document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight));
     assert(Math.abs(scrollY - expected) <= 1, 'Deletion lost scroll position: ' + JSON.stringify({before, expected, actual: scrollY}));
     assert((await fetch(url)).status === 404, 'Deleted post remains readable.');

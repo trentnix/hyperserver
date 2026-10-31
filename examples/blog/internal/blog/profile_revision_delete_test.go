@@ -2,7 +2,6 @@ package blog
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"reflect"
@@ -146,7 +145,7 @@ func TestDeleteProfileRevisionHTTP(t *testing.T) {
 			}
 			confirm := h.request("GET", path(versions[1].ID), nil, hx)
 			requireStatus(t, confirm, http.StatusOK)
-			if !strings.Contains(confirm.Body.String(), "This cannot be undone.") || strings.Contains(confirm.Body.String(), "<dialog") != hx {
+			if !strings.Contains(confirm.Body.String(), "This cannot be undone.") || strings.Contains(activeMarkup(confirm.Body.String()), "<dialog") != hx {
 				t.Fatal("incorrect confirmation", confirm.Body.String())
 			}
 			s := h.blog.profileStore
@@ -167,13 +166,9 @@ func TestDeleteProfileRevisionHTTP(t *testing.T) {
 					next = "/profile/history?revision=" + strconv.FormatInt(versions[i+2].ID, 10)
 				}
 				if hx && i < 2 {
-					requireStatus(t, response, http.StatusNoContent)
-					var events map[string]map[string]string
-					if err := json.Unmarshal([]byte(response.Header().Get("HX-Trigger")), &events); err != nil {
-						t.Fatal(err)
-					}
-					if detail := events["blog:revision-deleted"]; detail["revision"] != strconv.FormatInt(v.ID, 10) || detail["next"] != next {
-						t.Fatal("incorrect deletion event", events)
+					requireStatus(t, response, http.StatusOK)
+					if response.Header().Get("HX-Retarget") != "#revision-preview" || response.Header().Get("HX-Replace-Url") != next || !strings.Contains(response.Body.String(), `hx-swap-oob="innerHTML:#version-list"`) {
+						t.Fatal("incorrect deletion fragment", response.Header())
 					}
 				} else {
 					status, header := http.StatusSeeOther, "Location"

@@ -72,3 +72,37 @@ func TestAdministrationScripts(t *testing.T) {
 		t.Fatal("admin shell must load its native module entry point")
 	}
 }
+
+// TestReaderSearchSwaps covers navigation and history without touching search slots on editor swaps.
+func TestReaderSearchSwaps(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	for _, path := range []string{"/", "/pages"} {
+		for _, restore := range []bool{false, true} {
+			r := httptest.NewRequest("GET", path, nil)
+			r.Header.Set("HX-Request", "true")
+			r.Header.Set("HX-Target", "article-content")
+			if restore {
+				r.Header.Set("HX-History-Restore-Request", "true")
+			}
+			for _, cookie := range h.cookies {
+				r.AddCookie(cookie)
+			}
+			w := httptest.NewRecorder()
+			h.app.Handler.ServeHTTP(w, r)
+			requireStatus(t, w, http.StatusOK)
+			if !strings.Contains(w.Body.String(), `hx-swap-oob="innerHTML:[data-reader-search-slot]"`) {
+				t.Fatal("article navigation must update the shell search slots", path, restore)
+			}
+			if path == "/pages" && strings.Contains(w.Body.String(), "reader-search-form") {
+				t.Fatal("admin pages must clear reader search")
+			}
+		}
+	}
+	w := h.request("GET", "/media?pick=1", nil, true)
+	if strings.Contains(w.Body.String(), `hx-swap-oob="innerHTML:[data-reader-search-slot]"`) {
+		t.Fatal("media chooser must not change shell search")
+	}
+}

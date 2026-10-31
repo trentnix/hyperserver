@@ -1,9 +1,9 @@
 package blog
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
@@ -94,7 +94,7 @@ func (m *module) deleteRevision(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		contentURL = "/history/" + kind + "/" + id + "?revision=" + strconv.FormatInt(selected, 10)
-		if revisionDeleted(w, r, number, contentURL) {
+		if m.revisionDeleted(w, r, contentURL) {
 			return
 		}
 	}
@@ -103,15 +103,19 @@ func (m *module) deleteRevision(w http.ResponseWriter, r *http.Request) {
 
 // revisionDeleted updates an open history page without replacing it or moving scroll.
 // Ordinary navigation and history restoration use the caller's redirect instead.
-func revisionDeleted(w http.ResponseWriter, r *http.Request, number int64, next string) bool {
+func (m *module) revisionDeleted(w http.ResponseWriter, r *http.Request, next string) bool {
 	request := htmx.GetRequest(r)
 	if !request.Enabled || request.HistoryRestore {
 		return false
 	}
-	payload, _ := json.Marshal(map[string]map[string]string{
-		"blog:revision-deleted": {"revision": strconv.FormatInt(number, 10), "next": next},
-	})
-	response := htmx.Response{NoContent: true, Trigger: string(payload)}
-	response.Apply(w)
+	// next is constructed by the caller, never taken from request headers.
+	r = r.Clone(r.Context())
+	r.URL, _ = url.Parse(next)
+	r.Header.Set(htmx.HeaderTarget, "revision-preview")
+	if r.URL.Path == "/profile/history" {
+		m.profileHistory(w, r)
+	} else {
+		m.revisions(w, r)
+	}
 	return true
 }

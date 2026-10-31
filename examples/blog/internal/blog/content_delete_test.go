@@ -2,7 +2,6 @@ package blog
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,7 +29,7 @@ func (h *harness) deleteRequest(path, current string, hx, history bool) *httptes
 	return w
 }
 
-// TestContentDeleteResponses covers list events, detail-page redirects, ordinary
+// TestContentDeleteResponses covers list fragments, detail-page redirects, ordinary
 // forms, repeat submissions, and invalid current URLs for both content types.
 func TestContentDeleteResponses(t *testing.T) {
 	h := newHarness(t)
@@ -71,16 +70,24 @@ func TestContentDeleteResponses(t *testing.T) {
 					id = p.ID
 				}
 				path := prefix + "/delete/" + id
+				if tc.event {
+					confirmation := h.request("GET", path, nil, true)
+					if !strings.Contains(confirmation.Body.String(), `hx-sync="#article-content:replace"`) {
+						t.Fatal("deletion must synchronize with management navigation")
+					}
+				}
 				w := h.deleteRequest(path, tc.current, tc.hx, tc.history)
 				if tc.event {
-					requireStatus(t, w, http.StatusNoContent)
-					var payload map[string]map[string]string
-					if err := json.Unmarshal([]byte(w.Header().Get("HX-Trigger")), &payload); err != nil {
-						t.Fatal(err)
+					requireStatus(t, w, http.StatusOK)
+					if w.Header().Get("HX-Retarget") != "#management-results" || w.Header().Get("HX-Reswap") != "innerHTML show:none" || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
+						t.Fatal("list deletion must update results without navigating", w.Header())
 					}
-					deleted := payload["blog:content-deleted"]
-					if deleted["kind"] != kind || deleted["id"] != id || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" || w.Body.Len() != 0 {
-						t.Fatal("list deletion must identify the deleted row without navigating", w)
+					body := w.Body.String()
+					if strings.Contains(body, `data-content-id="`+id+`"`) || !strings.Contains(body, `data-result-count=`) || !strings.Contains(body, `id="dialog-host" hx-swap-oob="innerHTML"`) || !strings.Contains(body, "deleted.") {
+						t.Fatal("deletion must render the remaining results, notification, and dialog dismissal", body)
+					}
+					if tc.name == "filtered list" && !strings.Contains(body, "No "+kind+"s match your search.") {
+						t.Fatal("deletion lost the active search")
 					}
 				} else {
 					status, header := http.StatusSeeOther, "Location"
@@ -154,4 +161,31 @@ type failedContentDelete struct{ repository }
 
 func (failedContentDelete) Delete(context.Context, string) error {
 	return errors.New("private failure")
+}
+
+type failedManagementRead struct{ repository }
+
+func (failedManagementRead) ListMetadata(context.Context) ([]Post, error) {
+	return nil, errors.New("private list failure")
+}
+
+// TestContentDeletedRefreshFailure distinguishes a committed deletion from a failed refresh.
+func TestContentDeletedRefreshFailure(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	p, err := savePostFixture(h.blog.posts, t.Context(), Post{Title: "Delete me", Slug: "delete-refresh", Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.blog.posts = failedManagementRead{h.blog.posts}
+	w := h.deleteRequest("/post/delete/"+p.ID, "https://blog.example/post/manage", true, false)
+	requireStatus(t, w, http.StatusInternalServerError)
+	if !strings.Contains(w.Body.String(), "Content deleted, but the list could not be refreshed.") || strings.Contains(w.Body.String(), "private list failure") || w.Header().Get("HX-Retarget") != "" {
+		t.Fatal("refresh failure must explain the committed deletion and retain the error target", w.Body.String())
+	}
+	if _, err := h.blog.posts.GetByID(t.Context(), p.ID, true); !errors.Is(err, errNotFound) {
+		t.Fatal("deletion did not commit", err)
+	}
 }

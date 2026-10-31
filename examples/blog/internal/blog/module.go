@@ -158,6 +158,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"revisionDelete",
 		"media",
 		"mediaLibrary",
+		"mediaUploadError",
 		"mediaDetail",
 		"mediaDelete",
 		"mediaDeleteAll",

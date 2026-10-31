@@ -197,7 +197,10 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 	page.ResponseStatusCode = status
 	page.Headers = map[string]string{"Vary": htmx.HeaderTarget}
 	if view == "revisionPreview" {
-		page.HTMX.Response = &htmx.Response{ReplaceURL: data.URL + "?revision=" + strconv.FormatInt(selected, 10)}
+		page.HTMX.Response = &htmx.Response{ReplaceURL: data.URL + "?revision=" + strconv.FormatInt(selected, 10), Retarget: "#revision-preview", Reswap: "innerHTML show:none"}
+		if r.Method == http.MethodPost {
+			page.OutOfBand = []string{"blog.versionListUpdate", "blog.closeDialog"}
+		}
 	}
 	page.Title = "History — " + data.Title
 	if err := page.Render(w, r); err != nil {

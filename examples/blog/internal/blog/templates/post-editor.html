@@ -6,7 +6,7 @@
   {{ template "blog.draftRecovery" . }}
   <label for="post-title">Title</label><input id="post-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
   <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }}{{ if .Data.ScheduledSlug }} data-scheduled-slug="{{ .Data.ScheduledSlug }}" data-scheduled-at="{{ .Data.ScheduledAt }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
-  <small id="slug-help" class="form-hint">Leave blank to use the title.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
+  {{ template "blog.slugHelp" .Data }}
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
   {{ template "blog.previewImage" .Data.PreviewField }}
   {{ template "blog.markdownFields" .Data }}
@@ -84,7 +84,6 @@
     <p class="form-hint" id="schedule-help">When Schedule is selected, your post stays private until this time. Use UTC, not your device’s time zone.</p>
   </div>{{ end }}
   <p class="form-hint">Changes take effect when you save. Choose Draft to keep the post private.</p>
-  {{ template "blog.editorHelp" . }}
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   <div class="form-actions"><button type="submit">Save post</button><a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/post/manage{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>

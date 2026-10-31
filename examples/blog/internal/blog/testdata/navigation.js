@@ -117,19 +117,21 @@
       assert(!nav.querySelector('a[href="/page/project-guide"]') && !nav.querySelector('.child-links .child-links'), 'Navigation must stop at two levels.');
     }
     if (innerWidth < 768) {
+      const toggleBox = menuToggle.getBoundingClientRect();
+      assert(toggleBox.height >= 44 && toggleBox.width < 150, 'Native menu disclosure must remain a compact, touch-sized control.');
       menuToggle.click();
-      assert(!projectToggle.hidden && projectLinks.hidden, 'Mobile project tree must start collapsed.');
+      assert(!projectToggle.hidden && !projectLinks.parentElement.open, 'Mobile project tree must start collapsed.');
       projectToggle.click();
-      assert(!projectLinks.hidden && projectToggle.getAttribute('aria-expanded') === 'true', 'Project toggle did not reveal child links.');
+      assert(projectLinks.parentElement.open, 'Project toggle did not reveal child links.');
       checkSubpageTitles(menu);
       assert(!projectLinks.querySelector('.child-toggle'), 'Second-level links must not offer hidden descendants.');
       projectLinks.querySelector('a[href="/page/project-0"]').click();
       await wait(() => location.pathname === '/page/project-0');
       await headerVisible();
-      assert(menu.hidden && projectLinks.hidden, 'Selecting a page must close the mobile branch.');
+      assert(!menu.parentElement.open && !projectLinks.parentElement.open, 'Selecting a page must close the mobile branch.');
       unchanged();
     } else if (innerWidth >= 1680) {
-      assert(!projectLinks.hidden && projectToggle.hidden, 'Ultrawide project tree must remain expanded.');
+      assert(projectLinks.parentElement.open && projectToggle.hidden, 'Ultrawide project tree must remain expanded.');
       checkSubpageTitles(menu);
       for (const link of menu.querySelectorAll('a')) {
         const style = getComputedStyle(link);
@@ -143,7 +145,7 @@
       const originalWidth = innerWidth;
       for (const width of [390, 1100, originalWidth]) {
         window.frameElement.style.width = width + 'px';
-        await wait(() => innerWidth === width && menu.hidden === (width < 768) && projectLinks.hidden === (width < 768));
+        await wait(() => innerWidth === width && menu.parentElement.open === (width >= 768) && projectLinks.parentElement.open === (width >= 768));
         assert(projectToggle.hidden === (width >= 768), 'Resizing left the project toggle in the wrong state.');
         assert((document.querySelector('.profile-links').getClientRects().length > 0) === (width >= 768 && width < 1680), 'Resizing left duplicate or missing compact navigation.');
       }
@@ -188,7 +190,7 @@
     const aboutProfileLeft = document.querySelector('.profile-name').getBoundingClientRect().left;
     const aboutTitleLeft = article.querySelector('h1').getBoundingClientRect().left;
     if (innerWidth < 768) {
-      assert(menu.hidden && menuToggle.getAttribute('aria-expanded') === 'false', 'Navigation must close the mobile menu.');
+      assert(!menu.parentElement.open, 'Navigation must close the mobile menu.');
     }
     unchanged();
     if (innerWidth < 768) menuToggle.click();

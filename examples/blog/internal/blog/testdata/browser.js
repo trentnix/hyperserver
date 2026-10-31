@@ -98,21 +98,21 @@ document.removeEventListener = function(type, callback, options) {
         assert(!pageTop.contains(footer), 'Footer must sit outside the minimum-height content section.');
       }
       const menuToggle = document.querySelector('.menu-toggle');
+      const menu = menuToggle.closest('details');
       const profileLinks = document.querySelector('.profile-links');
       assert([...profileLinks.querySelectorAll('a')].map(link => link.textContent).join(' ') === 'About Me Projects' && !profileLinks.querySelector('img'), 'Profile navigation must use stored page titles.');
       assert(header.contains(links), 'Site links must belong to the header.');
       assert(getComputedStyle(footer).backgroundColor === 'rgba(0, 0, 0, 0)', 'Footer must have no background color.');
       if (innerWidth < 768) {
         assert(profileLinks.getClientRects().length === 0, 'Mobile must hide duplicate profile navigation.');
-        assert(!menuToggle.hidden && links.hidden, 'Mobile menu must start collapsed.');
-        assert(menuToggle.getAttribute('aria-expanded') === 'false', 'Collapsed menu must report its state.');
+        assert(!menuToggle.hidden && !menu.open, 'Mobile menu must start collapsed.');
         assert(document.querySelector('.header-menu').getBoundingClientRect().top === 0, 'Mobile navigation bar must sit at the top of the page.');
         assert(menuToggle.getBoundingClientRect().bottom <= profile.getBoundingClientRect().top, 'Mobile menu must precede the profile.');
         menuToggle.click();
-        assert(!links.hidden && menuToggle.getAttribute('aria-expanded') === 'true', 'Menu button must reveal links.');
+        assert(menu.open, 'Menu disclosure must reveal links.');
         links.querySelector('a').focus();
         links.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
-        assert(links.hidden && document.activeElement === menuToggle, 'Escape must close the menu and return focus.');
+        assert(!menu.open && document.activeElement === menuToggle, 'Escape must close the menu and return focus.');
         menuToggle.click();
       } else if (innerWidth < 1680) {
         assert(getComputedStyle(profileLinks).marginTop === '16px', 'Flat navigation must retain its spacing below the bio.');
@@ -120,7 +120,7 @@ document.removeEventListener = function(type, callback, options) {
         assert(profileLinks.getClientRects().length > 0 && profileLinks.getBoundingClientRect().top >= profile.querySelector('p').getBoundingClientRect().bottom, 'Desktop links must appear below the bio.');
       } else {
         assert(profileLinks.getClientRects().length === 0 && menuToggle.hidden, 'Ultrawide must hide compact links and the hamburger.');
-        assert(!links.hidden && links.getBoundingClientRect().top >= profile.getBoundingClientRect().bottom, 'Ultrawide navigation must sit below the bio.');
+        assert(menu.open && links.getBoundingClientRect().top >= profile.getBoundingClientRect().bottom, 'Ultrawide navigation must sit below the bio.');
       }
       const siteLinks = links.querySelectorAll('a');
       if (innerWidth < 768) {
@@ -209,17 +209,17 @@ document.removeEventListener = function(type, callback, options) {
         imagePost.remove();
         if (innerWidth === 768) {
           frameElement.style.width = '767px';
-          await wait(() => !menuToggle.hidden && links.hidden);
+          await wait(() => !menuToggle.hidden && !menu.open);
           assert(profileLinks.getClientRects().length === 0, 'Resizing to mobile must hide profile links.');
           menuToggle.click();
-          assert(!links.hidden, 'Resized mobile menu must open.');
+          assert(menu.open, 'Resized mobile menu must open.');
           frameElement.style.width = '768px';
-          await wait(() => menuToggle.hidden && !links.hidden);
+          await wait(() => menuToggle.hidden && menu.open);
           assert(profileLinks.getClientRects().length > 0 && document.querySelector('.header-menu').getClientRects().length === 0, 'Resizing to desktop must restore only profile links.');
           frameElement.style.width = '767px';
-          await wait(() => !menuToggle.hidden && links.hidden);
+          await wait(() => !menuToggle.hidden && !menu.open);
           frameElement.style.width = '768px';
-          await wait(() => menuToggle.hidden && !links.hidden);
+          await wait(() => menuToggle.hidden && menu.open);
         }
         const content = document.querySelector('article');
         const longText = document.createElement('p');

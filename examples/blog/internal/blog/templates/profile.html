@@ -16,12 +16,17 @@
 {{ template "blog.pageLinks" .LayoutData.Pages }}
 {{ end }}
 
+{{ define "blog.pageLinkUpdates" }}
+<ul hx-swap-oob="innerHTML:#site-menu">{{ template "blog.siteLinks" . }}</ul>
+<ul hx-swap-oob="innerHTML:.profile-links > ul">{{ template "blog.compactPageLinks" .LayoutData.Pages }}</ul>
+{{ end }}
+
 {{ define "blog.pageLinks" }}
 {{ range . }}<li>
-  <div class="page-branch">
-    <a href="{{ .URL }}"{{ if .ParentID }} title="{{ .Title }}"{{ end }}>{{ .Title }}</a>
-    {{ if .Children }}<button class="child-toggle text-button" type="button" aria-label="Toggle {{ .Title }} links" aria-controls="children-{{ .ID }}" aria-expanded="true" hidden><span aria-hidden="true">⌄</span></button>{{ end }}
-  </div>
-  {{ if .Children }}<ul id="children-{{ .ID }}" class="child-links">{{ template "blog.pageLinks" .Children }}</ul>{{ end }}
+  <a href="{{ .URL }}"{{ if .ParentID }} title="{{ .Title }}"{{ end }}>{{ .Title }}</a>
+  {{ if .Children }}<details class="page-branch" open>
+    <summary class="child-toggle text-button" aria-label="Toggle {{ .Title }} links" hidden><span aria-hidden="true">⌄</span></summary>
+    <ul id="children-{{ .ID }}" class="child-links">{{ template "blog.pageLinks" .Children }}</ul>
+  </details>{{ end }}
 </li>{{ end }}
 {{ end }}

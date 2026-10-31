@@ -4,7 +4,7 @@
   <h1 id="revision-delete-title">Delete revision?</h1>
   <p>This cannot be undone. The current content will not change.</p>
   <p>{{ .Data.Selected.Title }} · {{ .Data.Selected.RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}</p>
-  <form method="post" action="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}"{{ if .IsHtmx }} hx-post="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}" hx-target="closest section" hx-swap="innerHTML show:none"{{ end }} class="form-actions">
+  <form method="post" action="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}"{{ if .IsHtmx }} hx-post="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}" hx-target="closest section" hx-swap="innerHTML show:none" hx-sync="#revision-preview:replace"{{ end }} class="form-actions">
     <button type="submit" class="button-danger">Delete revision</button>
     {{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog autofocus>Cancel</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}?revision={{ .Data.Selected.ID }}">Cancel</a>{{ end }}
   </form>
@@ -24,7 +24,12 @@
 {{ end }}
 
 {{ define "blog.versionList" }}
-    <nav aria-label="Saved versions" hx-target="#revision-preview" hx-swap="innerHTML show:none" hx-sync="#revision-preview:replace"><ol class="revision-list">
+    <nav aria-label="Saved versions" hx-target="#revision-preview" hx-swap="innerHTML show:none" hx-sync="#revision-preview:replace"><ol id="version-list" class="revision-list">{{ template "blog.versionLinks" . }}</ol></nav>
+{{ end }}
+
+{{ define "blog.versionListUpdate" }}<ol hx-swap-oob="innerHTML:#version-list">{{ template "blog.versionLinks" . }}</ol>{{ end }}
+
+{{ define "blog.versionLinks" }}
     {{ range $index, $revision := .Data.Versions }}<li>
       <a href="{{ $.Data.URL }}?revision={{ .ID }}" hx-get="{{ $.Data.URL }}?revision={{ .ID }}" data-revision="{{ .ID }}"{{ if eq .ID $.Data.Selected.ID }} aria-current="true"{{ end }}>
         {{ if eq $index 0 }}<span class="revision-latest">Latest saved</span>{{ end }}
@@ -32,7 +37,6 @@
         <span class="revision-title">{{ .Title }}</span>
       </a>
     </li>{{ end }}
-    </ol></nav>
 {{ end }}
 
 {{ define "blog.revisionPreview" }}

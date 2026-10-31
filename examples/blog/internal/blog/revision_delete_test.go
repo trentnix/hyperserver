@@ -2,7 +2,6 @@ package blog
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"reflect"
@@ -208,7 +207,10 @@ func TestDeleteRevisionHTTP(t *testing.T) {
 				}
 				confirm := h.request("GET", deleteURL(list[1].ID), nil, hx)
 				requireStatus(t, confirm, http.StatusOK)
-				if !strings.Contains(confirm.Body.String(), "This cannot be undone.") || !strings.Contains(confirm.Body.String(), "Cancel") || strings.Contains(confirm.Body.String(), "<dialog") != hx {
+				if hx && !strings.Contains(confirm.Body.String(), `hx-sync="#revision-preview:replace"`) {
+					t.Fatal("revision deletion must synchronize with preview navigation")
+				}
+				if !strings.Contains(confirm.Body.String(), "This cannot be undone.") || !strings.Contains(confirm.Body.String(), "Cancel") || strings.Contains(activeMarkup(confirm.Body.String()), "<dialog") != hx {
 					t.Fatal("missing confirmation or incorrect presentation", confirm.Body.String())
 				}
 				afterGET, err := h.blog.history.ListRevisions(t.Context(), kind, id)
@@ -238,13 +240,8 @@ func TestDeleteRevisionHTTP(t *testing.T) {
 				} {
 					response := h.request("POST", deleteURL(tc.number), nil, hx)
 					if hx && tc.destination != contentURL {
-						requireStatus(t, response, http.StatusNoContent)
-						var events map[string]map[string]string
-						if err := json.Unmarshal([]byte(response.Header().Get("HX-Trigger")), &events); err != nil {
-							t.Fatal(err)
-						}
-						detail := events["blog:revision-deleted"]
-						if detail["revision"] != strconv.FormatInt(tc.number, 10) || detail["next"] != tc.destination || response.Header().Get("HX-Redirect") != "" {
+						requireStatus(t, response, http.StatusOK)
+						if response.Header().Get("HX-Retarget") != "#revision-preview" || response.Header().Get("HX-Replace-Url") != tc.destination || response.Header().Get("HX-Redirect") != "" || !strings.Contains(response.Body.String(), `hx-swap-oob="innerHTML:#version-list"`) || strings.Contains(response.Body.String(), `data-revision="`+strconv.FormatInt(tc.number, 10)+`"`) {
 							t.Fatal("incorrect in-place deletion response", response.Header())
 						}
 						requireStatus(t, h.request("POST", deleteURL(tc.number), nil, hx), http.StatusNotFound)

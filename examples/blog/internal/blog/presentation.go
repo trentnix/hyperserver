@@ -35,7 +35,7 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 		cm.RegisterLayouts(contentservice.PageType, blogModuleFS, "templates/layout.html")
 		cm.RegisterLayouts(contentservice.HtmxType, blogModuleFS, "templates/fragment.html")
 		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html")
-		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html")
+		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html")
 		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", "/", loginURL
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
@@ -108,23 +108,28 @@ func (m *module) configurePageNavigation() {
 		if hx.Enabled && !hx.HistoryRestore {
 			return data
 		}
-		var err error
-		data.Recent, err = m.loadRecent(r.Context())
-		if err != nil {
-			data.RecentUnavailable = true
-			logger.LogRequestError(r, err)
-		}
-		pages, err := m.pageStore.ListPages(r.Context(), false)
-		if err != nil {
-			logger.LogRequestError(r, err)
-		} else {
-			data.Pages = pageTree(pages, nil)
-			for i := range data.Pages {
-				for j := range data.Pages[i].Children {
-					data.Pages[i].Children[j].Children = nil
-				}
+		return m.populateNavigation(r, data)
+	}
+}
+
+// populateNavigation loads shell links for full pages and explicit navigation updates.
+func (m *module) populateNavigation(r *http.Request, data navigation) navigation {
+	var err error
+	data.Recent, err = m.loadRecent(r.Context())
+	if err != nil {
+		data.RecentUnavailable = true
+		logger.LogRequestError(r, err)
+	}
+	pages, err := m.pageStore.ListPages(r.Context(), false)
+	if err != nil {
+		logger.LogRequestError(r, err)
+	} else {
+		data.Pages = pageTree(pages, nil)
+		for i := range data.Pages {
+			for j := range data.Pages[i].Children {
+				data.Pages[i].Children[j].Children = nil
 			}
 		}
-		return data
 	}
+	return data
 }

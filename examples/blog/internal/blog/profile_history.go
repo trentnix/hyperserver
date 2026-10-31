@@ -82,7 +82,10 @@ func (m *module) profileHistory(w http.ResponseWriter, r *http.Request) {
 	page.Title = "Site Profile History"
 	page.Headers = map[string]string{"Vary": htmx.HeaderTarget}
 	if view == "profileRevisionPreview" {
-		page.HTMX.Response = &htmx.Response{ReplaceURL: data.URL + "?revision=" + strconv.FormatInt(number, 10)}
+		page.HTMX.Response = &htmx.Response{ReplaceURL: data.URL + "?revision=" + strconv.FormatInt(number, 10), Retarget: "#revision-preview", Reswap: "innerHTML show:none"}
+		if r.Method == http.MethodPost {
+			page.OutOfBand = []string{"blog.versionListUpdate", "blog.closeDialog"}
+		}
 	}
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display saved profile versions.", err)
@@ -175,7 +178,7 @@ func (m *module) deleteProfileRevision(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		next = "/profile/history?revision=" + strconv.FormatInt(selected, 10)
-		if revisionDeleted(w, r, number, next) {
+		if m.revisionDeleted(w, r, next) {
 			return
 		}
 	}

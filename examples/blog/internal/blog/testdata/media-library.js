@@ -68,7 +68,7 @@
     const before = layout(form);
     for (const [name, value] of Object.entries(values)) form.elements[name].value = value;
     form.requestSubmit();
-    await wait(() => !library().querySelector('[data-media-results]').hasAttribute('aria-busy'));
+    await wait(() => !form.isConnected && !library().querySelector('[data-media-results]').hasAttribute('aria-busy'));
     assert(library().open, 'Filtering closed the chooser.');
     const updated = library().querySelector('[data-media-filters]');
     const after = layout(updated);
@@ -166,8 +166,9 @@
       const resetBox = reset.getBoundingClientRect();
       const frameBox = frame.getBoundingClientRect();
       assert(resetBox.top >= frameBox.bottom && Math.abs(resetBox.left + resetBox.width / 2 - frameBox.left - frameBox.width / 2) < 1, 'Default-image action must be centered directly below the preview.');
-      const tips = form.querySelector('.editor-help');
-      assert(tips && !tips.open && tips.textContent.includes('256 KiB'), 'Secondary writing guidance must be available without taking up editor space.');
+      const markdownHelp = form.querySelector('#markdown-help');
+      assert(markdownHelp && markdownHelp.textContent.includes('256 KiB') && form.querySelector('#post-content').getAttribute('aria-describedby') === markdownHelp.id, 'Markdown guidance must accompany its editor.');
+      assert(form.querySelector('#slug-help').textContent.includes('lowercase letters') && !form.querySelector('.editor-help'), 'Slug guidance must stay with the slug, not in a separate tips section.');
       let fileClicks = 0;
       const fileClick = event => { event.preventDefault(); fileClicks++; };
       upload.addEventListener('click', fileClick);
@@ -224,20 +225,36 @@
       }
       reset.click();
       await open(browse);
-      // A late response must not replace a newer search, even if fetch ignores cancellation.
+      // HTMX must abort an older search before starting its replacement.
       if (stage === 'post') {
-        const originalFetch = window.fetch;
-        let release;
-        window.fetch = (path, options) => String(path).includes('q=stale-search') ? new Promise(resolve => { release = resolve; }) : originalFetch(path, options);
+        const send = XMLHttpRequest.prototype.send;
+        const abort = XMLHttpRequest.prototype.abort;
+        let pending, wasAborted = false;
+        const hold = event => {
+          if (event.target.matches('[data-media-filters]') && event.target.elements.q.value === 'stale-search') pending = event.detail.xhr;
+        };
+        document.addEventListener('htmx:beforeSend', hold);
+        XMLHttpRequest.prototype.send = function(body) {
+          if (this === pending) return;
+          return send.call(this, body);
+        };
+        // An unsent test request needs the abort event a real in-flight request emits.
+        XMLHttpRequest.prototype.abort = function() {
+          abort.call(this);
+          if (this === pending) {
+            wasAborted = true;
+            this.dispatchEvent(new ProgressEvent('abort'));
+          }
+        };
         const search = library().querySelector('[data-media-filters]');
         search.elements.q.value = 'stale-search';
         search.requestSubmit();
-        await wait(() => release);
+        await wait(() => pending);
         await filter({q: '.png'});
-        release(new Response('<section data-media-library>Stale results</section>'));
-        await new Promise(resolve => setTimeout(resolve, 0));
-        assert(library().querySelector('[name=q]').value === '.png', 'An old response replaced the current search.');
-        window.fetch = originalFetch;
+        assert(wasAborted && library().querySelector('[name=q]').value === '.png', 'An older search was not canceled or replaced the current search.');
+        XMLHttpRequest.prototype.send = send;
+        XMLHttpRequest.prototype.abort = abort;
+        document.removeEventListener('htmx:beforeSend', hold);
       }
       await filter({q: 'not-an-existing-image'});
       assert(!library().querySelector('[data-media-select]') && library().textContent.includes('No images match'), 'Empty search did not explain the result.');
@@ -406,13 +423,16 @@
     const picker = form.elements.imageURL.closest('[data-image-picker]');
     const previous = form.elements.imageURL.value;
     const originalFetch = window.fetch;
-    window.fetch = (path, options) => path === '/media?pick=1' ? Promise.resolve(new Response('', {status: 500})) : originalFetch(path, options);
+    const failLibrary = event => {
+      if (event.detail.path.startsWith('/media')) event.detail.parameters.usage = 'invalid';
+    };
+    document.addEventListener('htmx:configRequest', failLibrary);
     picker.querySelector('[data-media-browse]').click();
     await wait(() => library()?.querySelector('[data-media-status]').textContent.includes('Unable to load'));
     assert(form.elements.imageURL.value === previous, 'Failed library load changed the selection.');
     library().querySelector('[data-close-dialog]').click();
     await wait(() => !document.querySelector('.media-browser'));
-    window.fetch = originalFetch;
+    document.removeEventListener('htmx:configRequest', failLibrary);
 
     await open(picker.querySelector('[data-media-browse]'));
     window.fetch = (path, options) => options?.method === 'HEAD' ? Promise.resolve(new Response('', {status: 500})) : originalFetch(path, options);

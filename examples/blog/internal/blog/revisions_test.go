@@ -65,7 +65,7 @@ func TestHistoryPublicationStatus(t *testing.T) {
 					path := "/history/" + tc.kind + "/" + id + "?revision=" + strconv.FormatInt(revision.ID, 10)
 					response := h.request("GET", path, nil, hx)
 					requireStatus(t, response, http.StatusOK)
-					body := response.Body.String()
+					body := activeMarkup(response.Body.String())
 					label := "Post"
 					if tc.kind == "page" {
 						label = "Page"
@@ -229,7 +229,7 @@ func TestRevisionHTTP(t *testing.T) {
 				if response.Header().Get("Cache-Control") != "no-store" || len(sharingTags(t, response.Body.String())) != 0 {
 					t.Fatal("history must stay private")
 				}
-				body := response.Body.String()
+				body := activeMarkup(response.Body.String())
 				if strings.Contains(body, "<dialog") || strings.Count(body, `<span class="revision-latest">Latest saved</span>`) != 1 || !strings.Contains(body, `">Edit</a>`) || strings.Contains(body, "Edit this version") {
 					t.Fatal("current history must be a read-only page", body)
 				}
@@ -271,7 +271,7 @@ func TestRevisionHTTP(t *testing.T) {
 
 			response := h.request("GET", editorURL+"?revision="+first, nil, false)
 			requireStatus(t, response, http.StatusOK)
-			body := response.Body.String()
+			body := activeMarkup(response.Body.String())
 			values := revisionForm(t, body)
 			if values.Get("title") != original.Title || values.Get("summary") != original.Summary || values.Get("content") != original.Markdown || values.Get("previewImage") != imageID || values.Get("slug") != "current-url" || values.Get("version") != strconv.FormatInt(version, 10) {
 				t.Fatal("loaded editor has wrong content or settings", values)
@@ -312,7 +312,7 @@ func TestRevisionHTTP(t *testing.T) {
 				}
 				response := h.request("POST", action, values, false)
 				requireStatus(t, response, status)
-				body := response.Body.String()
+				body := activeMarkup(response.Body.String())
 				if !strings.Contains(body, cancelLink) || !strings.Contains(body, `action="`+action+`"`) || revisionForm(t, body).Get("title") != values.Get("title") {
 					t.Fatal("failed save lost history context or replaced submitted writing")
 				}
@@ -394,7 +394,7 @@ func TestEditorVersionHTTP(t *testing.T) {
 				for _, hx := range []bool{false, true} {
 					response := h.request("POST", action, values, hx)
 					requireStatus(t, response, http.StatusConflict)
-					body := response.Body.String()
+					body := activeMarkup(response.Body.String())
 					if !strings.Contains(body, editConflictMessage) || response.Header().Get("HX-Trigger") != "" || response.Header().Get("HX-Redirect") != "" || response.Header().Get("Location") != "" {
 						t.Fatal("conflict lacked feedback or acknowledged save")
 					}

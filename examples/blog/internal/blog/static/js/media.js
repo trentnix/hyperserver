@@ -1,58 +1,34 @@
 // A separate native dialog keeps the current editor and its unsaved writing intact.
-// Cancel pending reads when paging or closing. Selection never uploads another copy.
+// HTMX owns browsing requests. JavaScript only connects a choice to the unsaved editor.
 export function openMediaLibrary(select) {
   if (document.querySelector('.media-browser')) return;
   const opener = document.activeElement;
-  const dialog = document.createElement('dialog');
-  dialog.className = 'media-browser';
-  dialog.setAttribute('aria-labelledby', 'media-browser-title');
-  dialog.innerHTML = '<header class="page-manager-heading"><h2 id="media-browser-title">Choose an image</h2><button type="button" data-close-dialog autofocus>Cancel</button></header><p role="status" data-media-status></p><div data-media-results></div>';
+  const dialog = document.querySelector('#media-browser-template').content.firstElementChild.cloneNode(true);
   const results = dialog.querySelector('[data-media-results]');
   const status = dialog.querySelector('[data-media-status]');
-  let request;
+  const selection = new AbortController();
   let choosing = false;
-  let loading = false;
-  async function load(path, focusSearch = false) {
-    request?.abort();
-    const current = new AbortController();
-    request = current;
-    loading = true;
+  let browsing;
+  dialog.addEventListener('htmx:beforeRequest', event => {
+    if (choosing) { event.preventDefault(); return; }
+    browsing = event.detail.xhr;
     results.setAttribute('aria-busy', 'true');
     status.textContent = 'Loading images…';
-    try {
-      const response = await fetch(path, {headers: {'HX-Request': 'true'}, signal: current.signal});
-      if (!response.ok) throw new Error('Unable to load images. Close the library and try again.');
-      const document = new DOMParser().parseFromString(await response.text(), 'text/html');
-      const library = document.querySelector('[data-media-library]');
-      if (!library) throw new Error('Unable to load images. Sign in again if your session has expired.');
-      if (!dialog.open || current !== request || current.signal.aborted) return;
-      results.replaceChildren(library);
-      status.textContent = '';
-      results.scrollTop = 0;
-      if (focusSearch) library.querySelector('[data-media-filters] button').focus({preventScroll: true});
-    } catch (error) {
-      if (error.name !== 'AbortError' && current === request && dialog.open) status.textContent = error.message;
-    } finally {
-      if (current === request) {
-        loading = false;
-        results.removeAttribute('aria-busy');
-      }
+  });
+  dialog.addEventListener('htmx:afterRequest', event => {
+    if (event.detail.xhr !== browsing) return;
+    results.removeAttribute('aria-busy');
+    status.textContent = event.detail.xhr.status >= 200 && event.detail.xhr.status < 300 ? '' : 'Unable to load images. Close the library and try again.';
+  });
+  dialog.addEventListener('htmx:afterSwap', event => {
+    results.scrollTop = 0;
+    if (event.detail.requestConfig.elt.matches('[data-media-filters]')) {
+      results.querySelector('[data-media-filters] button')?.focus({preventScroll: true});
     }
-  }
-  dialog.addEventListener('submit', event => {
-    if (!event.target.matches('[data-media-filters]')) return;
-    event.preventDefault();
-    if (!choosing) load('/media?' + new URLSearchParams(new FormData(event.target)), true);
   });
   dialog.addEventListener('click', async event => {
-    const page = event.target.closest('[data-media-page]');
-    if (page) {
-      event.preventDefault();
-      if (!choosing) load(page.dataset.mediaPage);
-      return;
-    }
     const button = event.target.closest('[data-media-select]');
-    if (!button || choosing || loading) return;
+    if (!button || choosing || results.hasAttribute('aria-busy')) return;
     const id = button.dataset.mediaSelect;
     if (!/^[a-f0-9]{64}\.(png|jpeg|gif)$/.test(id)) return;
     choosing = true;
@@ -62,7 +38,7 @@ export function openMediaLibrary(select) {
       // Cleanup can remove an image after the library was opened. Saving also
       // checks references, because choosing an image does not reserve it.
       const path = '/images/' + id;
-      const response = await fetch(path, {method: 'HEAD', signal: request.signal});
+      const response = await fetch(path, {method: 'HEAD', signal: selection.signal});
       if (response.status === 404) throw new Error('This image is no longer available. Choose another image or reopen the library.');
       if (!response.ok) throw new Error('Unable to check this image. Try again, or sign in again if your session has expired.');
       if (!dialog.open) return;
@@ -76,13 +52,14 @@ export function openMediaLibrary(select) {
     }
   });
   dialog.addEventListener('close', () => {
-    request?.abort();
-    dialog.remove();
+    selection.abort();
+    htmx.trigger(results, 'htmx:abort');
+    htmx.remove(dialog);
     if (opener?.isConnected) opener.focus({preventScroll: true});
   }, {once: true});
   document.body.append(dialog);
   dialog.showModal();
-  load('/media?pick=1');
+  htmx.process(dialog);
 }
 
 // The library and profile controls use the same validated upload endpoint as the editor.
@@ -98,29 +75,6 @@ async function uploadImage(file) {
   if (typeof path !== 'string' || !/^\/images\/[a-f0-9]{64}\.(png|jpeg|gif)$/.test(path)) throw new Error('Invalid image upload response.');
   return path;
 }
-
-document.addEventListener('submit', async event => {
-  const form = event.target;
-  if (!form.matches('[data-media-upload]')) return;
-  event.preventDefault();
-  if (form.dataset.uploading) return;
-  const input = form.elements.image;
-  if (!input.files.length) return;
-  const button = form.querySelector('[type=submit]');
-  const status = form.querySelector('[data-upload-status]');
-  form.dataset.uploading = 'true';
-  input.disabled = button.disabled = true;
-  status.textContent = 'Uploading image…';
-  try {
-    const path = await uploadImage(input.files[0]);
-    location.assign('/media/' + path.slice('/images/'.length));
-  } catch (error) {
-    status.textContent = error.message;
-  } finally {
-    delete form.dataset.uploading;
-    input.disabled = button.disabled = false;
-  }
-});
 
 // Post and page previews store an image ID. Profile fields store the complete URL.
 function updateImagePreview(picker) {

@@ -41,78 +41,32 @@ document.addEventListener('focusin', event => {
   }
 });
 
-// Remove only confirmed deletions. Keep the list, its query, and nearby focus.
-document.addEventListener('blog:content-deleted', event => {
-  const list = document.querySelector('[data-content-list]');
-  const {kind, id} = event.detail;
-  if (!list || list.dataset.contentList !== kind) return;
-  const rows = [...list.querySelectorAll('[data-content-id]')];
-  const index = rows.findIndex(row => row.dataset.contentId === id);
-  if (index < 0) return;
-  const row = rows[index];
-  const next = rows[index + 1] || rows[index - 1];
-  const focus = next?.querySelector('.page-manager-actions a') || list.querySelector('input[type=search]');
-  const url = row.querySelector('.page-manager-title a').getAttribute('href');
-  const section = kind === 'post' ? row.closest('section') : null;
-  const searching = list.dataset.searching === 'true';
-  const {scrollX, scrollY} = window;
-  row.remove();
-  for (const group of list.querySelectorAll('.page-manager-list')) {
-    if (!group.children.length) group.remove();
+// Templates own the result HTML. Preserve only the user's place across swaps.
+const positions = new WeakMap();
+document.addEventListener('htmx:beforeSwap', event => {
+  const {xhr, target} = event.detail;
+  if (xhr.status !== 200 || !['management-results', 'revision-preview'].includes(target.id)) return;
+  let href = document.activeElement?.closest('a')?.getAttribute('href');
+  if (target.id === 'management-results') {
+    const form = event.detail.requestConfig.elt;
+    const id = form.action.split('/').pop();
+    const rows = [...target.querySelectorAll('[data-content-id]')];
+    const index = rows.findIndex(row => row.dataset.contentId === id);
+    const next = rows[index + 1] || rows[index - 1];
+    href = next?.querySelector('.page-manager-actions a')?.getAttribute('href');
   }
-  const empty = (container, message) => {
-    const p = document.createElement('p');
-    p.className = 'page-manager-empty';
-    p.textContent = message;
-    container.append(p);
-  };
-  if (section && !section.querySelector('[data-content-id]')) {
-    if (section.id === 'published-posts' && !searching) empty(section, 'No published posts yet.');
-    else section.remove();
-  }
-  const remaining = list.querySelectorAll('[data-content-id]').length;
-  const count = list.querySelector('[data-result-count]');
-  if (count) {
-    count.dataset.resultCount = String(remaining);
-    count.textContent = `${remaining} ${kind}${remaining === 1 ? '' : 's'} found.`;
-  }
-  if (!remaining && (searching || kind === 'page')) {
-    empty(list, searching ? `No ${kind}s match your search.` : 'No pages yet. Create a page to get started.');
-  }
-  // Public navigation can contain the same item outside the management list.
-  for (const link of document.querySelectorAll('#site-menu a, .profile-links a, .archive-nav a')) {
-    if (link.getAttribute('href') !== url) continue;
-    const item = link.closest('li');
-    if (!item) continue;
-    const siblings = item.parentElement;
-    item.remove();
-    if (!siblings.children.length && siblings.classList.contains('child-links')) {
-      siblings.parentElement.querySelector('.child-toggle')?.remove();
-      siblings.remove();
-    }
-  }
-  const dialog = event.target.closest('dialog');
-  dialog?.close();
-  dialog?.remove();
-  focus?.focus({preventScroll: true});
-  window.scrollTo({left: scrollX, top: scrollY, behavior: 'instant'});
-  const notice = document.createElement('div');
-  notice.className = 'notification notification--success';
-  notice.innerHTML = '<p role="status"></p><button class="text-button notification-dismiss" type="button" aria-label="Dismiss notification" data-dismiss-notification>×</button>';
-  notice.querySelector('p').textContent = kind === 'post' ? 'Post deleted.' : 'Page deleted.';
-  document.querySelector('#notifications').append(notice);
+  positions.set(xhr, {href, x: scrollX, y: scrollY});
 });
-
-document.addEventListener('blog:revision-deleted', event => {
-  const dialog = event.target.closest('dialog');
-  if (dialog) {
-    dialog.close();
-    dialog.remove();
-  }
-  for (const link of document.querySelectorAll('.revision-list a')) {
-    if (link.dataset.revision === event.detail.revision) link.closest('li').remove();
-  }
-  htmx.ajax('GET', event.detail.next, {target: '#revision-preview', swap: 'innerHTML show:none'});
+document.addEventListener('htmx:afterSwap', event => {
+  const position = positions.get(event.detail.xhr);
+  if (!position) return;
+  positions.delete(event.detail.xhr);
+  const links = document.querySelectorAll('#management-results a, .revision-list a');
+  const focus = [...links].find(link => link.getAttribute('href') === position.href) ||
+    (event.target.id === 'management-results' ? document.querySelector('.management-search input') :
+      document.querySelector('.revision-list [aria-current]'));
+  focus?.focus({preventScroll: true});
+  window.scrollTo({left: position.x, top: position.y, behavior: 'instant'});
 });
 function initialize(root) {
   root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
@@ -126,7 +80,7 @@ document.addEventListener('htmx:afterSwap', event => {
   if (event.target.id !== 'revision-preview') return;
   const selected = event.target.querySelector('[data-revision]')?.dataset.revision;
   if (!selected) return;
-  // Keep the list in place. Only mark a version after its preview arrives.
+  // Keep long lists in place during selection. Deletions return an updated list.
   for (const link of document.querySelectorAll('.revision-list a')) {
     if (link.dataset.revision === selected) link.setAttribute('aria-current', 'true');
     else link.removeAttribute('aria-current');

@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+// activeMarkup omits inert template contents when checking the rendered interface.
+func activeMarkup(markup string) string {
+	return regexp.MustCompile(`(?s)<template\b[^>]*>.*?</template>`).ReplaceAllString(markup, "")
+}
+
 // TestEditorPages keeps ordinary and partial navigation on the same page-based editor.
 func TestEditorPages(t *testing.T) {
 	h := newHarness(t)
@@ -23,7 +28,7 @@ func TestEditorPages(t *testing.T) {
 			for _, path := range []string{prefix + "/create", prefix + "/update/" + id} {
 				response := h.request("GET", path, nil, hx)
 				requireStatus(t, response, http.StatusOK)
-				body := response.Body.String()
+				body := activeMarkup(response.Body.String())
 				for _, want := range []string{`class="info-page editor-panel"`, `data-draft-owner=`, `class="form-actions"`, `href="` + manager + `"`} {
 					if !strings.Contains(body, want) {
 						t.Fatalf("%s missing %s", path, want)
@@ -31,6 +36,19 @@ func TestEditorPages(t *testing.T) {
 				}
 				if strings.Contains(body, "<dialog") || strings.Contains(body, "reader-search-form") || strings.Contains(body, "data-close-dialog") {
 					t.Fatalf("%s rendered dialog controls or reader search", path)
+				}
+				for _, field := range []struct{ id, help, text string }{
+					{kind + "-slug", "slug-help", "Custom slugs use lowercase letters"},
+					{"post-content", "markdown-help", "Up to 256 KiB of Markdown"},
+				} {
+					control := regexp.MustCompile(`<(?:input|textarea)[^>]*id="` + field.id + `"[^>]*>`).FindString(body)
+					help := regexp.MustCompile(`<small id="` + field.help + `"[^>]*>[^<]*</small>`).FindString(body)
+					if !strings.Contains(control, `aria-describedby="`+field.help+`"`) || !strings.Contains(help, field.text) {
+						t.Fatalf("%s missing field-specific guidance for %s", path, field.id)
+					}
+				}
+				if strings.Contains(body, "Writing tips") {
+					t.Fatalf("%s rendered the separate writing tips section", path)
 				}
 			}
 		}

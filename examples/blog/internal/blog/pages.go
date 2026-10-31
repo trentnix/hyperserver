@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"context"
 	"errors"
 	"html/template"
 	"net/http"
@@ -78,21 +79,33 @@ func (m *module) pages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Search must be at most 240 characters.", http.StatusBadRequest)
 		return
 	}
+	data, err := m.pageManagement(r.Context(), query)
+	if err != nil {
+		m.storageError(w, r, err)
+		return
+	}
+	page := m.views["pages"].Content(r, data)
+	page.Title = "Pages"
+	if err := page.Render(w, r); err != nil {
+		page.HandleRenderError(w, r, "Unable to display pages.", err)
+	}
+}
+
+// pageManagement loads the same tree or search results for navigation and deletion updates.
+func (m *module) pageManagement(ctx context.Context, query string) (pageManagement, error) {
 	var pages []Page
 	var err error
 	if query == "" {
-		pages, err = m.pageStore.ListPages(r.Context(), true)
+		pages, err = m.pageStore.ListPages(ctx, true)
 	} else {
-		pages, err = m.pageStore.SearchPages(r.Context(), query)
+		pages, err = m.pageStore.SearchPages(ctx, query)
 	}
 	if err != nil {
-		m.storageError(w, r, err)
-		return
+		return pageManagement{}, err
 	}
-	history, err := m.history.HistoryOwners(r.Context(), "page")
+	history, err := m.history.HistoryOwners(ctx, "page")
 	if err != nil {
-		m.storageError(w, r, err)
-		return
+		return pageManagement{}, err
 	}
 	data := pageManagement{Query: query, Total: len(pages)}
 	if query == "" {
@@ -102,11 +115,7 @@ func (m *module) pages(w http.ResponseWriter, r *http.Request) {
 			data.Pages = append(data.Pages, pageLink{Page: p, HasHistory: history[p.ID]})
 		}
 	}
-	page := m.views["pages"].Content(r, data)
-	page.Title = "Pages"
-	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display pages.", err)
-	}
+	return data, nil
 }
 
 // page displays content and its selected child previews. About and Projects have short URLs.
@@ -358,5 +367,5 @@ func (m *module) deletePage(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	finishContentDelete(w, r, "page", "/pages")
+	m.finishContentDelete(w, r, "page", "/pages")
 }

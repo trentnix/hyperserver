@@ -3,6 +3,7 @@
   const report = message => fetch('/test/result', {method: 'POST', body: message});
   const frames = [];
   const manageStyles = [];
+  const menuStyles = [];
   let initialFrames = 0;
   let done = false;
   window.addEventListener('error', event => report(event.message));
@@ -16,6 +17,10 @@
         return [rect.x, rect.y, rect.width, rect.height];
       }));
       const manage = document.querySelector('.account-menu summary');
+      if (innerWidth < 768) {
+        const style = getComputedStyle(document.querySelector('.menu-toggle'));
+        menuStyles.push([style.color, style.backgroundColor].join('|'));
+      }
       if (manage && innerWidth < 768) {
         const style = getComputedStyle(manage);
         manageStyles.push([style.color, style.backgroundColor, getComputedStyle(manage, '::after').transform].join('|'));
@@ -35,6 +40,7 @@
         }));
       }
       if (manageStyles.some(style => style !== manageStyles[0])) throw new Error('Manage changed colors or arrow direction during startup.');
+      if (menuStyles.some(style => style !== menuStyles[0])) throw new Error('Menu changed colors during startup.');
       if (performance.getEntriesByType('resource').some(entry => new URL(entry.name).pathname === '/posts/recent')) throw new Error('Startup fetched Recent Posts separately.');
       if (!sessionStorage.getItem('refresh-admin')) {
         sessionStorage.setItem('refresh-admin', 'true');
@@ -57,7 +63,7 @@
           const upload = document.querySelector('[data-media-upload]');
           if (!upload || upload.querySelector('details').open || upload.getBoundingClientRect().height < 44) throw new Error('Media upload must start as a visible, collapsed disclosure.');
           document.documentElement.classList.remove('js');
-          if (upload.getClientRects().length) throw new Error('The JavaScript upload form must stay hidden without enhancement.');
+          if (!upload.getClientRects().length) throw new Error('The ordinary upload form must remain available without enhancement.');
           document.documentElement.classList.add('js');
           report('PASS');
         }

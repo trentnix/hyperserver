@@ -110,7 +110,7 @@
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const expected = Math.min(before, Math.max(0, document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight));
       assert(Math.abs(scrollY - expected) <= 1, 'Page deletion lost scroll position: ' + JSON.stringify({before, expected, actual: scrollY}));
-      assert(article.querySelector('[data-content-list]') === list && document.activeElement === focus, 'Page deletion replaced the list or lost adjacent focus.');
+      assert(article.querySelector('[data-content-list]') === list && (document.activeElement === focus || (focus?.tagName === 'A' && document.activeElement?.getAttribute('href') === focus.getAttribute('href'))), 'Page deletion replaced the list or lost adjacent focus.');
       assert(![...document.querySelectorAll('#site-menu a, .profile-links a')].some(link => link.getAttribute('href') === url), 'Deleted page remains in navigation.');
       assert((await fetch(url)).status === 404, 'Deleted page remains readable.');
       const count = list.querySelector('[data-result-count]');

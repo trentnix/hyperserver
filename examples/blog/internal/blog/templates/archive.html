@@ -1,5 +1,10 @@
 {{ define "blog.recent" }}{{ template "blog.recentLinks" .Data }}{{ end }}
 
+{{ define "blog.recentUpdates" }}
+<div hx-swap-oob="innerHTML:#sidebar-archive">{{ template "blog.layoutRecent" .LayoutData }}</div>
+<div hx-swap-oob="innerHTML:#post-archive">{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap="innerHTML show:window:top">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div></div>
+{{ end }}
+
 {{ define "blog.layoutRecent" }}
 {{ if .RecentUnavailable }}<p>Recent posts are unavailable.</p>{{ template "blog.archiveLinks" }}{{ else }}{{ template "blog.recentLinks" .Recent }}{{ end }}
 {{ end }}
@@ -18,8 +23,8 @@
 </div>
 {{ end }}
 
-{{ define "blog.readerSearchState" }}
-<template data-reader-search>{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</template>
+{{ define "blog.readerSearchUpdates" }}
+<div hx-swap-oob="innerHTML:[data-reader-search-slot]">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div>
 {{ end }}
 
 {{ define "blog.searchForm" }}

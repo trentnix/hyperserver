@@ -25,8 +25,10 @@
       <aside class="site-sidebar">
         <header class="site-header" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
           <nav class="header-menu" aria-label="Site links">
-            <button class="menu-toggle text-button" type="button" aria-expanded="false" aria-controls="site-menu" hidden><span aria-hidden="true">☰</span> Menu</button>
-            <ul id="site-menu" class="site-links">{{ template "blog.siteLinks" . }}</ul>
+            <details class="site-menu-disclosure" open>
+              <summary class="menu-toggle text-button" hidden><span aria-hidden="true">☰</span> Menu</summary>
+              <ul id="site-menu" class="site-links">{{ template "blog.siteLinks" . }}</ul>
+            </details>
           </nav>
           <div class="profile">{{ template "blog.profile" . }}</div>
         </header>
@@ -49,7 +51,7 @@
             {{ end }}
           </nav>
         </div>
-        <article id="article-content" class="page-content" hx-history-elt>{{ template "blog.articleMetadata" . }}{{ template "blog.readerSearchState" . }}{{ renderPartial .PartialName . }}</article>
+        <article id="article-content" class="page-content" hx-history-elt>{{ template "blog.articleMetadata" . }}{{ if .HTMX.Request.HistoryRestore }}{{ template "blog.readerSearchUpdates" . }}{{ end }}{{ renderPartial .PartialName . }}</article>
         <div class="content-search" data-reader-search-slot hx-swap="innerHTML show:window:top">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div>
       </main>
     </div>
@@ -59,5 +61,12 @@
   </div>
   <div id="notifications">{{ template "blog.notifications" . }}</div>
   <div id="dialog-host"></div>
+  {{ if .LayoutData.Admin }}<template id="media-browser-template">
+    <dialog class="media-browser" aria-labelledby="media-browser-title">
+      <header class="page-manager-heading"><h2 id="media-browser-title">Choose an image</h2><button type="button" data-close-dialog autofocus>Cancel</button></header>
+      <p role="status" data-media-status></p>
+      <div id="media-results" data-media-results hx-get="/media?pick=1" hx-trigger="load" hx-target="this" hx-swap="innerHTML show:none settle:0" hx-sync="this:replace"></div>
+    </dialog>
+  </template>{{ end }}
 </body>
 </html>

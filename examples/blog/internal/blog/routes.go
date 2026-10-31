@@ -43,6 +43,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("GET /profile/history/delete/{revision}", m.requireAdmin(m.confirmProfileRevisionDelete))
 	routes.Handle("POST /profile/history/delete/{revision}", m.requireAdmin(m.deleteProfileRevision))
 	routes.Handle("GET /media", m.requireAdmin(m.mediaLibrary))
+	routes.HandleWithBodyLimit("POST /media/upload", m.requireAdmin(m.uploadMedia), 10*routing.MiB)
 	routes.Handle("GET /media/{id}", m.requireAdmin(m.mediaDetail))
 	routes.Handle("POST /media/{id}", m.requireAdmin(m.renameMedia))
 	routes.Handle("GET /media/unused", m.requireAdmin(m.unusedMedia))

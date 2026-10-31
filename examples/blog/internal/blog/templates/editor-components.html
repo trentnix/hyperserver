@@ -1,13 +1,14 @@
 {{ define "blog.markdownFields" }}
-  <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" required>{{ .Markdown }}</textarea>
+  <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help" required>{{ .Markdown }}</textarea>
+  {{ template "blog.markdownHelp" . }}
 {{ end }}
 
-{{ define "blog.editorHelp" }}
-<details class="editor-help form-hint">
-  <summary>Writing tips</summary>
-  <p>Custom slugs use lowercase letters, digits, and hyphens. Generated slugs add a number when needed to stay unique.</p>
-  <p>Content can contain up to 256 KiB of Markdown. Image limits also apply to uploads in the editor.</p>
-</details>
+{{ define "blog.slugHelp" }}
+  <small id="slug-help" class="form-hint">Leave blank to generate from the title, adding a number if needed. Custom slugs use lowercase letters, digits, and hyphens.{{ if .PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
+{{ end }}
+
+{{ define "blog.markdownHelp" }}
+  <small id="markdown-help" class="form-hint">Up to 256 KiB of Markdown. Editor uploads have the same image limits as preview images.</small>
 {{ end }}
 
 {{ define "blog.draftRecovery" }}

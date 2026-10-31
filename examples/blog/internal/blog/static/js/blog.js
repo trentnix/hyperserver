@@ -3,30 +3,14 @@
   const mobileLayout = matchMedia('(max-width: 767px)');
   const menuToggle = document.querySelector('.menu-toggle');
   const menu = document.querySelector('#site-menu');
-  const childToggles = [...menu.querySelectorAll('.child-toggle')];
   function closeMenu() {
-    menu.hidden = mobileLayout.matches;
+    menu.parentElement.open = !mobileLayout.matches;
     menuToggle.hidden = !mobileLayout.matches;
-    menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
-    for (const toggle of childToggles) {
-      if (!toggle.isConnected) continue;
-      const children = document.getElementById(toggle.getAttribute('aria-controls'));
-      children.hidden = mobileLayout.matches;
+    for (const toggle of menu.querySelectorAll('.child-toggle')) {
+      toggle.parentElement.open = !mobileLayout.matches;
       toggle.hidden = !mobileLayout.matches;
-      toggle.setAttribute('aria-expanded', String(!children.hidden));
     }
   }
-  for (const toggle of childToggles) {
-    toggle.addEventListener('click', () => {
-      const children = document.getElementById(toggle.getAttribute('aria-controls'));
-      children.hidden = !children.hidden;
-      toggle.setAttribute('aria-expanded', String(!children.hidden));
-    });
-  }
-  menuToggle.addEventListener('click', () => {
-    menu.hidden = !menu.hidden;
-    menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
-  });
   menu.addEventListener('click', event => {
     if (mobileLayout.matches && event.target.closest('a')) {
       closeMenu();
@@ -34,12 +18,15 @@
     }
   });
   document.querySelector('.header-menu').addEventListener('keydown', event => {
-    if (event.key === 'Escape' && mobileLayout.matches && !menu.hidden) {
+    if (event.key === 'Escape' && mobileLayout.matches && menu.parentElement.open) {
       closeMenu();
       menuToggle.focus();
     }
   });
   mobileLayout.addEventListener('change', closeMenu);
+  document.addEventListener('htmx:oobAfterSwap', event => {
+    if (event.detail.target.id === 'site-menu') closeMenu();
+  });
   closeMenu();
   menu.dataset.ready = '';
 
@@ -56,8 +43,7 @@
     }
   });
 
-  // Article responses carry metadata and reader-search markup for the shared shell.
-  // Apply both on navigation and history restores, never on dialog or preview swaps.
+  // Apply article metadata on navigation and history restores, never on dialog swaps.
   function updatePagePresentation(root) {
     const article = root.id === 'article-content' ? root : root.querySelector('#article-content');
     const metadata = article?.querySelector(':scope > template[data-page-metadata]');
@@ -65,14 +51,6 @@
       document.head.querySelectorAll('[data-blog-metadata]').forEach(node => node.remove());
       document.head.append(...metadata.content.children);
       metadata.remove();
-    }
-    const search = article?.querySelector(':scope > template[data-reader-search]');
-    if (search) {
-      for (const slot of document.querySelectorAll('[data-reader-search-slot]')) {
-        slot.replaceChildren(search.content.cloneNode(true));
-        htmx.process(slot);
-      }
-      search.remove();
     }
   }
 
