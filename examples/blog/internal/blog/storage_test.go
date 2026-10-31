@@ -137,6 +137,19 @@ func TestNavigationQueries(t *testing.T) {
 			t.Fatalf("accepted invalid recent post limit %d", limit)
 		}
 	}
+	for _, tc := range []struct{ limit, offset int }{{1, 0}, {1, 1}, {2, 1}, {10, 0}, {2, 3}, {2, 100}} {
+		page, err := store.ListArchivePage(t.Context(), tc.limit, tc.offset)
+		start := min(tc.offset, len(want))
+		expected := want[start:min(start+tc.limit, len(want))]
+		if err != nil || len(page) != len(expected) || (len(page) > 0 && !reflect.DeepEqual(page, expected)) {
+			t.Fatalf("archive limit=%d offset=%d: %+v, %v", tc.limit, tc.offset, page, err)
+		}
+	}
+	for _, tc := range []struct{ limit, offset int }{{0, 0}, {-1, 0}, {1, -1}} {
+		if _, err := store.ListArchivePage(t.Context(), tc.limit, tc.offset); err == nil {
+			t.Fatalf("accepted invalid archive bounds %+v", tc)
+		}
+	}
 	months := groupArchive(entries)
 	if len(months) != 2 || months[0].Name != "October 2026" || len(months[0].Posts) != 2 || months[1].Name != "September 2026" {
 		t.Fatalf("grouped archive = %+v", months)
@@ -149,6 +162,9 @@ func TestNavigationQueries(t *testing.T) {
 	}
 	if _, err := store.ListArchive(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("ListArchive ignored cancellation: %v", err)
+	}
+	if _, err := store.ListArchivePage(ctx, 1, 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("ListArchivePage ignored cancellation: %v", err)
 	}
 	if _, err := store.ListRecent(ctx, 1); !errors.Is(err, context.Canceled) {
 		t.Fatalf("ListRecent ignored cancellation: %v", err)
@@ -164,6 +180,9 @@ func TestNavigationQueries(t *testing.T) {
 	}
 	if _, err := store.ListArchive(t.Context()); err == nil {
 		t.Fatal("ListArchive hid storage failure")
+	}
+	if _, err := store.ListArchivePage(t.Context(), 1, 0); err == nil {
+		t.Fatal("ListArchivePage hid storage failure")
 	}
 	if _, err := store.ListRecent(t.Context(), 1); err == nil {
 		t.Fatal("ListRecent hid storage failure")

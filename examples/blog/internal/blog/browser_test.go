@@ -56,6 +56,17 @@ func TestBrowserRefresh(t *testing.T) {
 	}
 }
 
+// TestBrowserArchivePagination checks archive links, partial swaps, and browser history.
+func TestBrowserArchivePagination(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check archive pagination")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "archive") })
+	}
+}
+
 // TestBrowserNavigation checks article swaps and history without replacing the sidebar.
 func TestBrowserNavigation(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -248,6 +259,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "archive" {
+		seedArchive(t, h, 2*archivePageSize+1)
+	}
 	if mode == "media-library" {
 		for i := range mediaPageSize + 1 {
 			mediaUpload(t, h.blog, fmt.Sprintf("library image %d", i))
@@ -343,6 +357,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "archive":
+		scriptFile = "testdata/archive-pagination.js"
 	case "refresh":
 		scriptFile = "testdata/refresh.js"
 	case "admin-navigation":
@@ -445,6 +461,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		pagePath += "?test-layout=1&amp;test-width=" + width
 	} else if mode == "navigation" {
 		pagePath = "/post/s/first"
+	} else if mode == "archive" {
+		pagePath = "/posts"
 	}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if mode == "refresh" && (r.URL.Path == "/assets/js/blog.js" || strings.HasSuffix(r.URL.Path, ".woff2")) {

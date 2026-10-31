@@ -195,6 +195,13 @@ type editorPage struct {
 	CanSchedule                bool
 }
 
+// archivePage contains one bounded page of month-grouped links and adjacent URLs.
+type archivePage struct {
+	Months         []archiveMonth
+	Number         int
+	Previous, Next string
+}
+
 // archiveMonth contains the heading and post links for one archive month.
 type archiveMonth struct {
 	Name  string

@@ -936,6 +936,10 @@ func (s navigationRepository) NextPublication(context.Context) (time.Time, error
 func (s navigationRepository) ListArchive(context.Context) ([]ArchiveEntry, error) {
 	return s.entries, s.err
 }
+func (s navigationRepository) ListArchivePage(_ context.Context, limit, offset int) ([]ArchiveEntry, error) {
+	start := min(offset, len(s.entries))
+	return s.entries[start:min(start+limit, len(s.entries))], s.err
+}
 func (s navigationRepository) ListRecent(_ context.Context, limit int) ([]ArchiveEntry, error) {
 	return s.entries[:min(len(s.entries), limit)], s.err
 }

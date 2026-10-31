@@ -73,6 +73,13 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
 .post-archive li a:visited, .post-archive .archive-more:visited { color: #776477; }
 .post-archive li a:hover, .post-archive .archive-more:hover { color: #15191e; text-decoration-color: currentColor; }
 .post-archive .archive-more { display: inline-block; margin-top: 16px; font-size: .9em; }
+.post-archive > header { padding-bottom: 16px; border-bottom: 1px solid #e1e4e8; }
+.archive-pagination { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 48px; padding-block: 8px; border-top: 2px solid #e1e4e8; font-size: .9em; }
+.post-archive .archive-pagination a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: #505969; font-weight: 600; text-decoration: none; }
+.post-archive .archive-pagination a:hover { color: #212529; text-decoration: underline; text-underline-offset: .2em; }
+.archive-pagination [rel="prev"] { grid-area: 1 / 1; justify-self: start; }
+.archive-pagination [rel="next"] { grid-area: 1 / 3; justify-self: end; }
+.archive-page-number { grid-area: 1 / 2; color: #626975; font-size: .9em; white-space: nowrap; }
 
 @media (max-width: 1679px) {
   .article-column { padding-bottom: 80px; }

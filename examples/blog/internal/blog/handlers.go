@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -149,20 +150,55 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 	}
 }
 
-// archive groups post links by month without loading their Markdown bodies.
+const archivePageSize = 30
+
+// archive groups one page of public post links by month without loading bodies.
 func (m *module) archive(w http.ResponseWriter, r *http.Request) {
-	posts, err := m.posts.ListArchive(r.Context())
+	number := 1
+	if raw := r.URL.Query().Get("page"); raw != "" {
+		var err error
+		number, err = strconv.Atoi(raw)
+		if err != nil || number < 1 || number-1 > math.MaxInt/archivePageSize {
+			http.Error(w, "Page must be a positive whole number.", http.StatusBadRequest)
+			return
+		}
+	}
+	posts, err := m.posts.ListArchivePage(r.Context(), archivePageSize+1, (number-1)*archivePageSize)
 	if err != nil {
 		m.storageError(w, r, err)
 		return
 	}
+	if number > 1 && len(posts) == 0 {
+		m.storageError(w, r, errNotFound)
+		return
+	}
+	data := archivePage{Number: number}
+	if number > 1 {
+		data.Previous = archiveURL(number - 1)
+	}
+	if len(posts) > archivePageSize {
+		data.Next = archiveURL(number + 1)
+		posts = posts[:archivePageSize]
+	}
+	data.Months = groupArchive(posts)
 
-	page := m.views["archive"].Content(r, groupArchive(posts))
+	page := m.views["archive"].Content(r, data)
 	page.Title = "All Posts"
-	m.setSharing(page, r, sharingPreview{Title: page.Title, URL: "/posts", Type: "website"}, "")
+	if number > 1 {
+		page.Title += " — Page " + strconv.Itoa(number)
+	}
+	m.setSharing(page, r, sharingPreview{Title: page.Title, URL: archiveURL(number), Type: "website"}, "")
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}
+}
+
+// archiveURL gives the first page one canonical address, without query parameters.
+func archiveURL(number int) string {
+	if number == 1 {
+		return "/posts"
+	}
+	return "/posts?page=" + strconv.Itoa(number)
 }
 
 // recent displays the configured number of newest links for the sidebar or footer.

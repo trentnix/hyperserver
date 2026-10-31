@@ -66,6 +66,9 @@ type repository interface {
 	Latest(context.Context) (Post, error)
 	// ListArchive returns link metadata newest first, without post bodies.
 	ListArchive(context.Context) ([]ArchiveEntry, error)
+	// ListArchivePage returns at most limit public entries after offset entries.
+	// The limit must be positive and the offset nonnegative. Ordering matches ListArchive.
+	ListArchivePage(context.Context, int, int) ([]ArchiveEntry, error)
 	// ListRecent returns at most limit newest entries. The limit must be positive.
 	ListRecent(context.Context, int) ([]ArchiveEntry, error)
 	// NextPublication returns the next scheduled time, or zero if none remain.
@@ -257,7 +260,15 @@ func (s *sqliteRepository) NextPublication(ctx context.Context) (time.Time, erro
 
 // ListArchive returns metadata in the same order as List without loading Markdown.
 func (s *sqliteRepository) ListArchive(ctx context.Context) ([]ArchiveEntry, error) {
-	return s.listArchive(ctx, 0)
+	return s.listArchive(ctx, 0, 0)
+}
+
+// ListArchivePage bounds the metadata read in SQLite, including publication visibility.
+func (s *sqliteRepository) ListArchivePage(ctx context.Context, limit, offset int) ([]ArchiveEntry, error) {
+	if limit < 1 || offset < 0 {
+		return nil, errors.New("archive limit must be positive and offset must be nonnegative")
+	}
+	return s.listArchive(ctx, limit, offset)
 }
 
 // ListRecent limits the database query, not just the rendered navigation.
@@ -265,16 +276,16 @@ func (s *sqliteRepository) ListRecent(ctx context.Context, limit int) ([]Archive
 	if limit < 1 {
 		return nil, errors.New("recent post limit must be greater than zero")
 	}
-	return s.listArchive(ctx, limit)
+	return s.listArchive(ctx, limit, 0)
 }
 
 // listArchive reads link metadata. A zero limit selects the complete archive.
-func (s *sqliteRepository) listArchive(ctx context.Context, limit int) ([]ArchiveEntry, error) {
+func (s *sqliteRepository) listArchive(ctx context.Context, limit, offset int) ([]ArchiveEntry, error) {
 	query := "SELECT slug, title, published FROM blog_posts WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC"
 	args := []any{s.now().Unix()}
 	if limit > 0 {
-		query += " LIMIT ?"
-		args = append(args, limit)
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
 	}
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {

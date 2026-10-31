@@ -15,7 +15,7 @@ import (
 )
 
 // sharingPreview supplies public Open Graph metadata for a complete HTML page.
-// URL starts as a local content path and becomes absolute before rendering.
+// URL starts as a local content path and optional query, then becomes absolute.
 type sharingPreview struct {
 	Title, Description, URL, Image, Type string
 }
@@ -36,11 +36,17 @@ func (m *module) setSharing(c *content.Content, r *http.Request, preview sharing
 	data.Description = preview.Description
 	c.LayoutData = data
 
-	base, err := util.BuildPublicURL(r, m.app.Config.HTTP, preview.URL, nil)
+	local, err := url.Parse(preview.URL)
 	if err != nil {
 		logger.LogRequestError(r, err)
 		return
 	}
+	base, err := util.BuildPublicURL(r, m.app.Config.HTTP, local.Path, nil)
+	if err != nil {
+		logger.LogRequestError(r, err)
+		return
+	}
+	base.RawQuery = local.RawQuery
 	preview.URL = base.String()
 	preview.Image = sharingImageURL(preview.Image, base)
 	if preview.Image == "" {
