@@ -1,0 +1,188 @@
+{{ define "blog.post" }}
+<header class="post-heading"><h1>{{ .Data.Title }}</h1>{{ if .Data.Draft }}<p class="page-status">Draft preview — only you can see this post.</p>{{ else if .Data.Scheduled }}<p class="page-status">Scheduled for {{ .Data.Published.Format "Jan 2, 2006 at 3:04 PM UTC" }} — only you can preview this post until then.</p>{{ else }}<time datetime="{{ .Data.Published.Format "2006-01-02" }}">{{ .Data.Published.Format "January 2, 2006" }}</time>{{ end }}</header>
+{{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Post actions">
+  <a class="action-edit" href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a>
+  <details class="action-menu"><summary>More</summary><div class="action-menu-items">
+    {{ if .Data.HasHistory }}<a href="/history/post/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}
+    <a class="action-delete" href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
+  </div></details>
+</div>{{ end }}
+<div class="post-body">{{ .Data.HTML }}</div>
+{{ end }}
+
+{{ define "blog.posts" }}
+<section class="info-page page-manager">
+<header class="page-manager-heading">
+  <div><h1>Posts</h1><p>Manage your drafts, scheduled posts, and published posts.</p></div>
+  <a class="page-create" href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a>
+</header>
+<section id="draft-posts" aria-labelledby="draft-posts-heading">
+  <h2 id="draft-posts-heading">Drafts</h2>
+  {{ if .Data.Drafts }}{{ template "blog.postAdminLinks" .Data.Drafts }}{{ else }}<p class="page-manager-empty">No drafts.</p>{{ end }}
+</section>
+<section id="scheduled-posts" aria-labelledby="scheduled-posts-heading">
+  <h2 id="scheduled-posts-heading">Scheduled</h2>
+  {{ if .Data.Scheduled }}{{ template "blog.postAdminLinks" .Data.Scheduled }}{{ else }}<p class="page-manager-empty">No scheduled posts.</p>{{ end }}
+</section>
+<section id="published-posts" aria-labelledby="published-posts-heading">
+  <h2 id="published-posts-heading">Published</h2>
+  {{ if .Data.Published }}{{ template "blog.postAdminLinks" .Data.Published }}{{ else }}<p class="page-manager-empty">No published posts yet.</p>{{ end }}
+</section>
+</section>
+{{ end }}
+
+{{ define "blog.postAdminLinks" }}
+<ul class="page-manager-list">
+{{ range . }}<li class="page-manager-row">
+  <div class="page-manager-title"><a href="/post/s/{{ .Slug }}">{{ .Title }}</a>{{ if .Scheduled }}<small>Scheduled {{ .Published.Format "Jan 2, 2006 at 3:04 PM UTC" }}</small>{{ else if not .Draft }}<small>Published {{ .Published.Format "January 2, 2006" }}</small>{{ end }}</div>
+  <div class="page-manager-actions">
+    <a href="/post/update/{{ .ID }}" hx-get="/post/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
+    {{ if .HasHistory }}<a href="/history/post/{{ .ID }}" hx-boost="false" aria-label="History for {{ .Title }}">History</a>{{ end }}
+    <a href="/post/delete/{{ .ID }}" hx-get="/post/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
+  </div>
+</li>{{ end }}
+</ul>
+{{ end }}
+
+{{ define "blog.archive" }}
+<section class="post-archive info-page" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<h1>All Posts</h1>
+{{ range .Data }}<h2 class="archive-month">{{ .Name }}</h2>{{ template "blog.postLinks" .Posts }}{{ else }}<p>No posts yet.</p>{{ end }}
+</section>
+{{ end }}
+
+{{ define "blog.recent" }}
+<div class="post-archive" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<div class="archive-heading"><h2>Recent Posts</h2><a href="/rss" hx-boost="false" title="RSS feed"><img src="/assets/img/icons/rss.png" width="16" height="16" alt="RSS feed"></a></div>
+{{ if .Data }}{{ template "blog.postLinks" .Data }}{{ else }}<p>No posts yet.</p>{{ end }}
+<a class="archive-more" href="/posts">All posts &rarr;</a>
+</div>
+{{ end }}
+
+{{ define "blog.postLinks" }}
+<ul>{{ range . }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>
+{{ end }}
+
+{{ define "blog.editor" }}
+{{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
+<section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
+<form id="post-form" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+  <input type="hidden" name="version" value="{{ .Data.Version }}">
+  {{ template "blog.revisionNotice" . }}
+  {{ template "blog.draftRecovery" . }}
+  <label for="post-title">Title</label><input id="post-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
+  <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }}{{ if .Data.ScheduledSlug }} data-scheduled-slug="{{ .Data.ScheduledSlug }}" data-scheduled-at="{{ .Data.ScheduledAt }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
+  <small id="slug-help" class="form-hint">Leave blank to use the title.{{ if .Data.PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
+  <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
+  <fieldset class="image-picker page-preview" data-image-picker data-image-prefix="/images/">
+    <legend>Preview image <span>(optional)</span></legend>
+    <p class="form-hint">For sharing links, not the post body.</p>
+    <input type="hidden" name="previewImage" value="{{ .Data.PreviewImage }}" data-image-value>
+    <div class="preview-image-row">
+      <div class="preview-image-selection">
+        <div class="preview-image-frame"><img {{ if .Data.PreviewURL }}src="{{ .Data.PreviewURL }}"{{ else }}hidden{{ end }} alt="Selected sharing preview" width="160" height="100" data-image-preview><span class="image-empty">Default image</span></div>
+        <div class="image-upload-controls" hidden><button type="button" class="text-button" data-image-reset>Use default image</button></div>
+      </div>
+      <div class="preview-image-controls">
+        <div class="image-upload-controls" hidden>
+          <div class="preview-image-actions"><button type="button" data-image-upload aria-describedby="post-preview-help">Upload image</button><button type="button" data-media-browse>Browse library</button></div>
+          <input id="post-image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" hidden>
+        </div>
+        <p class="form-hint">By default, the preview uses the first suitable image in the post, or the site portrait if none is available.</p>
+        <p data-image-status role="status"></p>
+      </div>
+    </div>
+    <p id="post-preview-help" class="preview-image-help form-hint">PNG, JPEG, or GIF images up to 8 MiB and 20 million pixels stay private unless used in public content.</p>
+    <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
+  </fieldset>
+  {{ template "blog.markdownFields" .Data }}
+  <label for="post-publication">Publish</label>
+  <select id="post-publication" name="published">
+    <option value="" {{ if eq .Data.Publication "" }}selected{{ end }}>Draft</option>
+    <option value="on" {{ if eq .Data.Publication "on" }}selected{{ end }}>Now</option>
+    {{ if or .Data.CanSchedule (eq .Data.Publication "scheduled") }}<option value="scheduled" {{ if eq .Data.Publication "scheduled" }}selected{{ end }}>Schedule</option>{{ end }}
+  </select>
+  {{ if or .Data.CanSchedule (eq .Data.Publication "scheduled") }}<div class="post-schedule" data-publication-time>
+    <div class="post-schedule-fields">
+      <div><label for="post-publish-date">Date</label><input id="post-publish-date" name="publishDate" type="date" value="{{ .Data.ScheduleDate }}" aria-describedby="schedule-help"></div>
+      <div>
+        <label for="post-publish-time">Time (UTC)</label>
+        <div class="post-time-field">
+          <input id="post-publish-time" name="publishTime" type="text" autocomplete="off" value="{{ .Data.ScheduleTime }}" placeholder="9:30 AM" aria-describedby="time-help schedule-help">
+          <details class="post-time-menu" hidden>
+          <summary aria-label="Choose a time in UTC" title="Choose a time"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></summary>
+          <select data-time-choice size="8" aria-label="Suggested times in UTC" aria-describedby="time-help schedule-help">
+            <option value="" disabled hidden selected></option>
+            <option>12:00 AM</option>
+            <option>12:30 AM</option>
+            <option>1:00 AM</option>
+            <option>1:30 AM</option>
+            <option>2:00 AM</option>
+            <option>2:30 AM</option>
+            <option>3:00 AM</option>
+            <option>3:30 AM</option>
+            <option>4:00 AM</option>
+            <option>4:30 AM</option>
+            <option>5:00 AM</option>
+            <option>5:30 AM</option>
+            <option>6:00 AM</option>
+            <option>6:30 AM</option>
+            <option>7:00 AM</option>
+            <option>7:30 AM</option>
+            <option>8:00 AM</option>
+            <option>8:30 AM</option>
+            <option>9:00 AM</option>
+            <option>9:30 AM</option>
+            <option>10:00 AM</option>
+            <option>10:30 AM</option>
+            <option>11:00 AM</option>
+            <option>11:30 AM</option>
+            <option>12:00 PM</option>
+            <option>12:30 PM</option>
+            <option>1:00 PM</option>
+            <option>1:30 PM</option>
+            <option>2:00 PM</option>
+            <option>2:30 PM</option>
+            <option>3:00 PM</option>
+            <option>3:30 PM</option>
+            <option>4:00 PM</option>
+            <option>4:30 PM</option>
+            <option>5:00 PM</option>
+            <option>5:30 PM</option>
+            <option>6:00 PM</option>
+            <option>6:30 PM</option>
+            <option>7:00 PM</option>
+            <option>7:30 PM</option>
+            <option>8:00 PM</option>
+            <option>8:30 PM</option>
+            <option>9:00 PM</option>
+            <option>9:30 PM</option>
+            <option>10:00 PM</option>
+            <option>10:30 PM</option>
+            <option>11:00 PM</option>
+            <option>11:30 PM</option>
+          </select>
+          </details>
+        </div>
+        <p class="form-hint" id="time-help">Choose a time or type your own, such as 9:15 AM or 14:30.</p>
+      </div>
+    </div>
+    <p class="form-hint" id="schedule-help">When Schedule is selected, your post stays private until this time. Use UTC, not your device’s time zone.</p>
+  </div>{{ end }}
+  <p class="form-hint">Changes take effect when you save. Choose Draft to keep the post private.</p>
+  {{ template "blog.editorHelp" . }}
+  <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
+  <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/{{ end }}" hx-boost="false">Cancel</a>{{ end }}</div>
+  <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
+</form></section>
+{{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}
+
+{{ define "blog.delete" }}
+{{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
+<section class="confirmation-panel">
+<h1 id="delete-title">Delete post?</h1><p>Delete “{{ .Data.Title }}” and its saved versions? This cannot be undone.</p>
+<form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}"><button type="submit" class="button-danger">Delete post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
+</section>
+{{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}

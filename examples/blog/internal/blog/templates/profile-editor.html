@@ -1,0 +1,41 @@
+{{ define "blog.profileEditor" }}
+<section class="info-page profile-editor">
+<header><h1>Site Profile</h1><p class="form-hint">Your public name, biography, and site images.</p></header>
+<form id="profile-form" method="post" action="/profile" hx-post="/profile" hx-target="#profile-errors">
+  <div id="profile-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
+  <div class="profile-identity">
+    <label for="profile-name">Display name</label><input id="profile-name" name="name" value="{{ .Data.Name }}" maxlength="240" required autocomplete="name">
+    <label for="profile-bio">Short bio</label><textarea id="profile-bio" name="bio" rows="3" maxlength="500" aria-describedby="profile-bio-help">{{ .Data.Bio }}</textarea>
+    <p id="profile-bio-help" class="form-hint">Shown beside your portrait. Up to 500 characters.</p>
+  </div>
+  <h2>Images</h2>
+  <p id="profile-image-help" class="form-hint">PNG, JPEG, or GIF · Up to 8 MiB and 20 million pixels. Selected images become public when you save the profile.</p>
+  {{ range .Data.ImageFields }}
+  <fieldset class="image-picker profile-image" data-image-picker data-image-field="{{ .Name }}" data-image-default="{{ .DefaultURL }}">
+    <legend>{{ .Label }}</legend>
+    <p id="help-{{ .Name }}" class="form-hint">{{ if eq .Name "imageURL" }}Shown beside your name and bio with a centered, circular crop. The original image is kept unchanged.{{ else if eq .Name "faviconURL" }}Shown in browser tabs. Use a simple, square PNG that stays recognizable at 16 × 16 pixels.{{ else }}Background image for the site. This preview shows the image only. The site's styles control its size and placement.{{ end }}</p>
+    <div class="profile-image-row">
+      <div class="profile-image-preview">
+        <img {{ if .PreviewURL }}src="{{ .PreviewURL }}"{{ else }}hidden{{ end }} alt="{{ .Label }} preview" data-image-preview>
+        {{ if eq .Name "faviconURL" }}<span>Browser tab</span>{{ else if eq .Name "backgroundURL" }}<span class="form-hint image-empty">No background</span>{{ end }}
+      </div>
+      <div class="profile-image-controls">
+        <div class="image-upload-controls" hidden>
+          <button type="button" class="button-secondary" data-media-browse>Choose existing</button>
+          <label for="upload-{{ .Name }}">Choose {{ if eq .Name "imageURL" }}a portrait{{ else if eq .Name "faviconURL" }}a favicon{{ else }}a background{{ end }}</label><input id="upload-{{ .Name }}" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="profile-image-help help-{{ .Name }}">
+          <button type="button" class="text-button" data-image-reset>{{ if .DefaultURL }}Use default image{{ else }}Remove background{{ end }}</button>
+        </div>
+        <details{{ if $.Data.Error }} open{{ end }}>
+          <summary>Use an image URL</summary>
+          <label for="profile-{{ .Name }}">{{ .Label }} URL</label><input id="profile-{{ .Name }}" name="{{ .Name }}" value="{{ .Value }}" maxlength="2048" data-image-value>
+          <p class="form-hint">Local path or HTTPS URL. Leave blank to {{ if .DefaultURL }}use the default image{{ else }}remove the background{{ end }}.</p>
+        </details>
+        <p data-image-status role="status"></p>
+      </div>
+    </div>
+  </fieldset>
+  {{ end }}
+  <noscript><p>Enable JavaScript to upload images. You can still edit image URLs and save the profile.</p></noscript>
+  <div class="profile-save"><button type="submit">Save profile</button><span class="form-hint">Save to apply your changes to the site.</span></div>
+</form></section>
+{{ end }}

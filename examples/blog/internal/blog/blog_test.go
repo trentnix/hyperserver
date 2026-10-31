@@ -809,7 +809,7 @@ func (failingRepository) Save(context.Context, Post) (Post, error) {
 
 func TestSaveFailurePreservesDraft(t *testing.T) {
 	h := newHarness(t)
-	templates, err := content.PrepareTemplates(h.app.ContentManager, content.TemplatePath{FS: blogModuleFS, Path: pagesFile})
+	templates, err := prepareTemplates(h.app.ContentManager)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -900,7 +900,7 @@ func (s navigationRepository) ListRecent(_ context.Context, limit int) ([]Archiv
 
 func TestNavigationHandlers(t *testing.T) {
 	h := newHarness(t)
-	templates, err := content.PrepareTemplates(h.app.ContentManager, content.TemplatePath{FS: blogModuleFS, Path: pagesFile})
+	templates, err := prepareTemplates(h.app.ContentManager)
 	if err != nil {
 		t.Fatal(err)
 	}

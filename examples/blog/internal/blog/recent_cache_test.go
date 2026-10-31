@@ -173,7 +173,7 @@ func (s recentRepository) ListRecent(ctx context.Context, limit int) ([]ArchiveE
 // TestRecentHandlerCache checks recovery, module isolation, and request-specific rendering.
 func TestRecentHandlerCache(t *testing.T) {
 	h := newHarness(t)
-	templates, err := content.PrepareTemplates(h.app.ContentManager, content.TemplatePath{FS: blogModuleFS, Path: pagesFile})
+	templates, err := prepareTemplates(h.app.ContentManager)
 	if err != nil {
 		t.Fatal(err)
 	}

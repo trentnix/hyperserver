@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	pagesFile    = "templates/pages.html"
-	responseView = "blog.message"
-	notFoundView = "blog.notFound"
-	loginURL     = "/auth/login/email"
+	responsesFile = "templates/responses.html"
+	responseView  = "blog.message"
+	notFoundView  = "blog.notFound"
+	loginURL      = "/auth/login/email"
 )
 
 // ContentSecurityPolicy permits bundled scripts, styles, and fonts.
@@ -70,7 +70,21 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 	}
 	return content.ConfigureResponses(cm, content.ResponseTemplates{
 		Message: responseView, Error: responseView, NotFound: notFoundView,
-	}, content.TemplatePath{FS: blogModuleFS, Path: pagesFile})
+	}, content.TemplatePath{FS: blogModuleFS, Path: responsesFile})
+}
+
+// prepareTemplates parses the blog's feature templates together at startup so
+// named components can be shared without rereading files for each request.
+func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templates, error) {
+	return content.PrepareTemplates(cm,
+		content.TemplatePath{FS: blogModuleFS, Path: responsesFile},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/posts.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/pages.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/media.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/history.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/profile-editor.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/editor-components.html"},
+	)
 }
 
 // navigation holds the profile, links, and sharing metadata for the current request.

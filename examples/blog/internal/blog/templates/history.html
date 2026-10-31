@@ -1,0 +1,48 @@
+{{ define "blog.revisionDelete" }}
+{{ if .IsHtmx }}<dialog aria-labelledby="revision-delete-title">{{ end }}
+<section class="confirmation-panel">
+  <h1 id="revision-delete-title">Delete revision?</h1>
+  <p>This cannot be undone. The current post or page will not change.</p>
+  <p>{{ .Data.Selected.Title }} · {{ .Data.Selected.RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}</p>
+  <form method="post" action="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}"{{ if .IsHtmx }} hx-post="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}" hx-target="closest section" hx-swap="innerHTML show:none"{{ end }} class="form-actions">
+    <button type="submit" class="button-danger">Delete revision</button>
+    {{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog autofocus>Cancel</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}?revision={{ .Data.Selected.ID }}">Cancel</a>{{ end }}
+  </form>
+</section>
+{{ if .IsHtmx }}</dialog>{{ end }}
+{{ end }}
+
+{{ define "blog.history" }}
+<section class="info-page history-page" hx-boost="false">
+  <header class="page-manager-heading"><div><h1>History</h1><p>{{ .Data.Title }}</p></div><a href="{{ .Data.ContentURL }}">Back to {{ .Data.Kind }}</a></header>
+  <p>Saved versions preserve the title, summary, Markdown, and preview image. Loading a version does not save it or change its URL, publication setting, or page placement.</p>
+  <div class="revision-layout">
+    <nav aria-label="Saved versions" hx-target="#revision-preview" hx-swap="innerHTML show:none" hx-sync="#revision-preview:replace"><ol class="revision-list">
+    {{ range $index, $revision := .Data.Versions }}<li>
+      <a href="{{ $.Data.URL }}?revision={{ .ID }}" hx-get="{{ $.Data.URL }}?revision={{ .ID }}" data-revision="{{ .ID }}"{{ if eq .ID $.Data.Selected.ID }} aria-current="true"{{ end }}>
+        {{ if eq $index 0 }}<span class="revision-latest">Latest saved</span>{{ end }}
+        <time datetime="{{ .RecordedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .RecordedAt.Format "Jan 2, 2006 · 3:04:05 PM UTC" }}</time>
+        <span class="revision-title">{{ .Title }}</span>
+      </a>
+    </li>{{ end }}
+    </ol></nav>
+    <section id="revision-preview" class="revision-preview" aria-label="Version preview" aria-live="polite">{{ template "blog.revisionPreview" . }}</section>
+  </div>
+</section>
+{{ end }}
+
+{{ define "blog.revisionPreview" }}
+    <div data-revision="{{ .Data.Selected.ID }}">
+      <div class="form-actions">
+        <a class="button-secondary" href="{{ .Data.EditorURL }}?revision={{ .Data.Selected.ID }}">{{ if .Data.Current }}Edit{{ else }}Edit this version{{ end }}</a>
+        {{ if not .Data.Current }}<a class="button-secondary" href="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}" hx-get="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}" hx-target="#dialog-host">Delete revision</a>{{ end }}
+      </div>
+      {{ if not .Data.Current }}<p class="form-hint">Starts an edit using this version. Nothing changes until you save.</p>{{ end }}
+      <h2>{{ .Data.Selected.Title }}</h2>
+      {{ if .Data.Selected.Summary }}<p class="revision-summary">{{ .Data.Selected.Summary }}</p>{{ end }}
+      {{ if .Data.MissingImages }}<p class="revision-notice">Some images in this version are no longer available. The saved writing has not changed.</p>{{ end }}
+      {{ if .Data.Selected.PreviewImage }}<figure class="revision-image">{{ if .Data.MissingPreview }}<span class="missing-image">Image deleted</span>{{ else }}<img src="/images/{{ .Data.Selected.PreviewImage }}" alt="Saved preview image">{{ end }}<figcaption>Preview image</figcaption></figure>{{ end }}
+      <div class="revision-body">{{ .Data.HTML }}</div>
+      <details><summary>Markdown source</summary><pre>{{ .Data.Selected.Markdown }}</pre></details>
+    </div>
+{{ end }}

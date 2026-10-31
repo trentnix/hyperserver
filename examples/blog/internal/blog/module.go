@@ -130,7 +130,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		return errors.New("blog requires authentication and email verification")
 	}
 	m.app = app
-	templates, err := content.PrepareTemplates(app.ContentManager, content.TemplatePath{FS: blogModuleFS, Path: pagesFile})
+	templates, err := prepareTemplates(app.ContentManager)
 	if err != nil {
 		return err
 	}

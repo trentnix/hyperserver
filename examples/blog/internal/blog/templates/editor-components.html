@@ -1,0 +1,27 @@
+{{ define "blog.markdownFields" }}
+  <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" required>{{ .Markdown }}</textarea>
+{{ end }}
+
+{{ define "blog.editorHelp" }}
+<details class="editor-help form-hint">
+  <summary>Writing tips</summary>
+  <p>Custom slugs use lowercase letters, digits, and hyphens. Generated slugs add a number when needed to stay unique.</p>
+  <p>Content can contain up to 256 KiB of Markdown. Image limits also apply to uploads in the editor.</p>
+</details>
+{{ end }}
+
+{{ define "blog.draftRecovery" }}
+<aside class="draft-recovery" data-draft-recovery hidden>
+  <p><strong>Restore unsaved changes?</strong></p>
+  <p data-draft-description></p>
+  <div class="form-actions"><button type="button" data-draft-restore>Restore copy</button><button type="button" class="button-secondary" data-draft-discard>Discard copy</button></div>
+</aside>
+{{ end }}
+
+{{ define "blog.revisionNotice" }}
+{{ with .Data.LoadedRevision }}<aside class="revision-notice" role="status">
+  <strong>Editing a version saved {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}.</strong>
+  <p>Nothing changes until you save.</p>
+</aside>{{ end }}
+{{ if .Data.MissingImages }}<p class="field-error" role="status">This version references images that are no longer available. Replace or remove their references before saving.</p>{{ end }}
+{{ end }}
