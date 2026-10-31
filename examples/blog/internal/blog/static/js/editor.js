@@ -2,6 +2,20 @@ import {openMediaLibrary} from './media.js';
 
 const editors = new WeakMap();
 
+// Native suggestions replace the last comma-separated tag, keeping earlier tags.
+// Without JavaScript, the same field still accepts ordinary comma-separated input.
+const tagChoices = new WeakMap();
+function updateTagSuggestions(input) {
+  if (!tagChoices.has(input)) tagChoices.set(input, [...input.list.options].map(option => option.dataset.tag));
+  const prefix = input.value.slice(0, input.value.lastIndexOf(',') + 1);
+  const used = prefix.split(',').map(tag => tag.trim().normalize('NFC').toLowerCase());
+  input.list.replaceChildren(...tagChoices.get(input).filter(tag => !used.includes(tag)).map(tag => {
+    const option = new Option(tag, prefix ? prefix.trimEnd() + ' ' + tag : tag);
+    option.dataset.tag = tag;
+    return option;
+  }));
+}
+
 // This is a suggestion, not a reservation. The server resolves collisions on save.
 function updateSlugPlaceholder(form) {
   const slug = form?.querySelector('input[name="slug"]');
@@ -55,12 +69,14 @@ for (const name of ['input', 'change']) {
     const form = event.target.closest('form');
     updateSlugPlaceholder(form);
     updatePublication(form);
+    if (event.target.matches('input[name="tags"]')) updateTagSuggestions(event.target);
   });
 }
 
 function initialize(root) {
   root.querySelectorAll('#post-form').forEach(updatePublication);
   root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
+  root.querySelectorAll('input[name="tags"]').forEach(updateTagSuggestions);
   const textarea = root.querySelector('#post-content');
   if (textarea && window.EasyMDE && !editors.has(textarea)) {
     // EasyMDE replaces native textarea validation. The server remains authoritative.

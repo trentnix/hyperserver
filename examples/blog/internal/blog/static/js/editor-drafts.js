@@ -79,7 +79,7 @@
         }
         if (typeof data.baseline !== 'string' || !data.fields || !state.fields.every(field =>
           field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' :
-            (['previewImage', 'published', 'publishDate', 'publishTime'].includes(field.name) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
+            (['previewImage', 'published', 'publishDate', 'publishTime', 'tags'].includes(field.name) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
         copies.push({key, raw, data});
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);

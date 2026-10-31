@@ -71,6 +71,7 @@ type module struct {
 	posts           repository
 	pageStore       pageRepository
 	searchStore     publicSearchRepository
+	tags            tagRepository
 	profileStore    profileRepository
 	profile         *ProfileState
 	images          imageStore
@@ -202,6 +203,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	m.mediaMetadata = store
 	m.pageStore = store
 	m.searchStore = store
+	m.tags = store
 	m.profileStore = store
 	m.imageAccess = store
 	m.history = store

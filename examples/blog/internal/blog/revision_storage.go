@@ -44,8 +44,11 @@ title TEXT NOT NULL, summary TEXT NOT NULL, markdown TEXT NOT NULL, preview_imag
 ); CREATE INDEX IF NOT EXISTS `+revisions+"_owner ON "+revisions+"(owner_id, id)"); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO "+revisions+` (owner_id, title, summary, markdown, preview_image, recorded)
-SELECT id, title, summary, markdown, preview_image, ? FROM `+owners+` o
+		if err := initializeTags(ctx, tx, owners, revisions); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO "+revisions+` (owner_id, title, summary, markdown, preview_image, tags, recorded)
+SELECT id, title, summary, markdown, preview_image, tags, ? FROM `+owners+` o
 WHERE NOT EXISTS (SELECT 1 FROM `+revisions+" r WHERE r.owner_id=o.id)", time.Now().UTC().UnixNano()); err != nil {
 			return err
 		}
@@ -60,10 +63,10 @@ func recordRevision(ctx context.Context, tx *sql.Tx, kind, id string) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO "+revisions+` (owner_id, title, summary, markdown, preview_image, recorded)
-SELECT id, title, summary, markdown, preview_image, ? FROM `+owners+` o WHERE id=? AND NOT EXISTS (
+	_, err = tx.ExecContext(ctx, "INSERT INTO "+revisions+` (owner_id, title, summary, markdown, preview_image, tags, recorded)
+SELECT id, title, summary, markdown, preview_image, tags, ? FROM `+owners+` o WHERE id=? AND NOT EXISTS (
  SELECT 1 FROM `+revisions+` r WHERE r.id=(SELECT MAX(id) FROM `+revisions+` WHERE owner_id=o.id)
- AND r.title=o.title AND r.summary=o.summary AND r.markdown=o.markdown AND r.preview_image=o.preview_image
+ AND r.title=o.title AND r.summary=o.summary AND r.markdown=o.markdown AND r.preview_image=o.preview_image AND r.tags=o.tags
 )`, time.Now().UTC().UnixNano(), id)
 	return err
 }
@@ -176,8 +179,8 @@ func (s *sqliteRepository) GetRevision(ctx context.Context, kind, id string, num
 	}
 	var r Revision
 	var recorded int64
-	err = s.db.QueryRowContext(ctx, "SELECT id, title, summary, markdown, preview_image, recorded FROM "+table+" WHERE owner_id=? AND id=?", id, number).
-		Scan(&r.ID, &r.Title, &r.Summary, &r.Markdown, &r.PreviewImage, &recorded)
+	err = s.db.QueryRowContext(ctx, "SELECT id, title, summary, markdown, preview_image, tags, recorded FROM "+table+" WHERE owner_id=? AND id=?", id, number).
+		Scan(&r.ID, &r.Title, &r.Summary, &r.Markdown, &r.PreviewImage, &r.Tags, &recorded)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}

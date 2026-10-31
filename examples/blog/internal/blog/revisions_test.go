@@ -136,7 +136,7 @@ func TestRevisionPreview(t *testing.T) {
 func revisionForm(t *testing.T, body string) url.Values {
 	t.Helper()
 	values := url.Values{}
-	for _, name := range []string{"title", "slug", "previewImage", "version"} {
+	for _, name := range []string{"title", "slug", "tags", "previewImage", "version"} {
 		match := regexp.MustCompile(`name="` + name + `" value="([^"]*)"`).FindStringSubmatch(body)
 		if len(match) != 2 {
 			t.Fatal("missing input", name)
@@ -164,7 +164,7 @@ func TestRevisionHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			original := Revision{Title: "Earlier <title>", Summary: "Earlier & summary", Markdown: "# Earlier body\n\n<script>alert(1)</script>\n\n[Sibling](sibling)\n\n![Relative image](relative.png)", PreviewImage: imageID}
+			original := Revision{Title: "Earlier <title>", Summary: "Earlier & summary", Markdown: "# Earlier body\n\n<script>alert(1)</script>\n\n[Sibling](sibling)\n\n![Relative image](relative.png)", PreviewImage: imageID, Tags: "earlier-tag"}
 			id, version, err := saveRevisionContent(t.Context(), store, kind, "", 0, original)
 			if err != nil {
 				t.Fatal(err)
@@ -174,7 +174,7 @@ func TestRevisionHTTP(t *testing.T) {
 				t.Fatal(list, err)
 			}
 			first := strconv.FormatInt(list[0].ID, 10)
-			current := Revision{Title: "Current title", Summary: "Current summary", Markdown: "Current body"}
+			current := Revision{Title: "Current title", Summary: "Current summary", Markdown: "Current body", Tags: "current-tag"}
 			_, version, err = saveRevisionContent(t.Context(), store, kind, id, version, current)
 			if err != nil {
 				t.Fatal(err)
@@ -273,7 +273,7 @@ func TestRevisionHTTP(t *testing.T) {
 			requireStatus(t, response, http.StatusOK)
 			body := activeMarkup(response.Body.String())
 			values := revisionForm(t, body)
-			if values.Get("title") != original.Title || values.Get("summary") != original.Summary || values.Get("content") != original.Markdown || values.Get("previewImage") != imageID || values.Get("slug") != "current-url" || values.Get("version") != strconv.FormatInt(version, 10) {
+			if values.Get("title") != original.Title || values.Get("summary") != original.Summary || values.Get("tags") != original.Tags || values.Get("content") != original.Markdown || values.Get("previewImage") != imageID || values.Get("slug") != "current-url" || values.Get("version") != strconv.FormatInt(version, 10) {
 				t.Fatal("loaded editor has wrong content or settings", values)
 			}
 			if !strings.Contains(body, "Editing a version saved") || !strings.Contains(body, "Nothing changes until you save.") || !strings.Contains(body, "data-current-content=") || strings.Contains(body, `name="published" checked`) || strings.Contains(body, `value="on" selected`) {

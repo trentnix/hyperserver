@@ -31,7 +31,7 @@ func TestMediaMetadata(t *testing.T) {
 	if err := store.RememberMedia(t.Context(), id, "First.png"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RenameMedia(t.Context(), id, "Custom label", 1); err != nil {
+	if err := store.SaveMediaMetadata(t.Context(), id, mediaMetadata{Label: "Custom label", Tags: "forest, landscape", Version: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.RememberMedia(t.Context(), id, "Second.png"); err != nil {
@@ -46,30 +46,32 @@ func TestMediaMetadata(t *testing.T) {
 	}
 	defer closeStore()
 	got, err := store.GetMediaMetadata(t.Context(), id)
-	if err != nil || got != (mediaMetadata{Filename: "First.png", Label: "Custom label", Version: 2}) {
+	if err != nil || got != (mediaMetadata{Filename: "First.png", Label: "Custom label", Tags: "forest, landscape", Version: 2}) {
 		t.Fatal(got, err)
 	}
 	for _, version := range []int64{0, 1} {
-		if err := store.RenameMedia(t.Context(), id, "Stale label", version); !errors.Is(err, errEditConflict) {
+		if err := store.SaveMediaMetadata(t.Context(), id, mediaMetadata{Label: "Stale label", Version: version}); !errors.Is(err, errEditConflict) {
 			t.Fatal(err)
 		}
 	}
 	legacy := strings.Repeat("b", 64) + ".png"
-	if err := store.RenameMedia(t.Context(), legacy, "Legacy label", 0); err != nil {
+	if err := store.SaveMediaMetadata(t.Context(), legacy, mediaMetadata{Label: "Legacy label", Tags: "legacy"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.RememberMedia(t.Context(), legacy, "Recovered.png"); err != nil {
 		t.Fatal(err)
 	}
 	got, err = store.GetMediaMetadata(t.Context(), legacy)
-	if err != nil || got.Filename != "Recovered.png" || got.Label != "Legacy label" || got.Version != 2 {
+	if err != nil || got.Filename != "Recovered.png" || got.Label != "Legacy label" || got.Tags != "legacy" || got.Version != 2 {
 		t.Fatal(got, err)
 	}
 
 	results := make(chan error, 4)
 	var workers sync.WaitGroup
 	for range 4 {
-		workers.Go(func() { results <- store.RenameMedia(t.Context(), id, "Concurrent", 2) })
+		workers.Go(func() {
+			results <- store.SaveMediaMetadata(t.Context(), id, mediaMetadata{Label: "Concurrent", Tags: "winner", Version: 2})
+		})
 	}
 	workers.Wait()
 	close(results)
@@ -95,7 +97,7 @@ func TestMediaMetadata(t *testing.T) {
 	if err := store.RememberMedia(ctx, id, "canceled"); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	if err := store.RenameMedia(ctx, id, "canceled", 3); !errors.Is(err, context.Canceled) {
+	if err := store.SaveMediaMetadata(ctx, id, mediaMetadata{Label: "canceled", Version: 3}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 }
@@ -105,11 +107,11 @@ func TestMediaQuery(t *testing.T) {
 	file := mediaFile{ID: strings.Repeat("a", 64) + ".png"}
 	metadata := mediaMetadata{Filename: "Straße.png", Label: "100%_ÉTÉ"}
 	for _, query := range []string{"", "strasse", "été", "%_", ".png"} {
-		if !(mediaQuery{Search: query}).matches(file, metadata, mediaUsage{}) {
+		if (mediaQuery{Search: query}).rank(file, metadata, mediaUsage{}) < 0 {
 			t.Fatalf("did not match %q", query)
 		}
 	}
-	if (mediaQuery{Search: "x%_"}).matches(file, metadata, mediaUsage{}) {
+	if (mediaQuery{Search: "x%_"}).rank(file, metadata, mediaUsage{}) >= 0 {
 		t.Fatal("wildcards were interpreted")
 	}
 	for _, tc := range []struct {
@@ -122,7 +124,7 @@ func TestMediaQuery(t *testing.T) {
 		{mediaUsage{Current: true, History: []mediaRevision{{Title: "Older title"}}}, "current"},
 	} {
 		for _, filter := range []string{"current", "history", "unused"} {
-			if got := (mediaQuery{Usage: filter}).matches(file, metadata, tc.usage); got != (filter == tc.want) {
+			if got := (mediaQuery{Usage: filter}).rank(file, metadata, tc.usage) >= 0; got != (filter == tc.want) {
 				t.Fatalf("usage %s: %v", filter, tc)
 			}
 		}
@@ -258,7 +260,7 @@ func (failedMediaMetadata) GetMediaMetadata(context.Context, string) (mediaMetad
 func (failedMediaMetadata) RememberMedia(context.Context, string, string) error {
 	return errors.New("private metadata failure")
 }
-func (failedMediaMetadata) RenameMedia(context.Context, string, string, int64) error {
+func (failedMediaMetadata) SaveMediaMetadata(context.Context, string, mediaMetadata) error {
 	return errors.New("private metadata failure")
 }
 

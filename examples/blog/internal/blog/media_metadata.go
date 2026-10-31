@@ -10,25 +10,38 @@ import (
 	"unicode/utf8"
 )
 
-// mediaMetadata names an upload without changing its immutable image ID or URL.
+// mediaMetadata describes an upload without changing its immutable image ID or URL.
 type mediaMetadata struct {
-	Filename, Label string
-	Version         int64
+	Filename, Label, Tags string
+	Version               int64
 }
 
-// mediaMetadataRepository keeps display names separate from uploaded image bytes.
+// mediaMetadataRepository keeps names and tags separate from uploaded image bytes.
 // Missing metadata describes a legacy upload, not a missing image.
 type mediaMetadataRepository interface {
 	ListMediaMetadata(context.Context) (map[string]mediaMetadata, error)
 	GetMediaMetadata(context.Context, string) (mediaMetadata, error)
 	RememberMedia(context.Context, string, string) error
-	RenameMedia(context.Context, string, string, int64) error
+	SaveMediaMetadata(context.Context, string, mediaMetadata) error
 }
 
-// ListMediaMetadata supplies names for the filesystem-backed library. Records for
-// deleted files are ignored and retain their labels if the same bytes are re-uploaded.
+// initializeMediaTags preserves existing upload metadata when adding search tags.
+func initializeMediaTags(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := initializeTags(ctx, tx, "blog_media"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ListMediaMetadata supplies search metadata for the filesystem-backed library.
+// Callers ignore deleted files. Re-uploading the same bytes recovers their metadata.
 func (s *sqliteRepository) ListMediaMetadata(ctx context.Context) (map[string]mediaMetadata, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, filename, label, version FROM blog_media")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, filename, label, tags, version FROM blog_media")
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +50,7 @@ func (s *sqliteRepository) ListMediaMetadata(ctx context.Context) (map[string]me
 	for rows.Next() {
 		var id string
 		var value mediaMetadata
-		if err := rows.Scan(&id, &value.Filename, &value.Label, &value.Version); err != nil {
+		if err := rows.Scan(&id, &value.Filename, &value.Label, &value.Tags, &value.Version); err != nil {
 			return nil, err
 		}
 		metadata[id] = value
@@ -48,14 +61,14 @@ func (s *sqliteRepository) ListMediaMetadata(ctx context.Context) (map[string]me
 // GetMediaMetadata returns an empty value for uploads created before naming was available.
 func (s *sqliteRepository) GetMediaMetadata(ctx context.Context, id string) (mediaMetadata, error) {
 	var value mediaMetadata
-	err := s.db.QueryRowContext(ctx, "SELECT filename, label, version FROM blog_media WHERE id=?", id).Scan(&value.Filename, &value.Label, &value.Version)
+	err := s.db.QueryRowContext(ctx, "SELECT filename, label, tags, version FROM blog_media WHERE id=?", id).Scan(&value.Filename, &value.Label, &value.Tags, &value.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}
 	return value, err
 }
 
-// RememberMedia retains the first filename and never overwrites an administrator's label.
+// RememberMedia retains the first filename and never overwrites a label or tags.
 func (s *sqliteRepository) RememberMedia(ctx context.Context, id, filename string) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO blog_media(id, filename, label, version) VALUES (?, ?, '', 1)
 ON CONFLICT(id) DO UPDATE SET filename=excluded.filename, version=blog_media.version+1
@@ -63,14 +76,15 @@ WHERE blog_media.filename='' AND excluded.filename<>''`, id, filename)
 	return err
 }
 
-// RenameMedia rejects stale edits. A version of zero creates metadata for a legacy upload.
-func (s *sqliteRepository) RenameMedia(ctx context.Context, id, label string, version int64) error {
+// SaveMediaMetadata saves the label and canonical tags together, rejecting stale edits.
+// A version of zero creates metadata for a legacy upload. Filename is not editable.
+func (s *sqliteRepository) SaveMediaMetadata(ctx context.Context, id string, value mediaMetadata) error {
 	var result sql.Result
 	var err error
-	if version == 0 {
-		result, err = s.db.ExecContext(ctx, "INSERT INTO blog_media(id, filename, label, version) VALUES (?, '', ?, 1) ON CONFLICT(id) DO NOTHING", id, label)
+	if value.Version == 0 {
+		result, err = s.db.ExecContext(ctx, "INSERT INTO blog_media(id, filename, label, tags, version) VALUES (?, '', ?, ?, 1) ON CONFLICT(id) DO NOTHING", id, value.Label, value.Tags)
 	} else {
-		result, err = s.db.ExecContext(ctx, "UPDATE blog_media SET label=?, version=version+1 WHERE id=? AND version=?", label, id, version)
+		result, err = s.db.ExecContext(ctx, "UPDATE blog_media SET label=?, tags=?, version=version+1 WHERE id=? AND version=?", value.Label, value.Tags, id, value.Version)
 	}
 	if err != nil {
 		return err

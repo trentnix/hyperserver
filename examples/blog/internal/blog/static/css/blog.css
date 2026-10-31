@@ -290,6 +290,11 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .media-detail-usage .form-hint { margin: 0; }
 .media-label-form { margin: 0; }
 .media-label-form > label:first-of-type { margin-top: 0; }
+.media-label-form .form-hint { margin: 6px 0 0; }
+.media-label-form details.form-hint { margin-top: 12px; }
+.media-label-form summary { cursor: pointer; }
+.media-label-form details p { margin: 8px 0 0; }
+.media-label-form .form-actions { margin-top: 18px; }
 .page-manager .media-cleanup-link { border: 1px solid #cbd1da; background: #fff; color: #505969; font-size: .9em; }
 .page-manager .media-cleanup-link:hover { background: var(--surface); }
 .media-library > .page-manager-heading { margin-bottom: 16px; gap: 12px; }

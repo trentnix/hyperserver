@@ -13,8 +13,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/util"
 	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
 
 const mediaPageSize = 24
@@ -36,7 +38,8 @@ type mediaDetailPage struct {
 	ID    string
 	Usage mediaUsage
 	mediaMetadata
-	Error string
+	Error          string
+	TagSuggestions []string
 }
 
 // mediaDetail shows why an image is retained without changing its visibility.
@@ -59,7 +62,7 @@ func (m *module) renderMediaDetail(w http.ResponseWriter, r *http.Request, submi
 		return
 	}
 	if submitted != nil {
-		metadata.Label, metadata.Version = submitted.Label, submitted.Version
+		metadata.Label, metadata.Tags, metadata.Version = submitted.Label, submitted.Tags, submitted.Version
 	}
 	used, err := m.mediaReferences.ReferencedImages(r.Context())
 	if err != nil {
@@ -67,15 +70,15 @@ func (m *module) renderMediaDetail(w http.ResponseWriter, r *http.Request, submi
 		return
 	}
 
-	page := m.views["mediaDetail"].Content(r, mediaDetailPage{ID: id, Usage: used[id], mediaMetadata: metadata, Error: message})
+	page := m.views["mediaDetail"].Content(r, mediaDetailPage{ID: id, Usage: used[id], mediaMetadata: metadata, Error: message, TagSuggestions: m.mediaTagSuggestions(r)})
 	page.Title, page.ResponseStatusCode = "Image details", status
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this image.", err)
 	}
 }
 
-// renameMedia changes only the administrator-facing label, never the image URL or alt text.
-func (m *module) renameMedia(w http.ResponseWriter, r *http.Request) {
+// saveMediaMetadata changes search metadata, never the image URL, visibility, or alt text.
+func (m *module) saveMediaMetadata(w http.ResponseWriter, r *http.Request) {
 	if err := form.Parse(r); err != nil {
 		m.renderMediaDetail(w, r, nil, err.Message, err.StatusCode)
 		return
@@ -86,11 +89,17 @@ func (m *module) renameMedia(w http.ResponseWriter, r *http.Request) {
 		m.renderMediaDetail(w, r, nil, "Reload the image details before saving.", http.StatusBadRequest)
 		return
 	}
-	submitted := mediaMetadata{Label: label, Version: version}
+	submitted := mediaMetadata{Label: label, Tags: r.PostForm.Get("tags"), Version: version}
 	if !utf8.ValidString(label) || utf8.RuneCountInString(label) > 240 || strings.ContainsFunc(label, unicode.IsControl) {
 		m.renderMediaDetail(w, r, &submitted, "Use at most 240 characters without control characters.", http.StatusUnprocessableEntity)
 		return
 	}
+	tags, err := normalizeTags(submitted.Tags)
+	if err != nil {
+		m.renderMediaDetail(w, r, &submitted, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	submitted.Tags = tags
 
 	m.mediaMu.RLock()
 	defer m.mediaMu.RUnlock()
@@ -101,14 +110,41 @@ func (m *module) renameMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	image.Content.Close()
-	err = m.mediaMetadata.RenameMedia(r.Context(), id, label, version)
+	err = m.mediaMetadata.SaveMediaMetadata(r.Context(), id, submitted)
 	if errors.Is(err, errEditConflict) {
-		m.renderMediaDetail(w, r, &submitted, "This image label changed in another window. Reload before saving.", http.StatusConflict)
+		m.renderMediaDetail(w, r, &submitted, "These image details changed in another window. Reload before saving.", http.StatusConflict)
 	} else if err != nil {
 		m.storageError(w, r, err)
 	} else {
 		util.RedirectToURL(w, r, "/media/"+id)
 	}
+}
+
+// mediaTagSuggestions excludes writing tags and metadata left behind by deleted uploads.
+// Suggestions are optional, so a lookup failure must not prevent editing.
+func (m *module) mediaTagSuggestions(r *http.Request) []string {
+	files, err := m.media.List(r.Context())
+	if err != nil {
+		logger.LogRequestError(r, err)
+		return nil
+	}
+	metadata, err := m.mediaMetadata.ListMediaMetadata(r.Context())
+	if err != nil {
+		logger.LogRequestError(r, err)
+		return nil
+	}
+	seen := make(map[string]bool)
+	var tags []string
+	for _, file := range files {
+		for _, tag := range strings.Split(metadata[file.ID].Tags, ", ") {
+			if tag != "" && !seen[tag] {
+				seen[tag] = true
+				tags = append(tags, tag)
+			}
+		}
+	}
+	slices.Sort(tags)
+	return tags
 }
 
 // mediaLibraryItem adds a display name without changing filesystem identity.
@@ -134,42 +170,46 @@ type mediaQuery struct{ Search, Usage string }
 // Active distinguishes an empty library from filters that matched nothing.
 func (q mediaQuery) Active() bool { return q.Search != "" || q.Usage != "" }
 
-// matches includes saved-version titles so retained images can be located by their old use.
-func (q mediaQuery) matches(file mediaFile, metadata mediaMetadata, usage mediaUsage) bool {
+// rank prefers names, then tags, then current or saved-version titles.
+// A negative rank excludes images that do not match the text or usage filter.
+func (q mediaQuery) rank(file mediaFile, metadata mediaMetadata, usage mediaUsage) int {
 	switch q.Usage {
 	case "current":
 		if !usage.Current {
-			return false
+			return -1
 		}
 	case "history":
 		if usage.Current || len(usage.History) == 0 {
-			return false
+			return -1
 		}
 	case "unused":
 		if usage.Current || len(usage.History) > 0 {
-			return false
+			return -1
 		}
 	}
 	if q.Search == "" {
-		return true
+		return 0
 	}
 	fold := cases.Fold()
-	query := fold.String(q.Search)
-	contains := func(value string) bool { return strings.Contains(fold.String(value), query) }
+	query := norm.NFC.String(fold.String(q.Search))
+	contains := func(value string) bool { return strings.Contains(norm.NFC.String(fold.String(value)), query) }
 	if contains(file.ID) || contains(metadata.Label) || contains(metadata.Filename) {
-		return true
+		return 0
+	}
+	if contains(metadata.Tags) {
+		return 1
 	}
 	for _, ref := range usage.Content {
 		if contains(ref.Title) {
-			return true
+			return 2
 		}
 	}
 	for _, ref := range usage.History {
 		if contains(ref.Title) {
-			return true
+			return 2
 		}
 	}
-	return false
+	return -1
 }
 
 // mediaLibrary lets only the administrator browse uploads, including private images.
@@ -216,10 +256,11 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 		}
 		return cmp.Compare(a.ID, b.ID)
 	})
-	var matches []mediaLibraryItem
+	var ranked [3][]mediaLibraryItem
 	for _, file := range files {
 		name := metadata[file.ID]
-		if !query.matches(file, name, used[file.ID]) {
+		rank := query.rank(file, name, used[file.ID])
+		if rank < 0 {
 			continue
 		}
 		label := name.Label
@@ -229,7 +270,11 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 		if label == "" {
 			label = file.ID
 		}
-		matches = append(matches, mediaLibraryItem{mediaFile: file, Name: label})
+		ranked[rank] = append(ranked[rank], mediaLibraryItem{mediaFile: file, Name: label})
+	}
+	var matches []mediaLibraryItem
+	for _, group := range ranked {
+		matches = append(matches, group...)
 	}
 	data := mediaLibraryPage{Page: number, Pages: max(1, (len(matches)+mediaPageSize-1)/mediaPageSize), Picking: values.Get("pick") == "1", Query: query, Total: len(matches), ClearURL: "/media"}
 	if data.Picking {

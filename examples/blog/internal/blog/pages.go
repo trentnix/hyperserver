@@ -29,6 +29,7 @@ type pageContent struct {
 	Parents          []Page
 	DisplayOrderText string
 	PublishedSlug    string
+	TagSuggestions   []string
 }
 
 // PreviewField configures the shared picker for page cards and sharing.
@@ -204,6 +205,7 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		Published:       r.PostForm.Get("published") == "on",
 		ParentID:        r.PostForm.Get("parentID"),
 		Summary:         strings.TrimSpace(r.PostForm.Get("summary")),
+		Tags:            r.PostForm.Get("tags"),
 		PreviewImage:    r.PostForm.Get("previewImage"),
 		ChildrenDisplay: r.PostForm.Get("childrenDisplay"),
 	}
@@ -265,14 +267,14 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page, message string, status int) {
 	data := pageContent{Page: p, Error: message, revisionSelection: editorRevision(r, "page", p.ID)}
 	if r.Method == http.MethodGet && status == http.StatusOK {
-		selection, err := m.selectRevision(r, "page", p.ID, p.URL(), Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
+		selection, err := m.selectRevision(r, "page", p.ID, p.URL(), Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags})
 		if err != nil {
 			m.storageError(w, r, err)
 			return
 		}
 		data.revisionSelection = selection
 		if selected := selection.LoadedRevision; selected != nil {
-			data.Title, data.Summary, data.Markdown, data.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
+			data.Title, data.Summary, data.Markdown, data.PreviewImage, data.Tags = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage, selected.Tags
 		}
 	}
 	if p.DisplayOrder != nil {
@@ -287,6 +289,7 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 	if page.IsHtmx() && status >= 400 {
 		page = m.views["message"].Content(r, message)
 	} else {
+		data.TagSuggestions = m.tagSuggestions(r)
 		stored := p
 		if r.Method == http.MethodPost && p.ID != "" {
 			var err error

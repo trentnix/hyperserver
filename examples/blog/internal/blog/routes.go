@@ -45,7 +45,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("GET /media", m.requireAdmin(m.mediaLibrary))
 	routes.HandleWithBodyLimit("POST /media/upload", m.requireAdmin(m.uploadMedia), 10*routing.MiB)
 	routes.Handle("GET /media/{id}", m.requireAdmin(m.mediaDetail))
-	routes.Handle("POST /media/{id}", m.requireAdmin(m.renameMedia))
+	routes.Handle("POST /media/{id}", m.requireAdmin(m.saveMediaMetadata))
 	routes.Handle("GET /media/unused", m.requireAdmin(m.unusedMedia))
 	routes.Handle("GET /media/delete-unused", m.requireAdmin(m.confirmUnusedMediaDelete))
 	routes.HandleWithBodyLimit("POST /media/delete-unused", m.requireAdmin(m.deleteUnusedMedia), routing.MiB)

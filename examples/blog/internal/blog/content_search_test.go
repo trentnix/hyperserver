@@ -16,20 +16,23 @@ import (
 // database-specific wildcard language.
 func TestContentMatcher(t *testing.T) {
 	for _, tc := range []struct {
-		query, title, summary, body string
-		want                        int
+		query, title, tags, summary, body string
+		want                              int
 	}{
-		{"needle", "A NEEDLE", "needle", "needle", 0},
-		{"needle", "Other", "A needle", "needle", 1},
-		{"needle", "Other", "Other", "A Needle", 2},
-		{"needle", "Other", "Other", "Other", -1},
-		{"STRASSE", "Straße", "", "", 0},
-		{"ÉCOLE", "", "École", "", 1},
-		{"%_", "100%_literal", "", "", 0},
-		{"%_", "Anything", "", "", -1},
-		{"' OR 1=1 --", "Anything", "", "", -1},
+		{"needle", "A NEEDLE", "needle", "needle", "needle", 0},
+		{"needle", "Other", "a needle", "needle", "needle", 1},
+		{"needle", "Other", "", "A needle", "needle", 2},
+		{"needle", "Other", "", "Other", "A Needle", 3},
+		{"needle", "Other", "", "Other", "Other", -1},
+		{"STRASSE", "Straße", "", "", "", 0},
+		{"STRASSE", "", "straße", "", "", 1},
+		{"ÉCOLE", "", "e\u0301cole", "", "", 1},
+		{"ÉCOLE", "", "", "École", "", 2},
+		{"%_", "100%_literal", "", "", "", 0},
+		{"%_", "Anything", "", "", "", -1},
+		{"' OR 1=1 --", "Anything", "", "", "", -1},
 	} {
-		if got := contentMatcher(tc.query)(tc.title, tc.summary, tc.body); got != tc.want {
+		if got := contentMatcher(tc.query)(tc.title, tc.tags, tc.summary, tc.body); got != tc.want {
 			t.Errorf("%q in %q/%q/%q: rank %d, want %d", tc.query, tc.title, tc.summary, tc.body, got, tc.want)
 		}
 	}

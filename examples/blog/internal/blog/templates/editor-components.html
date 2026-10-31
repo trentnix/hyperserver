@@ -1,3 +1,13 @@
+{{ define "blog.tagInput" }}
+  <label for="content-tags">Tags (optional)</label><input id="content-tags" name="tags" value="{{ .Tags }}" list="tag-suggestions" autocomplete="off" aria-describedby="tags-help">
+  <datalist id="tag-suggestions">{{ range .TagSuggestions }}<option value="{{ . }}" data-tag="{{ . }}"></option>{{ end }}</datalist>
+{{ end }}
+
+{{ define "blog.tagField" }}
+  {{ template "blog.tagInput" . }}
+  <small id="tags-help" class="form-hint">Search keywords, separated by commas. Up to 20 tags, 50 characters each.</small>
+{{ end }}
+
 {{ define "blog.markdownFields" }}
   <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help" required>{{ .Markdown }}</textarea>
   {{ template "blog.markdownHelp" . }}

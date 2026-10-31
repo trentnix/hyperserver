@@ -10,13 +10,13 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-const postColumns = "id, slug, title, summary, markdown, published, draft, preview_image, version"
+const postColumns = "id, slug, title, summary, markdown, published, draft, preview_image, version, tags"
 
 // scanPost decodes a row in postColumns order and maps missing rows to errNotFound.
 func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
 	var published int64
-	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft, &p.PreviewImage, &p.Version)
+	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft, &p.PreviewImage, &p.Version, &p.Tags)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}
@@ -33,7 +33,7 @@ func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
 
 // ListMetadata returns drafts newest-created first, then posts newest-published first.
 func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
-	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '', version FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '', version, '' FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
 }
 
 // SearchPosts scans current content with Unicode case folding. Only matching
@@ -45,18 +45,22 @@ func (s *sqliteRepository) SearchPosts(ctx context.Context, query string) ([]Pos
 	}
 	defer rows.Close()
 	match := contentMatcher(query)
-	var matches [3][]Post
+	var matches [4][]Post
 	for rows.Next() {
 		post, err := scanPost(rows)
 		if err != nil {
 			return nil, err
 		}
-		if rank := match(post.Title, post.Summary, post.Markdown); rank >= 0 {
+		if rank := match(post.Title, post.Tags, post.Summary, post.Markdown); rank >= 0 {
 			post.Summary, post.Markdown, post.PreviewImage = "", "", ""
 			matches[rank] = append(matches[rank], post)
 		}
 	}
-	return append(append(matches[0], matches[1]...), matches[2]...), rows.Err()
+	var result []Post
+	for _, group := range matches {
+		result = append(result, group...)
+	}
+	return result, rows.Err()
 }
 
 // listPosts reads either complete public posts or administration metadata.
@@ -199,13 +203,13 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 			published = p.Published.Unix()
 		}
 		p.Version = 1
-		_, err = tx.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft, p.PreviewImage, p.Version)
+		_, err = tx.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft, p.PreviewImage, p.Version, p.Tags)
 	} else {
 		// RETURNING avoids a second lookup racing with another edit or deletion.
 		id := p.ID
-		p, err = scanPost(tx.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?, version=version+1,
+		p, err = scanPost(tx.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?, tags=?, version=version+1,
  published=CASE WHEN published>0 AND published<=? THEN published ELSE ? END WHERE id=? AND version=? RETURNING `+postColumns,
-			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, now.Unix(), publication, p.ID, p.Version))
+			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, p.Tags, now.Unix(), publication, p.ID, p.Version))
 		err = editError(ctx, tx, "post", id, err)
 		if err == nil && publication > now.Unix() && p.WasPublished(now) {
 			return p, errAlreadyPublished

@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS blog_media (
 	if err == nil {
 		err = initializeProfileRevisions(ctx, db)
 	}
+	if err == nil {
+		err = initializeMediaTags(ctx, db)
+	}
 	if err != nil {
 		db.Close()
 		return nil, nil, err

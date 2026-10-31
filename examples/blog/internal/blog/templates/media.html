@@ -15,12 +15,12 @@
   {{ end }}
   <form class="media-filters" data-media-filters method="get" action="/media"{{ if .Data.Picking }} hx-get="/media"{{ end }}>
     {{ if .Data.Picking }}<input type="hidden" name="pick" value="1">{{ end }}
-    <div class="media-search"><label for="media-search">Search images</label><input id="media-search" type="search" name="q" value="{{ .Data.Query.Search }}" maxlength="240" placeholder="Name or post/page title"></div>
+    <div class="media-search"><label for="media-search">Search images</label><input id="media-search" type="search" name="q" value="{{ .Data.Query.Search }}" maxlength="240" placeholder="Name, tag, or post/page title"></div>
     <div><label for="media-usage">Usage</label><select id="media-usage" name="usage"><option value="">All images</option><option value="current"{{ if eq .Data.Query.Usage "current" }} selected{{ end }}>Current content</option><option value="history"{{ if eq .Data.Query.Usage "history" }} selected{{ end }}>History only</option><option value="unused"{{ if eq .Data.Query.Usage "unused" }} selected{{ end }}>Unused</option></select></div>
     <button type="submit">Search</button>
   </form>
   {{ if .Data.Query.Active }}<p class="media-clear-filters"><a href="{{ .Data.ClearURL }}"{{ if .Data.Picking }} hx-get="{{ .Data.ClearURL }}" data-media-page="{{ .Data.ClearURL }}"{{ end }}>Clear filters</a></p>{{ end }}
-  <p class="form-hint" role="status">{{ .Data.Total }} {{ if eq .Data.Total 1 }}image{{ else }}images{{ end }}{{ if .Data.Query.Active }} found{{ end }} · Newest first.{{ if .Data.Picking }} Choose an image, then save your edits to use it.{{ end }}</p>
+  <p class="form-hint" role="status">{{ .Data.Total }} {{ if eq .Data.Total 1 }}image{{ else }}images{{ end }}{{ if .Data.Query.Active }} found{{ end }} · {{ if .Data.Query.Search }}Best matches first.{{ else }}Newest first.{{ end }}{{ if .Data.Picking }} Choose an image, then save your edits to use it.{{ end }}</p>
   <ul class="media-grid">
   {{ range .Data.Files }}<li>
     {{ if $.Data.Picking }}<button type="button" class="media-card" data-media-select="{{ .ID }}" aria-label="Select {{ .Name }}">{{ else }}<a class="media-card" href="/media/{{ .ID }}">{{ end }}
@@ -57,11 +57,17 @@
   <div class="media-detail-info">
   <form class="media-label-form" method="post" action="/media/{{ .Data.ID }}">
     <input type="hidden" name="version" value="{{ .Data.Version }}">
-    <label for="media-label">Image label</label><input id="media-label" name="label" value="{{ .Data.Label }}" maxlength="240" aria-describedby="media-label-help">
-    <p id="media-label-help" class="form-hint">Used in Media and the image chooser, not as image alt text. Leave blank to use the original filename or image ID.</p>
-    {{ with .Data.Filename }}<p class="form-hint">Original filename: {{ . }}</p>{{ end }}
+    <label for="media-label">Image label (optional)</label><input id="media-label" name="label" value="{{ .Data.Label }}" maxlength="240" aria-describedby="media-label-help">
+    <p id="media-label-help" class="form-hint">A name for finding this image. Leave blank to use its {{ if .Data.Filename }}filename{{ else }}image ID{{ end }}.</p>
+    {{ template "blog.tagInput" .Data }}
+    <p id="tags-help" class="form-hint">Separate search keywords with commas.</p>
+    <details class="form-hint">
+      <summary>About labels and tags</summary>
+      <p>Labels appear in Media and the image chooser, not as image alt text. Use up to 20 tags, 50 characters each.</p>
+      {{ with .Data.Filename }}<p>Original filename: {{ . }}</p>{{ end }}
+    </details>
     {{ with .Data.Error }}<p class="field-error" role="alert">{{ . }}</p>{{ end }}
-    <div class="form-actions"><button type="submit">Save label</button>{{ if .Data.Error }}<a href="/media/{{ .Data.ID }}">Reload details</a>{{ end }}</div>
+    <div class="form-actions"><button type="submit">Save details</button>{{ if .Data.Error }}<a href="/media/{{ .Data.ID }}">Reload details</a>{{ end }}</div>
   </form>
   </div>
   </div>

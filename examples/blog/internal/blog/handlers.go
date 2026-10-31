@@ -33,6 +33,7 @@ type editorPage struct {
 	Publication                string
 	ScheduleDate, ScheduleTime string
 	CanSchedule                bool
+	TagSuggestions             []string
 }
 
 // PreviewField configures the shared image picker for post sharing.
@@ -121,14 +122,15 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := m.postEditorData(p)
-	selection, err := m.selectRevision(r, "post", p.ID, "/post/s/"+p.Slug, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage})
+	data.TagSuggestions = m.tagSuggestions(r)
+	selection, err := m.selectRevision(r, "post", p.ID, "/post/s/"+p.Slug, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags})
 	if err != nil {
 		m.storageError(w, r, err)
 		return
 	}
 	data.revisionSelection = selection
 	if selected := selection.LoadedRevision; selected != nil {
-		data.Title, data.Summary, data.Markdown, data.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
+		data.Title, data.Summary, data.Markdown, data.PreviewImage, data.Tags = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage, selected.Tags
 	}
 	page := m.views["editor"].Content(r, data)
 	page.Title = "New post"
@@ -154,6 +156,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		Slug:         strings.TrimSpace(r.PostForm.Get("slug")),
 		Title:        strings.TrimSpace(r.PostForm.Get("title")),
 		Summary:      strings.TrimSpace(r.PostForm.Get("summary")),
+		Tags:         r.PostForm.Get("tags"),
 		Markdown:     r.PostForm.Get("content"),
 		PreviewImage: r.PostForm.Get("previewImage"),
 		Draft:        r.PostForm.Get("published") != "on",
@@ -208,14 +211,17 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	page := m.views["editor"].Content(r, data)
 	if page.IsHtmx() {
 		page = m.views["message"].Content(r, message)
-	} else if p.ID != "" {
-		stored, err := m.posts.GetByID(r.Context(), p.ID, true)
-		if err != nil {
-			logger.LogRequestError(r, err)
-		} else {
-			publication := m.postEditorData(stored)
-			data.PublishedSlug, data.CanSchedule = publication.PublishedSlug, publication.CanSchedule
-			data.ScheduledSlug, data.ScheduledAt = publication.ScheduledSlug, publication.ScheduledAt
+	} else {
+		data.TagSuggestions = m.tagSuggestions(r)
+		if p.ID != "" {
+			stored, err := m.posts.GetByID(r.Context(), p.ID, true)
+			if err != nil {
+				logger.LogRequestError(r, err)
+			} else {
+				publication := m.postEditorData(stored)
+				data.PublishedSlug, data.CanSchedule = publication.PublishedSlug, publication.CanSchedule
+				data.ScheduledSlug, data.ScheduledAt = publication.ScheduledSlug, publication.ScheduledAt
+			}
 		}
 		page.Data = data
 	}

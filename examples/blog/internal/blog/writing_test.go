@@ -44,7 +44,7 @@ func setPostPublication(store repository, ctx context.Context, id string, publis
 
 // postFields represents an editor submission without dropping existing writing.
 func postFields(p Post, published bool) url.Values {
-	values := url.Values{"version": {strconv.FormatInt(p.Version, 10)}, "title": {p.Title}, "slug": {p.Slug}, "summary": {p.Summary}, "content": {p.Markdown}, "previewImage": {p.PreviewImage}}
+	values := url.Values{"version": {strconv.FormatInt(p.Version, 10)}, "title": {p.Title}, "slug": {p.Slug}, "summary": {p.Summary}, "tags": {p.Tags}, "content": {p.Markdown}, "previewImage": {p.PreviewImage}}
 	if published {
 		values.Set("published", "on")
 	}

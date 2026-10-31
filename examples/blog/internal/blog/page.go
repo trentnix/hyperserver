@@ -21,6 +21,7 @@ const defaultPagePreviewURL = "/assets/img/project-default.svg"
 type Page struct {
 	ID, Slug, Title, Markdown                        string
 	ParentID, Summary, PreviewImage, ChildrenDisplay string
+	Tags                                             string // Canonical comma-separated search labels.
 	DisplayOrder                                     *int
 	Published                                        bool
 	EverPublished                                    bool // Remains true after the page returns to draft.
@@ -52,7 +53,7 @@ func (p Page) PreviewURL() string {
 type pageRepository interface {
 	ListPages(context.Context, bool) ([]Page, error)
 	// SearchPages searches current pages, including drafts and descendants of drafts.
-	// Literal case-insensitive matches rank title before summary before Markdown.
+	// Literal case-insensitive matches rank title, tags, summary, then Markdown.
 	SearchPages(context.Context, string) ([]Page, error)
 	GetPageBySlug(context.Context, string, bool) (Page, error)
 	GetPageByID(context.Context, string, bool) (Page, error)

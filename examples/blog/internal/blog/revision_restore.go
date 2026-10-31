@@ -64,9 +64,9 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 		if err != nil {
 			return err
 		}
-		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage}
+		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags}
 		currentVersion = p.Version
-		p.Title, p.Summary, p.Markdown, p.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
+		p.Title, p.Summary, p.Markdown, p.PreviewImage, p.Tags = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage, selected.Tags
 		save = func() error {
 			_, err := m.writePost(ctx, p)
 			return err
@@ -76,9 +76,9 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 		if err != nil {
 			return err
 		}
-		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage}
+		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags}
 		currentVersion = p.Version
-		p.Title, p.Summary, p.Markdown, p.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
+		p.Title, p.Summary, p.Markdown, p.PreviewImage, p.Tags = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage, selected.Tags
 		save = func() error {
 			_, err := m.writePage(ctx, p)
 			return err

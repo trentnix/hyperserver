@@ -14,10 +14,10 @@ func (s *sqliteRepository) SearchPublic(ctx context.Context, query string) (sear
 		return searchResults{}, nil
 	}
 	rows, err := s.db.QueryContext(ctx, publishedPages+`
-SELECT 'post' AS kind, slug, title, summary, markdown, published AS sort_time, id
+SELECT 'post' AS kind, slug, title, tags, summary, markdown, published AS sort_time, id
 FROM blog_posts WHERE draft=0 AND published<=?
 UNION ALL
-SELECT 'page', slug, title, summary, markdown, updated / 1000000000, id
+SELECT 'page', slug, title, tags, summary, markdown, updated / 1000000000, id
 FROM blog_pages WHERE id IN (SELECT id FROM visible)
 ORDER BY sort_time DESC, kind, id`, s.now().Unix())
 	if err != nil {
@@ -25,16 +25,16 @@ ORDER BY sort_time DESC, kind, id`, s.now().Unix())
 	}
 	defer rows.Close()
 	match := contentMatcher(query)
-	var ranks [3][]searchResult
+	var ranks [4][]searchResult
 	var results searchResults
 	for rows.Next() {
 		var item searchResult
-		var markdown, id string
+		var markdown, tags, id string
 		var sortTime int64
-		if err := rows.Scan(&item.Kind, &item.Slug, &item.Title, &item.Summary, &markdown, &sortTime, &id); err != nil {
+		if err := rows.Scan(&item.Kind, &item.Slug, &item.Title, &tags, &item.Summary, &markdown, &sortTime, &id); err != nil {
 			return searchResults{}, err
 		}
-		rank := match(item.Title, item.Summary, markdown)
+		rank := match(item.Title, tags, item.Summary, markdown)
 		if rank < 0 {
 			continue
 		}

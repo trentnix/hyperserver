@@ -11,10 +11,10 @@ import (
 // saveRevisionContent exercises the same content contract for posts and pages.
 func saveRevisionContent(ctx context.Context, store *sqliteRepository, kind, id string, version int64, content Revision) (string, int64, error) {
 	if kind == "post" {
-		p, err := savePostFixture(store, ctx, Post{ID: id, Version: version, Slug: "history", Title: content.Title, Summary: content.Summary, Markdown: content.Markdown, PreviewImage: content.PreviewImage})
+		p, err := savePostFixture(store, ctx, Post{ID: id, Version: version, Slug: "history", Title: content.Title, Summary: content.Summary, Markdown: content.Markdown, PreviewImage: content.PreviewImage, Tags: content.Tags})
 		return p.ID, p.Version, err
 	}
-	p, err := savePageFixture(store, ctx, Page{ID: id, Version: version, Slug: "history", Title: content.Title, Summary: content.Summary, Markdown: content.Markdown, PreviewImage: content.PreviewImage, Published: true})
+	p, err := savePageFixture(store, ctx, Page{ID: id, Version: version, Slug: "history", Title: content.Title, Summary: content.Summary, Markdown: content.Markdown, PreviewImage: content.PreviewImage, Tags: content.Tags, Published: true})
 	return p.ID, p.Version, err
 }
 

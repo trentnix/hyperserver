@@ -16,7 +16,7 @@ const (
 )
 
 // publicSearchRepository searches current public content, never drafts or revisions.
-// Title matches precede summary matches, then Markdown matches. Within each rank,
+// Title matches precede tag, summary, and Markdown matches. Within each rank,
 // newer content comes first. Results retain at most searchResultLimit entries.
 type publicSearchRepository interface {
 	SearchPublic(context.Context, string) (searchResults, error)

@@ -295,12 +295,31 @@ func TestBrowserAdminNavigation(t *testing.T) {
 	}
 }
 
+// TestBrowserTags checks suggestions and browser recovery in both writing forms.
+func TestBrowserTags(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check tag editing")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "tags") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "tags" {
+		if _, err := h.blog.writePost(t.Context(), Post{Title: "Tag source", Markdown: "Body", Tags: "Go, self-hosting", Draft: true}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.blog.writePage(t.Context(), Page{Title: "Other tags", Tags: "Go, SQLite", ChildrenDisplay: "hidden"}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if mode == "profile-history" {
 		image := mediaUpload(t, h.blog, "historical profile image")
 		for i := range 12 {
@@ -420,6 +439,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "tags":
+		scriptFile = "testdata/tags.js"
 	case "search":
 		scriptFile = "testdata/search.js"
 	case "archive":

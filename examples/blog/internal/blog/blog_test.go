@@ -855,7 +855,7 @@ func TestSaveFailurePreservesDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &module{app: h.app.ApplicationServer, posts: failingRepository{}, views: make(map[string]*content.View)}
+	m := &module{app: h.app.ApplicationServer, posts: failingRepository{}, tags: h.blog.tags, views: make(map[string]*content.View)}
 	for _, name := range []string{"editor", "message"} {
 		m.views[name], err = templates.View(h.app.ContentManager, "blog."+name)
 		if err != nil {

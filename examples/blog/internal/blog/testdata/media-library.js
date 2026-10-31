@@ -384,12 +384,29 @@
       sessionStorage.setItem('library-stage', 'renamed');
       sessionStorage.setItem('library-upload-path', location.pathname);
       const form = document.querySelector('.media-label-form');
+      assert(form.querySelector('label[for="media-label"]').textContent === 'Image label (optional)', 'The label must be marked optional.');
+      for (const [input, hint] of [['media-label', 'media-label-help'], ['content-tags', 'tags-help']]) {
+        const field = document.getElementById(input).getBoundingClientRect();
+        const help = document.getElementById(hint).getBoundingClientRect();
+        assert(Math.abs(help.top - field.bottom - 6) < 1, 'Field help must have consistent, compact spacing.');
+      }
+      const help = form.querySelector('details');
+      assert(!help.open, 'Secondary image help must start collapsed.');
+      help.querySelector('summary').click();
+      assert(help.open && help.textContent.includes('not as image alt text') && help.textContent.includes('20 tags, 50 characters each'), 'Expanded help must explain labels and tag limits.');
+      assert(document.documentElement.scrollWidth <= innerWidth, 'Expanded image help overflows the viewport.');
+      help.querySelector('summary').click();
+      assert(getComputedStyle(form.querySelector('.form-actions')).marginTop === '18px', 'Save spacing must remain compact.');
       form.elements.label.value = 'Été 100%_photo';
+      form.elements.tags.value = ' Landscape, LANDSCAPE, Summer ';
       form.requestSubmit();
       return;
     }
     if (stage === 'renamed') {
       assert(document.querySelector('[name=label]').value === 'Été 100%_photo', 'Renaming lost the label.');
+      const tags = document.querySelector('[name=tags]');
+      assert(tags.value === 'landscape, summer', 'Media tags were not normalized.');
+      assert([...tags.list.options].some(option => option.dataset.tag === 'summer' && option.value === 'landscape, summer'), 'Media suggestions must preserve earlier tags.');
       sessionStorage.setItem('library-stage', 'search-page');
       location.assign('/media');
       return;
@@ -397,7 +414,7 @@
     if (stage === 'search-page') {
       sessionStorage.setItem('library-stage', 'filtered-page');
       const form = document.querySelector('[data-media-filters]');
-      form.elements.q.value = 'ÉTÉ 100%_';
+      form.elements.q.value = 'SUMMER';
       form.elements.usage.value = 'unused';
       form.requestSubmit();
       return;

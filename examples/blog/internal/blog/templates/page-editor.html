@@ -15,6 +15,7 @@
   </select>
   <p class="form-hint">Navigation shows top-level pages and their immediate children. Draft parents hide subpages.</p>
   <label for="page-summary">Short description</label><textarea id="page-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
+  {{ template "blog.tagField" .Data }}
   <label for="page-order">Display order (optional)</label><input id="page-order" name="displayOrder" inputmode="numeric" pattern="[0-9]+" value="{{ .Data.DisplayOrderText }}" aria-describedby="order-help">
   <small id="order-help" class="form-hint">0–1,000,000, lowest first. Leave blank for newest updated.</small>
   {{ template "blog.previewImage" .Data.PreviewField }}

@@ -8,6 +8,7 @@
   <label for="post-slug">URL slug</label><input id="post-slug" name="slug" value="{{ .Data.Slug }}"{{ if .Data.PublishedSlug }} data-published-slug="{{ .Data.PublishedSlug }}"{{ end }}{{ if .Data.ScheduledSlug }} data-scheduled-slug="{{ .Data.ScheduledSlug }}" data-scheduled-at="{{ .Data.ScheduledAt }}"{{ end }} maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="slug-help">
   {{ template "blog.slugHelp" .Data }}
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
+  {{ template "blog.tagField" .Data }}
   {{ template "blog.previewImage" .Data.PreviewField }}
   {{ template "blog.markdownFields" .Data }}
   <label for="post-publication">Publish</label>

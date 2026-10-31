@@ -20,6 +20,7 @@ var (
 // PreviewImage is an optional upload ID used for sharing, not the article body.
 type Post struct {
 	ID, Slug, Title, Summary, Markdown, PreviewImage string
+	Tags                                             string // Canonical comma-separated search labels.
 	Published                                        time.Time
 	Draft                                            bool
 	Version                                          int64 // Save requires the current version when updating.
@@ -56,7 +57,7 @@ type repository interface {
 	// Drafts come first, then scheduled and published posts newest first.
 	ListMetadata(context.Context) ([]Post, error)
 	// SearchPosts searches all publication states, returning metadata only.
-	// Literal case-insensitive matches rank title before summary before Markdown.
+	// Literal case-insensitive matches rank title, tags, summary, then Markdown.
 	SearchPosts(context.Context, string) ([]Post, error)
 	// Latest returns errNotFound when no posts have been published.
 	Latest(context.Context) (Post, error)

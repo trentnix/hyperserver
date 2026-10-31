@@ -15,7 +15,7 @@
 {{ define "blog.history" }}
 <section class="info-page history-page" hx-boost="false">
   <header class="page-manager-heading"><div><h1>History</h1><p>{{ .Data.Title }}</p><p class="page-status">{{ if eq .Data.Kind "post" }}Post{{ else }}Page{{ end }} status: {{ .Data.PublicationStatus }}</p></div><a href="{{ .Data.ContentURL }}">Back to {{ .Data.Kind }}</a></header>
-  <p>Edit a saved version before saving, or restore it directly. Restoring replaces the title, summary, Markdown, and preview image. The current URL, publication setting, and page placement stay unchanged.</p>
+  <p>Edit a saved version before saving, or restore it directly. Restoring replaces the title, summary, tags, Markdown, and preview image. The current URL, publication setting, and page placement stay unchanged.</p>
   <div class="revision-layout">
     {{ template "blog.versionList" . }}
     <section id="revision-preview" class="revision-preview" aria-label="Version preview" aria-live="polite">{{ template "blog.revisionPreview" . }}</section>
@@ -50,6 +50,7 @@
       {{ if and (not .Data.Current) .Data.MatchesCurrent }}<p class="form-hint">This version matches the current content.</p>{{ end }}
       <h2>{{ .Data.Selected.Title }}</h2>
       {{ if .Data.Selected.Summary }}<p class="revision-summary">{{ .Data.Selected.Summary }}</p>{{ end }}
+      {{ if .Data.Selected.Tags }}<p class="form-hint">Tags: {{ .Data.Selected.Tags }}</p>{{ end }}
       {{ if .Data.MissingImages }}<p class="revision-notice">Some images in this version are no longer available. The saved writing has not changed.</p>{{ end }}
       {{ if .Data.Selected.PreviewImage }}<figure class="revision-image">{{ if .Data.MissingPreview }}<span class="missing-image">Image deleted</span>{{ else }}<img src="/images/{{ .Data.Selected.PreviewImage }}" alt="Saved preview image">{{ end }}<figcaption>Preview image</figcaption></figure>{{ end }}
       <div class="revision-body">{{ .Data.HTML }}</div>

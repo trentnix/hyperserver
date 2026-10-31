@@ -23,12 +23,13 @@ const editConflictMessage = "A newer version was saved while this editor was ope
 type Revision struct {
 	ID                                     int64
 	Title, Summary, Markdown, PreviewImage string
+	Tags                                   string
 	RecordedAt                             time.Time
 }
 
 // sameContent compares the fields restored by history, excluding snapshot metadata.
 func (r Revision) sameContent(other Revision) bool {
-	return r.Title == other.Title && r.Summary == other.Summary && r.Markdown == other.Markdown && r.PreviewImage == other.PreviewImage
+	return r.Title == other.Title && r.Summary == other.Summary && r.Markdown == other.Markdown && r.PreviewImage == other.PreviewImage && r.Tags == other.Tags
 }
 
 // revisionRepository reads and removes saved versions. Content repositories record them atomically on save.
@@ -86,7 +87,7 @@ func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, c
 	selection.MissingImages = len(missing) > 0
 	baseline, err := json.Marshal(map[string]string{
 		"title": current.Title, "summary": current.Summary,
-		"content": current.Markdown, "previewImage": current.PreviewImage,
+		"content": current.Markdown, "previewImage": current.PreviewImage, "tags": current.Tags,
 	})
 	selection.LoadedRevision, selection.CurrentContent = &selected, string(baseline)
 	return selection, err
@@ -132,7 +133,7 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 		} else if p.Scheduled(m.currentTime()) {
 			data.PublicationStatus = "Scheduled for " + p.Published.Format("Jan 2, 2006 at 3:04 PM UTC")
 		}
-		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage}
+		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags}
 		contentPath = "/post/s/" + p.Slug
 	case "page":
 		p, err := m.pageStore.GetPageByID(r.Context(), id, true)
@@ -145,7 +146,7 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 		if !p.Published {
 			data.PublicationStatus = "Draft"
 		}
-		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage}
+		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags}
 		contentPath = p.URL()
 	default:
 		m.storageError(w, r, errNotFound)

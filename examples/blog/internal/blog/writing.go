@@ -14,6 +14,11 @@ func (e contentError) Error() string { return string(e) }
 // writePost applies the same validation, media checks, and invalidation to editor
 // saves and history restores. The repository saves content, references, and history atomically.
 func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
+	var err error
+	p.Tags, err = normalizeTags(p.Tags)
+	if err != nil {
+		return p, err
+	}
 	generated := p.Slug == ""
 	if generated {
 		p.Slug = slugFromTitle(p.Title)
@@ -47,6 +52,11 @@ func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
 // writePage validates writing and protects its media from concurrent cleanup.
 // The repository enforces page-tree constraints within the save transaction.
 func (m *module) writePage(ctx context.Context, p Page) (Page, error) {
+	var err error
+	p.Tags, err = normalizeTags(p.Tags)
+	if err != nil {
+		return p, err
+	}
 	generated := p.Slug == ""
 	if generated {
 		p.Slug = slugFromTitle(p.Title)
