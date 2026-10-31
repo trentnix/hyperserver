@@ -1,0 +1,17 @@
+{{ define "blog.recent" }}{{ template "blog.recentLinks" .Data }}{{ end }}
+
+{{ define "blog.layoutRecent" }}
+{{ if .RecentUnavailable }}<p>Recent posts are unavailable.</p><a href="/posts">All posts</a>{{ else }}{{ template "blog.recentLinks" .Recent }}{{ end }}
+{{ end }}
+
+{{ define "blog.recentLinks" }}
+<div class="post-archive" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<div class="archive-heading"><h2>Recent Posts</h2><a href="/rss" hx-boost="false" title="RSS feed"><img src="/assets/img/icons/rss.png" width="16" height="16" alt="RSS feed"></a></div>
+{{ if . }}{{ template "blog.postLinks" . }}{{ else }}<p>No posts yet.</p>{{ end }}
+<a class="archive-more" href="/posts">All posts &rarr;</a>
+</div>
+{{ end }}
+
+{{ define "blog.postLinks" }}
+<ul>{{ range . }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>
+{{ end }}

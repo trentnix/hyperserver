@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -40,8 +41,8 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 	if err := cm.ApplyDefaults("blog", func(cm *contentservice.ContentManagerService) {
 		cm.RegisterLayouts(contentservice.PageType, blogModuleFS, "templates/layout.html")
 		cm.RegisterLayouts(contentservice.HtmxType, blogModuleFS, "templates/fragment.html")
-		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html")
-		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/notifications.html", "templates/auth.html")
+		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html")
+		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/notifications.html", "templates/auth.html", "templates/archive.html")
 		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", "/", loginURL
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
@@ -92,16 +93,27 @@ type navigation struct {
 	Profile                                  Profile
 	Sharing                                  *sharingPreview
 	Pages                                    []pageLink
+	Recent                                   []ArchiveEntry
+	RecentUnavailable                        bool
 	EditorOwner, Description                 string
 	SignedIn, Admin, Registration, ShowLogin bool
 }
 
-// configurePageNavigation adds two levels of published pages after storage opens.
+// configurePageNavigation adds published page links and cached Recent Posts after storage opens.
 // ConfigureRendering supplies the base navigation, including authentication links.
 func (m *module) configurePageNavigation() {
 	build := m.app.ContentManager.BuildLayoutData
 	m.app.ContentManager.BuildLayoutData = func(r *http.Request) any {
 		data := build(r).(navigation)
+		hx := htmx.GetRequest(r)
+		if !hx.Enabled || hx.HistoryRestore {
+			var err error
+			data.Recent, err = m.loadRecent(r.Context())
+			if err != nil {
+				data.RecentUnavailable = true
+				logger.LogRequestError(r, err)
+			}
+		}
 		pages, err := m.pageStore.ListPages(r.Context(), false)
 		if err != nil {
 			logger.LogRequestError(r, err)

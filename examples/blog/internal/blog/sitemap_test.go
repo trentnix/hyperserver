@@ -158,7 +158,7 @@ func TestSitemapHTTP(t *testing.T) {
 // robots.txt must not need content storage or change its output for HTMX requests.
 func TestRobotsHTTP(t *testing.T) {
 	h := newHarness(t)
-	h.blog.posts = sitemapPosts{err: errors.New("posts unavailable")}
+	h.blog.posts = sitemapPosts{repository: h.blog.posts, err: errors.New("posts unavailable")}
 	h.blog.pageStore = sitemapPages{err: errors.New("pages unavailable")}
 	for _, tc := range []struct {
 		origin, host, want string
@@ -245,7 +245,7 @@ func TestSitemapFailures(t *testing.T) {
 			privateError := errors.New("private repository details")
 			switch failure {
 			case "posts":
-				h.blog.posts = sitemapPosts{err: privateError}
+				h.blog.posts = sitemapPosts{repository: h.blog.posts, err: privateError}
 			case "pages":
 				h.blog.pageStore = sitemapPages{err: privateError}
 			case "origin":

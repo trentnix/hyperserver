@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -166,14 +167,7 @@ func (m *module) archive(w http.ResponseWriter, r *http.Request) {
 
 // recent displays the configured number of newest links for the sidebar or footer.
 func (m *module) recent(w http.ResponseWriter, r *http.Request) {
-	posts, err := m.recentPosts.loadUntil(r.Context(), m.settings.RecentPostCount, func() ([]ArchiveEntry, time.Time, error) {
-		next, err := m.posts.NextPublication(r.Context())
-		if err != nil {
-			return nil, time.Time{}, err
-		}
-		posts, err := m.posts.ListRecent(r.Context(), m.settings.RecentPostCount)
-		return posts, next, err
-	})
+	posts, err := m.loadRecent(r.Context())
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -184,6 +178,18 @@ func (m *module) recent(w http.ResponseWriter, r *http.Request) {
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}
+}
+
+// loadRecent shares the bounded, publication-aware cache between pages and fragments.
+func (m *module) loadRecent(ctx context.Context) ([]ArchiveEntry, error) {
+	return m.recentPosts.loadUntil(ctx, m.settings.RecentPostCount, func() ([]ArchiveEntry, time.Time, error) {
+		next, err := m.posts.NextPublication(ctx)
+		if err != nil {
+			return nil, time.Time{}, err
+		}
+		posts, err := m.posts.ListRecent(ctx, m.settings.RecentPostCount)
+		return posts, next, err
+	})
 }
 
 // editor opens a blank form for creation or loads an existing post for editing.
@@ -423,7 +429,7 @@ func (m *module) delete(w http.ResponseWriter, r *http.Request) {
 	}
 	m.feed.invalidate()
 	m.recentPosts.invalidate()
-	util.RedirectToURL(w, r, "/post/manage")
+	finishContentDelete(w, r, "post", "/post/manage")
 }
 
 // preview renders bounded, UTF-8 Markdown without saving it.

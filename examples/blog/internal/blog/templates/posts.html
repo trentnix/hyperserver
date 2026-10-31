@@ -11,30 +11,45 @@
 {{ end }}
 
 {{ define "blog.posts" }}
-<section class="info-page page-manager">
+<section class="info-page page-manager" data-content-list="post" data-searching="{{ if .Data.Query }}true{{ else }}false{{ end }}">
 <header class="page-manager-heading">
   <div><h1>Posts</h1><p>Manage your drafts, scheduled posts, and published posts.</p></div>
   <a class="page-create" href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a>
 </header>
+<form class="management-search" method="get" action="/post/manage" hx-get="/post/manage" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">
+  <div><label for="post-search">Search posts</label><input id="post-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
+  <button type="submit">Search</button>
+</form>
+<div class="management-search-results">
+  <p role="status" data-result-count="{{ .Data.Total }}">{{ .Data.Total }} {{ if eq .Data.Total 1 }}post{{ else }}posts{{ end }} found.</p>
+  {{ if .Data.Query }}<p class="management-search-clear"><a href="/post/manage" hx-get="/post/manage" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">Clear search</a></p>{{ end }}
+</div>
+{{ if and .Data.Query (not .Data.Total) }}<p class="page-manager-empty">No posts match your search.</p>{{ end }}
+{{ if .Data.Drafts }}
 <section id="draft-posts" aria-labelledby="draft-posts-heading">
   <h2 id="draft-posts-heading">Drafts</h2>
-  {{ if .Data.Drafts }}{{ template "blog.postAdminLinks" .Data.Drafts }}{{ else }}<p class="page-manager-empty">No drafts.</p>{{ end }}
+  {{ template "blog.postAdminLinks" .Data.Drafts }}
 </section>
+{{ end }}
+{{ if .Data.Scheduled }}
 <section id="scheduled-posts" aria-labelledby="scheduled-posts-heading">
   <h2 id="scheduled-posts-heading">Scheduled</h2>
-  {{ if .Data.Scheduled }}{{ template "blog.postAdminLinks" .Data.Scheduled }}{{ else }}<p class="page-manager-empty">No scheduled posts.</p>{{ end }}
+  {{ template "blog.postAdminLinks" .Data.Scheduled }}
 </section>
+{{ end }}
+{{ if or .Data.Published (not .Data.Query) }}
 <section id="published-posts" aria-labelledby="published-posts-heading">
   <h2 id="published-posts-heading">Published</h2>
   {{ if .Data.Published }}{{ template "blog.postAdminLinks" .Data.Published }}{{ else }}<p class="page-manager-empty">No published posts yet.</p>{{ end }}
 </section>
+{{ end }}
 </section>
 {{ end }}
 
 {{ define "blog.postAdminLinks" }}
 <ul class="page-manager-list">
-{{ range . }}<li class="page-manager-row">
-  <div class="page-manager-title"><a href="/post/s/{{ .Slug }}">{{ .Title }}</a>{{ if .Scheduled }}<small>Scheduled {{ .Published.Format "Jan 2, 2006 at 3:04 PM UTC" }}</small>{{ else if not .Draft }}<small>Published {{ .Published.Format "January 2, 2006" }}</small>{{ end }}</div>
+{{ range . }}<li class="page-manager-row" data-content-id="{{ .ID }}">
+  <div class="page-manager-title"><a href="/post/s/{{ .Slug }}">{{ .Title }}</a>{{ if .Scheduled }}<small>Scheduled {{ .Published.Format "Jan 2, 2006 at 3:04 PM UTC" }}</small>{{ else if .Draft }}<span class="page-manager-draft">Draft</span>{{ else }}<small>Published {{ .Published.Format "January 2, 2006" }}</small>{{ end }}</div>
   <div class="page-manager-actions">
     <a href="/post/update/{{ .ID }}" hx-get="/post/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
     {{ if .HasHistory }}<a href="/history/post/{{ .ID }}" hx-boost="false" aria-label="History for {{ .Title }}">History</a>{{ end }}
@@ -49,18 +64,6 @@
 <h1>All Posts</h1>
 {{ range .Data }}<h2 class="archive-month">{{ .Name }}</h2>{{ template "blog.postLinks" .Posts }}{{ else }}<p>No posts yet.</p>{{ end }}
 </section>
-{{ end }}
-
-{{ define "blog.recent" }}
-<div class="post-archive" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
-<div class="archive-heading"><h2>Recent Posts</h2><a href="/rss" hx-boost="false" title="RSS feed"><img src="/assets/img/icons/rss.png" width="16" height="16" alt="RSS feed"></a></div>
-{{ if .Data }}{{ template "blog.postLinks" .Data }}{{ else }}<p>No posts yet.</p>{{ end }}
-<a class="archive-more" href="/posts">All posts &rarr;</a>
-</div>
-{{ end }}
-
-{{ define "blog.postLinks" }}
-<ul>{{ range . }}<li><a href="/post/s/{{ .Slug }}">{{ .Title }}</a></li>{{ end }}</ul>
 {{ end }}
 
 {{ define "blog.editor" }}
@@ -180,9 +183,9 @@
 
 {{ define "blog.delete" }}
 {{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
-<section class="confirmation-panel">
+<section id="post-delete-confirmation" class="confirmation-panel">
 <h1 id="delete-title">Delete post?</h1><p>Delete “{{ .Data.Title }}” and its saved versions? This cannot be undone.</p>
-<form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}"><button type="submit" class="button-danger">Delete post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
+<form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}" hx-post="/post/delete/{{ .Data.ID }}" hx-target="#post-delete-confirmation" hx-swap="outerHTML"><button type="submit" class="button-danger">Delete post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
 </section>
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}

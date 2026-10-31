@@ -518,6 +518,9 @@ type unavailablePages struct{}
 func (unavailablePages) ListPages(context.Context, bool) ([]Page, error) {
 	return nil, errors.New("private storage failure")
 }
+func (unavailablePages) SearchPages(context.Context, string) ([]Page, error) {
+	return nil, errors.New("private storage failure")
+}
 func (unavailablePages) GetPageBySlug(context.Context, string, bool) (Page, error) {
 	return Page{}, errors.New("private storage failure")
 }

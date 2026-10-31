@@ -2,7 +2,7 @@
 <section class="page-manager media-library" data-media-library hx-boost="false">
   {{ if not .Data.Picking }}
   <header class="page-manager-heading"><h1>Media</h1><a class="page-create media-cleanup-link" href="/media/unused">Clean up uploads</a></header>
-  <form class="media-upload" data-media-upload method="post" action="/post/images/upload" enctype="multipart/form-data" hidden>
+  <form class="media-upload" data-media-upload method="post" action="/post/images/upload" enctype="multipart/form-data">
     <details>
       <summary>Upload image</summary>
       <div class="media-upload-fields">

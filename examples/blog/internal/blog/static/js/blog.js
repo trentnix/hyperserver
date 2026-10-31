@@ -2,20 +2,6 @@
  * The server validates posts and renders Markdown for both preview and publication. */
 (() => {
   const editors = new WeakMap();
-  document.documentElement.classList.add('js');
-
-  // Move one archive to keep visual and keyboard order aligned without reloading it.
-  // This breakpoint matches the sidebar layout in blog.css.
-  const sidebarLayout = matchMedia('(min-width: 1680px)');
-  const archive = document.querySelector('#post-archive');
-  const sidebar = document.querySelector('.site-sidebar');
-  const footer = document.querySelector('.site-footer');
-  function positionArchive() {
-    if (sidebarLayout.matches) sidebar.append(archive);
-    else footer.prepend(archive);
-  }
-  sidebarLayout.addEventListener('change', positionArchive);
-  positionArchive();
 
   // Keep ordinary links available without JavaScript. Only mobile collapses them.
   const mobileLayout = matchMedia('(max-width: 767px)');
@@ -27,6 +13,7 @@
     menuToggle.hidden = !mobileLayout.matches;
     menuToggle.setAttribute('aria-expanded', String(!menu.hidden));
     for (const toggle of childToggles) {
+      if (!toggle.isConnected) continue;
       const children = document.getElementById(toggle.getAttribute('aria-controls'));
       children.hidden = mobileLayout.matches;
       toggle.hidden = !mobileLayout.matches;
@@ -58,6 +45,7 @@
   });
   mobileLayout.addEventListener('change', closeMenu);
   closeMenu();
+  menu.dataset.ready = '';
 
   // Keep one set of admin links: expanded on desktop, a disclosure on mobile.
   const accountMenu = document.querySelector('.account-menu');
@@ -73,6 +61,7 @@
   }
   mobileLayout.addEventListener('change', positionAccountMenu);
   positionAccountMenu();
+  if (accountMenu) accountMenu.dataset.ready = '';
 
   // Native disclosure controls work without JavaScript. Add familiar dismissal
   // behavior, including for action menus inserted by HTMX navigation.
@@ -167,7 +156,6 @@
     root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
     root.querySelectorAll('.image-upload-controls').forEach(controls => { controls.hidden = false; });
-    root.querySelectorAll('[data-media-upload]').forEach(form => { form.hidden = false; });
     const textarea = root.querySelector('#post-content');
     if (textarea && window.EasyMDE && !editors.has(textarea)) {
       // EasyMDE replaces native textarea validation. The server remains authoritative.
@@ -501,6 +489,68 @@
     document.addEventListener(name, event => showRequestError(event.detail,
       'The connection failed. Check whether the operation completed before retrying.'));
   }
+  // Remove only confirmed deletions. Keep the list, its query, and nearby focus.
+  document.addEventListener('blog:content-deleted', event => {
+    const list = document.querySelector('[data-content-list]');
+    const {kind, id} = event.detail;
+    if (!list || list.dataset.contentList !== kind) return;
+    const rows = [...list.querySelectorAll('[data-content-id]')];
+    const index = rows.findIndex(row => row.dataset.contentId === id);
+    if (index < 0) return;
+    const row = rows[index];
+    const next = rows[index + 1] || rows[index - 1];
+    const focus = next?.querySelector('.page-manager-actions a') || list.querySelector('input[type=search]');
+    const url = row.querySelector('.page-manager-title a').getAttribute('href');
+    const section = kind === 'post' ? row.closest('section') : null;
+    const searching = list.dataset.searching === 'true';
+    const {scrollX, scrollY} = window;
+    row.remove();
+    for (const group of list.querySelectorAll('.page-manager-list')) {
+      if (!group.children.length) group.remove();
+    }
+    const empty = (container, message) => {
+      const p = document.createElement('p');
+      p.className = 'page-manager-empty';
+      p.textContent = message;
+      container.append(p);
+    };
+    if (section && !section.querySelector('[data-content-id]')) {
+      if (section.id === 'published-posts' && !searching) empty(section, 'No published posts yet.');
+      else section.remove();
+    }
+    const remaining = list.querySelectorAll('[data-content-id]').length;
+    const count = list.querySelector('[data-result-count]');
+    if (count) {
+      count.dataset.resultCount = String(remaining);
+      count.textContent = `${remaining} ${kind}${remaining === 1 ? '' : 's'} found.`;
+    }
+    if (!remaining && (searching || kind === 'page')) {
+      empty(list, searching ? `No ${kind}s match your search.` : 'No pages yet. Create a page to get started.');
+    }
+    // Public navigation can contain the same item outside the management list.
+    for (const link of document.querySelectorAll('#site-menu a, .profile-links a, .archive-nav a')) {
+      if (link.getAttribute('href') !== url) continue;
+      const item = link.closest('li');
+      if (!item) continue;
+      const siblings = item.parentElement;
+      item.remove();
+      if (!siblings.children.length && siblings.classList.contains('child-links')) {
+        siblings.parentElement.querySelector('.child-toggle')?.remove();
+        siblings.remove();
+      }
+    }
+    const dialog = event.target.closest('dialog');
+    dialog?.close();
+    dialog?.remove();
+    focus?.focus({preventScroll: true});
+    window.scrollTo({left: scrollX, top: scrollY, behavior: 'instant'});
+    const notice = document.createElement('div');
+    notice.className = 'notification notification--success';
+    notice.innerHTML = '<p role="status"></p><button class="text-button notification-dismiss" type="button" aria-label="Dismiss notification" data-dismiss-notification>×</button>';
+    notice.querySelector('p').textContent = kind === 'post' ? 'Post deleted.' : 'Page deleted.';
+    document.querySelector('#notifications').append(notice);
+  });
+
   document.addEventListener('blog:revision-deleted', event => {
     const dialog = event.target.closest('dialog');
     if (dialog) {

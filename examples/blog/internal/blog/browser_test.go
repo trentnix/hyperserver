@@ -45,6 +45,17 @@ func TestBrowserLayout(t *testing.T) {
 	}
 }
 
+// TestBrowserRefresh checks first-paint stability while scripts and fonts load slowly.
+func TestBrowserRefresh(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check first-paint stability")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "refresh") })
+	}
+}
+
 // TestBrowserNavigation checks article swaps and history without replacing the sidebar.
 func TestBrowserNavigation(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -258,6 +269,12 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			t.Fatal(err)
 		}
 	}
+	if mode == "admin-navigation" {
+		seedContentSearch(t, h)
+		if _, err := h.blog.pageStore.SavePage(t.Context(), Page{Slug: "visible-child", Title: "Visible child", ParentID: h.projectsID, Published: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if mode == "post-management" {
 		for _, draft := range []bool{true, false} {
 			for i, title := range []string{"Short title", strings.Repeat("A longer post title with several words ", 6), strings.Repeat("W", 240)} {
@@ -326,6 +343,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "refresh":
+		scriptFile = "testdata/refresh.js"
 	case "admin-navigation":
 		scriptFile = "testdata/admin-navigation.js"
 	case "media-library":
@@ -428,6 +447,14 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		pagePath = "/post/s/first"
 	}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if mode == "refresh" && (r.URL.Path == "/assets/js/blog.js" || strings.HasSuffix(r.URL.Path, ".woff2")) {
+			// Leave time for the initial layout to paint before enhancement and fonts arrive.
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(500 * time.Millisecond):
+			}
+		}
 		switch r.URL.Path {
 		case "/test/image.svg":
 			sizes := map[string][2]int{"large": {3200, 1800}, "small": {160, 100}, "tall": {360, 1800}, "wide": {2400, 320}, "square": {900, 900}, "tiny": {48, 48}}
@@ -513,7 +540,11 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		}
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		if strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/html") {
-			body = bytes.Replace(body, []byte("</head>"), []byte(`<script src="/test/browser.js" defer></script></head>`), 1)
+			scriptTag := `<script src="/test/browser.js" defer></script></head>`
+			if mode == "refresh" {
+				scriptTag = `<script src="/test/browser.js"></script></head>`
+			}
+			body = bytes.Replace(body, []byte("</head>"), []byte(scriptTag), 1)
 			w.Header().Del("Content-Length")
 		}
 		w.WriteHeader(recorder.Code)

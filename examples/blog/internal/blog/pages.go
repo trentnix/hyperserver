@@ -55,9 +55,27 @@ func pageTree(pages []Page, history map[string]bool) []pageLink {
 	return branch("")
 }
 
+// pageManagement shows the page tree or a flat, relevance-ordered search result.
+type pageManagement struct {
+	Query string
+	Pages []pageLink
+	Total int
+}
+
 // pages lists published pages and drafts for the administrator.
 func (m *module) pages(w http.ResponseWriter, r *http.Request) {
-	pages, err := m.pageStore.ListPages(r.Context(), true)
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if !utf8.ValidString(query) || utf8.RuneCountInString(query) > 240 {
+		http.Error(w, "Search must be at most 240 characters.", http.StatusBadRequest)
+		return
+	}
+	var pages []Page
+	var err error
+	if query == "" {
+		pages, err = m.pageStore.ListPages(r.Context(), true)
+	} else {
+		pages, err = m.pageStore.SearchPages(r.Context(), query)
+	}
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -67,7 +85,15 @@ func (m *module) pages(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	page := m.views["pages"].Content(r, pageTree(pages, history))
+	data := pageManagement{Query: query, Total: len(pages)}
+	if query == "" {
+		data.Pages = pageTree(pages, history)
+	} else {
+		for _, p := range pages {
+			data.Pages = append(data.Pages, pageLink{Page: p, HasHistory: history[p.ID]})
+		}
+	}
+	page := m.views["pages"].Content(r, data)
 	page.Title = "Pages"
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display pages.", err)
@@ -381,5 +407,5 @@ func (m *module) deletePage(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	util.RedirectToURL(w, r, "/pages")
+	finishContentDelete(w, r, "page", "/pages")
 }

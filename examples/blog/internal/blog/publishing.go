@@ -2,6 +2,8 @@ package blog
 
 import (
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -9,11 +11,24 @@ import (
 // postManagement separates drafts, scheduled posts, and published posts.
 type postManagement struct {
 	Drafts, Scheduled, Published []postPage
+	Query                        string
+	Total                        int
 }
 
 // managePosts lists all publication states for the administrator.
 func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
-	posts, err := m.posts.ListMetadata(r.Context())
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if !utf8.ValidString(query) || utf8.RuneCountInString(query) > 240 {
+		http.Error(w, "Search must be at most 240 characters.", http.StatusBadRequest)
+		return
+	}
+	var posts []Post
+	var err error
+	if query == "" {
+		posts, err = m.posts.ListMetadata(r.Context())
+	} else {
+		posts, err = m.posts.SearchPosts(r.Context(), query)
+	}
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -23,7 +38,7 @@ func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	var data postManagement
+	data := postManagement{Query: query, Total: len(posts)}
 	now := m.currentTime()
 	for _, post := range posts {
 		entry := postPage{Post: post, HasHistory: history[post.ID], Scheduled: post.Scheduled(now)}

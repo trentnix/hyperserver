@@ -77,7 +77,13 @@ Save open editors before cleanup. The server cannot inspect unsaved edits or bro
 
 RSS caches the complete rendered feed. Recent Posts caches only the configured number of entries, not rendered HTML. Both caches are loaded on demand and invalidated after saving, publishing, unpublishing, or deleting a post. Profile edits also invalidate RSS. Feed readers can revalidate with an ETag. Feed links and images use absolute URLs.
 
+Full pages include Recent Posts in the initial HTML. CSS selects the sidebar or footer placement, and HTMX navigation retains both without fetching the list again.
+
 Run one blog instance per content database. The site profile is loaded at startup and refreshed after successful edits. Edit posts and pages through the application. Direct database writes bypass image-reference updates and cache invalidation.
+
+The administrator's Posts and Pages lists search current titles, summaries, and Markdown, including drafts and scheduled posts. Search is literal and case-insensitive, with title matches first, then summary matches, then content matches. Posts retain their Drafts, Scheduled, and Published groups, with matches ranked within each group. Empty Drafts and Scheduled groups are hidden. Search hides every empty group. Pages appear as a flat list while searching. Clear search to restore the full lists or page tree. Saved versions are not searched.
+
+Deleting from Posts or Pages removes the row without reloading the list, preserves the search and scroll position where the remaining page height allows, and moves keyboard focus to nearby actions. Deleting from an individual post or page, or submitting without JavaScript, returns to its management list.
 
 ## Sharing links
 

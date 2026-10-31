@@ -12,6 +12,12 @@
   };
   window.addEventListener('error', event => report(event.message));
   const library = () => document.querySelector('.media-browser[open]');
+  function assertFilterHeights(form) {
+    const search = form.elements.q.getBoundingClientRect();
+    for (const control of [form.elements.usage, form.querySelector('button')]) {
+      assert(Math.abs(control.getBoundingClientRect().height - search.height) < 1, 'Search field, Usage dropdown, and Search button must have equal heights.');
+    }
+  }
   async function open(button) {
     button.focus();
     button.click();
@@ -28,6 +34,7 @@
     assert(library().getBoundingClientRect().right <= innerWidth, 'Library overflows viewport.');
     assert(library().scrollWidth <= library().clientWidth, 'Library content overflows horizontally.');
     const filters = library().querySelector('[data-media-filters]');
+    assertFilterHeights(filters);
     for (const control of filters.querySelectorAll('input:not([type=hidden]), select, button')) {
       const box = control.getBoundingClientRect();
       assert(box.left >= 0 && box.right <= innerWidth, 'Search controls overflow the viewport.');
@@ -283,6 +290,7 @@
       return;
     }
     if (stage === 'upload') {
+      assertFilterHeights(document.querySelector('[data-media-filters]'));
       const form = document.querySelector('[data-media-upload]');
       assert(form && !form.hidden, 'Media page must offer direct uploads.');
       const disclosure = form.querySelector('details');

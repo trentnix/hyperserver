@@ -59,6 +59,9 @@ type repository interface {
 	// ListMetadata supplies all posts for administration, without summaries or Markdown.
 	// Drafts come first, then scheduled and published posts newest first.
 	ListMetadata(context.Context) ([]Post, error)
+	// SearchPosts searches all publication states, returning metadata only.
+	// Literal case-insensitive matches rank title before summary before Markdown.
+	SearchPosts(context.Context, string) ([]Post, error)
 	// Latest returns errNotFound when no posts have been published.
 	Latest(context.Context) (Post, error)
 	// ListArchive returns link metadata newest first, without post bodies.
@@ -194,6 +197,29 @@ func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
 // ListMetadata returns drafts newest-created first, then posts newest-published first.
 func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
 	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '', version FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+}
+
+// SearchPosts scans current content with Unicode case folding. Only matching
+// metadata is retained. Equal ranks preserve the management list's order.
+func (s *sqliteRepository) SearchPosts(ctx context.Context, query string) ([]Post, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+postColumns+" FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	match := contentMatcher(query)
+	var matches [3][]Post
+	for rows.Next() {
+		post, err := scanPost(rows)
+		if err != nil {
+			return nil, err
+		}
+		if rank := match(post.Title, post.Summary, post.Markdown); rank >= 0 {
+			post.Summary, post.Markdown, post.PreviewImage = "", "", ""
+			matches[rank] = append(matches[rank], post)
+		}
+	}
+	return append(append(matches[0], matches[1]...), matches[2]...), rows.Err()
 }
 
 // listPosts reads either complete public posts or administration metadata.

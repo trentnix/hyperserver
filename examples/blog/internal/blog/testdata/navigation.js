@@ -19,7 +19,8 @@
       !document.querySelector('#post-archive').classList.contains('htmx-settling'));
     const body = document.body;
     const sidebar = document.querySelector('.site-sidebar');
-    const archive = document.querySelector('#post-archive .post-archive');
+    const archiveNav = document.querySelector(innerWidth >= 1680 ? '#sidebar-archive' : '#post-archive');
+    const archive = archiveNav.querySelector('.post-archive');
     for (const link of archive.querySelectorAll('li a')) {
       const style = getComputedStyle(link);
       assert(style.display === 'block' && link.getBoundingClientRect().height >= 24, 'Post links need full-row click targets.');
@@ -39,10 +40,10 @@
     const titleTop = document.querySelector('.post-heading').getBoundingClientRect().top;
     const archiveRequests = () => performance.getEntriesByType('resource').filter(entry => new URL(entry.name).pathname === '/posts/recent').length;
     const initialRequests = archiveRequests();
-    assert(initialRequests === 1, 'Expected one initial archive request.');
+    assert(initialRequests === 0, 'Recent Posts must be included in the initial HTML.');
     const unchanged = () => {
       assert(document.body === body && document.querySelector('.site-sidebar') === sidebar, 'Navigation replaced the page shell.');
-      assert(document.querySelector('#post-archive .post-archive') === archive, 'Navigation replaced Recent Posts.');
+      assert(archiveNav.querySelector('.post-archive') === archive, 'Navigation replaced Recent Posts.');
       assert(document.querySelector('#article-content') === article, 'Navigation replaced the article container.');
       const expectedBackground = innerWidth < 1680 && article.querySelector('.post-archive') ? 'none' : background;
       assert(getComputedStyle(body).backgroundImage === expectedBackground, 'Navigation changed the background unexpectedly.');

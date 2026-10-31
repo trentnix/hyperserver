@@ -54,15 +54,18 @@ document.removeEventListener = function(type, callback, options) {
       assert(fontRequests.some(entry => new URL(entry.name).pathname.endsWith('/source-sans-3-italic.woff2')), 'Italic font must load locally.');
       assert(!performance.getEntriesByType('resource').some(entry => new URL(entry.name).origin !== location.origin), 'Blog assets must not require external requests.');
       await wait(() => document.querySelector('.archive-nav .post-archive'));
-      const archiveTitle = document.querySelector('.archive-heading h2').getBoundingClientRect();
-      const feedIcon = document.querySelector('.archive-heading img').getBoundingClientRect();
+      const archiveNav = document.querySelector(innerWidth >= 1680 ? '#sidebar-archive' : '#post-archive');
+      assert([...document.querySelectorAll('.archive-nav')].filter(nav => nav.getClientRects().length).length === 1, 'Only one archive placement may be visible or keyboard-accessible.');
+      assert(!performance.getEntriesByType('resource').some(entry => new URL(entry.name).pathname === '/posts/recent'), 'Initial navigation must not fetch Recent Posts separately.');
+      const archiveTitle = archiveNav.querySelector('.archive-heading h2').getBoundingClientRect();
+      const feedIcon = archiveNav.querySelector('.archive-heading img').getBoundingClientRect();
       assert(Math.abs((archiveTitle.top + archiveTitle.bottom) / 2 - (feedIcon.top + feedIcon.bottom) / 2) < 1, 'RSS icon must be vertically centered with Recent Posts.');
       const profile = document.querySelector('.profile');
       const portrait = profile.querySelector('img').getBoundingClientRect();
       const bio = document.querySelector('.profile-details').getBoundingClientRect();
       const article = document.querySelector('article').getBoundingClientRect();
-      const archive = document.querySelector('.archive-nav').getBoundingClientRect();
-      const archiveStyle = getComputedStyle(document.querySelector('.archive-nav'));
+      const archive = archiveNav.getBoundingClientRect();
+      const archiveStyle = getComputedStyle(archiveNav);
       const archivePadding = innerWidth < 768 || innerWidth >= 1680 ? '20px' : '40px';
       assert(archiveStyle.paddingLeft === archivePadding && archiveStyle.paddingRight === archivePadding, 'Recent Posts has incorrect horizontal padding.');
       if (innerWidth >= 1680) assert(archiveStyle.paddingTop === '50px', 'Sidebar Recent Posts needs 50px of separation from site navigation.');
@@ -140,8 +143,8 @@ document.removeEventListener = function(type, callback, options) {
         assert(portrait.width === (innerWidth >= 1680 ? 120 : 100), 'Portrait must be 120px in the sidebar and 100px in the desktop header.');
         assert(Math.abs(portrait.width - portrait.height) < 1, 'Desktop portrait must remain circular: ' + portrait.width + ' x ' + portrait.height);
       }
-      assert(footer.getBoundingClientRect().top >= document.querySelector('article').getBoundingClientRect().bottom - 1, 'Footer must follow the article: ' + footer.getBoundingClientRect().top + ' < ' + document.querySelector('article').getBoundingClientRect().bottom);
       if (innerWidth < 1680) {
+        assert(footer.getBoundingClientRect().top >= document.querySelector('article').getBoundingClientRect().bottom - 1, 'Footer must follow the article.');
         assert(sidebar.getBoundingClientRect().bottom <= article.top, 'Bio must precede the article when stacked.');
         assert(archive.top >= document.querySelector('#main-content').getBoundingClientRect().bottom - 1, 'Recent Posts must follow the content.');
         assert(footer.contains(document.querySelector('#post-archive')), 'Recent Posts must be inside the footer.');
@@ -152,7 +155,7 @@ document.removeEventListener = function(type, callback, options) {
       } else {
         assert(getComputedStyle(sidebar).position === 'sticky', 'Desktop sidebar must stay visible while reading.');
         const sidebarBounds = sidebar.getBoundingClientRect();
-        assert(sidebar.contains(document.querySelector('#post-archive')), 'Desktop archive must remain inside the sidebar.');
+        assert(sidebar.contains(archiveNav), 'Desktop archive must remain inside the sidebar.');
         assert(Math.abs(sidebarBounds.left) < 1 && Math.abs(sidebarBounds.right - article.left) < 1, 'Sidebar must fill the entire left section.');
         assert(Math.abs(header.getBoundingClientRect().width - sidebar.clientWidth) < 1, 'Header must use the available sidebar width.');
         assert(Math.abs(archive.width - sidebar.clientWidth) < 1, 'Navigation must use the available sidebar width.');
@@ -231,7 +234,7 @@ document.removeEventListener = function(type, callback, options) {
             item.append(link);
             entries.append(item);
           }
-          document.querySelector('.post-archive').append(entries);
+          archiveNav.querySelector('.post-archive').append(entries);
           assert(Math.abs(footer.getBoundingClientRect().top - (innerHeight - 200)) < 1, 'A long archive must not pull the footer upward.');
           assert(footer.getBoundingClientRect().height > 200, 'Footer clipped the long archive.');
           assert(getComputedStyle(footer).overflowY === 'visible', 'Footer must not have an internal scrollbar.');
@@ -312,11 +315,11 @@ document.removeEventListener = function(type, callback, options) {
       }
       sessionStorage.setItem('blog-test-stage', 'posts');
       posts.click();
-      await wait(() => document.querySelector('#draft-posts') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      await wait(() => document.querySelector('#published-posts') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       stage = 'posts';
     }
     if (stage === 'posts') {
-      assert(document.querySelector('#draft-posts') && document.querySelector('#published-posts'), 'Post management sections are missing.');
+      assert(!document.querySelector('#draft-posts') && !document.querySelector('#scheduled-posts') && document.querySelector('#published-posts'), 'Empty Drafts and Scheduled sections must be hidden.');
       const link = document.querySelector('a[href="/post/create"]');
       assert(link, 'Posts page has no New post link.');
       link.click();

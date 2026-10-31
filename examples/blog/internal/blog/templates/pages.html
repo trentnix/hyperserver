@@ -24,18 +24,26 @@
 {{ end }}
 
 {{ define "blog.pages" }}
-<section class="info-page page-manager">
+<section class="info-page page-manager" data-content-list="page" data-searching="{{ if .Data.Query }}true{{ else }}false{{ end }}">
 <header class="page-manager-heading">
   <div><h1>Pages</h1><p>Manage your pages and subpages.</p></div>
   <a class="page-create" href="/pages/create" hx-get="/pages/create" hx-target="#dialog-host">New page</a>
 </header>
-{{ if .Data }}{{ template "blog.pageAdminLinks" .Data }}{{ else }}<p class="page-manager-empty">No pages yet. Create a page to get started.</p>{{ end }}
+<form class="management-search" method="get" action="/pages" hx-get="/pages" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">
+  <div><label for="page-search">Search pages</label><input id="page-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
+  <button type="submit">Search</button>
+</form>
+<div class="management-search-results">
+  <p role="status" data-result-count="{{ .Data.Total }}">{{ .Data.Total }} {{ if eq .Data.Total 1 }}page{{ else }}pages{{ end }} found.</p>
+  {{ if .Data.Query }}<p class="management-search-clear"><a href="/pages" hx-get="/pages" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">Clear search</a></p>{{ end }}
+</div>
+{{ if .Data.Pages }}{{ template "blog.pageAdminLinks" .Data.Pages }}{{ else }}<p class="page-manager-empty">{{ if .Data.Query }}No pages match your search.{{ else }}No pages yet. Create a page to get started.{{ end }}</p>{{ end }}
 </section>
 {{ end }}
 
 {{ define "blog.pageAdminLinks" }}
 <ul class="page-manager-list">
-{{ range . }}<li>
+{{ range . }}<li data-content-id="{{ .ID }}">
   <div class="page-manager-row">
     <div class="page-manager-title"><a href="{{ .URL }}">{{ .Title }}</a><small>{{ .URL }}</small>{{ if not .Published }}<span class="page-manager-draft">Draft</span>{{ end }}</div>
     <div class="page-manager-actions">

@@ -18,6 +18,59 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
 
+// TestInitialRecentPosts checks cached initial navigation, history restores, and
+// a visible fallback when the optional navigation read fails.
+func TestInitialRecentPosts(t *testing.T) {
+	h := newHarnessWithRecentPostCount(t, 1)
+	reads := 0
+	fail := false
+	h.blog.posts = recentRepository{read: func(_ context.Context, limit int) ([]ArchiveEntry, error) {
+		reads++
+		if limit != 1 {
+			t.Fatalf("recent limit = %d, want 1", limit)
+		}
+		if fail {
+			return nil, errors.New("private database failure")
+		}
+		return []ArchiveEntry{{Slug: "latest", Title: "Latest <post>"}}, nil
+	}}
+	h.blog.recentPosts.invalidate()
+	for _, headers := range []map[string]string{
+		nil,
+		{"HX-Request": "true", "HX-History-Restore-Request": "true"},
+	} {
+		r := httptest.NewRequest(http.MethodGet, loginURL, nil)
+		for key, value := range headers {
+			r.Header.Set(key, value)
+		}
+		w := httptest.NewRecorder()
+		h.app.Handler.ServeHTTP(w, r)
+		requireStatus(t, w, http.StatusOK)
+		body := w.Body.String()
+		if strings.Count(body, `href="/post/s/latest">Latest &lt;post&gt;</a>`) != 2 || strings.Contains(body, `hx-trigger="load"`) {
+			t.Fatal("full pages must include both CSS-selected archive placements without a follow-up request")
+		}
+		if !strings.Contains(body, `as="font"`) || !strings.Contains(body, `/assets/js/startup.js`) {
+			t.Fatal("missing first-paint resources")
+		}
+	}
+	if reads != 1 {
+		t.Fatalf("full-page storage reads = %d, want 1", reads)
+	}
+	h.blog.recentPosts.invalidate()
+	w := h.request(http.MethodGet, loginURL, nil, true)
+	requireStatus(t, w, http.StatusOK)
+	if reads != 1 || strings.Contains(w.Body.String(), "Recent Posts") {
+		t.Fatal("fragment loaded unused layout navigation")
+	}
+	fail = true
+	w = h.request(http.MethodGet, loginURL, nil, false)
+	requireStatus(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), "Recent posts are unavailable.") || strings.Contains(w.Body.String(), "No posts yet.") || strings.Contains(w.Body.String(), "private database") {
+		t.Fatal("recent navigation failure must be explicit without breaking the login page or exposing storage details")
+	}
+}
+
 // TestRecentCacheConcurrentRead checks coalescing and invalidation during storage reads.
 func TestRecentCacheConcurrentRead(t *testing.T) {
 	for _, invalidate := range []bool{false, true} {
@@ -261,6 +314,7 @@ func TestRecentPostChanges(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
+	h.blog.recentPosts.invalidate()
 	read := func(slug, title string, wantReads int) {
 		t.Helper()
 		before := store.recentReads

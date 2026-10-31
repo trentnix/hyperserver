@@ -48,9 +48,13 @@ func (p Page) PreviewURL() string {
 // pageRepository stores pages independently of post feeds and archives. Providers
 // must enforce unique slugs, existing parents, and an acyclic tree atomically.
 // Updates never insert missing IDs. Parents with children cannot be deleted.
-// Unless includeDrafts is true, reads exclude drafts and their descendants.
+// Lookups and ListPages exclude drafts and their descendants unless includeDrafts
+// is true. SearchPages is reserved for administrator management.
 type pageRepository interface {
 	ListPages(context.Context, bool) ([]Page, error)
+	// SearchPages searches current pages, including drafts and descendants of drafts.
+	// Literal case-insensitive matches rank title before summary before Markdown.
+	SearchPages(context.Context, string) ([]Page, error)
 	GetPageBySlug(context.Context, string, bool) (Page, error)
 	GetPageByID(context.Context, string, bool) (Page, error)
 	// SavePage retains EverPublished once published, regardless of caller-supplied history.
@@ -118,6 +122,29 @@ ORDER BY display_order IS NULL, display_order, updated DESC, id`, includeDrafts)
 		pages = append(pages, p)
 	}
 	return pages, rows.Err()
+}
+
+// SearchPages returns matching metadata in relevance order, retaining the normal
+// page order for ties. It scans bodies without keeping them in the result list.
+func (s *sqliteRepository) SearchPages(ctx context.Context, query string) ([]Page, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+pageColumns+" FROM blog_pages ORDER BY display_order IS NULL, display_order, updated DESC, id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	match := contentMatcher(query)
+	var matches [3][]Page
+	for rows.Next() {
+		page, err := scanPage(rows)
+		if err != nil {
+			return nil, err
+		}
+		if rank := match(page.Title, page.Summary, page.Markdown); rank >= 0 {
+			page.Markdown = ""
+			matches[rank] = append(matches[rank], page)
+		}
+	}
+	return append(append(matches[0], matches[1]...), matches[2]...), rows.Err()
 }
 
 // GetPageBySlug hides drafts and descendants of drafts from public readers.

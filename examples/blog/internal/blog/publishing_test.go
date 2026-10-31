@@ -60,7 +60,8 @@ func TestPostPublication(t *testing.T) {
 				for section, visible := range map[string]bool{"draft-posts": !published, "published-posts": published} {
 					_, body, found := strings.Cut(w.Body.String(), `id="`+section+`"`)
 					body, _, _ = strings.Cut(body, "</section>")
-					if !found || strings.Contains(body, "Private title") != visible {
+					wantSection := visible || section == "published-posts"
+					if found != wantSection || strings.Contains(body, "Private title") != visible {
 						t.Fatalf("incorrect %s listing", section)
 					}
 				}
@@ -317,10 +318,13 @@ func TestPostManagement(t *testing.T) {
 	h.login(t)
 	w := h.request("GET", "/post/manage", nil, false)
 	requireStatus(t, w, http.StatusOK)
-	for _, text := range []string{"No drafts.", "No published posts yet.", `href="/post/manage">Posts</a>`, `href="/post/create"`} {
+	for _, text := range []string{"No published posts yet.", `href="/post/manage">Posts</a>`, `href="/post/create"`} {
 		if !strings.Contains(w.Body.String(), text) {
 			t.Fatalf("empty management page missing %q", text)
 		}
+	}
+	if strings.Contains(w.Body.String(), `id="draft-posts"`) || strings.Contains(w.Body.String(), `id="scheduled-posts"`) {
+		t.Fatal("empty Drafts and Scheduled sections must be hidden")
 	}
 
 	for _, slug := range []string{"draft", "published"} {

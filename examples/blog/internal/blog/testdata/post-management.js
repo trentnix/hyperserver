@@ -1,4 +1,4 @@
-// Management keeps actions aligned and returns to the list after a confirmed deletion.
+// Management keeps actions aligned and deletes rows without leaving the list.
 (async () => {
   await new Promise(resolve => document.addEventListener('DOMContentLoaded', () => setTimeout(resolve, 0), {once: true}));
   const report = message => fetch('/test/result', {method: 'POST', body: message});
@@ -10,14 +10,30 @@
       await new Promise(resolve => setTimeout(resolve, 25));
     }
   };
-  const deleteFirst = async (section, nextStage) => {
+  const deleteFirst = async section => {
     const row = document.querySelector(section + ' .page-manager-row');
-    sessionStorage.setItem('deleted-post-url', row.querySelector('.page-manager-title a').getAttribute('href'));
+    const url = row.querySelector('.page-manager-title a').getAttribute('href');
+    const body = document.body;
+    const list = document.querySelector('.page-manager');
+    const rows = [...list.querySelectorAll('[data-content-id]')];
+    const index = rows.indexOf(row);
+    const next = rows[index + 1] || rows[index - 1];
+    const focus = next?.querySelector('.page-manager-actions a') || list.querySelector('input[type=search]');
+    row.scrollIntoView({block: 'center'});
     row.querySelector('a[href^="/post/delete/"]').click();
     await wait(() => document.querySelector('dialog[open] form[action^="/post/delete/"]'));
     await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
-    sessionStorage.setItem('management-stage', nextStage);
+    const before = scrollY;
+    sessionStorage.setItem('management-stage', 'deleting');
     document.querySelector('dialog[open] form').requestSubmit();
+    await wait(() => !row.isConnected && !document.querySelector('dialog[open]'));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    assert(document.body === body && document.querySelector('.page-manager') === list, 'Deletion reloaded or replaced the management list.');
+    assert(document.activeElement === focus, 'Deletion did not focus the adjacent actions.');
+    const expected = Math.min(before, Math.max(0, document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight));
+    assert(Math.abs(scrollY - expected) <= 1, 'Deletion lost scroll position: ' + JSON.stringify({before, expected, actual: scrollY}));
+    assert((await fetch(url)).status === 404, 'Deleted post remains readable.');
+    assert(document.querySelector('#notifications').textContent.includes('Post deleted.'), 'Deletion must show a success notification.');
   };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
@@ -34,20 +50,7 @@
       location.assign('/post/manage');
       return;
     }
-    if (stage === 'draft-deleted' || stage === 'published-deleted') {
-      assert(location.pathname === '/post/manage' && document.querySelector('.page-manager'), 'Deleting a post must return to Posts.');
-      assert(!document.querySelector('dialog[open]') && !document.querySelector('.post-body'), 'Deletion left a dialog open or displayed another post.');
-      assert((await fetch(sessionStorage.getItem('deleted-post-url'))).status === 404, 'Deleted post remains readable.');
-      assert(document.querySelectorAll('#draft-posts .page-manager-row').length === 2, 'Draft deletion removed the wrong number of posts.');
-      if (stage === 'draft-deleted') {
-        assert(document.querySelectorAll('#published-posts .page-manager-row').length === 3, 'Draft deletion affected published posts.');
-        await deleteFirst('#published-posts', 'published-deleted');
-      } else {
-        assert(document.querySelectorAll('#published-posts .page-manager-row').length === 2, 'Published deletion removed the wrong number of posts.');
-        await report('PASS');
-      }
-      return;
-    }
+    assert(stage !== 'deleting', 'Deletion reloaded the document.');
     await document.fonts.ready;
     assert(document.documentElement.scrollWidth <= Math.max(320, document.documentElement.clientWidth), 'Post management overflows the viewport.');
     const accountNav = document.querySelector('nav.account-nav[aria-label="Account"]');
@@ -147,6 +150,25 @@
         }
       }
     }
-    await deleteFirst('#draft-posts', 'draft-deleted');
+    await deleteFirst('#draft-posts');
+    assert(document.querySelectorAll('#draft-posts .page-manager-row').length === 2 && document.querySelectorAll('#published-posts .page-manager-row').length === 3, 'Draft deletion changed the wrong rows.');
+    await deleteFirst('#published-posts');
+    assert(document.querySelectorAll('#published-posts .page-manager-row').length === 2, 'Published deletion changed the wrong rows.');
+    const search = document.querySelector('.management-search');
+    search.elements.q.value = 'Short title';
+    search.requestSubmit();
+    await wait(() => document.querySelector('[data-result-count]')?.dataset.resultCount === '2' && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+    const query = location.search;
+    await deleteFirst('#draft-posts');
+    assert(!document.querySelector('#draft-posts') && document.querySelector('[data-result-count]').dataset.resultCount === '1', 'Last draft match must hide its section and update the count.');
+    await deleteFirst('#published-posts');
+    assert(!document.querySelector('#published-posts') && document.querySelector('[data-result-count]').dataset.resultCount === '0', 'Last published match must hide its section and update the count.');
+    assert(location.search === query && document.querySelector('.page-manager-empty').textContent === 'No posts match your search.', 'Empty search must preserve its query and show one empty state.');
+    document.querySelector('.management-search-clear a').click();
+    await wait(() => location.search === '' && !document.querySelector('.management-search-clear') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+    while (document.querySelector('#draft-posts')) await deleteFirst('#draft-posts');
+    while (document.querySelector('#published-posts .page-manager-row')) await deleteFirst('#published-posts');
+    assert(document.querySelector('#published-posts .page-manager-empty')?.textContent === 'No published posts yet.', 'Deleting the last published post must keep its normal empty section.');
+    await report('PASS');
   } catch (error) { await report(error.message + '\n' + error.stack); }
 })();

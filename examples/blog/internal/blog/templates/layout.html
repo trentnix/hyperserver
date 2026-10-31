@@ -18,6 +18,8 @@
   <link rel="icon" href="{{ .LayoutData.Profile.IconURL }}">
   <link rel="alternate" type="application/rss+xml" title="{{ .LayoutData.Profile.Name }}" href="/rss">
   <link rel="stylesheet" href="/assets/css/blog.css">
+  <link rel="preload" href="/assets/fonts/source-sans-3.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/assets/js/startup.js"></script>
   {{ if .LayoutData.Admin }}<link rel="stylesheet" href="/assets/lib/easymde/easymde.min.css">
   <script src="/assets/lib/easymde/easymde.min.js" defer></script>
   <script src="/assets/js/confirmation.js" defer></script>
@@ -36,6 +38,7 @@
           </nav>
           <div class="profile">{{ template "blog.profile" . }}</div>
         </header>
+        <nav id="sidebar-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}</nav>
       </aside>
       <main id="main-content" class="article-column">
         <div class="account-panel">
@@ -58,7 +61,7 @@
       </main>
     </div>
     <footer class="site-footer">
-      <nav id="post-archive" class="archive-nav" aria-label="Post archive" hx-get="/posts/recent" hx-trigger="load" hx-swap="innerHTML"><a href="/posts">All posts</a></nav>
+      <nav id="post-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}</nav>
     </footer>
   </div>
   <div id="notifications">{{ template "blog.notifications" . }}</div>
