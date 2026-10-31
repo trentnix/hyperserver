@@ -1,15 +1,29 @@
 {{ define "blog.recent" }}{{ template "blog.recentLinks" .Data }}{{ end }}
 
 {{ define "blog.layoutRecent" }}
-{{ if .RecentUnavailable }}<p>Recent posts are unavailable.</p><a href="/posts">All posts</a>{{ else }}{{ template "blog.recentLinks" .Recent }}{{ end }}
+{{ if .RecentUnavailable }}<p>Recent posts are unavailable.</p>{{ template "blog.archiveLinks" }}{{ else }}{{ template "blog.recentLinks" .Recent }}{{ end }}
 {{ end }}
 
 {{ define "blog.recentLinks" }}
 <div class="post-archive" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
 <div class="archive-heading"><h2>Recent Posts</h2><a href="/rss" hx-boost="false" title="RSS feed"><img src="/assets/img/icons/rss.png" width="16" height="16" alt="RSS feed"></a></div>
 {{ if . }}{{ template "blog.postLinks" . }}{{ else }}<p>No posts yet.</p>{{ end }}
-<a class="archive-more" href="/posts">All posts &rarr;</a>
+{{ template "blog.archiveLinks" }}
 </div>
+{{ end }}
+
+{{ define "blog.archiveLinks" }}
+<div class="archive-links" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+  <a href="/posts">All posts &rarr;</a>
+  {{ template "blog.searchForm" "" }}
+</div>
+{{ end }}
+
+{{ define "blog.searchForm" }}
+<form class="management-search reader-search-form" role="search" method="get" action="/search" hx-get="/search" hx-target="#article-content" hx-sync="#article-content:replace" hx-push-url="true">
+  <div><label><span>Search Site</span><input type="search" name="q" value="{{ . }}" maxlength="240" placeholder="Search"></label></div>
+  <button type="submit">Search</button>
+</form>
 {{ end }}
 
 {{ define "blog.postLinks" }}

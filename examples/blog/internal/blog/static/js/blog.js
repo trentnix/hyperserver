@@ -151,7 +151,19 @@
     });
   }
 
+  // Carry only page metadata with article swaps, including fetched history restores.
+  // Dialogs and smaller partials must not replace the surrounding page's metadata.
+  function updatePageMetadata(root) {
+    const article = root.id === 'article-content' ? root : root.querySelector('#article-content');
+    const metadata = article?.querySelector(':scope > template[data-page-metadata]');
+    if (!metadata) return;
+    document.head.querySelectorAll('[data-blog-metadata]').forEach(node => node.remove());
+    document.head.append(...metadata.content.children);
+    metadata.remove();
+  }
+
   function initialize(root) {
+    updatePageMetadata(root);
     root.querySelectorAll('#post-form').forEach(updatePublication);
     root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
@@ -563,9 +575,34 @@
     htmx.ajax('GET', event.detail.next, {target: '#revision-preview', swap: 'innerHTML show:none'});
   });
 
+  // Preserve search editing focus, or move to the result heading when following a
+  // match. Keep this request-local so unrelated swaps never move focus or scroll.
+  const searchFocus = new WeakMap();
+  document.addEventListener('htmx:beforeRequest', event => {
+    const source = event.detail.elt;
+    const field = source.closest('.reader-search-form')?.querySelector('input[name=q]');
+    if (field) {
+      searchFocus.set(event.detail.xhr, {start: field.selectionStart, end: field.selectionEnd});
+    } else if (source.closest('.search-results a')) {
+      searchFocus.set(event.detail.xhr, {heading: true});
+    }
+  });
+
   // History swaps omit detail.target but still dispatch on the swapped element.
   document.addEventListener('htmx:afterSwap', event => {
     initialize(event.target);
+    if (event.target.id === 'article-content') {
+      const intent = searchFocus.get(event.detail.xhr);
+      if (intent) {
+        searchFocus.delete(event.detail.xhr);
+        const target = event.target.querySelector(intent.heading ? 'h1' : '.reader-search-form input[name=q]');
+        if (target) {
+          if (intent.heading) target.tabIndex = -1;
+          target.focus({preventScroll: true});
+          if (!intent.heading) target.setSelectionRange(intent.start, intent.end);
+        }
+      }
+    }
     if (event.target.id !== 'revision-preview') return;
     const selected = event.target.querySelector('[data-revision]')?.dataset.revision;
     if (!selected) return;

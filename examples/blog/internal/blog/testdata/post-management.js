@@ -154,7 +154,8 @@
     assert(document.querySelectorAll('#draft-posts .page-manager-row').length === 2 && document.querySelectorAll('#published-posts .page-manager-row').length === 3, 'Draft deletion changed the wrong rows.');
     await deleteFirst('#published-posts');
     assert(document.querySelectorAll('#published-posts .page-manager-row').length === 2, 'Published deletion changed the wrong rows.');
-    const search = document.querySelector('.management-search');
+    const search = document.querySelector('#article-content .management-search');
+    assert(new URL(search.action).pathname === '/post/manage', 'Post management must search its own list, not the public site.');
     search.elements.q.value = 'Short title';
     search.requestSubmit();
     await wait(() => document.querySelector('[data-result-count]')?.dataset.resultCount === '2' && !document.querySelector('#article-content').classList.contains('htmx-settling'));

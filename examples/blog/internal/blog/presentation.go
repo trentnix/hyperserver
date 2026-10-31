@@ -41,8 +41,8 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 	if err := cm.ApplyDefaults("blog", func(cm *contentservice.ContentManagerService) {
 		cm.RegisterLayouts(contentservice.PageType, blogModuleFS, "templates/layout.html")
 		cm.RegisterLayouts(contentservice.HtmxType, blogModuleFS, "templates/fragment.html")
-		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html")
-		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/notifications.html", "templates/auth.html", "templates/archive.html")
+		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html")
+		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html")
 		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", "/", loginURL
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
@@ -80,6 +80,7 @@ func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templa
 	return content.PrepareTemplates(cm,
 		content.TemplatePath{FS: blogModuleFS, Path: responsesFile},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/posts.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/search.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/pages.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/media.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/history.html"},

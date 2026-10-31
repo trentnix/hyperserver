@@ -7,11 +7,40 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
 	"golang.org/x/net/html"
 )
+
+// articleMetadata reads the inert metadata carried with full and partial articles.
+func articleMetadata(t *testing.T, source string) string {
+	t.Helper()
+	const start = "<template data-page-metadata>"
+	if strings.Count(source, start) != 1 {
+		t.Fatal("article must carry exactly one metadata template")
+	}
+	_, rest, _ := strings.Cut(source, start)
+	metadata, _, ok := strings.Cut(rest, "</template>")
+	if !ok {
+		t.Fatal("unclosed metadata template")
+	}
+	return "<head>" + metadata + "</head>"
+}
+
+// requestArticle exercises the same authenticated or anonymous article swap as HTMX.
+func requestArticle(h *harness, path string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest("GET", "https://blog.example"+path, nil)
+	r.Header.Set("HX-Request", "true")
+	r.Header.Set("HX-Target", "article-content")
+	for _, cookie := range h.cookies {
+		r.AddCookie(cookie)
+	}
+	w := httptest.NewRecorder()
+	h.app.Handler.ServeHTTP(w, r)
+	return w
+}
 
 // sharingTags reads metadata as a crawler would, including HTML entity decoding.
 func sharingTags(t *testing.T, source string) map[string]string {
@@ -24,13 +53,21 @@ func metadataTags(t *testing.T, source, attribute, prefix string) map[string]str
 	t.Helper()
 	tags := make(map[string]string)
 	tokens := html.NewTokenizer(strings.NewReader(source))
+	var templateDepth int
 	for {
 		switch tokens.Next() {
 		case html.ErrorToken:
 			return tags
+		case html.EndTagToken:
+			if tokens.Token().Data == "template" && templateDepth > 0 {
+				templateDepth--
+			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
-			if token.Data != "meta" {
+			if token.Data == "template" {
+				templateDepth++
+			}
+			if templateDepth > 0 || token.Data != "meta" {
 				continue
 			}
 			var property, value string
@@ -68,6 +105,7 @@ func requireCanonical(t *testing.T, source, want string) {
 	t.Helper()
 	tokens := html.NewTokenizer(strings.NewReader(source))
 	var found, inHead bool
+	var templateDepth int
 	for {
 		switch tokens.Next() {
 		case html.ErrorToken:
@@ -76,11 +114,21 @@ func requireCanonical(t *testing.T, source, want string) {
 			}
 			return
 		case html.EndTagToken:
-			if tokens.Token().Data == "head" {
+			tag := tokens.Token().Data
+			if tag == "template" && templateDepth > 0 {
+				templateDepth--
+			}
+			if tag == "head" {
 				inHead = false
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
+			if token.Data == "template" {
+				templateDepth++
+			}
+			if templateDepth > 0 {
+				continue
+			}
 			if token.Data == "head" {
 				inHead = true
 			}
@@ -153,10 +201,21 @@ func TestSharingPublicContent(t *testing.T) {
 				}
 			}
 			requireDescription(t, response.Body.String(), tc.description)
+			for _, body := range []string{response.Body.String(), requestArticle(h, tc.path).Body.String()} {
+				metadata := articleMetadata(t, body)
+				requireCanonical(t, metadata, "https://blog.example"+tc.target)
+				requireDescription(t, metadata, tc.description)
+				if got := sharingTags(t, metadata); !reflect.DeepEqual(got, tags) {
+					t.Fatal("article metadata differs from the full page", got, tags)
+				}
+			}
 			if strings.Contains(response.Body.String(), "<script>alert(1)</script>") {
 				t.Fatal("metadata escaped incorrectly")
 			}
 			fragment := h.request("GET", tc.path, nil, true).Body.String()
+			if strings.Contains(fragment, "data-page-metadata") {
+				t.Fatal("a non-article fragment must not replace page metadata")
+			}
 			requireCanonical(t, fragment, "")
 			if tags := sharingTags(t, fragment); len(tags) != 0 {
 				t.Fatal("fragment contains sharing metadata", tags)
@@ -219,6 +278,12 @@ func TestSharingVisibility(t *testing.T) {
 			if tags := metadataTags(t, response.Body.String(), "name", "description"); len(tags) != 0 && tags["description"] != h.blog.profile.Current().Bio {
 				t.Fatalf("admin=%v path=%s exposed a private description: %v", admin, path, tags)
 			}
+			metadata := articleMetadata(t, requestArticle(h, path).Body.String())
+			requireCanonical(t, metadata, "")
+			if tags := sharingTags(t, metadata); len(tags) != 0 {
+				t.Fatalf("admin=%v path=%s exposed private sharing metadata in an article swap: %v", admin, path, tags)
+			}
+			requireDescription(t, metadata, h.blog.profile.Current().Bio)
 		}
 	}
 }

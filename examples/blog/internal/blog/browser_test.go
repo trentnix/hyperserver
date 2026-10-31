@@ -65,6 +65,17 @@ func TestBrowserRefresh(t *testing.T) {
 	}
 }
 
+// TestBrowserSearch checks reader search, partial navigation, and responsive layout.
+func TestBrowserSearch(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check reader search")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "search") })
+	}
+}
+
 // TestBrowserArchivePagination checks archive links, partial swaps, and browser history.
 func TestBrowserArchivePagination(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -268,6 +279,10 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "search" {
+		seedPublicSearch(t, h)
+		h.blog.recentPosts.invalidate()
+	}
 	if mode == "archive" {
 		seedArchive(t, h, 2*archivePageSize+1)
 	}
@@ -366,6 +381,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "search":
+		scriptFile = "testdata/search.js"
 	case "archive":
 		scriptFile = "testdata/archive-pagination.js"
 	case "refresh":
@@ -473,7 +490,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		pagePath += "?test-layout=1&amp;test-width=" + width
 	} else if mode == "navigation" {
 		pagePath = "/post/s/first"
-	} else if mode == "archive" {
+	} else if mode == "archive" || mode == "search" {
 		pagePath = "/posts"
 	}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

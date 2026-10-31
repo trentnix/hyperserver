@@ -19,6 +19,8 @@ Before starting the server, set `adminEmail` in `modules/blog/config.yaml` to yo
 
 Set `recentPostCount` in `modules/blog/config.yaml` to the number of Recent Posts links to show. It must be greater than zero. Restart after changing configuration. All Posts lists 30 published posts per page, newest first and grouped by month. Navigation works with ordinary links and HTMX. Its metadata cache holds one block of ten pages plus a lookahead entry, invalidates after successful post changes, and expires at the next scheduled publication.
 
+Search at `/search` finds published posts and visible pages, never drafts, future posts, or saved versions. It matches literal phrases case-insensitively, ranking titles before summaries and Markdown content, then newer content within each rank. Each request searches current content and shows up to 50 matches. Broader searches show the total and suggest refining the query. Search allows 30 requests per minute per client IP, tracks at most 4,096 clients, and limits database work to two seconds. Responses use `no-store` and ask search engines not to index the results.
+
 Start a local SMTP inbox if one is not already running:
 
 ```sh

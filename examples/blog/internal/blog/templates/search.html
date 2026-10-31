@@ -1,0 +1,20 @@
+{{ define "blog.search" }}
+<section class="reader-search info-page" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+  <h1>Search</h1>
+  {{ template "blog.searchForm" .Data.Query }}
+  <div class="management-search-results">
+    <p role="status">{{ if .Data.Query }}{{ .Data.Total }} {{ if eq .Data.Total 1 }}result{{ else }}results{{ end }} found.{{ else }}Enter a word or phrase to search.{{ end }}</p>
+    {{ if .Data.Query }}<p><a href="/search">Clear search</a></p>{{ end }}
+  </div>
+  {{ if gt .Data.Total (len .Data.Items) }}<p class="search-limit">Showing the {{ len .Data.Items }} best matches. Refine your search to narrow the results.</p>{{ end }}
+  {{ if and .Data.Query (not .Data.Total) }}<p>No matches. Try a different word or phrase.</p>{{ end }}
+  <ul class="search-results">
+    {{ range .Data.Items }}<li>
+      <span class="search-kind">{{ if eq .Kind "post" }}Post{{ else }}Page{{ end }}</span>
+      <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+      {{ if .Summary }}<p>{{ .Summary }}</p>{{ end }}
+    </li>{{ end }}
+  </ul>
+</section>
+{{ end }}
+

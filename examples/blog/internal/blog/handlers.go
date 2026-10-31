@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -34,6 +35,11 @@ func (m *module) Routes(routes *routing.Routes) error {
 	}
 	routes.HandleFunc("GET /{$}", m.index)
 	routes.HandleFunc("GET /posts", m.archive)
+	searchRoutes, err := routes.WithRateLimit(ratelimit.Policy{Requests: searchRequestsPerMinute, Window: time.Minute, MaxClients: 4096})
+	if err != nil {
+		return err
+	}
+	searchRoutes.HandleFunc("GET /search", m.search)
 	routes.HandleFunc("GET /posts/recent", m.recent)
 	routes.HandleFunc("GET /post/s/{slug}", m.post)
 	routes.HandleFunc("GET /post/id/{id}", m.post)

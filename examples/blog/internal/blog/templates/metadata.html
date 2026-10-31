@@ -1,0 +1,16 @@
+{{ define "blog.headMetadata" }}
+<meta data-blog-metadata name="description" content="{{ .LayoutData.Description }}">
+{{ with .LayoutData.Sharing }}
+<link data-blog-metadata rel="canonical" href="{{ .URL }}">
+<meta data-blog-metadata property="og:site_name" content="{{ $.LayoutData.Profile.Name }}">
+<meta data-blog-metadata property="og:title" content="{{ .Title }}">
+<meta data-blog-metadata property="og:description" content="{{ .Description }}">
+<meta data-blog-metadata property="og:type" content="{{ .Type }}">
+<meta data-blog-metadata property="og:url" content="{{ .URL }}">
+{{ if .Image }}<meta data-blog-metadata property="og:image" content="{{ .Image }}">{{ end }}
+{{ end }}
+{{ end }}
+
+{{ define "blog.articleMetadata" }}
+<template data-page-metadata>{{ template "blog.headMetadata" . }}</template>
+{{ end }}

@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// sharingPreview supplies public Open Graph metadata for a complete HTML page.
+// sharingPreview supplies public Open Graph metadata for full pages and article navigation.
 // URL starts as a local content path and optional query, then becomes absolute.
 type sharingPreview struct {
 	Title, Description, URL, Image, Type string
@@ -23,7 +23,7 @@ type sharingPreview struct {
 // setSharing supplies the public description and Open Graph preview. Preview URLs
 // use configuration, never request headers. URL errors do not suppress descriptions.
 func (m *module) setSharing(c *content.Content, r *http.Request, preview sharingPreview, rendered template.HTML) {
-	if c.IsHtmx() {
+	if c.IsHtmx() && c.HTMX.Request.Target != "article-content" {
 		return
 	}
 	data := c.LayoutData.(navigation)
@@ -63,7 +63,7 @@ func (m *module) setSharing(c *content.Content, r *http.Request, preview sharing
 // setPageSharing excludes pages hidden by an unpublished ancestor, even when an
 // administrator can view them. Public requests have already passed that check.
 func (m *module) setPageSharing(c *content.Content, r *http.Request, p Page, rendered template.HTML, admin bool) {
-	if c.IsHtmx() || !p.Published {
+	if !p.Published || (c.IsHtmx() && c.HTMX.Request.Target != "article-content") {
 		return
 	}
 	if admin {

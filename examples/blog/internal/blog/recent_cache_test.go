@@ -69,6 +69,9 @@ func TestInitialRecentPosts(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "Recent posts are unavailable.") || strings.Contains(w.Body.String(), "No posts yet.") || strings.Contains(w.Body.String(), "private database") {
 		t.Fatal("recent navigation failure must be explicit without breaking the login page or exposing storage details")
 	}
+	if strings.Count(w.Body.String(), `role="search" method="get" action="/search"`) != 3 {
+		t.Fatal("search must remain available in all responsive placements when recent posts fail")
+	}
 }
 
 // TestRecentCacheConcurrentRead checks coalescing and invalidation during storage reads.

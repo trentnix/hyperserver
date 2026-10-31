@@ -61,7 +61,7 @@
 
 {{ define "blog.archive" }}
 <section class="post-archive info-page" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
-<header><h1>All Posts</h1></header>
+<header><h1>All Posts</h1>{{ template "blog.searchForm" "" }}</header>
 {{ range .Data.Months }}<h2 class="archive-month">{{ .Name }}</h2>{{ template "blog.postLinks" .Posts }}{{ else }}<p>No posts yet.</p>{{ end }}
 {{ if or .Data.Previous .Data.Next }}
 <nav class="archive-pagination" aria-label="Archive pages">

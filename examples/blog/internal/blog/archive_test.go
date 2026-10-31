@@ -96,7 +96,8 @@ func TestArchivePagination(t *testing.T) {
 				}
 				if !hx {
 					canonical := "https://blog.example" + archiveURL(number)
-					if !strings.Contains(body, `<link rel="canonical" href="`+canonical+`">`) || !strings.Contains(body, `<meta property="og:url" content="`+canonical+`">`) {
+					requireCanonical(t, body, canonical)
+					if sharingTags(t, body)["og:url"] != canonical {
 						t.Fatalf("missing normalized page-specific canonical URL: %s", canonical)
 					}
 				}
@@ -115,9 +116,7 @@ func TestArchivePagination(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.app.Handler.ServeHTTP(w, r)
 	requireStatus(t, w, http.StatusOK)
-	if !strings.Contains(w.Body.String(), `<link rel="canonical" href="https://blog.example/posts?page=2">`) {
-		t.Fatal("history restore lost its page-specific canonical URL")
-	}
+	requireCanonical(t, w.Body.String(), "https://blog.example/posts?page=2")
 }
 
 // TestArchiveBoundaries checks empty and exactly-full archives without phantom pages.

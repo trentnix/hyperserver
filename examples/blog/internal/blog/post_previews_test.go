@@ -41,7 +41,7 @@ func TestPostPreviewsHTTP(t *testing.T) {
 				t.Fatal("selected preview did not take priority")
 			}
 			_, body, _ := strings.Cut(response.Body.String(), "</head>")
-			if strings.Contains(body, imageID) || !strings.Contains(body, "/content.jpg") {
+			if strings.Contains(body, `src="/images/`+imageID+`"`) || !strings.Contains(body, "/content.jpg") {
 				t.Fatal("preview changed the visible article")
 			}
 			response = h.request("GET", "/post/update/"+p.ID, nil, hx)

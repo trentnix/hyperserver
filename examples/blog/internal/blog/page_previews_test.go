@@ -92,7 +92,7 @@ func TestPagePreviewsHTTP(t *testing.T) {
 			if !fullPage {
 				detail = w.Body.String()
 			}
-			if strings.Contains(detail, imageID) || !strings.Contains(detail, "<h1>Details</h1>") {
+			if strings.Contains(detail, `src="/images/`+imageID+`"`) || !strings.Contains(detail, "<h1>Details</h1>") {
 				t.Fatal("detail image leakage or incorrect Markdown", w.Body)
 			}
 			if w.Header().Get("Cache-Control") != "no-store" {

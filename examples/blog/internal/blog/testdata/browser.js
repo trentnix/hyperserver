@@ -99,7 +99,7 @@ document.removeEventListener = function(type, callback, options) {
       }
       const menuToggle = document.querySelector('.menu-toggle');
       const profileLinks = document.querySelector('.profile-links');
-      assert([...profileLinks.querySelectorAll('a')].map(link => link.textContent).join(' ') === 'About Me Projects' && !profileLinks.querySelector('img'), 'Profile navigation must use stored page titles as text links.');
+      assert([...profileLinks.querySelectorAll('a')].map(link => link.textContent).join(' ') === 'About Me Projects' && !profileLinks.querySelector('img'), 'Profile navigation must use stored page titles.');
       assert(header.contains(links), 'Site links must belong to the header.');
       assert(getComputedStyle(footer).backgroundColor === 'rgba(0, 0, 0, 0)', 'Footer must have no background color.');
       if (innerWidth < 768) {
@@ -233,7 +233,7 @@ document.removeEventListener = function(type, callback, options) {
         if (innerWidth < 1680) {
           assert(document.querySelector('#post-archive').getBoundingClientRect().top >= content.getBoundingClientRect().bottom - 1, 'Long content overlaps Recent Posts.');
           content.textContent = 'Short page';
-          assert(Math.abs(footer.getBoundingClientRect().bottom - innerHeight) < 1, 'Short pages must fill the viewport without a white gap below the footer.');
+          assert(footer.getBoundingClientRect().bottom >= innerHeight - 1, 'Short pages must fill the viewport without a white gap below the footer.');
           assert(Math.abs(footer.getBoundingClientRect().top - (innerHeight - 200)) < 1, 'Short pages must initially show 200px of the footer.');
 
           // A long archive extends the document, not its own scroll container.

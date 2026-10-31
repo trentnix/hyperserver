@@ -3,16 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="{{ .LayoutData.Description }}">
-  {{ with .LayoutData.Sharing }}
-  <link rel="canonical" href="{{ .URL }}">
-  <meta property="og:site_name" content="{{ $.LayoutData.Profile.Name }}">
-  <meta property="og:title" content="{{ .Title }}">
-  <meta property="og:description" content="{{ .Description }}">
-  <meta property="og:type" content="{{ .Type }}">
-  <meta property="og:url" content="{{ .URL }}">
-  {{ if .Image }}<meta property="og:image" content="{{ .Image }}">{{ end }}
-  {{ end }}
+  {{ template "blog.headMetadata" . }}
   <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"historyCacheSize":0}'>
   <title>{{ .LayoutData.Profile.Name }}{{ if .Title }} | {{ .Title }}{{ end }}</title>
   <link rel="icon" href="{{ .LayoutData.Profile.IconURL }}">
@@ -57,7 +48,8 @@
             {{ end }}
           </nav>
         </div>
-        <article id="article-content" class="page-content" hx-history-elt>{{ renderPartial .PartialName . }}</article>
+        <article id="article-content" class="page-content" hx-history-elt>{{ template "blog.articleMetadata" . }}{{ renderPartial .PartialName . }}</article>
+        <div class="content-search" hx-swap="innerHTML show:window:top">{{ template "blog.searchForm" "" }}</div>
       </main>
     </div>
     <footer class="site-footer">
