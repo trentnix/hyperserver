@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -219,6 +220,17 @@ func TestBrowserMediaLibrary(t *testing.T) {
 	}
 }
 
+// TestBrowserAdminNavigation keeps the page shell during management navigation.
+func TestBrowserAdminNavigation(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check management navigation")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "admin-navigation") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
@@ -314,6 +326,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "admin-navigation":
+		scriptFile = "testdata/admin-navigation.js"
 	case "media-library":
 		scriptFile = "testdata/media-library.js"
 	case "media-cleanup":
@@ -405,6 +419,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		script = bytes.ReplaceAll(script, []byte("__RESET_URL__"), []byte(fmt.Sprintf("%q", resetURL.RequestURI())))
 	}
 	result := make(chan string, 1)
+	ready := make(chan struct{})
+	var readyOnce sync.Once
 	pagePath := "/auth/login/email"
 	if mode == "layout" {
 		pagePath += "?test-layout=1&amp;test-width=" + width
@@ -458,7 +474,12 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			return
 		case "/test/browser.js":
 			w.Header().Set("Content-Type", "text/javascript")
+			io.WriteString(w, `document.addEventListener('DOMContentLoaded', () => fetch('/test/ready', {method: 'POST'}), {once: true});`+"\n")
 			w.Write(script)
+			return
+		case "/test/ready":
+			readyOnce.Do(func() { close(ready) })
+			w.WriteHeader(http.StatusNoContent)
 			return
 		case "/test/result":
 			data, err := io.ReadAll(io.LimitReader(r.Body, 8192))
@@ -499,7 +520,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		w.Write(body)
 	}))
 	defer s.Close()
-	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	log, err := os.CreateTemp(t.TempDir(), "firefox-*.log")
 	if err != nil {
@@ -519,14 +540,18 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { cancel(); command.Wait() }()
-	select {
-	case report := <-result:
-		if report != "PASS" {
-			t.Fatal(report)
-		}
-	case <-ctx.Done():
+	exited := make(chan struct{})
+	go func() {
+		command.Wait()
+		close(exited)
+	}()
+	defer func() { cancel(); <-exited }()
+	readyAfter, err := waitForBlogBrowser(ctx, ready, result, exited)
+	if readyAfter > 0 {
+		t.Logf("Browser JavaScript ready after %s", readyAfter)
+	}
+	if err != nil {
 		data, _ := os.ReadFile(log.Name())
-		t.Fatalf("browser did not finish: %s", data)
+		t.Fatalf("%v\nFirefox output:\n%s", err, data)
 	}
 }

@@ -12,7 +12,7 @@
   };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
-    const stage = sessionStorage.getItem('profile-stage');
+    let stage = sessionStorage.getItem('profile-stage');
     if (!stage) {
       document.querySelector('#email').value = 'trentnix@gmail.com';
       document.querySelector('#password').value = 'Sample-Password-123!';
@@ -24,7 +24,8 @@
       sessionStorage.setItem('profile-stage', 'edit');
       if (innerWidth < 768) document.querySelector('.account-menu summary').click();
       document.querySelector('.account-nav a[href="/profile"]').click();
-      return;
+      await wait(() => document.querySelector('#profile-form') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      stage = 'edit';
     }
     const form = document.querySelector('#profile-form');
     const formStyle = getComputedStyle(form);

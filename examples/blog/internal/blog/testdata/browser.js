@@ -46,7 +46,7 @@ document.removeEventListener = function(type, callback, options) {
     }
     const requestedWidth = new URLSearchParams(location.search).get('test-width');
     if (requestedWidth) assert(innerWidth === Number(requestedWidth), 'Wrong test viewport: ' + innerWidth + ' instead of ' + requestedWidth);
-    const stage = sessionStorage.getItem('blog-test-stage');
+    let stage = sessionStorage.getItem('blog-test-stage');
     if (!stage) {
       // Firefox can reuse fonts across documents without recording another request.
       const fontRequests = performance.getEntriesByType('resource').filter(entry => new URL(entry.name).pathname.endsWith('.woff2'));
@@ -312,7 +312,8 @@ document.removeEventListener = function(type, callback, options) {
       }
       sessionStorage.setItem('blog-test-stage', 'posts');
       posts.click();
-      return;
+      await wait(() => document.querySelector('#draft-posts') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      stage = 'posts';
     }
     if (stage === 'posts') {
       assert(document.querySelector('#draft-posts') && document.querySelector('#published-posts'), 'Post management sections are missing.');

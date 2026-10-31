@@ -17,7 +17,7 @@
   };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
-    const stage = sessionStorage.getItem('page-stage');
+    let stage = sessionStorage.getItem('page-stage');
     if (!stage) {
       document.querySelector('#email').value = 'trentnix@gmail.com';
       document.querySelector('#password').value = 'Sample-Password-123!';
@@ -28,7 +28,8 @@
     if (stage === 'logged-in') {
       document.querySelector('.account-nav a[href="/pages"]').click();
       sessionStorage.setItem('page-stage', 'create');
-      return;
+      await wait(() => location.pathname === '/pages' && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      stage = 'create';
     }
     if (stage === 'create') {
       assert(location.pathname === '/pages', 'Missing page management screen.');

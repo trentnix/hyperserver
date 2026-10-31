@@ -12,7 +12,7 @@
   };
   window.addEventListener('error', event => report(event.message));
   try {
-    const stage = sessionStorage.getItem('media-stage');
+    let stage = sessionStorage.getItem('media-stage');
     if (!stage) {
       document.querySelector('#email').value = 'trentnix@gmail.com';
       document.querySelector('#password').value = 'Sample-Password-123!';
@@ -24,7 +24,8 @@
       sessionStorage.setItem('media-stage', 'library');
       if (innerWidth < 768) document.querySelector('.account-menu summary').click();
       document.querySelector('a[href="/media"]').click();
-      return;
+      await wait(() => document.querySelector('.media-library') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      stage = 'library';
     }
     if (stage === 'library') {
       sessionStorage.setItem('media-stage', 'list');

@@ -214,6 +214,48 @@ func TestNotFoundResponses(t *testing.T) {
 	}
 }
 
+// TestManagementResponses preserves direct navigation while serving article fragments
+// for management links and complete pages for uncached browser-history restores.
+func TestManagementResponses(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	for _, page := range []struct{ path, title string }{
+		{"/post/manage", "Posts"},
+		{"/pages", "Pages"},
+		{"/profile", "Site Profile"},
+		{"/media", "Media"},
+	} {
+		for _, mode := range []string{"direct", "fragment", "history"} {
+			t.Run(page.path+"/"+mode, func(t *testing.T) {
+				r := httptest.NewRequest(http.MethodGet, "https://blog.example"+page.path, nil)
+				for _, cookie := range h.cookies {
+					r.AddCookie(cookie)
+				}
+				if mode != "direct" {
+					r.Header.Set("HX-Request", "true")
+					r.Header.Set("HX-Target", "article-content")
+				}
+				if mode == "history" {
+					r.Header.Set("HX-History-Restore-Request", "true")
+				}
+				w := httptest.NewRecorder()
+				h.app.Handler.ServeHTTP(w, r)
+				requireStatus(t, w, http.StatusOK)
+
+				body := w.Body.String()
+				if strings.Contains(body, "<html") != (mode != "fragment") || !strings.Contains(body, "<title>Trent Nix | "+page.title+"</title>") {
+					t.Fatal("unexpected management layout or document title", body)
+				}
+				if w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("HX-Redirect") != "" {
+					t.Fatal("management response must remain private without forcing a reload", w.Header())
+				}
+			})
+		}
+	}
+}
+
 // TestReadingResponses preserves full-page navigation and limits fragment titles
 // to requests that replace the article, not the sidebar or editor.
 func TestReadingResponses(t *testing.T) {
