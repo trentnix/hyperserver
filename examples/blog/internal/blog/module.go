@@ -151,6 +151,8 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"delete",
 		"message",
 		"profileEditor",
+		"profileHistory",
+		"profileRevisionPreview",
 		"history",
 		"revisionPreview",
 		"revisionDelete",
@@ -225,10 +227,14 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 // It must only be called after successful initialization.
 func (m *module) Shutdown(context.Context) error { return m.close() }
 
-// requireAdmin rejects unverified or non-administrator accounts and prevents
-// caching of publishing responses, including access denials.
+// adminPageKey marks management responses without confusing them with public pages viewed by an administrator.
+type adminPageKey struct{}
+
+// requireAdmin rejects unverified or non-administrator accounts, marks management
+// responses for rendering, and prevents caching, including access denials.
 func (m *module) requireAdmin(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(context.WithValue(r.Context(), adminPageKey{}, true))
 		w.Header().Set("Cache-Control", "no-store")
 		if !m.access.IsAdmin(user.GetUserFromContext(r.Context())) {
 			m.app.ContentManager.HandleError(w, r, "A verified administrator account is required.", nil, http.StatusForbidden)

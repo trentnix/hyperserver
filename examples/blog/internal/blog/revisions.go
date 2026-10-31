@@ -26,6 +26,11 @@ type Revision struct {
 	RecordedAt                             time.Time
 }
 
+// sameContent compares the fields restored by history, excluding snapshot metadata.
+func (r Revision) sameContent(other Revision) bool {
+	return r.Title == other.Title && r.Summary == other.Summary && r.Markdown == other.Markdown && r.PreviewImage == other.PreviewImage
+}
+
 // revisionRepository reads and removes saved versions. Content repositories record them atomically on save.
 type revisionRepository interface {
 	ListRevisions(context.Context, string, string) ([]Revision, error)
@@ -91,18 +96,28 @@ func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, c
 type historyPage struct {
 	Title, URL, EditorURL         string
 	ContentURL, Kind              string
+	PublicationStatus             string
 	Versions                      []Revision
 	Selected                      Revision
 	Current                       bool
+	MatchesCurrent                bool
+	Version                       int64
+	Error                         string
 	HTML                          template.HTML
 	MissingImages, MissingPreview bool
 }
 
 // revisions shows administrator-only history without modifying content or publication.
 func (m *module) revisions(w http.ResponseWriter, r *http.Request) {
+	m.renderRevisions(w, r, "", http.StatusOK)
+}
+
+// renderRevisions keeps restore errors beside the selected version and its actions.
+func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message string, status int) {
 	kind, id := r.PathValue("kind"), r.PathValue("id")
-	data := historyPage{URL: "/history/" + kind + "/" + id, Kind: kind}
+	data := historyPage{URL: "/history/" + kind + "/" + id, Kind: kind, Error: message, PublicationStatus: "Published"}
 	var contentPath string
+	var current Revision
 	switch kind {
 	case "post":
 		p, err := m.posts.GetByID(r.Context(), id, true)
@@ -111,6 +126,13 @@ func (m *module) revisions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.Title, data.EditorURL = p.Title, "/post/update/"+id
+		data.Version = p.Version
+		if p.Draft {
+			data.PublicationStatus = "Draft"
+		} else if p.Scheduled(m.currentTime()) {
+			data.PublicationStatus = "Scheduled for " + p.Published.Format("Jan 2, 2006 at 3:04 PM UTC")
+		}
+		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage}
 		contentPath = "/post/s/" + p.Slug
 	case "page":
 		p, err := m.pageStore.GetPageByID(r.Context(), id, true)
@@ -119,6 +141,11 @@ func (m *module) revisions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.Title, data.EditorURL = p.Title, "/pages/update/"+id
+		data.Version = p.Version
+		if !p.Published {
+			data.PublicationStatus = "Draft"
+		}
+		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage}
 		contentPath = p.URL()
 	default:
 		m.storageError(w, r, errNotFound)
@@ -159,6 +186,7 @@ func (m *module) revisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.Versions, data.Current = versions, selected == versions[0].ID
+	data.MatchesCurrent = data.Selected.sameContent(current)
 	data.ContentURL = contentPath
 	request := htmx.GetRequest(r)
 	view := "history"
@@ -166,6 +194,7 @@ func (m *module) revisions(w http.ResponseWriter, r *http.Request) {
 		view = "revisionPreview"
 	}
 	page := m.views[view].Content(r, data)
+	page.ResponseStatusCode = status
 	page.Headers = map[string]string{"Vary": htmx.HeaderTarget}
 	if view == "revisionPreview" {
 		page.HTMX.Response = &htmx.Response{ReplaceURL: data.URL + "?revision=" + strconv.FormatInt(selected, 10)}

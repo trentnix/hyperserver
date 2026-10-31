@@ -78,9 +78,21 @@
     if (stage === 'edit') {
       for (const fieldset of form.querySelectorAll('[data-image-picker]')) {
         const input = fieldset.querySelector('input[type=file]');
-        const fileButton = getComputedStyle(input, '::file-selector-button');
-        assert(getComputedStyle(input).borderTopWidth === '0px' && fileButton.padding === '8px 12px' && fileButton.borderRadius === '4px', 'Profile upload must use shared file-button styling.');
+        assert(input.hidden && getComputedStyle(input).display === 'none', 'Native file controls should not duplicate the upload button.');
+        const uploadButton = fieldset.querySelector('[data-image-upload]');
+        const browseButton = fieldset.querySelector('[data-media-browse]');
+        assert(uploadButton.textContent === 'Upload image' && browseButton.textContent === 'Browse library', 'Image actions should have clear, consistent labels.');
+        const uploadBounds = uploadButton.getBoundingClientRect();
+        const browseBounds = browseButton.getBoundingClientRect();
+        assert(Math.abs(uploadBounds.top - browseBounds.top) < 1 && Math.abs(uploadBounds.width - browseBounds.width) < 1 && Math.abs(uploadBounds.height - browseBounds.height) < 1, 'Upload and library buttons must share a row and size.');
+        let filePickerOpened = false;
+        const interceptPicker = event => { event.preventDefault(); filePickerOpened = true; };
+        input.addEventListener('click', interceptPicker, {once: true});
+        uploadButton.click();
+        assert(filePickerOpened, 'Upload image did not open the file picker.');
         const preview = fieldset.querySelector('.profile-image-preview').getBoundingClientRect();
+        const reset = fieldset.querySelector('[data-image-reset]').getBoundingClientRect();
+        assert(reset.top >= preview.bottom && Math.abs(reset.left + reset.right - preview.left - preview.right) < 1, 'Reset action must be centered below the preview.');
         const controls = fieldset.querySelector('.profile-image-controls').getBoundingClientRect();
         const stacked = innerWidth < 768 || fieldset.dataset.imageField === 'backgroundURL';
         assert(stacked ? controls.top >= preview.bottom : controls.left > preview.right, 'Image controls do not follow the responsive layout.');

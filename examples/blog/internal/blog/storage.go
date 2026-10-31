@@ -84,6 +84,7 @@ type repository interface {
 	// Conflicting slugs return errSlugTaken.
 	// Updates require the current Version or return errEditConflict. Content changes
 	// append a revision in the same transaction as the save and image references.
+	// Unchanged content and settings preserve Version and history.
 	Save(context.Context, Post) (Post, error)
 	// SetPublished immediately publishes or hides content, replacing any pending
 	// schedule. Past publication dates stay unchanged. Missing IDs return errNotFound.
@@ -168,6 +169,9 @@ CREATE TABLE IF NOT EXISTS blog_media (
 	}
 	if err == nil {
 		err = initializeRevisions(ctx, db)
+	}
+	if err == nil {
+		err = initializeProfileRevisions(ctx, db)
 	}
 	if err != nil {
 		db.Close()
@@ -320,6 +324,36 @@ func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDr
 // Updates require the current Version and fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
+	now := s.now().UTC().Truncate(time.Second)
+	var publication int64
+	if !p.Draft {
+		publication = now.Unix()
+		if p.Published.After(now) {
+			publication = p.Published.Unix()
+		}
+	}
+	if p.ID != "" {
+		current, err := s.GetByID(ctx, p.ID, true)
+		if err != nil {
+			return p, err
+		}
+		if p.Version != current.Version {
+			return p, errEditConflict
+		}
+		candidate := p
+		candidate.Published = time.Time{}
+		if current.WasPublished(now) {
+			if publication > now.Unix() {
+				return p, errAlreadyPublished
+			}
+			candidate.Published = current.Published
+		} else if publication != 0 {
+			candidate.Published = time.Unix(publication, 0).UTC()
+		}
+		if candidate == current {
+			return current, nil
+		}
+	}
 	refs, err := imageReferences(p.Markdown, "/post/s/"+p.Slug, p.PreviewImage)
 	if err != nil {
 		return p, err
@@ -330,14 +364,6 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post) (Post, error) {
 	}
 	defer tx.Rollback()
 
-	now := s.now().UTC().Truncate(time.Second)
-	var publication int64
-	if !p.Draft {
-		publication = now.Unix()
-		if p.Published.After(now) {
-			publication = p.Published.Unix()
-		}
-	}
 	if p.ID == "" {
 		p.ID = rand.Text()
 		var published int64

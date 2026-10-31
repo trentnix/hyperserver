@@ -301,6 +301,12 @@ func TestPagePreviewSortOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldUpdated := p.Updated
+	unchanged, err := store.SavePage(t.Context(), p)
+	if err != nil || unchanged.Updated != p.Updated || unchanged.Version != p.Version {
+		t.Fatal("unchanged save altered page order or edit token", unchanged, err)
+	}
+	assertOrder("zero,ordered-new,ordered-old,unordered-new,unordered-old")
+	p.Title = "Updated title"
 	p, err = store.SavePage(t.Context(), p)
 	if err != nil || !p.Updated.After(oldUpdated) {
 		t.Fatal("save did not update timestamp", p, err)

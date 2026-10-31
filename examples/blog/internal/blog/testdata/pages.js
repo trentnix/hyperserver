@@ -11,8 +11,8 @@
     }
   };
   const editorReady = async () => {
-    await wait(() => document.querySelector('dialog[open] .CodeMirror'));
-    await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    await wait(() => document.querySelector('.editor-panel .CodeMirror'));
+    await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
     return document.querySelector('#page-form');
   };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
@@ -71,7 +71,7 @@
       const form = await editorReady();
       const panelStyle = getComputedStyle(form.closest('.editor-panel'));
       assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Page editor typography differs from other forms.');
-      assert(form.querySelector('.button-secondary[data-close-dialog]'), 'Page editor Cancel is not secondary.');
+      assert(form.querySelector('.form-actions a.button-secondary'), 'Page editor Cancel is not secondary.');
       assert(form.textContent.includes('Navigation shows top-level pages and their immediate children.'), 'Navigation help does not explain the depth limit.');
       assert(!form.elements.published.checked, 'New pages must start as drafts.');
       form.elements.title.value = 'Contact';

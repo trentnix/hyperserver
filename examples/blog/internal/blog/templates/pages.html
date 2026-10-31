@@ -4,9 +4,9 @@
 {{ if not .Data.Published }}<p class="page-status">Draft — visible only to you</p>{{ end }}
 <h1>{{ .Data.Title }}</h1>
 {{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Page actions">
-  <a class="action-edit" href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a>
+  <a class="action-edit" href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">Edit</a>
   <details class="action-menu"><summary>More</summary><div class="action-menu-items">
-    <a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#dialog-host">New subpage</a>
+    <a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">New subpage</a>
     {{ if .Data.HasHistory }}<a href="/history/page/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}
     <a class="action-delete" href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
   </div></details>
@@ -27,7 +27,7 @@
 <section class="info-page page-manager" data-content-list="page" data-searching="{{ if .Data.Query }}true{{ else }}false{{ end }}">
 <header class="page-manager-heading">
   <div><h1>Pages</h1><p>Manage your pages and subpages.</p></div>
-  <a class="page-create" href="/pages/create" hx-get="/pages/create" hx-target="#dialog-host">New page</a>
+  <a class="page-create" href="/pages/create" hx-get="/pages/create" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">New page</a>
 </header>
 <form class="management-search" method="get" action="/pages" hx-get="/pages" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">
   <div><label for="page-search">Search pages</label><input id="page-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
@@ -47,7 +47,7 @@
   <div class="page-manager-row">
     <div class="page-manager-title"><a href="{{ .URL }}">{{ .Title }}</a><small>{{ .URL }}</small>{{ if not .Published }}<span class="page-manager-draft">Draft</span>{{ end }}</div>
     <div class="page-manager-actions">
-      <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
+      <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top" aria-label="Edit {{ .Title }}">Edit</a>
       {{ if .HasHistory }}<a href="/history/page/{{ .ID }}" hx-boost="false" aria-label="History for {{ .Title }}">History</a>{{ end }}
       <a href="/pages/delete/{{ .ID }}" hx-get="/pages/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
     </div>
@@ -58,8 +58,7 @@
 {{ end }}
 
 {{ define "blog.pageEditor" }}
-{{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
-<section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit page{{ else }}New page{{ end }}</h1>
+<section class="info-page editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit page{{ else }}New page{{ end }}</h1>
 <form id="page-form" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   <input type="hidden" name="version" value="{{ .Data.Version }}">
   {{ template "blog.revisionNotice" . }}
@@ -103,10 +102,9 @@
   <p class="form-hint">Uncheck to move this page to drafts when you save.</p>
   {{ template "blog.editorHelp" . }}
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
-  <div class="form-actions"><button type="submit">Save page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/pages{{ end }}" hx-boost="false">Cancel</a>{{ end }}</div>
+  <div class="form-actions"><button type="submit">Save page</button><a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/pages{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
 </form></section>
-{{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
 
 {{ define "blog.pageDelete" }}

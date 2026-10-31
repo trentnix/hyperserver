@@ -12,7 +12,74 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
+
+// TestHistoryPublicationStatus describes the current content, never the selected snapshot.
+func TestHistoryPublicationStatus(t *testing.T) {
+	for _, tc := range []struct{ kind, status string }{
+		{"post", "Draft"}, {"post", "Published"}, {"post", "Scheduled for Nov 1, 2026 at 1:00 PM UTC"},
+		{"page", "Draft"}, {"page", "Published"},
+	} {
+		t.Run(tc.kind+"/"+tc.status, func(t *testing.T) {
+			h := newHarness(t)
+			h.register(t)
+			h.verify(t)
+			h.login(t)
+			store := h.blog.posts.(*sqliteRepository)
+			now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+			store.now, h.blog.now = func() time.Time { return now }, func() time.Time { return now }
+			var id string
+			if tc.kind == "post" {
+				p, err := store.Save(t.Context(), Post{Slug: "status", Title: "Earlier writing", Markdown: "Body", Draft: true})
+				if err != nil {
+					t.Fatal(err)
+				}
+				p.Title, p.Draft = "Current writing", tc.status == "Draft"
+				if strings.HasPrefix(tc.status, "Scheduled") {
+					p.Published = now.Add(time.Hour)
+				}
+				p, err = store.Save(t.Context(), p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				id = p.ID
+			} else {
+				p, err := store.SavePage(t.Context(), Page{Slug: "status", Title: "Earlier writing"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				p.Title, p.Published = "Current writing", tc.status == "Published"
+				p, err = store.SavePage(t.Context(), p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				id = p.ID
+			}
+			versions, err := store.ListRevisions(t.Context(), tc.kind, id)
+			if err != nil || len(versions) != 2 {
+				t.Fatal(versions, err)
+			}
+			for _, hx := range []bool{false, true} {
+				for _, revision := range versions {
+					path := "/history/" + tc.kind + "/" + id + "?revision=" + strconv.FormatInt(revision.ID, 10)
+					response := h.request("GET", path, nil, hx)
+					requireStatus(t, response, http.StatusOK)
+					body := response.Body.String()
+					label := "Post"
+					if tc.kind == "page" {
+						label = "Page"
+					}
+					want := `<p class="page-status">` + label + " status: " + tc.status + "</p>"
+					header := regexp.MustCompile(`(?s)<header class="page-manager-heading">.*?</header>`).FindString(body)
+					if !strings.Contains(header, want) || !strings.Contains(header, "Current writing") || strings.Count(body, want) != 1 {
+						t.Fatal("status must appear once in the current content header", header)
+					}
+				}
+			}
+		})
+	}
+}
 
 // TestRevisionPreview keeps targeted selection separate from navigation and history restoration.
 func TestRevisionPreview(t *testing.T) {
@@ -257,6 +324,28 @@ func TestRevisionHTTP(t *testing.T) {
 			list, err = store.ListRevisions(t.Context(), kind, id)
 			if err != nil || len(list) != 3 || list[0].Title != original.Title || list[1].Title != current.Title {
 				t.Fatal("restoration discarded history", list, err)
+			}
+			response = h.request("GET", historyURL+"?revision="+first, nil, false)
+			if !strings.Contains(response.Body.String(), "This version matches the current content.") {
+				t.Fatal("matching historical content was not identified")
+			}
+			// Loading and saving that older, now-identical version must not rewrite current content.
+			response = h.request("GET", editorURL+"?revision="+first, nil, false)
+			values.Set("version", revisionForm(t, response.Body.String()).Get("version"))
+			beforePost, _ := store.GetByID(t.Context(), id, true)
+			beforePage, _ := store.GetPageByID(t.Context(), id, true)
+			for _, hx := range []bool{false, true} {
+				want := http.StatusSeeOther
+				if hx {
+					want = http.StatusOK
+				}
+				requireStatus(t, h.request("POST", action, values, hx), want)
+				afterPost, _ := store.GetByID(t.Context(), id, true)
+				afterPage, _ := store.GetPageByID(t.Context(), id, true)
+				afterHistory, err := store.ListRevisions(t.Context(), kind, id)
+				if err != nil || afterPost != beforePost || !reflect.DeepEqual(afterPage, beforePage) || !reflect.DeepEqual(afterHistory, list) {
+					t.Fatal("identical restore changed content, timestamps, version, or history", err)
+				}
 			}
 			h.cookies = nil
 			if kind == "post" {

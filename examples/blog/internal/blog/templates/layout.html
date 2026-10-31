@@ -48,12 +48,12 @@
             {{ end }}
           </nav>
         </div>
-        <article id="article-content" class="page-content" hx-history-elt>{{ template "blog.articleMetadata" . }}{{ renderPartial .PartialName . }}</article>
-        <div class="content-search" hx-swap="innerHTML show:window:top">{{ template "blog.searchForm" "" }}</div>
+        <article id="article-content" class="page-content" hx-history-elt>{{ template "blog.articleMetadata" . }}{{ template "blog.readerSearchState" . }}{{ renderPartial .PartialName . }}</article>
+        <div class="content-search" data-reader-search-slot hx-swap="innerHTML show:window:top">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div>
       </main>
     </div>
     <footer class="site-footer">
-      <nav id="post-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}</nav>
+      <nav id="post-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap="innerHTML show:window:top">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div></nav>
     </footer>
   </div>
   <div id="notifications">{{ template "blog.notifications" . }}</div>

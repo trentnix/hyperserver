@@ -71,24 +71,22 @@
     }
     if (phase === 'editor' || phase === 'view') {
       await wait(() => document.querySelector('.CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
-      await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+      await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
       const editorPath = location.pathname;
       const form = document.querySelector('form[data-draft-owner]');
       form.elements.title.value = 'Unsaved local writing';
       form.elements.title.dispatchEvent(new Event('input', {bubbles: true}));
       await wait(() => form.querySelector('[data-draft-status]').textContent.includes('Saved locally'));
       assert(!form.querySelector('a[href^="/history/"]'), 'Editors must not offer History.');
-      const cancel = form.querySelector('[data-close-dialog]');
+      const cancel = form.querySelector('.form-actions a');
       cancel.click();
       await Promise.resolve();
       assert(prompts.length === 1 && location.pathname === editorPath, 'Closing the editor lost unsaved writing without confirmation.');
       consent = true;
       cancel.click();
-      await Promise.resolve();
+      await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       stage('history');
-      document.querySelector('.content-actions .action-menu summary').click();
-      await Promise.resolve();
-      document.querySelector('.content-actions a[href="' + target.history + '"]').click();
+      document.querySelector('a[href="' + target.history + '"]').click();
       await Promise.resolve();
       return;
     }

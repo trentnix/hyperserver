@@ -32,6 +32,7 @@
       assert(archiveRequests() === initialRequests, 'Management navigation reloaded Recent Posts.');
       assert(!document.querySelector('dialog[open]'), 'Management navigation opened a dialog.');
       assert(!article.querySelector('html, body, .site-layout'), 'Management fragment included the page shell.');
+      assert(!document.querySelector('.reader-search-form'), 'Administration must not contain reader search markup.');
     };
     const ready = async (path, title) => {
       await wait(() => location.pathname === path && article.querySelector('h1')?.textContent === title && !article.classList.contains('htmx-settling'));
@@ -135,6 +136,16 @@
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     window.frameElement.style.width = width;
     assert(!document.querySelector('.account-nav form').closest('[hx-boost="true"]'), 'Logout must retain ordinary navigation.');
+    const publicReady = async () => {
+      await wait(() => location.pathname === '/' && article.querySelector('.post-body') && !article.classList.contains('htmx-settling'));
+      assert([...document.querySelectorAll('.reader-search-form')].filter(form => form.getClientRects().length).length === 1, 'Returning to public content must restore reader search for administrators.');
+    };
+    document.querySelector('.profile-name').click();
+    await publicReady();
+    history.back();
+    await ready('/pages', 'Pages');
+    history.forward();
+    await publicReady();
     await report('PASS');
   } catch (error) {
     await report(error.stack || String(error));

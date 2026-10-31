@@ -151,19 +151,28 @@
     });
   }
 
-  // Carry only page metadata with article swaps, including fetched history restores.
-  // Dialogs and smaller partials must not replace the surrounding page's metadata.
-  function updatePageMetadata(root) {
+  // Article responses carry metadata and reader-search markup for the shared shell.
+  // Apply both on navigation and history restores, never on dialog or preview swaps.
+  function updatePagePresentation(root) {
     const article = root.id === 'article-content' ? root : root.querySelector('#article-content');
     const metadata = article?.querySelector(':scope > template[data-page-metadata]');
-    if (!metadata) return;
-    document.head.querySelectorAll('[data-blog-metadata]').forEach(node => node.remove());
-    document.head.append(...metadata.content.children);
-    metadata.remove();
+    if (metadata) {
+      document.head.querySelectorAll('[data-blog-metadata]').forEach(node => node.remove());
+      document.head.append(...metadata.content.children);
+      metadata.remove();
+    }
+    const search = article?.querySelector(':scope > template[data-reader-search]');
+    if (search) {
+      for (const slot of document.querySelectorAll('[data-reader-search-slot]')) {
+        slot.replaceChildren(search.content.cloneNode(true));
+        htmx.process(slot);
+      }
+      search.remove();
+    }
   }
 
   function initialize(root) {
-    updatePageMetadata(root);
+    updatePagePresentation(root);
     root.querySelectorAll('#post-form').forEach(updatePublication);
     root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
     root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
@@ -346,6 +355,9 @@
 
   // Post and page previews store an image ID. Profile fields store the complete URL.
   function updateImagePreview(picker) {
+    picker.querySelector('[data-image-missing]')?.remove();
+    const empty = picker.querySelector('.image-empty');
+    if (empty) empty.hidden = false;
     const value = picker.querySelector('[data-image-value]').value.trim();
     const url = value ? (picker.dataset.imagePrefix || '') + value : picker.dataset.imageDefault;
     const preview = picker.querySelector('[data-image-preview]');

@@ -49,8 +49,12 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /robots.txt", m.robots)
 	routes.Handle("GET /history/{kind}/{id}", m.requireAdmin(m.revisions))
 	routes.Handle("GET /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.confirmRevisionDelete))
+	routes.HandleWithBodyLimit("POST /history/{kind}/{id}/restore", m.requireAdmin(m.restoreRevision), routing.MiB)
 	routes.Handle("POST /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.deleteRevision))
 	routes.Handle("GET /profile", m.requireAdmin(m.profileEditor))
+	routes.Handle("GET /profile/history", m.requireAdmin(m.profileHistory))
+	routes.Handle("GET /profile/history/delete/{revision}", m.requireAdmin(m.confirmProfileRevisionDelete))
+	routes.Handle("POST /profile/history/delete/{revision}", m.requireAdmin(m.deleteProfileRevision))
 	routes.Handle("GET /media", m.requireAdmin(m.mediaLibrary))
 	routes.Handle("GET /media/{id}", m.requireAdmin(m.mediaDetail))
 	routes.Handle("POST /media/{id}", m.requireAdmin(m.renameMedia))
@@ -60,6 +64,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("GET /media/delete/{id}", m.requireAdmin(m.confirmMediaDelete))
 	routes.Handle("POST /media/delete/{id}", m.requireAdmin(m.deleteMedia))
 	routes.HandleWithBodyLimit("POST /profile", m.requireAdmin(m.saveProfile), routing.MiB)
+	routes.HandleWithBodyLimit("POST /profile/restore", m.requireAdmin(m.restoreProfile), routing.MiB)
 	routes.HandleFunc("GET /about", m.page)
 	routes.HandleFunc("GET /page/{slug}", m.page)
 	routes.Handle("GET /pages", m.requireAdmin(m.pages))
@@ -257,6 +262,10 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 		data.Title, data.Summary, data.Markdown, data.PreviewImage = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage
 	}
 	page := m.views["editor"].Content(r, data)
+	page.Title = "New post"
+	if p.ID != "" {
+		page.Title = "Edit post"
+	}
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this page.", err)
 	}
@@ -443,6 +452,10 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 			data.ScheduledSlug, data.ScheduledAt = publication.ScheduledSlug, publication.ScheduledAt
 		}
 		page.Data = data
+	}
+	page.Title = "New post"
+	if p.ID != "" {
+		page.Title = "Edit post"
 	}
 	page.ResponseStatusCode = status
 	if err := page.Render(w, r); err != nil {

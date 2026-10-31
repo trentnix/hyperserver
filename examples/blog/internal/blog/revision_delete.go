@@ -94,15 +94,24 @@ func (m *module) deleteRevision(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		contentURL = "/history/" + kind + "/" + id + "?revision=" + strconv.FormatInt(selected, 10)
-		if request := htmx.GetRequest(r); request.Enabled && !request.HistoryRestore {
-			// Let the existing history page remove the entry and load its next preview.
-			payload, _ := json.Marshal(map[string]map[string]string{
-				"blog:revision-deleted": {"revision": strconv.FormatInt(number, 10), "next": contentURL},
-			})
-			response := htmx.Response{NoContent: true, Trigger: string(payload)}
-			response.Apply(w)
+		if revisionDeleted(w, r, number, contentURL) {
 			return
 		}
 	}
 	util.RedirectToURL(w, r, contentURL)
+}
+
+// revisionDeleted updates an open history page without replacing it or moving scroll.
+// Ordinary navigation and history restoration use the caller's redirect instead.
+func revisionDeleted(w http.ResponseWriter, r *http.Request, number int64, next string) bool {
+	request := htmx.GetRequest(r)
+	if !request.Enabled || request.HistoryRestore {
+		return false
+	}
+	payload, _ := json.Marshal(map[string]map[string]string{
+		"blog:revision-deleted": {"revision": strconv.FormatInt(number, 10), "next": next},
+	})
+	response := htmx.Response{NoContent: true, Trigger: string(payload)}
+	response.Apply(w)
+	return true
 }

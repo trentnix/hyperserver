@@ -11,9 +11,9 @@
     }
   };
   const edit = async path => {
-    await htmx.ajax('GET', path, '#dialog-host');
-    await wait(() => document.querySelector('dialog[open] .CodeMirror'));
-    await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    await htmx.ajax('GET', path, '#article-content');
+    await wait(() => document.querySelector('.editor-panel .CodeMirror'));
+    await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
     return document.querySelector('#post-form');
   };
   const choose = (form, value) => {
@@ -42,14 +42,14 @@
       const timeChoices = form.querySelector('[data-time-choice]');
       const timeMenu = timeChoices.closest('details');
       const timeToggle = timeMenu.querySelector('summary');
-      const dialog = form.closest('dialog');
+      const scroller = document.scrollingElement;
       const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
       assert(!timeMenu.hidden && !timeMenu.open, 'Scheduling must expose a closed time menu.');
-      const closedScrollHeight = dialog.scrollHeight;
+      const closedScrollHeight = scroller.scrollHeight;
       timeToggle.click();
       await new Promise(resolve => setTimeout(resolve, 100));
       assert(timeMenu.open && timeChoices.getClientRects().length > 0, 'The time list must stay open after a completed click without holding the mouse.');
-      assert(dialog.scrollHeight === closedScrollHeight, 'Opening the time menu must not extend the dialog scroll area.');
+      assert(scroller.scrollHeight === closedScrollHeight, 'Opening the time menu must not extend the page height.');
       const suggestions = [...timeChoices.options].slice(1).map(option => option.value);
       assert(suggestions.length === 48 && new Set(suggestions).size === 48 && suggestions[0] === '12:00 AM' && suggestions[24] === '12:00 PM' && suggestions[47] === '11:30 PM', 'Time suggestions must cover the full day in half-hour steps.');
       // Keep the time field visible and scroll within the list, as a user would
@@ -58,11 +58,9 @@
       timeChoices.focus({preventScroll: true});
       timeChoices.scrollTop = timeChoices.scrollHeight;
       await frame();
-      const scrollTop = dialog.scrollTop;
-      const pageTop = window.scrollY;
+      const scrollTop = scroller.scrollTop;
       let jumped = false;
-      const recordScroll = () => { jumped ||= Math.abs(dialog.scrollTop - scrollTop) > 1 || Math.abs(window.scrollY - pageTop) > 1; };
-      dialog.addEventListener('scroll', recordScroll);
+      const recordScroll = () => { jumped ||= Math.abs(scroller.scrollTop - scrollTop) > 1; };
       window.addEventListener('scroll', recordScroll);
       const focus = timeToggle.focus;
       let preventedScroll = false;
@@ -75,10 +73,9 @@
       await frame();
       await frame();
       recordScroll();
-      dialog.removeEventListener('scroll', recordScroll);
       window.removeEventListener('scroll', recordScroll);
       delete timeToggle.focus;
-      assert(preventedScroll && !jumped, 'Selecting a time must return focus without scrolling the dialog or page: ' + JSON.stringify({preventedScroll, scrollTop, after: dialog.scrollTop, pageTop, pageAfter: window.scrollY, maximum: dialog.scrollHeight - dialog.clientHeight}));
+      assert(preventedScroll && !jumped, 'Selecting a time must return focus without scrolling the page: ' + JSON.stringify({preventedScroll, scrollTop, after: scroller.scrollTop, maximum: scroller.scrollHeight - scroller.clientHeight}));
       assert(form.elements.publishTime.value === '9:30 AM' && form.elements.publishTime.checkValidity() && !timeMenu.open, 'Selecting a time must update the field and close the menu.');
       form.elements.publishTime.value = '14:17';
       form.elements.publishTime.dispatchEvent(new Event('input', {bubbles: true}));
@@ -88,7 +85,7 @@
       timeChoices.focus();
       const escape = new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true});
       timeChoices.dispatchEvent(escape);
-      assert(!timeMenu.open && escape.defaultPrevented && document.activeElement === timeToggle && form.closest('dialog').open, 'Escape must close only the time menu and return focus to its toggle.');
+      assert(!timeMenu.open && escape.defaultPrevented && document.activeElement === timeToggle && form.isConnected, 'Escape must close only the time menu and return focus to its toggle.');
       timeToggle.click();
       form.elements.publishDate.click();
       assert(!timeMenu.open, 'Clicking outside the time menu must dismiss it.');
@@ -103,21 +100,20 @@
       // Larger mobile text makes the saved message wrap while "Unsaved changes."
       // still fits on one line. The footer must not shrink between those states.
       if (innerWidth < 768) form.querySelector('[data-draft-status]').style.fontSize = '18px';
-      dialog.scrollTop = dialog.scrollHeight;
+      scroller.scrollTop = scroller.scrollHeight;
       await frame();
-      const bottomScroll = dialog.scrollTop;
-      const bottomHeight = dialog.scrollHeight;
+      const bottomScroll = scroller.scrollTop;
+      const bottomHeight = scroller.scrollHeight;
       const bottomPositions = [];
-      const recordBottom = () => bottomPositions.push({top: dialog.scrollTop, height: dialog.scrollHeight, menuTop: timeChoices.getBoundingClientRect().top, dialogTop: dialog.getBoundingClientRect().top});
-      dialog.addEventListener('scroll', recordBottom);
+      const recordBottom = () => bottomPositions.push({top: scroller.scrollTop, height: scroller.scrollHeight, menuTop: timeChoices.getBoundingClientRect().top});
+      window.addEventListener('scroll', recordBottom);
       timeToggle.click();
       timeChoices.focus({preventScroll: true});
       timeChoices.scrollTop = timeChoices.scrollHeight;
       await frame();
       recordBottom();
       const listBounds = timeChoices.getBoundingClientRect();
-      const dialogBounds = dialog.getBoundingClientRect();
-      assert(listBounds.top >= dialogBounds.top && listBounds.bottom <= dialogBounds.bottom, 'The time list must fit inside the visible dialog so native option clicks cannot scroll it.');
+      assert(listBounds.top >= 0 && listBounds.bottom <= innerHeight, 'The time list must fit inside the viewport so native option clicks cannot scroll it.');
       // External browser drivers can supply a real pointer click as well.
       if (window.testPickTime) await window.testPickTime('6:30 AM');
       else {
@@ -130,9 +126,9 @@
       await wait(() => form.querySelector('[data-draft-status]').textContent === 'Saved locally. Use Save to apply changes.');
       await frame();
       recordBottom();
-      dialog.removeEventListener('scroll', recordBottom);
+      window.removeEventListener('scroll', recordBottom);
       assert(bottomPositions.every(position => Math.abs(position.top - bottomScroll) <= 1), 'Selection at the bottom must preserve scroll position through recovery status updates: ' + JSON.stringify({bottomScroll, bottomHeight, bottomPositions}));
-      assert(bottomPositions.every(position => position.height === bottomHeight), 'Updating recovery status must not resize the dialog scroll area: ' + JSON.stringify({bottomHeight, bottomPositions}));
+      assert(bottomPositions.every(position => position.height === bottomHeight), 'Updating recovery status must not resize the page height: ' + JSON.stringify({bottomHeight, bottomPositions}));
       form.elements.publishTime.value = '';
       assert(form.elements.publishDate.validity.valueMissing && form.elements.publishTime.validity.valueMissing, 'Scheduling must require the complete date and time.');
       const dateBox = form.elements.publishDate.getBoundingClientRect();
@@ -230,7 +226,8 @@
       localStorage.setItem(key, JSON.stringify({saved: Date.now(), baseline: JSON.stringify(fields), fields: {
         ...fields, content: 'Recovered scheduled writing.', published: 'scheduled', publishAt: sessionStorage.getItem('schedule-date')
       }}));
-      form.querySelector('[data-close-dialog]').click();
+      form.querySelector('.form-actions a').click();
+      await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       form = await edit(path);
       assert(!form.querySelector('[data-draft-recovery]').hidden, 'The old scheduled copy must remain recoverable.');
       assert(form.querySelector('[data-draft-description]').textContent.includes('Your current publication setting will be kept.'), 'Recovery must explain why it cannot restore the schedule.');

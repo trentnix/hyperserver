@@ -79,7 +79,7 @@
     const searchForm = document.querySelector(placement + ' form[role=search]');
     assert(searchForm?.getClientRects().length, 'Search form is missing from its responsive placement.');
     if (innerWidth >= 1680) {
-      assert(!document.querySelector('#sidebar-archive form').getClientRects().length, 'Ultrawide search must not appear in the sidebar.');
+      assert(!document.querySelector('#sidebar-archive form'), 'Ultrawide search must not appear in the sidebar.');
       assert(searchForm.getBoundingClientRect().top >= article.getBoundingClientRect().bottom, 'Ultrawide search must follow the page content.');
       assert(Math.abs(searchForm.getBoundingClientRect().left - article.getBoundingClientRect().left - parseFloat(getComputedStyle(article).paddingLeft)) < 1, 'Ultrawide search must align with the content text.');
     } else {

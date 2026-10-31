@@ -2,7 +2,7 @@
 {{ if .IsHtmx }}<dialog aria-labelledby="revision-delete-title">{{ end }}
 <section class="confirmation-panel">
   <h1 id="revision-delete-title">Delete revision?</h1>
-  <p>This cannot be undone. The current post or page will not change.</p>
+  <p>This cannot be undone. The current content will not change.</p>
   <p>{{ .Data.Selected.Title }} · {{ .Data.Selected.RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}</p>
   <form method="post" action="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}"{{ if .IsHtmx }} hx-post="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}" hx-target="closest section" hx-swap="innerHTML show:none"{{ end }} class="form-actions">
     <button type="submit" class="button-danger">Delete revision</button>
@@ -14,9 +14,16 @@
 
 {{ define "blog.history" }}
 <section class="info-page history-page" hx-boost="false">
-  <header class="page-manager-heading"><div><h1>History</h1><p>{{ .Data.Title }}</p></div><a href="{{ .Data.ContentURL }}">Back to {{ .Data.Kind }}</a></header>
-  <p>Saved versions preserve the title, summary, Markdown, and preview image. Loading a version does not save it or change its URL, publication setting, or page placement.</p>
+  <header class="page-manager-heading"><div><h1>History</h1><p>{{ .Data.Title }}</p><p class="page-status">{{ if eq .Data.Kind "post" }}Post{{ else }}Page{{ end }} status: {{ .Data.PublicationStatus }}</p></div><a href="{{ .Data.ContentURL }}">Back to {{ .Data.Kind }}</a></header>
+  <p>Edit a saved version before saving, or restore it directly. Restoring replaces the title, summary, Markdown, and preview image. The current URL, publication setting, and page placement stay unchanged.</p>
   <div class="revision-layout">
+    {{ template "blog.versionList" . }}
+    <section id="revision-preview" class="revision-preview" aria-label="Version preview" aria-live="polite">{{ template "blog.revisionPreview" . }}</section>
+  </div>
+</section>
+{{ end }}
+
+{{ define "blog.versionList" }}
     <nav aria-label="Saved versions" hx-target="#revision-preview" hx-swap="innerHTML show:none" hx-sync="#revision-preview:replace"><ol class="revision-list">
     {{ range $index, $revision := .Data.Versions }}<li>
       <a href="{{ $.Data.URL }}?revision={{ .ID }}" hx-get="{{ $.Data.URL }}?revision={{ .ID }}" data-revision="{{ .ID }}"{{ if eq .ID $.Data.Selected.ID }} aria-current="true"{{ end }}>
@@ -26,18 +33,17 @@
       </a>
     </li>{{ end }}
     </ol></nav>
-    <section id="revision-preview" class="revision-preview" aria-label="Version preview" aria-live="polite">{{ template "blog.revisionPreview" . }}</section>
-  </div>
-</section>
 {{ end }}
 
 {{ define "blog.revisionPreview" }}
     <div data-revision="{{ .Data.Selected.ID }}">
-      <div class="form-actions">
+      <form class="form-actions" method="post" action="{{ .Data.URL }}/restore?revision={{ .Data.Selected.ID }}">
+        {{ if not .Data.MatchesCurrent }}<input type="hidden" name="version" value="{{ .Data.Version }}"><button type="submit">Restore this version</button>{{ end }}
         <a class="button-secondary" href="{{ .Data.EditorURL }}?revision={{ .Data.Selected.ID }}">{{ if .Data.Current }}Edit{{ else }}Edit this version{{ end }}</a>
         {{ if not .Data.Current }}<a class="button-secondary" href="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}" hx-get="{{ .Data.URL }}/delete/{{ .Data.Selected.ID }}" hx-target="#dialog-host">Delete revision</a>{{ end }}
-      </div>
-      {{ if not .Data.Current }}<p class="form-hint">Starts an edit using this version. Nothing changes until you save.</p>{{ end }}
+      </form>
+      {{ if .Data.Error }}<p class="field-error" role="alert">{{ .Data.Error }}</p>{{ end }}
+      {{ if and (not .Data.Current) .Data.MatchesCurrent }}<p class="form-hint">This version matches the current content.</p>{{ end }}
       <h2>{{ .Data.Selected.Title }}</h2>
       {{ if .Data.Selected.Summary }}<p class="revision-summary">{{ .Data.Selected.Summary }}</p>{{ end }}
       {{ if .Data.MissingImages }}<p class="revision-notice">Some images in this version are no longer available. The saved writing has not changed.</p>{{ end }}

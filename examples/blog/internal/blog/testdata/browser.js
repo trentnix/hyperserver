@@ -27,8 +27,8 @@ document.removeEventListener = function(type, callback, options) {
   };
   const savePublication = async (edit, published, nextStage) => {
     edit.click();
-    await wait(() => document.querySelector('dialog[open] #post-form .CodeMirror'));
-    await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    await wait(() => document.querySelector('.editor-panel #post-form .CodeMirror'));
+    await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
     const form = document.querySelector('#post-form');
     assert(form.querySelector('label[for="post-publication"]').textContent.trim() === 'Publish', 'Editor must label publication clearly.');
     form.elements.published.value = published ? 'on' : '';
@@ -335,10 +335,10 @@ document.removeEventListener = function(type, callback, options) {
       const link = document.querySelector('a[href="/post/create"]');
       assert(link, 'Posts page has no New post link.');
       link.click();
-      await wait(() => document.querySelector('dialog[open] .CodeMirror'));
+      await wait(() => document.querySelector('.editor-panel .CodeMirror') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       const cm = document.querySelector('.CodeMirror').CodeMirror;
       const panelStyle = getComputedStyle(document.querySelector('.editor-panel'));
-      assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Modal editor typography is inconsistent.');
+      assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Page editor typography is inconsistent.');
       const saveStyle = getComputedStyle(document.querySelector('#post-form [type=submit]'));
       const cancelStyle = getComputedStyle(document.querySelector('#post-form .button-secondary'));
       assert(saveStyle.backgroundColor !== cancelStyle.backgroundColor && cancelStyle.textDecorationLine === 'none', 'Cancel must be a secondary control.');
@@ -409,13 +409,14 @@ document.removeEventListener = function(type, callback, options) {
       assert(image.naturalWidth === 2, 'Uploaded image did not load.');
       const baselineListeners = editorKeyListeners.size;
       document.querySelector('a[href^="/post/update/"]').click();
-      await wait(() => document.querySelector('dialog[open] .CodeMirror'));
-      document.querySelector('[data-close-dialog]').click();
-      assert(!document.querySelector('dialog[open]'), 'Cancel did not close the dialog.');
+      await wait(() => document.querySelector('.editor-panel .CodeMirror') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      document.querySelector('#post-form .form-actions a').click();
+      await wait(() => !document.querySelector('#post-form') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      assert(location.pathname === '/post/manage', 'Cancel must return to Posts.');
       await htmx.ajax('GET', '/posts/recent', '.archive-nav');
       assert(!document.querySelector('dialog[open]'), 'An unrelated swap reopened the dialog.');
       document.querySelector('a[href^="/post/update/"]').click();
-      await wait(() => document.querySelector('dialog[open] .CodeMirror'));
+      await wait(() => document.querySelector('.editor-panel .CodeMirror') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       assert(document.querySelectorAll('.CodeMirror').length === 1, 'Reopening duplicated the editor.');
       assert(editorKeyListeners.size === baselineListeners + 1, 'Replacing an editor leaked its document listener.');
 
@@ -459,11 +460,10 @@ document.removeEventListener = function(type, callback, options) {
       const originalConfirm = window.blogConfirm;
       let leavePrompt = '';
       window.blogConfirm = (options, proceed) => { leavePrompt = options.title; queueMicrotask(proceed); };
-      document.querySelector('[data-close-dialog]').click();
-      await Promise.resolve();
+      document.querySelector('#post-form .form-actions a').click();
+      await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       window.blogConfirm = originalConfirm;
       assert(leavePrompt.includes('without saving'), 'Closing a changed editor must warn about unsaved edits.');
-      document.querySelector('.content-actions .action-menu summary').click();
       document.querySelector('a[href^="/post/delete/"]').click();
       await wait(() => document.querySelector('dialog[open] form[action^="/post/delete/"]'));
       const deletion = document.querySelector('dialog[open] form');

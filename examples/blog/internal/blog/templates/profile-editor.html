@@ -1,7 +1,10 @@
 {{ define "blog.profileEditor" }}
 <section class="info-page profile-editor">
-<header><h1>Site Profile</h1><p class="form-hint">Your public name, biography, and site images.</p></header>
-<form id="profile-form" method="post" action="/profile" hx-post="/profile" hx-target="#profile-errors">
+<header class="page-manager-heading"><div><h1>Site Profile</h1><p class="form-hint">Your public name, biography, and site images.</p></div>{{ if .Data.HasHistory }}<a class="button-secondary" href="/profile/history">History</a>{{ end }}</header>
+{{ with .Data.LoadedRevision }}<p class="revision-notice">Editing the version saved {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}. Save to apply it to the site. <a href="/profile/history?revision={{ .ID }}">Back to history</a></p>{{ end }}
+{{ if .Data.MissingImages }}<p class="revision-notice">Some images are no longer available. Replace or remove their references before saving.</p>{{ end }}
+<form id="profile-form" method="post" action="/profile{{ with .Data.LoadedRevision }}?revision={{ .ID }}{{ end }}" hx-post="/profile{{ with .Data.LoadedRevision }}?revision={{ .ID }}{{ end }}" hx-target="#profile-errors">
+  <input type="hidden" name="version" value="{{ .Data.Version }}">
   <div id="profile-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
   <div class="profile-identity">
     <label for="profile-name">Display name</label><input id="profile-name" name="name" value="{{ .Data.Name }}" maxlength="240" required autocomplete="name">
@@ -13,24 +16,27 @@
   {{ range .Data.ImageFields }}
   <fieldset class="image-picker profile-image" data-image-picker data-image-field="{{ .Name }}" data-image-default="{{ .DefaultURL }}">
     <legend>{{ .Label }}</legend>
-    <p id="help-{{ .Name }}" class="form-hint">{{ if eq .Name "imageURL" }}Shown beside your name and bio with a centered, circular crop. The original image is kept unchanged.{{ else if eq .Name "faviconURL" }}Shown in browser tabs. Use a simple, square PNG that stays recognizable at 16 × 16 pixels.{{ else }}Background image for the site. This preview shows the image only. The site's styles control its size and placement.{{ end }}</p>
+    <p id="help-{{ .Name }}" class="form-hint">{{ if eq .Name "imageURL" }}Shown beside your name and bio with a circular crop.{{ else if eq .Name "faviconURL" }}Shown in browser tabs. Use a simple, square image recognizable at 16 × 16 pixels.{{ else }}Your site's styles control the background's size and placement.{{ end }}</p>
     <div class="profile-image-row">
-      <div class="profile-image-preview">
-        <img {{ if .PreviewURL }}src="{{ .PreviewURL }}"{{ else }}hidden{{ end }} alt="{{ .Label }} preview" data-image-preview>
-        {{ if eq .Name "faviconURL" }}<span>Browser tab</span>{{ else if eq .Name "backgroundURL" }}<span class="form-hint image-empty">No background</span>{{ end }}
+      <div class="profile-image-selection">
+        <div class="profile-image-preview">
+          <img {{ if .PreviewURL }}src="{{ .PreviewURL }}"{{ else }}hidden{{ end }} alt="{{ .Label }} preview" data-image-preview>
+          {{ if .Missing }}<span class="missing-image" data-image-missing>Image deleted</span>{{ end }}
+          {{ if eq .Name "faviconURL" }}<span>Browser tab</span>{{ else if eq .Name "backgroundURL" }}<span class="form-hint image-empty"{{ if .Missing }} hidden{{ end }}>No background</span>{{ end }}
+        </div>
+        <div class="image-upload-controls" hidden><button type="button" class="text-button" data-image-reset>{{ if .DefaultURL }}Use default image{{ else }}Remove background{{ end }}</button></div>
       </div>
       <div class="profile-image-controls">
         <div class="image-upload-controls" hidden>
-          <button type="button" class="button-secondary" data-media-browse>Choose existing</button>
-          <label for="upload-{{ .Name }}">Choose {{ if eq .Name "imageURL" }}a portrait{{ else if eq .Name "faviconURL" }}a favicon{{ else }}a background{{ end }}</label><input id="upload-{{ .Name }}" type="file" accept="image/png,image/jpeg,image/gif" aria-describedby="profile-image-help help-{{ .Name }}">
-          <button type="button" class="text-button" data-image-reset>{{ if .DefaultURL }}Use default image{{ else }}Remove background{{ end }}</button>
+          <div class="preview-image-actions"><button type="button" data-image-upload aria-describedby="profile-image-help help-{{ .Name }}">Upload image</button><button type="button" data-media-browse>Browse library</button></div>
+          <input id="upload-{{ .Name }}" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload {{ .Label }}" hidden>
         </div>
+        <p data-image-status role="status"></p>
         <details{{ if $.Data.Error }} open{{ end }}>
-          <summary>Use an image URL</summary>
+          <summary>Enter image URL</summary>
           <label for="profile-{{ .Name }}">{{ .Label }} URL</label><input id="profile-{{ .Name }}" name="{{ .Name }}" value="{{ .Value }}" maxlength="2048" data-image-value>
           <p class="form-hint">Local path or HTTPS URL. Leave blank to {{ if .DefaultURL }}use the default image{{ else }}remove the background{{ end }}.</p>
         </details>
-        <p data-image-status role="status"></p>
       </div>
     </div>
   </fieldset>

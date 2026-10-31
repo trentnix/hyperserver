@@ -1,0 +1,29 @@
+{{ define "blog.profileHistory" }}
+<section class="info-page history-page" hx-boost="false">
+  <header class="page-manager-heading"><div><h1>History</h1><p>Site Profile</p></div><a href="/profile">Back to Site Profile</a></header>
+  <p>Edit a saved version before saving, or restore it directly. Restoring updates the live site and preserves earlier versions.</p>
+  <div class="revision-layout">
+    {{ template "blog.versionList" . }}
+    <section id="revision-preview" class="revision-preview" aria-label="Version preview" aria-live="polite">{{ template "blog.profileRevisionPreview" . }}</section>
+  </div>
+</section>
+{{ end }}
+
+{{ define "blog.profileRevisionPreview" }}
+<div data-revision="{{ .Data.Selected.ID }}">
+  <form class="form-actions" method="post" action="/profile/restore?revision={{ .Data.Selected.ID }}">
+    {{ if not .Data.MatchesCurrent }}<input type="hidden" name="version" value="{{ .Data.Version }}"><button type="submit">Restore this version</button>{{ end }}
+    <a class="button-secondary" href="/profile?revision={{ .Data.Selected.ID }}">Edit</a>
+    {{ if not .Data.Current }}<a class="button-secondary" href="/profile/history/delete/{{ .Data.Selected.ID }}" hx-get="/profile/history/delete/{{ .Data.Selected.ID }}" hx-target="#dialog-host">Delete revision</a>{{ end }}
+  </form>
+  {{ if and (not .Data.Current) .Data.MatchesCurrent }}<p class="form-hint">This version matches the current content.</p>{{ end }}
+  <h2>{{ .Data.Selected.Name }}</h2>
+  {{ if .Data.Selected.Bio }}<p class="profile-history-bio">{{ .Data.Selected.Bio }}</p>{{ end }}
+  <div class="profile-history-images">
+    {{ range .Data.Images }}<figure class="revision-image">
+      <figcaption>{{ .Label }}</figcaption>
+      {{ if .Missing }}<span class="missing-image">Image deleted</span>{{ else if .URL }}<img src="{{ .URL }}" alt="Saved {{ .Label }}">{{ else }}<p class="form-hint">No background</p>{{ end }}
+    </figure>{{ end }}
+  </div>
+</div>
+{{ end }}

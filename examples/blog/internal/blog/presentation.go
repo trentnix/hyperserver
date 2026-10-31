@@ -47,6 +47,7 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
 			data := navigation{Profile: profile.Current(), SignedIn: account != nil, Admin: access.IsAdmin(account)}
+			data.ReaderSearch = r.Context().Value(adminPageKey{}) == nil
 			data.Description = data.Profile.Bio
 			if data.Admin {
 				data.EditorOwner = account.ID
@@ -85,6 +86,7 @@ func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templa
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/media.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/history.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/profile-editor.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/profile-history.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/editor-components.html"},
 	)
 }
@@ -96,6 +98,7 @@ type navigation struct {
 	Pages                                    []pageLink
 	Recent                                   []ArchiveEntry
 	RecentUnavailable                        bool
+	ReaderSearch                             bool
 	EditorOwner, Description                 string
 	SignedIn, Admin, Registration, ShowLogin bool
 }

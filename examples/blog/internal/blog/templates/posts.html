@@ -1,7 +1,7 @@
 {{ define "blog.post" }}
 <header class="post-heading"><h1>{{ .Data.Title }}</h1>{{ if .Data.Draft }}<p class="page-status">Draft preview — only you can see this post.</p>{{ else if .Data.Scheduled }}<p class="page-status">Scheduled for {{ .Data.Published.Format "Jan 2, 2006 at 3:04 PM UTC" }} — only you can preview this post until then.</p>{{ else }}<time datetime="{{ .Data.Published.Format "2006-01-02" }}">{{ .Data.Published.Format "January 2, 2006" }}</time>{{ end }}</header>
 {{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Post actions">
-  <a class="action-edit" href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#dialog-host">Edit</a>
+  <a class="action-edit" href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">Edit</a>
   <details class="action-menu"><summary>More</summary><div class="action-menu-items">
     {{ if .Data.HasHistory }}<a href="/history/post/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}
     <a class="action-delete" href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
@@ -14,7 +14,7 @@
 <section class="info-page page-manager" data-content-list="post" data-searching="{{ if .Data.Query }}true{{ else }}false{{ end }}">
 <header class="page-manager-heading">
   <div><h1>Posts</h1><p>Manage your drafts, scheduled posts, and published posts.</p></div>
-  <a class="page-create" href="/post/create" hx-get="/post/create" hx-target="#dialog-host">New post</a>
+  <a class="page-create" href="/post/create" hx-get="/post/create" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">New post</a>
 </header>
 <form class="management-search" method="get" action="/post/manage" hx-get="/post/manage" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">
   <div><label for="post-search">Search posts</label><input id="post-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
@@ -51,7 +51,7 @@
 {{ range . }}<li class="page-manager-row" data-content-id="{{ .ID }}">
   <div class="page-manager-title"><a href="/post/s/{{ .Slug }}">{{ .Title }}</a>{{ if .Scheduled }}<small>Scheduled {{ .Published.Format "Jan 2, 2006 at 3:04 PM UTC" }}</small>{{ else if .Draft }}<span class="page-manager-draft">Draft</span>{{ else }}<small>Published {{ .Published.Format "January 2, 2006" }}</small>{{ end }}</div>
   <div class="page-manager-actions">
-    <a href="/post/update/{{ .ID }}" hx-get="/post/update/{{ .ID }}" hx-target="#dialog-host" aria-label="Edit {{ .Title }}">Edit</a>
+    <a href="/post/update/{{ .ID }}" hx-get="/post/update/{{ .ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top" aria-label="Edit {{ .Title }}">Edit</a>
     {{ if .HasHistory }}<a href="/history/post/{{ .ID }}" hx-boost="false" aria-label="History for {{ .Title }}">History</a>{{ end }}
     <a href="/post/delete/{{ .ID }}" hx-get="/post/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
   </div>
@@ -74,8 +74,7 @@
 {{ end }}
 
 {{ define "blog.editor" }}
-{{ if .IsHtmx }}<dialog class="editor-dialog" aria-labelledby="editor-title">{{ end }}
-<section class="editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
+<section class="info-page editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
 <form id="post-form" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   <input type="hidden" name="version" value="{{ .Data.Version }}">
   {{ template "blog.revisionNotice" . }}
@@ -182,10 +181,9 @@
   <p class="form-hint">Changes take effect when you save. Choose Draft to keep the post private.</p>
   {{ template "blog.editorHelp" . }}
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
-  <div class="form-actions"><button type="submit">Save post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/{{ end }}" hx-boost="false">Cancel</a>{{ end }}</div>
+  <div class="form-actions"><button type="submit">Save post</button><a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/post/manage{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
 </form></section>
-{{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}
 
 {{ define "blog.delete" }}

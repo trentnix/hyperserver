@@ -48,10 +48,10 @@
             await save(path.replace('/update/', '/'), fields);
           }
         }
-        await htmx.ajax('GET', path, '#dialog-host');
-        await wait(() => document.querySelector('dialog[open] .CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
-        await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
-        const form = document.querySelector('dialog[open] form');
+        await htmx.ajax('GET', path, '#article-content');
+        await wait(() => document.querySelector('.editor-panel .CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
+        await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
+        const form = document.querySelector('.editor-panel form');
         form.elements.title.value = 'Changed title';
         form.querySelector('.CodeMirror').CodeMirror.setValue('Writing that must not be lost.');
         const slug = form.elements.slug;
@@ -86,7 +86,8 @@
           }
         }
         consent = true;
-        form.querySelector('[data-close-dialog]').click();
+        form.querySelector('.form-actions a').click();
+        await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
         await Promise.resolve();
       }
     }

@@ -15,8 +15,11 @@
 {{ define "blog.archiveLinks" }}
 <div class="archive-links" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
   <a href="/posts">All posts &rarr;</a>
-  {{ template "blog.searchForm" "" }}
 </div>
+{{ end }}
+
+{{ define "blog.readerSearchState" }}
+<template data-reader-search>{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</template>
 {{ end }}
 
 {{ define "blog.searchForm" }}

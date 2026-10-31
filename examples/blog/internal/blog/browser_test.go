@@ -119,6 +119,17 @@ func TestBrowserRevisions(t *testing.T) {
 	}
 }
 
+// TestBrowserRevisionRestore applies saved writing directly and selects the new history entry.
+func TestBrowserRevisionRestore(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check direct restoration")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "revision-restore") })
+	}
+}
+
 // TestBrowserRevisionNavigation keeps long history lists and scroll positions intact during selection.
 func TestBrowserRevisionNavigation(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -229,6 +240,17 @@ func TestBrowserProfile(t *testing.T) {
 	}
 }
 
+// TestBrowserProfileHistory checks responsive previews, stable selection, and explicit restoration.
+func TestBrowserProfileHistory(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check profile history")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "profile-history") })
+	}
+}
+
 // TestBrowserAuthStyles compares authentication panels in full-page and HTMX responses.
 func TestBrowserAuthStyles(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -279,6 +301,23 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
+	if mode == "profile-history" {
+		image := mediaUpload(t, h.blog, "historical profile image")
+		for i := range 12 {
+			p := h.blog.profile.Current()
+			p.Name, p.Bio = fmt.Sprintf("Profile %02d", i), "A saved biography."
+			p.ImageURL, p.FaviconURL, p.BackgroundURL = "", "", ""
+			if i == 0 {
+				p.ImageURL, p.FaviconURL, p.BackgroundURL = "/images/"+image.ID, "/images/"+image.ID, "/images/"+image.ID
+			}
+			if err := h.blog.writeProfile(t.Context(), p); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := h.blog.removeMedia(t.Context(), image.ID, image.Version(), true); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if mode == "search" {
 		seedPublicSearch(t, h)
 		h.blog.recentPosts.invalidate()
@@ -401,12 +440,16 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/revisions.js"
 	case "revision-navigation":
 		scriptFile = "testdata/revision-navigation.js"
+	case "revision-restore":
+		scriptFile = "testdata/revision-restore.js"
 	case "projects":
 		scriptFile = "testdata/projects.js"
 	case "pages":
 		scriptFile = "testdata/pages.js"
 	case "profile":
 		scriptFile = "testdata/profile.js"
+	case "profile-history":
+		scriptFile = "testdata/profile-history.js"
 	case "auth-styles":
 		scriptFile = "testdata/auth-styles.js"
 	case "draft-recovery":
@@ -429,7 +472,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	if mode == "archive" {
 		script = bytes.ReplaceAll(script, []byte("__ARCHIVE_PAGE_SIZE__"), []byte(fmt.Sprint(archivePageSize)))
 	}
-	if mode == "revisions" || mode == "revision-navigation" {
+	if mode == "revisions" || mode == "revision-navigation" || mode == "revision-restore" {
 		var targets []map[string]any
 		store := h.blog.posts.(*sqliteRepository)
 		for _, kind := range []string{"post", "page"} {

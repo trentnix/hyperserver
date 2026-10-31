@@ -27,8 +27,8 @@
     }
     if (stage === 'create') {
       document.querySelector('a[href^="/pages/create?parent="]').click();
-      await wait(() => document.querySelector('dialog[open] .CodeMirror'));
-      await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+      await wait(() => document.querySelector('.editor-panel .CodeMirror'));
+      await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
       const form = document.querySelector('#page-form');
       form.elements.title.value = 'A project';
       form.elements.slug.value = 'browser-project';
@@ -129,9 +129,9 @@
         assert(document.documentElement.scrollWidth <= innerWidth, 'Preview mode overflowed the viewport: ' + mode);
       }
 
-      await htmx.ajax('GET', edit, '#dialog-host');
-      await wait(() => document.querySelector('dialog[open] .CodeMirror'));
-      await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+      await htmx.ajax('GET', edit, '#article-content');
+      await wait(() => document.querySelector('.editor-panel .CodeMirror'));
+      await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
       document.querySelector('[data-image-reset]').click();
       const form = document.querySelector('#page-form');
       assert(form.elements.previewImage.value === '', 'Removing the preview retained its ID.');

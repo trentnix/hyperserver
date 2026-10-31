@@ -60,6 +60,7 @@ type pageRepository interface {
 	// SavePage retains EverPublished once published, regardless of caller-supplied history.
 	// Updates require the current Version or return errEditConflict. Content changes
 	// append a revision in the same transaction as the save and image references.
+	// Unchanged content and settings preserve Version, Updated, and history.
 	SavePage(context.Context, Page) (Page, error)
 	DeletePage(context.Context, string) error
 }
@@ -160,6 +161,25 @@ func (s *sqliteRepository) GetPageByID(ctx context.Context, id string, includeDr
 // SavePage creates a page when ID is empty, or updates an existing page atomically.
 // The caller must supply a valid slug and the current Version for updates.
 func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
+	if p.ChildrenDisplay == "" {
+		p.ChildrenDisplay = "hidden"
+	}
+	if p.ID != "" {
+		current, err := s.GetPageByID(ctx, p.ID, true)
+		if err != nil {
+			return p, err
+		}
+		if p.Version != current.Version {
+			return p, errEditConflict
+		}
+		// Ignore server-owned fields and compare the optional order by value.
+		candidate := p
+		candidate.Updated, candidate.EverPublished, candidate.DisplayOrder = current.Updated, current.EverPublished, current.DisplayOrder
+		sameOrder := p.DisplayOrder == nil && current.DisplayOrder == nil || p.DisplayOrder != nil && current.DisplayOrder != nil && *p.DisplayOrder == *current.DisplayOrder
+		if sameOrder && candidate == current {
+			return current, nil
+		}
+	}
 	refs, err := imageReferences(p.Markdown, p.URL(), p.PreviewImage)
 	if err != nil {
 		return p, err
@@ -171,9 +191,6 @@ func (s *sqliteRepository) SavePage(ctx context.Context, p Page) (Page, error) {
 	defer tx.Rollback()
 
 	p.Updated = time.Now().UTC()
-	if p.ChildrenDisplay == "" {
-		p.ChildrenDisplay = "hidden"
-	}
 	if p.ID == "" {
 		p.ID = rand.Text()
 		p.Version = 1

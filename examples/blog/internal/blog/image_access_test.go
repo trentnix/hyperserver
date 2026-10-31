@@ -133,7 +133,7 @@ func TestPageImageAccess(t *testing.T) {
 	}
 	check(http.StatusNotFound)
 	for _, field := range []string{"portrait", "favicon", "background"} {
-		p := Profile{Name: "Profile"}
+		p := Profile{Name: "Profile", Version: h.blog.profile.Current().Version}
 		switch field {
 		case "portrait":
 			p.ImageURL = "/images/" + id
@@ -146,7 +146,7 @@ func TestPageImageAccess(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(http.StatusOK)
-		if err := h.blog.writeProfile(t.Context(), Profile{Name: "Profile"}); err != nil {
+		if err := h.blog.writeProfile(t.Context(), Profile{Name: "Profile", Version: h.blog.profile.Current().Version}); err != nil {
 			t.Fatal(err)
 		}
 		check(http.StatusNotFound)
@@ -264,12 +264,14 @@ func TestImageReferenceDefaultPorts(t *testing.T) {
 			profile := h.blog.profile.Current()
 			for _, field := range []*string{&profile.ImageURL, &profile.FaviconURL, &profile.BackgroundURL} {
 				*field = ref
+				profile.Version = h.blog.profile.Current().Version
 				if err := h.blog.writeProfile(t.Context(), profile); err != nil {
 					t.Fatal(err)
 				}
 				requireStatus(t, h.request("GET", "/images/"+id, nil, false), status)
 				*field = ""
 			}
+			profile.Version = h.blog.profile.Current().Version
 			if err := h.blog.writeProfile(t.Context(), profile); err != nil {
 				t.Fatal(err)
 			}
@@ -292,6 +294,7 @@ func TestProfileImageIPv6DefaultPort(t *testing.T) {
 			port = "80"
 		}
 		profile := Profile{Name: "Profile", ImageURL: "//[::1]:" + port + "/images/" + id}
+		profile.Version = h.blog.profile.Current().Version
 		if err := h.blog.writeProfile(t.Context(), profile); err != nil {
 			t.Fatal(err)
 		}

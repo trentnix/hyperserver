@@ -276,14 +276,12 @@
       assert(editor.getValue().includes('![](/images/' + bodyImage + ')'), 'Existing image was not inserted into Markdown.');
       assert(form.elements.content.value === editor.getValue(), 'Markdown textarea was not synchronized.');
       if (stage === 'post') {
-        // The same library must stack above an HTMX editor without closing it.
-        await htmx.ajax('GET', '/pages/create', {target: '#dialog-host'});
-        const parent = document.querySelector('#dialog-host dialog[open]');
-        assert(parent, 'Editor dialog did not open.');
+        // A picker overlays the editor page without replacing its form.
+        await htmx.ajax('GET', '/pages/create', {target: '#article-content'});
+        const parent = document.querySelector('.editor-panel');
+        assert(parent && !parent.closest('dialog'), 'Editor must open in the page.');
         await choose(parent.querySelector('[data-media-browse]'));
-        assert(parent.open && parent.querySelector('[data-image-value]').value, 'Choosing closed or failed to update the editor dialog.');
-        parent.close();
-        parent.remove();
+        assert(parent.isConnected && parent.querySelector('[data-image-value]').value, 'Choosing replaced or failed to update the editor page.');
       }
       sessionStorage.setItem('library-stage', stage === 'post' ? 'page' : 'profile');
       location.assign(stage === 'post' ? '/pages/create' : '/profile');

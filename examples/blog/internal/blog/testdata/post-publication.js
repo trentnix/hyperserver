@@ -11,9 +11,9 @@
     }
   };
   const editor = async path => {
-    await htmx.ajax('GET', path, '#dialog-host');
-    await wait(() => document.querySelector('dialog[open] .CodeMirror'));
-    await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    await htmx.ajax('GET', path, '#article-content');
+    await wait(() => document.querySelector('.editor-panel .CodeMirror'));
+    await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
     return document.querySelector('#post-form');
   };
   window.addEventListener('error', event => report('Browser error: ' + event.message));

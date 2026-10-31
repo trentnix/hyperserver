@@ -1,4 +1,4 @@
-// Exercise the full-page editor, then restore it through HTMX history navigation.
+// Open an editor from management, then restore it through HTMX history navigation.
 (async () => {
   await new Promise(resolve => document.addEventListener('DOMContentLoaded', () => setTimeout(resolve, 0), {once: true}));
   const report = message => fetch('/test/result', {method: 'POST', body: message});
@@ -22,15 +22,18 @@
     }
     if (stage === 'logged-in') {
       sessionStorage.setItem('editor-history-stage', 'editor');
-      location.assign('/post/create');
+      location.assign('/post/manage');
       return;
     }
     assert(stage === 'editor', 'History navigation unexpectedly reloaded the document.');
     sessionStorage.setItem('editor-history-stage', 'restoring');
-    await wait(() => document.querySelector('#article-content .CodeMirror'));
     const article = document.querySelector('#article-content');
+    document.querySelector('a[href="/post/create"]').click();
+    await wait(() => location.pathname === '/post/create' && article.querySelector('.CodeMirror') && !article.classList.contains('htmx-settling'));
+    assert(document.querySelector('#article-content') === article && !document.querySelector('dialog[open]'), 'New post must replace only the main content with an editor page.');
+    assert(document.title.includes('New post'), 'Editor navigation must update the document title.');
     const panelStyle = getComputedStyle(article.querySelector('.editor-panel'));
-    assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Full-page editor typography differs from dialogs.');
+    assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Editor typography is inconsistent.');
     const cancel = article.querySelector('.form-actions a.button-secondary');
     assert(cancel && getComputedStyle(cancel).textDecorationLine === 'none', 'Full-page Cancel must retain its secondary button style.');
     document.querySelector('.profile-links a[href="/about"]').click();

@@ -159,6 +159,7 @@ func requireCanonical(t *testing.T, source, want string) {
 func TestSharingPublicContent(t *testing.T) {
 	h := newHarness(t)
 	profile := Profile{Name: `A "site" & friends`, Bio: "Site biography", ImageURL: "/local-assets/portrait.jpg"}
+	profile.Version = h.blog.profile.Current().Version
 	if err := h.blog.writeProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
@@ -230,6 +231,7 @@ func TestSharingPublicContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile.Bio, profile.ImageURL = "Updated bio", "https://cdn.example/new.jpg"
+	profile.Version = h.blog.profile.Current().Version
 	if err := h.blog.writeProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +368,7 @@ func TestPageDescriptions(t *testing.T) {
 			}
 		}
 	}
-	if err := h.blog.writeProfile(t.Context(), Profile{Name: "My Blog"}); err != nil {
+	if err := h.blog.writeProfile(t.Context(), Profile{Name: "My Blog", Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	requireDescription(t, h.request("GET", "/", nil, false).Body.String(), "")
@@ -375,7 +377,7 @@ func TestPageDescriptions(t *testing.T) {
 // TestSharingOriginAndDefaults checks trusted URLs, neutral defaults, and failure isolation.
 func TestSharingOriginAndDefaults(t *testing.T) {
 	h := newHarness(t)
-	if err := h.blog.writeProfile(t.Context(), Profile{Name: "My Blog"}); err != nil {
+	if err := h.blog.writeProfile(t.Context(), Profile{Name: "My Blog", Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	r := httptest.NewRequest("GET", "https://spoofed.example/?private=query", nil)

@@ -11,9 +11,9 @@
     }
   };
   const edit = async (path = '/post/create') => {
-    await htmx.ajax('GET', path, '#dialog-host');
-    await wait(() => document.querySelector('.editor-dialog .CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
-    await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    await htmx.ajax('GET', path, '#article-content');
+    await wait(() => document.querySelector('.editor-panel .CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
+    await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
     return document.querySelector('#post-form');
   };
   const prompt = title => {
@@ -50,25 +50,25 @@
 
     let form = await edit();
     form.querySelector('.CodeMirror').CodeMirror.setValue('Recover this writing.');
-    const close = form.querySelector('[data-close-dialog]');
+    const close = form.querySelector('.form-actions a');
     close.focus();
     close.click();
     let dialog = prompt('Leave without saving?');
-    assert(form.closest('dialog').open, 'The editor must stay open while confirmation is pending.');
+    assert(form.isConnected, 'The editor must stay open while confirmation is pending.');
     window.blogConfirm({title: 'Duplicate', message: 'Ignored', action: 'Ignore'}, () => { throw new Error('Duplicate confirmation ran'); });
     assert(document.querySelectorAll('.editor-confirmation').length === 1, 'Repeated actions must not stack confirmations.');
     answer(dialog, false);
-    assert(form.closest('dialog').open && document.activeElement === close, 'Cancel must keep the editor and return focus.');
+    assert(form.isConnected && document.activeElement === close, 'Cancel must keep the editor and return focus.');
     close.click();
     dialog = prompt('Leave without saving?');
     dialog.dispatchEvent(new Event('cancel', {cancelable: true}));
-    assert(!document.querySelector('.editor-confirmation') && form.closest('dialog').open, 'Escape must cancel without closing the editor.');
+    assert(!document.querySelector('.editor-confirmation') && form.isConnected, 'Escape must cancel without closing the editor.');
     const unload = new Event('beforeunload', {cancelable: true});
     window.dispatchEvent(unload);
     assert(unload.defaultPrevented, 'Cancel must not suppress the browser unload warning.');
     close.click();
     answer(prompt('Leave without saving?'), true);
-    assert(!form.closest('dialog').open, 'Accepting leave must close the editor.');
+    await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
 
     const copyKey = Object.keys(localStorage).find(key => key.startsWith('hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':/post:'));
     const originalCopy = JSON.parse(localStorage.getItem(copyKey));
@@ -91,14 +91,16 @@
     assert(recovery.hidden && recovery.getClientRects().length === 0, 'Restoring must dismiss the recovery panel even when other copies exist.');
     assert(form.querySelector('[data-draft-status]').textContent === 'Copy restored. Save to apply changes.', 'Restore must explain that the recovered content still needs saving.');
     assert(localStorage.getItem(olderKey) === olderCopy, 'Restore must preserve other browser copies.');
-    form.querySelector('[data-close-dialog]').click();
+    form.querySelector('.form-actions a').click();
     answer(prompt('Leave without saving?'), true);
+    await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
     form = await edit();
     assert(!form.querySelector('[data-draft-recovery]').hidden && localStorage.getItem(olderKey) === olderCopy, 'Reopening must keep the remaining copies available.');
     form.querySelector('[data-draft-discard]').click();
     answer(prompt('Discard this browser copy?'), true);
     assert(form.querySelector('[data-draft-recovery]').hidden && form.elements.content.value === '', 'Discard must dismiss recovery without changing the current editor.');
-    form.querySelector('[data-close-dialog]').click();
+    form.querySelector('.form-actions a').click();
+    await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
 
     const response = await fetch('/post', {method: 'POST', headers: {'HX-Request': 'true'}, body: new URLSearchParams({title: 'Confirmation target', slug: 'confirmation-target', content: 'Published body.', published: 'on'})});
     assert(response.ok, 'Unable to create a published post.');

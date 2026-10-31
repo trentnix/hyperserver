@@ -53,7 +53,7 @@ func TestRevisionStorage(t *testing.T) {
 			}
 			first := versions(1)[0].ID
 			_, version, err = saveRevisionContent(t.Context(), store, kind, id, version, original)
-			if err != nil || version != 2 {
+			if err != nil || version != 1 {
 				t.Fatal("unchanged save", version, err)
 			}
 			versions(1)

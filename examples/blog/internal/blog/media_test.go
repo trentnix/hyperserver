@@ -72,6 +72,7 @@ func TestMediaReferences(t *testing.T) {
 		}
 	}
 	profile := Profile{Name: "Profile", ImageURL: "/images/" + add("portrait"), FaviconURL: "https://blog.example/images/" + add("favicon"), BackgroundURL: "/images/" + add("background")}
+	profile.Version = m.profile.Current().Version
 	if err := m.writeProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
@@ -479,6 +480,7 @@ func TestMediaCleanupConcurrentSave(t *testing.T) {
 			h := newHarness(t)
 			f := mediaUpload(t, h.blog, "concurrent")
 			p := Profile{Name: "Concurrent", ImageURL: "/images/" + f.ID}
+			p.Version = h.blog.profile.Current().Version
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			entered, release := make(chan struct{}), make(chan struct{})
@@ -541,7 +543,7 @@ func TestMediaStaleEditors(t *testing.T) {
 				t.Fatal(w.Body.String())
 			}
 		}
-		w := h.request("POST", "/profile", url.Values{"name": {"Keep my name"}, "imageURL": {ref}}, false)
+		w := h.request("POST", "/profile", url.Values{"version": {"1"}, "name": {"Keep my name"}, "imageURL": {ref}}, false)
 		// Profile validation rejects protocol-relative URLs before the media check.
 		requireStatus(t, w, http.StatusUnprocessableEntity)
 	}

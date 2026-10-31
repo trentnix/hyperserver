@@ -6,6 +6,7 @@ import (
 	"html"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +14,7 @@ import (
 )
 
 func profileFields(name string) url.Values {
-	return url.Values{"name": {name}, "bio": {"Notes about <software> & life."}, "imageURL": {"/assets/img/profile-default.svg"}, "faviconURL": {"https://example.test/icon.png"}, "backgroundURL": {"/assets/img/site-bg.jpg"}}
+	return url.Values{"version": {"1"}, "name": {name}, "bio": {"Notes about <software> & life."}, "imageURL": {"/assets/img/profile-default.svg"}, "faviconURL": {"https://example.test/icon.png"}, "backgroundURL": {"/assets/img/site-bg.jpg"}}
 }
 
 // TestProfileImageFields preserves draft URLs and supplies neutral picker previews.
@@ -122,7 +123,7 @@ func TestProfileValidation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	requireStatus(t, h.request("POST", "/profile", url.Values{"name": {"Minimal"}}, false), http.StatusSeeOther)
+	requireStatus(t, h.request("POST", "/profile", url.Values{"name": {"Minimal"}, "version": {strconv.FormatInt(original.Version, 10)}}, false), http.StatusSeeOther)
 	p := h.blog.profile.Current()
 	if p.Bio != "" || p.BackgroundURL != "" || p.PortraitURL() != "/assets/img/profile-default.svg" || p.IconURL() != "/assets/img/favicon.svg" {
 		t.Fatal("clearing optional fields did not restore defaults")
@@ -163,9 +164,16 @@ func TestProfileSaveFailure(t *testing.T) {
 func TestProfileConcurrentSaves(t *testing.T) {
 	h := newHarness(t)
 	var wg sync.WaitGroup
+	version := h.blog.profile.Current().Version
+	var successes int
+	var mu sync.Mutex
 	for _, name := range []string{"First", "Second", "Third", "Fourth"} {
 		wg.Go(func() {
-			if err := h.blog.writeProfile(t.Context(), Profile{Name: name, Bio: name}); err != nil {
+			if err := h.blog.writeProfile(t.Context(), Profile{Name: name, Bio: name, Version: version}); err == nil {
+				mu.Lock()
+				successes++
+				mu.Unlock()
+			} else if !errors.Is(err, errEditConflict) {
 				t.Error(err)
 			}
 			p := h.blog.profile.Current()
@@ -175,6 +183,9 @@ func TestProfileConcurrentSaves(t *testing.T) {
 		})
 	}
 	wg.Wait()
+	if successes != 1 {
+		t.Fatalf("got %d successful saves from one edit version", successes)
+	}
 	stored, err := h.blog.profileStore.GetProfile(t.Context())
 	if err != nil || stored != h.blog.profile.Current() {
 		t.Fatal("database and rendering disagree", err)
@@ -194,8 +205,8 @@ func TestProfileStorage(t *testing.T) {
 	if !errors.Is(err, errNotFound) || p != (Profile{}) {
 		t.Fatal("missing profile was not reported", p, err)
 	}
-	for _, name := range []string{"First", "Second"} {
-		if err := store.SaveProfile(t.Context(), Profile{Name: name}); err != nil {
+	for version, name := range []string{"First", "Second"} {
+		if err := store.SaveProfile(t.Context(), Profile{Name: name, Version: int64(version)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -250,7 +261,7 @@ func TestProfileRefreshDuringFeedBuild(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	if err := h.blog.writeProfile(ctx, Profile{Name: "New identity"}); err != nil {
+	if err := h.blog.writeProfile(ctx, Profile{Name: "New identity", Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	release <- struct{}{}
@@ -267,7 +278,7 @@ func TestProfileRefreshDuringFeedBuild(t *testing.T) {
 // TestProfileInitialization rejects corrupt stored data without publishing a fallback profile.
 func TestProfileInitialization(t *testing.T) {
 	h := newHarness(t)
-	if err := h.blog.profileStore.SaveProfile(t.Context(), Profile{}); err != nil {
+	if err := h.blog.profileStore.SaveProfile(t.Context(), Profile{Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	m := &module{settings: h.blog.settings, access: &Access{}, profile: &ProfileState{}}
@@ -283,7 +294,7 @@ func TestProfileInitialization(t *testing.T) {
 func TestProfileApplicationIsolation(t *testing.T) {
 	first, second := newHarness(t), newHarness(t)
 	before := second.blog.profile.Current()
-	if err := first.blog.writeProfile(t.Context(), Profile{Name: "Independent site"}); err != nil {
+	if err := first.blog.writeProfile(t.Context(), Profile{Name: "Independent site", Version: first.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	if second.blog.profile.Current() != before {
@@ -361,7 +372,7 @@ func TestProfileReadsDuringSave(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			done := make(chan struct{})
 			var saveError error
-			updated := Profile{Name: "Updated site", Bio: "Updated bio"}
+			updated := Profile{Name: "Updated site", Bio: "Updated bio", Version: original.Version}
 			go func() {
 				saveError = h.blog.writeProfile(ctx, updated)
 				close(done)
@@ -397,6 +408,7 @@ func TestProfileReadsDuringSave(t *testing.T) {
 				t.Fatal("unexpected save error", saveError)
 			}
 			want := updated
+			want.Version++
 			if fail {
 				want = original
 			}

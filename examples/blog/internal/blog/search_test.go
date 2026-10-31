@@ -309,6 +309,60 @@ func TestPublicSearchHTTP(t *testing.T) {
 	}
 }
 
+// TestReaderSearchOmission checks actual HTML, including errors and history restores.
+func TestReaderSearchOmission(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	p, err := h.blog.posts.Save(t.Context(), Post{Slug: "reader-search", Title: "Reader search"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := mediaUpload(t, h.blog, "search visibility")
+	paths := []string{
+		"/post/manage", "/pages", "/profile", "/profile/history", "/media", "/media/unused", "/media/" + f.ID,
+		"/post/create", "/post/update/" + p.ID, "/post/delete/" + p.ID, "/pages/create", "/pages/update/" + h.projectsID,
+		"/history/post/" + p.ID, "/media/delete/" + f.ID,
+	}
+	request := func(path string, hx, restore bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "https://blog.example"+path, nil)
+		r.Header.Set("HX-Request", fmt.Sprint(hx))
+		r.Header.Set("HX-Target", "article-content")
+		r.Header.Set("HX-History-Restore-Request", fmt.Sprint(restore))
+		for _, cookie := range h.cookies {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		h.app.Handler.ServeHTTP(w, r)
+		return w
+	}
+	for _, mode := range []struct{ hx, restore bool }{{}, {hx: true}, {hx: true, restore: true}} {
+		for _, path := range paths {
+			w := request(path, mode.hx, mode.restore)
+			requireStatus(t, w, http.StatusOK)
+			if strings.Contains(w.Body.String(), "reader-search-form") || strings.Contains(w.Body.String(), `action="/search"`) {
+				t.Fatalf("admin response %s contains reader search", path)
+			}
+		}
+		for _, path := range []string{"/", "/posts", "/search", "/about", "/projects", "/post/s/" + p.Slug} {
+			w := request(path, mode.hx, mode.restore)
+			requireStatus(t, w, http.StatusOK)
+			if !strings.Contains(w.Body.String(), "reader-search-form") {
+				t.Fatalf("public response %s omitted reader search for administrator", path)
+			}
+		}
+	}
+	h.cookies = nil
+	for _, path := range paths {
+		w := request(path, false, false)
+		requireStatus(t, w, http.StatusForbidden)
+		if strings.Contains(w.Body.String(), "reader-search-form") {
+			t.Fatal("access denial contains reader search", path)
+		}
+	}
+}
+
 // TestSearchMetadata covers concise Unicode summaries and page route aliases.
 func TestSearchMetadata(t *testing.T) {
 	if got := searchSummary(" a\n\t b "); got != "a b" {

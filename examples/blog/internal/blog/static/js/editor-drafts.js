@@ -11,7 +11,7 @@
   }
   const encoded = state => JSON.stringify(snapshot(state));
   const dirty = state => encoded(state) !== state.baseline;
-  const active = state => state.form.isConnected && (!state.form.closest('dialog') || state.form.closest('dialog').open);
+  const active = state => state.form.isConnected;
 
   function setStatus(state, message, failed = false) {
     if (state.status.textContent !== message) state.status.textContent = message;
@@ -199,20 +199,14 @@
   }
 
   document.addEventListener('click', event => {
-    const close = event.target.closest('[data-close-dialog]');
     const link = event.target.closest('a[href]');
     // Chooser pagination and filtering replace only the image results, not an editor.
     if (link?.matches('.media-browser [data-media-page]')) return;
-    if (!close && (!link || link.hasAttribute('download') || link.target === '_blank' || event.ctrlKey || event.metaKey || event.shiftKey || link.getAttribute('href').startsWith('#'))) return;
-    const candidates = close ? [...states.values()].filter(state => close.closest('dialog').contains(state.form)) : states.values();
-    if (!allowLeave(candidates, () => { if ((close || link).isConnected) (close || link).click(); })) {
+    if (!link || link.hasAttribute('download') || link.target === '_blank' || event.ctrlKey || event.metaKey || event.shiftKey || link.getAttribute('href').startsWith('#')) return;
+    if (!allowLeave(states.values(), () => { if (link.isConnected) link.click(); })) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
-  }, true);
-  document.addEventListener('cancel', event => {
-    const dialog = event.target;
-    if (!allowLeave([...states.values()].filter(state => dialog.contains(state.form)), () => { if (dialog.isConnected) dialog.close(); })) event.preventDefault();
   }, true);
   document.addEventListener('submit', event => {
     if (event.target.matches('.media-browser [data-media-filters]')) return;

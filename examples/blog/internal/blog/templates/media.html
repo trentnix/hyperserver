@@ -70,7 +70,7 @@
     </section>
   </div>
   <p class="form-hint">Unsaved edits and browser recovery copies are not included.</p>
-  {{ if not .Data.Usage.Current }}<div class="content-actions"><a class="action-delete" href="/media/delete/{{ .Data.ID }}">Review deletion</a></div>{{ end }}
+  {{ if not .Data.Usage.Current }}<div class="content-actions"><a class="action-delete" href="/media/delete/{{ .Data.ID }}">Delete image</a></div>{{ end }}
 </section>
 {{ end }}
 
@@ -94,7 +94,7 @@
   <ul class="page-manager-list media-list" aria-label="Historical uploads">
   {{ range .Data.History }}<li class="page-manager-row">
     <div class="media-details"><img src="/images/{{ .ID }}?variant=thumbnail" alt="Historical upload" loading="lazy"><div class="page-manager-title"><a href="/images/{{ .ID }}" target="_blank" rel="noopener">{{ .ID }}</a><small>{{ .Size }} stored bytes · Used by {{ len .History }} saved versions</small></div></div>
-    <div class="page-manager-actions"><a href="/media/delete/{{ .ID }}">Review deletion</a></div>
+    <div class="page-manager-actions"><a href="/media/delete/{{ .ID }}">Delete image</a></div>
   </li>{{ end }}
   </ul>
   {{ end }}

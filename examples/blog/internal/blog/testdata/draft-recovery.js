@@ -19,7 +19,7 @@
   };
   const ready = async () => {
     await wait(() => document.querySelector('.CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
-    await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
     const form = document.querySelector('form[data-draft-owner]');
     const status = form.querySelector('[data-draft-status]');
     const controls = form.querySelector('[type="submit"]').closest('.form-actions');
@@ -166,7 +166,7 @@
 
       const about = new DOMParser().parseFromString(await (await fetch('/about')).text(), 'text/html');
       const editURL = about.querySelector('a[href^="/pages/update/"]').getAttribute('href');
-      await htmx.ajax('GET', editURL, '#dialog-host');
+      await htmx.ajax('GET', editURL, '#article-content');
       const form = await ready();
       change(form, 'title', 'Recovered About');
       change(form, 'summary', 'Page summary');
@@ -185,22 +185,17 @@
       assert(blockedUnload.defaultPrevented, 'A blocked save suppressed the unsaved-edit warning.');
       const publicAbout = await (await fetch('/about', {credentials: 'omit'})).text();
       assert(!publicAbout.includes('Recovered About'), 'Autosave changed the published page.');
-      const dialog = form.closest('dialog');
-      form.querySelector('[data-close-dialog]').click();
+      form.querySelector('.form-actions a').click();
       await Promise.resolve();
-      assert(dialog.open, 'Rejected Cancel closed the editor.');
-      const escape = new Event('cancel', {cancelable: true});
-      dialog.dispatchEvent(escape);
-      assert(escape.defaultPrevented, 'Escape did not protect unsaved edits.');
+      assert(form.isConnected, 'Rejected Cancel left the editor.');
       consent = true;
-      form.querySelector('[data-close-dialog]').click();
-      await Promise.resolve();
-      assert(!dialog.open, 'Accepted Cancel did not close the editor.');
+      form.querySelector('.form-actions a').click();
+      await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       const concurrentSave = await fetch(form.action, {method: 'POST', headers: {'HX-Request': 'true'}, body: new URLSearchParams({
         title: 'About changed on the server', slug: 'about', content: 'A separately saved version.', childrenDisplay: 'hidden', published: 'on', version: form.elements.version.value
       })});
       assert(concurrentSave.ok, 'Unable to prepare a changed server version.');
-      await htmx.ajax('GET', editURL, '#dialog-host');
+      await htmx.ajax('GET', editURL, '#article-content');
       const restored = await ready();
       assert(restored.elements.title.value === 'About changed on the server' && restored.querySelector('[data-draft-description]').textContent.includes('server version or initial settings have changed'), 'Stale recovery must disclose changed server content without replacing it.');
       restored.querySelector('[data-draft-restore]').click();
@@ -233,7 +228,7 @@
     }
     if (stage === 'page-saved') {
       assert(location.pathname === '/about' && document.querySelector('h1').textContent === 'Recovered About', 'Explicit page save failed.');
-      await htmx.ajax('GET', '/post/create', '#dialog-host');
+      await htmx.ajax('GET', '/post/create', '#article-content');
       const form = await ready();
       form.querySelector('.CodeMirror').CodeMirror.setValue('Discard this recovery copy.');
       await saved(form);
@@ -242,9 +237,9 @@
       const olderKey = selectedKey + '-older';
       localStorage.setItem(olderKey, JSON.stringify({...originalCopy, saved: originalCopy.saved - 1000}));
       consent = true;
-      form.querySelector('[data-close-dialog]').click();
-      await Promise.resolve();
-      await htmx.ajax('GET', '/post/create', '#dialog-host');
+      form.querySelector('.form-actions a').click();
+      await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      await htmx.ajax('GET', '/post/create', '#article-content');
       const clean = await ready();
       consent = false;
       clean.querySelector('[data-draft-discard]').click();
@@ -280,10 +275,10 @@
       assert(clean.querySelector('[data-draft-status]').textContent === 'Browser copy discarded.' && !clean.querySelector('[data-draft-status]').classList.contains('draft-status--error'), 'Successful discard must clear the error and confirm deletion.');
       assert(clean.querySelector('.CodeMirror').CodeMirror.getValue() === '', 'Discard modified the clean editor.');
       const count = prompts.length;
-      clean.querySelector('[data-close-dialog]').click();
-      await Promise.resolve();
+      clean.querySelector('.form-actions a').click();
+      await wait(() => !clean.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       assert(prompts.length === count, 'Unchanged editor warned before closing.');
-      await htmx.ajax('GET', '/post/create', '#dialog-host');
+      await htmx.ajax('GET', '/post/create', '#article-content');
       const reopened = await ready();
       assert(!reopened.querySelector('[data-draft-recovery]').hidden, 'Other copies must remain available when reopening the editor.');
       // Another tab may already have removed the offered copy.
@@ -291,9 +286,10 @@
       reopened.querySelector('[data-draft-discard]').click();
       await Promise.resolve();
       assert(copies(reopened).length === 0 && reopened.querySelector('[data-draft-recovery]').hidden, 'An already-removed copy must dismiss cleanly.');
-      reopened.querySelector('[data-close-dialog]').click();
+      reopened.querySelector('.form-actions a').click();
+      await wait(() => !reopened.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       localStorage.setItem(selectedKey, JSON.stringify(originalCopy));
-      await htmx.ajax('GET', '/post/create', '#dialog-host');
+      await htmx.ajax('GET', '/post/create', '#article-content');
       const failedRestore = await ready();
       const setItem = Storage.prototype.setItem;
       try {
