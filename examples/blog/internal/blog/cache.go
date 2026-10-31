@@ -6,6 +6,28 @@ import (
 	"time"
 )
 
+const archiveCachePages = 10
+
+// loadArchivePage returns a page plus one lookahead entry from a bounded block.
+// The caller validates number before calculating offsets. Cache entries contain
+// only public metadata and remain read-only after publication to other requests.
+func (m *module) loadArchivePage(ctx context.Context, number int) ([]ArchiveEntry, error) {
+	block := (number - 1) / archiveCachePages
+	posts, err := m.archivePosts.loadUntil(ctx, block, func() ([]ArchiveEntry, time.Time, error) {
+		next, err := m.posts.NextPublication(ctx)
+		if err != nil {
+			return nil, time.Time{}, err
+		}
+		posts, err := m.posts.ListArchivePage(ctx, archivePageSize*archiveCachePages+1, block*archivePageSize*archiveCachePages)
+		return posts, next, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	start := min((number-1)%archiveCachePages*archivePageSize, len(posts))
+	return posts[start:min(start+archivePageSize+1, len(posts))], nil
+}
+
 // cachedValue holds one read-only value, not a map of entries. Changing the key
 // replaces that value. Each blog module owns separate feed and metadata caches.
 type cachedValue[K comparable, V any] struct {

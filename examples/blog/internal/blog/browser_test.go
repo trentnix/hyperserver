@@ -45,6 +45,15 @@ func TestBrowserLayout(t *testing.T) {
 	}
 }
 
+// TestBrowserFonts checks font assets and layout when optional display fonts arrive late.
+func TestBrowserFonts(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check delayed font loading")
+	}
+	testBrowser(t, browser, "1100", "fonts")
+}
+
 // TestBrowserRefresh checks first-paint stability while scripts and fonts load slowly.
 func TestBrowserRefresh(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -400,6 +409,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if mode == "archive" {
+		script = bytes.ReplaceAll(script, []byte("__ARCHIVE_PAGE_SIZE__"), []byte(fmt.Sprint(archivePageSize)))
+	}
 	if mode == "revisions" || mode == "revision-navigation" {
 		var targets []map[string]any
 		store := h.blog.posts.(*sqliteRepository)
@@ -457,7 +469,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	ready := make(chan struct{})
 	var readyOnce sync.Once
 	pagePath := "/auth/login/email"
-	if mode == "layout" {
+	if mode == "layout" || mode == "fonts" {
 		pagePath += "?test-layout=1&amp;test-width=" + width
 	} else if mode == "navigation" {
 		pagePath = "/post/s/first"
@@ -465,7 +477,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		pagePath = "/posts"
 	}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if mode == "refresh" && (r.URL.Path == "/assets/js/blog.js" || strings.HasSuffix(r.URL.Path, ".woff2")) {
+		delayScript := mode == "refresh" && r.URL.Path == "/assets/js/blog.js"
+		delayFont := (mode == "refresh" || mode == "fonts") && strings.HasSuffix(r.URL.Path, ".woff2")
+		if delayScript || delayFont {
 			// Leave time for the initial layout to paint before enhancement and fonts arrive.
 			select {
 			case <-r.Context().Done():

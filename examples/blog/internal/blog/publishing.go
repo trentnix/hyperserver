@@ -76,6 +76,7 @@ func (m *module) setPublication(w http.ResponseWriter, r *http.Request, publishe
 	}
 	m.feed.invalidate()
 	m.recentPosts.invalidate()
+	m.archivePosts.invalidate()
 	// Management actions return to the list. Never accept a caller-supplied URL.
 	if !published && r.URL.Query().Get("from") == "posts" {
 		util.RedirectToURL(w, r, "/post/manage")

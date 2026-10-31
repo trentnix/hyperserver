@@ -163,7 +163,7 @@ func (m *module) archive(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	posts, err := m.posts.ListArchivePage(r.Context(), archivePageSize+1, (number-1)*archivePageSize)
+	posts, err := m.loadArchivePage(r.Context(), number)
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -351,6 +351,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	}
 	m.feed.invalidate()
 	m.recentPosts.invalidate()
+	m.archivePosts.invalidate()
 	w.Header().Set("HX-Trigger", "blog:content-saved")
 	util.RedirectToURL(w, r, "/post/s/"+saved.Slug)
 }
@@ -465,6 +466,7 @@ func (m *module) delete(w http.ResponseWriter, r *http.Request) {
 	}
 	m.feed.invalidate()
 	m.recentPosts.invalidate()
+	m.archivePosts.invalidate()
 	finishContentDelete(w, r, "post", "/post/manage")
 }
 

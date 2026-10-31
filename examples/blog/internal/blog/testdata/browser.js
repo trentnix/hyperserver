@@ -40,9 +40,21 @@ document.removeEventListener = function(type, callback, options) {
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
     await document.fonts.ready;
-    for (const style of ['400', 'italic 600']) {
-      const faces = await document.fonts.load(style + ' 16px "Source Sans 3"');
-      assert(faces.length > 0 && faces.every(face => face.status === 'loaded'), 'Source Sans 3 must load: ' + style);
+    // Optional display fonts may be abandoned on a slow connection. Validate the
+    // files independently without adding a face or forcing a late layout swap.
+    for (const [style, weight, filename] of [
+      ['normal', '400', 'source-sans-3.woff2'],
+      ['italic', '600', 'source-sans-3-italic.woff2'],
+    ]) {
+      try {
+        const response = await fetch('/assets/fonts/' + filename);
+        assert(response.ok, 'HTTP ' + response.status);
+        const face = new FontFace('Font asset check', await response.arrayBuffer(), {style, weight});
+        await face.load();
+        assert(face.status === 'loaded', 'Font did not decode.');
+      } catch (error) {
+        throw new Error('Unable to load ' + filename + ': ' + error.message);
+      }
     }
     const requestedWidth = new URLSearchParams(location.search).get('test-width');
     if (requestedWidth) assert(innerWidth === Number(requestedWidth), 'Wrong test viewport: ' + innerWidth + ' instead of ' + requestedWidth);

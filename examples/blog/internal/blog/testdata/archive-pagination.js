@@ -13,12 +13,13 @@
   try {
     const article = document.querySelector('#article-content');
     const shell = ['body', '.site-sidebar', '.account-panel', '#post-archive', '#sidebar-archive'].map(selector => [selector, document.querySelector(selector)]);
+    const pageSize = __ARCHIVE_PAGE_SIZE__;
     const ready = async page => {
       await wait(() => location.search === (page === 1 ? '' : '?page=' + page) && article.querySelector('.archive-page-number')?.textContent === 'Page ' + page && !article.classList.contains('htmx-settling'));
       assert(document.title === 'Trent Nix | All Posts' + (page === 1 ? '' : ' — Page ' + page), 'Archive title lost its page number.');
       for (const [selector, node] of shell) assert(document.querySelector(selector) === node, 'Pagination replaced ' + selector);
       const links = article.querySelectorAll('li > a');
-      assert(links.length === (page < 3 ? 30 : 1), 'Incorrect number of archive entries.');
+      assert(links.length === (page < 3 ? pageSize : 1), 'Incorrect number of archive entries.');
       const controls = article.querySelectorAll('.archive-pagination');
       assert(controls.length === 1, 'Archive needs just one navigation row.');
       assert(article.querySelector('.post-archive').lastElementChild === controls[0], 'Pagination must follow the archive list.');
@@ -46,7 +47,7 @@
     await ready(2);
     const fallback = await fetch(location.href);
     const html = await fallback.text();
-    assert(fallback.ok && html.includes('href="https://blog.example/posts?page=2"') && html.includes('Archive &lt;030&gt;'), 'Ordinary navigation must render page two with its canonical URL.');
+    assert(fallback.ok && html.includes('href="https://blog.example/posts?page=2"') && html.includes('Archive &lt;' + String(pageSize).padStart(3, '0') + '&gt;'), 'Ordinary navigation must render page two with its canonical URL.');
     article.querySelector('[rel=next]').click();
     await ready(3);
     article.querySelector('[rel=prev]').click();

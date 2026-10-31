@@ -83,6 +83,7 @@ type module struct {
 	views           map[string]*content.View
 	feed            feedCache
 	recentPosts     cachedValue[int, []ArchiveEntry]
+	archivePosts    cachedValue[int, []ArchiveEntry]
 	now             func() time.Time
 
 	// mediaMu prevents cleanup from racing with uploads or saves of image references.

@@ -17,7 +17,7 @@ Put the two different generated keys in `http.session.jwtKey` and `auth.jwtKey`.
 
 Before starting the server, set `adminEmail` in `modules/blog/config.yaml` to your email address. Only that address can register or log in. Administrative access also requires email verification. The administrator address stays in configuration, not the Site Profile editor.
 
-Set `recentPostCount` in `modules/blog/config.yaml` to the number of Recent Posts links to show. It must be greater than zero. Restart after changing configuration. The All Posts archive lists published posts in pages of 30, newest first and grouped by month. Previous and Next work with ordinary navigation and HTMX.
+Set `recentPostCount` in `modules/blog/config.yaml` to the number of Recent Posts links to show. It must be greater than zero. Restart after changing configuration. All Posts lists 30 published posts per page, newest first and grouped by month. Navigation works with ordinary links and HTMX. Its metadata cache holds one block of ten pages plus a lookahead entry, invalidates after successful post changes, and expires at the next scheduled publication.
 
 Start a local SMTP inbox if one is not already running:
 

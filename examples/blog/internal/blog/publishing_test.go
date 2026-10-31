@@ -452,6 +452,8 @@ func TestPostPublicationFailures(t *testing.T) {
 	feed := h.request("GET", "/rss", nil, false)
 	requireStatus(t, h.request("GET", "/posts/recent", nil, true), http.StatusOK)
 	recent := append([]ArchiveEntry(nil), h.blog.recentPosts.value...)
+	requireStatus(t, h.request("GET", "/posts", nil, true), http.StatusOK)
+	archive := append([]ArchiveEntry(nil), h.blog.archivePosts.value...)
 	store := h.blog.posts
 	h.blog.posts = failedPublicationRepository{store}
 	for _, hx := range []bool{false, true} {
@@ -472,7 +474,7 @@ func TestPostPublicationFailures(t *testing.T) {
 	if err != nil || stored != post {
 		t.Fatal("failed publication changed content", err)
 	}
-	if !h.blog.feed.ready || !h.blog.recentPosts.ready {
+	if !h.blog.feed.ready || !h.blog.recentPosts.ready || !h.blog.archivePosts.ready {
 		t.Fatal("failed publication invalidated caches")
 	}
 	if got := h.request("GET", "/rss", nil, false); got.Header().Get("ETag") != feed.Header().Get("ETag") || got.Body.String() != feed.Body.String() {
@@ -480,6 +482,9 @@ func TestPostPublicationFailures(t *testing.T) {
 	}
 	if !reflect.DeepEqual(h.blog.recentPosts.value, recent) {
 		t.Fatal("failed publication changed recent posts")
+	}
+	if !reflect.DeepEqual(h.blog.archivePosts.value, archive) {
+		t.Fatal("failed publication changed the archive")
 	}
 	h.blog.posts = store
 	for _, hx := range []bool{false, true} {

@@ -62,6 +62,7 @@ func publicationClock(h *harness, start time.Time) func(time.Time) {
 	h.blog.posts.(*sqliteRepository).now = now
 	h.blog.feed.now = now
 	h.blog.recentPosts.now = now
+	h.blog.archivePosts.now = now
 	return func(value time.Time) { clock.Store(value.UnixNano()) }
 }
 
@@ -312,7 +313,7 @@ func TestScheduleCacheChanges(t *testing.T) {
 	requireStatus(t, h.request("POST", "/post", values, true), http.StatusOK)
 	check := func(firstVisible, secondVisible bool) {
 		t.Helper()
-		for _, path := range []string{"/rss", "/posts/recent"} {
+		for _, path := range []string{"/rss", "/posts/recent", "/posts"} {
 			response := h.request("GET", path, nil, false)
 			requireStatus(t, response, http.StatusOK)
 			body := response.Body.String()
@@ -343,7 +344,7 @@ func TestScheduleCacheChanges(t *testing.T) {
 	values.Set("published", "")
 	requireStatus(t, h.submitEditor(t, "/post/"+third.ID, values, true), http.StatusOK)
 	advance(start.Add(3 * time.Hour))
-	for _, path := range []string{"/rss", "/posts/recent"} {
+	for _, path := range []string{"/rss", "/posts/recent", "/posts"} {
 		response := h.request("GET", path, nil, false)
 		requireStatus(t, response, http.StatusOK)
 		if strings.Contains(response.Body.String(), "/post/s/third") {
@@ -379,17 +380,17 @@ func TestScheduleSurvivesRestart(t *testing.T) {
 	}
 }
 
-// TestScheduleReadFailure prevents caching an incomplete feed or recent list when
+// TestScheduleReadFailure prevents caching incomplete public metadata when
 // the next publication time cannot be read. A later healthy request can retry.
 func TestScheduleReadFailure(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.posts
 	h.blog.posts = scheduleReadFailure{repository: store}
-	for _, path := range []string{"/rss", "/posts/recent"} {
+	for _, path := range []string{"/rss", "/posts/recent", "/posts"} {
 		requireStatus(t, h.request("GET", path, nil, false), http.StatusInternalServerError)
 	}
 	h.blog.posts = store
-	for _, path := range []string{"/rss", "/posts/recent"} {
+	for _, path := range []string{"/rss", "/posts/recent", "/posts"} {
 		requireStatus(t, h.request("GET", path, nil, false), http.StatusOK)
 	}
 }

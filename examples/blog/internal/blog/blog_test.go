@@ -979,6 +979,7 @@ func TestNavigationHandlers(t *testing.T) {
 			// List is deliberately unavailable: neither navigation handler needs full post collections.
 			m.posts = tc.store
 			m.recentPosts.invalidate()
+			m.archivePosts.invalidate()
 			r := session.AddSessionManagerToRequestContext(httptest.NewRequest("GET", "/", nil), h.app.Sessions)
 			w := httptest.NewRecorder()
 			tc.handler(w, r)

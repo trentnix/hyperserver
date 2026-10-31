@@ -282,13 +282,19 @@ func TestRecentHandlerCache(t *testing.T) {
 // Tests use it only with sequential requests.
 type observedPostRepository struct {
 	repository
-	recentReads int
-	writeError  error
+	recentReads  int
+	archiveReads int
+	writeError   error
 }
 
 func (s *observedPostRepository) ListRecent(ctx context.Context, limit int) ([]ArchiveEntry, error) {
 	s.recentReads++
 	return s.repository.ListRecent(ctx, limit)
+}
+
+func (s *observedPostRepository) ListArchivePage(ctx context.Context, limit, offset int) ([]ArchiveEntry, error) {
+	s.archiveReads++
+	return s.repository.ListArchivePage(ctx, limit, offset)
 }
 
 func (s *observedPostRepository) Save(ctx context.Context, post Post) (Post, error) {
@@ -307,6 +313,7 @@ func (s *observedPostRepository) Delete(ctx context.Context, id string) error {
 
 // TestRecentPostChanges checks that committed writes refresh the cache once and
 // rejected or failed writes leave it intact, without another storage read.
+// The public archive follows the same invalidation rules.
 func TestRecentPostChanges(t *testing.T) {
 	h := newHarnessWithRecentPostCount(t, 1)
 	store := &observedPostRepository{repository: h.blog.posts}
@@ -315,10 +322,21 @@ func TestRecentPostChanges(t *testing.T) {
 	h.verify(t)
 	h.login(t)
 	h.blog.recentPosts.invalidate()
+	h.blog.archivePosts.invalidate()
 	read := func(slug, title string, wantReads int) {
 		t.Helper()
 		before := store.recentReads
+		archiveBefore := store.archiveReads
 		for range 2 {
+			archive := h.request(http.MethodGet, "/posts", nil, true)
+			requireStatus(t, archive, http.StatusOK)
+			if slug == "" {
+				if !strings.Contains(archive.Body.String(), "No posts yet.") {
+					t.Fatal("expected an empty archive")
+				}
+			} else if !strings.Contains(archive.Body.String(), `href="/post/s/`+slug+`">`+title+`</a>`) {
+				t.Fatal("archive did not reflect the saved post")
+			}
 			w := h.request(http.MethodGet, "/posts/recent", nil, true)
 			requireStatus(t, w, http.StatusOK)
 			body := w.Body.String()
@@ -332,6 +350,9 @@ func TestRecentPostChanges(t *testing.T) {
 		}
 		if got := store.recentReads - before; got != wantReads {
 			t.Fatalf("storage reads=%d, want %d", got, wantReads)
+		}
+		if got := store.archiveReads - archiveBefore; got != wantReads {
+			t.Fatalf("archive reads=%d, want %d", got, wantReads)
 		}
 	}
 	read("", "", 1)
