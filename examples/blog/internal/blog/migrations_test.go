@@ -2,6 +2,8 @@ package blog
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"net/url"
 	"os"
 	"os/exec"
@@ -90,17 +92,8 @@ VALUES('parent','parent','Parent','',1,NULL,'','','hidden',1),('child','child','
 
 func TestBlogMigrationFailureAndFutureVersion(t *testing.T) {
 	db, filename := schemaTestDB(t)
-	directory := t.TempDir()
+	directory := blogMigrationDirectory(t)
 	run := blogMigrationCommand(t, filename, directory)
-	for _, name := range []string{"000001_blog.up.sql", "000001_blog.down.sql"} {
-		data, err := os.ReadFile(filepath.Join("migrations", name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(directory, name), data, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
 	write := func(name, sql string) {
 		t.Helper()
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(sql), 0600); err != nil {
@@ -148,4 +141,153 @@ func TestBlogMigrationFailureAndFutureVersion(t *testing.T) {
 	if err := prepareBlogSchema(t.Context(), db); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestBlogMigrationPopulatedRoundTrip exercises reversible schema changes on
+// populated storage. Version 1's destructive down is tested separately.
+func TestBlogMigrationPopulatedRoundTrip(t *testing.T) {
+	for _, scenario := range []struct {
+		name     string
+		failDown bool
+	}{
+		{"successful down", false},
+		{"failed down and repair", true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			db, filename := schemaTestDB(t)
+			directory := blogMigrationDirectory(t)
+			run := blogMigrationCommand(t, filename, directory)
+			if output, err := run("up"); err != nil {
+				t.Fatal(output, err)
+			}
+			seed, err := os.ReadFile("testdata/migration-content.sql")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.ExecContext(t.Context(), string(seed)); err != nil {
+				t.Fatal(err)
+			}
+			baseline := schemaSnapshot(t, db)
+			content := blogMigrationSnapshot(t, db, "schema")
+
+			// Index-only changes let us compare every content column unchanged.
+			// These synthetic migrations exist only in this test's temporary directory.
+			up := `CREATE INDEX blog_posts_test_title ON blog_posts(title);
+CREATE INDEX blog_pages_test_title ON blog_pages(title);`
+			down := `DROP INDEX blog_posts_test_title; DROP INDEX blog_pages_test_title;`
+			if err := os.WriteFile(filepath.Join(directory, "000002_indexes.up.sql"), []byte(up), 0600); err != nil {
+				t.Fatal(err)
+			}
+			downFile := filepath.Join(directory, "000002_indexes.down.sql")
+			if err := os.WriteFile(downFile, []byte(down), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if output, err := run("up"); err != nil {
+				t.Fatal(output, err)
+			}
+			var version int
+			var dirty bool
+			if err := db.QueryRow(`SELECT version, dirty FROM blog_schema_version`).Scan(&version, &dirty); err != nil || version != 2 || dirty {
+				t.Fatal("upgrade did not record clean version 2", version, dirty, err)
+			}
+			if blogMigrationSnapshot(t, db, "schema") != content {
+				t.Fatal("upgrade changed stored content")
+			}
+			var indexes int
+			if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='index' AND name IN ('blog_posts_test_title', 'blog_pages_test_title')`).Scan(&indexes); err != nil || indexes != 2 {
+				t.Fatal("upgrade did not create both indexes", indexes, err)
+			}
+
+			if scenario.failDown {
+				beforeFailure := blogMigrationSnapshot(t, db)
+				// Fail after changing rows, cascading child deletion, and dropping
+				// indexes. All those changes must roll back, not just the last statement.
+				failure := `UPDATE blog_posts SET title='Must roll back';
+DELETE FROM blog_pages WHERE id='child';
+UPDATE blog_profile SET bio='Must roll back';
+DELETE FROM blog_media;` + down + ` INSERT INTO missing_table VALUES(1);`
+				if err := os.WriteFile(downFile, []byte(failure), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if output, err := run("down", "1"); err == nil || !strings.Contains(output, "no such table: missing_table") {
+					t.Fatal("down must fail at the injected final statement", output, err)
+				}
+				if err := db.QueryRow(`SELECT version, dirty FROM blog_schema_version`).Scan(&version, &dirty); err != nil || version != 1 || !dirty {
+					t.Fatal("failed down must leave the target version dirty", version, dirty, err)
+				}
+				if blogMigrationSnapshot(t, db) != beforeFailure {
+					t.Fatal("failed down did not roll back all data and schema changes")
+				}
+				dirtySnapshot := schemaSnapshot(t, db)
+				if err := prepareBlogSchema(t.Context(), db); err == nil || !strings.Contains(err.Error(), "dirty") {
+					t.Fatal("startup accepted failed down", err)
+				}
+				if output, err := run("down", "1"); err == nil {
+					t.Fatal("migration retried with a dirty marker", output)
+				}
+				if schemaSnapshot(t, db) != dirtySnapshot {
+					t.Fatal("startup or retry altered dirty storage")
+				}
+				// Only restore version 2's marker after proving its schema and data
+				// survived. Force does not repair schema or recover content.
+				if err := os.WriteFile(downFile, []byte(down), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if output, err := run("force", "2"); err != nil {
+					t.Fatal(output, err)
+				}
+			}
+
+			if output, err := run("down", "1"); err != nil {
+				t.Fatal(output, err)
+			}
+			if schemaSnapshot(t, db) != baseline {
+				t.Fatal("upgrade/downgrade did not preserve the complete version 1 database")
+			}
+			if err := prepareBlogSchema(t.Context(), db); err != nil {
+				t.Fatal("downgraded database cannot start", err)
+			}
+			var violations int
+			if err := db.QueryRow(`SELECT count(*) FROM pragma_foreign_key_check`).Scan(&violations); err != nil || violations != 0 {
+				t.Fatal("downgrade left broken references", violations, err)
+			}
+		})
+	}
+}
+
+// blogMigrationDirectory copies the released SQL so tests can add synthetic
+// migrations without changing the application's migration history.
+func blogMigrationDirectory(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	for _, name := range []string{"000001_blog.up.sql", "000001_blog.down.sql"} {
+		data, err := os.ReadFile(filepath.Join("migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return directory
+}
+
+// blogMigrationSnapshot excludes version rows, which the CLI updates outside
+// the SQL transaction. Callers check version and dirty state separately. Omitting
+// "schema" compares all stored rows while allowing an intentional index change.
+func blogMigrationSnapshot(t *testing.T, db *sql.DB, omit ...string) string {
+	t.Helper()
+	var snapshot map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(schemaSnapshot(t, db)), &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	delete(snapshot, "blog_schema_version")
+	for _, key := range omit {
+		delete(snapshot, key)
+	}
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
