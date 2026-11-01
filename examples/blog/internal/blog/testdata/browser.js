@@ -30,9 +30,9 @@ document.removeEventListener = function(type, callback, options) {
     await wait(() => document.querySelector('.editor-panel #post-form .CodeMirror'));
     await wait(() => !document.querySelector('#article-content').classList.contains('htmx-settling'));
     const form = document.querySelector('#post-form');
-    assert(form.querySelector('label[for="post-publication"]').textContent.trim() === 'Publish', 'Editor must label publication clearly.');
-    form.elements.published.value = published ? 'on' : '';
-    form.elements.published.dispatchEvent(new Event('change', {bubbles: true}));
+    const choice = form.querySelector(`[name="published"][value="${published ? 'on' : ''}"]`);
+    assert(choice.labels[0].textContent.trim() === (published ? 'Publish' : 'Draft'), 'Editor must label publication clearly.');
+    choice.click();
     sessionStorage.setItem('blog-test-stage', nextStage);
     form.requestSubmit();
   };

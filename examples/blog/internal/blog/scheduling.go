@@ -18,6 +18,7 @@ func (m *module) currentTime() time.Time {
 func (m *module) postEditorData(p Post) editorPage {
 	now := m.currentTime()
 	data := editorPage{Post: p, CanSchedule: !p.WasPublished(now)}
+	data.SaveActions = editorActions("post", !p.Draft && !p.Scheduled(now), p.Scheduled(now))
 	if !p.Draft {
 		data.Publication = "on"
 	}

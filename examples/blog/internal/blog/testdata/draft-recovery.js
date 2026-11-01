@@ -15,7 +15,7 @@
     const field = form.elements[name];
     if (field.type === 'checkbox') field.checked = value;
     else field.value = value;
-    field.dispatchEvent(new Event('input', {bubbles: true}));
+    form.dispatchEvent(new Event('input', {bubbles: true}));
   };
   const ready = async () => {
     await wait(() => document.querySelector('.CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
@@ -124,6 +124,7 @@
         if (name === key) {
           const data = JSON.parse(value);
           delete data.fields.published;
+          delete data.fields.schedule;
           delete data.fields.publishDate;
           delete data.fields.publishTime;
           delete data.fields.previewImage;
@@ -172,9 +173,16 @@
       change(form, 'summary', 'Page summary');
       change(form, 'displayOrder', '7');
       change(form, 'childrenDisplay', 'list');
-      change(form, 'published', false);
+      assert(form.querySelector('[type="submit"]').textContent === 'Save changes', 'Published page must start with Save changes.');
+      change(form, 'published', '');
       form.querySelector('.CodeMirror').CodeMirror.setValue('Unpublished changes to an existing page.');
       await saved(form);
+      // Copies from the former page checkbox must still restore the draft choice.
+      for (const key of copies(form)) {
+        const copy = JSON.parse(localStorage.getItem(key));
+        copy.fields.published = false;
+        localStorage.setItem(key, JSON.stringify(copy));
+      }
       // Image uploads block submission, so pressing Save must not waive the leave warning.
       form.dataset.uploading = 'true';
       form.requestSubmit();
@@ -201,7 +209,8 @@
       restored.querySelector('[data-draft-restore]').click();
       await Promise.resolve();
       assert(restored.elements.title.value === 'Recovered About' && restored.elements.summary.value === 'Page summary' && restored.elements.displayOrder.value === '7', 'Page recovery lost metadata.');
-      assert(restored.elements.childrenDisplay.value === 'list' && !restored.elements.published.checked, 'Page recovery lost its select or checkbox.');
+      assert(restored.elements.childrenDisplay.value === 'list' && restored.elements.published.value === '', 'Page recovery lost its select or publication choice.');
+      assert(restored.querySelector('[type="submit"]').textContent === 'Move to drafts', 'Restoring a draft choice must update the save action.');
 
       // Quota and privacy failures must be visible and leave the editor usable.
       const setItem = Storage.prototype.setItem;
@@ -218,7 +227,8 @@
       assert(restored.elements.title.value === 'Storage failure does not lose writing', 'Storage failure changed the editor.');
       Storage.prototype.setItem = setItem;
       change(restored, 'title', 'Recovered About');
-      change(restored, 'published', true);
+      change(restored, 'published', 'on');
+      assert(restored.querySelector('[type="submit"]').textContent === 'Save changes', 'Returning to Publish must restore Save changes.');
       await saved(restored);
       assert(!failure.classList.contains('draft-status--error'), 'A successful recovery save must clear the failure style.');
       sessionStorage.setItem('recovery-stage', 'page-saved');

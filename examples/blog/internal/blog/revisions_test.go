@@ -276,7 +276,7 @@ func TestRevisionHTTP(t *testing.T) {
 			if values.Get("title") != original.Title || values.Get("summary") != original.Summary || values.Get("tags") != original.Tags || values.Get("content") != original.Markdown || values.Get("previewImage") != imageID || values.Get("slug") != "current-url" || values.Get("version") != strconv.FormatInt(version, 10) {
 				t.Fatal("loaded editor has wrong content or settings", values)
 			}
-			if !strings.Contains(body, "Editing a version saved") || !strings.Contains(body, "Nothing changes until you save.") || !strings.Contains(body, "data-current-content=") || strings.Contains(body, `name="published" checked`) || strings.Contains(body, `value="on" selected`) {
+			if !strings.Contains(body, "Editing a version saved") || !strings.Contains(body, "Nothing changes until you save.") || !strings.Contains(body, "data-current-content=") || strings.Contains(body, `name="published" checked`) || strings.Contains(body, `value="on" checked`) {
 				t.Fatal("loaded version changed publication or lacks unsaved-work guidance")
 			}
 			if kind == "post" {

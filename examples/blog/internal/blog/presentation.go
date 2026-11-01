@@ -54,7 +54,10 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 					data.SetupTitle = "Log in to your blog"
 					data.SetupHelp = "Log in to edit your site profile."
 					if account, err := accounts.GetByEmail(r.Context(), access.emailKey); err == nil && account.NeedsVerification() {
-						data.SetupHelp = "Check your email to verify your account. If you need another message, log in to resend it."
+						data.SetupTitle = "Check your email"
+						data.SetupHelp = "Open the verification link in your email to make your site public."
+						data.SetupVerificationPending = true
+						data.SetupLoginOpen = r.Method == http.MethodPost
 					}
 				}
 				return data
@@ -108,6 +111,7 @@ func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templa
 // navigation holds the profile, links, and sharing metadata for the current request.
 type navigation struct {
 	Setup                                    bool
+	SetupVerificationPending, SetupLoginOpen bool
 	SetupTitle, SetupHelp                    string
 	Profile                                  Profile
 	Sharing                                  *sharingPreview

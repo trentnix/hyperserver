@@ -457,7 +457,7 @@ func TestPageOversizedDraft(t *testing.T) {
 				if strings.Contains(body, `<script>alert(1)</script>`) {
 					t.Fatal("draft was not escaped")
 				}
-				if strings.Contains(body, `name="published" checked`) != published {
+				if strings.Contains(body, `value="on" checked`) != published {
 					t.Fatal("publication setting was lost")
 				}
 				if !strings.Contains(body, `action="`+path+`"`) {

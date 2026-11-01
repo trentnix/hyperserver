@@ -34,6 +34,10 @@
     if (stage === 'registered') {
       assert(location.pathname === '/auth/login/email', 'Registration must lead to login.');
       assert(document.body.textContent.includes('Check your email'), 'Missing verification guidance.');
+      const login = document.querySelector('.setup-login');
+      assert(login && !login.open, 'Login should be secondary until verification.');
+      login.querySelector('summary').click();
+      assert(login.open && document.querySelector('#login-form').getBoundingClientRect().height > 0, 'Login must remain available for recovery.');
       const response = await fetch('/test/verification-link');
       assert(response.ok, 'Verification mail missing.');
       sessionStorage.setItem('setup-stage', 'verify');
@@ -57,9 +61,22 @@
       document.querySelector('#login-form').requestSubmit();
       return;
     }
-    assert(stage === 'profile' && location.pathname === '/profile', 'First login must open Site Profile.');
-    assert(document.querySelector('#profile-form').elements.name.value === 'My Blog', 'Default profile is missing.');
-    assert(!document.querySelector('.setup-panel'), 'Wizard remains after login.');
+    if (stage === 'profile') {
+      assert(location.pathname === '/profile', 'First login must open Site Profile.');
+      const form = document.querySelector('#profile-form');
+      assert(form.elements.name.value === 'My Blog', 'Default profile is missing.');
+      assert(!document.querySelector('.setup-panel'), 'Wizard remains after login.');
+      assert(document.body.textContent.includes('Images are optional.'), 'Missing initial profile guidance.');
+      form.elements.name.value = 'A new blog';
+      sessionStorage.setItem('setup-stage', 'saved');
+      form.requestSubmit();
+      return;
+    }
+    assert(stage === 'saved' && location.pathname === '/profile', 'First save must return to Site Profile.');
+    const completion = document.querySelector('.setup-complete');
+    assert(completion && completion.textContent.includes('Your site profile is saved.'), 'Missing profile confirmation.');
+    assert(completion.querySelector('a[href="/"]') && completion.querySelector('a[href="/post/create"]'), 'Missing next steps.');
+    assert(!document.body.textContent.includes('Images are optional.'), 'Initial guidance remains after saving.');
     await report('PASS');
   } catch (error) { await report(error.message + '\n' + error.stack); }
 })();

@@ -2,14 +2,91 @@ package blog
 
 import (
 	"net/http"
+	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // activeMarkup omits inert template contents when checking the rendered interface.
 func activeMarkup(markup string) string {
 	return regexp.MustCompile(`(?s)<template\b[^>]*>.*?</template>`).ReplaceAllString(markup, "")
+}
+
+// TestEditorSaveActions checks initial labels and ordinary validation redisplays.
+// Submitted choices must not be mistaken for the saved publication state.
+func TestEditorSaveActions(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	now := time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)
+	publicationClock(h, now)
+	button := regexp.MustCompile(`<button[^>]*data-publication-save[^>]*>([^<]+)</button>`)
+	for _, kind := range []string{"post", "page"} {
+		for _, state := range []string{"new", "draft", "published", "scheduled"} {
+			if kind == "page" && state == "scheduled" {
+				continue
+			}
+			t.Run(kind+"/"+state, func(t *testing.T) {
+				prefix := "/post"
+				if kind == "page" {
+					prefix = "/pages"
+				}
+				path, action, version := prefix+"/create", prefix, int64(0)
+				if state != "new" {
+					var id string
+					var err error
+					if kind == "post" {
+						p := Post{Title: kind + " " + state, Markdown: "Content", Draft: state == "draft"}
+						if state == "scheduled" {
+							p.Published = now.Add(time.Hour)
+						}
+						p, err = h.blog.writePost(t.Context(), p)
+						id, version = p.ID, p.Version
+					} else {
+						p, saveErr := h.blog.writePage(t.Context(), Page{Title: kind + " " + state, ChildrenDisplay: "hidden", Published: state == "published"})
+						id, version, err = p.ID, p.Version, saveErr
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					path, action = prefix+"/update/"+id, prefix+"/"+id
+				}
+				labels := map[string]string{"": "Save draft", "on": "Publish " + kind, "scheduled": "Schedule post"}
+				initial := ""
+				if state == "published" {
+					initial, labels["on"], labels[""] = "on", "Save changes", "Move to drafts"
+				}
+				if state == "scheduled" {
+					initial, labels["scheduled"], labels[""] = "scheduled", "Save schedule", "Move to drafts"
+				}
+				check := func(body, want string) {
+					t.Helper()
+					match := button.FindStringSubmatch(body)
+					if len(match) != 2 || match[1] != want {
+						t.Fatalf("save button = %v, want %q", match, want)
+					}
+				}
+				for _, hx := range []bool{false, true} {
+					w := h.request("GET", path, nil, hx)
+					requireStatus(t, w, http.StatusOK)
+					check(w.Body.String(), labels[initial])
+				}
+				for selection, label := range labels {
+					if selection == "scheduled" && (kind == "page" || state == "published") {
+						continue
+					}
+					fields := url.Values{"title": {""}, "content": {"Content"}, "published": {selection}, "version": {strconv.FormatInt(version, 10)}, "childrenDisplay": {"hidden"}, "publishDate": {"2030-01-02"}, "publishTime": {"9:30 AM"}}
+					w := h.request("POST", action, fields, false)
+					requireStatus(t, w, http.StatusUnprocessableEntity)
+					check(w.Body.String(), label)
+				}
+			})
+		}
+	}
 }
 
 // TestEditorPages keeps ordinary and partial navigation on the same page-based editor.

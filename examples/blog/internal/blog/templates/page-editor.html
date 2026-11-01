@@ -21,10 +21,13 @@
   {{ template "blog.previewImage" .Data.PreviewField }}
   <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help">{{ .Data.Markdown }}</textarea>
   {{ template "blog.markdownHelp" .Data }}
-  <label class="publish-option"><input type="checkbox" name="published" {{ if .Data.Published }}checked{{ end }}> Publish</label>
-  <p class="form-hint">Uncheck to move this page to drafts when you save.</p>
+  <div class="publication-options" role="radiogroup" aria-label="Publication">
+    <label><input type="radio" name="published" value=""{{ if not .Data.Published }} checked{{ end }}><span>Draft</span></label>
+    <label><input type="radio" name="published" value="on"{{ if .Data.Published }} checked{{ end }}><span>Publish</span></label>
+  </div>
+  <p class="form-hint">Changes take effect when you save.</p>
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
-  <div class="form-actions"><button type="submit">Save page</button><a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/pages{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
+  <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/pages{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
 </form></section>
 {{ end }}

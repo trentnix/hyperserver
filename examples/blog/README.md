@@ -29,7 +29,7 @@ Mailpit captures mail locally rather than delivering it. In another terminal, st
 GOWORK=off go run .
 ```
 
-Open <http://127.0.0.1:8086/>. First-time setup asks you to register the configured administrator address. Use the verification message at <http://127.0.0.1:8025>, then log in. Your first login opens Site Profile.
+Open <http://127.0.0.1:8086/>. First-time setup asks you to register the configured administrator address. Use the verification message at <http://127.0.0.1:8025>, then log in. Your first login opens Site Profile. Add your name and bio, then save. Images are optional. After the first save, you can view your site or write your first post.
 
 Public content, including the homepage, opens after registration and any required verification. Verification leads the administrator to login, and the first login opens Site Profile. Setup progress survives restarts. Existing installations with a verified administrator skip setup. If no administrator exists, enable `auth.registrationEnabled` to register.
 

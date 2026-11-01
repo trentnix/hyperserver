@@ -33,6 +33,7 @@ type editorPage struct {
 	Publication                string
 	ScheduleDate, ScheduleTime string
 	CanSchedule                bool
+	SaveActions                publicationActions
 	TagSuggestions             []string
 }
 
@@ -184,7 +185,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, errAlreadyPublished) {
-		m.editorError(w, r, p, "This post has already been published. Choose Draft or Now.", http.StatusUnprocessableEntity)
+		m.editorError(w, r, p, "This post has already been published. Choose Draft or Publish.", http.StatusUnprocessableEntity)
 		return
 	}
 	if err != nil {
@@ -206,6 +207,7 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
 	data := editorPage{Post: p, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
+	data.SaveActions = editorActions("post", false, false)
 	data.Publication = r.PostForm.Get("published")
 	data.ScheduleDate, data.ScheduleTime = r.PostForm.Get("publishDate"), r.PostForm.Get("publishTime")
 	page := m.views["editor"].Content(r, data)
@@ -219,6 +221,7 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 				logger.LogRequestError(r, err)
 			} else {
 				publication := m.postEditorData(stored)
+				data.SaveActions = publication.SaveActions
 				data.PublishedSlug, data.CanSchedule = publication.PublishedSlug, publication.CanSchedule
 				data.ScheduledSlug, data.ScheduledAt = publication.ScheduledSlug, publication.ScheduledAt
 			}

@@ -191,7 +191,7 @@ func TestBrowserPostPublication(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check post publication")
 	}
-	for _, width := range []string{"390", "1100"} {
+	for _, width := range []string{"320", "390", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "post-publication") })
 	}
 }
@@ -202,7 +202,7 @@ func TestBrowserScheduling(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check scheduled publication")
 	}
-	for _, width := range []string{"320", "390", "1100"} {
+	for _, width := range []string{"320", "390", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "scheduling") })
 	}
 }

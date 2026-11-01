@@ -113,7 +113,7 @@ func RequireAnonymous(accounts user.AccountRepository, cm *content_services.Cont
 			if u != nil {
 				// don't allow access
 				cm.HandleError(w, r,
-					"The requested resource is not available to authenticated users",
+					"You're already logged in.",
 					nil,
 					http.StatusForbidden)
 				return

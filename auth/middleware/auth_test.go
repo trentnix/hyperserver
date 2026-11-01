@@ -10,6 +10,29 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
+func TestRequireAnonymousExplainsExistingLogin(t *testing.T) {
+	for _, hx := range []bool{false, true} {
+		r := user.AddUserToRequestContext(httptest.NewRequest(http.MethodGet, "/auth/login/email", nil), &user.User{ID: "user"})
+		if hx {
+			r.Header.Set("HX-Request", "true")
+		}
+		accounts := &struct{ user.AccountRepository }{}
+		cm := &content.ContentManagerService{HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
+			if message != "You're already logged in." || err != nil {
+				t.Fatalf("unexpected login guidance: %q, %v", message, err)
+			}
+			w.WriteHeader(status)
+		}}
+		w := httptest.NewRecorder()
+		RequireAnonymous(accounts, cm)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			t.Fatal("signed-in user reached an anonymous-only handler")
+		})).ServeHTTP(w, r)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403", w.Code)
+		}
+	}
+}
+
 func TestAuthMiddlewareMissingDependencies(t *testing.T) {
 	for name, guard := range map[string]func(user.AccountRepository, *content.ContentManagerService) func(http.Handler) http.Handler{
 		"authenticated": RequireAuthentication,

@@ -73,7 +73,8 @@
       assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Page editor typography differs from other forms.');
       assert(form.querySelector('.form-actions a.button-secondary'), 'Page editor Cancel is not secondary.');
       assert(form.textContent.includes('Navigation shows top-level pages and their immediate children.'), 'Navigation help does not explain the depth limit.');
-      assert(!form.elements.published.checked, 'New pages must start as drafts.');
+      assert(form.elements.published.value === '', 'New pages must start as drafts.');
+      assert(form.querySelector('[type="submit"]').textContent === 'Save draft', 'New page action must identify a draft save.');
       form.elements.title.value = 'Contact';
       form.elements.title.dispatchEvent(new Event('input', {bubbles: true}));
       assert(form.elements.slug.placeholder === 'contact' && form.elements.slug.value === '', 'Page slug suggestion must follow its title without entering a value.');
@@ -85,7 +86,7 @@
       const conflict = form.querySelector('#editor-errors');
       assert(conflict.textContent.includes('leave it blank to generate one from the title'), 'Slug conflict must explain how to recover.');
       assert(getComputedStyle(conflict).borderLeftWidth === '3px' && getComputedStyle(conflict.querySelector('.page-message')).paddingTop === '0px', 'Editor error must use a compact, distinct callout.');
-      assert(conflict.getBoundingClientRect().top > form.querySelector('.publish-option').getBoundingClientRect().bottom, 'Editor error must appear near the save controls.');
+      assert(conflict.getBoundingClientRect().top > form.querySelector('.publication-options').getBoundingClientRect().bottom, 'Editor error must appear near the save controls.');
       assert(document.querySelector('.CodeMirror').CodeMirror === cm && cm.getValue() === 'A **contact** page.', 'Conflict lost the mounted editor or draft.');
       form.elements.slug.value = '';
       form.noValidate = true;
@@ -111,7 +112,8 @@
       assert(document.querySelector('.CodeMirror').CodeMirror.getValue() === 'A **contact** page.', 'Stored page was not loaded into the editor.');
       assert(form.elements.slug.value === 'contact' && !form.elements.slug.required, 'Page editor must load its generated slug and allow clearing it.');
       form.elements.slug.value = '';
-      form.elements.published.checked = true;
+      form.querySelector('[name="published"][value="on"]').click();
+      assert(form.querySelector('[type="submit"]').textContent === 'Publish page', 'Publishing a draft page must be explicit.');
       sessionStorage.setItem('page-stage', 'published');
       form.requestSubmit();
       return;

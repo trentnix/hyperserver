@@ -26,6 +26,12 @@ function updateSlugPlaceholder(form) {
   slug.placeholder = suggestion || (title.trim() ? 'Enter a custom slug' : 'Generated from title on save');
 }
 function updatePublication(form) {
+  const button = form?.querySelector('[data-publication-save]');
+  if (button) {
+    const choice = form.elements.published.value;
+    button.textContent = choice === 'scheduled' ? button.dataset.scheduleLabel :
+      choice === 'on' ? button.dataset.publishLabel : button.dataset.draftLabel;
+  }
   const field = form?.querySelector('[data-publication-time]');
   if (!field) return;
   field.hidden = form.elements.published.value !== 'scheduled';
@@ -74,7 +80,7 @@ for (const name of ['input', 'change']) {
 }
 
 function initialize(root) {
-  root.querySelectorAll('#post-form').forEach(updatePublication);
+  root.querySelectorAll('#post-form, #page-form').forEach(updatePublication);
   root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
   root.querySelectorAll('input[name="tags"]').forEach(updateTagSuggestions);
   const textarea = root.querySelector('#post-content');

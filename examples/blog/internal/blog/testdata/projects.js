@@ -35,7 +35,7 @@
       form.elements.summary.value = 'A short card description';
       assert(form.elements.displayOrder.value === '', 'New projects should default to update-time ordering.');
       form.elements.displayOrder.value = '10';
-      form.elements.published.checked = true;
+      form.querySelector('[name="published"][value="on"]').click();
       sessionStorage.setItem('project-parent', form.elements.parentID.value);
       const cm = document.querySelector('.CodeMirror').CodeMirror;
       form.elements.slug.value = 'INVALID';
@@ -135,7 +135,7 @@
       document.querySelector('[data-image-reset]').click();
       const form = document.querySelector('#page-form');
       assert(form.elements.previewImage.value === '', 'Removing the preview retained its ID.');
-      form.elements.published.checked = false;
+      form.querySelector('[name="published"][value=""]').click();
       sessionStorage.setItem('project-stage', 'unpublished');
       form.requestSubmit();
       return;

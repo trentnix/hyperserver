@@ -60,3 +60,5 @@
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
   </fieldset>
 {{ end }}
+
+{{ define "blog.saveContent" }}<button type="submit" data-publication-save data-draft-label="{{ .SaveActions.Draft }}" data-publish-label="{{ .SaveActions.Publish }}" data-schedule-label="{{ .SaveActions.Schedule }}">{{ .SaveActions.Label .Publication }}</button>{{ end }}

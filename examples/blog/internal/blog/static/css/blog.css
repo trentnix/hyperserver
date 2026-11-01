@@ -119,10 +119,10 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
   .profile-links { display: none; }
   .profile { grid-template-columns: 120px minmax(0, 1fr); }
   .site-sidebar .archive-nav { padding: 50px 20px 24px; }
-  .article-column { grid-column: 2; grid-row: 1; }
+  .article-column { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-height: 100vh; }
   .article-column:has(.page-blocks) { grid-column: 2 / -1; max-width: none; }
   #sidebar-archive { display: block; }
-  .content-search { display: block; max-width: 960px; padding: 0 60px 40px; }
+  .content-search { display: block; width: 100%; max-width: 960px; margin-top: auto; padding: 0 60px 40px; }
   .site-footer { display: none; }
 }
 @media (max-width: 767px) {
@@ -209,7 +209,9 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .page-card:hover h2 { text-decoration: underline; }
 .page-status { font-size: .8em; color: var(--muted); margin-bottom: 8px; }
 .page-back { display: inline-block; margin-bottom: 24px; font-size: .85em; }
-.publish-option { display: flex; align-items: center; gap: 10px; }
+.publication-options { display: flex; flex-wrap: wrap; gap: 4px 24px; margin-block: 24px 8px; }
+.publication-options label { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; font-weight: 400; white-space: nowrap; cursor: pointer; }
+.publication-options input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--button-bg); }
 .page-preview-list { display: grid; gap: 20px; margin-top: 30px; }
 .page-content .page-preview-list .page-card { flex-direction: row; }
 .page-preview-list .page-card > img { width: 28%; align-self: flex-start; }
@@ -383,12 +385,15 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .form-actions, .verification-actions { margin-top: 24px; }
 .text-button { border: 0; padding: 0; background: none; color: inherit; text-decoration: underline; text-underline-offset: .18em; cursor: pointer; }
 label { display: block; font-weight: 600; margin: 18px 0 6px; }
-input:not([type=hidden], [type=checkbox]), textarea, select { display: block; width: 100%; padding: 10px 12px; color: #212529; border: 1px solid #bfc4cd; border-radius: 3px; background: #fff; }
+input:not([type=hidden], [type=checkbox], [type=radio]), textarea, select { display: block; width: 100%; padding: 10px 12px; color: #212529; border: 1px solid #bfc4cd; border-radius: 3px; background: #fff; }
 textarea { resize: vertical; }
 button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .55; cursor: not-allowed; }
 .image-picker input:disabled::file-selector-button, .media-upload input:disabled::file-selector-button { cursor: not-allowed; }
 .field-error, [data-request-error], .verification-status--error { color: #a12626; }
 .form-hint { color: var(--muted); font-size: .85em; }
+.publication-footer { display: flex; flex-direction: column; overflow-anchor: none; }
+/* Reserve the schedule's actual height below the actions until it is selected. */
+.publication-footer .post-schedule[hidden] { display: block; visibility: hidden; order: 1; }
 .post-schedule { margin-top: 16px; padding: 16px; border: 1px solid #e1e5eb; border-radius: 4px; background: var(--surface); }
 .post-schedule-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 .post-schedule-fields > div { min-width: 0; }
@@ -463,6 +468,11 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 .setup-panel header p { color: #656b77; margin-bottom: 0; }
 .setup-panel :is(.auth-email-form, .verification-panel) { max-width: none; }
 .setup-panel .verification-panel { padding: 0; border: 0; background: none; }
+.setup-login { margin-top: 24px; }
+.setup-login summary { padding-block: 10px; cursor: pointer; font-weight: 600; }
+.setup-complete { margin-bottom: 28px; padding: 20px; background: #eef0f4; border-radius: 5px; }
+.setup-complete h2 { margin: 0 0 16px; font-size: 1.25em; }
+.setup-complete > div { display: flex; flex-wrap: wrap; gap: 12px; }
 :is(.auth-email-form, #reset-request-form, #reset-password-form) {
   label { margin: 24px 0 8px; color: var(--button-bg); }
   label:first-child { margin-top: 0; }

@@ -30,7 +30,26 @@
       const form = await editor('/post/create');
       assert(form.querySelector('[data-image-preview]').getClientRects().length === 0, 'New post must not display an empty preview image.');
       assert(form.elements.published.value === '', 'New post must start as a draft.');
-      assert(form.querySelector('[type="submit"]').textContent === 'Save post', 'Post save label must not force a draft step.');
+      const choices = [...form.querySelectorAll('.publication-options input')];
+      assert(choices.length === 3 && choices.every(input => input.type === 'radio'), 'Publication must use one radio group.');
+      const group = form.querySelector('.publication-options').getBoundingClientRect();
+      assert(group.top >= form.querySelector('#markdown-help').getBoundingClientRect().bottom + 16, 'Publication must sit below the Markdown help, not alongside it.');
+      for (const [i, choice] of choices.entries()) {
+        const box = choice.labels[0].getBoundingClientRect();
+        assert(box.height >= 44 && box.right <= form.getBoundingClientRect().right + 1, 'Publication choices must fit and remain touch-friendly.');
+        if (i) assert(Math.abs(box.top - choices[0].labels[0].getBoundingClientRect().top) < 1, 'Publication choices must stay on one row.');
+        const text = choice.nextElementSibling;
+        assert(text.getBoundingClientRect().height <= parseFloat(getComputedStyle(text).lineHeight) + 1, 'Publication labels must not wrap.');
+        const style = getComputedStyle(choice), circle = choice.getBoundingClientRect();
+        assert(style.appearance !== 'none' && style.clipPath === 'none' && style.opacity === '1' && circle.width >= 16 && circle.height >= 16, 'Native radio circles must remain visible.');
+        choice.labels[0].click();
+        assert(form.elements.published.value === choice.value && choices.filter(input => input.checked).length === 1, 'Publication choices must be mutually exclusive.');
+        assert(form.querySelector('[type="submit"]').textContent === ['Save draft', 'Publish post', 'Schedule post'][i], 'Save action must describe the selected outcome.');
+      }
+      choices[0].click();
+      choices[0].focus({preventScroll: true});
+      assert(document.activeElement === choices[0], 'Radio controls must remain focusable.');
+      assert(form.querySelector('[type="submit"]').textContent === 'Save draft', 'Draft save action must identify its outcome.');
       form.elements.title.value = 'First Save';
       assert(form.elements.slug.value === '' && !form.elements.slug.required, 'New post slug must be optional.');
       for (const [title, slug] of [['  Go & HTMX!  ', 'go-htmx'], ['İGo Kit', 'go-it'], ['世界', 'Enter a custom slug'], ['A'.repeat(119) + ' -- end', 'a'.repeat(119)], ['First Save', 'first-save']]) {
@@ -69,6 +88,7 @@
       form.requestSubmit();
       await wait(() => document.querySelector('#editor-errors').textContent.includes('valid Markdown'));
       assert(form.elements.published.value === 'on', 'Validation failure cleared the publication choice.');
+      assert(form.querySelector('[type="submit"]').textContent === 'Publish post', 'Validation failure changed the save action.');
       assert(form.elements.previewImage.value === sessionStorage.getItem('post-preview'), 'Validation failure cleared the preview.');
       form.querySelector('.CodeMirror').CodeMirror.setValue('Public content on the first save.');
       sessionStorage.setItem('publication-stage', 'published');
@@ -82,6 +102,7 @@
       const response = await fetch(location.pathname, {credentials: 'omit'});
       assert(response.ok && (await response.text()).includes('Public content on the first save.'), 'Checked first save did not publish the content.');
       const form = await editor(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
+      assert(form.querySelector('[type="submit"]').textContent === 'Save changes', 'Published post edits must say Save changes.');
       assert(form.elements.slug.value === 'first-save-2' && !form.elements.slug.required, 'Post editor must load its generated slug and allow clearing it.');
       assert(form.elements.previewImage.value === sessionStorage.getItem('post-preview'), 'Reopening lost the preview.');
       form.querySelector('[data-image-reset]').click();
@@ -89,7 +110,8 @@
       assert(form.querySelector('[data-image-preview]').getClientRects().length === 0, 'Cleared preview image must not occupy layout space.');
       form.elements.slug.value = '';
       assert(form.elements.published.value === 'on', 'Published post did not retain its publication setting.');
-      form.elements.published.value = '';
+      form.querySelector('[name="published"][value=""]').click();
+      assert(form.querySelector('[type="submit"]').textContent === 'Move to drafts', 'Unpublishing must be explicit.');
       form.querySelector('.CodeMirror').CodeMirror.setValue('Private edited content.');
       let warnings = 0;
       window.blogConfirm = (options, proceed) => {

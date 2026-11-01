@@ -163,10 +163,10 @@ func TestSavePostPublication(t *testing.T) {
 					t.Fatal("save reset the first publication date")
 				}
 				editor := h.request("GET", "/post/update/"+post.ID, nil, hx).Body.String()
-				if strings.Contains(editor, `value="on" selected`) != publish {
+				if strings.Contains(editor, `value="on" checked`) != publish {
 					t.Fatal("editor publication choice does not reflect stored state")
 				}
-				if !strings.Contains(editor, ">Publish</label>") || !strings.Contains(editor, "Changes take effect when you save. Choose Draft to keep the post private.") {
+				if !strings.Contains(editor, ">Publish</span>") || !strings.Contains(editor, ">Draft</span>") || !strings.Contains(editor, "Changes take effect when you save.") {
 					t.Fatal("editor must explain how publication choices change visibility")
 				}
 				view := h.request("GET", "/post/s/"+post.Slug, nil, hx)
@@ -214,7 +214,7 @@ func TestSavePostPublication(t *testing.T) {
 				}
 				response := h.submitEditor(t, "/post/"+post.ID, values, hx)
 				requireStatus(t, response, http.StatusUnprocessableEntity)
-				if !hx && strings.Contains(response.Body.String(), `value="on" selected`) != publish {
+				if !hx && strings.Contains(response.Body.String(), `value="on" checked`) != publish {
 					t.Fatal("failed save lost the publication choice")
 				}
 				stored, err := h.blog.posts.GetByID(t.Context(), post.ID, true)

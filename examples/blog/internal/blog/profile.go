@@ -109,6 +109,8 @@ type profileEditorData struct {
 	Error          string
 	LoadedRevision *ProfileRevision
 	HasHistory     bool
+	InitialProfile bool
+	ProfileCreated bool
 	MissingImages  map[string]bool
 }
 
@@ -209,6 +211,9 @@ func (m *module) saveProfileContent(w http.ResponseWriter, r *http.Request, p Pr
 		m.renderProfileEditor(w, r, p, "Unable to save the site profile. Please try again.", http.StatusInternalServerError)
 		return
 	}
+	if p.Version == 0 && !restore {
+		destination = "/profile?created=1"
+	}
 	// Reload the whole document so the header, favicon, and background update together.
 	util.RedirectToURL(w, r, destination)
 }
@@ -241,6 +246,10 @@ func (m *module) writeProfile(ctx context.Context, p Profile) error {
 // renderProfileEditor preserves ordinary form values and mounted HTMX inputs on errors.
 func (m *module) renderProfileEditor(w http.ResponseWriter, r *http.Request, p Profile, message string, status int) {
 	data := profileEditorData{Profile: p, Error: message}
+	current := m.profile.Current()
+	data.InitialProfile = current.Version == 0
+	// The redirect flag only selects a confirmation. Stored state determines whether it applies.
+	data.ProfileCreated = r.Method == http.MethodGet && status == http.StatusOK && current.Version == 1 && r.URL.Query().Get("created") == "1" && r.URL.Query().Get("revision") == ""
 	// Failed HTMX submissions leave the mounted editor and its concurrency token intact.
 	view := m.views["profileEditor"]
 	page := view.Content(r, data)

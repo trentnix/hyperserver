@@ -12,9 +12,149 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+// TestSetupVerificationGuidance keeps login available without competing with verification.
+func TestSetupVerificationGuidance(t *testing.T) {
+	h := startHarness(t, harnessConfig(t, 10))
+	h.register(t)
+	w := h.request("GET", loginURL, nil, false)
+	requireStatus(t, w, http.StatusOK)
+	for _, want := range []string{"<h1>Check your email</h1>", `class="setup-login">`, "log in to request another", `id="login-form"`} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	for _, hx := range []bool{false, true} {
+		w = h.request("POST", loginURL, url.Values{"email": {"trentnix@gmail.com"}, "password": {"wrong"}}, hx)
+		requireStatus(t, w, http.StatusOK)
+		if !strings.Contains(w.Body.String(), "Invalid login/password") || !hx && !strings.Contains(w.Body.String(), `class="setup-login" open>`) {
+			t.Fatal("failed login must leave validation visible")
+		}
+	}
+	// Verification in a different browser must not depend on registration cookies.
+	originalBrowser := h.cookies
+	h.cookies = make(map[string]*http.Cookie)
+	h.verify(t)
+	h.cookies = originalBrowser
+	w = h.request("GET", loginURL, nil, false)
+	requireStatus(t, w, http.StatusOK)
+	if strings.Contains(w.Body.String(), "setup-login") || !strings.Contains(w.Body.String(), "Log in to your blog") {
+		t.Fatal("verified account must see login directly in the original browser")
+	}
+	requireStatus(t, h.request("GET", "/", nil, false), http.StatusOK)
+}
+
+// TestSetupExpiredVerification provides a recovery path without opening the site.
+func TestSetupExpiredVerification(t *testing.T) {
+	h := startHarness(t, harnessConfig(t, 10))
+	h.register(t)
+	account, err := h.app.Accounts.GetByEmail(t.Context(), "trentnix@gmail.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := user.NewAuthVerificationToken(account, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := token.Metadata()
+	metadata.ExpiresAt = time.Now().Add(-time.Hour)
+	if err := h.app.Accounts.InsertToken(t.Context(), metadata); err != nil {
+		t.Fatal(err)
+	}
+	for _, hx := range []bool{false, true} {
+		w := h.request("POST", "/auth/verify", url.Values{"token": {token.Token}}, hx)
+		requireStatus(t, w, http.StatusBadRequest)
+		if !strings.Contains(w.Body.String(), "invalid or expired") || !strings.Contains(w.Body.String(), `href="/auth/continue"`) {
+			t.Fatal("expired verification needs an explanation and a way to continue")
+		}
+	}
+	requireStatus(t, h.request("GET", "/", nil, false), http.StatusSeeOther)
+	h.login(t)
+	w := h.request("GET", authReturnURL, nil, false)
+	if w.Header().Get("Location") != "/auth/request/verify" {
+		t.Fatal("unverified login must lead to resend instructions")
+	}
+	// Retain only the replacement message so verify exercises the new link.
+	h.mail.messages = nil
+	requireStatus(t, h.request("POST", "/auth/request/verify", nil, false), http.StatusOK)
+	h.verify(t)
+	w = h.request("GET", authReturnURL, nil, false)
+	if w.Header().Get("Location") != "/profile" {
+		t.Fatal("replacement verification must finish setup for the signed-in administrator")
+	}
+}
+
+// TestSetupProfileGuidance survives leaving the editor and finishes only after a successful save.
+func TestSetupProfileGuidance(t *testing.T) {
+	for _, hx := range []bool{false, true} {
+		t.Run(fmt.Sprint(hx), func(t *testing.T) {
+			cfg := harnessConfig(t, 10)
+			h := startHarness(t, cfg)
+			h.register(t)
+			h.verify(t)
+			h.login(t)
+			requireStatus(t, h.request("GET", authReturnURL, nil, false), http.StatusSeeOther)
+			const introduction = "Give your blog a name and a short introduction. Images are optional."
+			for range 2 {
+				w := h.request("GET", "/profile?created=1", nil, hx)
+				requireStatus(t, w, http.StatusOK)
+				if !strings.Contains(w.Body.String(), introduction) || strings.Contains(w.Body.String(), "setup-complete") {
+					t.Fatal("unsaved profile needs guidance, not a success message")
+				}
+				if err := h.app.ShutdownContext(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				h = startHarness(t, cfg)
+				h.login(t)
+			}
+			fields := url.Values{"version": {"0"}, "name": {""}}
+			requireStatus(t, h.request("POST", "/profile", fields, hx), http.StatusUnprocessableEntity)
+			fields.Set("name", "My new blog")
+			store := h.blog.profileStore
+			h.blog.profileStore = failingProfileStore{store}
+			w := h.request("POST", "/profile", fields, hx)
+			requireStatus(t, w, http.StatusInternalServerError)
+			if strings.Contains(w.Body.String(), "setup-complete") || h.blog.profile.Current().Version != 0 || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
+				t.Fatal("failed save must not finish profile setup")
+			}
+			h.blog.profileStore = store
+			w = h.request("POST", "/profile", fields, hx)
+			status, header := http.StatusSeeOther, "Location"
+			if hx {
+				status, header = http.StatusOK, "HX-Redirect"
+			}
+			requireStatus(t, w, status)
+			if w.Header().Get(header) != "/profile?created=1" {
+				t.Fatal("first save must lead to confirmation")
+			}
+			w = h.request("GET", "/profile?created=1", nil, hx)
+			requireStatus(t, w, http.StatusOK)
+			for _, want := range []string{"Your site profile is saved.", `href="/">View site`, `href="/post/create">Write your first post`} {
+				if !strings.Contains(w.Body.String(), want) {
+					t.Errorf("missing %q", want)
+				}
+			}
+			if strings.Contains(w.Body.String(), introduction) {
+				t.Fatal("saved profile still shows initial guidance")
+			}
+			requireStatus(t, h.request("POST", "/profile", fields, hx), http.StatusConflict)
+			if strings.Contains(h.request("GET", "/profile", nil, hx).Body.String(), "setup-complete") {
+				t.Fatal("returning to the editor must not replay confirmation")
+			}
+			fields.Set("version", "1")
+			fields.Set("name", "Updated blog")
+			w = h.request("POST", "/profile", fields, hx)
+			requireStatus(t, w, status)
+			if w.Header().Get(header) != "/profile" || strings.Contains(h.request("GET", "/profile?created=1", nil, hx).Body.String(), "setup-complete") {
+				t.Fatal("later saves must not replay first-save confirmation")
+			}
+		})
+	}
+}
 
 // TestSetupAuthenticationReturns keeps verification and login guidance separate
 // from public navigation, for ordinary forms and HTMX submissions.
@@ -218,6 +358,10 @@ func TestSetupFailures(t *testing.T) {
 		requireStatus(t, h.request("POST", "/auth/request/verify", nil, false), http.StatusOK)
 		if len(h.mail.messages) != 1 {
 			t.Fatal("could not resend verification")
+		}
+		h.verify(t)
+		if w := h.request("GET", authReturnURL, nil, false); w.Header().Get("Location") != "/profile" {
+			t.Fatal("recovered delivery did not allow setup to finish")
 		}
 	})
 	t.Run("account lookup", func(t *testing.T) {

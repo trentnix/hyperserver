@@ -17,8 +17,7 @@
     return document.querySelector('#post-form');
   };
   const choose = (form, value) => {
-    form.elements.published.value = value;
-    form.elements.published.dispatchEvent(new Event('change', {bubbles: true}));
+    form.querySelector(`[name="published"][value="${value}"]`).click();
   };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
   try {
@@ -35,8 +34,22 @@
       const field = form.querySelector('[data-publication-time]');
       assert(field.hidden, 'A new draft must not show a scheduling field.');
       assert(form.elements.publishDate.disabled && form.elements.publishTime.disabled, 'Unused scheduling fields must not block a draft save.');
+      assert(getComputedStyle(field).visibility === 'hidden', 'Reserved scheduling space must not expose its controls.');
+      const scroll = document.scrollingElement;
+      scroll.scrollTop = scroll.scrollHeight;
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      const beforeSchedule = {height: scroll.scrollHeight, top: scroll.scrollTop, button: form.querySelector('[type="submit"]').getBoundingClientRect().top};
       choose(form, 'scheduled');
-      assert(form.elements.published.selectedOptions[0].textContent === 'Schedule', 'The scheduling choice must be labeled Schedule.');
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      assert(scroll.scrollHeight === beforeSchedule.height && Math.abs(scroll.scrollTop - beforeSchedule.top) <= 1, 'Selecting Schedule at the bottom must use reserved space without resizing or scrolling the page.');
+      assert(form.querySelector('[type="submit"]').getBoundingClientRect().top > beforeSchedule.button, 'Scheduling fields must appear above the save actions.');
+      assert(field.getBoundingClientRect().bottom <= innerHeight, 'Scheduling controls must remain visible at the bottom.');
+      choose(form, '');
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      assert(scroll.scrollHeight === beforeSchedule.height && Math.abs(scroll.scrollTop - beforeSchedule.top) <= 1, 'Returning to Draft must preserve the page height and scroll position.');
+      choose(form, 'scheduled');
+      assert(form.querySelector('[type="submit"]').textContent === 'Schedule post', 'A new schedule must say Schedule post.');
+      assert(form.querySelector('[name="published"]:checked').labels[0].textContent.trim() === 'Schedule', 'The selected radio must identify Schedule.');
       assert(!field.hidden && field.textContent.includes('UTC'), 'Scheduling must expose its time zone.');
       assert(form.elements.publishDate.type === 'date' && form.elements.publishTime.type === 'text', 'Scheduling should offer a date picker and a single editable time.');
       const timeChoices = form.querySelector('[data-time-choice]');
@@ -170,6 +183,12 @@
       const form = await edit(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
       assert(form.elements.published.value === 'scheduled' && form.elements.publishDate.value === sessionStorage.getItem('schedule-date').slice(0, 10) && form.elements.publishTime.value === sessionStorage.getItem('schedule-time'), 'Reopening changed the saved UTC schedule.');
       assert(!form.querySelector('[data-publication-time]').hidden, 'Reopening hid the schedule.');
+      assert(form.querySelector('[type="submit"]').textContent === 'Save schedule', 'An existing schedule must say Save schedule.');
+      choose(form, '');
+      assert(form.querySelector('[type="submit"]').textContent === 'Move to drafts', 'Canceling a schedule must identify the draft outcome.');
+      choose(form, 'on');
+      assert(form.querySelector('[type="submit"]').textContent === 'Publish post', 'Publishing a scheduled post now must say Publish post.');
+      choose(form, 'scheduled');
 
       // An editor can stay open while publication happens. Only the warning's
       // browser clock changes here. Stop submission before any server request.
@@ -206,7 +225,7 @@
     if (stage === 'draft') {
       assert(document.querySelector('.post-heading').textContent.includes('Draft preview'), 'Canceling must return to a private draft.');
       const form = await edit(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
-      assert(form.elements.publishDate.value === '' && form.elements.publishTime.value === '' && form.elements.published.querySelector('[value="scheduled"]'), 'Canceled draft must allow a fresh schedule.');
+      assert(form.elements.publishDate.value === '' && form.elements.publishTime.value === '' && form.querySelector('[name="published"][value="scheduled"]'), 'Canceled draft must allow a fresh schedule.');
       choose(form, 'on');
       sessionStorage.setItem('schedule-stage', 'published');
       form.requestSubmit();
@@ -216,7 +235,7 @@
       assert((await fetch(location.pathname, {credentials: 'omit'})).ok, 'Publish now must make the post public.');
       const path = document.querySelector('a[href^="/post/update/"]').getAttribute('href');
       let form = await edit(path);
-      assert(!form.elements.published.querySelector('[value="scheduled"]') && !form.elements.publishDate && !form.elements.publishTime, 'Previously published posts must not offer scheduling.');
+      assert(!form.querySelector('[name="published"][value="scheduled"]') && !form.elements.publishDate && !form.elements.publishTime, 'Previously published posts must not offer scheduling.');
 
       // A copy saved before publication must not turn an unavailable Schedule
       // option into an empty selection, which the server would treat as Draft.
@@ -224,7 +243,7 @@
       delete fields.version;
       const key = 'hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':' + new URL(form.action).pathname + ':scheduled-copy';
       localStorage.setItem(key, JSON.stringify({saved: Date.now(), baseline: JSON.stringify(fields), fields: {
-        ...fields, content: 'Recovered scheduled writing.', published: 'scheduled', publishAt: sessionStorage.getItem('schedule-date')
+        ...fields, content: 'Recovered scheduled writing.', published: false, schedule: true, publishAt: sessionStorage.getItem('schedule-date')
       }}));
       form.querySelector('.form-actions a').click();
       await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));

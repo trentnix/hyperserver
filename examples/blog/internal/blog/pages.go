@@ -30,6 +30,15 @@ type pageContent struct {
 	DisplayOrderText string
 	PublishedSlug    string
 	TagSuggestions   []string
+	SaveActions      publicationActions
+}
+
+// Publication supplies the page editor's selected radio value.
+func (p pageContent) Publication() string {
+	if p.Published {
+		return "on"
+	}
+	return ""
 }
 
 // PreviewField configures the shared picker for page cards and sharing.
@@ -301,6 +310,7 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 		if stored.EverPublished {
 			data.PublishedSlug = stored.Slug
 		}
+		data.SaveActions = editorActions("page", stored.ID != "" && stored.Published, false)
 		pages, err := m.pageStore.ListPages(r.Context(), true)
 		if err != nil && status < 400 {
 			m.storageError(w, r, err)

@@ -82,6 +82,12 @@
       assert(!document.querySelector('#sidebar-archive form'), 'Ultrawide search must not appear in the sidebar.');
       assert(searchForm.getBoundingClientRect().top >= article.getBoundingClientRect().bottom, 'Ultrawide search must follow the page content.');
       assert(Math.abs(searchForm.getBoundingClientRect().left - article.getBoundingClientRect().left - parseFloat(getComputedStyle(article).paddingLeft)) < 1, 'Ultrawide search must align with the content text.');
+      window.scrollTo(0, 0);
+      const slot = searchForm.closest('.content-search');
+      assert(Math.abs(slot.getBoundingClientRect().bottom - innerHeight) < 2, 'Search must sit at the bottom of a short ultrawide page.');
+      article.style.minHeight = '150vh';
+      assert(slot.getBoundingClientRect().top >= article.getBoundingClientRect().bottom, 'Search must follow long content without covering it.');
+      article.style.removeProperty('min-height');
     } else {
       const recentLinks = document.querySelector(placement + ' .post-archive > ul');
       assert(searchForm.getBoundingClientRect().top >= recentLinks.getBoundingClientRect().bottom, 'Footer search must follow Recent Posts.');

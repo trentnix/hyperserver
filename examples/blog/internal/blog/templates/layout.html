@@ -24,7 +24,13 @@
   {{ if .LayoutData.Setup }}
   <main class="setup-panel" id="article-content">
     {{ if .LayoutData.SetupTitle }}<header><h1>{{ .LayoutData.SetupTitle }}</h1><p>{{ .LayoutData.SetupHelp }}</p></header>{{ end }}
-    {{ renderPartial .PartialName . }}
+    {{ if .LayoutData.SetupVerificationPending }}
+    <p>Already verified? Log in to continue. If the email is missing or the link expired, log in to request another.</p>
+    <details class="setup-login"{{ if .LayoutData.SetupLoginOpen }} open{{ end }}>
+      <summary>Log in</summary>
+      {{ renderPartial .PartialName . }}
+    </details>
+    {{ else }}{{ renderPartial .PartialName . }}{{ end }}
   </main>
   {{ else }}
   <div class="site-layout">

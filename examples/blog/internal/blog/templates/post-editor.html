@@ -11,12 +11,12 @@
   {{ template "blog.tagField" .Data }}
   {{ template "blog.previewImage" .Data.PreviewField }}
   {{ template "blog.markdownFields" .Data }}
-  <label for="post-publication">Publish</label>
-  <select id="post-publication" name="published">
-    <option value="" {{ if eq .Data.Publication "" }}selected{{ end }}>Draft</option>
-    <option value="on" {{ if eq .Data.Publication "on" }}selected{{ end }}>Now</option>
-    {{ if or .Data.CanSchedule (eq .Data.Publication "scheduled") }}<option value="scheduled" {{ if eq .Data.Publication "scheduled" }}selected{{ end }}>Schedule</option>{{ end }}
-  </select>
+  <div class="publication-options" role="radiogroup" aria-label="Publication">
+    <label><input type="radio" name="published" value=""{{ if eq .Data.Publication "" }} checked{{ end }}><span>Draft</span></label>
+    <label><input type="radio" name="published" value="on"{{ if eq .Data.Publication "on" }} checked{{ end }}><span>Publish</span></label>
+    {{ if or .Data.CanSchedule (eq .Data.Publication "scheduled") }}<label><input type="radio" name="published" value="scheduled"{{ if eq .Data.Publication "scheduled" }} checked{{ end }}><span>Schedule</span></label>{{ end }}
+  </div>
+  <div class="publication-footer">
   {{ if or .Data.CanSchedule (eq .Data.Publication "scheduled") }}<div class="post-schedule" data-publication-time>
     <div class="post-schedule-fields">
       <div><label for="post-publish-date">Date</label><input id="post-publish-date" name="publishDate" type="date" value="{{ .Data.ScheduleDate }}" aria-describedby="schedule-help"></div>
@@ -84,10 +84,11 @@
     </div>
     <p class="form-hint" id="schedule-help">When Schedule is selected, your post stays private until this time. Use UTC, not your device’s time zone.</p>
   </div>{{ end }}
-  <p class="form-hint">Changes take effect when you save. Choose Draft to keep the post private.</p>
+  <p class="form-hint">Changes take effect when you save.</p>
   <div id="editor-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
-  <div class="form-actions"><button type="submit">Save post</button><a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/post/manage{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
+  <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/post/manage{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
+  </div>
 </form></section>
 {{ end }}
 

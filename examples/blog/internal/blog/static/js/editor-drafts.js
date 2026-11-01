@@ -7,7 +7,8 @@
   const maxLength = 1024 * 1024;
 
   function snapshot(state) {
-    return Object.fromEntries(state.fields.map(field => [field.name, field.type === 'checkbox' ? field.checked : field.value]));
+    return Object.fromEntries(state.fields.filter(field => field.type !== 'radio' || field.checked)
+      .map(field => [field.name, field.type === 'checkbox' ? field.checked : field.value]));
   }
   const encoded = state => JSON.stringify(snapshot(state));
   const dirty = state => encoded(state) !== state.baseline;
@@ -49,9 +50,8 @@
 
   // A scheduled copy may outlive publication, when Schedule is no longer offered.
   function unavailablePublication(state, copy) {
-    const field = state.form.elements.published;
-    return field?.tagName === 'SELECT' && Object.hasOwn(copy.data.fields, 'published') &&
-      ![...field.options].some(option => option.value === copy.data.fields.published);
+    return Object.hasOwn(copy.data.fields, 'published') &&
+      ![...state.form.querySelectorAll('[name="published"]')].some(field => field.value === copy.data.fields.published);
   }
 
   // Read only this account's copies. Expired or malformed copies are not restored.
@@ -68,10 +68,9 @@
           continue;
         }
         if (!key.startsWith(state.scope) || key === state.key || state.sources.some(copy => copy.key === key)) continue;
-        // Older post copies used a checkbox. Keep those copies usable with the
-        // publication selector, without changing page checkbox recovery.
-        if (state.form.elements.published?.tagName === 'SELECT' && typeof data.fields?.published === 'boolean') {
-          data.fields.published = data.fields.published ? 'on' : '';
+        // Preserve copies from the former publication checkboxes.
+        if (typeof data.fields?.published === 'boolean' || data.fields?.schedule === true) {
+          data.fields.published = data.fields.schedule ? 'scheduled' : data.fields.published ? 'on' : '';
         }
         // Split copies saved by the former combined date/time control.
         if (typeof data.fields?.publishAt === 'string' && data.fields.publishDate === undefined && data.fields.publishTime === undefined) {
@@ -145,6 +144,7 @@
           if (!Object.hasOwn(copy.data.fields, field.name)) continue;
           if (field.name === 'published' && keepPublication) continue;
           if (field.type === 'checkbox') field.checked = copy.data.fields[field.name];
+          else if (field.type === 'radio') field.checked = field.value === copy.data.fields[field.name];
           else field.value = copy.data.fields[field.name];
         }
         const editor = form.querySelector('.CodeMirror')?.CodeMirror;

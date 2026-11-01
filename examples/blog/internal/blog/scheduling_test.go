@@ -66,6 +66,40 @@ func publicationClock(h *harness, start time.Time) func(time.Time) {
 	return func(value time.Time) { clock.Store(value.UnixNano()) }
 }
 
+// TestScheduleSelection makes the server honor scheduling even without JavaScript.
+func TestScheduleSelection(t *testing.T) {
+	for _, hx := range []bool{false, true} {
+		h := newHarness(t)
+		now := time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)
+		publicationClock(h, now)
+		h.register(t)
+		h.verify(t)
+		h.login(t)
+		slug := "schedule-selection"
+		values := url.Values{"slug": {slug}, "title": {"Scheduled post"}, "content": {"Body"}, "published": {"scheduled"}}
+		w := h.request("POST", "/post", values, hx)
+		requireStatus(t, w, http.StatusUnprocessableEntity)
+		if !hx && !strings.Contains(w.Body.String(), `value="scheduled" checked`) {
+			t.Fatal("validation lost the Schedule selection")
+		}
+		if _, err := h.blog.posts.GetBySlug(t.Context(), slug, true); !errors.Is(err, errNotFound) {
+			t.Fatal("missing schedule must not create or immediately publish the post", err)
+		}
+		values.Set("publishDate", "2030-01-02")
+		values.Set("publishTime", "9:30 AM")
+		w = h.request("POST", "/post", values, hx)
+		status := http.StatusSeeOther
+		if hx {
+			status = http.StatusOK
+		}
+		requireStatus(t, w, status)
+		post, err := h.blog.posts.GetBySlug(t.Context(), slug, true)
+		if err != nil || !post.Scheduled(now) || post.Published.Format(time.RFC3339) != "2030-01-02T09:30:00Z" {
+			t.Fatal("Schedule must preserve the chosen date and time", post, err)
+		}
+	}
+}
+
 // TestScheduledPublication checks every public surface immediately before and at
 // publication, including already-warm caches and conditional image/feed requests.
 func TestScheduledPublication(t *testing.T) {
@@ -92,7 +126,7 @@ func TestScheduledPublication(t *testing.T) {
 		t.Fatal("scheduled preview missing its state or exposing sharing metadata")
 	}
 	editor := h.request("GET", "/post/update/"+post.ID, nil, false).Body.String()
-	if !strings.Contains(editor, `value="scheduled" selected`) || !strings.Contains(editor, `value="2030-01-01"`) || !strings.Contains(editor, `value="1:00 PM"`) {
+	if !strings.Contains(editor, `value="scheduled" checked`) || !strings.Contains(editor, `value="2030-01-01"`) || !strings.Contains(editor, `value="1:00 PM"`) {
 		t.Fatal("editor lost its schedule")
 	}
 	management := h.request("GET", "/post/manage", nil, false).Body.String()
@@ -221,7 +255,7 @@ func TestScheduleValidation(t *testing.T) {
 			if !strings.Contains(response.Body.String(), "future publication date and time in UTC") || response.Header().Get("HX-Trigger") != "" {
 				t.Fatal("invalid schedule did not report a validation error")
 			}
-			if !hx && !strings.Contains(response.Body.String(), `value="scheduled" selected`) {
+			if !hx && !strings.Contains(response.Body.String(), `value="scheduled" checked`) {
 				t.Fatal("failed schedule lost its selected publication option")
 			}
 			if !hx && !strings.Contains(response.Body.String(), `autocomplete="off" value="`+clock+`"`) {
