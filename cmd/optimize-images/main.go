@@ -11,8 +11,8 @@ import (
 	"syscall"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/examples/blog/internal/blog"
-	"github.com/trentnix/hyperserver/examples/blog/internal/maintenance"
+	"github.com/trentnix/hyperserver/internal/maintenance"
+	"github.com/trentnix/hyperserver/modules/blog"
 )
 
 // main loads only configuration and image storage, not HTTP or account services.

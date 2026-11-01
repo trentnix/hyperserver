@@ -10,4 +10,4 @@ recentPostCount: 10
 uploadsDirectory: uploads
 storage:
   provider: sqlite
-  connection: blog-rebuild-posts.db?_journal=WAL&_fk=true
+  connection: blog.db?_journal=WAL&_fk=true

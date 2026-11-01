@@ -9,7 +9,7 @@ COPY modules ./modules
 COPY pkg ./pkg
 ARG VERSION=development
 ARG COMMIT=unknown
-RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o /out/web ./cmd/web && \
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o /out/web ./cmd/reference && \
     CGO_ENABLED=1 go build -trimpath -o /out/cleanup ./cmd/cleanup
 
 FROM build AS migrationtools

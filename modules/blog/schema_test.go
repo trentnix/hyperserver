@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/mattn/go-sqlite3"
-	"github.com/trentnix/hyperserver/examples/blog/internal/maintenance"
+	"github.com/trentnix/hyperserver/internal/maintenance"
 	dbsqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 )
 

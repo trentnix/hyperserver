@@ -1,49 +1,57 @@
-// Command web runs HyperServer's loopback-only development application.
-// It imports the sample site and email authentication provider. It is not suitable
-// for public deployment.
+// Command web runs the blog configured by config.yaml and modules/blog/config.yaml.
 package main
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/trentnix/hyperserver/config"
-	framework "github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/internal/maintenance"
+	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
 
+// main connects process signals to graceful shutdown and reports startup failures.
 func main() {
-	l := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	info := buildInfo()
-	l.Info("Application starting", "version", info.Version, "commit", info.Commit, "modified", info.Modified)
-	contactDirectory := flag.String("contact-directory", "", "store contact submissions as JSON files in this directory instead of SQLite")
-	flag.Parse()
-
+	l := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	ctx, stop := signal.NotifyContext(logger.Set(context.Background(), l), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go func() {
-		<-ctx.Done()
-		stop()
-		fmt.Println("Shutting down. Send another interrupt to force exit.")
-	}()
+	if err := run(ctx); err != nil {
+		l.Error("Blog stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+// run loads configuration and serves the blog until cancellation or a server error.
+// The application owns shutdown of the HTTP server and its services.
+func run(ctx context.Context) error {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		l.Error("Configuration failed", "error", err)
-		os.Exit(1)
+		return err
 	}
-	app, err := newApplication(ctx, cfg, *contactDirectory, framework.Options{})
+	lock, err := maintenance.Lock(cfg.App.WorkingDirectory)
 	if err != nil {
-		l.Error("Application startup failed", "error", redactLifecycleError(err, &cfg))
-		os.Exit(1)
+		return err
 	}
-	if err := run(ctx, app); err != nil {
-		l.Error("Application lifecycle failed", "error", redactLifecycleError(err, app.Config))
-		os.Exit(1)
+	defer lock.Close()
+	app, err := newApplication(ctx, cfg)
+	if err != nil {
+		return err
 	}
-	l.Info("Application stopped")
+	return app.Run(ctx, func(ctx context.Context) (*http.Server, net.Listener, error) {
+		httpServer, err := server.NewHTTPServer(app.Config.HTTP, app.Handler)
+		if err != nil {
+			return nil, nil, err
+		}
+		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", httpServer.Addr)
+		if err == nil {
+			logger.Get(ctx).Info("Blog listening", "address", listener.Addr().String())
+		}
+		return httpServer, listener, err
+	})
 }

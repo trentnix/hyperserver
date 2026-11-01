@@ -38,6 +38,9 @@ config.yaml
 
 # executable
 /web
+/reference
+/blog-maintenance
+/optimize-images
 
 # Repository-local temporary files
 /tmp/
@@ -45,6 +48,9 @@ config.yaml
 /examples/blog/uploads/
 /examples/blog/assets/
 /examples/blog/.blog-maintenance.lock
+/uploads/
+/assets/
+/.blog-maintenance.lock
 
 # Local implementation guidance
 /production-readiness-checklist.md

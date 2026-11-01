@@ -1,6 +1,6 @@
 # Contact-file storage
 
-The [file provider](file_contacts.go) is a sample alternative to SQLite. Select it with `go run ./cmd/web -contact-directory ./tmp/contacts`. It creates one file per submission. It has no read, list, update, delete, or conversion API.
+The [file provider](file_contacts.go) is a sample alternative to SQLite. Configure the [reference site](../../../examples/reference/README.md), then run `go run ../../cmd/reference -contact-directory ./contacts` from `examples/reference`. It creates one file per submission. It has no read, list, update, delete, or conversion API.
 
 ## Stored format
 

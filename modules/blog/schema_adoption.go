@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/examples/blog/internal/maintenance"
+	"github.com/trentnix/hyperserver/internal/maintenance"
 	"github.com/trentnix/hyperserver/pkg/database"
 	dbsqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 )

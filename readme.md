@@ -6,20 +6,17 @@ The core provides rendering and HTMX responses. Authentication, sessions, persis
 
 ![Hyper Gopher](hypergo.png)
 
-## Run an example
+## Run the blog
 
 Use the Go version in [go.mod](go.mod). SQLite and race tests require CGO and a C compiler.
 
-- [Blog](examples/blog/README.md): a complete application with posts, pages, images, search, and administrator-only publishing. Start here to see how an application uses the framework.
-- [Reference site](cmd/web): the current default application, with contact forms and development routes. It is restricted to an explicit loopback IP and must not be publicly deployed, including through a tunnel or proxy.
-
-To run the reference site, copy [config-template.yaml](config-template.yaml) to `config.yaml` if that file does not already exist. Configure the enabled services and replace signing-key placeholders, then run:
+The default application is the [blog](docs/blog/readme.md), with posts, pages, images, search, and administrator-only publishing. Follow its [setup instructions](docs/blog/readme.md#run-locally) to configure signing keys, mail, and the administrator address. Then run from the repository root:
 
 ```sh
 go run ./cmd/web
 ```
 
-The blog has its own configuration and Go module. Follow its [setup instructions](examples/blog/README.md#run-locally). Do not load [modules/site](modules/site) in a production application.
+The [reference site](examples/reference/README.md) remains available through `cmd/reference` for contact forms, health checks, and development routes. It is restricted to an explicit loopback IP and must not be publicly deployed, including through a tunnel or proxy. Do not load its [site module](modules/site) in a production application.
 
 ## Build an application
 
@@ -27,7 +24,7 @@ Use `application.New` to open configured services and initialize the modules sel
 
 Imports make module factories available. They do not select or initialize modules. Factories must return fresh instances without I/O. Modules own their settings, routes, templates, and feature-specific storage.
 
-Start with [application setup](docs/application.md) and the blog's [application.go](examples/blog/application.go). [AGENTS.md](AGENTS.md#building-an-application-with-hyperserver) gives coding agents the same starting points and constraints.
+Start with [application setup](docs/application.md) and the blog's [application.go](cmd/web/application.go). [AGENTS.md](AGENTS.md#building-an-application-with-hyperserver) gives coding agents the same starting points and constraints.
 
 | Guide | Covers |
 | --- | --- |
@@ -56,12 +53,11 @@ Fresh stores initialize automatically. Existing framework account and session st
 
 ## Checks
 
-Run the root and blog modules separately:
+The framework, blog, reference site, and maintenance commands share one Go module. From the repository root:
 
 ```sh
 go test ./...
 go vet ./...
-(cd examples/blog && GOWORK=off go test ./... && GOWORK=off go vet ./...)
 ```
 
 See [testing](docs/testing.md) for race, browser, and migration checks. [Performance measurements](docs/performance.md) describe reference-site workloads, not production capacity.

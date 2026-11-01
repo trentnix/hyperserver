@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/examples/blog/internal/maintenance"
+	"github.com/trentnix/hyperserver/internal/maintenance"
 	dbsqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"gopkg.in/yaml.v3"
 )
@@ -54,7 +54,7 @@ func fixture(t *testing.T) config.Config {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"blog-rebuild-accounts.db", "blog-rebuild-posts.db"} {
+	for _, name := range []string{"accounts.db", "blog.db"} {
 		db, err := dbsqlite.OpenConfigured(config.DatabaseConfig{Driver: "sqlite3", Connection: name + "?_journal=WAL"}, directory)
 		if err != nil {
 			t.Fatal(err)
@@ -176,7 +176,7 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"blog-rebuild-posts.db", "blog-rebuild-accounts.db"} {
+	for _, name := range []string{"blog.db", "accounts.db"} {
 		db, err := openDatabase(filepath.Join(restored, name))
 		if err != nil {
 			t.Fatal(err)
@@ -259,7 +259,7 @@ func TestBackupFailures(t *testing.T) {
 
 func TestWALSnapshot(t *testing.T) {
 	cfg := fixture(t)
-	pool, err := dbsqlite.OpenConfigured(config.DatabaseConfig{Driver: "sqlite3", Connection: "blog-rebuild-posts.db?_journal=WAL"}, cfg.App.WorkingDirectory)
+	pool, err := dbsqlite.OpenConfigured(config.DatabaseConfig{Driver: "sqlite3", Connection: "blog.db?_journal=WAL"}, cfg.App.WorkingDirectory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestWALSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	restored := recoverFixture(t, archive, cfg)
-	db, err := openDatabase(filepath.Join(restored, "blog-rebuild-posts.db"))
+	db, err := openDatabase(filepath.Join(restored, "blog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

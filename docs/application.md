@@ -1,6 +1,6 @@
 # Application setup and modules
 
-The [reference application](../cmd/web/application.go) uses `application.New` for service startup, modules, middleware, and cleanup. It selects contact storage, presentation, readiness policy, and a loopback listener. Modules own their internal resources and routes.
+The default [blog application](../cmd/web/application.go) uses `application.New` for service startup, modules, middleware, and cleanup. It selects shared rendering and administrator-only authentication. Modules own their internal resources and routes. The separate [reference application](../cmd/reference/application.go) demonstrates contact storage selection and readiness checks.
 
 ## Adding or replacing a feature
 

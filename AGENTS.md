@@ -10,7 +10,7 @@ Treat public interfaces as unstable during the `v0` phase. Change an interface w
 
 ## Building an application with HyperServer
 
-Use [docs/application.md](docs/application.md) for the supported setup path. The [blog application](examples/blog/application.go) demonstrates it with real content and storage. The [reference site](cmd/web) demonstrates contact forms, health checks, and development routes. Do not copy its diagnostic routes into another application.
+Use [docs/application.md](docs/application.md) for the supported setup path. The default [blog application](cmd/web/application.go) demonstrates it with real content and storage. The [reference site](cmd/reference) demonstrates contact forms, health checks, and development routes. Do not copy its diagnostic routes into another application.
 
 Before writing setup code, inspect `pkg/application.Options` and the relevant service contracts. Prefer the configured constructor over assembling accounts, sessions, mail, and middleware by hand. Change framework code only when the requested task requires it.
 
@@ -23,11 +23,11 @@ Before writing setup code, inspect `pkg/application.Options` and the relevant se
 7. Register method-qualified routes and return `routes.Err()`. Set explicit upload body limits. Validate requests and authorization before changing data. Preserve submitted non-secret values on validation errors. Use ordinary form actions where operation without JavaScript is required.
 8. Keep storage rules with the feature. Use narrow repositories where substitution or testing benefits the application. Do not create a capability provider, generic repository, or separate service layer without a concrete need. Application-supplied resources keep their owner. Modules close only resources they acquire.
 9. Serve `app.Handler` with `server.NewHTTPServer` and `app.Run`. Do not install the standard middleware twice or call `handlers.Setup` after `application.New`. Use `app.OnShutdown` for callback-owned resources and module `Shutdown(context.Context) error` for module-owned resources.
-10. Test a fresh installation, full-page and HTMX success/failure paths, authorization, and shutdown. Run checks for each Go module separately. The root test command does not test `examples/blog`.
+10. Test a fresh installation, full-page and HTMX success/failure paths, authorization, and shutdown. Run checks from the repository root. The framework, blog, and reference site share one Go module.
 
 Authentication requires selecting `auth.Module` and enabling authentication in configuration. The constructor supplies configured services and the default email provider. Use `Options.AuthProviders` only when the application needs a different authentication policy. Business permissions remain application or module rules, not core framework policy.
 
-For an application in its own repository, pin the framework revision and give that application its own configuration and tests. The blog uses a local `replace` directive for repository development. Do not copy that directive into a standalone application unless local framework development is intended.
+For an application in its own repository, pin the framework revision and give that application its own configuration and tests.
 
 ## Architecture
 

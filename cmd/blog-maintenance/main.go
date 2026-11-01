@@ -10,8 +10,8 @@ import (
 	"syscall"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/examples/blog/internal/backup"
-	"github.com/trentnix/hyperserver/examples/blog/internal/blog"
+	"github.com/trentnix/hyperserver/internal/backup"
+	"github.com/trentnix/hyperserver/modules/blog"
 )
 
 func main() {

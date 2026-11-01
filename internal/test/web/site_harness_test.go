@@ -32,7 +32,7 @@ import (
 )
 
 // Site scenarios exercise real forms, layouts, and assets through public APIs.
-// Command startup, provider selection, and middleware ordering stay in cmd/web's tests.
+// Command startup, provider selection, and middleware ordering stay in cmd/reference's tests.
 func runSiteScenario(t *testing.T, scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
 	scenario(newSiteHTTPHarness(t, nil, configure...))

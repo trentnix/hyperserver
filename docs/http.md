@@ -81,7 +81,7 @@ Both routes consume the same five-request allowance per IP. Every attached limit
 
 ### Application settings
 
-The [configuration template](../config-template.yaml) exposes independent controls:
+The [reference configuration template](../examples/reference/config-template.yaml) documents independent controls that can also be added to the blog configuration:
 
 ```yaml
 http:

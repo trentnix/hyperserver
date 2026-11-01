@@ -6,7 +6,7 @@ Configuration files are copied unchanged. **Save environment overrides separatel
 
 ## Create and verify
 
-Build the command from the blog source directory:
+Build the command from the repository root:
 
 ```sh
 go build -o /tmp/blog-maintenance ./cmd/blog-maintenance

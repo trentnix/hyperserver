@@ -26,7 +26,7 @@ SQLite writes complete before reporting success. File-backed data survives norma
 
 The sample file contact provider publishes complete files without overwriting records, but does not sync them to disk or promise power-loss durability. Its filesystem calls cannot be interrupted by context cancellation. Applications needing stronger guarantees must select another provider.
 
-To try file-backed contacts with SQLite accounts, run `go run ./cmd/web -contact-directory ./tmp/contacts` from the repository root. The contact directory must be on a filesystem with hard-link support. See the [file format](../modules/site/storage/readme.md).
+To try file-backed contacts with SQLite accounts, configure the [reference site](../examples/reference/README.md). From `examples/reference`, run `go run ../../cmd/reference -contact-directory ./contacts`. The contact directory must be on a filesystem with hard-link support. See the [file format](../modules/site/storage/readme.md).
 
 Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](../pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
 

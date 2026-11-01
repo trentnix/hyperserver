@@ -6,7 +6,7 @@ Use **Media** to upload images and browse existing files. Use **Browse library**
 
 Uploads accept PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. The blog keeps the original and generates display and thumbnail copies with maximum edges of 2,048 and 480 pixels. Small images are not enlarged. JPEG copies use quality 85. PNG keeps transparency. JPEG/PNG copies apply EXIF orientation and remove metadata, including location data. GIF retains its original bytes, animation, and metadata. Animated PNG is rejected.
 
-Only one upload is processed at a time. A concurrent upload receives a retry message. Image processing uses the framework's optional [imaging package](../../../pkg/imaging/image.go). The blog owns limits, storage, access rules, and editor behavior.
+Only one upload is processed at a time. A concurrent upload receives a retry message. Image processing uses the framework's optional [imaging package](../../pkg/imaging/image.go). The blog owns limits, storage, access rules, and editor behavior.
 
 ## Find images
 
@@ -38,12 +38,12 @@ Save open editors before cleanup. The server cannot see unsaved references. If a
 
 ## Reprocess existing uploads
 
-Back up uploads and stop the blog before running this command from the blog directory:
+Build the optimizer from the repository root:
 
 ```sh
-GOWORK=off go run ./cmd/optimize-images
+go build -o /tmp/optimize-images ./cmd/optimize-images
 ```
 
-The command preserves originals, URLs, and upload dates. Each bundle is replaced atomically. Failures report progress and leave the failed image unchanged. Rerunning is safe. Legacy uploads are not served publicly until processed.
+Back up uploads and stop the blog. Run `/tmp/optimize-images` from the application's configuration directory. The command preserves originals, URLs, and upload dates. Each bundle is replaced atomically. Failures report progress and leave the failed image unchanged. Rerunning is safe. Legacy uploads are not served publicly until processed.
 
 Use the [backup guide](backup.md) for complete recovery, not just image files.

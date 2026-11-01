@@ -2,6 +2,8 @@
 
 These benchmarks measure the local reference application, not deployment capacity. Run them before adding a cache or changing a storage or rendering policy.
 
+The reference executable now lives in `cmd/reference`. Historical output retains its original `cmd/web` package path. These budgets do not measure the blog.
+
 ## Workload and baseline
 
 The [raw baseline](performance-baseline.txt) records five 500 ms samples per benchmark on October 15, 2026, based on `4f86ae4` plus the benchmark changes. Environment: Go 1.27.2, linux/amd64 (`GOAMD64=v1`), Linux Mint 22.3, AMD Ryzen 9 9950X3D, `GOMAXPROCS=2`, CGO enabled with GCC, and temporary SQLite files on local ext4/NVMe storage. No race detector or coverage instrumentation was enabled.
@@ -36,11 +38,11 @@ export GOTOOLCHAIN=local GOMAXPROCS=2 CGO_ENABLED=1 GOGC=100 GOMEMLIMIT=off
   go version
   go test -run '^$' -bench 'Benchmark(RenderTemplates|Middleware|Session|Reference)' \
     -benchmem -benchtime=500ms -count=5 \
-    ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./cmd/web
+    ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./cmd/reference
 } | tee tmp/performance/results.txt
-go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/web
+go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/reference
 go run ./internal/test/perfcheck -results tmp/performance/results.txt -binary tmp/performance/web
-HS_TEST_PERFORMANCE=1 go test -v -count=5 ./cmd/web -run '^TestReferenceHeapBudget$'
+HS_TEST_PERFORMANCE=1 go test -v -count=5 ./cmd/reference -run '^TestReferenceHeapBudget$'
 ```
 
 [Budgets](performance-budgets.json) allow 25% above baseline medians for allocations and bytes allocated, rounded up. At least five samples are required. The checker reports each range and uses the median so one noisy sample cannot fail the run. It rejects missing benchmarks, malformed metrics, failed runs, and mismatched Go version, OS, architecture, or parallelism. CI checks these budgets, a stripped binary limit of 18,000,000 bytes, and a retained-heap growth limit of 1 MiB after 10,000 requests.
@@ -52,7 +54,7 @@ Latency budgets allow 50% above the baseline median. Add `-timing` to `perfcheck
 ## Profile before optimizing
 
 ```bash
-go test ./cmd/web -run '^$' -bench '^BenchmarkReferenceLoad$' -benchtime=5s \
+go test ./cmd/reference -run '^$' -bench '^BenchmarkReferenceLoad$' -benchtime=5s \
   -cpuprofile="$PWD/tmp/performance/cpu.pprof" \
   -memprofile="$PWD/tmp/performance/heap.pprof" \
   -o "$PWD/tmp/performance/web.test"

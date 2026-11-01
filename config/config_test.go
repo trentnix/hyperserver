@@ -441,7 +441,7 @@ func TestTemplateSessionSigningKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	const fileKey = "test-session-signing-key"
-	yaml := strings.Replace(string(template), "<your JWT encryption key goes here>", fileKey, 1)
+	yaml := strings.Replace(string(template), "REPLACE_WITH_RANDOM_SESSION_KEY", fileKey, 1)
 	for _, tc := range []struct {
 		name, environmentKey, want string
 	}{

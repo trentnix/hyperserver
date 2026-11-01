@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/examples/blog/internal/blog"
+	"github.com/trentnix/hyperserver/modules/blog"
 )
 
 // resource records where an archived file or directory came from.

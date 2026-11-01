@@ -54,9 +54,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod # Keep CI and local builds on the same Go version.
-          cache-dependency-path: |
-            go.sum
-            examples/blog/go.sum
+          cache-dependency-path: go.sum
 
       - name: Install SQLite migration tool
         env:
@@ -71,14 +69,6 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test and vet blog
-        working-directory: examples/blog
-        env:
-          GOWORK: 'off'
-        run: |
-          go test -count=1 -timeout=5m ./...
-          go vet ./...
-
       - name: Build and test core without CGO
         env:
           CGO_ENABLED: '0'
@@ -90,13 +80,6 @@ jobs:
         env:
           GORACE: atexit_sleep_ms=0 # Avoid an exit delay for every test subprocess.
         run: go test -race -count=1 -timeout=10m ./...
-
-      - name: Test blog with race detector
-        working-directory: examples/blog
-        env:
-          GOWORK: 'off'
-          GORACE: atexit_sleep_ms=0
-        run: go test -race -count=1 -timeout=5m ./...
 
   performance:
     name: Allocation, memory, and build-size budgets
@@ -131,12 +114,12 @@ jobs:
             go version
             go test -run '^$' -bench 'Benchmark(RenderTemplates|Middleware|Session|Reference)' \
               -benchmem -benchtime=500ms -count=5 \
-              ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./cmd/web
+              ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./cmd/reference
           } | tee tmp/performance/results.txt
-          go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/web
+          go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/reference
           # Shared runners are not a stable environment for latency budgets.
           go run ./internal/test/perfcheck -results tmp/performance/results.txt -binary tmp/performance/web
-          HS_TEST_PERFORMANCE=1 go test -v -count=5 ./cmd/web -run '^TestReferenceHeapBudget$'
+          HS_TEST_PERFORMANCE=1 go test -v -count=5 ./cmd/reference -run '^TestReferenceHeapBudget$'
 
   browser:
     name: Firefox browser checks
@@ -161,9 +144,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: |
-            go.sum
-            examples/blog/go.sum
+          cache-dependency-path: go.sum
 
       - name: Record browser environment
         env:
@@ -184,11 +165,8 @@ jobs:
 
       - name: Test blog in Firefox
         if: ${{ !inputs.browser_diagnostics }}
-        working-directory: examples/blog
-        env:
-          GOWORK: 'off'
         run: |
-          go test -v -count=1 -timeout=10m ./internal/blog -run '^TestBrowser' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/blog-tests.log"
+          go test -v -count=1 -timeout=10m ./modules/blog -run '^TestBrowser' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/blog-tests.log"
 
       - name: Test HTMX and native forms in Firefox
         if: ${{ !inputs.browser_diagnostics }}

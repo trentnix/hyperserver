@@ -12,7 +12,7 @@ Storage compatibility is separate from source compatibility. A format change mus
 
 ## Stabilization candidates
 
-Module registration, lifecycle hooks, and `MailSender` are candidates for stabilization. The [blog](../examples/blog) uses framework setup without reference-site wiring, but still builds against a local framework checkout. Test a separately pinned external application before promising stable interfaces.
+Module registration, lifecycle hooks, and `MailSender` are candidates for stabilization. The [blog](../modules/blog) uses framework setup without reference-site wiring, but shares the framework's Go module. Test a separately pinned external application before promising stable interfaces.
 
 Keep account and session provider interfaces experimental while testing another backend. SQLite coverage alone does not establish that their contracts fit PostgreSQL or other storage platforms. Feature repositories remain application-owned unless reuse demonstrates a framework need.
 

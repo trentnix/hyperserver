@@ -2,7 +2,7 @@
 
 ## Posts
 
-Use **Posts → New post** to write a title and Markdown body. Under **Publish**, choose **Draft**, **Now**, or **Schedule**. Schedules use UTC and are available only for never-published posts. Choose **Draft** to unpublish or cancel a schedule.
+Use **Posts → New post** to write a title and Markdown body. Choose **Draft**, **Publish**, or **Schedule** before saving. Schedules use UTC and are available only for never-published posts. Choose **Draft** to unpublish or cancel a schedule.
 
 Republishing keeps the original publication date. Canceling before a scheduled time clears that date. Scheduled content becomes public at the saved time without a background worker, so the server clock must be accurate.
 

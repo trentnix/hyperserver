@@ -1,6 +1,6 @@
 # Local deployment and recovery
 
-This rehearsal runs the development application, not a production application. It uses disposable SQLite storage, Mailpit, and an Nginx HTTPS proxy. Only host loopback ports are published. Do not expose this stack through a tunnel, change those bindings, or use real account data. An independent security review remains required before public account and recovery traffic.
+This rehearsal runs the development application in [cmd/reference](../cmd/reference), not the default blog or a production application. It uses disposable SQLite storage, Mailpit, and an Nginx HTTPS proxy. Only host loopback ports are published. Do not expose this stack through a tunnel, change those bindings, or use real account data. An independent security review remains required before public account and recovery traffic.
 
 ## Start and test
 

@@ -4,115 +4,155 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
-	framework "github.com/trentnix/hyperserver/pkg/application"
-	"github.com/trentnix/hyperserver/pkg/handlers"
-	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-func TestReferenceRegistrationLoginAndContact(t *testing.T) {
-	for _, htmx := range []bool{false, true} {
-		t.Run(map[bool]string{false: "ordinary", true: "HTMX"}[htmx], func(t *testing.T) {
-			h := newHTTPHarness(t, func(cfg *config.Config) { cfg.Auth.RegisterRequiresVerification = false })
-			status, redirect := http.StatusSeeOther, "Location"
-			if htmx {
-				status, redirect = http.StatusOK, "HX-Redirect"
-			}
-			w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), htmx)
-			if w.Code != status || w.Header().Get(redirect) != "/login" {
-				t.Fatalf("registration: status=%d headers=%v body=%s", w.Code, w.Header(), w.Body)
-			}
-			if _, err := h.app.Accounts.GetByEmail(t.Context(), "person@example.invalid"); err != nil {
+// blogConfig loads the shipped templates in an isolated installation. Mail is
+// disabled so the command's wiring can be exercised without an SMTP server.
+func blogConfig(t *testing.T) config.Config {
+	t.Helper()
+	for _, entry := range os.Environ() {
+		key, value, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, "HYPERSERVER_") {
+			t.Setenv(key, value)
+			if err := os.Unsetenv(key); err != nil {
 				t.Fatal(err)
 			}
-			w = h.request(http.MethodPost, "/auth/login/email", url.Values{
-				"email": {"person@example.invalid"}, "password": {"TestPassword1!"},
-			}, htmx)
-			if w.Code != status || w.Header().Get(redirect) != "/" {
-				t.Fatalf("login: status=%d headers=%v body=%s", w.Code, w.Header(), w.Body)
+		}
+	}
+	directory := t.TempDir()
+	for _, name := range []string{"config-template.yaml", "modules/blog/config-template.yaml"} {
+		data, err := os.ReadFile(filepath.Join("../..", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(directory, strings.ReplaceAll(name, "config-template.yaml", "config.yaml"))
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		contents := strings.NewReplacer(
+			"REPLACE_WITH_RANDOM_SESSION_KEY", strings.Repeat("s", 64),
+			"REPLACE_WITH_DIFFERENT_RANDOM_AUTH_KEY", strings.Repeat("a", 64),
+		).Replace(string(data))
+		if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(directory)
+	cfg, err := config.GetConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Auth.RegisterRequiresVerification = false
+	cfg.Mail = config.MailConfig{}
+	return cfg
+}
+
+// TestDefaultApplication verifies the command's actual composition, rather than
+// a test-only selection of modules, rendering, and authentication providers.
+func TestDefaultApplication(t *testing.T) {
+	cfg := blogConfig(t)
+	app, err := newApplication(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := app.ShutdownContext(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
+	cookies := make(map[string]*http.Cookie)
+	request := func(method, path string, values url.Values, status int) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, cfg.HTTP.PublicOrigin+path, strings.NewReader(values.Encode()))
+		if values != nil {
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		for _, cookie := range cookies {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		app.Handler.ServeHTTP(w, r)
+		if w.Code != status {
+			t.Fatalf("%s %s: status=%d, want=%d, body=%s", method, path, w.Code, status, w.Body)
+		}
+		for _, cookie := range w.Result().Cookies() {
+			if cookie.MaxAge < 0 {
+				delete(cookies, cookie.Name)
+			} else {
+				cookies[cookie.Name] = cookie
 			}
-			w = h.request(http.MethodGet, "/", nil, htmx)
-			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "person@example.invalid") {
-				t.Fatal("home page lost the authenticated identity", w.Code, w.Body)
-			}
-			w = h.request(http.MethodPost, "/contact", url.Values{
-				"name": {"Reader"}, "email": {"person@example.invalid"}, "message": {"Hello"},
-			}, htmx)
-			if w.Code != http.StatusOK {
-				t.Fatal("contact submission failed", w.Code, w.Body)
-			}
-			h.assertRowCount(t, "hyperserver_contact_submission", 1)
-			w = h.request(http.MethodPost, "/auth/logout", nil, htmx)
-			if w.Code != status || w.Header().Get(redirect) != "/" {
-				t.Fatal("logout failed", w.Code, w.Header())
-			}
-		})
+		}
+		return w
+	}
+
+	w := request("GET", "/", nil, http.StatusSeeOther)
+	if w.Header().Get("Location") != "/auth/register/email" {
+		t.Fatal("fresh installation did not open registration", w.Header())
+	}
+	w = request("GET", "/auth/register/email", nil, http.StatusOK)
+	if !strings.Contains(w.Body.String(), "Set up your blog") {
+		t.Fatal("registration did not use the blog setup layout")
+	}
+	request("GET", "/assets/css/blog.css", nil, http.StatusOK)
+	credentials := url.Values{
+		"email": {"other@example.com"}, "password": {"Sample-Password-123!"}, "passwordMatch": {"Sample-Password-123!"},
+	}
+	request("POST", "/auth/register/email", credentials, http.StatusForbidden)
+	if account, err := app.Accounts.GetByEmail(t.Context(), "other@example.com"); !errors.Is(err, user.ErrUserNotFound) || account != nil {
+		t.Fatalf("rejected address lookup: account=%v err=%v", account, err)
+	}
+	credentials.Set("email", "admin@example.com")
+	request("POST", "/auth/register/email", credentials, http.StatusSeeOther)
+	w = request("GET", "/", nil, http.StatusOK)
+	for _, want := range []string{"My Blog", "No posts yet."} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("fresh homepage missing %q", want)
+		}
+	}
+	for _, private := range []string{"Trent Nix", "trentnix.com", "trentnix@gmail.com"} {
+		if strings.Contains(w.Body.String(), private) {
+			t.Errorf("fresh homepage exposes %q", private)
+		}
+	}
+
+	request("POST", "/auth/login/email", credentials, http.StatusSeeOther)
+	w = request("GET", "/auth/continue", nil, http.StatusSeeOther)
+	if w.Header().Get("Location") != "/profile" {
+		t.Fatal("first login did not open Site Profile", w.Header())
+	}
+	w = request("GET", "/profile", nil, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `id="profile-form"`) {
+		t.Fatal("Site Profile editor was not rendered")
+	}
+	// Check after setup and login so authorization cannot mask demo routes.
+	request("GET", "/contact", nil, http.StatusNotFound)
+	for _, path := range []string{"/contact", "/test-email", "/session-example"} {
+		request("POST", path, url.Values{}, http.StatusNotFound)
 	}
 }
 
-func TestReferenceConstructorRollsBackContactPool(t *testing.T) {
-	for _, failure := range []string{"selection", "routes"} {
-		t.Run(failure, func(t *testing.T) {
-			cfg := config.Config{
-				HTTP:     config.HTTPConfig{ListenHost: "127.0.0.1"},
-				App:      config.AppConfig{WorkingDirectory: t.TempDir()},
-				Database: config.DatabaseConfig{Driver: "sqlite3", Connection: "contacts.db"},
-			}
-			var captured *application
-			cause := errors.New("module selection failed")
-			app, err := newApplication(t.Context(), cfg, "", framework.Options{
-				Modules: func(ctx context.Context, base *framework.Application) ([]handlers.Descriptor, error) {
-					captured = &application{Application: base}
-					catalog, err := siteModules(ctx, captured, "")
-					if err != nil {
-						return nil, err
-					}
-					if failure == "selection" {
-						return nil, cause
-					}
-					return append(catalog, handlers.Descriptor{Name: "conflict", New: func() handlers.Handler {
-						return &testModule{bind: func(routes *routing.Routes) {
-							routes.HandleFunc("GET /contact", func(http.ResponseWriter, *http.Request) {})
-						}}
-					}}), nil
-				},
-			})
-			if app != nil || err == nil || captured == nil || captured.contactDB == nil {
-				t.Fatalf("app=%v err=%v captured=%v", app, err, captured)
-			}
-			if failure == "selection" && !errors.Is(err, cause) {
-				t.Fatal("lost module-selection error", err)
-			}
-			if failure == "routes" && !strings.Contains(err.Error(), "conflicts") {
-				t.Fatal("wrong route error", err)
-			}
-			if captured.contactDB.Ping() == nil {
-				t.Fatal("failed constructor leaked contact storage")
-			}
-		})
+// TestDefaultApplicationRequiresBlogConfiguration prevents an old reference-site
+// configuration from silently starting a blog without an administrator policy.
+func TestDefaultApplicationRequiresBlogConfiguration(t *testing.T) {
+	cfg := blogConfig(t)
+	if err := os.Remove(filepath.Join(cfg.App.WorkingDirectory, "modules/blog/config.yaml")); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestReferenceConstructorRejectsInvalidAddressBeforeServices(t *testing.T) {
-	for _, host := range []string{"", " \t", "localhost", "LOCALHOST", "0.0.0.0"} {
-		cfg := config.Config{HTTP: config.HTTPConfig{ListenHost: host}, Auth: config.AuthConfig{Enabled: true}}
-		app, err := newApplication(t.Context(), cfg, "", framework.Options{
-			AccountProviders: map[string]user.StorageProvider{"sqlite": {Open: func(context.Context, map[string]string) (user.AccountRepository, func() error, error) {
-				t.Fatal("opened accounts before validating the listen address")
-				return nil, nil, nil
-			}}},
-		})
-		want := "http.listenHost must be configured"
-		if strings.TrimSpace(host) != "" {
-			want = "loopback"
-		}
-		if app != nil || err == nil || !strings.Contains(err.Error(), want) {
-			t.Fatalf("host=%q app=%v err=%v", host, app, err)
-		}
+	app, err := newApplication(t.Context(), cfg)
+	if app != nil {
+		_ = app.ShutdownContext(context.Background())
+		t.Fatal("started without blog configuration")
+	}
+	if err == nil || !strings.Contains(err.Error(), "blog.adminEmail") {
+		t.Fatalf("missing administrator policy: %v", err)
 	}
 }

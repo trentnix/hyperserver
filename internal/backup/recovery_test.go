@@ -20,8 +20,8 @@ import (
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/examples/blog/internal/blog"
-	"github.com/trentnix/hyperserver/examples/blog/internal/maintenance"
+	"github.com/trentnix/hyperserver/internal/maintenance"
+	"github.com/trentnix/hyperserver/modules/blog"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
@@ -182,7 +182,7 @@ func TestApplicationRecovery(t *testing.T) {
 	}
 	directory := recoverFixture(t, archive, cfg)
 	// The source installation remains present and unchanged.
-	if _, err := os.Stat(filepath.Join(cfg.App.WorkingDirectory, "blog-rebuild-posts.db")); err != nil {
+	if _, err := os.Stat(filepath.Join(cfg.App.WorkingDirectory, "blog.db")); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(directory)
