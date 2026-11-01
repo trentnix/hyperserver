@@ -19,43 +19,6 @@ func revisionTable(kind string) (string, string, error) {
 	}
 }
 
-// initializeRevisions captures existing content once and adds optimistic edit versions.
-// Tables, columns, and baseline snapshots commit together or roll back together.
-func initializeRevisions(ctx context.Context, db *sql.DB) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, kind := range []string{"post", "page"} {
-		owners, revisions, _ := revisionTable(kind)
-		var exists bool
-		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?) WHERE name='version')", owners).Scan(&exists); err != nil {
-			return err
-		}
-		if !exists {
-			if _, err := tx.ExecContext(ctx, "ALTER TABLE "+owners+" ADD COLUMN version INTEGER NOT NULL DEFAULT 1"); err != nil {
-				return err
-			}
-		}
-		if _, err := tx.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+revisions+` (
-id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id TEXT NOT NULL REFERENCES `+owners+`(id) ON DELETE CASCADE,
-title TEXT NOT NULL, summary TEXT NOT NULL, markdown TEXT NOT NULL, preview_image TEXT NOT NULL, recorded INTEGER NOT NULL
-); CREATE INDEX IF NOT EXISTS `+revisions+"_owner ON "+revisions+"(owner_id, id)"); err != nil {
-			return err
-		}
-		if err := initializeTags(ctx, tx, owners, revisions); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO "+revisions+` (owner_id, title, summary, markdown, preview_image, tags, recorded)
-SELECT id, title, summary, markdown, preview_image, tags, ? FROM `+owners+` o
-WHERE NOT EXISTS (SELECT 1 FROM `+revisions+" r WHERE r.owner_id=o.id)", time.Now().UTC().UnixNano()); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
 // recordRevision appends content only when it differs from the latest snapshot.
 // It shares the content save transaction, including image-reference updates.
 func recordRevision(ctx context.Context, tx *sql.Tx, kind, id string) error {

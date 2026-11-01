@@ -3,12 +3,21 @@ package blog
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/trentnix/hyperserver/config"
 	dbsqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 )
+
+// The version table follows golang-migrate's SQLite format and belongs only to
+// blog content. Accounts and sessions can share the file without sharing versions.
+const blogVersionSchema = `CREATE TABLE blog_schema_version (version uint64, dirty bool)`
+
+//go:embed migrations/000001_blog.up.sql
+var blogSchemaV1 string
 
 // sqliteRepository stores blog content and the site profile.
 type sqliteRepository struct {
@@ -26,79 +35,73 @@ func openRepository(ctx context.Context, settings Settings, directory string) (*
 	if err != nil {
 		return nil, nil, err
 	}
-	_, err = db.ExecContext(ctx, `
-CREATE TABLE IF NOT EXISTS blog_posts (
- id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
- summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL,
- draft INTEGER NOT NULL DEFAULT 0 CHECK (draft IN (0, 1)),
- preview_image TEXT NOT NULL DEFAULT ''
-);
-CREATE TABLE IF NOT EXISTS blog_pages (
- id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
- markdown TEXT NOT NULL, published INTEGER NOT NULL CHECK (published IN (0, 1)),
- parent_id TEXT REFERENCES blog_pages(id) ON DELETE RESTRICT,
- summary TEXT NOT NULL, preview_image TEXT NOT NULL,
- children_display TEXT NOT NULL CHECK (children_display IN ('hidden', 'list', 'blocks')),
- display_order INTEGER CHECK (display_order BETWEEN 0 AND 1000000), updated INTEGER NOT NULL,
- ever_published INTEGER NOT NULL DEFAULT 0 CHECK (ever_published IN (0, 1))
-);
-CREATE INDEX IF NOT EXISTS blog_pages_parent ON blog_pages(parent_id);
-CREATE TRIGGER IF NOT EXISTS blog_pages_no_cycle BEFORE UPDATE OF parent_id ON blog_pages
-WHEN NEW.parent_id IS NOT NULL BEGIN
- SELECT RAISE(ABORT, 'page parent cycle') WHERE NEW.id IN (
-  WITH RECURSIVE ancestors(id, parent_id) AS (
-   SELECT id, parent_id FROM blog_pages WHERE id=NEW.parent_id
-   UNION ALL SELECT p.id, p.parent_id FROM blog_pages p JOIN ancestors a ON p.id=a.parent_id
-  ) SELECT id FROM ancestors
- );
-END;
-CREATE TABLE IF NOT EXISTS blog_profile (
- id INTEGER PRIMARY KEY CHECK (id=1), name TEXT NOT NULL, bio TEXT NOT NULL,
- image_url TEXT NOT NULL, favicon_url TEXT NOT NULL, background_url TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS blog_setup (
- email TEXT PRIMARY KEY, complete INTEGER NOT NULL CHECK (complete IN (0, 1))
-);
-CREATE TABLE IF NOT EXISTS blog_media (
- id TEXT PRIMARY KEY, filename TEXT NOT NULL, label TEXT NOT NULL,
- version INTEGER NOT NULL CHECK (version>0)
-);`)
-	if err != nil {
-		db.Close()
-		return nil, nil, err
-	}
-	// Existing installations contain only published posts. Preserve their content
-	// and dates when adding draft support.
-	var hasDraft bool
-	err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_posts') WHERE name='draft')").Scan(&hasDraft)
-	if err == nil && !hasDraft {
-		_, err = db.ExecContext(ctx, "ALTER TABLE blog_posts ADD COLUMN draft INTEGER NOT NULL DEFAULT 0 CHECK (draft IN (0, 1))")
-	}
-	if err == nil {
-		err = initializePagePublicationHistory(ctx, db)
-	}
-	if err == nil {
-		var hasPreview bool
-		err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_posts') WHERE name='preview_image')").Scan(&hasPreview)
-		if err == nil && !hasPreview {
-			_, err = db.ExecContext(ctx, "ALTER TABLE blog_posts ADD COLUMN preview_image TEXT NOT NULL DEFAULT ''")
-		}
-	}
-	if err == nil {
-		err = initializeImageReferences(ctx, db)
-	}
-	if err == nil {
-		err = initializeRevisions(ctx, db)
-	}
-	if err == nil {
-		err = initializeProfileRevisions(ctx, db)
-	}
-	if err == nil {
-		err = initializeMediaTags(ctx, db)
-	}
-	if err != nil {
+	if err := prepareBlogSchema(ctx, db); err != nil {
 		db.Close()
 		return nil, nil, err
 	}
 	return &sqliteRepository{db: db, now: time.Now}, db.Close, nil
+}
+
+// prepareBlogSchema bootstraps empty storage. Existing storage must already have
+// a clean, supported version. Upgrades and adoption are explicit offline actions.
+func prepareBlogSchema(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE lower(name) GLOB 'blog_*'`).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := tx.ExecContext(ctx, blogSchemaV1); err != nil {
+			return fmt.Errorf("create blog schema: %w", err)
+		}
+		if err := recordBlogVersion(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if err := checkBlogVersion(ctx, tx); err != nil {
+		return err
+	}
+	if err := validateBlogSchema(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// recordBlogVersion marks an already prepared or validated baseline atomically.
+func recordBlogVersion(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, blogVersionSchema+`; INSERT INTO blog_schema_version VALUES (1, false)`); err != nil {
+		return fmt.Errorf("record blog schema version: %w", err)
+	}
+	return nil
+}
+
+// checkBlogVersion rejects ambiguous metadata and never repairs a dirty migration.
+func checkBlogVersion(ctx context.Context, tx *sql.Tx) error {
+	var exists bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='blog_schema_version' COLLATE NOCASE)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("unversioned blog database: stop the server, back up, then run blog-maintenance adopt-schema with the existing configuration")
+	}
+	var count int
+	var version sql.NullInt64
+	var dirty sql.NullBool
+	if err := tx.QueryRowContext(ctx, `SELECT count(*), min(version), min(dirty) FROM blog_schema_version`).Scan(&count, &version, &dirty); err != nil {
+		return fmt.Errorf("read blog schema version: %w", err)
+	}
+	if count != 1 || !version.Valid || !dirty.Valid {
+		return fmt.Errorf("invalid blog schema version: expected one version and dirty flag")
+	}
+	if dirty.Bool {
+		return fmt.Errorf("blog schema version %d is dirty: repair the failed migration or restore a compatible backup before starting", version.Int64)
+	}
+	if version.Int64 != 1 {
+		return fmt.Errorf("unsupported blog schema version %d: this application requires version 1; use compatible migrations or a compatible binary", version.Int64)
+	}
+	return nil
 }

@@ -2,12 +2,10 @@ package blog
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -520,35 +518,6 @@ func TestPostPublicationCSRF(t *testing.T) {
 	stored, err := h.blog.posts.GetByID(t.Context(), post.ID, true)
 	if err != nil || stored != post {
 		t.Fatal("rejected request changed the draft", stored, err)
-	}
-}
-
-// TestPostDraftSchemaUpgrade preserves published content when reopening an older database.
-func TestPostDraftSchemaUpgrade(t *testing.T) {
-	directory := t.TempDir()
-	db, err := sql.Open("sqlite3", filepath.Join(directory, "posts.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`CREATE TABLE blog_posts (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL);
-INSERT INTO blog_posts VALUES ('old', 'old', 'Original title', 'Summary', 'Original body', 1700000000)`)
-	if closeErr := db.Close(); err != nil || closeErr != nil {
-		t.Fatal(err, closeErr)
-	}
-	settings := Settings{}
-	settings.Storage.Provider, settings.Storage.Connection = "sqlite", "posts.db"
-	for range 2 {
-		store, closeStore, err := openRepository(t.Context(), settings, directory)
-		if err != nil {
-			t.Fatal(err)
-		}
-		post, err := store.GetByID(t.Context(), "old", false)
-		if err != nil || post.Draft || post.Published.Unix() != 1700000000 || post.Title != "Original title" || post.Markdown != "Original body" {
-			t.Fatal("upgrade changed published content", post, err)
-		}
-		if err := closeStore(); err != nil {
-			t.Fatal(err)
-		}
 	}
 }
 

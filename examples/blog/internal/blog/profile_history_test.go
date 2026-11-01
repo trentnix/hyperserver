@@ -89,22 +89,8 @@ func TestProfileHistoryStorage(t *testing.T) {
 	if err != nil || got != current {
 		t.Fatal("failed snapshot changed current profile", got, err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), `DROP TRIGGER fail_profile_history; DROP TABLE blog_profile_revisions; ALTER TABLE blog_profile DROP COLUMN version`); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TRIGGER fail_profile_history"); err != nil {
 		t.Fatal(err)
-	}
-	for range 2 {
-		if err := initializeProfileRevisions(t.Context(), s.db); err != nil {
-			t.Fatal(err)
-		}
-	}
-	versions, err = s.ListProfileRevisions(t.Context())
-	if err != nil || len(versions) != 1 {
-		t.Fatal("upgrade duplicated or lost baseline", versions, err)
-	}
-	snapshot, err = s.GetProfileRevision(t.Context(), versions[0].ID)
-	current.Version = 0
-	if err != nil || snapshot.Profile != current {
-		t.Fatal("upgrade lost content", snapshot, err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

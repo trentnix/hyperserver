@@ -12,25 +12,6 @@ import (
 
 const pageColumns = "id, slug, title, markdown, published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published, version, tags"
 
-// initializePagePublicationHistory preserves known publication state on existing
-// installations. Existing drafts do not record whether they were published earlier.
-func initializePagePublicationHistory(ctx context.Context, db *sql.DB) error {
-	var exists bool
-	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_pages') WHERE name='ever_published')").Scan(&exists); err != nil || exists {
-		return err
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE blog_pages ADD COLUMN ever_published INTEGER NOT NULL DEFAULT 0 CHECK (ever_published IN (0, 1));
-UPDATE blog_pages SET ever_published=published;`); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
 // publishedPages includes only pages reachable through published ancestors.
 const publishedPages = `WITH RECURSIVE visible(id) AS (
  SELECT id FROM blog_pages WHERE parent_id IS NULL AND published=1

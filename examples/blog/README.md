@@ -50,7 +50,35 @@ Runtime configuration, databases, uploads, and local assets are ignored by Git. 
 
 [internal/blog](internal/blog) owns content rules, templates, handlers, SQLite content storage, and image files. Module configuration loads from `modules/blog/config.yaml`. Relative storage paths use the application configuration directory. Templates, scripts, styles, and default assets are embedded, so rebuild after changing them.
 
-Storage startup creates fresh content tables and applies selected additive changes. It is not a general migration system for arbitrary older blog schemas. Back up before upgrading. The framework's account and session schemas have their own [migration rules](../../docs/storage.md).
+Fresh startup creates blog schema version 1 from the embedded [SQL migration](internal/blog/migrations/000001_blog.up.sql). Existing databases must have a clean version 1 in `blog_schema_version`. Startup checks the schema and rejects missing, dirty, or unsupported versions without repairing tables. Accounts and sessions keep their own [migration histories](../../docs/storage.md).
+
+## Database upgrades
+
+Before upgrading an existing installation, stop the server and all other writers. Create and verify a [backup](docs/backup.md). Keep the compatible application binary with the backup.
+
+For an unversioned database from the last pre-migration release (`1502fba`), run this once from the application configuration directory:
+
+```sh
+/path/to/blog-maintenance adopt-schema
+```
+
+Build `blog-maintenance` from this checkout with `go build -o /path/to/blog-maintenance ./cmd/blog-maintenance`. Adoption validates required columns, keys, foreign keys, named indexes, and the page-cycle trigger, then records version 1 in one transaction. Extra indexes are allowed. Validation errors identify the incompatible schema element. Adoption does not change content, history, or image files. Repeating it is safe.
+
+Incomplete or older schemas are rejected. Use the compatible older application to complete its supported upgrades before adopting. Do not add version metadata by hand.
+
+Later upgrades use the same pinned `golang-migrate` CLI as the framework. From the blog source directory:
+
+```sh
+go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
+migrate -path internal/blog/migrations \
+  -database 'sqlite3://file:///absolute/path/blog.db?x-migrations-table=blog_schema_version&_foreign_keys=on' up
+```
+
+Keep `x-migrations-table=blog_schema_version` in every command. Run one migration process at a time. The CLI does not acquire the blog's maintenance lock. Migrate accounts and sessions separately if they require an upgrade, even when they share the file. Do not run version 1's `up` on an unversioned database. Adopt it first.
+
+A failed migration rolls back its SQL but leaves a dirty version marker. Inspect the failure before repairing the marker. `force` changes metadata, not tables. Do not use it to bypass an incompatible schema. Version 1's `down` deletes all blog tables. For production rollback, restore a verified backup into a separate directory and use the compatible binary.
+
+Migration files are immutable after release. Add numbered migrations for later changes, update the application's supported schema and validation, and test both fresh installation and upgrades. Set `HS_TEST_MIGRATE` to the pinned CLI executable to run migration integration tests. CI already enables them.
 
 ## Deployment limits
 

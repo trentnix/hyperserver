@@ -2,27 +2,9 @@ package blog
 
 import (
 	"context"
-	"database/sql"
 	"slices"
 	"strings"
 )
-
-// initializeTags adds optional search metadata without changing existing content.
-func initializeTags(ctx context.Context, tx *sql.Tx, tables ...string) error {
-	for _, table := range tables {
-		var exists bool
-		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?) WHERE name='tags')", table).Scan(&exists); err != nil {
-			return err
-		}
-		if !exists {
-			// Table names are fixed internal names, never user input.
-			if _, err := tx.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN tags TEXT NOT NULL DEFAULT ''"); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
 
 // ListTags returns unique labels from current posts and pages in alphabetical order.
 func (s *sqliteRepository) ListTags(ctx context.Context) ([]string, error) {

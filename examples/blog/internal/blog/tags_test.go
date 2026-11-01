@@ -271,35 +271,3 @@ type unavailableTags struct{}
 func (unavailableTags) ListTags(context.Context) ([]string, error) {
 	return nil, errors.New("private storage failure")
 }
-
-// TestTagSchemaUpgrade preserves existing writing and revision IDs across repeated startup.
-func TestTagSchemaUpgrade(t *testing.T) {
-	h := newHarness(t)
-	store := h.blog.posts.(*sqliteRepository)
-	for _, kind := range []string{"post", "page"} {
-		if _, _, err := saveRevisionContent(t.Context(), store, kind, "", 0, Revision{Title: "Before tags", Markdown: "Body"}); err != nil {
-			t.Fatal(err)
-		}
-		owners, revisions, _ := revisionTable(kind)
-		for _, table := range []string{owners, revisions} {
-			if _, err := store.db.Exec("ALTER TABLE " + table + " DROP COLUMN tags"); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	for range 2 {
-		if err := initializeRevisions(t.Context(), store.db); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, kind := range []string{"post", "page"} {
-		owners, revisions, _ := revisionTable(kind)
-		var count int
-		if err := store.db.QueryRow("SELECT count(*) FROM " + revisions + " WHERE title='Before tags' AND tags=''").Scan(&count); err != nil || count != 1 {
-			t.Fatal("upgrade changed history", count, err)
-		}
-		if err := store.db.QueryRow("SELECT count(*) FROM " + owners + " WHERE title='Before tags' AND tags='' AND version=1").Scan(&count); err != nil || count != 1 {
-			t.Fatal("upgrade changed writing", count, err)
-		}
-	}
-}

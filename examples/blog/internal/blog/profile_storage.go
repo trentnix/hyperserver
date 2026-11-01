@@ -7,37 +7,6 @@ import (
 	"time"
 )
 
-// initializeProfileRevisions preserves an existing profile as the first snapshot.
-// Schema changes and the baseline commit together. Reopening does not add versions.
-func initializeProfileRevisions(ctx context.Context, db *sql.DB) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	var exists bool
-	if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pragma_table_info('blog_profile') WHERE name='version')").Scan(&exists); err != nil {
-		return err
-	}
-	if !exists {
-		if _, err := tx.ExecContext(ctx, "ALTER TABLE blog_profile ADD COLUMN version INTEGER NOT NULL DEFAULT 1"); err != nil {
-			return err
-		}
-	}
-	_, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS blog_profile_revisions (
-id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id INTEGER NOT NULL REFERENCES blog_profile(id) ON DELETE CASCADE,
-name TEXT NOT NULL, bio TEXT NOT NULL, image_url TEXT NOT NULL, favicon_url TEXT NOT NULL,
-background_url TEXT NOT NULL, recorded INTEGER NOT NULL
-);
-INSERT INTO blog_profile_revisions (owner_id, name, bio, image_url, favicon_url, background_url, recorded)
-SELECT id, name, bio, image_url, favicon_url, background_url, ? FROM blog_profile
-WHERE NOT EXISTS (SELECT 1 FROM blog_profile_revisions);`, time.Now().UTC().UnixNano())
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
 // GetProfile returns the stored profile or errNotFound if none has been saved.
 func (s *sqliteRepository) GetProfile(ctx context.Context) (Profile, error) {
 	var p Profile

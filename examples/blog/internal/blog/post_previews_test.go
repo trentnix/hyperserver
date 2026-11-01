@@ -2,12 +2,10 @@ package blog
 
 import (
 	"bytes"
-	"database/sql"
 	"image"
 	"image/png"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -97,44 +95,5 @@ func TestPostPreviewsHTTP(t *testing.T) {
 				t.Fatal("removing selection did not restore automatic image", tags)
 			}
 		})
-	}
-}
-
-// TestPostPreviewUpgrade preserves existing posts and saves selections across restarts.
-func TestPostPreviewUpgrade(t *testing.T) {
-	directory := t.TempDir()
-	db, err := sql.Open("sqlite3", filepath.Join(directory, "blog.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`CREATE TABLE blog_posts (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, summary TEXT NOT NULL, markdown TEXT NOT NULL, published INTEGER NOT NULL, draft INTEGER NOT NULL);
-INSERT INTO blog_posts VALUES ('old', 'old', 'Title', 'Summary', 'Body', 1700000000, 0)`)
-	closeErr := db.Close()
-	if err != nil || closeErr != nil {
-		t.Fatal(err, closeErr)
-	}
-	settings := Settings{}
-	settings.Storage.Provider, settings.Storage.Connection = "sqlite", "blog.db"
-	for iteration := range 2 {
-		store, closeStore, err := openRepository(t.Context(), settings, directory)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { closeStore() })
-		p, err := store.GetByID(t.Context(), "old", true)
-		wantImage := ""
-		if iteration == 1 {
-			wantImage = "selected.png"
-		}
-		if err != nil || p.PreviewImage != wantImage || p.Published.Unix() != 1700000000 || p.Markdown != "Body" || p.Draft {
-			t.Fatal("upgrade or reopen changed post", p, err)
-		}
-		p.PreviewImage = "selected.png"
-		if _, err := savePostFixture(store, t.Context(), p); err != nil {
-			t.Fatal(err)
-		}
-		if err := closeStore(); err != nil {
-			t.Fatal(err)
-		}
 	}
 }

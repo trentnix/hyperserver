@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func TestImageReferenceCancellation(t *testing.T) {
+	store := newHarness(t).blog.posts.(*sqliteRepository)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := store.ImageIsPublic(ctx, "/images/example.png"); !errors.Is(err, context.Canceled) {
+		t.Fatal("lookup ignored cancellation", err)
+	}
+}
+
 // TestImageReferenceDeduplication ensures repeated uses and a preview selection
 // share one reference without causing a failed save or losing publication access.
 func TestImageReferenceDeduplication(t *testing.T) {
@@ -89,44 +98,5 @@ func TestImageReferencesConcurrentSave(t *testing.T) {
 			close(start)
 			wg.Wait()
 		})
-	}
-}
-
-// TestImageReferenceBackfillFailure rolls back both tables when the second table
-// cannot initialize. A later successful attempt must rebuild all references.
-func TestImageReferenceBackfillFailure(t *testing.T) {
-	h := newHarness(t)
-	store := h.blog.posts.(*sqliteRepository)
-	if _, err := savePostFixture(store, t.Context(), Post{Slug: "existing", Title: "Existing", PreviewImage: "existing.png"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.db.ExecContext(t.Context(), `DROP TABLE blog_post_images; DROP TABLE blog_page_images;
-CREATE TABLE blog_page_images_url (id INTEGER)`); err != nil {
-		t.Fatal(err)
-	}
-	if err := initializeImageReferences(t.Context(), store.db); err == nil {
-		t.Fatal("backfill accepted a conflicting index name")
-	}
-	var count int
-	if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('blog_post_images', 'blog_page_images')").Scan(&count); err != nil || count != 0 {
-		t.Fatal("failed backfill left partially initialized tables", count, err)
-	}
-	if _, err := store.db.ExecContext(t.Context(), "DROP TABLE blog_page_images_url"); err != nil {
-		t.Fatal(err)
-	}
-	if err := initializeImageReferences(t.Context(), store.db); err != nil {
-		t.Fatal(err)
-	}
-	if public, err := store.ImageIsPublic(t.Context(), "/images/existing.png"); err != nil || !public {
-		t.Fatal("retry did not restore existing references", public, err)
-	}
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	if err := initializeImageReferences(ctx, store.db); !errors.Is(err, context.Canceled) {
-		t.Fatal("backfill ignored cancellation", err)
-	}
-	if _, err := store.ImageIsPublic(ctx, "/images/existing.png"); !errors.Is(err, context.Canceled) {
-		t.Fatal("lookup ignored cancellation", err)
 	}
 }

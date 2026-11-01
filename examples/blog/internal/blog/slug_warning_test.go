@@ -1,11 +1,9 @@
 package blog
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -73,50 +71,6 @@ func TestSlugWarningHistory(t *testing.T) {
 					t.Fatal("validation failure lost the submitted slug")
 				}
 			})
-		}
-	}
-}
-
-// TestPagePublicationHistoryUpgrade verifies backfill, sticky history, and reopening.
-func TestPagePublicationHistoryUpgrade(t *testing.T) {
-	directory := t.TempDir()
-	db, err := sql.Open("sqlite3", filepath.Join(directory, "pages.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`CREATE TABLE blog_pages (
-id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, markdown TEXT NOT NULL,
-published INTEGER NOT NULL, parent_id TEXT REFERENCES blog_pages(id), summary TEXT NOT NULL,
-preview_image TEXT NOT NULL, children_display TEXT NOT NULL, display_order INTEGER, updated INTEGER NOT NULL);
-INSERT INTO blog_pages VALUES ('live', 'live', 'Live', '', 1, NULL, '', '', 'hidden', NULL, 1);
-INSERT INTO blog_pages VALUES ('draft', 'draft', 'Draft', '', 0, NULL, '', '', 'hidden', NULL, 1);`)
-	closeErr := db.Close()
-	if err != nil || closeErr != nil {
-		t.Fatal(err, closeErr)
-	}
-	settings := Settings{}
-	settings.Storage.Provider, settings.Storage.Connection = "sqlite", "pages.db"
-	for iteration := range 2 {
-		store, closeStore, err := openRepository(t.Context(), settings, directory)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { closeStore() })
-		live, err := store.GetPageByID(t.Context(), "live", true)
-		if err != nil || !live.EverPublished || live.Published != (iteration == 0) {
-			t.Fatal("publication history did not survive upgrade or reopen", live, err)
-		}
-		draft, err := store.GetPageBySlug(t.Context(), "draft", true)
-		if err != nil || draft.EverPublished {
-			t.Fatal("upgrade invented draft history", draft, err)
-		}
-		live.Published, live.EverPublished = false, false
-		live, err = savePageFixture(store, t.Context(), live)
-		if err != nil || !live.EverPublished || live.Published {
-			t.Fatal("unpublishing discarded history", live, err)
-		}
-		if err := closeStore(); err != nil {
-			t.Fatal(err)
 		}
 	}
 }

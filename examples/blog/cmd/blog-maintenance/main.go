@@ -1,4 +1,4 @@
-// Command blog-maintenance creates and verifies offline blog archives.
+// Command blog-maintenance creates and verifies archives and adopts blog schemas offline.
 package main
 
 import (
@@ -11,6 +11,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/examples/blog/internal/backup"
+	"github.com/trentnix/hyperserver/examples/blog/internal/blog"
 )
 
 func main() {
@@ -22,12 +23,22 @@ func main() {
 	}
 }
 
-// run loads live configuration only for backup. Verification uses only the archive.
+// run loads live configuration for backup and adoption. Verification uses only the archive.
 func run(ctx context.Context, args []string) error {
-	if len(args) < 2 {
-		return errors.New("usage: blog-maintenance backup ARCHIVE | verify ARCHIVE")
+	const usage = "usage: blog-maintenance backup ARCHIVE | verify ARCHIVE | adopt-schema"
+	if len(args) == 0 {
+		return errors.New(usage)
 	}
 	switch {
+	case args[0] == "adopt-schema" && len(args) == 1:
+		cfg, err := config.GetConfig()
+		if err != nil {
+			return err
+		}
+		if err := blog.AdoptSchema(ctx, cfg.App.WorkingDirectory); err != nil {
+			return err
+		}
+		fmt.Println("Blog schema version 1 verified. Content and images are unchanged.")
 	case args[0] == "backup" && len(args) == 2:
 		cfg, err := config.GetConfig()
 		if err != nil {
@@ -43,7 +54,7 @@ func run(ctx context.Context, args []string) error {
 		}
 		fmt.Println("Backup verified. Checksums detect corruption, not a forged archive.")
 	default:
-		return errors.New("usage: blog-maintenance backup ARCHIVE | verify ARCHIVE")
+		return errors.New(usage)
 	}
 	return nil
 }

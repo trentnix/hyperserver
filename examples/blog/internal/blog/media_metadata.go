@@ -25,19 +25,6 @@ type mediaMetadataRepository interface {
 	SaveMediaMetadata(context.Context, string, mediaMetadata) error
 }
 
-// initializeMediaTags preserves existing upload metadata when adding search tags.
-func initializeMediaTags(ctx context.Context, db *sql.DB) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := initializeTags(ctx, tx, "blog_media"); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
 // ListMediaMetadata supplies search metadata for the filesystem-backed library.
 // Callers ignore deleted files. Re-uploading the same bytes recovers their metadata.
 func (s *sqliteRepository) ListMediaMetadata(ctx context.Context) (map[string]mediaMetadata, error) {

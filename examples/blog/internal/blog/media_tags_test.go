@@ -162,32 +162,3 @@ func TestMediaTagRanking(t *testing.T) {
 		}
 	}
 }
-
-// TestMediaTagsUpgrade preserves labels and filenames when opening a pre-tag database.
-func TestMediaTagsUpgrade(t *testing.T) {
-	settings := Settings{}
-	settings.Storage.Provider, settings.Storage.Connection = "sqlite", "media.db"
-	directory := t.TempDir()
-	store, closeStore, err := openRepository(t.Context(), settings, directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveMediaMetadata(t.Context(), "legacy", mediaMetadata{Label: "Existing"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.db.ExecContext(t.Context(), "ALTER TABLE blog_media DROP COLUMN tags"); err != nil {
-		t.Fatal(err)
-	}
-	if err := closeStore(); err != nil {
-		t.Fatal(err)
-	}
-	store, closeStore, err = openRepository(t.Context(), settings, directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeStore()
-	got, err := store.GetMediaMetadata(t.Context(), "legacy")
-	if err != nil || got != (mediaMetadata{Label: "Existing", Version: 1}) {
-		t.Fatal(got, err)
-	}
-}

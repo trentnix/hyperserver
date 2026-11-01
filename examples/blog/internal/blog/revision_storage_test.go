@@ -3,7 +3,6 @@ package blog
 import (
 	"context"
 	"errors"
-	"reflect"
 	"sync"
 	"testing"
 )
@@ -246,49 +245,10 @@ func TestPublicationInvalidatesEditor(t *testing.T) {
 	}
 }
 
-// TestRevisionBackfill verifies atomic baseline capture and repeatable startup.
-func TestRevisionBackfill(t *testing.T) {
+// TestRevisionInvalidKind rejects unsupported content kinds and missing owners.
+func TestRevisionInvalidKind(t *testing.T) {
 	store := newHarness(t).blog.posts.(*sqliteRepository)
-	id, _, err := saveRevisionContent(t.Context(), store, "post", "", 0, Revision{Title: "Existing", Markdown: "Body"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.db.Exec(`DROP TABLE blog_post_revisions; DROP TABLE blog_page_revisions;
-ALTER TABLE blog_posts DROP COLUMN version; ALTER TABLE blog_pages DROP COLUMN version;
-CREATE TABLE blog_page_revisions_owner (id INTEGER)`); err != nil {
-		t.Fatal(err)
-	}
-	if err := initializeRevisions(t.Context(), store.db); err == nil {
-		t.Fatal("backfill accepted conflicting schema")
-	}
-	var count int
-	if err := store.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name IN ('blog_post_revisions', 'blog_page_revisions')").Scan(&count); err != nil || count != 0 {
-		t.Fatal("partial history tables survived failure", count, err)
-	}
-	if err := store.db.QueryRow("SELECT count(*) FROM pragma_table_info('blog_posts') WHERE name='version'").Scan(&count); err != nil || count != 0 {
-		t.Fatal("edit-version column survived failed upgrade", count, err)
-	}
-	if _, err := store.db.Exec("DROP TABLE blog_page_revisions_owner"); err != nil {
-		t.Fatal(err)
-	}
-	if err := initializeRevisions(t.Context(), store.db); err != nil {
-		t.Fatal(err)
-	}
-	before, err := store.ListRevisions(t.Context(), "post", id)
-	if err != nil || len(before) != 1 || before[0].Title != "Existing" {
-		t.Fatal("existing post was not captured", before, err)
-	}
-	var pages, snapshots int
-	if err := store.db.QueryRow("SELECT (SELECT count(*) FROM blog_pages), (SELECT count(*) FROM blog_page_revisions)").Scan(&pages, &snapshots); err != nil || pages != snapshots {
-		t.Fatal("existing pages were not captured", pages, snapshots, err)
-	}
-	if err := initializeRevisions(t.Context(), store.db); err != nil {
-		t.Fatal(err)
-	}
-	after, err := store.ListRevisions(t.Context(), "post", id)
-	if err != nil || !reflect.DeepEqual(before, after) {
-		t.Fatal("reopening changed baseline history", after, err)
-	}
+	id := "missing"
 	if _, err := store.ListRevisions(t.Context(), "invalid", id); !errors.Is(err, errNotFound) {
 		t.Fatal("invalid content type accepted", err)
 	}
@@ -303,7 +263,7 @@ CREATE TABLE blog_page_revisions_owner (id INTEGER)`); err != nil {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := initializeRevisions(ctx, store.db); !errors.Is(err, context.Canceled) {
+	if err := prepareBlogSchema(ctx, store.db); !errors.Is(err, context.Canceled) {
 		t.Fatal("startup ignored cancellation", err)
 	}
 }
