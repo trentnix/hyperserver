@@ -6,7 +6,7 @@ adminEmail: admin@example.com
 assetsDirectory: ""
 # Number of links in Recent Posts. Must be greater than zero. All posts stays complete.
 recentPostCount: 10
-# Public image files, relative to the application configuration directory. Back up this directory.
+# Private image bundles, served through access checks. Keep outside public file roots and back up with the database.
 uploadsDirectory: uploads
 storage:
   provider: sqlite

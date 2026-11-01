@@ -1,6 +1,6 @@
 # Storage providers and maintenance
 
-The [README](../readme.md#account-storage) shows account setup. This guide covers provider guarantees, SQLite migrations, and cleanup. For session APIs, see the [session guide](../pkg/services/session/readme.md).
+Use [application.New](application.md#services-and-serving) for configured account and session setup. This guide covers provider contracts, explicit setup, SQLite migrations, and cleanup. For session APIs, see the [session guide](../pkg/services/session/readme.md).
 
 ## Account storage
 
@@ -10,7 +10,7 @@ For accounts that share an existing SQLite pool, supply `user/sqlite.ConfiguredP
 
 SQLite account connections use the config directory or `app.workingDirectory` for relative paths. Missing connections and unsupported options stop startup. Accounts do not read `database`, which configures the reference application's contact storage. Accounts and contacts can name the same file, but own separate pools. `:memory:` creates a separate database per pool.
 
-Account models and contracts live in [`user`](../pkg/services/user), with SQLite support in [`user/sqlite`](../pkg/services/user/sqlite). See the [README](../readme.md#account-storage) for construction and initialization. Register repository-owned cleanup before initializing consumers. A supplied pool keeps its existing owner.
+Account models and contracts live in [`user`](../pkg/services/user), with SQLite support in [`user/sqlite`](../pkg/services/user/sqlite). For explicit setup, call `sqlite.NewAccountRepository(pool)` and then `Initialize(ctx)` before supplying it to consumers. A supplied pool keeps its existing owner.
 
 Initialization checks writable columns, supported types, required `NOT NULL` declarations, and unique keys for account IDs, normalized email keys, and account/token pairs. Keys must cover every row and use binary comparison. Tokens must reference `user(id)` through `user_id` with `ON DELETE CASCADE`. These checks do not validate every stored value. See [schema versions and migrations](#account-schema-migrations) for startup's version checks.
 
@@ -25,6 +25,8 @@ Account matching and uniqueness use [EmailKey](../pkg/services/user/email.go). U
 SQLite writes complete before reporting success. File-backed data survives normal close and reopen. Crash durability depends on SQLite settings and the filesystem. In-memory databases are temporary.
 
 The sample file contact provider publishes complete files without overwriting records, but does not sync them to disk or promise power-loss durability. Its filesystem calls cannot be interrupted by context cancellation. Applications needing stronger guarantees must select another provider.
+
+To try file-backed contacts with SQLite accounts, run `go run ./cmd/web -contact-directory ./tmp/contacts` from the repository root. The contact directory must be on a filesystem with hard-link support. See the [file format](../modules/site/storage/readme.md).
 
 Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](../pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
 

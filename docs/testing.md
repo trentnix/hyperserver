@@ -16,7 +16,18 @@ The [CI workflow](../.github/workflows/ci.yml) runs these checks on pushes and p
 
 [Container recovery and soak tests](deployment.md#start-and-test) are opt-in. Ordinary Go test runs and CI skip them. Never run failure/recovery tests alongside a soak test or against real data.
 
-CI also builds and tests the core without CGO. Dependency checks verify that the core does not import optional storage, authentication, session, or mail implementations. External-application compatibility testing is deferred until a replacement sample is available.
+CI also builds and tests the core without CGO. Dependency checks verify that the core does not import optional storage, authentication, session, or mail implementations. CI tests the blog's separate module against the local checkout. Compatibility with a separately pinned external application is not established by those checks.
+
+The root commands do not include the blog. Run its tests separately:
+
+```sh
+cd examples/blog
+GOWORK=off go test ./...
+GOWORK=off go vet ./...
+GOWORK=off go test -race ./...
+```
+
+For blog browser checks, set `HS_TEST_FIREFOX=firefox` and run `GOWORK=off go test ./internal/blog -run '^TestBrowser' -count=1` from that directory. Blog backup tests use isolated temporary data, including an application restart after manual recovery. They never delete the local blog's data.
 
 ## Browser tests
 

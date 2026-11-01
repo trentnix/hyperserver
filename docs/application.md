@@ -4,17 +4,17 @@ The [reference application](../cmd/web/application.go) uses `application.New` fo
 
 ## Adding or replacing a feature
 
-A module descriptor's factory creates a fresh instance. Application setup supplies dependencies with `handlers.Replace` before initializing modules. Importing a module alone does not supply its dependencies.
+A module descriptor's factory creates a fresh instance with its dependencies. Select descriptors in `application.Options.Modules`. Use `handlers.Replace` when replacing a descriptor in an existing catalog. Importing a module alone does not supply its dependencies or select it.
 
-The module's `Init` checks dependencies and prepares embedded templates. `Routes` binds ordinary Go handlers and returns registration errors. Handlers use the supplied repository, not a database client or configuration lookup. Repository contracts belong to the feature that uses them.
+The module's `Init` validates settings and dependencies, opens module-owned resources, and prepares embedded templates. `Routes` binds ordinary Go handlers and returns registration errors. Keep storage selection out of request handlers. Use feature-owned repositories where they help, or native clients when direct backend access is appropriate.
 
 | Replace | Implement and supply |
 | --- | --- |
-| Account storage | [`user.AccountRepository`](../pkg/services/user/account_repository.go), initialized in application setup and passed to auth and its middleware. Preserve email uniqueness, expiry checks, session revocation, and atomic token redemption. |
+| Account storage | [`user.AccountRepository`](../pkg/services/user/account_repository.go), selected through `Options.AccountProviders` or supplied initialized through `Options.Services.Accounts`. Preserve email uniqueness, expiry checks, session revocation, and atomic token redemption. |
 | Session storage | [`session.SessionStore`](../pkg/services/session/store.go) through a `session.StoreFactory`. Authentication also requires revocable rotation. See [ownership and extension](../pkg/services/session/readme.md#ownership-and-extension). |
 | Session encoding | [`session.Serializer`](../pkg/services/session/serializer.go), selected when constructing a store. Define how existing data is read or invalidated. See [serialization](../pkg/services/session/readme.md#replacing-serialization). |
 | Mail delivery | [`messaging.MailSender`](../pkg/services/messaging/mail.go) through `NewMailClientWithSender`. Honor cancellation, validate headers, and report unavailable delivery as an error. The client does not close the sender. |
-| Authentication workflow | [`auth.AuthService`](../auth/auth_service.go) plus the supported workflow interfaces. Supply its descriptor to `auth.Module`. Changing account storage alone does not require a new auth provider. |
+| Authentication workflow | [`auth.AuthService`](../auth/auth_service.go) plus the supported workflow interfaces. Select descriptors through `Options.AuthProviders`. Changing account storage alone does not require a new auth provider. |
 
 Selected services handle concurrent requests. Keep mutable request data separate and give each resource one cleanup owner. The contracts linked above define failure and concurrency guarantees. Matching method signatures is not enough.
 
