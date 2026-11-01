@@ -33,6 +33,18 @@ func TestBrowserEditor(t *testing.T) {
 	}
 }
 
+// TestBrowserAccessibility checks navigation focus, editor keyboard behavior,
+// control labels, and dialog focus at mobile, medium, and ultrawide widths.
+func TestBrowserAccessibility(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check keyboard accessibility")
+	}
+	for _, width := range []string{"320", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "accessibility") })
+	}
+}
+
 // TestBrowserSetup follows registration, verification, and login into the profile editor.
 func TestBrowserSetup(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -455,6 +467,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "accessibility":
+		scriptFile = "testdata/accessibility.js"
 	case "setup":
 		scriptFile = "testdata/setup.js"
 	case "tags":

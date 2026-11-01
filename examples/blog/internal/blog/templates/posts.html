@@ -67,7 +67,7 @@
 {{ if .IsHtmx }}<dialog aria-labelledby="delete-title">{{ end }}
 <section id="post-delete-confirmation" class="confirmation-panel">
 <h1 id="delete-title">Delete post?</h1><p>Delete “{{ .Data.Title }}” and its saved versions? This cannot be undone.</p>
-<form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}" hx-post="/post/delete/{{ .Data.ID }}" hx-target="#post-delete-confirmation" hx-swap="outerHTML" hx-sync="#article-content:replace"><button type="submit" class="button-danger">Delete post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
+<form class="form-actions" method="post" action="/post/delete/{{ .Data.ID }}" hx-post="/post/delete/{{ .Data.ID }}" hx-target="#post-delete-confirmation" hx-swap="outerHTML" hx-sync="#article-content:replace"><button type="submit" class="button-danger">Delete post</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog autofocus>Cancel</button>{{ else }}<a class="button-secondary" href="/post/id/{{ .Data.ID }}">Cancel</a>{{ end }}</form>
 </section>
 {{ if .IsHtmx }}</dialog>{{ end }}
 {{ end }}

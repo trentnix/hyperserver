@@ -7,6 +7,8 @@ a:hover { color: #245b85; text-decoration: underline; }
 button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid #395b88; outline-offset: 3px; }
+.skip-link { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 10px 16px; background: #fff; color: #212529; border: 1px solid currentColor; transform: translateY(calc(-100% - 12px)); }
+.skip-link:focus { transform: none; }
 
 /* Button appearance does not depend on the surrounding form or page. */
 :where(button:not(.text-button, .editor-toolbar button)), .button-primary, .button-secondary, .button-danger { display: inline-flex; align-items: center; justify-content: center; padding: 9px 18px; border: 1px solid var(--button-bg); border-radius: 3px; background: var(--button-bg); color: #fff; text-decoration: none; }

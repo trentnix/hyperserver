@@ -56,6 +56,7 @@
       await wait(() => document.querySelector('dialog[open] form[action^="/pages/delete/"]'));
       await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
       const confirmation = document.querySelector('dialog[open]');
+      assert(document.activeElement === confirmation.querySelector('[data-close-dialog]'), 'Deletion must initially focus Cancel, not the destructive action.');
       const deleteForm = confirmation.querySelector('form');
       deleteForm.requestSubmit();
       await wait(() => confirmation.querySelector('[role="alert"]')?.textContent.includes('This page has subpages.'));

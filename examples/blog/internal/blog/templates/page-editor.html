@@ -19,7 +19,7 @@
   <label for="page-order">Display order (optional)</label><input id="page-order" name="displayOrder" inputmode="numeric" pattern="[0-9]+" value="{{ .Data.DisplayOrderText }}" aria-describedby="order-help">
   <small id="order-help" class="form-hint">0–1,000,000, lowest first. Leave blank for newest updated.</small>
   {{ template "blog.previewImage" .Data.PreviewField }}
-  <label for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help">{{ .Data.Markdown }}</textarea>
+  <label id="markdown-label" for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help">{{ .Data.Markdown }}</textarea>
   {{ template "blog.markdownHelp" .Data }}
   <div class="publication-options" role="radiogroup" aria-label="Publication">
     <label><input type="radio" name="published" value=""{{ if not .Data.Published }} checked{{ end }}><span>Draft</span></label>

@@ -55,16 +55,16 @@
     }
   }
 
-  // Preserve search editing focus, or move to the result heading when following a
-  // match. Keep this request-local so unrelated swaps never move focus or scroll.
-  const searchFocus = new WeakMap();
+  // Article navigation moves focus to the new heading. Search submissions keep
+  // editing focus. In-place updates and dialogs manage their own focus.
+  const navigationFocus = new WeakMap();
   document.addEventListener('htmx:beforeRequest', event => {
     const source = event.detail.elt;
     const field = source.closest('.reader-search-form')?.querySelector('input[name=q]');
     if (field) {
-      searchFocus.set(event.detail.xhr, {start: field.selectionStart, end: field.selectionEnd});
-    } else if (source.closest('.search-results a')) {
-      searchFocus.set(event.detail.xhr, {heading: true});
+      navigationFocus.set(event.detail.xhr, {start: field.selectionStart, end: field.selectionEnd});
+    } else if (source.closest('a[href]') && event.detail.target.id === 'article-content') {
+      navigationFocus.set(event.detail.xhr, {heading: true});
     }
   });
 
@@ -72,10 +72,10 @@
   document.addEventListener('htmx:afterSwap', event => {
     updatePagePresentation(event.target);
     if (event.target.id === 'article-content') {
-      const intent = searchFocus.get(event.detail.xhr);
+      const intent = navigationFocus.get(event.detail.xhr);
       if (intent) {
-        searchFocus.delete(event.detail.xhr);
-        const target = event.target.querySelector(intent.heading ? 'h1' : '.reader-search-form input[name=q]');
+        navigationFocus.delete(event.detail.xhr);
+        const target = intent.heading ? event.target.querySelector('h1') || event.target : event.target.querySelector('.reader-search-form input[name=q]');
         if (target) {
           if (intent.heading) target.tabIndex = -1;
           target.focus({preventScroll: true});

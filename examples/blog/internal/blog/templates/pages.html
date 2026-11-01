@@ -71,7 +71,7 @@
 {{ else }}
 <h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}” and its saved versions? This cannot be undone. Move or delete its subpages first. Uploaded images are kept.</p>
 <form method="post" action="/pages/delete/{{ .Data.ID }}" hx-post="/pages/delete/{{ .Data.ID }}" hx-target="#page-delete-confirmation" hx-swap="outerHTML" hx-sync="#article-content:replace">
-<div class="form-actions"><button type="submit" class="button-danger">Delete page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog>Cancel</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">Cancel</a>{{ end }}</div>
+<div class="form-actions"><button type="submit" class="button-danger">Delete page</button>{{ if .IsHtmx }}<button type="button" class="button-secondary" data-close-dialog autofocus>Cancel</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">Cancel</a>{{ end }}</div>
 </form>
 {{ end }}
 </section>

@@ -21,8 +21,9 @@
   {{ if .LayoutData.Admin }}<script type="module" src="/assets/js/admin.js"></script>{{ end }}
 </head>
 <body{{ if .LayoutData.Profile.BackgroundURL }} style="--site-background: url('{{ .LayoutData.Profile.BackgroundURL }}')"{{ end }}>
+  <a class="skip-link" href="#article-content">Skip to content</a>
   {{ if .LayoutData.Setup }}
-  <main class="setup-panel" id="article-content">
+  <main class="setup-panel" id="article-content" tabindex="-1">
     {{ if .LayoutData.SetupTitle }}<header><h1>{{ .LayoutData.SetupTitle }}</h1><p>{{ .LayoutData.SetupHelp }}</p></header>{{ end }}
     {{ if .LayoutData.SetupVerificationPending }}
     <p>Already verified? Log in to continue. If the email is missing or the link expired, log in to request another.</p>
@@ -64,7 +65,7 @@
             {{ end }}
           </nav>
         </div>
-        <article id="article-content" class="page-content" hx-history-elt>{{ template "blog.articleMetadata" . }}{{ if .HTMX.Request.HistoryRestore }}{{ template "blog.readerSearchUpdates" . }}{{ end }}{{ renderPartial .PartialName . }}</article>
+        <article id="article-content" class="page-content" tabindex="-1" hx-history-elt>{{ template "blog.articleMetadata" . }}{{ if .HTMX.Request.HistoryRestore }}{{ template "blog.readerSearchUpdates" . }}{{ end }}{{ renderPartial .PartialName . }}</article>
         <div class="content-search" data-reader-search-slot hx-swap="innerHTML show:window:top">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div>
       </main>
     </div>

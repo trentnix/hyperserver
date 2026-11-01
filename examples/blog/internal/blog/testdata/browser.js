@@ -132,7 +132,8 @@ document.removeEventListener = function(type, callback, options) {
       }
       if (innerWidth < 768) menuToggle.click();
       assert(document.querySelectorAll('#post-archive').length === 1, 'Recent Posts must have one persistent container.');
-      const pageWidth = Math.max(320, document.documentElement.clientWidth);
+      // clientWidth includes a reserved scrollbar gutter in some engines.
+      const pageWidth = Math.max(320, document.documentElement.getBoundingClientRect().width);
       assert(portrait.right <= bio.left, 'Profile photo must sit beside the bio.');
       assert(Math.abs(portrait.top - bio.top) <= 5, 'Profile photo and bio are not top-aligned.');
       assert(getComputedStyle(document.body).fontSize === '16px', 'Base typography changed.');

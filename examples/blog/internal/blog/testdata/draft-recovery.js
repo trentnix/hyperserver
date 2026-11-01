@@ -13,7 +13,8 @@
   };
   const change = (form, name, value) => {
     const field = form.elements[name];
-    if (field.type === 'checkbox') field.checked = value;
+    if (field instanceof RadioNodeList) [...field].find(radio => radio.value === value).click();
+    else if (field.type === 'checkbox') field.checked = value;
     else field.value = value;
     form.dispatchEvent(new Event('input', {bubbles: true}));
   };
@@ -177,12 +178,6 @@
       change(form, 'published', '');
       form.querySelector('.CodeMirror').CodeMirror.setValue('Unpublished changes to an existing page.');
       await saved(form);
-      // Copies from the former page checkbox must still restore the draft choice.
-      for (const key of copies(form)) {
-        const copy = JSON.parse(localStorage.getItem(key));
-        copy.fields.published = false;
-        localStorage.setItem(key, JSON.stringify(copy));
-      }
       // Image uploads block submission, so pressing Save must not waive the leave warning.
       form.dataset.uploading = 'true';
       form.requestSubmit();
@@ -199,6 +194,13 @@
       consent = true;
       form.querySelector('.form-actions a').click();
       await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      // Set the legacy format after leaving, so the editor's final save cannot
+      // overwrite it before recovery is tested.
+      for (const key of copies(form)) {
+        const copy = JSON.parse(localStorage.getItem(key));
+        copy.fields.published = false;
+        localStorage.setItem(key, JSON.stringify(copy));
+      }
       const concurrentSave = await fetch(form.action, {method: 'POST', headers: {'HX-Request': 'true'}, body: new URLSearchParams({
         title: 'About changed on the server', slug: 'about', content: 'A separately saved version.', childrenDisplay: 'hidden', published: 'on', version: form.elements.version.value
       })});
@@ -209,7 +211,7 @@
       restored.querySelector('[data-draft-restore]').click();
       await Promise.resolve();
       assert(restored.elements.title.value === 'Recovered About' && restored.elements.summary.value === 'Page summary' && restored.elements.displayOrder.value === '7', 'Page recovery lost metadata.');
-      assert(restored.elements.childrenDisplay.value === 'list' && restored.elements.published.value === '', 'Page recovery lost its select or publication choice.');
+      assert(restored.elements.childrenDisplay.value === 'list' && restored.querySelector('[name="published"][value=""]').checked, 'Page recovery lost its select or publication choice.');
       assert(restored.querySelector('[type="submit"]').textContent === 'Move to drafts', 'Restoring a draft choice must update the save action.');
 
       // Quota and privacy failures must be visible and leave the editor usable.

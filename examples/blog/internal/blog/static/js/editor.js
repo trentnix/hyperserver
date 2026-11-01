@@ -86,6 +86,7 @@ function initialize(root) {
   const textarea = root.querySelector('#post-content');
   if (textarea && window.EasyMDE && !editors.has(textarea)) {
     // EasyMDE replaces native textarea validation. The server remains authoritative.
+    const required = textarea.required;
     textarea.required = false;
     let previewRequest;
     const editor = new EasyMDE({
@@ -130,6 +131,14 @@ function initialize(root) {
         return 'Loading preview…';
       }
     });
+    // Preserve the textarea's label/help and let Tab leave the rich editor.
+    const input = editor.codemirror.getInputField();
+    input.id = 'markdown-input';
+    input.setAttribute('aria-labelledby', 'markdown-label');
+    input.setAttribute('aria-describedby', textarea.getAttribute('aria-describedby'));
+    if (required) input.setAttribute('aria-required', 'true');
+    root.querySelector('#markdown-label').htmlFor = input.id;
+    editor.codemirror.setOption('extraKeys', {...editor.codemirror.getOption('extraKeys'), Tab: false, 'Shift-Tab': false});
     editors.set(textarea, {editor, cancelPreview: () => previewRequest?.abort()});
     editor.codemirror.on('change', () => textarea.dispatchEvent(new Event('input', {bubbles: true})));
   }

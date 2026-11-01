@@ -23,6 +23,7 @@
     row.querySelector('a[href^="/post/delete/"]').click();
     await wait(() => document.querySelector('dialog[open] form[action^="/post/delete/"]'));
     await wait(() => !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
+    assert(document.activeElement === document.querySelector('dialog[open] [data-close-dialog]'), 'Deletion must initially focus Cancel, not the destructive action.');
     const before = scrollY;
     sessionStorage.setItem('management-stage', 'deleting');
     document.querySelector('dialog[open] form').requestSubmit();
