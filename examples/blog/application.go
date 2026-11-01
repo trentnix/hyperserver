@@ -25,7 +25,7 @@ func newApplication(ctx context.Context, cfg config.Config) (*application.Applic
 			if err := blog.ConfigureRendering(app.ContentManager, profile, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
-			return []handlers.Descriptor{blog.Module(access, profile), auth.Module(nil, nil, nil)}, nil
+			return []handlers.Descriptor{blog.Module(access, profile, app.Accounts), auth.Module(nil, nil, nil)}, nil
 		},
 		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
 			return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {

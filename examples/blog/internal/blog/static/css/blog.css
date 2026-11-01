@@ -458,6 +458,11 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 .auth-form-footer a { display: inline-block; padding-block: 6px; text-underline-offset: .2em; }
 .auth-email-form, #reset-request-form, #reset-password-form { max-width: 440px; margin: 0; }
 .auth-email-form { padding-top: 32px; }
+.setup-panel { width: min(100% - 32px, 500px); margin: 60px auto; padding: 28px; border: 1px solid #e1e3e8; border-radius: 5px; font-size: 16px; line-height: 1.5; }
+.setup-panel h1 { margin-top: 0; font-size: 1.75em; }
+.setup-panel header p { color: #656b77; margin-bottom: 0; }
+.setup-panel :is(.auth-email-form, .verification-panel) { max-width: none; }
+.setup-panel .verification-panel { padding: 0; border: 0; background: none; }
 :is(.auth-email-form, #reset-request-form, #reset-password-form) {
   label { margin: 24px 0 8px; color: var(--button-bg); }
   label:first-child { margin-top: 0; }

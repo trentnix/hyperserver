@@ -33,6 +33,17 @@ func TestBrowserEditor(t *testing.T) {
 	}
 }
 
+// TestBrowserSetup follows registration, verification, and login into the profile editor.
+func TestBrowserSetup(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check first-time setup")
+	}
+	for _, width := range []string{"320", "1100", "2560"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "setup") })
+	}
+}
+
 // TestBrowserLayout checks the layout breakpoint, ultrawide centering, and minimum
 // page width without repeating the editor and notification flows at every width.
 func TestBrowserLayout(t *testing.T) {
@@ -309,9 +320,14 @@ func TestBrowserTags(t *testing.T) {
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
-	h := newHarness(t)
-	h.register(t)
-	h.verify(t)
+	var h *harness
+	if mode == "setup" {
+		h = startHarness(t, harnessConfig(t, 10))
+	} else {
+		h = newHarness(t)
+		h.register(t)
+		h.verify(t)
+	}
 	if mode == "tags" {
 		if _, err := h.blog.writePost(t.Context(), Post{Title: "Tag source", Markdown: "Body", Tags: "Go, self-hosting", Draft: true}); err != nil {
 			t.Fatal(err)
@@ -439,6 +455,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "setup":
+		scriptFile = "testdata/setup.js"
 	case "tags":
 		scriptFile = "testdata/tags.js"
 	case "search":
@@ -550,7 +568,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	ready := make(chan struct{})
 	var readyOnce sync.Once
 	pagePath := "/auth/login/email"
-	if mode == "layout" || mode == "fonts" {
+	if mode == "setup" {
+		pagePath = "/"
+	} else if mode == "layout" || mode == "fonts" {
 		pagePath += "?test-layout=1&amp;test-width=" + width
 	} else if mode == "navigation" {
 		pagePath = "/post/s/first"
@@ -569,6 +589,25 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			}
 		}
 		switch r.URL.Path {
+		case "/test/verification-link":
+			if mode != "setup" {
+				http.NotFound(w, r)
+				return
+			}
+			h.mail.mu.Lock()
+			defer h.mail.mu.Unlock()
+			if len(h.mail.messages) != 1 {
+				http.Error(w, "verification mail missing", http.StatusNotFound)
+				return
+			}
+			link := regexp.MustCompile(`https://blog.example/auth/verify\?[^"< ]+`).FindString(h.mail.messages[0].Body)
+			u, err := url.Parse(html.UnescapeString(link))
+			if err != nil || u.Query().Get("token") == "" {
+				http.Error(w, "verification token missing", http.StatusNotFound)
+				return
+			}
+			io.WriteString(w, u.RequestURI())
+			return
 		case "/test/image.svg":
 			sizes := map[string][2]int{"large": {3200, 1800}, "small": {160, 100}, "tall": {360, 1800}, "wide": {2400, 320}, "square": {900, 900}, "tiny": {48, 48}}
 			size, ok := sizes[r.URL.Query().Get("size")]

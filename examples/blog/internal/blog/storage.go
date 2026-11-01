@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS blog_profile (
  id INTEGER PRIMARY KEY CHECK (id=1), name TEXT NOT NULL, bio TEXT NOT NULL,
  image_url TEXT NOT NULL, favicon_url TEXT NOT NULL, background_url TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS blog_setup (
+ email TEXT PRIMARY KEY, complete INTEGER NOT NULL CHECK (complete IN (0, 1))
+);
 CREATE TABLE IF NOT EXISTS blog_media (
  id TEXT PRIMARY KEY, filename TEXT NOT NULL, label TEXT NOT NULL,
  version INTEGER NOT NULL CHECK (version>0)

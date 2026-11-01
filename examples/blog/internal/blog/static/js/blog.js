@@ -4,6 +4,7 @@
   const menuToggle = document.querySelector('.menu-toggle');
   const menu = document.querySelector('#site-menu');
   function closeMenu() {
+    if (!menu) return;
     menu.parentElement.open = !mobileLayout.matches;
     menuToggle.hidden = !mobileLayout.matches;
     for (const toggle of menu.querySelectorAll('.child-toggle')) {
@@ -11,13 +12,13 @@
       toggle.hidden = !mobileLayout.matches;
     }
   }
-  menu.addEventListener('click', event => {
+  menu?.addEventListener('click', event => {
     if (mobileLayout.matches && event.target.closest('a')) {
       closeMenu();
       menuToggle.focus({preventScroll: true});
     }
   });
-  document.querySelector('.header-menu').addEventListener('keydown', event => {
+  document.querySelector('.header-menu')?.addEventListener('keydown', event => {
     if (event.key === 'Escape' && mobileLayout.matches && menu.parentElement.open) {
       closeMenu();
       menuToggle.focus();
@@ -28,7 +29,7 @@
     if (event.detail.target.id === 'site-menu') closeMenu();
   });
   closeMenu();
-  menu.dataset.ready = '';
+  if (menu) menu.dataset.ready = '';
 
   document.addEventListener('click', event => {
     const dismiss = event.target.closest('[data-dismiss-notification]');

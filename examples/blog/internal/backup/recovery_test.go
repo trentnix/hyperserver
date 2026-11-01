@@ -50,7 +50,7 @@ func recoveryApp(t *testing.T, cfg config.Config) (*application.Application, fun
 			if err := blog.ConfigureRendering(app.ContentManager, profile, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
-			return []handlers.Descriptor{blog.Module(access, profile), auth.Module(nil, nil, nil)}, nil
+			return []handlers.Descriptor{blog.Module(access, profile, app.Accounts), auth.Module(nil, nil, nil)}, nil
 		},
 		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
 			return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
@@ -126,6 +126,8 @@ func TestApplicationRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	form("/auth/login/email", credentials)
+	request("GET", "/", nil, "", http.StatusSeeOther) // Follow the first login into Site Profile.
+	get("/profile")
 	upload := func(red uint8) string {
 		t.Helper()
 		var body bytes.Buffer

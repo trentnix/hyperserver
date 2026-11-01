@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"errors"
 	"net/http"
 
 	emailauth "github.com/trentnix/hyperserver/auth/modules/email"
@@ -11,6 +12,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // returningUserCookie controls link visibility only. It never grants access.
@@ -40,9 +42,31 @@ func (p *EmailProvider) Init(app *server.ApplicationServer) error {
 
 // Register checks admission before the email provider can create an account.
 func (p *EmailProvider) Register(w http.ResponseWriter, r *http.Request) {
-	if p.admit(w, r) {
+	if p.registrationAvailable(w, r) && p.admit(w, r) {
 		p.EmailAuthService.Register(w, r)
 	}
+}
+
+// GetRegister stops offering registration after the configured account exists.
+func (p *EmailProvider) GetRegister(w http.ResponseWriter, r *http.Request) {
+	if p.registrationAvailable(w, r) {
+		p.EmailAuthService.GetRegister(w, r)
+	}
+}
+
+// registrationAvailable also prevents restarting the wizard through a bookmarked form.
+func (p *EmailProvider) registrationAvailable(w http.ResponseWriter, r *http.Request) bool {
+	s := p.access.setup
+	_, err := s.accounts.GetByEmail(r.Context(), s.email)
+	if errors.Is(err, user.ErrUserNotFound) {
+		return true
+	}
+	if err != nil {
+		p.content.HandleError(w, r, "Registration is temporarily unavailable. Please try again.", err, http.StatusServiceUnavailable)
+		return false
+	}
+	util.RedirectToURL(w, r, loginURL)
+	return false
 }
 
 // Login checks admission before checking credentials or creating a session.

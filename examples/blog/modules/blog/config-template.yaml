@@ -1,5 +1,5 @@
 # Copy to config.yaml in this directory. Only this address can register and log in.
-# Publishing also requires email verification.
+# The application config controls whether email verification is required.
 adminEmail: admin@example.com
 # Optional public files at /local-assets/{filename}. Create the directory before enabling.
 # Paths are relative to the application configuration directory. Keep private files elsewhere.

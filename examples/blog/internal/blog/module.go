@@ -44,7 +44,10 @@ type Settings struct {
 
 // Access shares the blog's administrator rule with authentication and rendering.
 // Module initialization sets the identity once, before requests are accepted.
-type Access struct{ emailKey string }
+type Access struct {
+	emailKey string
+	setup    *setupState
+}
 
 // AllowAccount permits only the configured administrator to register or log in.
 // Password checking and email verification remain the authentication service's job.
@@ -58,15 +61,16 @@ func (a *Access) AllowAccount(ctx context.Context, address string) (bool, error)
 	return user.EmailKey(address) == a.emailKey, nil
 }
 
-// IsAdmin requires a verified account matching the configured address.
+// IsAdmin requires the configured account to have completed any required verification.
 func (a *Access) IsAdmin(account *user.User) bool {
-	return a != nil && a.emailKey != "" && account != nil && account.Verified && user.EmailKey(account.Email) == a.emailKey
+	return a != nil && a.emailKey != "" && account != nil && !account.NeedsVerification() && user.EmailKey(account.Email) == a.emailKey
 }
 
 // module owns one application's views, content repositories, and images.
 type module struct {
 	settings        *Settings
 	access          *Access
+	accounts        user.AccountRepository
 	app             *server.ApplicationServer
 	posts           repository
 	pageStore       pageRepository
@@ -95,19 +99,20 @@ type module struct {
 }
 
 // init registers the factory without opening storage or creating runtime state.
-func init() { handlers.Register(Module(nil, nil)) }
+func init() { handlers.Register(Module(nil, nil, nil)) }
 
 // Module creates application-local blog instances using the supplied access rule.
 // Each instance opens and closes its content and image storage. Accounts and sessions
 // remain framework services and can select storage independently.
-// Share profile with ConfigureRendering. Each application must supply its own state.
-func Module(access *Access, profile *ProfileState) handlers.Descriptor {
+// Share profile with ConfigureRendering. Accounts determine first-time setup state.
+// Each application must supply its own state.
+func Module(access *Access, profile *ProfileState, accounts user.AccountRepository) handlers.Descriptor {
 	return handlers.Descriptor{Name: "blog", New: func() handlers.Handler {
 		selected := profile
 		if selected == nil {
 			selected = &ProfileState{}
 		}
-		return &module{access: access, settings: &Settings{}, profile: selected}
+		return &module{access: access, settings: &Settings{}, profile: selected, accounts: accounts}
 	}}
 }
 
@@ -129,8 +134,8 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if m.settings.RecentPostCount < 1 {
 		return errors.New("blog.recentPostCount must be greater than zero")
 	}
-	if !app.Config.Auth.Enabled || !app.Config.Auth.RegisterRequiresVerification {
-		return errors.New("blog requires authentication and email verification")
+	if !app.Config.Auth.Enabled || m.accounts == nil {
+		return errors.New("blog requires authentication and account storage")
 	}
 	m.app = app
 	templates, err := prepareTemplates(app.ContentManager)
@@ -175,6 +180,10 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	store, closeStore, err := openRepository(ctx, *m.settings, app.Config.App.WorkingDirectory)
 	if err != nil {
 		return fmt.Errorf("open blog storage: %w", err)
+	}
+	setup, err := newSetupState(ctx, store, m.accounts, user.EmailKey(m.settings.AdminEmail))
+	if err != nil {
+		return errors.Join(fmt.Errorf("load blog setup: %w", err), closeStore())
 	}
 	profile, err := store.GetProfile(ctx)
 	if errors.Is(err, errNotFound) {
@@ -222,6 +231,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		return errors.Join(assetError, images.Close(), closeStore())
 	}
 	m.access.emailKey = user.EmailKey(m.settings.AdminEmail)
+	m.access.setup = setup
 	m.configurePageNavigation()
 	return nil
 }
@@ -233,14 +243,14 @@ func (m *module) Shutdown(context.Context) error { return m.close() }
 // adminPageKey marks management responses without confusing them with public pages viewed by an administrator.
 type adminPageKey struct{}
 
-// requireAdmin rejects unverified or non-administrator accounts, marks management
+// requireAdmin rejects accounts that do not satisfy the administrator rule, marks management
 // responses for rendering, and prevents caching, including access denials.
 func (m *module) requireAdmin(next http.HandlerFunc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return m.requireSetup(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(context.WithValue(r.Context(), adminPageKey{}, true))
 		w.Header().Set("Cache-Control", "no-store")
 		if !m.access.IsAdmin(user.GetUserFromContext(r.Context())) {
-			m.app.ContentManager.HandleError(w, r, "A verified administrator account is required.", nil, http.StatusForbidden)
+			m.app.ContentManager.HandleError(w, r, "Sign in as the administrator and complete any required email verification.", nil, http.StatusForbidden)
 			return
 		}
 		next(w, r)

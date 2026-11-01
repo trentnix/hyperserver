@@ -441,6 +441,28 @@ func newHarness(t *testing.T) *harness {
 
 func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	t.Helper()
+	h := startHarness(t, harnessConfig(t, count))
+	// Most tests exercise an established site. Setup tests start with harnessConfig directly.
+	if err := h.blog.access.setup.finish(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.blog.writeProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software.", BackgroundURL: "/assets/img/site-bg.jpg"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "about", Title: "About Me", DisplayOrder: new(0), Published: true}); err != nil {
+		t.Fatal(err)
+	}
+	projects, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "projects", Title: "Projects", Published: true, ChildrenDisplay: "blocks", DisplayOrder: new(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.projectsID = projects.ID
+	return h
+}
+
+// harnessConfig creates isolated configuration without registering an administrator.
+func harnessConfig(t *testing.T, count int) config.Config {
+	t.Helper()
 	directory := t.TempDir()
 	moduleDirectory := filepath.Join(directory, "modules", "blog")
 	if err := os.MkdirAll(moduleDirectory, 0700); err != nil {
@@ -462,19 +484,7 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	cfg.Auth.VerificationTokenExpiration, cfg.Auth.ResetTokenExpiration = time.Hour, time.Hour
 	cfg.Auth.AccountStorage = config.AccountStorageConfig{Provider: "sqlite", Options: map[string]string{"connection": "accounts.db?_journal=WAL"}}
 	cfg.Auth.Services = map[string]map[string]string{"email": {"enabled": "true"}}
-	h := startHarness(t, cfg)
-	if err := h.blog.writeProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software.", BackgroundURL: "/assets/img/site-bg.jpg"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "about", Title: "About Me", DisplayOrder: new(0), Published: true}); err != nil {
-		t.Fatal(err)
-	}
-	projects, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "projects", Title: "Projects", Published: true, ChildrenDisplay: "blocks", DisplayOrder: new(1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.projectsID = projects.ID
-	return h
+	return cfg
 }
 
 func startHarness(t *testing.T, cfg config.Config) *harness {
@@ -493,7 +503,7 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 			if err := ConfigureRendering(app.ContentManager, profile, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
 				return nil, err
 			}
-			blog := Module(access, profile)
+			blog := Module(access, profile, app.Accounts)
 			newBlog := blog.New
 			blog.New = func() handlers.Handler {
 				h.blog = newBlog().(*module)

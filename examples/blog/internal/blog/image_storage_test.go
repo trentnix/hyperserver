@@ -230,7 +230,7 @@ func TestModuleImageStorageInitFailure(t *testing.T) {
 	}
 	for _, directory := range []string{"", "occupied"} {
 		settings.UploadsDirectory = directory
-		m := &module{settings: &settings, access: &Access{}}
+		m := &module{settings: &settings, access: &Access{}, accounts: h.app.Accounts}
 		err := m.Init(t.Context(), h.app.ApplicationServer)
 		if err == nil || !strings.Contains(err.Error(), "open blog uploads") {
 			t.Fatalf("invalid directory %q: %v", directory, err)

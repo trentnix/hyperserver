@@ -21,6 +21,12 @@
   {{ if .LayoutData.Admin }}<script type="module" src="/assets/js/admin.js"></script>{{ end }}
 </head>
 <body{{ if .LayoutData.Profile.BackgroundURL }} style="--site-background: url('{{ .LayoutData.Profile.BackgroundURL }}')"{{ end }}>
+  {{ if .LayoutData.Setup }}
+  <main class="setup-panel" id="article-content">
+    {{ if .LayoutData.SetupTitle }}<header><h1>{{ .LayoutData.SetupTitle }}</h1><p>{{ .LayoutData.SetupHelp }}</p></header>{{ end }}
+    {{ renderPartial .PartialName . }}
+  </main>
+  {{ else }}
   <div class="site-layout">
     <div class="page-top">
       <aside class="site-sidebar">
@@ -60,6 +66,7 @@
       <nav id="post-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap="innerHTML show:window:top">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div></nav>
     </footer>
   </div>
+  {{ end }}
   <div id="notifications" data-request-errors>{{ template "blog.notifications" . }}</div>
   <div id="dialog-host"></div>
   {{ if .LayoutData.Admin }}<template id="media-browser-template">

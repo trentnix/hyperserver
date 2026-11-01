@@ -20,22 +20,22 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets)))
 	routes.HandleFunc("GET /assets/js/htmx-errors.js", htmx.ServeErrorScript)
 	if m.localAssets != nil {
-		routes.HandleFunc("GET /local-assets/{name}", m.localAsset)
+		routes.HandleFunc("GET /local-assets/{name}", m.requireSetup(m.localAsset))
 	}
-	routes.HandleFunc("GET /{$}", m.index)
-	routes.HandleFunc("GET /posts", m.archive)
+	routes.HandleFunc("GET /{$}", m.requireSetup(m.index))
+	routes.HandleFunc("GET /posts", m.requireSetup(m.archive))
 	searchRoutes, err := routes.WithRateLimit(ratelimit.Policy{Requests: searchRequestsPerMinute, Window: time.Minute, MaxClients: 4096})
 	if err != nil {
 		return err
 	}
-	searchRoutes.HandleFunc("GET /search", m.search)
-	routes.HandleFunc("GET /posts/recent", m.recent)
-	routes.HandleFunc("GET /post/s/{slug}", m.post)
-	routes.HandleFunc("GET /post/id/{id}", m.post)
-	routes.HandleFunc("GET /images/{id}", m.image)
-	routes.HandleFunc("GET /rss", m.rss)
-	routes.HandleFunc("GET /sitemap.xml", m.sitemap)
-	routes.HandleFunc("GET /robots.txt", m.robots)
+	searchRoutes.HandleFunc("GET /search", m.requireSetup(m.search))
+	routes.HandleFunc("GET /posts/recent", m.requireSetup(m.recent))
+	routes.HandleFunc("GET /post/s/{slug}", m.requireSetup(m.post))
+	routes.HandleFunc("GET /post/id/{id}", m.requireSetup(m.post))
+	routes.HandleFunc("GET /images/{id}", m.requireSetup(m.image))
+	routes.HandleFunc("GET /rss", m.requireSetup(m.rss))
+	routes.HandleFunc("GET /sitemap.xml", m.requireSetup(m.sitemap))
+	routes.HandleFunc("GET /robots.txt", m.requireSetup(m.robots))
 	routes.Handle("GET /history/{kind}/{id}", m.requireAdmin(m.revisions))
 	routes.Handle("GET /history/{kind}/{id}/delete/{revision}", m.requireAdmin(m.confirmRevisionDelete))
 	routes.HandleWithBodyLimit("POST /history/{kind}/{id}/restore", m.requireAdmin(m.restoreRevision), routing.MiB)
@@ -55,8 +55,8 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("POST /media/delete/{id}", m.requireAdmin(m.deleteMedia))
 	routes.HandleWithBodyLimit("POST /profile", m.requireAdmin(m.saveProfile), routing.MiB)
 	routes.HandleWithBodyLimit("POST /profile/restore", m.requireAdmin(m.restoreProfile), routing.MiB)
-	routes.HandleFunc("GET /about", m.page)
-	routes.HandleFunc("GET /page/{slug}", m.page)
+	routes.HandleFunc("GET /about", m.requireSetup(m.page))
+	routes.HandleFunc("GET /page/{slug}", m.requireSetup(m.page))
 	routes.Handle("GET /pages", m.requireAdmin(m.pages))
 	routes.Handle("GET /pages/create", m.requireAdmin(m.pageEditor))
 	routes.Handle("GET /pages/update/{id}", m.requireAdmin(m.pageEditor))
@@ -64,8 +64,8 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleWithBodyLimit("POST /pages", m.requireAdmin(m.savePage), routing.MiB)
 	routes.HandleWithBodyLimit("POST /pages/{id}", m.requireAdmin(m.savePage), routing.MiB)
 	routes.Handle("POST /pages/delete/{id}", m.requireAdmin(m.deletePage))
-	routes.HandleFunc("GET /projects", m.page)
-	routes.HandleFunc("GET /project/s/{slug}", m.page) // Retain published project links.
+	routes.HandleFunc("GET /projects", m.requireSetup(m.page))
+	routes.HandleFunc("GET /project/s/{slug}", m.requireSetup(m.page)) // Retain published project links.
 	routes.Handle("GET /post/create", m.requireAdmin(m.editor))
 	routes.Handle("GET /post/manage", m.requireAdmin(m.managePosts))
 	routes.Handle("GET /post/update/{id}", m.requireAdmin(m.editor))
@@ -76,7 +76,8 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleWithBodyLimit("POST /post/preview", m.requireAdmin(m.preview), routing.MiB)
 	routes.HandleWithBodyLimit("POST /post/images/upload", m.requireAdmin(m.upload), 10*routing.MiB)
 	routes.HandleFunc("GET /login", m.login)
-	routes.HandleFunc("/", m.app.ContentManager.HandleNotFound)
+	routes.HandleFunc("GET "+authReturnURL, m.requireSetup(m.continueSetup))
+	routes.HandleFunc("/", m.requireSetup(m.app.ContentManager.HandleNotFound))
 	return routes.Err()
 }
 

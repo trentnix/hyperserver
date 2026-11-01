@@ -3,6 +3,7 @@ package blog
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
@@ -16,6 +17,7 @@ const (
 	responseView  = "blog.message"
 	notFoundView  = "blog.notFound"
 	loginURL      = "/auth/login/email"
+	authReturnURL = "/auth/continue"
 )
 
 // ContentSecurityPolicy permits bundled scripts, styles, and fonts.
@@ -36,10 +38,27 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 		cm.RegisterLayouts(contentservice.HtmxType, blogModuleFS, "templates/fragment.html")
 		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html")
 		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html")
-		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", "/", loginURL
+		// Authentication returns through setup before selecting login, profile, or home.
+		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", authReturnURL, loginURL
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
 			data := navigation{Profile: profile.Current(), SignedIn: account != nil, Admin: access.IsAdmin(account)}
+			if r.Context().Value(setupPageKey{}) != nil || access.setup != nil && !access.setup.complete.Load() && strings.HasPrefix(r.URL.Path, "/auth/") {
+				data.Setup = true
+				data.Profile = Profile{Name: "My Blog"}
+				switch r.URL.Path {
+				case "/auth/register/email":
+					data.SetupTitle = "Set up your blog"
+					data.SetupHelp = "Register using the administrator email from your configuration."
+				case loginURL:
+					data.SetupTitle = "Log in to your blog"
+					data.SetupHelp = "Log in to edit your site profile."
+					if account, err := accounts.GetByEmail(r.Context(), access.emailKey); err == nil && account.NeedsVerification() {
+						data.SetupHelp = "Check your email to verify your account. If you need another message, log in to resend it."
+					}
+				}
+				return data
+			}
 			data.ReaderSearch = r.Context().Value(adminPageKey{}) == nil
 			data.Description = data.Profile.Bio
 			if data.Admin {
@@ -88,6 +107,8 @@ func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templa
 
 // navigation holds the profile, links, and sharing metadata for the current request.
 type navigation struct {
+	Setup                                    bool
+	SetupTitle, SetupHelp                    string
 	Profile                                  Profile
 	Sharing                                  *sharingPreview
 	Pages                                    []pageLink
@@ -104,6 +125,9 @@ func (m *module) configurePageNavigation() {
 	build := m.app.ContentManager.BuildLayoutData
 	m.app.ContentManager.BuildLayoutData = func(r *http.Request) any {
 		data := build(r).(navigation)
+		if data.Setup {
+			return data
+		}
 		hx := htmx.GetRequest(r)
 		if hx.Enabled && !hx.HistoryRestore {
 			return data

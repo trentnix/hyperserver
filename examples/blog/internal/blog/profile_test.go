@@ -281,7 +281,7 @@ func TestProfileInitialization(t *testing.T) {
 	if err := h.blog.profileStore.SaveProfile(t.Context(), Profile{Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
-	m := &module{settings: h.blog.settings, access: &Access{}, profile: &ProfileState{}}
+	m := &module{settings: h.blog.settings, access: &Access{}, profile: &ProfileState{}, accounts: h.app.Accounts}
 	if err := m.Init(t.Context(), h.blog.app); err == nil || !strings.Contains(err.Error(), "load blog profile") {
 		t.Fatal("invalid profile did not fail startup", err)
 	}

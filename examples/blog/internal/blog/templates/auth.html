@@ -1,4 +1,4 @@
-{{/* Keep the login link with registration when HTMX replaces validation responses. */}}
+{{/* Keep registration navigation consistent when HTMX replaces validation responses. */}}
 {{ define "auth.partial.email.register.form" }}
 {{ with .Data }}
 <div id="register" class="container">
@@ -21,7 +21,7 @@
     <button type="submit">Register</button>
     {{ if .HasErrorMessages }}<div class="form-messages" role="alert"><ul>{{ range .GetErrorMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}
   </form>
-  <p class="auth-form-footer"><a href="/auth/login/email">Log in</a></p>
+  {{ if not $.LayoutData.Setup }}<p class="auth-form-footer"><a href="/auth/login/email">Log in</a></p>{{ end }}
 </div>
 {{ else }}<p>Unable to display registration details.</p>{{ end }}
 {{ end }}

@@ -15,7 +15,7 @@ openssl rand -hex 32
 openssl rand -hex 32
 ```
 
-Put the two different generated values in `http.session.jwtKey` and `auth.jwtKey`. Set `adminEmail` in `modules/blog/config.yaml` before starting. Only that address can register or log in. Administrative access also requires email verification.
+Put the two different generated values in `http.session.jwtKey` and `auth.jwtKey`. Set `adminEmail` in `modules/blog/config.yaml` before starting. Only that address can register or log in. The supplied configuration requires email verification before administrative access.
 
 If a local SMTP inbox is not already running, start Mailpit:
 
@@ -29,7 +29,9 @@ Mailpit captures mail locally rather than delivering it. In another terminal, st
 GOWORK=off go run .
 ```
 
-Open <http://127.0.0.1:8086/auth/register/email>, register the configured address, and use the verification message at <http://127.0.0.1:8025>. Then log in.
+Open <http://127.0.0.1:8086/>. First-time setup asks you to register the configured administrator address. Use the verification message at <http://127.0.0.1:8025>, then log in. Your first login opens Site Profile.
+
+Public content, including the homepage, opens after registration and any required verification. Verification leads the administrator to login, and the first login opens Site Profile. Setup progress survives restarts. Existing installations with a verified administrator skip setup. If no administrator exists, enable `auth.registrationEnabled` to register.
 
 A fresh installation shows “My Blog,” neutral portrait/favicon assets, no background, and no posts or pages. Use **Site Profile** for the name, bio, and images. Create About or Projects through **Pages**. Content belongs in the database. Operational settings and the administrator allowlist belong in configuration.
 

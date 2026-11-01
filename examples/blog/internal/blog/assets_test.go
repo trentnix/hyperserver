@@ -186,7 +186,7 @@ func TestLocalAssetsInitializationFailure(t *testing.T) {
 	h := newHarness(t)
 	settings := *h.blog.settings
 	settings.AssetsDirectory = "missing-assets"
-	m := &module{settings: &settings, access: &Access{}}
+	m := &module{settings: &settings, access: &Access{}, accounts: h.app.Accounts}
 	if err := m.Init(t.Context(), h.blog.app); err == nil || !strings.Contains(err.Error(), "open blog assets") {
 		t.Fatal("invalid configured assets did not fail initialization", err)
 	}
@@ -250,7 +250,7 @@ func TestOverlappingAssetsInitializationFailure(t *testing.T) {
 	h := newHarness(t)
 	settings := *h.blog.settings
 	settings.AssetsDirectory = settings.UploadsDirectory
-	m := &module{settings: &settings, access: &Access{}}
+	m := &module{settings: &settings, access: &Access{}, accounts: h.app.Accounts}
 	if err := m.Init(t.Context(), h.blog.app); err == nil || !strings.Contains(err.Error(), "must not overlap") {
 		t.Fatal("overlapping directories did not fail initialization", err)
 	}
