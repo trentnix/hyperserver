@@ -442,7 +442,7 @@ document.removeEventListener = function(type, callback, options) {
       unchanged();
 
       await htmx.ajax('POST', '/test/disconnect', {target: '#editor-errors'}).catch(() => {});
-      await wait(() => form.querySelector('[data-request-error]')?.textContent.includes('connection failed'));
+      await wait(() => form.querySelector('[data-request-error]')?.textContent.includes('No response from the server.'));
       unchanged();
 
       form.querySelector('[data-request-error]').remove();
@@ -455,7 +455,7 @@ document.removeEventListener = function(type, callback, options) {
       form.append(button);
       htmx.process(button);
       button.click();
-      await wait(() => form.querySelector('[data-request-error]')?.textContent.includes('connection failed'));
+      await wait(() => form.querySelector('[data-request-error]')?.textContent.includes('No response from the server.'));
       unchanged();
       const originalConfirm = window.blogConfirm;
       let leavePrompt = '';

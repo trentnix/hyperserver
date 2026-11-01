@@ -1,6 +1,6 @@
 {{ define "site.component.notifications" }}
 
-<div id="user-notifications" class="toaster-container">
+<div id="user-notifications" class="toaster-container" data-request-errors>
   {{ range .Notifications }}
     <div class="toaster{{ if .IsSuccess }} success{{ else if .IsError }} error{{ end }}">
       {{ .Message }}

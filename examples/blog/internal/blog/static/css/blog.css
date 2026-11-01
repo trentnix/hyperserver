@@ -387,7 +387,7 @@ input:not([type=hidden], [type=checkbox]), textarea, select { display: block; wi
 textarea { resize: vertical; }
 button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .55; cursor: not-allowed; }
 .image-picker input:disabled::file-selector-button, .media-upload input:disabled::file-selector-button { cursor: not-allowed; }
-.field-error, .verification-status--error { color: #a12626; }
+.field-error, [data-request-error], .verification-status--error { color: #a12626; }
 .form-hint { color: var(--muted); font-size: .85em; }
 .post-schedule { margin-top: 16px; padding: 16px; border: 1px solid #e1e5eb; border-radius: 4px; background: var(--surface); }
 .post-schedule-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
@@ -466,7 +466,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
   button { min-height: 44px; min-width: 120px; margin: 28px 0 12px; border-radius: 6px; font-weight: 600; }
   button:hover { background: var(--button-hover); border-color: var(--button-hover); }
   a { display: inline-block; padding-block: 6px; font-size: .9em; text-underline-offset: .2em; }
-  .field-error { display: block; margin-top: 6px; font-size: .9em; }
+  .field-error, [data-request-error] { display: block; margin-top: 6px; font-size: .9em; }
   .form-messages { padding: 12px 16px; border-left: 3px solid #cbd1da; background: var(--surface); }
   .form-messages ul { margin: 0; padding: 0; list-style: none; }
   .form-messages li + li { margin-top: 6px; }
@@ -510,7 +510,7 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 /* Notifications. */
 /* Only success notifications expire. Without JavaScript, all messages stay visible. */
 #notifications { position: fixed; bottom: 20px; right: 20px; max-width: min(420px, 90vw); display: grid; gap: 10px; z-index: 2; }
-.notification, #notifications > .field-error { margin: 0; padding: 12px 20px; background: var(--button-bg); color: white; border-radius: 5px; }
+.notification, #notifications > [data-request-error] { margin: 0; padding: 12px 20px; background: var(--button-bg); color: white; border-radius: 5px; }
 .notification { display: flex; align-items: start; gap: 16px; overflow-wrap: anywhere; }
 .notification p { margin: 0; }
 .notification-dismiss { display: none; flex-shrink: 0; font-size: 1.3em; line-height: 1; text-decoration: none; }

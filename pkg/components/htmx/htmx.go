@@ -1,5 +1,6 @@
-// Package htmx reads HTMX request headers and writes HTMX response headers.
-// Apply response metadata before writing a response body.
+// Package htmx reads HTMX request headers, writes HTMX response headers, and
+// serves optional browser error handling. Apply response metadata before writing
+// a response body.
 package htmx
 
 import "net/http"

@@ -92,9 +92,30 @@ For additional fragments, define named templates containing their own `hx-swap-o
 | Return no body in either mode | `page.ResponseStatusCode = http.StatusNoContent` | 204 without template execution. |
 | Show validation errors | Render the form with errors | 200 by default so HTMX swaps the form. |
 
-Redirects take precedence and skip templates and notification retrieval. Use `RedirectURL`, not a 3xx `ResponseStatusCode`. Store destination notifications explicitly. If an application chooses 422 for validation, it must configure HTMX to swap that status.
+Redirects take precedence and skip templates and notification retrieval. Use `RedirectURL`, not a 3xx `ResponseStatusCode`. Store destination notifications explicitly. If an application chooses 422 for validation, it must enable error swaps, for example with the script below.
 
 Rendered responses default to `Cache-Control: no-store` and add both HTMX request headers to `Vary`. An existing response `Cache-Control` header takes precedence over `page.Headers`. Keep sensitive responses uncacheable. Direct `http.Handler` and `http.ResponseWriter` remain available for streaming and downloads.
+
+### Browser errors
+
+The optional framework script handles HTTP and connection errors without application-specific JavaScript. Register it once in the application or a module:
+
+```go
+routes.HandleFunc("GET /js/htmx-errors.js", htmx.ServeErrorScript)
+```
+
+Load it once after HTMX in the page layout:
+
+```html
+<script src="/js/htmx-errors.js" defer></script>
+<div data-request-errors></div>
+```
+
+HTML 4xx/5xx responses swap into the selected target, including validation fragments. Plain-text errors appear as text without replacing inputs. Other response types receive a generic status message. Connection failures warn that a submitted change may have completed. The script does not retry requests or turn HTTP failures into successful HTMX events.
+
+Alerts appear in the submitting form or dialog, then the target's form or dialog. Otherwise, they use the optional `[data-request-errors]` container or the document body. Style `[data-request-error]` in the application stylesheet. Application handlers still own public error messages and validation markup. Only send HTML errors intended for the selected target. Keep `allowScriptTags` disabled when fragments must not execute scripts.
+
+Sending a new request clears that source's previous alert. A failed retry displays a new alert. Canceled requests and requests from other controls leave existing alerts alone. Programmatic requests without a source use their target to distinguish alerts.
 
 ## Messages
 

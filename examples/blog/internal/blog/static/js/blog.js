@@ -54,39 +54,6 @@
     }
   }
 
-  function showRequestError(detail, message) {
-    // Keep failures inside an open modal or the submitting form without replacing its inputs.
-    const container = detail.elt?.closest('form') || detail.target?.closest('form') || detail.target?.querySelector('form') ||
-      document.querySelector('dialog[open]') || document.querySelector('#notifications');
-    let notice = container.querySelector('[data-request-error]');
-    if (!notice) {
-      notice = document.createElement('p');
-      notice.dataset.requestError = '';
-      notice.className = 'field-error';
-      notice.setAttribute('role', 'alert');
-      container.prepend(notice);
-    }
-    notice.textContent = message;
-  }
-
-  // Render styled HTML errors in their existing target. Never insert plain-text errors as HTML.
-  document.addEventListener('htmx:beforeSwap', event => {
-    const {xhr} = event.detail;
-    if (xhr.status < 400 || xhr.status > 599) return;
-    const type = (xhr.getResponseHeader('Content-Type') || '').split(';')[0].trim().toLowerCase();
-    if (type === 'text/html') {
-      event.detail.shouldSwap = true;
-      event.detail.isError = false;
-    } else {
-      event.detail.shouldSwap = false;
-      const message = type === 'text/plain' ? xhr.responseText.trim() : '';
-      showRequestError(event.detail, message || `Request failed (HTTP ${xhr.status}). Please try again.`);
-    }
-  });
-  for (const name of ['htmx:sendError', 'htmx:timeout']) {
-    document.addEventListener(name, event => showRequestError(event.detail,
-      'No response from the server. If you submitted a change, check whether it went through before trying again.'));
-  }
   // Preserve search editing focus, or move to the result heading when following a
   // match. Keep this request-local so unrelated swaps never move focus or scroll.
   const searchFocus = new WeakMap();

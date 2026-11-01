@@ -61,6 +61,32 @@ func TestBrowserSiteErrors(t *testing.T) {
 		h.app.Web.HandleFunc("GET /test/browser/plain", func(w http.ResponseWriter, r *http.Request) {
 			util.HttpError(w, r, `<img id="error-injection" src=x onerror="window.errorInjected=true">`, nil, http.StatusInternalServerError)
 		})
+		h.app.Web.HandleFunc("GET /test/browser/json", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			io.WriteString(w, `{"error":"private detail"}`)
+		})
+		h.app.Web.HandleFunc("GET /test/browser/empty", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadGateway)
+		})
+		h.app.Web.HandleFunc("GET /test/browser/retarget-error", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("HX-Retarget", "#browser-target")
+			http.Error(w, "Please retry", http.StatusServiceUnavailable)
+		})
+		h.app.Web.HandleFunc("GET /test/browser/no-content", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		})
+		h.app.Web.HandleFunc("GET /test/browser/timeout", func(w http.ResponseWriter, r *http.Request) {
+			<-r.Context().Done()
+		})
+		h.app.Web.HandleFunc("GET /test/browser/disconnect", func(w http.ResponseWriter, r *http.Request) {
+			connection, _, err := http.NewResponseController(w).Hijack()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			connection.Close()
+		})
 		h.app.Web.HandleFunc("GET /test/browser/success", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			io.WriteString(w, `<p id="success">Saved</p><script src="/test/browser/injected.js"></script>`)

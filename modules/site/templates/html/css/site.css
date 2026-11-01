@@ -217,7 +217,7 @@ footer a:hover {
   text-decoration: underline;
 }
 
-.field-error {
+.field-error, [data-request-error] {
   color: #f00;
   font-size: .8em;
 }
@@ -386,6 +386,14 @@ button:hover {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.toaster-container > [data-request-error] {
+  max-width: min(420px, 80vw);
+  padding: 16px;
+  border-radius: 4px;
+  background: #a12626;
+  color: #fff;
 }
 
 .toaster {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/util"
@@ -17,6 +18,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 		return err
 	}
 	routes.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets)))
+	routes.HandleFunc("GET /assets/js/htmx-errors.js", htmx.ServeErrorScript)
 	if m.localAssets != nil {
 		routes.HandleFunc("GET /local-assets/{name}", m.localAsset)
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/trentnix/hyperserver/auth"
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/middleware"
@@ -33,6 +34,8 @@ func (m *SiteModule) Routes(mux *routing.Routes) error {
 		prefix := "/" + directory + "/"
 		mux.Handle(prefix, http.StripPrefix(prefix, http.FileServerFS(files)))
 	}
+
+	mux.HandleFunc("GET /js/htmx-errors.js", htmx.ServeErrorScript)
 
 	// serve files
 	mux.HandleFunc("/favicon.ico", m.ServeFavicon)
