@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/examples/blog/internal/maintenance"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
@@ -33,6 +34,11 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	lock, err := maintenance.Lock(cfg.App.WorkingDirectory)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
 	app, err := newApplication(ctx, cfg)
 	if err != nil {
 		return err

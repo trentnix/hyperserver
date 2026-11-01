@@ -51,6 +51,8 @@ Posts and pages open in dedicated editor pages. Cancel returns to their manageme
 
 Set `uploadsDirectory` in the module config to a persistent, application-owned directory. The sample uses `uploads/`, which is ignored by Git. Back up this directory along with the databases. Each upload is one uncompressed ZIP bundle containing its original, display copy, and thumbnail. The original's hash determines the filename and stable image URL. The handler serves individual image bytes, not the bundle. Do not edit stored files in place.
 
+Use the [backup command and recovery guide](docs/backup.md) to archive databases, uploads, local assets, and unchanged configuration files. Stop the blog before backup. Recovery uses ordinary ZIP extraction and manual file placement. Save environment overrides separately.
+
 Uploads produce a display copy with a maximum 2,048-pixel edge and a 480-pixel thumbnail, without enlargement or cropping. JPEG copies use quality 85. PNG copies retain transparency. EXIF orientation is applied before resizing, and JPEG/PNG copies omit metadata, including location data. GIFs keep their original bytes, animation, dimensions, and metadata. Animated PNGs are rejected rather than flattened. Only one upload is processed at a time. A concurrent upload receives a retry message.
 
 Originals remain available to the verified administrator through **Download original** in Media. Public image URLs serve display copies, and library previews request thumbnails. Both copies follow the content visibility rules below. Cleanup removes the original and copies together. Media sizes include all stored copies. Bundled and local assets are not processed.

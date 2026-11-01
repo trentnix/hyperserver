@@ -44,6 +44,7 @@ config.yaml
 /deploy/local/state/
 /examples/blog/uploads/
 /examples/blog/assets/
+/examples/blog/.blog-maintenance.lock
 
 # Local implementation guidance
 /production-readiness-checklist.md

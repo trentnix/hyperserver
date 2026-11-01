@@ -12,6 +12,7 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/examples/blog/internal/blog"
+	"github.com/trentnix/hyperserver/examples/blog/internal/maintenance"
 )
 
 // main loads only configuration and image storage, not HTTP or account services.
@@ -30,6 +31,11 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	lock, err := maintenance.Lock(cfg.App.WorkingDirectory)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
 	var settings blog.Settings
 	path := filepath.Join(cfg.App.WorkingDirectory, "modules", "blog", "config.yaml")
 	found, err := config.LoadModuleFile(path, &settings)

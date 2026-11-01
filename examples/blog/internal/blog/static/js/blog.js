@@ -85,7 +85,7 @@
   });
   for (const name of ['htmx:sendError', 'htmx:timeout']) {
     document.addEventListener(name, event => showRequestError(event.detail,
-      'The connection failed. Check whether the operation completed before retrying.'));
+      'No response from the server. If you submitted a change, check whether it went through before trying again.'));
   }
   // Preserve search editing focus, or move to the result heading when following a
   // match. Keep this request-local so unrelated swaps never move focus or scroll.
