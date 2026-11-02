@@ -1,0 +1,15 @@
+{{ define "auth.page.provider" }}
+<section id="login" class="auth-provider">
+  {{ template "auth.provider.introduction" . }}
+  {{ if .Data.Message }}<p>{{ .Data.Message }}</p>{{ end }}
+  {{ if .Data.Controls }}{{ range .Data.Controls }}{{ . }}{{ end }}
+  {{ else }}<p><a href="/auth/login" hx-boost="false">Sign in</a></p>{{ end }}
+  {{ if .Data.Alternatives }}
+  <div class="auth-alternatives" aria-label="Other authentication methods">
+    {{ range .Data.Alternatives }}{{ . }}{{ end }}
+  </div>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ define "auth.provider.introduction" }}<h1>{{ .Data.Title }}</h1>{{ end }}

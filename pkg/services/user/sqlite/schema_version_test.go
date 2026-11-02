@@ -31,7 +31,7 @@ func TestAccountSchemaBootstrap(t *testing.T) {
 	}
 	var count, version int
 	var dirty bool
-	if err := db.QueryRowContext(t.Context(), `SELECT count(*), min(version), min(dirty) FROM hyperserver_account_version`).Scan(&count, &version, &dirty); err != nil || count != 1 || version != 1 || dirty {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*), min(version), min(dirty) FROM hyperserver_account_version`).Scan(&count, &version, &dirty); err != nil || count != 1 || version != 2 || dirty {
 		t.Fatalf("version metadata = (%d, %d, %t), %v", count, version, dirty, err)
 	}
 	var otherVersion int
@@ -111,9 +111,10 @@ func TestAccountSchemaRejectsUnsupportedHistory(t *testing.T) {
 		{"missing history", `DROP TABLE hyperserver_account_version`, "unversioned"},
 		{"empty history", `DELETE FROM hyperserver_account_version`, "expected one version and dirty flag"},
 		{"version zero", `UPDATE hyperserver_account_version SET version = 0`, "unsupported SQLite account schema version 0"},
-		{"future version", `UPDATE hyperserver_account_version SET version = 2`, "unsupported SQLite account schema version 2"},
+		{"old version", `UPDATE hyperserver_account_version SET version = 1`, "requires version 2"},
+		{"future version", `UPDATE hyperserver_account_version SET version = 3`, "unsupported SQLite account schema version 3"},
 		{"negative version", `UPDATE hyperserver_account_version SET version = -1`, "unsupported SQLite account schema version -1"},
-		{"dirty baseline", `UPDATE hyperserver_account_version SET dirty = true`, "version 1 is dirty"},
+		{"dirty baseline", `UPDATE hyperserver_account_version SET dirty = true`, "version 2 is dirty"},
 		{"dirty future version", `UPDATE hyperserver_account_version SET version = 2, dirty = true`, "version 2 is dirty"},
 		{"multiple versions", `INSERT INTO hyperserver_account_version VALUES (2, false)`, "expected one version and dirty flag"},
 		{"duplicate version", `INSERT INTO hyperserver_account_version VALUES (1, false)`, "expected one version and dirty flag"},

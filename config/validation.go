@@ -21,6 +21,9 @@ func (c Config) Validate() error {
 	if err != nil {
 		return err
 	}
+	if _, err := c.HTTP.FormActionSources(); err != nil {
+		return err
+	}
 	if _, err := requestinfo.NewProxyMiddleware(c.HTTP.TrustedProxies); err != nil {
 		return fmt.Errorf("http.trustedProxies: %w", err)
 	}

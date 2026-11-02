@@ -81,7 +81,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	return routes.Err()
 }
 
-// login redirects the short login URL to the email authentication page.
+// login redirects the short login URL to the configured authentication choices.
 func (m *module) login(w http.ResponseWriter, r *http.Request) {
 	util.RedirectToURL(w, r, loginURL)
 }

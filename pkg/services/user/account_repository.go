@@ -19,6 +19,13 @@ type TokenMaintenance interface {
 	DeleteExpiredTokens(ctx context.Context, limit int) (int64, error)
 }
 
+// SingleAccountReader optionally identifies a site's sole registered account.
+// Return an independent User when exactly one account exists, or nil without an
+// error for zero or multiple accounts. Reads must honor context cancellation.
+type SingleAccountReader interface {
+	SingleAccount(context.Context) (*User, error)
+}
+
 // AccountRepository stores accounts for authentication. Reads of missing accounts
 // must return ErrUserNotFound. Other failures must remain errors. Implementations
 // must honor cancellation and support concurrent calls. Successful reads must

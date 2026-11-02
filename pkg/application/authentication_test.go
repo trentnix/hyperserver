@@ -49,7 +49,7 @@ func authenticationModules(_ context.Context, app *application.Application) ([]h
 	layouts := fstest.MapFS{"page.html": {Data: []byte(`{{renderPartial .PartialName .}}`)}}
 	app.ContentManager.RegisterLayouts(contentservices.PageType, layouts, "page.html")
 	app.ContentManager.RegisterLayouts(contentservices.HtmxType, layouts, "page.html")
-	return []handlers.Descriptor{auth.Module(nil, nil, nil)}, nil
+	return []handlers.Descriptor{auth.Module(auth.Dependencies{}, nil)}, nil
 }
 
 // Requests use the returned handler directly, without adding auth middleware.
@@ -239,7 +239,7 @@ func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T
 				t.Fatal("sessions are not initialized", err)
 			}
 			selections = append(selections, app)
-			return []auth.Descriptor{{Name: "custom", New: func() auth.AuthService {
+			return []auth.Descriptor{{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService {
 				p := &customAuthProvider{}
 				providers = append(providers, p)
 				return p
@@ -337,7 +337,7 @@ func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
 				cause = context.Canceled
 				options.AuthProviders = func(context.Context, *application.Application) ([]auth.Descriptor, error) {
 					cancel()
-					return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
+					return []auth.Descriptor{{Name: "email", New: func(_ auth.Dependencies) auth.AuthService {
 						t.Fatal("provider created after cancellation")
 						return nil
 					}}}, nil
@@ -347,7 +347,7 @@ func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
 			case "provider init":
 				cfg.Auth.Services = map[string]map[string]string{"custom": {"enabled": "true"}}
 				options.AuthProviders = func(context.Context, *application.Application) ([]auth.Descriptor, error) {
-					return []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return &customAuthProvider{initErr: cause} }}}, nil
+					return []auth.Descriptor{{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService { return &customAuthProvider{initErr: cause} }}}, nil
 				}
 			}
 			var captured *application.Application

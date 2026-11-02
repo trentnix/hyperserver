@@ -1,11 +1,3 @@
 {{ define "auth.page.login.selection" }}
-<div class="auth-options container">
-    {{ if .Data }}
-        {{ range .Data }}
-            {{ . }}<br/>
-        {{ end }}
-    {{ else }}
-        No authentication providers are configured
-    {{ end }}
-</div>
+{{ template "auth.page.provider" . }}
 {{ end }}

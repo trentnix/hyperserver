@@ -24,11 +24,13 @@ var catalog struct {
 }
 
 // Descriptor names an authentication provider and supplies its factory.
-// New must return a fresh instance without I/O. Name must match AuthType.
+// New receives application-owned dependencies and must return a fresh instance
+// without I/O. Providers must preserve and enforce the supplied Policy for
+// registration and linking. Name must match AuthType.
 // The instance must not be nil, including a typed nil inside an interface.
 type Descriptor struct {
 	Name string
-	New  func() AuthService
+	New  func(Dependencies) AuthService
 }
 
 // Registry holds one application's enabled providers. Initialize them before
@@ -39,7 +41,7 @@ type Registry struct {
 
 // NewRegistry validates provider selections and creates enabled instances only.
 // The catalog can be an import snapshot or an application-supplied local catalog.
-func NewRegistry(c *config.Config, descriptors []Descriptor) (*Registry, error) {
+func NewRegistry(c *config.Config, descriptors []Descriptor, dependencies Dependencies) (*Registry, error) {
 	if err := ValidateConfig(c, descriptors); err != nil {
 		return nil, err
 	}
@@ -56,7 +58,7 @@ func NewRegistry(c *config.Config, descriptors []Descriptor) (*Registry, error) 
 		if !enabled {
 			continue
 		}
-		service := d.New()
+		service := d.New(dependencies)
 		if isNilAuthService(service) || service.AuthType() != d.Name {
 			return nil, fmt.Errorf("auth provider %q returned no instance or a different AuthType", d.Name)
 		}
@@ -118,9 +120,24 @@ type AuthService interface {
 }
 
 // ProviderRoutes optionally binds provider-specific routes after initialization.
+// Use mutations for state-changing routes to apply the authentication rate limit.
 // Registration errors stop startup before accepting traffic.
 type ProviderRoutes interface {
-	Routes(*routing.Routes) error
+	Routes(routes, mutations *routing.Routes) error
+}
+
+// AccountAction links to a provider-owned account management page.
+// URL must be a local absolute path. Labels are escaped by the account template.
+type AccountAction struct {
+	Label string
+	URL   string
+}
+
+// AccountActionsProvider offers account controls for the authenticated user.
+// Return only actions the account can use. This method must not perform I/O or
+// change the user. The target handlers must enforce their own authorization.
+type AccountActionsProvider interface {
+	AccountActions(*user.User) []AccountAction
 }
 
 // LoginHandler supplies login pages and credential submission handling.
@@ -138,6 +155,25 @@ type LoginHandler interface {
 	Login(http.ResponseWriter, *http.Request) *user.User
 }
 
+// LoginFormHandler offers an inline form on the shared login page. Other enabled
+// providers remain available through LoginAlternatives, including on failed submissions.
+type LoginFormHandler interface {
+	GetLoginForm(http.ResponseWriter, *http.Request)
+}
+
+// LoginAvailability reports whether an account has credentials for this provider.
+// It controls presentation only. Providers without this capability stay visible.
+type LoginAvailability interface {
+	LoginAvailable(context.Context, *user.User) (bool, error)
+}
+
+// LoginCallbackHandler completes an external login. A successful callback returns
+// an account without writing a response. A rejected callback writes its response.
+// The provider must validate browser-bound state before accepting credentials.
+type LoginCallbackHandler interface {
+	Callback(http.ResponseWriter, *http.Request) *user.User
+}
+
 // RegistrationHandler supplies account registration. Providers without this
 // capability are omitted from registration choices, even when registration is enabled.
 type RegistrationHandler interface {
@@ -149,6 +185,12 @@ type RegistrationHandler interface {
 	// Register processes registration and writes its response, including any redirect.
 	// Delivery or rendering can fail after the account has been created.
 	Register(http.ResponseWriter, *http.Request)
+}
+
+// RegistrationFormHandler offers an inline form on the shared registration page.
+// Other enabled providers remain available through RegistrationAlternatives.
+type RegistrationFormHandler interface {
+	GetRegisterForm(http.ResponseWriter, *http.Request)
 }
 
 // ResetHandler supplies the request and redemption steps for credential recovery.

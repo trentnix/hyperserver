@@ -39,7 +39,7 @@
       assert(document.title === 'Trent Nix | ' + title, 'Management navigation lost the document title.');
       unchanged();
     };
-    for (const [path, title] of [['/post/manage', 'Posts'], ['/pages', 'Pages'], ['/profile', 'Site Profile'], ['/media', 'Media']]) {
+    for (const [path, title] of [['/auth/account', 'Account'], ['/post/manage', 'Posts'], ['/pages', 'Pages'], ['/profile', 'Site Profile'], ['/media', 'Media']]) {
       if (innerWidth < 768) account.querySelector('summary').click();
       account.querySelector(`a[href="${path}"]`).click();
       await ready(path, title);

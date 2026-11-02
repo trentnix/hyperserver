@@ -34,11 +34,11 @@ Accounts, contacts, and each configured SQLite session table have independent sc
 
 ## Account schema migrations
 
-Accounts use the separately installed [golang-migrate v4.20.1 CLI](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1). Migrations are plain SQL: [up](../pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates version 1 and [down](../pkg/services/user/sqlite/migrations/000001_accounts.down.sql) removes its tables. On first startup, the application creates the SQLite file if needed. If no account storage objects exist, initialization runs the embedded up file and records version 1 in one transaction. Fresh databases need no migration executable or manual setup.
+Accounts use the separately installed [golang-migrate v4.20.1 CLI](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1). [Version 1](../pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates accounts and tokens. [Version 2](../pkg/services/user/sqlite/migrations/000002_external_identities.up.sql) adds external identity links without changing existing accounts or passwords. On first startup, the application creates the SQLite file if needed. If no account storage objects exist, initialization runs both embedded migrations and records version 2 in one transaction. Fresh databases need no migration executable or manual setup.
 
-Existing account storage must record version 1 with `dirty = false` in `hyperserver_account_version`. Missing, malformed, dirty, or unsupported versions stop startup without changes. Startup never deletes storage or runs later migrations. Unversioned account databases have no supported upgrade path. Recreate disposable development databases rather than adding version metadata by hand.
+Existing account storage must record version 2 with `dirty = false` in `hyperserver_account_version`. Before starting this version against a version 1 database, back up the database and run the account migrations. Missing, malformed, dirty, or unsupported versions stop startup without changes. Startup never deletes storage or runs later migrations. Unversioned account databases have no supported upgrade path. Recreate disposable development databases rather than adding version metadata by hand.
 
-Install the pinned CLI with its SQLite driver, outside the application's dependency graph. The executable goes in `GOBIN`, or `$(go env GOPATH)/bin` if `GOBIN` is unset. With that directory on `PATH`, run from the repository root against a database with no account tables:
+Install the pinned CLI with its SQLite driver, outside the application's dependency graph. The executable goes in `GOBIN`, or `$(go env GOPATH)/bin` if `GOBIN` is unset. With that directory on `PATH`, run from the repository root against an empty or supported versioned account database:
 
 ```sh
 go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
@@ -48,7 +48,7 @@ migrate -path pkg/services/user/sqlite/migrations \
 
 Before deployment migrations, stop affected writers, including cleanup jobs, and back up the data. Run one migration process per database at a time because the SQLite driver does not coordinate migration-process locks. Keep the account-specific version-table setting in every command. Validate the result before restarting consumers.
 
-Use `down 1` to reverse version 1. After down, startup rejects the empty version table until an explicit `up` recreates the schema. Failed transactional migrations must roll back. Inspect and repair the database before using `force` to correct its version marker. `force` does not run or undo SQL.
+From version 2, `down 1` removes external identity links but preserves accounts and passwords. Google-only accounts then cannot log in with the older application. Back up before downgrading. Reversing version 1 deletes accounts and tokens. After all migrations are reversed, startup rejects the empty version table until an explicit `up` recreates the schema. Failed transactional migrations must roll back. Inspect and repair the database before using `force` to correct its version marker. `force` does not run or undo SQL.
 
 After a committed change, use forward repair or restore a compatible backup. Restart an older application only if it supports the resulting format.
 

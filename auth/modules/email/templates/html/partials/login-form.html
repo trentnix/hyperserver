@@ -45,7 +45,7 @@
                 {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
             {{ template "auth.partial.email.login.form.field_errors" (.GetFieldErrors "Password") }}
 
-            <button type="submit">Login</button>
+            <button type="submit">Sign in</button>
 
             <div>
                 <a href="/auth/reset/request/email"
@@ -64,6 +64,12 @@
                 </div>
             {{ end }}
         </form>
+        {{ if .Alternatives }}
+        <div class="auth-alternatives" aria-label="Other ways to sign in">
+            <p>Or continue with</p>
+            {{ range .Alternatives }}{{ . }}{{ end }}
+        </div>
+        {{ end }}
     </div>
     {{ else }}
         <div>Unable to display login details.</div>

@@ -27,7 +27,10 @@ const accountVersionSchema = `CREATE TABLE hyperserver_account_version (version 
 //go:embed migrations/000001_accounts.up.sql
 var accountSchemaV1 string
 
-// PrepareDatabase creates version 1 in fresh account storage and checks required
+//go:embed migrations/000002_external_identities.up.sql
+var accountSchemaV2 string
+
+// PrepareDatabase creates version 2 in fresh account storage and checks required
 // columns, supported types, nullability, unique keys, and the token foreign key.
 // Applications must call it before using account storage. Repeated calls preserve
 // data. Existing storage must already have supported version metadata. It does
@@ -59,12 +62,17 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 		{"user", []string{"id"}},
 		{"user", []string{"email_key"}},
 		{"usertoken", []string{"user_id", "token_hash"}},
+		{"external_identity", []string{"issuer", "subject"}},
+		{"external_identity", []string{"user_id", "issuer"}},
 	} {
 		if err := requireAccountUniqueKey(ctx, tx, key.table, key.columns); err != nil {
 			return err
 		}
 	}
 	if err := requireTokenForeignKey(ctx, tx); err != nil {
+		return err
+	}
+	if err := requireAccountForeignKey(ctx, tx, "external_identity"); err != nil {
 		return err
 	}
 
@@ -79,7 +87,7 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 	var objects int
 	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master
-		WHERE name COLLATE NOCASE IN ('user', 'usertoken', 'usertoken_expiration', ?)`, accountVersionTable).Scan(&objects)
+		WHERE name COLLATE NOCASE IN ('user', 'usertoken', 'usertoken_expiration', 'external_identity', ?)`, accountVersionTable).Scan(&objects)
 	if err != nil {
 		return fmt.Errorf("inspect account storage: %w", err)
 	}
@@ -90,8 +98,11 @@ func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, accountSchemaV1); err != nil {
 			return fmt.Errorf("create account schema version 1: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO hyperserver_account_version (version, dirty) VALUES (1, false)`); err != nil {
-			return fmt.Errorf("record account schema version 1: %w", err)
+		if _, err := tx.ExecContext(ctx, accountSchemaV2); err != nil {
+			return fmt.Errorf("create account schema version 2: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO hyperserver_account_version (version, dirty) VALUES (2, false)`); err != nil {
+			return fmt.Errorf("record account schema version 2: %w", err)
 		}
 		return nil
 	}
@@ -118,8 +129,8 @@ func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 	if dirty.Bool {
 		return fmt.Errorf("SQLite account schema version %d is dirty: explicit migration repair is required before startup", version.Int64)
 	}
-	if version.Int64 != 1 {
-		return fmt.Errorf("unsupported SQLite account schema version %d: this provider supports version 1", version.Int64)
+	if version.Int64 != 2 {
+		return fmt.Errorf("unsupported SQLite account schema version %d: this provider requires version 2. Back up the database and run the account migrations", version.Int64)
 	}
 	return nil
 }
@@ -128,9 +139,14 @@ func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 // tokens when their account is deleted. An omitted parent column is valid only
 // when the account's entire primary key is id.
 func requireTokenForeignKey(ctx context.Context, tx *sql.Tx) error {
+	return requireAccountForeignKey(ctx, tx, "usertoken")
+}
+
+// requireAccountForeignKey checks a dependent table's account ownership constraint.
+func requireAccountForeignKey(ctx context.Context, tx *sql.Tx, table string) error {
 	rows, err := tx.QueryContext(ctx, `SELECT "table", "from", "to", on_delete
-		FROM pragma_foreign_key_list('usertoken')
-		GROUP BY id HAVING count(*) = 1`)
+		FROM pragma_foreign_key_list(?)
+		GROUP BY id HAVING count(*) = 1`, table)
 	if err != nil {
 		return fmt.Errorf("check SQLite account token foreign key: %w", err)
 	}
@@ -171,7 +187,7 @@ func requireTokenForeignKey(ctx context.Context, tx *sql.Tx) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("incompatible SQLite account schema: usertoken.user_id requires a foreign key to user(id) with ON DELETE CASCADE")
+	return fmt.Errorf("incompatible SQLite account schema: %s.user_id requires a foreign key to user(id) with ON DELETE CASCADE", table)
 }
 
 // validateAccountColumns checks declarations without reading account data.
@@ -182,6 +198,9 @@ func validateAccountColumns(ctx context.Context, tx *sql.Tx) error {
 		table, name, kind string
 		notNull           bool
 	}{
+		{"external_identity", "issuer", "text", true},
+		{"external_identity", "subject", "text", true},
+		{"external_identity", "user_id", "text", true},
 		{"user", "id", "text", false},
 		{"user", "email", "text", true},
 		{"user", "email_key", "text", true},

@@ -51,11 +51,9 @@ func recoveryApp(t *testing.T, cfg config.Config) (*application.Application, fun
 			if err != nil {
 				return nil, err
 			}
-			return []handlers.Descriptor{module, auth.Module(nil, nil, nil)}, nil
+			return []handlers.Descriptor{module, auth.Module(auth.Dependencies{}, nil)}, nil
 		},
-		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
-			return []auth.Descriptor{site.EmailProvider(app)}, nil
-		},
+		AuthPolicy: site.AuthenticationPolicy(),
 	})
 	if err != nil {
 		lock.Close()

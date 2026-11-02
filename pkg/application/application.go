@@ -45,10 +45,12 @@ type Options struct {
 	SessionProviders      map[string]session.ConfiguredProvider
 	// AuthProviders selects providers after Modules returns, with shared services
 	// ready but modules not yet initialized. It runs only when auth is selected
-	// and enabled. A nil callback selects email/password. An empty result selects
+	// and enabled. A nil callback selects the registered provider catalog. An empty result selects
 	// none. Configuration determines which providers are enabled. Register any
 	// callback-owned resources with app.OnShutdown before returning.
 	AuthProviders func(context.Context, *Application) ([]auth.Descriptor, error)
+	// AuthPolicy supplies application admission and login behavior for all providers.
+	AuthPolicy auth.Policy
 	// Modules selects a catalog after shared services are ready. Supply feature
 	// dependencies through descriptor factories. A nil callback loads no modules.
 	// Use handlers.Registered explicitly to select the import catalog. Register
@@ -122,7 +124,7 @@ func New(ctx context.Context, cfg config.Config, options Options) (_ *Applicatio
 		app.ContentManager.LoadNotifications = flash.LoadNotifications
 	}
 
-	catalog, err = app.configureAuthentication(ctx, catalog, options.AuthProviders)
+	catalog, err = app.configureAuthentication(ctx, catalog, options.AuthProviders, options.AuthPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("prepare authentication: %w", err)
 	}

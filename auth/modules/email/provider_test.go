@@ -79,7 +79,7 @@ func TestProviderSetupLeavesServiceOwnershipWithApplication(t *testing.T) {
 			if tc.name == "verification failure" {
 				client = nil
 			}
-			descriptor := auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
+			descriptor := auth_services.Descriptor{Name: AuthTypeEmail, New: func(_ auth_services.Dependencies) auth_services.AuthService {
 				provider := New(accounts, sessions, client)
 				if tc.name == "template failure" {
 					provider.TemplateFS = fstest.MapFS{}
@@ -91,7 +91,7 @@ func TestProviderSetupLeavesServiceOwnershipWithApplication(t *testing.T) {
 			}
 
 			err = handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{
-				auth_services.Module(accounts, sessions, []auth_services.Descriptor{descriptor}),
+				auth_services.Module(auth_services.Dependencies{Accounts: accounts, Sessions: sessions}, []auth_services.Descriptor{descriptor}),
 			}, nil)
 			if tc.wantError == "" {
 				if err != nil {
@@ -141,8 +141,11 @@ func TestProviderSuppliesDependencies(t *testing.T) {
 	if other := New(accounts, sessions, client); other == direct {
 		t.Fatal("constructor reused a service instance")
 	}
-	descriptor := Provider(accounts, sessions, client)
-	first, second := descriptor.New().(*EmailAuthService), descriptor.New().(*EmailAuthService)
+	descriptor := Provider()
+	dependencies := auth_services.Dependencies{Accounts: accounts, Sessions: sessions, Mail: client, Policy: auth_services.Policy{
+		AllowAccount: func(context.Context, string) (bool, error) { return false, nil },
+	}}
+	first, second := descriptor.New(dependencies).(*EmailAuthService), descriptor.New(dependencies).(*EmailAuthService)
 	if descriptor.Name != AuthTypeEmail || first == second {
 		t.Fatal("provider did not create independent instances")
 	}
@@ -152,7 +155,10 @@ func TestProviderSuppliesDependencies(t *testing.T) {
 	if first.sessions != sessions || second.sessions != sessions {
 		t.Fatal("provider did not retain the supplied session manager")
 	}
-	other := Provider(nil, nil, nil).New().(*EmailAuthService)
+	if first.Policy.AllowAccount == nil || second.Policy.AllowAccount == nil {
+		t.Fatal("provider did not retain the supplied policy")
+	}
+	other := descriptor.New(auth_services.Dependencies{}).(*EmailAuthService)
 	second.mailClient = nil
 	second.accounts = nil
 	second.sessions = nil
@@ -160,15 +166,15 @@ func TestProviderSuppliesDependencies(t *testing.T) {
 		t.Fatal("provider instances share mutable dependency selection")
 	}
 
-	if first.sessions != sessions || other.sessions != nil {
+	if first.sessions != sessions || other.sessions != nil || other.Policy.AllowAccount != nil {
 		t.Fatal("provider instances share session selection")
 	}
 
 	for _, registered := range auth_services.Registered() {
 		if registered.Name == AuthTypeEmail {
-			provider := registered.New().(*EmailAuthService)
-			if provider.mailClient != nil || provider.accounts != nil || provider.sessions != nil {
-				t.Fatal("application dependencies escaped into the import catalog")
+			provider := registered.New(dependencies).(*EmailAuthService)
+			if provider.mailClient != client || provider.accounts != accounts || provider.sessions != sessions || provider.Policy.AllowAccount == nil {
+				t.Fatal("registered factory ignored application dependencies")
 			}
 			return
 		}
@@ -189,7 +195,7 @@ func TestProviderValidatesSigningKey(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sessions := emailSessions(t, map[string]string{"default": "memory"})
-			service := Provider(&emailAccountRepository{}, sessions, nil).New().(*EmailAuthService)
+			service := Provider().New(auth_services.Dependencies{Accounts: &emailAccountRepository{}, Sessions: sessions}).(*EmailAuthService)
 			// Bypass shared configuration validation to exercise the provider boundary.
 			app := &server.ApplicationServer{ContentManager: content.NewContentManager(), Config: &config.Config{
 				Auth: config.AuthConfig{JwtKey: tc.key, Services: map[string]map[string]string{"email": {"enabled": "true"}}},
@@ -250,7 +256,7 @@ func TestProviderMailRequirements(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			module := auth_services.Module(accounts, sessions, []auth_services.Descriptor{Provider(accounts, sessions, client)}).New()
+			module := auth_services.Module(auth_services.Dependencies{Accounts: accounts, Sessions: sessions, Mail: client}, []auth_services.Descriptor{Provider()}).New()
 			err = module.Init(t.Context(), app)
 			if test.required && !test.supplied {
 				if !errors.Is(err, messaging.ErrMailUnavailable) {
@@ -267,7 +273,7 @@ func TestProviderRequiresSuppliedSessions(t *testing.T) {
 	app := &server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{
 		Services: map[string]map[string]string{"email": {"enabled": "true"}},
 	}}}
-	provider := Provider(&emailAccountRepository{}, nil, nil).New()
+	provider := Provider().New(auth_services.Dependencies{Accounts: &emailAccountRepository{}})
 	err := provider.Init(app)
 	if !errors.Is(err, session.ErrSessionManagerNotFound) {
 		t.Fatalf("initialization error = %v, want missing session manager", err)
@@ -280,7 +286,7 @@ func TestProviderRejectsUnknownOptionsBeforeDependencies(t *testing.T) {
 			app := &server.ApplicationServer{Config: &config.Config{Auth: config.AuthConfig{
 				Services: map[string]map[string]string{"email": {"enabled": "true", option: "secret-option-value"}},
 			}}}
-			provider := Provider(nil, nil, nil).New()
+			provider := Provider().New(auth_services.Dependencies{})
 			err := provider.Init(app)
 			if !errors.Is(err, auth_services.ErrEmailAuthServiceInit) || !strings.Contains(err.Error(), "auth.services.email accepts only the enabled option") || strings.Contains(err.Error(), "secret-option-value") {
 				t.Fatalf("expected safe option error, got %v", err)

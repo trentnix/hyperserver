@@ -2,11 +2,26 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
 )
+
+// FormActionSources validates exact origins for CSP. Wildcards, directives,
+// credentials, and paths are not allowed. This setting never changes CSRF policy.
+func (c HTTPConfig) FormActionSources() ([]string, error) {
+	var sources []string
+	for i, value := range c.FormActionOrigins {
+		origin, err := ParsePublicOrigin(value)
+		if err != nil || origin == nil || strings.ContainsAny(value, ",;*'\" \\\t\r\n") {
+			return nil, fmt.Errorf("http.formActionOrigins[%d] must be an exact HTTP or HTTPS origin", i)
+		}
+		sources = append(sources, origin.String())
+	}
+	return sources, nil
+}
 
 // ParsePublicOrigin validates the public address used for absolute links.
 // An empty value leaves origin selection to the direct-connection fallback.

@@ -26,9 +26,9 @@
   <main class="setup-panel" id="article-content" tabindex="-1">
     {{ if .LayoutData.SetupTitle }}<header><h1>{{ .LayoutData.SetupTitle }}</h1><p>{{ .LayoutData.SetupHelp }}</p></header>{{ end }}
     {{ if .LayoutData.SetupVerificationPending }}
-    <p>Already verified? Log in to continue. If the email is missing or the link expired, log in to request another.</p>
+    <p>Already verified? Sign in to continue. If the email is missing or the link expired, sign in to request another.</p>
     <details class="setup-login"{{ if .LayoutData.SetupLoginOpen }} open{{ end }}>
-      <summary>Log in</summary>
+      <summary>Sign in</summary>
       {{ renderPartial .PartialName . }}
     </details>
     {{ else }}{{ renderPartial .PartialName . }}{{ end }}
@@ -38,6 +38,7 @@
     <div class="page-top">
       <aside class="site-sidebar">
         <header class="site-header" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+          {{ template "blog.signInLink" . }}
           <nav class="header-menu" aria-label="Site links">
             <details class="site-menu-disclosure" open>
               <summary class="menu-toggle text-button" hidden><span aria-hidden="true">☰</span> Menu</summary>
@@ -54,14 +55,13 @@
           <nav class="account-nav" aria-label="Account">
             {{ if .LayoutData.Admin }}<details class="account-menu action-menu" open>
               <summary>Manage</summary>
-              <div class="action-menu-items" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace"><a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media">Media</a></div>
+              <div class="action-menu-items" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace"><a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media">Media</a><a href="/auth/account">Account</a></div>
             </details>{{ end }}
             {{ if .LayoutData.SignedIn }}
             {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
             <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>
             {{ else }}
-            {{ if .LayoutData.ShowLogin }}<a href="/auth/login/email">Log in</a>{{ end }}
-            {{ if .LayoutData.Registration }}<a href="/auth/register/email">Register</a>{{ end }}
+            {{ if .LayoutData.Registration }}<a href="/auth/register">Register</a>{{ end }}
             {{ end }}
           </nav>
         </div>

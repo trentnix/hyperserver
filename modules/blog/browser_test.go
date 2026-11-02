@@ -285,6 +285,19 @@ func TestBrowserAuthStyles(t *testing.T) {
 	}
 }
 
+// TestBrowserAuthChoices checks login and registration controls at each layout.
+func TestBrowserAuthChoices(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check provider choices")
+	}
+	for _, mode := range []string{"auth-choices-both", "auth-choices-google", "auth-choices-register-both", "auth-choices-register-google"} {
+		for _, width := range []string{"320", "1100", "3440"} {
+			t.Run(mode+"/"+width, func(t *testing.T) { testBrowser(t, browser, width, mode) })
+		}
+	}
+}
+
 // TestBrowserMediaCleanup exercises review, cancellation, deletion, and responsive layout.
 func TestBrowserMediaCleanup(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -335,6 +348,18 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	var h *harness
 	if mode == "setup" {
 		h = startHarness(t, harnessConfig(t, 10))
+	} else if strings.HasPrefix(mode, "auth-choices-") {
+		cfg := harnessConfig(t, 10)
+		cfg.Auth.Services["google"] = map[string]string{"enabled": "true", "clientID": "test-client", "clientSecret": "test-secret"}
+		if strings.HasSuffix(mode, "-google") {
+			cfg.Auth.Services["email"]["enabled"] = "false"
+		}
+		h = startHarness(t, cfg)
+		if !strings.Contains(mode, "-register-") {
+			if err := h.blog.access.setup.finish(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+		}
 	} else {
 		h = newHarness(t)
 		h.register(t)
@@ -467,6 +492,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "auth-choices-both", "auth-choices-google", "auth-choices-register-both", "auth-choices-register-google":
+		scriptFile = "testdata/auth-choices.js"
 	case "accessibility":
 		scriptFile = "testdata/accessibility.js"
 	case "setup":
@@ -582,7 +609,13 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	ready := make(chan struct{})
 	var readyOnce sync.Once
 	pagePath := "/auth/login/email"
-	if mode == "setup" {
+	if strings.HasPrefix(mode, "auth-choices-") {
+		pagePath = "/auth/login"
+		if strings.Contains(mode, "-register-") {
+			pagePath = "/auth/register"
+		}
+		pagePath += "?email=" + fmt.Sprint(strings.HasSuffix(mode, "-both"))
+	} else if mode == "setup" {
 		pagePath = "/"
 	} else if mode == "layout" || mode == "fonts" {
 		pagePath += "?test-layout=1&amp;test-width=" + width
@@ -633,6 +666,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><rect width="100%%" height="100%%" fill="#4477aa"/></svg>`, size[0], size[1])
 			return
 		case "/test/viewport":
+			if mode == "navigation" {
+				http.SetCookie(w, &http.Cookie{Name: returningUserCookie, Value: "1", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+			}
 			// Firefox limits ordinary windows to 500px. An iframe gives each
 			// flow an exact viewport, including narrow mobile sizes.
 			w.Header().Set("Content-Type", "text/html")

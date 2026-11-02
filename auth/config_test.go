@@ -17,7 +17,7 @@ func (s configTestAuthService) AuthType() string { return s.name }
 
 func TestValidateAuthConfig(t *testing.T) {
 	// A custom imported provider must work without adding its name to the loader.
-	descriptors := []Descriptor{{Name: "custom", New: func() AuthService { return configTestAuthService{name: "custom"} }}}
+	descriptors := []Descriptor{{Name: "custom", New: func(_ Dependencies) AuthService { return configTestAuthService{name: "custom"} }}}
 	for _, tc := range []struct {
 		name   string
 		change func(*config.Config)
@@ -52,8 +52,8 @@ func TestValidateAuthConfigRejectsDuplicateRegistrations(t *testing.T) {
 	for _, name := range []string{"custom", "CUSTOM"} {
 		t.Run(name, func(t *testing.T) {
 			descriptors := []Descriptor{
-				{Name: "custom", New: func() AuthService { return configTestAuthService{name: "custom"} }},
-				{Name: name, New: func() AuthService { return configTestAuthService{name: name} }},
+				{Name: "custom", New: func(_ Dependencies) AuthService { return configTestAuthService{name: "custom"} }},
+				{Name: name, New: func(_ Dependencies) AuthService { return configTestAuthService{name: name} }},
 			}
 			c := &config.Config{Auth: config.AuthConfig{
 				Enabled:                     true,

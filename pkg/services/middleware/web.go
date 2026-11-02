@@ -18,8 +18,16 @@ func Web(handler http.Handler, cfg config.HTTPConfig, contentSecurityPolicy stri
 	if handler == nil {
 		return nil, errors.New("HTTP middleware requires a handler")
 	}
+	sources, err := cfg.FormActionSources()
+	if err != nil {
+		return nil, err
+	}
+	contentSecurityPolicy, err = withFormActionOrigins(contentSecurityPolicy, sources)
+	if err != nil {
+		return nil, err
+	}
 	handler = http.NewCrossOriginProtection().Handler(handler)
-	handler, err := FromConfig(handler, cfg)
+	handler, err = FromConfig(handler, cfg)
 	if err != nil {
 		return nil, err
 	}

@@ -63,6 +63,12 @@
                 </div>
             {{ end }}
         </form>
+        {{ if .Alternatives }}
+        <div class="auth-alternatives" aria-label="Other ways to register">
+            <p>Or sign up with</p>
+            {{ range .Alternatives }}{{ . }}{{ end }}
+        </div>
+        {{ end }}
     </div>
     {{ else }}
         <div>Unable to display registration details.</div>

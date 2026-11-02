@@ -52,12 +52,11 @@ func TestSiteAssembly(t *testing.T) {
 		if m == another || m.settings == another.settings {
 			t.Fatal("descriptor reused a module instance or its settings")
 		}
-		provider := site.EmailProvider(app)
-		email := provider.New().(*EmailProvider)
-		if email == provider.New().(*EmailProvider) {
-			t.Fatal("descriptor reused an authentication provider")
+		policy := site.AuthenticationPolicy()
+		if policy.AllowAccount == nil || policy.BeforeRegister == nil || policy.AfterLogin == nil {
+			t.Fatal("site omitted authentication policy")
 		}
-		if descriptor.Name != "blog" || provider.Name != "email" || email.access != m.access || m.profile != &site.profile || m.site != site {
+		if descriptor.Name != "blog" || m.access != &site.access || m.profile != &site.profile || m.site != site {
 			t.Fatal("site did not share its own state with its descriptors")
 		}
 		m.profile.value = Profile{Name: "Shared profile"}

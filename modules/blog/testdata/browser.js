@@ -270,7 +270,7 @@ document.removeEventListener = function(type, callback, options) {
       }
       const email = document.querySelector('#email');
       const password = document.querySelector('#password');
-      assert(!document.querySelector('a[href="/auth/register/email"]'), 'Registered administrator must not see a registration link.');
+      assert(!document.querySelector('a[href="/auth/register"]'), 'Registered administrator must not see a registration link.');
       assert(email && password, 'Missing login controls.');
       const formWidth = document.querySelector('#login-form').getBoundingClientRect().width;
       const availableWidth = article.width - parseFloat(articleStyle.paddingLeft) - parseFloat(articleStyle.paddingRight);

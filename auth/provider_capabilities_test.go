@@ -171,10 +171,10 @@ func TestProviderChoicesMatchCapabilities(t *testing.T) {
 		wantStatus   int
 		want         string
 	}{
-		{"single login", []AuthService{login, registration}, false, 200, `hx-get="/auth/login/login-only"`},
+		{"single login", []AuthService{login, registration}, false, 204, ""},
 		{"multiple logins", []AuthService{login, otherLogin, registration}, false, 200, "login-choice"},
 		{"no login", []AuthService{registration}, false, 404, "404 page not found"},
-		{"single registration", []AuthService{login, registration}, true, 200, `hx-get="/auth/register/registration-only"`},
+		{"single registration", []AuthService{login, registration}, true, 204, ""},
 		{"multiple registrations", []AuthService{login, registration, otherRegistration}, true, 200, "register-choice"},
 		{"no registration", []AuthService{login}, true, 403, "Registration is not available."},
 		{"no providers", nil, true, 403, "Registration is not available."},

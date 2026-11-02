@@ -69,6 +69,11 @@ func TestInitialRecentPosts(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "Recent posts are unavailable.") || strings.Contains(w.Body.String(), "No posts yet.") || strings.Contains(w.Body.String(), "private database") {
 		t.Fatal("recent navigation failure must be explicit without breaking the login page or exposing storage details")
 	}
+	if strings.Contains(w.Body.String(), "reader-search-form") {
+		t.Fatal("login must omit site search even when recent posts fail")
+	}
+	w = h.request(http.MethodGet, "/about", nil, false)
+	requireStatus(t, w, http.StatusOK)
 	if strings.Count(w.Body.String(), `role="search" method="get" action="/search"`) != 2 {
 		t.Fatal("search must remain available in all responsive placements when recent posts fail")
 	}
@@ -265,7 +270,7 @@ func TestRecentHandlerCache(t *testing.T) {
 			if !strings.Contains(body, "One &lt;post&gt;") {
 				t.Fatal("missing escaped post title")
 			}
-			if strings.Contains(body, `href="/auth/login/email">Log in</a>`) != (i == 2) {
+			if strings.Contains(body, `href="/auth/login">Sign in</a>`) != (i == 2) {
 				t.Fatal("cached metadata interfered with request-specific navigation")
 			}
 		}

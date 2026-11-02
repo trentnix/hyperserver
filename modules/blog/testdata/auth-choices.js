@@ -1,0 +1,71 @@
+// Check login and registration controls without sending a browser to Google.
+(async () => {
+  await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once: true}));
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  try {
+    await document.fonts.ready;
+    const email = new URLSearchParams(location.search).get('email') === 'true';
+    const registering = location.pathname === '/auth/register';
+    const flow = registering ? 'register' : 'login';
+    const form = document.querySelector('#' + flow + '-form');
+    assert(!!form === email, 'Email visibility does not match configuration.');
+    const googleSelector = 'form[action="/auth/' + flow + '/google"]';
+    const google = document.querySelector(googleSelector);
+    assert(google && google.method === 'post', 'Google sign-in control missing.');
+    assert(google.getAttribute('hx-boost') === 'false', 'Google must use full browser navigation.');
+    const button = google.querySelector('button');
+    assert(button.textContent.trim() === (registering ? 'Sign up with Google' : 'Sign in with Google'), 'Google button has the wrong label.');
+    const icon = button.querySelector('img');
+    assert(icon && icon.getAttribute('alt') === '', 'Google button needs a decorative brand icon.');
+    await icon.decode();
+    assert(icon.naturalWidth > 0, 'Google icon failed to load.');
+    assert(getComputedStyle(button).backgroundColor === 'rgb(255, 255, 255)', 'Google button should use the light brand style.');
+    assert(getComputedStyle(button).display === 'flex', 'Google icon and label should share a row.');
+    const bounds = button.getBoundingClientRect();
+    assert(bounds.height >= 44 && bounds.width >= 120, 'Google button is too small for touch.');
+    assert(bounds.left >= 0 && bounds.right <= innerWidth, 'Google button overflows.');
+    assert(document.documentElement.scrollWidth <= innerWidth, 'Login causes horizontal scrolling.');
+    if (!email && !registering) {
+      const panel = google.closest('.auth-provider');
+      const panelBounds = panel.getBoundingClientRect();
+      const heading = panel.querySelector('h1').getBoundingClientRect();
+      assert(panelBounds.width <= 400, 'Standalone login panel is too wide.');
+      assert(panel.querySelector('h1').textContent === 'Welcome back', 'Login should have a welcoming heading rather than repeating the button.');
+      assert(panel.querySelector('.auth-introduction').textContent.includes('manage your site'), 'Login should explain its purpose.');
+      assert(bounds.top - heading.bottom >= 18, 'Login heading crowds the Google button.');
+      assert(bounds.bottom <= panelBounds.bottom - 20, 'Login panel needs space below its button.');
+      assert(bounds.height <= 48, 'Google button wraps in the compact panel.');
+      if (innerWidth >= 768 && innerWidth < 1680) {
+        const article = document.querySelector('#article-content').getBoundingClientRect();
+        assert(Math.abs((panelBounds.left + panelBounds.right) / 2 - (article.left + article.right) / 2) < 1, 'Login panel should be centered at medium widths.');
+      }
+    }
+    if (registering) {
+      const panel = document.querySelector('.setup-panel');
+      assert(panel, 'Registration should exercise the onboarding layout.');
+      assert(panel.getBoundingClientRect().height <= 640, 'Setup has excessive vertical spacing.');
+      if (form) {
+        for (const control of form.querySelectorAll('input:not([type=hidden]), button')) {
+          assert(control.getBoundingClientRect().height >= 44, 'Compact setup controls must remain touch-friendly.');
+        }
+        assert(parseFloat(getComputedStyle(form.querySelector('label[for=password]')).marginTop) <= 16, 'Setup field spacing is too large.');
+        const headingBottom = panel.querySelector('header').getBoundingClientRect().bottom;
+        assert(form.querySelector('label').getBoundingClientRect().top - headingBottom <= 24, 'Too much space above the registration fields.');
+      }
+    }
+    if (email) {
+      assert(!form.contains(google), 'Google form must not be nested inside the email form.');
+      const formBounds = form.getBoundingClientRect();
+      assert(Math.abs(formBounds.left - bounds.left) < 1, 'Login methods are misaligned.');
+      assert(Math.abs(formBounds.width - bounds.width) < 1, 'Login methods have inconsistent widths.');
+      form.elements.email.value = registering ? 'invalid' : 'trentnix@gmail.com';
+      form.elements.password.value = 'invalid';
+      const response = await fetch(form.action, {method: 'POST', body: new URLSearchParams(new FormData(form)), headers: {'HX-Request': 'true'}});
+      const fragment = new DOMParser().parseFromString(await response.text(), 'text/html');
+      assert(fragment.querySelector(googleSelector), 'Validation removes the Google alternative.');
+    }
+    await fetch('/test/result', {method: 'POST', body: 'PASS'});
+  } catch (error) {
+    await fetch('/test/result', {method: 'POST', body: String(error.stack || error)});
+  }
+})();

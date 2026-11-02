@@ -22,17 +22,18 @@ type (
 
 	// HTTPConfig stores HTTP configuration
 	HTTPConfig struct {
-		PublicOrigin     string          // Address for absolute links. Required with trusted proxies.
-		TrustedProxies   []string        // Direct proxy peer CIDRs. Empty trusts no forwarding headers.
-		HSTSMaxAge       int64           // HTTPS-only HSTS lifetime in seconds. Zero disables the header.
-		ListenHost       string          // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
-		Port             uint16          // Listener port. Zero requests an ephemeral port but cannot supply fallback links.
-		ReadTimeout      time.Duration   // Maximum time to read a request, including its body.
-		WriteTimeout     time.Duration   // Maximum time to write a response.
-		IdleTimeout      time.Duration   // Maximum wait for another request on a keep-alive connection.
-		ShutdownTimeout  *time.Duration  // HTTP request-drain budget. Nil defaults to 10s. If set, must be positive.
-		DefaultRateLimit RateLimitConfig // Inherited per-route policy. Module and handler policies replace it.
-		SharedRateLimit  RateLimitConfig // Optional aggregate per-client budget. Route overrides do not bypass it.
+		PublicOrigin      string          // Address for absolute links. Required with trusted proxies.
+		FormActionOrigins []string        // Explicit additional CSP form destinations, including external login redirects.
+		TrustedProxies    []string        // Direct proxy peer CIDRs. Empty trusts no forwarding headers.
+		HSTSMaxAge        int64           // HTTPS-only HSTS lifetime in seconds. Zero disables the header.
+		ListenHost        string          // Host or unbracketed IP address. Empty defaults to 127.0.0.1.
+		Port              uint16          // Listener port. Zero requests an ephemeral port but cannot supply fallback links.
+		ReadTimeout       time.Duration   // Maximum time to read a request, including its body.
+		WriteTimeout      time.Duration   // Maximum time to write a response.
+		IdleTimeout       time.Duration   // Maximum wait for another request on a keep-alive connection.
+		ShutdownTimeout   *time.Duration  // HTTP request-drain budget. Nil defaults to 10s. If set, must be positive.
+		DefaultRateLimit  RateLimitConfig // Inherited per-route policy. Module and handler policies replace it.
+		SharedRateLimit   RateLimitConfig // Optional aggregate per-client budget. Route overrides do not bypass it.
 		// TLS enables direct HTTPS using a PEM certificate and private key.
 		TLS struct {
 			Enabled     bool

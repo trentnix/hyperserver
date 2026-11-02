@@ -14,7 +14,7 @@
     assert(expected.maxWidth === '440px', 'Auth fields must stay comfortably bounded.');
     for (const hx of [false, true]) {
       for (const [path, selector] of [
-        ['/auth/login/email', '#login-form'],
+        ['/auth/login', '#login-form'],
         ['/auth/reset/request/email', '#reset-request-form'],
         [__RESET_URL__, '#reset-password-form']
       ]) {
@@ -24,8 +24,8 @@
         const form = document.querySelector(selector);
         assert(form, 'Auth form missing: ' + selector);
         if (selector === '#login-form') {
-          assert(!document.querySelector('.account-nav a[href="/auth/login/email"]'), 'Login must not appear in the top panel on auth forms.');
-          const links = document.querySelectorAll('a[href="/auth/login/email"]');
+          assert(!document.querySelector('.account-nav a[href="/auth/login"]'), 'Login must not appear in the top panel on auth forms.');
+          const links = document.querySelectorAll('a[href="/auth/login"]');
           assert(links.length === 0, 'Login must not link to itself.');
         }
         article.replaceChildren(form);

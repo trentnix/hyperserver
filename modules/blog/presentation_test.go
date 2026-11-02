@@ -152,3 +152,37 @@ func TestReaderSearchSwaps(t *testing.T) {
 		t.Fatal("media chooser must not change shell search")
 	}
 }
+
+func TestAuthenticationPagesOmitReaderSearch(t *testing.T) {
+	cfg := harnessConfig(t, 10)
+	cfg.Auth.Services["google"] = map[string]string{"enabled": "true", "clientID": "test-client", "clientSecret": "test-secret"}
+	h := startHarness(t, cfg)
+	// Exercise the normal site shell, not the separate onboarding layout.
+	if err := h.blog.access.setup.finish(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/auth/login", "/auth/login/email", "/auth/login/google", "/auth/register", "/auth/register/email", "/auth/register/google", "/auth/reset/request/email", "/"} {
+		for _, mode := range []string{"page", "fragment", "history"} {
+			t.Run(path+"/"+mode, func(t *testing.T) {
+				r := httptest.NewRequest(http.MethodGet, path, nil)
+				if mode != "page" {
+					r.Header.Set("HX-Request", "true")
+					r.Header.Set("HX-Target", "article-content")
+				}
+				if mode == "history" {
+					r.Header.Set("HX-History-Restore-Request", "true")
+				}
+				w := httptest.NewRecorder()
+				h.app.Handler.ServeHTTP(w, r)
+				requireStatus(t, w, http.StatusOK)
+				body := w.Body.String()
+				if strings.Contains(body, "reader-search-form") != (path == "/") {
+					t.Fatal("incorrect reader search visibility", body)
+				}
+				if mode != "page" && !strings.Contains(body, `hx-swap-oob="innerHTML:[data-reader-search-slot]"`) {
+					t.Fatal("navigation must update existing search slots")
+				}
+			})
+		}
+	}
+}

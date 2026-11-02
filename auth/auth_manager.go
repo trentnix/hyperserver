@@ -29,6 +29,7 @@ const messageTemplate = "templates/html/pages/message.html"
 type AuthManager struct {
 	Enabled  bool
 	Services *Registry
+	Policy   Policy
 
 	accounts       user.AccountRepository
 	sessions       *session.SessionManager
@@ -94,14 +95,15 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 func (a *AuthManager) prepareTemplates() error {
 	prepared := make(map[string]*content.Templates)
 	for _, name := range []string{
-		authLoginDefaultTemplate,
+		accountTemplate,
 		authLoginSelectionTemplate,
-		authRegisterDefaultTemplate,
 		authRegisterSelectionTemplate,
 		authVerifyTemplate,
 		"templates/html/pages/verification-request.html",
 	} {
-		templates, err := content.PrepareTemplates(a.contentManager, content.TemplatePath{FS: authModuleTemplatesFS, Path: name})
+		templates, err := content.PrepareTemplates(a.contentManager,
+			content.TemplatePath{FS: authModuleTemplatesFS, Path: "templates/html/pages/provider.html"},
+			content.TemplatePath{FS: authModuleTemplatesFS, Path: name})
 		if err != nil {
 			return fmt.Errorf("prepare auth template %s: %w", name, err)
 		}
@@ -133,6 +135,12 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		mux.Handle("GET "+authEndpoint, anonymous(http.HandlerFunc(a.GetLogin)))
 		mux.Handle("GET /auth/login/{authType}", anonymous(http.HandlerFunc(a.GetLoginService)))
 		mutations.Handle("POST /auth/login/{authType}", anonymous(http.HandlerFunc(a.Login)))
+		for _, provider := range a.Services.Services() {
+			if _, ok := provider.(LoginCallbackHandler); ok {
+				mutations.Handle("GET /auth/callback/{authType}", noStore(http.HandlerFunc(a.Callback)))
+				break
+			}
+		}
 		mux.WithoutRateLimit().Handle("POST /auth/logout", noStore(http.HandlerFunc(a.Logout)))
 
 		// register
@@ -157,9 +165,21 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		mux.Handle("GET /auth/reset/{authType}", anonymous(http.HandlerFunc(a.GetReset)))
 		mutations.Handle("POST /auth/reset/{authType}", anonymous(http.HandlerFunc(a.Reset)))
 
-		// change change credentials
+		// account management
+		mux.Handle("GET /auth/account", authenticated(http.HandlerFunc(a.GetAccount)))
 		mux.Handle("GET /auth/change/{authType}", authenticated(http.HandlerFunc(a.GetChange)))
 		mutations.Handle("POST /auth/change/{authType}", authenticated(http.HandlerFunc(a.Change)))
+
+		for _, provider := range a.Services.Services() {
+			if binder, ok := provider.(ProviderRoutes); ok {
+				if err := binder.Routes(mux, mutations); err != nil {
+					return fmt.Errorf("register auth service %q routes: %w", provider.AuthType(), err)
+				}
+				if err := mux.Err(); err != nil {
+					return fmt.Errorf("register auth service %q routes: %w", provider.AuthType(), err)
+				}
+			}
+		}
 	}
 	return mux.Err()
 }

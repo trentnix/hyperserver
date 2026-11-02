@@ -10,29 +10,30 @@ import (
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
-	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // ModuleName identifies authentication in the module catalog.
 const ModuleName = "auth"
 
-// Module supplies the manager's accounts, sessions, and an explicit provider catalog.
-// Configure provider dependencies through their own factories. Each instance
+// Module supplies shared dependencies, application policy, and a provider catalog.
+// Each enabled provider factory receives those dependencies. Each instance
 // owns its manager and enabled providers. An empty catalog does not use imports.
 // Required account, session, mail, and rendering services must be ready before Init.
 // Providers only configure themselves. Application setup owns service cleanup
 // after failed startup or after HTTP requests drain, not the auth module.
-func Module(accounts user.AccountRepository, sessions *session.SessionManager, providers []Descriptor) handlers.Descriptor {
+func Module(dependencies Dependencies, providers []Descriptor) handlers.Descriptor {
 	providers = slices.Clone(providers)
 	return handlers.Descriptor{Name: ModuleName, New: func() handlers.Handler {
-		return &module{manager: NewAuthManager(accounts, sessions), providers: providers}
+		manager := NewAuthManager(dependencies.Accounts, dependencies.Sessions)
+		manager.Policy = dependencies.Policy
+		return &module{manager: manager, providers: providers, dependencies: dependencies}
 	}}
 }
 
 type module struct {
-	manager   *AuthManager
-	providers []Descriptor
+	manager      *AuthManager
+	providers    []Descriptor
+	dependencies Dependencies
 }
 
 func init() {
@@ -44,7 +45,7 @@ func init() {
 }
 
 func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error {
-	registry, err := NewRegistry(app.Config, m.providers)
+	registry, err := NewRegistry(app.Config, m.providers, m.dependencies)
 	if err != nil {
 		return err
 	}
@@ -79,20 +80,5 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 }
 
 func (m *module) Routes(routes *routing.Routes) error {
-	if err := m.manager.Routes(routes); err != nil {
-		return err
-	}
-	for _, provider := range m.manager.Services.Services() {
-		binder, ok := provider.(ProviderRoutes)
-		if !ok {
-			continue
-		}
-		if err := binder.Routes(routes); err != nil {
-			return fmt.Errorf("register auth service %q routes: %w", provider.AuthType(), err)
-		}
-		if err := routes.Err(); err != nil {
-			return fmt.Errorf("register auth service %q routes: %w", provider.AuthType(), err)
-		}
-	}
-	return routes.Err()
+	return m.manager.Routes(routes)
 }

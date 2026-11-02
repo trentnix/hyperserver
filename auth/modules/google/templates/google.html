@@ -1,0 +1,16 @@
+{{ define "auth.google.account" }}
+<section id="login" class="auth-provider">
+  <h1>Google login</h1>
+  {{ if .Data.Connected }}
+  <p>Google is connected. You can use it to log in.</p>
+  {{ else }}
+  <p>Connect your Google account to use it as another way to log in. Your existing login method stays available.</p>
+  <form method="post" action="/auth/link/google" hx-boost="false" class="auth-provider-button">
+    <button type="submit" class="auth-google-button">{{ template "auth.google.icon" }}Connect Google account</button>
+  </form>
+  {{ end }}
+  <p><a href="/auth/account">Back to Account</a></p>
+</section>
+{{ end }}
+
+{{ define "auth.google.icon" }}<img src="/auth/google/icon.png" alt="" width="20" height="20">{{ end }}

@@ -17,6 +17,8 @@ openssl rand -hex 32
 
 Put the two different generated values in `http.session.jwtKey` and `auth.jwtKey`. Set `adminEmail` in `modules/blog/config.yaml` before starting. Only that address can register or log in. The supplied configuration requires email verification before administrative access.
 
+You can enable [Google authentication](../google-authentication.md) alongside email or on its own. The login page shows only enabled providers. Existing administrators must log in and connect Google before disabling their original login method.
+
 If a local SMTP inbox is not already running, start Mailpit:
 
 ```sh

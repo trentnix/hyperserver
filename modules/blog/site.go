@@ -4,19 +4,20 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
 // Site assembles one application's blog module, rendering, and administrator-only
-// email provider. Its zero value is ready to configure. Create one Site per
+// authentication policy. Its zero value is ready to configure. Create one Site per
 // application and do not copy it. Assembly methods run during startup, before
 // requests are accepted. The application still selects services and modules.
 type Site struct {
 	access     Access
 	profile    ProfileState
 	configured bool
+	content    *contentservice.ContentManagerService
 
 	// Module initialization supplies navigation after its storage opens.
 	populateNavigation func(*http.Request, navigation) navigation
@@ -37,18 +38,9 @@ func (s *Site) Configure(app *application.Application) (handlers.Descriptor, err
 		return handlers.Descriptor{}, err
 	}
 	s.configured = true
+	s.content = app.ContentManager
 	accounts := app.Accounts
 	return handlers.Descriptor{Name: "blog", New: func() handlers.Handler {
 		return &module{settings: &Settings{}, access: &s.access, profile: &s.profile, accounts: accounts, site: s}
 	}}, nil
-}
-
-// EmailProvider returns the administrator-only provider for
-// application.Options.AuthProviders. Select auth.Module separately to enable
-// authentication. Services remain owned by the application.
-func (s *Site) EmailProvider(app *application.Application) auth.Descriptor {
-	accounts, sessions, mail := app.Accounts, app.Sessions, app.Mail
-	return auth.Descriptor{Name: "email", New: func() auth.AuthService {
-		return NewEmailProvider(accounts, sessions, mail, &s.access)
-	}}
 }

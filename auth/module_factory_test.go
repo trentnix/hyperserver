@@ -11,7 +11,7 @@ import (
 func TestModuleSuppliesServicesWithoutChangingCatalog(t *testing.T) {
 	accounts := &struct{ user.AccountRepository }{}
 	sessions := new(session.SessionManager)
-	descriptor := Module(accounts, sessions, nil)
+	descriptor := Module(Dependencies{Accounts: accounts, Sessions: sessions}, nil)
 	if descriptor.Name != ModuleName {
 		t.Fatalf("module name = %q, want %q", descriptor.Name, ModuleName)
 	}
@@ -24,7 +24,7 @@ func TestModuleSuppliesServicesWithoutChangingCatalog(t *testing.T) {
 	}
 	otherAccounts := &struct{ user.AccountRepository }{}
 	otherSessions := new(session.SessionManager)
-	other := Module(otherAccounts, otherSessions, nil).New().(*module)
+	other := Module(Dependencies{Accounts: otherAccounts, Sessions: otherSessions}, nil).New().(*module)
 	if other.manager.accounts != otherAccounts || first.manager.accounts != accounts || other.manager.sessions != otherSessions || first.manager.sessions != sessions {
 		t.Fatal("one application's selection changed another application's services")
 	}

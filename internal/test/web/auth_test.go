@@ -61,10 +61,10 @@ func TestHTTPLoginOnlyProvider(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				providers := []auth.Descriptor{{Name: "login-only", New: func() auth.AuthService {
+				providers := []auth.Descriptor{{Name: "login-only", New: func(_ auth.Dependencies) auth.AuthService {
 					return &loginOnlyHTTPProvider{accounts: h.accounts}
 				}}}
-				return handlers.Replace(modules, auth.Module(h.accounts, h.sessions, providers))
+				return handlers.Replace(modules, auth.Module(auth.Dependencies{Accounts: h.accounts, Sessions: h.sessions}, providers))
 			}
 			runSiteScenarioWithCatalog(t, catalog, func(h *httpHarness) {
 				account := &user.User{Email: "login-only@example.invalid", RegistrationAuthType: "login-only", Verified: true}
@@ -73,7 +73,7 @@ func TestHTTPLoginOnlyProvider(t *testing.T) {
 				}
 
 				w := h.request(http.MethodGet, "/auth/login", nil, htmx)
-				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `hx-get="/auth/login/login-only"`) {
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Login-only provider form") {
 					t.Fatalf("login selection = %d %s", w.Code, w.Body.String())
 				}
 				w = h.request(http.MethodGet, "/auth/login/login-only", nil, htmx)

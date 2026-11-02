@@ -1,14 +1,22 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"html/template"
 	"net/http"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+// LoginAvailable reports whether the account has password credentials.
+func (*EmailAuthService) LoginAvailable(_ context.Context, account *user.User) (bool, error) {
+	return account.Password != "", nil
+}
 
 const (
 	emailLoginFormTemplate       = "templates/html/partials/login-form.html"
@@ -19,8 +27,9 @@ const (
 
 // LoginForm defines the fields used when logging in via email/password
 type LoginForm struct {
-	Email    string
-	Password string
+	Email        string
+	Password     string
+	Alternatives []template.HTML
 
 	form.Form
 }
@@ -43,9 +52,14 @@ func (a *EmailAuthService) GetLoginButton() template.HTML {
 	return a.loginButton
 }
 
+// GetLoginForm renders email credentials alongside other enabled providers.
+func (a *EmailAuthService) GetLoginForm(w http.ResponseWriter, r *http.Request) {
+	a.GetLogin(w, r)
+}
+
 // GetLogin serves the login form
 func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
-	loginForm := &LoginForm{}
+	loginForm := &LoginForm{Alternatives: auth.LoginAlternatives(r)}
 	loginForm.ActionUrl = emailLoginPath
 	login := a.views[emailLoginFormPartial].Content(r, loginForm)
 
@@ -66,8 +80,13 @@ func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
 
 // Login validates credentials and renders failures. The auth manager establishes
 // the session and redirects after a successful login.
-func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.User {
-	loginForm := &LoginForm{}
+func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) (account *user.User) {
+	defer func() {
+		if account == nil {
+			logger.Audit(r.Context(), "login", "rejected")
+		}
+	}()
+	loginForm := &LoginForm{Alternatives: auth.LoginAlternatives(r)}
 	loginForm.ActionUrl = emailLoginPath
 	login := a.views[emailLoginFormPartial].Content(r, loginForm)
 
@@ -77,6 +96,9 @@ func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) *user.U
 		return nil
 	}
 
+	if !a.Policy.Admit(w, r, loginForm.Email, a.contentManager) {
+		return nil
+	}
 	u, err := a.authenticate(r.Context(), loginForm.Email, loginForm.Password)
 	if errors.Is(err, errInvalidCredentials) {
 		form.HandleFormError(w, r, login, loginForm, "Invalid login/password", nil)

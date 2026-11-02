@@ -1,0 +1,12 @@
+{{ define "auth.page.account" }}
+<section class="auth-account" aria-labelledby="account-title">
+  <h1 id="account-title">Account</h1>
+  <p>Signed in as <strong>{{ .Data.Email }}</strong>.</p>
+  {{ if .Data.Actions }}
+  <p>Manage how you log in to this site.</p>
+  <div class="auth-options">
+    {{ range .Data.Actions }}<a class="button-secondary" href="{{ .URL }}">{{ .Label }}</a>{{ end }}
+  </div>
+  {{ else }}<p>No account controls are available for your login method.</p>{{ end }}
+</section>
+{{ end }}

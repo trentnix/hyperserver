@@ -9,7 +9,7 @@ import (
 func TestConfigClone(t *testing.T) {
 	timeout := time.Minute
 	original := Config{
-		HTTP: HTTPConfig{PublicOrigin: "https://example.com", TrustedProxies: []string{"127.0.0.1/32"}, ShutdownTimeout: &timeout},
+		HTTP: HTTPConfig{PublicOrigin: "https://example.com", TrustedProxies: []string{"127.0.0.1/32"}, FormActionOrigins: []string{"https://login.example"}, ShutdownTimeout: &timeout},
 		Auth: AuthConfig{
 			Services:       map[string]map[string]string{"email": {"enabled": "true"}, "unset": nil},
 			AccountStorage: AccountStorageConfig{Provider: "custom", Options: map[string]string{"bucket": "users"}},
@@ -25,6 +25,7 @@ func TestConfigClone(t *testing.T) {
 		"shutdown timeout":         func(c *Config) { *c.HTTP.ShutdownTimeout = time.Second },
 		"scalar":                   func(c *Config) { c.App.Name = "changed" },
 		"proxy slice":              func(c *Config) { c.HTTP.TrustedProxies[0] = "192.0.2.0/24" },
+		"form-action origins":      func(c *Config) { c.HTTP.FormActionOrigins[0] = "https://other.example" },
 		"session mapping":          func(c *Config) { c.HTTP.Session.Types["default"] = "sqliteStore" },
 		"session provider options": func(c *Config) { c.HTTP.Session.Stores["cookieStore"]["enabled"] = "false" },
 		"session provider map":     func(c *Config) { delete(c.HTTP.Session.Stores, "cookieStore") },

@@ -13,7 +13,7 @@ import (
 func versionedAccountTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db := unpreparedUserTestDB(t)
-	if _, err := db.ExecContext(t.Context(), accountVersionSchema+`; INSERT INTO hyperserver_account_version (version, dirty) VALUES (1, false)`); err != nil {
+	if _, err := db.ExecContext(t.Context(), accountVersionSchema+`; INSERT INTO hyperserver_account_version (version, dirty) VALUES (2, false);`+accountSchemaV2); err != nil {
 		t.Fatal(err)
 	}
 	return db

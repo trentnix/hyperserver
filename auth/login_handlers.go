@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"html/template"
 	"net/http"
@@ -16,9 +17,7 @@ import (
 
 const (
 	authLoginSelectionTemplate = "templates/html/pages/login-selection.html"
-	authLoginDefaultTemplate   = "templates/html/pages/login-default.html"
 	authLoginSelectionPartial  = "auth.page.login.selection"
-	authLoginDefaultPartial    = "auth.page.login.default"
 	authEndpoint               = "/auth/login"
 )
 
@@ -26,34 +25,33 @@ const (
 // to the application. If there is only a single authentication option, the user is
 // sent directly to the login page of that authentication service.
 func (a *AuthManager) GetLogin(w http.ResponseWriter, r *http.Request) {
-	c := content.NewManagedContent(r, a.contentManager)
-
-	var loginHTML []template.HTML
-
-	var authServices []LoginHandler
-	for _, service := range a.Services.Services() {
-		if handler, ok := service.(LoginHandler); ok {
-			authServices = append(authServices, handler)
-		}
+	authServices, err := a.loginChoices(r.Context())
+	if err != nil {
+		a.contentManager.HandleError(w, r, "Login options are temporarily unavailable. Please try again.", err, http.StatusServiceUnavailable)
+		return
 	}
 	if len(authServices) == 0 {
 		http.NotFound(w, r)
 		return
 	}
 	if len(authServices) == 1 {
-		// there is only 1 auth service - display the default
-		c.PartialName = authLoginDefaultPartial
-		c.Templates = a.templates[authLoginDefaultTemplate]
-		c.Data = "/auth/login/" + authServices[0].AuthType()
-	} else {
-		c.PartialName = authLoginSelectionPartial
-		for _, service := range authServices {
-			loginHTML = append(loginHTML, service.GetLoginButton())
-		}
-
-		c.Templates = a.templates[authLoginSelectionTemplate]
-		c.Data = loginHTML
+		authServices[0].GetLogin(w, withLoginAlternatives(r, authServices[0].AuthType(), authServices))
+		return
 	}
+	for _, provider := range authServices {
+		if form, ok := provider.(LoginFormHandler); ok {
+			form.GetLoginForm(w, withLoginAlternatives(r, provider.AuthType(), authServices))
+			return
+		}
+	}
+	var loginHTML []template.HTML
+	for _, service := range authServices {
+		loginHTML = append(loginHTML, service.GetLoginButton())
+	}
+	c := content.NewManagedContent(r, a.contentManager)
+	c.PartialName = authLoginSelectionPartial
+	c.Templates = a.templates[authLoginSelectionTemplate]
+	c.Data = ProviderPage{Workflow: "login", Title: "Sign in", Controls: loginHTML}
 
 	if err := c.Render(w, r); err != nil {
 		c.HandleRenderError(w, r, "could not render the login page", err)
@@ -81,7 +79,7 @@ func (a *AuthManager) GetSpecificLoginService(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	authService.GetLogin(w, r)
+	authService.GetLogin(w, a.prepareLoginRequest(r, authType))
 }
 
 // Login starts the login process for the given AuthService (specified by authType)
@@ -98,9 +96,30 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r = a.prepareLoginRequest(r, authType)
 	u := authService.Login(w, r)
 	if u == nil {
-		logger.Audit(r.Context(), "login", "rejected")
+		return
+	}
+	a.completeLogin(w, r, u)
+}
+
+// Callback passes validated external credentials through the shared session flow.
+func (a *AuthManager) Callback(w http.ResponseWriter, r *http.Request) {
+	provider, ok := a.getAuthService(r.PathValue("authType")).(LoginCallbackHandler)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	u := provider.Callback(w, r)
+	if u != nil {
+		a.completeLogin(w, r, u)
+	}
+}
+
+// completeLogin establishes the same session and redirect for every provider.
+func (a *AuthManager) completeLogin(w http.ResponseWriter, r *http.Request, u *user.User) {
+	if !a.Policy.Admit(w, r, u.Email, a.contentManager) {
 		return
 	}
 
@@ -127,6 +146,9 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 
 	logger.Audit(r.Context(), "login", "succeeded")
 	r = user.AddUserToRequestContext(r, u)
+	if a.Policy.AfterLogin != nil {
+		a.Policy.AfterLogin(w, r, u)
+	}
 	err = flash.AddSuccessNotification(w, r, "You have been successfully logged in")
 	if err != nil {
 		logger.LogRequestError(r, errors.New("login succeeded but its notification could not be saved"))
@@ -154,6 +176,74 @@ func (a *AuthManager) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	util.RedirectToURL(w, r, redirectURL)
+}
+
+type loginAlternativesKey struct{}
+
+// LoginAlternatives returns other enabled providers' trusted login controls.
+// The manager attaches them before rendering forms or processing submissions.
+func LoginAlternatives(r *http.Request) []template.HTML {
+	buttons, _ := r.Context().Value(loginAlternativesKey{}).([]template.HTML)
+	return buttons
+}
+
+// loginChoices applies presentation policy without changing provider routes.
+func (a *AuthManager) loginChoices(ctx context.Context) ([]LoginHandler, error) {
+	var account *user.User
+	if a.Policy.LoginAccount != nil {
+		var err error
+		account, err = a.Policy.LoginAccount(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var choices []LoginHandler
+	for _, service := range a.Services.Services() {
+		provider, ok := service.(LoginHandler)
+		if !ok {
+			continue
+		}
+		if availability, ok := service.(LoginAvailability); ok && account != nil {
+			available, err := availability.LoginAvailable(ctx, account)
+			if err != nil {
+				// Unknown availability must not hide a usable login method or
+				// prevent other providers from authenticating the account.
+				if log := logger.Get(ctx); log != nil {
+					log.ErrorContext(ctx, "login availability lookup failed", "provider", service.AuthType(), "error", err)
+				}
+				available = true
+			}
+			if !available {
+				continue
+			}
+		}
+		choices = append(choices, provider)
+	}
+	if account != nil && len(choices) == 0 {
+		return nil, errors.New("no configured login provider supports the selected account")
+	}
+	return choices, nil
+}
+
+func (a *AuthManager) prepareLoginRequest(r *http.Request, selected string) *http.Request {
+	choices, err := a.loginChoices(r.Context())
+	if err != nil {
+		logger.LogRequestError(r, err)
+		// A direct provider route must not depend on optional presentation
+		// lookups. Credential validation and admission still run normally.
+		return withLoginAlternatives(r, selected, nil)
+	}
+	return withLoginAlternatives(r, selected, choices)
+}
+
+func withLoginAlternatives(r *http.Request, selected string, choices []LoginHandler) *http.Request {
+	var buttons []template.HTML
+	for _, provider := range choices {
+		if provider.AuthType() != selected {
+			buttons = append(buttons, provider.GetLoginButton())
+		}
+	}
+	return r.WithContext(context.WithValue(r.Context(), loginAlternativesKey{}, buttons))
 }
 
 // Logout ends a session for any logged-in user

@@ -1,16 +1,12 @@
 package blog
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
-	emailauth "github.com/trentnix/hyperserver/auth/modules/email"
-	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
-	"github.com/trentnix/hyperserver/pkg/server"
-	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
-	"github.com/trentnix/hyperserver/pkg/services/messaging"
-	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -18,88 +14,43 @@ import (
 // returningUserCookie controls link visibility only. It never grants access.
 const returningUserCookie = "blog_returning_user"
 
-// EmailProvider keeps account admission in the blog. Embedded email authentication
-// still owns credentials, forms, verification, recovery, and password changes.
-type EmailProvider struct {
-	*emailauth.EmailAuthService
-	access  *Access
-	content *contentservice.ContentManagerService
-}
-
-// NewEmailProvider restricts registration and login to the configured administrator.
-// Dependencies remain owned by the application. Access is initialized by the blog
-// module before any request can reach the provider.
-func NewEmailProvider(accounts user.AccountRepository, sessions *session.SessionManager, mail *messaging.MailClient, access *Access) *EmailProvider {
-	email := emailauth.New(accounts, sessions, mail)
-	return &EmailProvider{EmailAuthService: email, access: access}
-}
-
-// Init prepares the framework's email forms in the blog's layout.
-func (p *EmailProvider) Init(app *server.ApplicationServer) error {
-	p.content = app.ContentManager
-	return p.EmailAuthService.Init(app)
-}
-
-// Register checks admission before the email provider can create an account.
-func (p *EmailProvider) Register(w http.ResponseWriter, r *http.Request) {
-	if p.registrationAvailable(w, r) && p.admit(w, r) {
-		p.EmailAuthService.Register(w, r)
+// AuthenticationPolicy supplies the blog's administrator and onboarding rules
+// for application.Options.AuthPolicy. Configure the site before serving requests.
+// The policy works with every configured provider, not just email and Google.
+func (s *Site) AuthenticationPolicy() auth.Policy {
+	return auth.Policy{
+		LoginAccount:   s.loginAccount,
+		AllowAccount:   s.access.AllowAccount,
+		BeforeRegister: s.registrationAvailable,
+		AfterLogin: func(w http.ResponseWriter, r *http.Request, _ *user.User) {
+			http.SetCookie(w, &http.Cookie{
+				Name: returningUserCookie, Value: "1", Path: "/", MaxAge: 365 * 24 * 60 * 60,
+				HttpOnly: true, Secure: requestinfo.IsHTTPS(r), SameSite: http.SameSiteLaxMode,
+			})
+		},
 	}
 }
 
-// GetRegister stops offering registration after the configured account exists.
-func (p *EmailProvider) GetRegister(w http.ResponseWriter, r *http.Request) {
-	if p.registrationAvailable(w, r) {
-		p.EmailAuthService.GetRegister(w, r)
+// loginAccount simplifies choices only when storage confirms a sole account.
+// Other storage providers keep the full configured login choices.
+func (s *Site) loginAccount(ctx context.Context) (*user.User, error) {
+	if accounts, ok := s.access.setup.accounts.(user.SingleAccountReader); ok {
+		return accounts.SingleAccount(ctx)
 	}
+	return nil, nil
 }
 
-// registrationAvailable also prevents restarting the wizard through a bookmarked form.
-func (p *EmailProvider) registrationAvailable(w http.ResponseWriter, r *http.Request) bool {
-	s := p.access.setup
-	_, err := s.accounts.GetByEmail(r.Context(), s.email)
+// registrationAvailable stops offering registration after the administrator exists.
+func (s *Site) registrationAvailable(w http.ResponseWriter, r *http.Request) bool {
+	setup := s.access.setup
+	_, err := setup.accounts.GetByEmail(r.Context(), setup.email)
 	if errors.Is(err, user.ErrUserNotFound) {
 		return true
 	}
 	if err != nil {
-		p.content.HandleError(w, r, "Registration is temporarily unavailable. Please try again.", err, http.StatusServiceUnavailable)
+		s.content.HandleError(w, r, "Registration is temporarily unavailable. Please try again.", err, http.StatusServiceUnavailable)
 		return false
 	}
 	util.RedirectToURL(w, r, loginURL)
 	return false
-}
-
-// Login checks admission before checking credentials or creating a session.
-func (p *EmailProvider) Login(w http.ResponseWriter, r *http.Request) *user.User {
-	if !p.admit(w, r) {
-		return nil
-	}
-	account := p.EmailAuthService.Login(w, r)
-	if account != nil {
-		// Remember accepted credentials, independently of the authentication session.
-		http.SetCookie(w, &http.Cookie{
-			Name: returningUserCookie, Value: "1", Path: "/", MaxAge: 365 * 24 * 60 * 60,
-			HttpOnly: true, Secure: requestinfo.IsHTTPS(r), SameSite: http.SameSiteLaxMode,
-		})
-	}
-	return account
-}
-
-// admit checks the submitted email against the administrator rule.
-// It writes an error response when parsing, admission, or access setup fails.
-func (p *EmailProvider) admit(w http.ResponseWriter, r *http.Request) bool {
-	if err := form.Parse(r); err != nil {
-		p.content.HandleError(w, r, err.Message, nil, err.StatusCode)
-		return false
-	}
-	// Match the exact value the embedded provider reads, including form precedence.
-	allowed, err := p.access.AllowAccount(r.Context(), r.Form.Get("email"))
-	if err != nil {
-		p.content.HandleError(w, r, "Account access is unavailable.", err, http.StatusInternalServerError)
-		return false
-	}
-	if !allowed {
-		p.content.HandleError(w, r, "Registration and login are available only to the blog administrator.", nil, http.StatusForbidden)
-	}
-	return allowed
 }

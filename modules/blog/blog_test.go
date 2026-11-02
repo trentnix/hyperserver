@@ -54,7 +54,7 @@ func TestReturningUserNavigation(t *testing.T) {
 	}, false), http.StatusSeeOther)
 	h.publish(t, "welcome")
 
-	const link = `href="/auth/login/email">Log in</a>`
+	const link = `href="/auth/login">Sign in</a>`
 	if body := h.request(http.MethodGet, "/post/s/welcome", nil, false).Body.String(); strings.Contains(body, link) || !strings.Contains(body, ">Log out</button>") {
 		t.Fatal("signed-in navigation must show logout instead of login")
 	}
@@ -74,6 +74,17 @@ func TestReturningUserNavigation(t *testing.T) {
 			if got := strings.Contains(w.Body.String(), link); got != (value == "1" && path != loginURL) {
 				t.Errorf("cookie=%q path=%s: login link visible=%v", value, path, got)
 			}
+			if value == "1" && path != loginURL {
+				body := w.Body.String()
+				start := strings.Index(body, `<header class="site-header"`)
+				if start < 0 {
+					t.Fatal("missing site header")
+				}
+				end := strings.Index(body[start:], "</header>")
+				if end < 0 || strings.Count(body, link) != 2 || strings.Count(body[start:start+end], link) != 2 {
+					t.Fatal("both responsive sign-in links must belong to the site header")
+				}
+			}
 			if path == loginURL && !strings.Contains(w.Body.String(), `name="password"`) {
 				t.Error("direct login form is unavailable")
 			}
@@ -91,7 +102,7 @@ func TestReturningUserNavigation(t *testing.T) {
 // TestAuthFormNavigation keeps login below registration, including validation responses.
 func TestAuthFormNavigation(t *testing.T) {
 	h := newHarness(t)
-	const link = `href="/auth/login/email">Log in</a>`
+	const link = `href="/auth/login">Sign in</a>`
 	for _, returning := range []bool{false, true} {
 		if returning {
 			h.cookies[returningUserCookie] = &http.Cookie{Name: returningUserCookie, Value: "1"}
@@ -138,7 +149,7 @@ func TestReturningUserCookie(t *testing.T) {
 				if !accepted {
 					values.Set("password", "Wrong-Password-123!")
 				}
-				r := httptest.NewRequest(http.MethodPost, scheme+"://blog.example"+loginURL, strings.NewReader(values.Encode()))
+				r := httptest.NewRequest(http.MethodPost, scheme+"://blog.example/auth/login/email", strings.NewReader(values.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				if hx {
 					r.Header.Set("HX-Request", "true")
@@ -508,11 +519,9 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 				h.blog = newBlog().(*module)
 				return h.blog
 			}
-			return []handlers.Descriptor{blog, auth.Module(nil, nil, nil)}, nil
+			return []handlers.Descriptor{blog, auth.Module(auth.Dependencies{}, nil)}, nil
 		},
-		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
-			return []auth.Descriptor{site.EmailProvider(app)}, nil
-		},
+		AuthPolicy: site.AuthenticationPolicy(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -609,7 +618,7 @@ func TestAuthenticationPagesAndAdmission(t *testing.T) {
 	}
 	requireStatus(t, h.request("GET", "/missing", nil, false), http.StatusNotFound)
 	requireStatus(t, h.request("GET", "/setup", nil, false), http.StatusNotFound)
-	if !strings.Contains(h.request("GET", "/", nil, false).Body.String(), `href="/auth/register/email">Register</a>`) {
+	if !strings.Contains(h.request("GET", "/", nil, false).Body.String(), `href="/auth/register">Register</a>`) {
 		t.Fatal("registration link is missing")
 	}
 	requireStatus(t, h.request("GET", "/post/create", nil, false), http.StatusForbidden)

@@ -95,7 +95,7 @@ func TestDefaultApplication(t *testing.T) {
 	}
 
 	w := request("GET", "/", nil, http.StatusSeeOther)
-	if w.Header().Get("Location") != "/auth/register/email" {
+	if w.Header().Get("Location") != "/auth/register" {
 		t.Fatal("fresh installation did not open registration", w.Header())
 	}
 	w = request("GET", "/auth/register/email", nil, http.StatusOK)

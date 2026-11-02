@@ -72,13 +72,13 @@ func TestAccountMigrationEscapedPaths(t *testing.T) {
 			// Check the original connection before startup can bootstrap a schema.
 			var version int
 			var dirty bool
-			if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != 1 || dirty {
+			if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != 2 || dirty {
 				t.Fatalf("migration did not update the intended database: %d, %t, %v", version, dirty, err)
 			}
 			if err := PrepareDatabase(t.Context(), db); err != nil {
 				t.Fatal(err)
 			}
-			runMigration(t, run, "down", "1")
+			runMigration(t, run, "down", "2")
 			assertAccountSetupRejected(t, db, "expected one version and dirty flag")
 
 			entries, err := os.ReadDir(directory)
@@ -113,7 +113,7 @@ func TestAccountMigrationDownAndIndependentVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runMigration(t, run, "down", "1")
+	runMigration(t, run, "down", "2")
 	var count int
 	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name IN ('user', 'usertoken', 'usertoken_expiration')`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("down left account objects: %d, %v", count, err)
@@ -163,9 +163,10 @@ func TestAccountMigrationFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 				files["000001_accounts.up.sql"] = accountSchemaV1
-				files["000002_failure.up.sql"] = `CREATE TABLE partial_change (value TEXT);
+				files["000002_external_identities.up.sql"] = accountSchemaV2
+				files["000003_failure.up.sql"] = `CREATE TABLE partial_change (value TEXT);
 					DELETE FROM user; INSERT INTO missing_table VALUES (1);`
-				wantDirty = "version 2 is dirty"
+				wantDirty = "version 3 is dirty"
 			}
 			failing := migrationCommand(t, db, writeMigrationFiles(t, files), accountVersionTable)
 			if output, err := failing("up"); err == nil || !strings.Contains(output, "missing_table") {
@@ -192,8 +193,8 @@ func TestAccountMigrationFailure(t *testing.T) {
 				if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM user WHERE id = 'preserved'`).Scan(&count); err != nil || count != 1 {
 					t.Fatalf("failed upgrade changed account data: %d, %v", count, err)
 				}
-				// Both schema and data rolled back to version 1.
-				runMigration(t, valid, "force", "1")
+				// Both schema and data rolled back to version 2.
+				runMigration(t, valid, "force", "2")
 			}
 			if err := PrepareDatabase(t.Context(), db); err != nil {
 				t.Fatal("explicit repair did not restore usable storage:", err)

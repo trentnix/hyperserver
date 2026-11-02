@@ -9,6 +9,7 @@ import (
 // pointers. The source must not be mutated concurrently while it is being copied.
 func (c Config) Clone() Config {
 	c.HTTP.TrustedProxies = slices.Clone(c.HTTP.TrustedProxies)
+	c.HTTP.FormActionOrigins = slices.Clone(c.HTTP.FormActionOrigins)
 	c.HTTP.Session.Types = maps.Clone(c.HTTP.Session.Types)
 	c.HTTP.Session.Stores = cloneOptions(c.HTTP.Session.Stores)
 	if c.HTTP.ShutdownTimeout != nil {

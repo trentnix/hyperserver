@@ -19,6 +19,11 @@
 {{ define "blog.siteLinks" }}
 <li><a href="/">Home</a></li>
 {{ template "blog.pageLinks" .LayoutData.Pages }}
+{{ if .LayoutData.ShowLogin }}<li class="site-sign-in">{{ template "blog.signInLink" . }}</li>{{ end }}
+{{ end }}
+
+{{ define "blog.signInLink" }}
+{{ if .LayoutData.ShowLogin }}<a class="header-sign-in" hx-boost="false" href="/auth/login">Sign in</a>{{ end }}
 {{ end }}
 
 {{ define "blog.pageLinkUpdates" }}

@@ -25,7 +25,7 @@ Before writing setup code, inspect `pkg/application.Options` and the relevant se
 9. Serve `app.Handler` with `server.NewHTTPServer` and `app.Run`. Do not install the standard middleware twice or call `handlers.Setup` after `application.New`. Use `app.OnShutdown` for callback-owned resources and module `Shutdown(context.Context) error` for module-owned resources.
 10. Test a fresh installation, full-page and HTMX success/failure paths, authorization, and shutdown. Run checks from the repository root. The framework, blog, and reference site share one Go module.
 
-Authentication requires selecting `auth.Module` and enabling authentication in configuration. The constructor supplies configured services and the default email provider. Use `Options.AuthProviders` only when the application needs a different authentication policy. Business permissions remain application or module rules, not core framework policy.
+Authentication requires selecting `auth.Module` and enabling authentication in configuration. The constructor supplies configured services to registered provider factories, including email and Google. Configuration selects which providers initialize. Use `Options.AuthPolicy` for shared admission and login behavior. Use `Options.AuthProviders` only for an explicit local provider catalog. Business permissions remain application or module rules, not core framework policy.
 
 For an application in its own repository, pin the framework revision and give that application its own configuration and tests.
 

@@ -14,7 +14,7 @@
     assert(document.documentElement.scrollWidth <= innerWidth, 'Setup overflows the viewport.');
     const stage = sessionStorage.getItem('setup-stage');
     if (!stage) {
-      assert(location.pathname === '/auth/register/email', 'Fresh site must start at registration.');
+      assert(location.pathname === '/auth/register', 'Fresh site must start at registration.');
       assert(document.querySelector('.setup-panel') && !document.querySelector('.site-sidebar'), 'Registration must use the setup layout.');
       document.querySelector('#email').value = 'trentnix@gmail.com';
       document.querySelector('#password').value = 'Sample-Password-123!';
@@ -32,7 +32,7 @@
       return;
     }
     if (stage === 'registered') {
-      assert(location.pathname === '/auth/login/email', 'Registration must lead to login.');
+      assert(location.pathname === '/auth/login', 'Registration must lead to login.');
       assert(document.body.textContent.includes('Check your email'), 'Missing verification guidance.');
       const login = document.querySelector('.setup-login');
       assert(login && !login.open, 'Login should be secondary until verification.');
@@ -50,7 +50,7 @@
       return;
     }
     if (stage === 'login') {
-      assert(location.pathname === '/auth/login/email', 'Verification must return to login.');
+      assert(location.pathname === '/auth/login', 'Verification must return to login.');
       for (const path of ['/', '/posts']) {
         const publicPage = await fetch(path);
         assert(publicPage.ok && new URL(publicPage.url).pathname === path, 'Verification must open public content: ' + path);

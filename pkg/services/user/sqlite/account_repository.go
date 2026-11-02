@@ -41,6 +41,21 @@ func scanAccount(row *sql.Row) (*accounts.User, error) {
 
 var _ accounts.AccountRepository = (*AccountRepository)(nil)
 var _ accounts.TokenMaintenance = (*AccountRepository)(nil)
+var _ accounts.SingleAccountReader = (*AccountRepository)(nil)
+
+// SingleAccount returns the sole account without counting the entire table.
+func (s *AccountRepository) SingleAccount(ctx context.Context) (*accounts.User, error) {
+	if s.db == nil {
+		return nil, database.ErrDatabaseUnavailable
+	}
+	query := `SELECT ` + accountColumns + ` FROM user
+		WHERE (SELECT count(*) FROM (SELECT 1 FROM user LIMIT 2)) = 1 LIMIT 1`
+	u, err := scanAccount(s.db.QueryRowContext(ctx, query))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return u, err
+}
 
 // DeleteExpiredTokens removes a bounded batch without initializing or closing storage.
 func (s *AccountRepository) DeleteExpiredTokens(ctx context.Context, limit int) (int64, error) {

@@ -24,6 +24,7 @@ type RegisterForm struct {
 	Email         string
 	Password      string
 	PasswordMatch string
+	Alternatives  []template.HTML
 
 	form.Form
 }
@@ -52,14 +53,19 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 	return a.registerButton
 }
 
-// GetRegister serves the register form
+// GetRegisterForm renders email registration alongside other enabled providers.
+func (a *EmailAuthService) GetRegisterForm(w http.ResponseWriter, r *http.Request) {
+	a.GetRegister(w, r)
+}
+
+// GetRegister serves the register form.
 func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
 	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
 		auth_services.RegistrationUnavailable(w, r)
 		return
 	}
 
-	registerForm := &RegisterForm{}
+	registerForm := &RegisterForm{Alternatives: auth_services.RegistrationAlternatives(r)}
 	registerForm.ActionUrl = emailRegisterPath
 	register := a.views[emailRegisterFormPartial].Content(r, registerForm)
 
@@ -87,7 +93,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	registerForm := &RegisterForm{}
+	registerForm := &RegisterForm{Alternatives: auth_services.RegistrationAlternatives(r)}
 	registerForm.ActionUrl = emailRegisterPath
 	register := a.views[emailRegisterFormPartial].Content(r, registerForm)
 
@@ -97,6 +103,9 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !a.Policy.RegistrationAvailable(w, r) || !a.Policy.Admit(w, r, registerForm.Email, a.contentManager) {
+		return
+	}
 	userMessage, registrationErr := auth_services.ProcessRegistration(r.Context(), a.accounts, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
 	if registrationErr != nil {
 		logger.Audit(r.Context(), "registration", "failed")

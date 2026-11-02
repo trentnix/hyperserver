@@ -35,6 +35,8 @@ const (
 
 // EmailAuthService implements email/password authentication using shared application services.
 type EmailAuthService struct {
+	// Policy supplies application admission rules. Set before Init.
+	Policy auth_services.Policy
 	// TemplateFS overrides bundled templates. Set before Init. Nil uses embedded assets.
 	// Reads during Init are synchronous and cannot be interrupted by a context.
 	TemplateFS        fs.FS
@@ -53,7 +55,7 @@ type EmailAuthService struct {
 
 // init makes the provider discoverable without creating application state.
 func init() {
-	auth_services.Register(Provider(nil, nil, nil))
+	auth_services.Register(Provider())
 }
 
 // New supplies email authentication with initialized accounts and sessions,
@@ -65,11 +67,12 @@ func New(accounts user.AccountRepository, sessions *session.SessionManager, mail
 	return &EmailAuthService{accounts: accounts, sessions: sessions, mailClient: mail}
 }
 
-// Provider describes email authentication. Each factory call creates a fresh
-// service using New with application-owned dependencies.
-func Provider(accounts user.AccountRepository, sessions *session.SessionManager, mail *messaging.MailClient) auth_services.Descriptor {
-	return auth_services.Descriptor{Name: AuthTypeEmail, New: func() auth_services.AuthService {
-		return New(accounts, sessions, mail)
+// Provider creates independent instances using application-supplied dependencies.
+func Provider() auth_services.Descriptor {
+	return auth_services.Descriptor{Name: AuthTypeEmail, New: func(d auth_services.Dependencies) auth_services.AuthService {
+		provider := New(d.Accounts, d.Sessions, d.Mail)
+		provider.Policy = d.Policy
+		return provider
 	}}
 }
 

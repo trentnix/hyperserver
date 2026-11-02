@@ -19,16 +19,14 @@ func newApplication(ctx context.Context, cfg config.Config) (*application.Applic
 	}
 	site := &blog.Site{}
 	return application.New(ctx, cfg, application.Options{
+		AuthPolicy:            site.AuthenticationPolicy(),
 		ContentSecurityPolicy: blog.ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
 			module, err := site.Configure(app)
 			if err != nil {
 				return nil, err
 			}
-			return []handlers.Descriptor{module, auth.Module(nil, nil, nil)}, nil
-		},
-		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
-			return []auth.Descriptor{site.EmailProvider(app)}, nil
+			return []handlers.Descriptor{module, auth.Module(auth.Dependencies{}, nil)}, nil
 		},
 	})
 }

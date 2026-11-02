@@ -18,6 +18,30 @@
     await wait(() => document.querySelector('#post-archive a[href="/post/s/second"]') &&
       !document.querySelector('#post-archive').classList.contains('htmx-settling'));
     const body = document.body;
+    const signInLinks = [...document.querySelectorAll('.header-sign-in')];
+    assert(signInLinks.length === 2 && signInLinks.every(link => link.closest('.site-header')), 'Sign-in links belong in the responsive header, not the content area.');
+    assert(signInLinks.every(link => link.getAttribute('hx-boost') === 'false'), 'Sign-in navigation must refresh the account shell.');
+    assert(!document.querySelector('.account-panel a[href="/auth/login"]'), 'Sign in remains in the content area.');
+    const checkSignIn = () => {
+      const visible = signInLinks.filter(link => link.getClientRects().length > 0);
+      assert(visible.length === 1, 'Only one responsive sign-in link should be visible.');
+      const bounds = visible[0].getBoundingClientRect();
+      assert(bounds.left >= 0 && bounds.right <= document.documentElement.clientWidth, 'Sign in overflows the header.');
+      if (innerWidth < 768) assert(bounds.height >= 44, 'Mobile sign-in needs a touch-sized target.');
+      else {
+        const header = document.querySelector('.site-header');
+        const right = header.getBoundingClientRect().right - parseFloat(getComputedStyle(header).paddingRight);
+        assert(visible[0].parentElement === header && Math.abs(bounds.right - right) < 1, 'Desktop sign-in must align with the upper-right header gutter.');
+        assert(bounds.bottom <= header.querySelector('.profile').getBoundingClientRect().top, 'Sign in must sit above the profile without overlapping it.');
+        const profile = header.querySelector('.profile');
+        const profileTop = profile.getBoundingClientRect().top;
+        const headerHeight = header.getBoundingClientRect().height;
+        visible[0].style.display = 'none';
+        assert(profile.getBoundingClientRect().top === profileTop && header.getBoundingClientRect().height === headerHeight, 'Sign in must not shift the profile or increase header height.');
+        visible[0].style.removeProperty('display');
+      }
+      if (innerWidth >= 1680) assert(bounds.right <= document.querySelector('.site-sidebar').getBoundingClientRect().right, 'Ultrawide sign-in must stay in the left column.');
+    };
     const sidebar = document.querySelector('.site-sidebar');
     const archiveNav = document.querySelector(innerWidth >= 1680 ? '#sidebar-archive' : '#post-archive');
     const archive = archiveNav.querySelector('.post-archive');
@@ -120,6 +144,7 @@
       const toggleBox = menuToggle.getBoundingClientRect();
       assert(toggleBox.height >= 44 && toggleBox.width < 150, 'Native menu disclosure must remain a compact, touch-sized control.');
       menuToggle.click();
+      checkSignIn();
       assert(!projectToggle.hidden && !projectLinks.parentElement.open, 'Mobile project tree must start collapsed.');
       projectToggle.click();
       assert(projectLinks.parentElement.open, 'Project toggle did not reveal child links.');
@@ -131,11 +156,13 @@
       assert(!menu.parentElement.open && !projectLinks.parentElement.open, 'Selecting a page must close the mobile branch.');
       unchanged();
     } else if (innerWidth >= 1680) {
+      checkSignIn();
       assert(projectLinks.parentElement.open && projectToggle.hidden, 'Ultrawide project tree must remain expanded.');
       checkSubpageTitles(menu);
       for (const link of menu.querySelectorAll('a')) {
+        if (!link.getClientRects().length) continue;
         const style = getComputedStyle(link);
-        const expectedWeight = link.closest('.child-links') ? '400' : '600';
+        const expectedWeight = link.closest('.child-links') || link.matches('.header-sign-in') ? '400' : '600';
         assert(style.paddingTop === '2px' && style.paddingBottom === '2px' && style.fontWeight === expectedWeight, 'Ultrawide navigation must keep compact spacing with bold parents and regular-weight subpages.');
       }
       assert(projectLinks.querySelector('a').getBoundingClientRect().left > menu.querySelector('a[href="/projects"]').getBoundingClientRect().left, 'Ultrawide subpages must remain indented.');
@@ -150,6 +177,7 @@
         assert((document.querySelector('.profile-links').getClientRects().length > 0) === (width >= 768 && width < 1680), 'Resizing left duplicate or missing compact navigation.');
       }
     } else {
+      checkSignIn();
       assert(menu.getClientRects().length === 0, 'Middle widths must hide the separate menu.');
       checkSubpageTitles(pageLinks);
       const children = pageLinks.querySelector('.child-links');

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	authservice "github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/identity"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
@@ -18,6 +19,14 @@ const (
 	emailChangePasswordFormPartial  = "auth.partial.email.change.password.form"
 	emailChangePath                 = "/auth/change/email"
 )
+
+// AccountActions offers password changes only to accounts with email credentials.
+func (*EmailAuthService) AccountActions(u *user.User) []authservice.AccountAction {
+	if u == nil || u.RegistrationAuthType != AuthTypeEmail || u.Password == "" {
+		return nil
+	}
+	return []authservice.AccountAction{{Label: "Change password", URL: emailChangePath}}
+}
 
 // ChangePasswordForm binds the current password and matching replacement passwords.
 type ChangePasswordForm struct {

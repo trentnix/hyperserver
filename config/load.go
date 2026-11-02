@@ -65,6 +65,7 @@ func defaultConfig() Config {
 func configFields(c *Config) map[string]any {
 	return map[string]any{
 		"http.publicOrigin":                 &c.HTTP.PublicOrigin,
+		"http.formActionOrigins":            &c.HTTP.FormActionOrigins,
 		"http.trustedProxies":               &c.HTTP.TrustedProxies,
 		"http.hstsMaxAge":                   &c.HTTP.HSTSMaxAge,
 		"http.listenHost":                   &c.HTTP.ListenHost,

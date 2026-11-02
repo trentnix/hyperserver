@@ -16,11 +16,12 @@ const (
 	responsesFile = "templates/responses.html"
 	responseView  = "blog.message"
 	notFoundView  = "blog.notFound"
-	loginURL      = "/auth/login/email"
+	loginURL      = "/auth/login"
 	authReturnURL = "/auth/continue"
 )
 
-// ContentSecurityPolicy permits bundled scripts, styles, and fonts.
+// ContentSecurityPolicy permits bundled assets. Deployment configuration supplies
+// additional form-action origins for external authentication redirects.
 // Editor-generated inline styles use style attributes, not inline scripts.
 const ContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
@@ -38,16 +39,18 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
 			data := navigation{Profile: profile.Current(), SignedIn: account != nil, Admin: access.IsAdmin(account)}
+			loginPage := r.URL.Path == loginURL || strings.HasPrefix(r.URL.Path, loginURL+"/")
+			registerPage := r.URL.Path == "/auth/register" || strings.HasPrefix(r.URL.Path, "/auth/register/")
 			if r.Context().Value(setupPageKey{}) != nil || access.setup != nil && !access.setup.complete.Load() && strings.HasPrefix(r.URL.Path, "/auth/") {
 				data.Setup = true
 				data.Profile = Profile{Name: "My Blog"}
-				switch r.URL.Path {
-				case "/auth/register/email":
+				switch {
+				case registerPage:
 					data.SetupTitle = "Set up your blog"
 					data.SetupHelp = "Register using the administrator email from your configuration."
-				case loginURL:
-					data.SetupTitle = "Log in to your blog"
-					data.SetupHelp = "Log in to edit your site profile."
+				case loginPage:
+					data.SetupTitle = "Sign in to your blog"
+					data.SetupHelp = "Sign in to edit your site profile."
 					if account, err := accounts.GetByEmail(r.Context(), access.emailKey); err == nil && account.NeedsVerification() {
 						data.SetupTitle = "Check your email"
 						data.SetupHelp = "Open the verification link in your email to make your site public."
@@ -57,15 +60,14 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 				}
 				return data
 			}
-			data.ReaderSearch = r.Context().Value(adminPageKey{}) == nil
+			data.ReaderSearch = r.Context().Value(adminPageKey{}) == nil && !strings.HasPrefix(r.URL.Path, "/auth/")
 			data.Description = data.Profile.Bio
 			if data.Admin {
 				data.EditorOwner = account.ID
 			}
 			cookie, err := r.Cookie(returningUserCookie)
 			data.ShowLogin = !data.SignedIn && err == nil && cookie.Value == "1"
-			switch r.URL.Path {
-			case "/auth/login", loginURL, "/auth/register", "/auth/register/email":
+			if loginPage || registerPage {
 				data.ShowLogin = false
 			}
 			if registration && !data.SignedIn {

@@ -7,6 +7,9 @@ http:
   listenHost: 127.0.0.1
   port: 8080
   publicOrigin: http://127.0.0.1:8080
+  # External login redirect destinations. Add only origins used by enabled providers.
+  # When Google is enabled: [https://accounts.google.com]
+  formActionOrigins: []
   readTimeout: 10s
   writeTimeout: 40s
   idleTimeout: 2m
@@ -35,8 +38,14 @@ auth:
     options:
       connection: accounts.db?_journal=WAL&_fk=true
   services:
+    # Enable email, Google, or both. Login forms follow these settings.
     email:
       enabled: "true"
+    google:
+      enabled: "false"
+      clientID: ""
+      clientSecret: ""
+      # Register http.publicOrigin + /auth/callback/google in Google Cloud.
 # Local Mailpit accepts these credentials when configured with MP_SMTP_AUTH_ACCEPT_ANY.
 mail:
   hostname: 127.0.0.1

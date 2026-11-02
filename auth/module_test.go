@@ -37,7 +37,7 @@ func TestAuthenticationProviderDiagnostics(t *testing.T) {
 				accounts = nil
 			}
 			sessions := moduleSessions(t, map[string]string{"default": "custom"})
-			module := auth.Module(accounts, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+			module := auth.Module(auth.Dependencies{Accounts: accounts, Sessions: sessions}, []auth.Descriptor{{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService { return new(moduleProvider) }}}).New()
 			var output bytes.Buffer
 			var log *slog.Logger = slog.New(slog.NewTextHandler(&output, nil))
 			err = module.Init(logger.Set(t.Context(), log), app)
@@ -70,7 +70,7 @@ func (p *moduleProvider) Init(app *server.ApplicationServer) error {
 	p.name = app.Config.App.Name
 	return nil
 }
-func (p *moduleProvider) Routes(routes *routing.Routes) error {
+func (p *moduleProvider) Routes(routes, mutations *routing.Routes) error {
 	routes.HandleFunc("GET /provider", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, p.name)
 	})
@@ -105,9 +105,9 @@ func moduleSessions(t *testing.T, types map[string]string) *session.SessionManag
 }
 
 func TestModuleOwnsAuthenticationSetup(t *testing.T) {
-	providers := []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}
+	providers := []auth.Descriptor{{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService { return new(moduleProvider) }}}
 	sessions := moduleSessions(t, map[string]string{"default": "custom"})
-	descriptor := auth.Module(&struct{ user.AccountRepository }{}, sessions, providers)
+	descriptor := auth.Module(auth.Dependencies{Accounts: &struct{ user.AccountRepository }{}, Sessions: sessions}, providers)
 	providers[0].New = nil // Module must retain a catalog snapshot.
 	var apps []*server.ApplicationServer
 	for _, name := range []string{"first", "second"} {
@@ -161,8 +161,8 @@ func TestModuleWithoutRegistrationOrCustomRoutes(t *testing.T) {
 	}
 	provider := &minimalProvider{}
 	sessions := moduleSessions(t, map[string]string{"default": "custom"})
-	module := auth.Module(&struct{ user.AccountRepository }{}, sessions, []auth.Descriptor{
-		{Name: "custom", New: func() auth.AuthService { return provider }},
+	module := auth.Module(auth.Dependencies{Accounts: &struct{ user.AccountRepository }{}, Sessions: sessions}, []auth.Descriptor{
+		{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService { return provider }},
 	}).New()
 	if err := module.Init(t.Context(), app); err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestModuleProviderSelection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		module := auth.Module(nil, nil, nil).New()
+		module := auth.Module(auth.Dependencies{}, nil).New()
 		err = module.Init(context.Background(), app)
 		if enabled {
 			if err == nil || !strings.Contains(err.Error(), "unknown enabled") {
@@ -216,7 +216,7 @@ func TestModuleRequiresAccountRepository(t *testing.T) {
 			}
 			sessions := moduleSessions(t, map[string]string{"default": "custom"})
 			provider := new(moduleProvider)
-			descriptor := auth.Module(nil, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return provider }}})
+			descriptor := auth.Module(auth.Dependencies{Accounts: nil, Sessions: sessions}, []auth.Descriptor{{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService { return provider }}})
 			err = handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{descriptor}, nil)
 			if enabled {
 				if err == nil || !strings.Contains(err.Error(), "requires an account repository") {
@@ -247,7 +247,7 @@ func TestModuleRejectsProviderRouteConflict(t *testing.T) {
 	}
 	app.Web.HandleFunc("GET /provider", func(http.ResponseWriter, *http.Request) {})
 	sessions := moduleSessions(t, map[string]string{"default": "custom"})
-	module := auth.Module(&struct{ user.AccountRepository }{}, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+	module := auth.Module(auth.Dependencies{Accounts: &struct{ user.AccountRepository }{}, Sessions: sessions}, []auth.Descriptor{{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService { return new(moduleProvider) }}}).New()
 	if err := module.Init(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func TestModuleRequiresSelectedStoreRotation(t *testing.T) {
 			if tc.types != nil {
 				sessions = moduleSessions(t, tc.types)
 			}
-			module := auth.Module(&struct{ user.AccountRepository }{}, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+			module := auth.Module(auth.Dependencies{Accounts: &struct{ user.AccountRepository }{}, Sessions: sessions}, []auth.Descriptor{{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService { return new(moduleProvider) }}}).New()
 			err = module.Init(t.Context(), app)
 			if tc.valid && err != nil {
 				t.Fatal(err)
@@ -314,7 +314,7 @@ func TestModuleValidatesInjectedSessions(t *testing.T) {
 					t.Fatal(err)
 				}
 				sessions := moduleSessions(t, tc.types)
-				module := auth.Module(&struct{ user.AccountRepository }{}, sessions, []auth.Descriptor{{Name: "custom", New: func() auth.AuthService { return new(moduleProvider) }}}).New()
+				module := auth.Module(auth.Dependencies{Accounts: &struct{ user.AccountRepository }{}, Sessions: sessions}, []auth.Descriptor{{Name: "custom", New: func(_ auth.Dependencies) auth.AuthService { return new(moduleProvider) }}}).New()
 
 				err = module.Init(t.Context(), app)
 				if tc.want == "" {

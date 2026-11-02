@@ -4,10 +4,56 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
 )
+
+func TestConfiguredFormActionOrigins(t *testing.T) {
+	for _, tc := range []struct {
+		policy  string
+		want    string
+		invalid bool
+	}{
+		{"default-src 'none'; form-action 'self'; frame-ancestors 'none'", "form-action 'self' https://login.example", false},
+		{"default-src 'none'", "form-action 'self' https://login.example", false},
+		{"form-action 'self' https://login.example", "form-action 'self' https://login.example", false},
+		{"", "", true},
+		{"form-action 'none'", "", true},
+		{"form-action", "", true},
+		{"form-action 'self'; FORM-ACTION 'self'", "", true},
+	} {
+		t.Run(tc.policy, func(t *testing.T) {
+			handler, err := Web(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }), config.HTTPConfig{FormActionOrigins: []string{"https://login.example"}}, tc.policy, nil)
+			if tc.invalid {
+				if err == nil {
+					t.Fatal("accepted contradictory or absent CSP")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+			policy := w.Header().Get("Content-Security-Policy")
+			if !strings.Contains(policy, tc.want) || strings.Count(policy, "https://login.example") != 1 {
+				t.Fatal("incorrect policy", policy)
+			}
+			// Allowing an outgoing form destination must not authorize inbound CSRF.
+			r := httptest.NewRequest("POST", "https://site.example/", nil)
+			r.Header.Set("Origin", "https://login.example")
+			r.Header.Set("Sec-Fetch-Site", "cross-site")
+			w = httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != http.StatusForbidden {
+				t.Fatalf("CSRF status=%d", w.Code)
+			}
+		})
+	}
+}
 
 func TestSecurityHeaders(t *testing.T) {
 	for _, policy := range []string{"", "default-src 'none'; frame-ancestors 'none'"} {

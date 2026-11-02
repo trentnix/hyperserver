@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"html/template"
 	"net/http"
 
@@ -9,17 +10,17 @@ import (
 
 const (
 	authRegisterSelectionTemplate = "templates/html/pages/register-selection.html"
-	authRegisterDefaultTemplate   = "templates/html/pages/register-default.html"
 	authRegisterSelectionPartial  = "auth.page.register.selection"
-	authRegisterDefaultPartial    = "auth.page.register.default"
 )
 
-// GetRegister renders the various authentication options to a user trying to register
-// with the application. If there is only a single authentication option, the user is
-// sent directly to the registration page of that authentication service.
+// GetRegister renders an inline registration form with other enabled providers.
+// If no provider offers an inline form, it displays the provider choices.
 func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 	if !a.registrationEnabled {
 		RegistrationUnavailable(w, r)
+		return
+	}
+	if !a.Policy.RegistrationAvailable(w, r) {
 		return
 	}
 
@@ -38,18 +39,22 @@ func (a *AuthManager) GetRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(authServices) == 1 {
-		// there is only 1 auth service - display the default
-		c.PartialName = authRegisterDefaultPartial
-		c.Templates = a.templates[authRegisterDefaultTemplate]
-		c.Data = "/auth/register/" + authServices[0].AuthType()
+		authServices[0].GetRegister(w, r)
+		return
 	} else {
+		for _, provider := range authServices {
+			if form, ok := provider.(RegistrationFormHandler); ok {
+				form.GetRegisterForm(w, a.withRegistrationAlternatives(r, provider.AuthType()))
+				return
+			}
+		}
 		c.PartialName = authRegisterSelectionPartial
 		for _, service := range authServices {
 			loginHTML = append(loginHTML, service.GetRegisterButton())
 		}
 
 		c.Templates = a.templates[authRegisterSelectionTemplate]
-		c.Data = loginHTML
+		c.Data = ProviderPage{Workflow: "register", Title: "Register", Controls: loginHTML}
 	}
 
 	if err := c.Render(w, r); err != nil {
@@ -64,6 +69,9 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 		RegistrationUnavailable(w, r)
 		return
 	}
+	if !a.Policy.RegistrationAvailable(w, r) {
+		return
+	}
 
 	authType := r.PathValue("authType")
 	if authType == "" {
@@ -77,7 +85,7 @@ func (a *AuthManager) GetRegisterService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	authService.GetRegister(w, r)
+	authService.GetRegister(w, a.withRegistrationAlternatives(r, authType))
 }
 
 // Register starts the registration process for the given AuthService (specified by authType)
@@ -86,6 +94,9 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		RegistrationUnavailable(w, r)
 		return
 	}
+	if !a.Policy.RegistrationAvailable(w, r) {
+		return
+	}
 
 	authType := r.PathValue("authType")
 	if authType == "" {
@@ -99,5 +110,25 @@ func (a *AuthManager) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authService.Register(w, r)
+	authService.Register(w, a.withRegistrationAlternatives(r, authType))
+}
+
+type registrationAlternativesKey struct{}
+
+// RegistrationAlternatives returns other enabled providers' trusted registration
+// controls. The manager attaches them to forms and submissions so validation
+// errors preserve the available registration methods.
+func RegistrationAlternatives(r *http.Request) []template.HTML {
+	buttons, _ := r.Context().Value(registrationAlternativesKey{}).([]template.HTML)
+	return buttons
+}
+
+func (a *AuthManager) withRegistrationAlternatives(r *http.Request, selected string) *http.Request {
+	var buttons []template.HTML
+	for _, service := range a.Services.Services() {
+		if provider, ok := service.(RegistrationHandler); ok && provider.AuthType() != selected {
+			buttons = append(buttons, provider.GetRegisterButton())
+		}
+	}
+	return r.WithContext(context.WithValue(r.Context(), registrationAlternativesKey{}, buttons))
 }
