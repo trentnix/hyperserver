@@ -3,8 +3,13 @@
 <div class="profile-details">
   <a class="profile-name" href="/">{{ .LayoutData.Profile.Name }}</a>
   {{ if .LayoutData.Profile.Bio }}<p>{{ .LayoutData.Profile.Bio }}</p>{{ end }}
-  <nav class="profile-links" aria-label="Site links"><ul>{{ template "blog.compactPageLinks" .LayoutData.Pages }}</ul></nav>
+  <nav class="profile-links" aria-label="Site links"><ul>{{ template "blog.compactSiteLinks" . }}</ul></nav>
 </div>
+{{ end }}
+
+{{ define "blog.compactSiteLinks" }}
+<li><a href="/">Home</a></li>
+{{ template "blog.compactPageLinks" .LayoutData.Pages }}
 {{ end }}
 
 {{ define "blog.compactPageLinks" }}
@@ -18,7 +23,7 @@
 
 {{ define "blog.pageLinkUpdates" }}
 <ul hx-swap-oob="innerHTML:#site-menu">{{ template "blog.siteLinks" . }}</ul>
-<ul hx-swap-oob="innerHTML:.profile-links > ul">{{ template "blog.compactPageLinks" .LayoutData.Pages }}</ul>
+<ul hx-swap-oob="innerHTML:.profile-links > ul">{{ template "blog.compactSiteLinks" . }}</ul>
 {{ end }}
 
 {{ define "blog.pageLinks" }}

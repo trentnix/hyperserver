@@ -2,11 +2,52 @@ package blog
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 )
+
+// TestHomeNavigation keeps Home first in each menu, including HTMX updates,
+// without adding another Home link inside nested page lists.
+func TestHomeNavigation(t *testing.T) {
+	const home = `<li><a href="/">Home</a></li>`
+	homeBeforePage := regexp.MustCompile(regexp.QuoteMeta(home) + `\s*<li>\s*<a href="/page/parent"`)
+	templates, err := template.ParseFS(blogModuleFS, "templates/profile.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pages := range [][]pageLink{
+		nil,
+		{{Page: Page{ID: "parent", Slug: "parent", Title: "Parent"}, Children: []pageLink{
+			{Page: Page{ParentID: "parent", Slug: "child", Title: "Child"}},
+		}}},
+	} {
+		for _, tc := range []struct {
+			name  string
+			count int
+		}{
+			{"blog.profile", 1},
+			{"blog.siteLinks", 1},
+			{"blog.pageLinkUpdates", 2},
+		} {
+			var body strings.Builder
+			data := struct{ LayoutData navigation }{navigation{Pages: pages}}
+			if err := templates.ExecuteTemplate(&body, tc.name, data); err != nil {
+				t.Fatal(err)
+			}
+			html := body.String()
+			if strings.Count(html, home) != tc.count {
+				t.Fatalf("%s: expected %d Home links: %s", tc.name, tc.count, html)
+			}
+			if len(pages) != 0 && len(homeBeforePage.FindAllStringIndex(html, -1)) != tc.count {
+				t.Fatalf("%s: Home must precede page links: %s", tc.name, html)
+			}
+		}
+	}
+}
 
 // navigationReads counts shell-only queries without changing page storage behavior.
 type navigationReads struct {

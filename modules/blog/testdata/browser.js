@@ -100,7 +100,8 @@ document.removeEventListener = function(type, callback, options) {
       const menuToggle = document.querySelector('.menu-toggle');
       const menu = menuToggle.closest('details');
       const profileLinks = document.querySelector('.profile-links');
-      assert([...profileLinks.querySelectorAll('a')].map(link => link.textContent).join(' ') === 'About Me Projects' && !profileLinks.querySelector('img'), 'Profile navigation must use stored page titles.');
+      assert([...profileLinks.querySelectorAll('a')].map(link => link.textContent).join(' ') === 'Home About Me Projects' && !profileLinks.querySelector('img'), 'Profile navigation must put Home before stored page titles.');
+      assert(profileLinks.querySelector('a').getAttribute('href') === '/', 'Home must link to the site root.');
       assert(header.contains(links), 'Site links must belong to the header.');
       assert(getComputedStyle(footer).backgroundColor === 'rgba(0, 0, 0, 0)', 'Footer must have no background color.');
       if (innerWidth < 768) {
