@@ -34,10 +34,18 @@
 
 {{ define "auth.provider.introduction" }}
   {{ if and (eq .Data.Workflow "login") (not .LayoutData.Setup) }}
+  {{ template "blog.authWelcome" . }}
+  {{ else if not .LayoutData.SetupTitle }}<h1>{{ .Data.Title }}</h1>{{ end }}
+{{ end }}
+
+{{ define "auth.email.login.introduction" }}
+  {{ if not .LayoutData.Setup }}{{ template "blog.authWelcome" . }}{{ end }}
+{{ end }}
+
+{{ define "blog.authWelcome" }}
   <header class="auth-introduction">
     <p class="auth-eyebrow">Site administration</p>
     <h1>Welcome back</h1>
     <p>Sign in to write posts and manage your site.</p>
   </header>
-  {{ else if not .LayoutData.SetupTitle }}<h1>{{ .Data.Title }}</h1>{{ end }}
 {{ end }}

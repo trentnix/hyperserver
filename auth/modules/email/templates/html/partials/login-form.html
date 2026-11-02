@@ -1,6 +1,7 @@
 {{ define "auth.partial.email.login.form" }}
     {{ with .Data }}
-    <div id="login" class="container">
+    <div id="login" class="container auth-login-panel">
+        {{ block "auth.email.login.introduction" $ }}{{ end }}
         <form id="login-form"
             class="auth-email-form"
             method="post"
@@ -33,25 +34,23 @@
             <label for="email">Email</label>
             <input type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" id="email"
                 name="email"
-                autocomplete="username"
                 value="{{ .Email }}"
                 required {{ if .HasFieldErrors "Email" }} aria-invalid="true" {{ end }}>
             {{ template "auth.partial.email.login.form.field_errors" (.GetFieldErrors "Email") }}
 
             <label for="password">Password</label>
-            <input type="password" id="password"
+            <input type="password" autocomplete="current-password" id="password"
                 name="password"
                 required
                 {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
             {{ template "auth.partial.email.login.form.field_errors" (.GetFieldErrors "Password") }}
 
-            <button type="submit">Sign in</button>
-
-            <div>
+            <div class="auth-email-actions">
+                <button type="submit">Sign in</button>
                 <a href="/auth/reset/request/email"
                 hx-get="/auth/reset/request/email"
                 hx-target="#login-form"
-                hx-swap="outerHTML">Forgot Password?</a>
+                hx-swap="outerHTML">Forgot password?</a>
             </div>
 
             {{ if .HasErrorMessages }}

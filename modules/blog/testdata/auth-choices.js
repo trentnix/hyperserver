@@ -58,6 +58,16 @@
       const formBounds = form.getBoundingClientRect();
       assert(Math.abs(formBounds.left - bounds.left) < 1, 'Login methods are misaligned.');
       assert(Math.abs(formBounds.width - bounds.width) < 1, 'Login methods have inconsistent widths.');
+      if (!registering) {
+        const panel = form.closest('.auth-login-panel');
+        assert(panel.querySelector('h1')?.textContent === 'Welcome back', 'Email and external login should share the welcome heading.');
+        assert(panel.getBoundingClientRect().width <= 440, 'Combined login panel is too wide.');
+        const actions = panel.querySelector('.auth-email-actions');
+        const password = form.querySelector('input[name=password]').getBoundingClientRect();
+        const submit = actions.querySelector('button').getBoundingClientRect();
+        assert(submit.top - password.bottom >= 16 && submit.top - password.bottom <= 24, 'Email action has excessive vertical spacing.');
+        assert(bounds.bottom <= panel.getBoundingClientRect().bottom - 16, 'Login panel needs space below provider buttons.');
+      }
       form.elements.email.value = registering ? 'invalid' : 'trentnix@gmail.com';
       form.elements.password.value = 'invalid';
       const response = await fetch(form.action, {method: 'POST', body: new URLSearchParams(new FormData(form)), headers: {'HX-Request': 'true'}});

@@ -469,14 +469,31 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 }
 
 /* Authentication. */
-.auth-alternatives, .auth-provider, .auth-account, .auth-options { max-width: 440px; margin-block: 24px; font-size: 16px; line-height: 1.5; }
+.auth-alternatives, .auth-provider, .auth-login-panel, .auth-account, .auth-options { max-width: 440px; margin-block: 24px; font-size: 16px; line-height: 1.5; }
 .auth-account { overflow-wrap: anywhere; }
 .auth-alternatives { padding-top: 16px; border-top: 1px solid #e1e3e8; }
-.auth-provider-button button { min-height: 44px; width: 100%; border-radius: 6px; }
-.auth-provider > .auth-provider-button + .auth-provider-button { margin-top: 12px; }
+.auth-provider-button button {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 44px; margin: 0; padding: 10px 12px;
+  border: 1px solid #747775; border-radius: 4px; background: #fff; color: #1f1f1f;
+  font: 500 14px/20px Arial, sans-serif;
+}
+.auth-provider-button button:hover { background: #f8faff; box-shadow: 0 1px 2px rgb(60 64 67 / 20%); }
+.auth-provider-button :is(img, svg) { flex: none; width: 20px; height: 20px; margin: 0; object-fit: contain; }
+.auth-provider-button + .auth-provider-button { margin-top: 12px; }
 .auth-options { display: grid; gap: 16px; }
 .auth-options a { display: block; text-align: center; }
-.page-content .auth-provider { max-width: 400px; padding: 28px; border: 1px solid #dce0e6; border-radius: 8px; background: #fff; box-shadow: 0 4px 20px rgb(30 40 55 / 6%); }
+.page-content :is(.auth-provider, .auth-login-panel) { max-width: 400px; padding: 28px; border: 1px solid #dce0e6; border-radius: 8px; background: #fff; box-shadow: 0 4px 20px rgb(30 40 55 / 6%); }
+.page-content .auth-login-panel { max-width: 440px; }
+.auth-login-panel .auth-email-form { padding-top: 0; }
+.auth-login-panel .auth-email-form label { margin: 16px 0 6px; }
+.auth-login-panel .auth-email-form label:first-child { margin-top: 0; }
+.auth-login-panel .auth-email-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 20px; }
+.auth-login-panel .auth-email-actions button { margin: 0; }
+.auth-login-panel .auth-email-actions a { color: var(--muted); }
+.auth-login-panel .auth-alternatives { max-width: none; margin: 24px 0 0; padding: 0; border: 0; }
+.auth-login-panel .auth-alternatives > p { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+.auth-login-panel .auth-alternatives > p::before, .auth-login-panel .auth-alternatives > p::after { content: ''; flex: 1; border-top: 1px solid #e1e3e8; }
 .page-content .auth-provider h1 { margin: 0 0 20px; font-size: 1.5em; line-height: 1.25; }
 .page-content .auth-provider p { margin: 0 0 20px; color: var(--muted); }
 .page-content .auth-provider > :last-child { margin-bottom: 0; }
@@ -493,7 +510,6 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 }
 :is(.auth-provider-button, .auth-options) .auth-google-button:hover { background: #f8faff; border-color: #747775; box-shadow: 0 1px 2px rgb(60 64 67 / 20%); }
 :is(.auth-provider-button, .auth-options) .auth-google-button:focus-visible { outline: 2px solid #1a73e8; outline-offset: 3px; }
-.auth-google-button img { flex: none; width: 20px; height: 20px; margin: 0; object-fit: contain; }
 .auth-form-footer { max-width: 440px; margin: 0; font-size: 14px; line-height: 1.5; }
 .auth-form-footer a { display: inline-block; padding-block: 6px; text-underline-offset: .2em; }
 .auth-email-form, #reset-request-form, #reset-password-form { max-width: 440px; margin: 0; }
@@ -511,7 +527,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 .setup-complete { margin-bottom: 28px; padding: 20px; background: #eef0f4; border-radius: 5px; }
 .setup-complete h2 { margin: 0 0 16px; font-size: 1.25em; }
 .setup-complete > div { display: flex; flex-wrap: wrap; gap: 12px; }
-:is(.auth-email-form, #reset-request-form, #reset-password-form) {
+:where(.auth-email-form, #reset-request-form, #reset-password-form) {
   label { margin: 24px 0 8px; color: var(--button-bg); }
   label:first-child { margin-top: 0; }
   input { min-height: 46px; border-color: #cbd1da; border-radius: 6px; }
@@ -534,8 +550,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 .verification-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
 
 @media (min-width: 768px) and (max-width: 1679px) {
-  .auth-email-form, .auth-form-footer, .auth-alternatives, .auth-provider, .auth-account, .auth-options { margin-inline: auto; }
+  .auth-email-form, .auth-form-footer, .auth-alternatives, .auth-provider, .auth-login-panel, .auth-account, .auth-options { margin-inline: auto; }
 }
+@media (max-width: 767px) { .page-content .auth-login-panel { padding: 20px; } }
 @media (max-width: 767px) { .verification-panel { padding: 20px; } }
 
 /* Editor and dialogs. */

@@ -58,8 +58,9 @@
     assert(accountNav, 'Account links must have a named navigation landmark.');
     const navBounds = accountNav.getBoundingClientRect();
     const controls = [...accountNav.querySelectorAll('a, button')];
-    assert(controls.map(control => control.textContent).join(',') === 'Posts,Pages,Site Profile,Media,Log out', 'Account controls changed: ' + controls.map(control => control.textContent).join(','));
+    assert(controls.map(control => control.textContent).join(',') === 'Posts,Pages,Site Profile,Media,Account,Log out', 'Account controls changed: ' + controls.map(control => control.textContent).join(','));
     assert(accountNav.querySelector('a[href="/media"]')?.textContent === 'Media', 'Media must open the library.');
+    assert(accountNav.querySelector('a[href="/auth/account"]')?.textContent === 'Account', 'Account must open authentication settings.');
     const logout = accountNav.querySelector('form[action="/auth/logout"] button[type="submit"]');
     assert(logout, 'Account toolbar must offer a logout action.');
     const accountMenu = accountNav.querySelector('.account-menu');
