@@ -42,20 +42,19 @@ func recoveryApp(t *testing.T, cfg config.Config) (*application.Application, fun
 	if err != nil {
 		t.Fatal(err)
 	}
-	access, profile := &blog.Access{}, &blog.ProfileState{}
+	site := &blog.Site{}
 	app, err := application.New(t.Context(), cfg, application.Options{
 		Services:              application.Services{Mail: mail},
 		ContentSecurityPolicy: blog.ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-			if err := blog.ConfigureRendering(app.ContentManager, profile, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
+			module, err := site.Configure(app)
+			if err != nil {
 				return nil, err
 			}
-			return []handlers.Descriptor{blog.Module(access, profile, app.Accounts), auth.Module(nil, nil, nil)}, nil
+			return []handlers.Descriptor{module, auth.Module(nil, nil, nil)}, nil
 		},
 		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
-			return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
-				return blog.NewEmailProvider(app.Accounts, app.Sessions, app.Mail, access)
-			}}}, nil
+			return []auth.Descriptor{site.EmailProvider(app)}, nil
 		},
 	})
 	if err != nil {

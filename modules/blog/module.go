@@ -68,6 +68,7 @@ func (a *Access) IsAdmin(account *user.User) bool {
 
 // module owns one application's views, content repositories, and images.
 type module struct {
+	site            *Site
 	settings        *Settings
 	access          *Access
 	accounts        user.AccountRepository
@@ -99,21 +100,10 @@ type module struct {
 }
 
 // init registers the factory without opening storage or creating runtime state.
-func init() { handlers.Register(Module(nil, nil, nil)) }
-
-// Module creates application-local blog instances using the supplied access rule.
-// Each instance opens and closes its content and image storage. Accounts and sessions
-// remain framework services and can select storage independently.
-// Share profile with ConfigureRendering. Accounts determine first-time setup state.
-// Each application must supply its own state.
-func Module(access *Access, profile *ProfileState, accounts user.AccountRepository) handlers.Descriptor {
-	return handlers.Descriptor{Name: "blog", New: func() handlers.Handler {
-		selected := profile
-		if selected == nil {
-			selected = &ProfileState{}
-		}
-		return &module{access: access, settings: &Settings{}, profile: selected, accounts: accounts}
-	}}
+func init() {
+	handlers.Register(handlers.Descriptor{Name: "blog", New: func() handlers.Handler {
+		return &module{settings: &Settings{}}
+	}})
 }
 
 // Configuration supplies the destination for the module's YAML settings.
@@ -123,7 +113,7 @@ func (m *module) Configuration() any { return m.settings }
 // It initializes the shared administrator rule only after setup succeeds.
 func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error {
 	if m.access == nil {
-		return errors.New("blog requires an access rule")
+		return errors.New("configure the blog through Site.Configure")
 	}
 	if m.settings == nil {
 		return errors.New("blog requires settings")
@@ -232,7 +222,9 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	}
 	m.access.emailKey = user.EmailKey(m.settings.AdminEmail)
 	m.access.setup = setup
-	m.configurePageNavigation()
+	if m.site != nil {
+		m.site.populateNavigation = m.populateNavigation
+	}
 	return nil
 }
 

@@ -2,6 +2,10 @@
 
 The default [blog application](../cmd/web/application.go) uses `application.New` for service startup, modules, middleware, and cleanup. It selects shared rendering and administrator-only authentication. Modules own their internal resources and routes. The separate [reference application](../cmd/reference/application.go) demonstrates contact storage selection and readiness checks.
 
+The blog uses one [`blog.Site`](../modules/blog/site.go) per application. Its `Configure(app)` method configures shared rendering and returns the blog descriptor. Its `EmailProvider(app)` method returns the administrator-only authentication provider. Select those descriptors in `Options.Modules` and `Options.AuthProviders`, respectively, and select `auth.Module` explicitly.
+
+The site owns the shared profile, administrator rule, and navigation wiring. Callers do not create or connect that state themselves. Create a new site for each application startup, including retries after failed initialization. Service configuration, the content security policy, and module selection remain application choices.
+
 ## Adding or replacing a feature
 
 A module descriptor's factory creates a fresh instance with its dependencies. Select descriptors in `application.Options.Modules`. Use `handlers.Replace` when replacing a descriptor in an existing catalog. Importing a module alone does not supply its dependencies or select it.

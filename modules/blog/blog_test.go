@@ -494,16 +494,15 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	access := &Access{}
-	profile := &ProfileState{}
+	site := &Site{}
 	h.app, err = application.New(t.Context(), cfg, application.Options{
 		Services:              application.Services{Mail: mail},
 		ContentSecurityPolicy: ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-			if err := ConfigureRendering(app.ContentManager, profile, access, app.Accounts, cfg.Auth.RegistrationEnabled); err != nil {
+			blog, err := site.Configure(app)
+			if err != nil {
 				return nil, err
 			}
-			blog := Module(access, profile, app.Accounts)
 			newBlog := blog.New
 			blog.New = func() handlers.Handler {
 				h.blog = newBlog().(*module)
@@ -512,9 +511,7 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 			return []handlers.Descriptor{blog, auth.Module(nil, nil, nil)}, nil
 		},
 		AuthProviders: func(_ context.Context, app *application.Application) ([]auth.Descriptor, error) {
-			return []auth.Descriptor{{Name: "email", New: func() auth.AuthService {
-				return NewEmailProvider(app.Accounts, app.Sessions, app.Mail, access)
-			}}}, nil
+			return []auth.Descriptor{site.EmailProvider(app)}, nil
 		},
 	})
 	if err != nil {
@@ -697,7 +694,8 @@ func (unavailableAccounts) GetByEmail(context.Context, string) (*user.User, erro
 // TestRegistrationLinkHiddenOnLookupFailure keeps storage errors from advertising signup.
 func TestRegistrationLinkHiddenOnLookupFailure(t *testing.T) {
 	cm := contentservice.NewContentManager()
-	if err := ConfigureRendering(cm, &ProfileState{}, &Access{emailKey: user.EmailKey("trentnix@gmail.com")}, unavailableAccounts{}, true); err != nil {
+	site := &Site{access: Access{emailKey: user.EmailKey("trentnix@gmail.com")}}
+	if err := site.configureRendering(cm, unavailableAccounts{}, true); err != nil {
 		t.Fatal(err)
 	}
 	r := httptest.NewRequest(http.MethodGet, "/", nil)

@@ -27,15 +27,20 @@ func TestNavigationOnlyForShell(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		hx, restore bool
+		setup       bool
 		reads       int
 	}{
-		{"ordinary", false, false, 1},
-		{"fragment", true, false, 0},
-		{"history restore", true, true, 1},
+		{"ordinary", false, false, false, 1},
+		{"fragment", true, false, false, 0},
+		{"history restore", true, true, false, 1},
+		{"setup", false, false, true, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store.calls = 0
 			r := httptest.NewRequest(http.MethodGet, "https://blog.example/", nil)
+			if tc.setup {
+				r = r.WithContext(context.WithValue(r.Context(), setupPageKey{}, true))
+			}
 			if tc.hx {
 				r.Header.Set("HX-Request", "true")
 			}

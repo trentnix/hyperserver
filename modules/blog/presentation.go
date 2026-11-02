@@ -24,15 +24,10 @@ const (
 // Editor-generated inline styles use style attributes, not inline scripts.
 const ContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
-// ConfigureRendering selects the blog layout for feature and authentication pages.
-// Call it before module initialization prepares views. The registration flag
-// permits a registration link only while the administrator account is absent.
-// Account admission and route availability remain the authentication provider's job.
-// profile must be the same application-local state supplied to Module.
-func ConfigureRendering(cm *contentservice.ContentManagerService, profile *ProfileState, access *Access, accounts user.AccountRepository, registration bool) error {
-	if profile == nil {
-		return errors.New("blog rendering requires profile state")
-	}
+// configureRendering selects shared layouts and installs one navigation callback.
+// Site owns the profile and administrator rule used by rendering and authentication.
+func (s *Site) configureRendering(cm *contentservice.ContentManagerService, accounts user.AccountRepository, registration bool) error {
+	profile, access := &s.profile, &s.access
 	if err := cm.ApplyDefaults("blog", func(cm *contentservice.ContentManagerService) {
 		cm.RegisterLayouts(contentservice.PageType, blogModuleFS, "templates/layout.html")
 		cm.RegisterLayouts(contentservice.HtmxType, blogModuleFS, "templates/fragment.html")
@@ -80,6 +75,10 @@ func ConfigureRendering(cm *contentservice.ContentManagerService, profile *Profi
 					logger.LogRequestError(r, err)
 				}
 			}
+			hx := htmx.GetRequest(r)
+			if s.populateNavigation != nil && (!hx.Enabled || hx.HistoryRestore) {
+				data = s.populateNavigation(r, data)
+			}
 			return data
 		}
 	}); err != nil {
@@ -121,23 +120,6 @@ type navigation struct {
 	ReaderSearch                             bool
 	EditorOwner, Description                 string
 	SignedIn, Admin, Registration, ShowLogin bool
-}
-
-// configurePageNavigation adds published page links and cached Recent Posts after storage opens.
-// ConfigureRendering supplies the base navigation, including authentication links.
-func (m *module) configurePageNavigation() {
-	build := m.app.ContentManager.BuildLayoutData
-	m.app.ContentManager.BuildLayoutData = func(r *http.Request) any {
-		data := build(r).(navigation)
-		if data.Setup {
-			return data
-		}
-		hx := htmx.GetRequest(r)
-		if hx.Enabled && !hx.HistoryRestore {
-			return data
-		}
-		return m.populateNavigation(r, data)
-	}
 }
 
 // populateNavigation loads shell links for full pages and explicit navigation updates.
