@@ -74,7 +74,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleWithBodyLimit("POST /post/{id}", m.requireAdmin(m.save), routing.MiB)
 	routes.Handle("POST /post/delete/{id}", m.requireAdmin(m.delete))
 	routes.HandleWithBodyLimit("POST /post/preview", m.requireAdmin(m.preview), routing.MiB)
-	routes.HandleWithBodyLimit("POST /post/images/upload", m.requireAdmin(m.upload), 10*routing.MiB)
+	routes.HandleWithBodyLimit("POST /post/images/upload", http.HandlerFunc(m.upload), 10*routing.MiB)
 	routes.HandleFunc("GET /login", m.login)
 	routes.HandleFunc("GET "+authReturnURL, m.requireSetup(m.continueSetup))
 	routes.HandleFunc("/", m.requireSetup(m.app.ContentManager.HandleNotFound))

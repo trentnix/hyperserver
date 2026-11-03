@@ -63,17 +63,45 @@ export function openMediaLibrary(select) {
 }
 
 // The library and profile controls use the same validated upload endpoint as the editor.
-async function uploadImage(file) {
+export async function uploadImage(file) {
   if (file.size > 8 * 1024 * 1024) throw new Error('Choose an image of at most 8 MiB.');
   const data = new FormData();
   data.append('image', file);
-  const response = await fetch('/post/images/upload', {method: 'POST', body: data});
+  const response = await fetch('/post/images/upload', {method: 'POST', body: data, redirect: 'error'});
+  if (response.status === 401) {
+    throw Object.assign(new Error("You're signed out. Sign in again to upload this image."), {code: 'authentication_required'});
+  }
   if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('Unable to upload the image.');
   const result = await response.json();
-  if (!response.ok) throw new Error(result?.error || 'Unable to upload the image.');
+  if (!response.ok) throw Object.assign(new Error(result?.error || 'Unable to upload the image.'), {code: response.status === 403 ? result?.code : undefined});
   const path = result?.data?.filePath;
   if (typeof path !== 'string' || !/^\/images\/[a-f0-9]{64}\.(png|jpeg|gif)$/.test(path)) throw new Error('Invalid image upload response.');
   return path;
+}
+
+// Authentication happens in another tab so neither unsaved fields nor the
+// selected File leave this page. Retrying is always an explicit user action.
+export function showUploadFailure(status, error, retry) {
+  status.textContent = error.message + ' Your edits are unchanged.';
+  const verify = error.code === 'verification_required';
+  if (error.code !== 'authentication_required' && !verify) return;
+  status.append(' Keep this page open. After ' + (verify ? 'verifying your email' : 'signing in') + ', return here and retry.');
+  const actions = document.createElement('span');
+  actions.className = 'image-upload-recovery';
+  const link = document.createElement('a');
+  link.href = verify ? '/auth/request/verify' : '/login';
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.setAttribute('hx-boost', 'false');
+  link.textContent = verify ? 'Verify email in a new tab' : 'Sign in in a new tab';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'button-secondary';
+  button.dataset.uploadRetry = '';
+  button.textContent = 'Retry upload';
+  button.addEventListener('click', retry);
+  actions.append(link, button);
+  status.append(actions);
 }
 
 // Post and page previews store an image ID. Profile fields store the complete URL.
@@ -124,28 +152,30 @@ document.addEventListener('click', event => {
 
 // Pickers share the editor's validated upload endpoint. Serialize uploads within
 // each form so Save cannot race another image selection or submit incomplete URLs.
-document.addEventListener('change', async event => {
+document.addEventListener('change', event => {
   const input = event.target;
   if (input.matches('[data-image-value]')) {
     updateImagePreview(input.closest('[data-image-picker]'));
+    input.closest('[data-image-picker]').querySelector('[data-image-status]').textContent = '';
     return;
   }
   if (!input.matches('[data-image-picker] input[type="file"]') || !input.files.length) return;
-  const picker = input.closest('[data-image-picker]');
+  uploadPickerImage(input.closest('[data-image-picker]'), input.files[0]);
+  input.value = '';
+});
+
+async function uploadPickerImage(picker, file) {
+  const input = picker.querySelector('input[type="file"]');
   const form = input.form;
-  if (form.dataset.uploading) {
-    input.value = '';
-    return;
-  }
+  if (!picker.isConnected || form.dataset.uploading) return;
   const status = picker.querySelector('[data-image-status]');
-  const file = input.files[0];
   if (file.size > 8 * 1024 * 1024) {
     status.textContent = 'Choose an image of at most 8 MiB. The current image is unchanged.';
     input.value = '';
     return;
   }
   form.dataset.uploading = 'true';
-  const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [data-image-upload], [data-media-browse], [type="submit"]')].filter(control => !control.disabled);
+  const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [data-image-upload], [data-media-browse], [data-upload-retry], [type="submit"]')].filter(control => !control.disabled);
   controls.forEach(control => { control.disabled = true; });
   status.textContent = 'Uploading image…';
   try {
@@ -155,13 +185,13 @@ document.addEventListener('change', async event => {
     updateImagePreview(picker);
     status.textContent = 'Image uploaded. Save to apply.';
   } catch (error) {
-    status.textContent = error.message + ' The current image is unchanged.';
+    showUploadFailure(status, error, () => uploadPickerImage(picker, file));
   } finally {
     delete form.dataset.uploading;
     controls.forEach(control => { control.disabled = false; });
     input.value = '';
   }
-});
+}
 
 document.addEventListener('submit', event => {
   if (event.target.dataset.uploading) {

@@ -53,6 +53,22 @@ func prepareImage(ctx context.Context, data []byte) (imageUpload, error) {
 // upload accepts EasyMDE's image field and returns its documented JSON response.
 // Both compressed size and decoded dimensions are bounded before decoding pixels.
 func (m *module) upload(w http.ResponseWriter, r *http.Request) {
+	// This endpoint serves fetch/EasyMDE, not page navigation. Keep access
+	// failures in its JSON contract so clients can preserve unsaved edits.
+	w.Header().Set("Cache-Control", "no-store")
+	account := user.GetUserFromContext(r.Context())
+	if account == nil {
+		writeJSON(w, r, http.StatusUnauthorized, map[string]string{"code": "authentication_required", "error": "You're signed out. Sign in again to upload this image."})
+		return
+	}
+	if !m.access.IsAdmin(account) {
+		code, message := "access_denied", "This account cannot upload images. Sign in with the administrator account."
+		if account.NeedsVerification() {
+			code, message = "verification_required", "Verify your email before uploading images."
+		}
+		writeJSON(w, r, http.StatusForbidden, map[string]string{"code": code, "error": message})
+		return
+	}
 	id, status, err := m.storeUpload(w, r)
 	if err != nil {
 		writeJSON(w, r, status, map[string]string{"error": err.Error()})

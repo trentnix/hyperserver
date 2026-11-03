@@ -162,6 +162,32 @@
         assert(form.elements.imageURL.value === sessionStorage.getItem('imageURL'), 'Failed response replaced the selected image.');
         assert([...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [type="submit"]')].every(control => !control.disabled), 'Failed response left controls disabled.');
       }
+      // Losing authentication must preserve the entire form and selected File.
+      const originalName = form.elements.name.value;
+      form.elements.name.value = 'Unsaved profile name';
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 12;
+      canvas.getContext('2d').fillRect(0, 0, 12, 12);
+      const pendingImage = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      await fetch('/auth/logout', {method: 'POST', redirect: 'manual'});
+      selectFile('imageURL', new File([pendingImage], 'pending.png', {type: 'image/png'}));
+      await wait(() => !form.dataset.uploading);
+      const authStatus = picker('imageURL').querySelector('[data-image-status]');
+      assert(authStatus.textContent.includes("You're signed out"), 'Expired login was not explained.');
+      assert(document.querySelector('#profile-form') === form && form.elements.name.value === 'Unsaved profile name', 'Authentication failure lost unsaved profile edits.');
+      const signIn = authStatus.querySelector('a');
+      assert(signIn?.getAttribute('href') === '/login' && signIn.target === '_blank' && signIn.rel === 'noopener' && signIn.getAttribute('hx-boost') === 'false', 'Recovery must sign in separately without navigating the editor.');
+      authStatus.querySelector('[data-upload-retry]').click();
+      await wait(() => !form.dataset.uploading);
+      assert(authStatus.textContent.includes("You're signed out") && !form.querySelector('[type="submit"]').disabled, 'Failed retry lost the recovery flow or disabled Save.');
+      const login = await fetch('/auth/login/email', {method: 'POST', redirect: 'manual', body: new URLSearchParams({email: 'trentnix@gmail.com', password: 'Sample-Password-123!'})});
+      assert(login.type === 'opaqueredirect', 'Reauthentication did not succeed.');
+      authStatus.querySelector('[data-upload-retry]').click();
+      await wait(() => !form.dataset.uploading);
+      assert(authStatus.textContent === 'Image uploaded. Save to apply.' && !authStatus.querySelector('a'), 'Retained image did not upload after signing in again.');
+      assert(form.elements.name.value === 'Unsaved profile name', 'Retry lost unsaved edits.');
+      assert(form.elements.imageURL.value !== sessionStorage.getItem('imageURL'), 'Retry did not use the retained file.');
+      form.elements.name.value = originalName;
       await upload('imageURL', '#44aa66', 1000, 1);
       await upload('backgroundURL', '#aabbcc');
       const backgroundImage = picker('backgroundURL').querySelector('[data-image-preview]').getBoundingClientRect();
@@ -177,6 +203,30 @@
       assert(document.querySelector('.portrait').getAttribute('src') === '/assets/img/profile-default.svg', 'Portrait default was not restored.');
       assert(document.querySelector('link[rel="icon"]').getAttribute('href') === '/assets/img/favicon.svg', 'Favicon default was not restored.');
       assert(getComputedStyle(document.body).backgroundImage === 'none' && getComputedStyle(document.querySelector('.page-top')).backgroundImage === 'none', 'Background reset was not saved.');
+      // The Markdown toolbar must offer the same recovery without losing writing.
+      await htmx.ajax('GET', '/post/create', {target: '#article-content'});
+      await wait(() => document.querySelector('.CodeMirror')?.CodeMirror);
+      const cm = document.querySelector('.CodeMirror').CodeMirror;
+      cm.setValue('Unsaved writing');
+      await fetch('/auth/logout', {method: 'POST', redirect: 'manual'});
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 2;
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      document.querySelector('.tool-image').click();
+      const input = document.querySelector('.imageInput');
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([blob], 'editor.png', {type: 'image/png'}));
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change'));
+      await wait(() => document.querySelector('[data-upload-retry]'));
+      assert(cm.getValue() === 'Unsaved writing', 'Failed Markdown upload changed the writing.');
+      const link = document.querySelector('.image-upload-recovery a');
+      assert(link?.getAttribute('href') === '/login' && link.target === '_blank', 'Markdown upload lacks sign-in recovery.');
+      await fetch('/auth/login/email', {method: 'POST', redirect: 'manual', body: new URLSearchParams({email: 'trentnix@gmail.com', password: 'Sample-Password-123!'})});
+      cm.setCursor(cm.lineCount(), 0);
+      document.querySelector('[data-upload-retry]').click();
+      await wait(() => cm.getValue().includes('/images/'));
+      assert(cm.getValue().includes('Unsaved writing') && !document.querySelector('[data-upload-retry]'), 'Markdown retry lost writing or left stale recovery actions.');
       await report('PASS');
       return;
     }

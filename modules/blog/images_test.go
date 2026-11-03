@@ -3,6 +3,7 @@ package blog
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"image"
 	"image/png"
@@ -11,7 +12,50 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+func TestImageUploadAuthentication(t *testing.T) {
+	h := newHarness(t)
+	assertFailure := func(status int, code string) {
+		t.Helper()
+		for _, hx := range []bool{false, true} {
+			w := h.request("POST", "/post/images/upload", nil, hx)
+			requireStatus(t, w, status)
+			var body map[string]string
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body["code"] != code || body["error"] == "" {
+				t.Fatalf("missing upload authentication response: %s, %v", w.Body, err)
+			}
+			if !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Location") != "" || w.Header().Get("HX-Redirect") != "" {
+				t.Fatalf("upload denial must not redirect or be cached: %v", w.Header())
+			}
+		}
+	}
+	assertFailure(http.StatusUnauthorized, "authentication_required")
+	h.register(t)
+	h.login(t)
+	assertFailure(http.StatusForbidden, "verification_required")
+	h.verify(t)
+	// A valid login reaches multipart validation, not the access denial.
+	requireStatus(t, h.request("POST", "/post/images/upload", nil, false), http.StatusBadRequest)
+	oldCookie := *h.cookies["auth-user-session"]
+	requireStatus(t, h.request("POST", "/auth/logout", nil, false), http.StatusSeeOther)
+	// Keep presenting a well-formed cookie whose server-side session is gone.
+	h.cookies[oldCookie.Name] = &oldCookie
+	assertFailure(http.StatusUnauthorized, "authentication_required")
+	h.login(t)
+	requireStatus(t, h.request("POST", "/post/images/upload", nil, false), http.StatusBadRequest)
+
+	// Being authenticated does not grant upload access to a different account.
+	r := user.AddUserToRequestContext(httptest.NewRequest("POST", "/post/images/upload", nil), &user.User{Email: "other@example.invalid", Verified: true})
+	w := httptest.NewRecorder()
+	h.blog.upload(w, r)
+	requireStatus(t, w, http.StatusForbidden)
+	if !strings.Contains(w.Body.String(), `"code":"access_denied"`) {
+		t.Fatal("non-administrator upload did not explain the access denial", w.Body)
+	}
+}
 
 func testPNG(t *testing.T) []byte {
 	t.Helper()

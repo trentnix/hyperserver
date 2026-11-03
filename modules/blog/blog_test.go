@@ -905,7 +905,11 @@ func TestPublishingAuthorizationAndCSRF(t *testing.T) {
 	h := newHarness(t)
 	paths := []string{"/post", "/post/example", "/post/delete/example", "/post/preview", "/post/images/upload"}
 	for _, path := range paths {
-		requireStatus(t, h.request("POST", path, url.Values{}, false), http.StatusForbidden)
+		status := http.StatusForbidden
+		if path == "/post/images/upload" {
+			status = http.StatusUnauthorized
+		}
+		requireStatus(t, h.request("POST", path, url.Values{}, false), status)
 	}
 	h.register(t)
 	h.login(t)

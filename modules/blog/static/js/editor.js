@@ -1,4 +1,4 @@
-import {openMediaLibrary} from './media.js';
+import {openMediaLibrary, uploadImage, showUploadFailure} from './media.js';
 
 const editors = new WeakMap();
 
@@ -97,6 +97,24 @@ function initialize(root) {
       status: false,
       uploadImage: true,
       imageUploadEndpoint: '/post/images/upload',
+      imageUploadFunction(file, onSuccess) {
+        const status = document.createElement('p');
+        status.setAttribute('role', 'status');
+        editor.codemirror.getWrapperElement().after(status);
+        const attempt = async () => {
+          if (!textarea.isConnected) return;
+          status.textContent = 'Uploading ' + file.name + '…';
+          try {
+            const path = await uploadImage(file);
+            if (!textarea.isConnected) return;
+            onSuccess(path);
+            status.remove();
+          } catch (error) {
+            showUploadFailure(status, error, attempt);
+          }
+        };
+        attempt();
+      },
       imagePathAbsolute: true,
       imageMaxSize: 8 * 1024 * 1024,
       imageAccept: 'image/png,image/jpeg,image/gif',
