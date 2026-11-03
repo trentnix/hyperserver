@@ -18,7 +18,7 @@
     const rows = [...list.querySelectorAll('[data-content-id]')];
     const index = rows.indexOf(row);
     const next = rows[index + 1] || rows[index - 1];
-    const focus = next?.querySelector('.page-manager-actions a') || list.querySelector('input[type=search]');
+    const focusHref = next?.querySelector('.page-manager-actions a').getAttribute('href');
     row.scrollIntoView({block: 'center'});
     row.querySelector('a[href^="/post/delete/"]').click();
     await wait(() => document.querySelector('dialog[open] form[action^="/post/delete/"]'));
@@ -30,7 +30,9 @@
     await wait(() => !row.isConnected && !document.querySelector('dialog[open]'));
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     assert(document.body === body && document.querySelector('.page-manager') === list, 'Deletion reloaded or replaced the management list.');
-    assert(document.activeElement === focus || (focus?.tagName === 'A' && document.activeElement?.getAttribute('href') === focus.getAttribute('href')), 'Deletion did not focus the adjacent actions.');
+    const focus = focusHref ? list.querySelector('.page-manager-actions a[href="' + focusHref + '"]') :
+      list.querySelector('input[type=search]') || list.querySelector('.page-create');
+    assert(document.activeElement === focus, 'Deletion did not focus the adjacent actions or empty-list control.');
     const expected = Math.min(before, Math.max(0, document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight));
     assert(Math.abs(scrollY - expected) <= 1, 'Deletion lost scroll position: ' + JSON.stringify({before, expected, actual: scrollY}));
     assert((await fetch(url)).status === 404, 'Deleted post remains readable.');
@@ -167,11 +169,14 @@
     await deleteFirst('#published-posts');
     assert(!document.querySelector('#published-posts') && document.querySelector('[data-result-count]').dataset.resultCount === '0', 'Last published match must hide its section and update the count.');
     assert(location.search === query && document.querySelector('.page-manager-empty').textContent === 'No posts match your search.', 'Empty search must preserve its query and show one empty state.');
+    assert(document.querySelector('#post-search'), 'An empty search must keep the search controls.');
     document.querySelector('.management-search-clear a').click();
     await wait(() => location.search === '' && !document.querySelector('.management-search-clear') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
     while (document.querySelector('#draft-posts')) await deleteFirst('#draft-posts');
     while (document.querySelector('#published-posts .page-manager-row')) await deleteFirst('#published-posts');
     assert(document.querySelector('#published-posts .page-manager-empty')?.textContent === 'No published posts yet.', 'Deleting the last published post must keep its normal empty section.');
+    assert(!document.querySelector('#post-search'), 'An empty collection must hide the search controls.');
+    assert(document.activeElement === document.querySelector('.page-create'), 'Deleting the last post must focus New post when search is hidden.');
     await report('PASS');
   } catch (error) { await report(error.message + '\n' + error.stack); }
 })();

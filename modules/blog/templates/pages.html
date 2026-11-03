@@ -29,15 +29,17 @@
   <div><h1>Pages</h1><p>Manage your pages and subpages.</p></div>
   <a class="button-primary page-create" href="/pages/create" hx-get="/pages/create" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">New page</a>
 </header>
-<form class="management-search" method="get" action="/pages" hx-get="/pages" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">
-  <div><label for="page-search">Search pages</label><input id="page-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
-  <button type="submit" class="button-secondary">Search</button>
-</form>
 <div id="management-results">{{ template "blog.pageResults" . }}</div>
 </section>
 {{ end }}
 
 {{ define "blog.pageResults" }}
+{{ if or .Data.Total .Data.Query }}
+<form class="management-search" method="get" action="/pages" hx-get="/pages" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">
+  <div><label for="page-search">Search pages</label><input id="page-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
+  <button type="submit" class="button-secondary">Search</button>
+</form>
+{{ end }}
 <div class="management-search-results">
   <p role="status" data-result-count="{{ .Data.Total }}">{{ .Data.Total }} {{ if eq .Data.Total 1 }}page{{ else }}pages{{ end }} found.</p>
   {{ if .Data.Query }}<p class="management-search-clear"><a href="/pages" hx-get="/pages" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">Clear search</a></p>{{ end }}

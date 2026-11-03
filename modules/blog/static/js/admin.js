@@ -63,7 +63,7 @@ document.addEventListener('htmx:afterSwap', event => {
   positions.delete(event.detail.xhr);
   const links = document.querySelectorAll('#management-results a, .revision-list a');
   const focus = [...links].find(link => link.getAttribute('href') === position.href) ||
-    (event.target.id === 'management-results' ? document.querySelector('.management-search input') :
+    (event.target.id === 'management-results' ? document.querySelector('.management-search input') || document.querySelector('.page-create') :
       document.querySelector('.revision-list [aria-current]'));
   focus?.focus({preventScroll: true});
   window.scrollTo({left: position.x, top: position.y, behavior: 'instant'});

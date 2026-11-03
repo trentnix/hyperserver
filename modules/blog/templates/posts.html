@@ -16,15 +16,17 @@
   <div><h1>Posts</h1><p>Manage your drafts, scheduled posts, and published posts.</p></div>
   <a class="button-primary page-create" href="/post/create" hx-get="/post/create" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">New post</a>
 </header>
-<form class="management-search" method="get" action="/post/manage" hx-get="/post/manage" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">
-  <div><label for="post-search">Search posts</label><input id="post-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
-  <button type="submit" class="button-secondary">Search</button>
-</form>
 <div id="management-results">{{ template "blog.postResults" . }}</div>
 </section>
 {{ end }}
 
 {{ define "blog.postResults" }}
+{{ if or .Data.Total .Data.Query }}
+<form class="management-search" method="get" action="/post/manage" hx-get="/post/manage" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">
+  <div><label for="post-search">Search posts</label><input id="post-search" type="search" name="q" value="{{ .Data.Query }}" maxlength="240" placeholder="Title, summary, or content"></div>
+  <button type="submit" class="button-secondary">Search</button>
+</form>
+{{ end }}
 <div class="management-search-results">
   <p role="status" data-result-count="{{ .Data.Total }}">{{ .Data.Total }} {{ if eq .Data.Total 1 }}post{{ else }}posts{{ end }} found.</p>
   {{ if .Data.Query }}<p class="management-search-clear"><a href="/post/manage" hx-get="/post/manage" hx-target="#article-content" hx-push-url="true" hx-sync="#article-content:replace">Clear search</a></p>{{ end }}

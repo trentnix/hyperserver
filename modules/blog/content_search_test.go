@@ -235,6 +235,65 @@ func TestManagementSearch(t *testing.T) {
 	}
 }
 
+// TestManagementSearchVisibility covers empty collections and deletion updates.
+func TestManagementSearchVisibility(t *testing.T) {
+	h := startHarness(t, harnessConfig(t, 10))
+	if err := h.blog.access.setup.finish(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	for _, kind := range []string{"post", "page"} {
+		t.Run(kind, func(t *testing.T) {
+			path, prefix := "/post/manage", "/post"
+			if kind == "page" {
+				path, prefix = "/pages", "/pages"
+			}
+			check := func(body string, want bool) {
+				t.Helper()
+				if got := strings.Contains(body, `class="management-search"`); got != want {
+					t.Fatalf("search form present = %t, want %t", got, want)
+				}
+			}
+			for _, hx := range []bool{false, true} {
+				w := h.request("GET", path, nil, hx)
+				requireStatus(t, w, http.StatusOK)
+				check(w.Body.String(), false)
+			}
+			for _, query := range []string{"", "?q=needle"} {
+				var id string
+				if kind == "post" {
+					p, err := savePostFixture(h.blog.posts, t.Context(), Post{Title: "Needle", Slug: "needle", Draft: true})
+					if err != nil {
+						t.Fatal(err)
+					}
+					id = p.ID
+				} else {
+					p, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Title: "Needle", Slug: "needle"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					id = p.ID
+				}
+				for _, hx := range []bool{false, true} {
+					for _, search := range []string{"", "?q=needle", "?q=absent"} {
+						w := h.request("GET", path+search, nil, hx)
+						requireStatus(t, w, http.StatusOK)
+						check(w.Body.String(), true)
+					}
+				}
+				w := h.deleteRequest(prefix+"/delete/"+id, "https://blog.example"+path+query, true, false)
+				requireStatus(t, w, http.StatusOK)
+				check(w.Body.String(), query != "")
+				if !strings.Contains(w.Body.String(), `data-result-count="0"`) {
+					t.Fatal("last deletion must leave an empty collection")
+				}
+			}
+		})
+	}
+}
+
 // TestPostSearchGroups keeps publication groups while ranking matches inside
 // each group and omitting groups with no matching posts.
 func TestPostSearchGroups(t *testing.T) {
