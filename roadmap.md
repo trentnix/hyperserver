@@ -130,4 +130,4 @@ Runtime plugins need a separate design for activation, compatibility, request dr
 
 If delivery must survive restarts, add an optional durable service with an atomic outbox and safe retries. Do not promise exactly-once email delivery.
 
-Evaluate opaque recovery tokens and session identifiers separately from urgent security fixes. Keep established signing and password-hashing implementations unless a validated design removes the need for them.
+Use opaque recovery tokens and server-side session identifiers. Keep signature verification for cookie-backed session data and external identity proofs. Keep established password-hashing implementations.

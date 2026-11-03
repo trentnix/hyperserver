@@ -16,11 +16,7 @@ func TestConstructorValidatesOptions(t *testing.T) {
 		change func(*Options)
 		want   string
 	}{
-		{"zero options", func(o *Options) { *o = Options{} }, "signing key"},
-		{"empty key", func(o *Options) { o.SigningKey = "" }, "signing key"},
-		{"short key", func(o *Options) { o.SigningKey = strings.Repeat("s", 31) }, "at least 32 bytes"},
-		{"whitespace key", func(o *Options) { o.SigningKey = "  " }, "signing key"},
-		{"placeholder key", func(o *Options) { o.SigningKey = "<replace-me>" }, "signing key"},
+		{"zero options", func(o *Options) { *o = Options{} }, "token lifetime"},
 		{"zero token lifetime", func(o *Options) { o.TokenLifetime = 0 }, "token lifetime"},
 		{"negative token lifetime", func(o *Options) { o.TokenLifetime = -time.Second }, "token lifetime"},
 		{"subsecond token lifetime", func(o *Options) { o.TokenLifetime = time.Millisecond }, "token lifetime"},
@@ -75,7 +71,7 @@ func TestConstructorCopiesOptions(t *testing.T) {
 	options.SigningKey = "changed"
 	options.TokenLifetime = time.Hour
 	options.CookieLifetime = time.Hour
-	if string(store.JwtKey) != strings.Repeat("s", 32) || store.TokenLifetime != time.Second || store.CookieLifetime != time.Second {
+	if store.TokenLifetime != time.Second || store.CookieLifetime != time.Second {
 		t.Fatal("constructor did not preserve validated options")
 	}
 }

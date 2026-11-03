@@ -135,16 +135,15 @@ func TestSQLiteSessionDataStaysServerSide(t *testing.T) {
 		t.Fatal(err)
 	}
 	cookie := w.Result().Cookies()[0]
-	claims, err := sessioncookie.Parse(cookie.Value, store.JwtKey, cookie.Name)
-	if err != nil || claims.Value != "" || claims.ID != s.ID {
-		t.Fatalf("SQLite cookie leaked session data: %+v, %v", claims, err)
+	if cookie.Value != s.ID || len(cookie.Value) != 47 {
+		t.Fatal("SQLite cookie must contain only its opaque token")
 	}
 	r.AddCookie(cookie)
 	loaded, err := store.Get(r, s.Name)
 	if err != nil || loaded.Data["secret"] != s.Data["secret"] {
 		t.Fatalf("large server-side session failed: %v", err)
 	}
-	if _, err := store.db.Exec(`UPDATE sessions SET session = ? WHERE id = ?`, strings.Repeat("a", sessions.MaxEncodedSessionSize+100), s.ID); err != nil {
+	if _, err := store.db.Exec(`UPDATE sessions SET session = ? WHERE id = ?`, strings.Repeat("a", sessions.MaxEncodedSessionSize+100), sessionKey(s.ID, s.Name)); err != nil {
 		t.Fatal(err)
 	}
 	if loaded, err := store.Get(r, s.Name); !errors.Is(err, sessions.ErrSessionTooLarge) || loaded != nil {

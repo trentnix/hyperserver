@@ -80,7 +80,7 @@ func newLookupTestManager(t *testing.T) (*AuthManager, *user.User, *session.Sess
 	if err := usersqlite.NewAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	manager := &AuthManager{verificationJwtKey: strings.Repeat("t", 32), contentManager: &content.ContentManagerService{
+	manager := &AuthManager{contentManager: &content.ContentManagerService{
 		HomeURL: "/", AuthURL: "/login",
 		HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
 			http.Error(w, message, status)
@@ -105,7 +105,7 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 	for _, failure := range []string{"missing session manager", "invalid session cookie", "account storage unavailable"} {
 		t.Run(failure, func(t *testing.T) {
 			manager, account, sessions, db := newLookupTestManager(t)
-			token, err := user.NewAuthVerificationToken(account, []byte(manager.verificationJwtKey), time.Hour)
+			token, err := user.NewAuthVerificationToken(account, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -194,7 +194,7 @@ func TestVerifyUsesAccountRepository(t *testing.T) {
 	for _, scenario := range []string{"success", "storage failure", "nil account", "consumed", "expired", "canceled"} {
 		t.Run(scenario, func(t *testing.T) {
 			manager, account, sessions, _ := newLookupTestManager(t)
-			token, err := user.NewAuthVerificationToken(account, []byte(manager.verificationJwtKey), time.Hour)
+			token, err := user.NewAuthVerificationToken(account, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -210,7 +210,7 @@ func TestVerifyUsesAccountRepository(t *testing.T) {
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			r.Header.Set("HX-Request", "true")
 			calls := 0
-			manager.accounts = verificationRepository{verify: func(ctx context.Context, authorization user.VerificationAuthorization) (*user.User, error) {
+			manager.accounts = verificationRepository{AccountRepository: &tokenLookupRepository{token: func(context.Context, string, string) (user.TokenMetadata, error) { return token.Metadata(), nil }}, verify: func(ctx context.Context, authorization user.VerificationAuthorization) (*user.User, error) {
 				calls++
 				if ctx != r.Context() || authorization.AccountID != account.ID || authorization.Email != account.Email || authorization.TokenHash != token.TokenHash {
 					t.Fatal("verification lost its request context or token identity")
@@ -295,8 +295,8 @@ func TestResetLookupUsesAccountRepository(t *testing.T) {
 		for _, scenario := range []string{"success", "token failure", "account failure", "canceled"} {
 			t.Run(method+"/"+scenario, func(t *testing.T) {
 				account := &user.User{ID: "account", Email: "person@example.invalid"}
-				key := "test-signing-key"
-				token, err := user.NewAuthResetToken(account, []byte(key), time.Hour)
+				_ = "test-signing-key"
+				token, err := user.NewAuthResetToken(account, time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -331,7 +331,7 @@ func TestResetLookupUsesAccountRepository(t *testing.T) {
 						return account, nil
 					},
 				}
-				manager := &AuthManager{accounts: repository, verificationJwtKey: key, contentManager: &content.ContentManagerService{
+				manager := &AuthManager{accounts: repository, contentManager: &content.ContentManagerService{
 					HandleError: func(w http.ResponseWriter, r *http.Request, message string, err error, status int) {
 						http.Error(w, message, status)
 					},
@@ -372,7 +372,7 @@ func TestResetStopsOnTokenLookupFailure(t *testing.T) {
 				manager, account, _, db := newLookupTestManager(t)
 				provider := &lookupTestAuthService{}
 				manager.Services = &Registry{services: []AuthService{provider}}
-				token, err := user.NewAuthResetToken(account, []byte(manager.verificationJwtKey), time.Hour)
+				token, err := user.NewAuthResetToken(account, time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -403,7 +403,7 @@ func TestResetStopsOnTokenLookupFailure(t *testing.T) {
 				if _, err := db.Exec("ALTER TABLE unavailable RENAME TO " + table); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := user.ValidateResetToken(context.Background(), manager.accounts, token.Token, []byte(manager.verificationJwtKey)); err != nil {
+				if _, err := user.ValidateResetToken(context.Background(), manager.accounts, token.Token); err != nil {
 					t.Fatalf("failed lookup invalidated the token: %v", err)
 				}
 				stored, err := usersqlite.NewAccountRepository(db).GetByID(t.Context(), account.ID)

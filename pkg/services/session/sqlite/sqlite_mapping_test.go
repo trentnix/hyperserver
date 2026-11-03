@@ -37,7 +37,7 @@ func TestSQLiteSessionFieldMappings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	row := SQLiteSession{ID: value.ID, Session: encoded, Expires_at: time.Now().Add(time.Hour)}
+	row := SQLiteSession{ID: sessionKey(value.ID, value.Name), Session: encoded, Expires_at: time.Now().Add(time.Hour)}
 	started := time.Now()
 	if err := store.create(t.Context(), &row); err != nil {
 		t.Fatal(err)
@@ -53,11 +53,11 @@ func TestSQLiteSessionFieldMappings(t *testing.T) {
 	if _, err := store.db.ExecContext(t.Context(), `UPDATE sessions SET created_at = ?, updated_at = ? WHERE id = ?`, row.Created_at, row.Updated_at, row.ID); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := store.getSessionFromDatabase(t.Context(), row.ID, value.Name)
+	loaded, err := store.getSessionFromDatabase(t.Context(), value.ID, value.Name)
 	if err != nil || loaded == nil {
 		t.Fatalf("load session: %v", err)
 	}
-	if loaded.ID != row.ID || loaded.Name != value.Name || loaded.IsNew || loaded.Store != store || !loaded.ExpiresAt.Equal(row.Expires_at) || loaded.Data["text"] != value.Data["text"] {
+	if loaded.ID != value.ID || loaded.Name != value.Name || loaded.IsNew || loaded.Store != store || !loaded.ExpiresAt.Equal(row.Expires_at) || loaded.Data["text"] != value.Data["text"] {
 		t.Fatalf("incorrect loaded session: %+v", loaded)
 	}
 
@@ -86,7 +86,7 @@ func TestSQLiteSessionScanFailure(t *testing.T) {
 		t.Run(column, func(t *testing.T) {
 			store := revocationStore(t)
 			value, request := savedSession(t, store)
-			if _, err := store.db.ExecContext(t.Context(), "UPDATE sessions SET "+column+" = NULL WHERE id = ?", value.ID); err != nil {
+			if _, err := store.db.ExecContext(t.Context(), "UPDATE sessions SET "+column+" = NULL WHERE id = ?", sessionKey(value.ID, value.Name)); err != nil {
 				t.Fatal(err)
 			}
 			if got, err := store.Get(request, value.Name); got != nil || err == nil {
@@ -104,11 +104,11 @@ func TestSQLiteSessionCancellationWhileWaiting(t *testing.T) {
 				store.db.SetMaxOpenConns(1)
 				value, request := savedSession(t, store)
 				if operation == "cleanup" {
-					if _, err := store.db.ExecContext(t.Context(), `UPDATE sessions SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Hour), value.ID); err != nil {
+					if _, err := store.db.ExecContext(t.Context(), `UPDATE sessions SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Hour), sessionKey(value.ID, value.Name)); err != nil {
 						t.Fatal(err)
 					}
 				}
-				before := readSQLiteSessionRow(t, store, value.ID)
+				before := readSQLiteSessionRow(t, store, sessionKey(value.ID, value.Name))
 				conn, err := store.db.Conn(t.Context())
 				if err != nil {
 					t.Fatal(err)

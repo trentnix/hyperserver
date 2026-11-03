@@ -2,163 +2,98 @@ package user
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
-	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 )
 
-type (
-	// AuthToken holds an account token and its storage metadata.
-	// Pass Metadata to AccountRepository.InsertToken to persist it without the raw Token.
-	AuthToken struct {
-		UserId string
-		// TokenHash is the SHA-256 hash stored instead of the raw token.
-		TokenHash string
-		Token     string
-		ExpiresAt time.Time
-		Type      string
-	}
-)
+// AuthToken holds a bearer token and its storage metadata.
+// Persist Metadata, never Token. Email binds verification to its recipient.
+type AuthToken struct {
+	UserId    string
+	TokenHash string
+	Token     string
+	ExpiresAt time.Time
+	Type      string
+	Email     string
+}
 
-// Metadata returns the storage fields without the raw signed token.
+// Metadata returns storage fields without the raw bearer token.
 func (token AuthToken) Metadata() TokenMetadata {
 	return TokenMetadata{
 		AccountID: token.UserId, TokenHash: token.TokenHash,
-		Purpose: token.Type, ExpiresAt: token.ExpiresAt,
+		Purpose: token.Type, ExpiresAt: token.ExpiresAt, Email: token.Email,
 	}
 }
 
-func newAuthToken(u *User, jwtKey []byte, expiration time.Duration, tokenType string) (*AuthToken, error) {
-	errNewToken := errors.New("error creating a new token instance")
+func newAuthToken(u *User, expiration time.Duration, purpose string) (*AuthToken, error) {
 	if u == nil || u.ID == "" {
-		return nil, hs_errors.WithCause(ErrUserNotSpecified, errNewToken)
+		return nil, ErrUserNotSpecified
 	}
-
 	if expiration <= 0 {
-		return nil, hs_errors.WithCause(ErrTokenExpirationNotSpecified, errNewToken)
+		return nil, ErrTokenExpirationNotSpecified
 	}
-	if len(jwtKey) == 0 {
-		return nil, hs_errors.WithCause(ErrJwtKeyNotSet, errNewToken)
+	if purpose != ResetTokenPurpose && purpose != VerificationTokenPurpose {
+		return nil, ErrToken
 	}
-	if tokenType != ResetTokenPurpose && tokenType != VerificationTokenPurpose {
-		return nil, hs_errors.WithCause(ErrToken, errors.New("invalid token purpose"))
-	}
-	if tokenType == VerificationTokenPurpose && u.Email == "" {
-		return nil, hs_errors.WithCause(ErrToken, errors.New("verification requires an email address"))
+	if purpose == VerificationTokenPurpose && EmailKey(u.Email) == "" {
+		return nil, ErrToken
 	}
 
-	tokenID, err := uuid.NewRandom()
-	if err != nil {
-		return nil, hs_errors.WithCause(ErrToken, err)
+	raw := opaquetoken.New()
+	token := &AuthToken{UserId: u.ID, Token: raw, TokenHash: opaquetoken.Hash(raw),
+		ExpiresAt: time.Now().Add(expiration), Type: purpose}
+	if purpose == VerificationTokenPurpose {
+		token.Email = u.Email
 	}
-	expirationTime := time.Now().Add(expiration)
-
-	// A random token ID prevents same-second resends from reissuing a consumed token.
-	claims := &VerificationClaims{
-		Id:      u.ID,
-		Purpose: tokenType,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        tokenID.String(),
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-		},
-	}
-	if tokenType == VerificationTokenPurpose {
-		claims.Email = u.Email
-	}
-
-	// Create and sign the token with the specified algorithm and claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	verificationToken, err := token.SignedString(jwtKey)
-	if err != nil {
-		return nil, hs_errors.WithCause(ErrToken, err)
-	}
-
-	hash := sha256.Sum256([]byte(verificationToken))
-	verificationTokenHash := hex.EncodeToString(hash[:])
-
-	authToken := &AuthToken{}
-	authToken.UserId = u.ID
-	authToken.TokenHash = verificationTokenHash
-	authToken.Token = verificationToken
-	authToken.ExpiresAt = expirationTime
-	authToken.Type = tokenType
-
-	// return token
-	return authToken, nil
+	return token, nil
 }
 
-// parseAuthToken checks the signature and purpose before a token can authorize an action.
-func parseAuthToken(tokenString string, jwtKey []byte, purpose string) (*VerificationClaims, error) {
-	if len(jwtKey) == 0 {
-		return nil, hs_errors.WithCause(ErrJwtKeyNotSet, errors.New("a signing key is required to validate a token"))
+// loadToken validates format and stored metadata without consuming the token.
+// Redemption must repeat the storage checks atomically with the account change.
+func loadToken(ctx context.Context, accounts AccountRepository, raw, purpose string) (TokenMetadata, error) {
+	if raw == "" {
+		return TokenMetadata{}, ErrTokenNotSpecified
 	}
-
-	claims := &VerificationClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(*jwt.Token) (any, error) {
-		return jwtKey, nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, hs_errors.WithCause(ErrTokenExpired, err)
-		}
-		return nil, hs_errors.WithCause(ErrToken, errors.New("invalid signed token"))
-	}
-
-	if !token.Valid || claims.Id == "" || claims.Purpose != purpose {
-		return nil, hs_errors.WithCause(ErrToken, errors.New("invalid token claims"))
-	}
-	if purpose == VerificationTokenPurpose && claims.Email == "" {
-		return nil, hs_errors.WithCause(ErrToken, errors.New("verification token has no email address"))
-	}
-	return claims, nil
-}
-
-func validateToken(ctx context.Context, accounts AccountRepository, tokenString string, jwtKey []byte, tokenType string) (*User, error) {
-	errValidateReset := errors.New("error validating the specified reset token")
-	if tokenString == "" {
-		return nil, hs_errors.WithCause(ErrTokenNotSpecified, errValidateReset)
+	if !opaquetoken.Valid(raw) {
+		return TokenMetadata{}, ErrToken
 	}
 	if accounts == nil {
-		return nil, errors.New("the account repository is not configured")
+		return TokenMetadata{}, errors.New("the account repository is not configured")
 	}
-	claims, err := parseAuthToken(tokenString, jwtKey, tokenType)
+	hash := opaquetoken.Hash(raw)
+	stored, err := accounts.GetToken(ctx, hash, purpose)
 	if err != nil {
-		return nil, err
+		return TokenMetadata{}, err
 	}
-
-	hash := sha256.Sum256([]byte(tokenString))
-	tokenHash := hex.EncodeToString(hash[:])
-	stored, err := accounts.GetToken(ctx, tokenHash, tokenType)
-	if err != nil {
-		return nil, err
-	}
-	if stored.AccountID != claims.Id || stored.TokenHash != tokenHash || stored.Purpose != tokenType {
-		return nil, hs_errors.WithCause(ErrToken, errors.New("token does not belong to the stored account"))
+	if stored.AccountID == "" || stored.TokenHash != hash || stored.Purpose != purpose ||
+		(purpose == VerificationTokenPurpose && EmailKey(stored.Email) == "") {
+		return TokenMetadata{}, ErrToken
 	}
 	if !time.Now().Before(stored.ExpiresAt) {
-		return nil, hs_errors.WithCause(ErrTokenExpired, errValidateReset)
+		return TokenMetadata{}, ErrTokenExpired
 	}
+	return stored, nil
+}
 
+func validateToken(ctx context.Context, accounts AccountRepository, raw, purpose string) (*User, error) {
+	stored, err := loadToken(ctx, accounts, raw, purpose)
+	if err != nil {
+		return nil, err
+	}
 	account, err := accounts.GetByID(ctx, stored.AccountID)
 	if err != nil {
 		return nil, err
 	}
-	if account == nil || account.ID != claims.Id {
+	if account == nil || account.ID != stored.AccountID {
 		return nil, errors.New("account repository returned an unexpected account")
 	}
-	if tokenType == VerificationTokenPurpose && EmailKey(account.Email) != EmailKey(claims.Email) {
-		return nil, hs_errors.WithCause(ErrToken, errors.New("verification address no longer matches the account"))
+	if purpose == VerificationTokenPurpose && EmailKey(account.Email) != EmailKey(stored.Email) {
+		return nil, ErrToken
 	}
-
-	// Either deadline may have passed while waiting for storage.
-	now := time.Now()
-	if !now.Before(claims.ExpiresAt.Time) || !now.Before(stored.ExpiresAt) {
-		return nil, hs_errors.WithCause(ErrTokenExpired, errValidateReset)
+	if !time.Now().Before(stored.ExpiresAt) {
+		return nil, ErrTokenExpired
 	}
 	return account, nil
 }

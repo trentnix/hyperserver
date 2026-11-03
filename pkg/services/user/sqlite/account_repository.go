@@ -137,9 +137,9 @@ func (s *AccountRepository) GetToken(ctx context.Context, tokenHash, purpose str
 	}
 
 	var metadata accounts.TokenMetadata
-	err := s.db.QueryRowContext(ctx, `SELECT user_id, token_hash, expires_at, token_type
+	err := s.db.QueryRowContext(ctx, `SELECT user_id, token_hash, expires_at, token_type, email
 		FROM `+userTokenTableName+` WHERE token_hash = ? AND token_type = ?`, tokenHash, purpose).
-		Scan(&metadata.AccountID, &metadata.TokenHash, &metadata.ExpiresAt, &metadata.Purpose)
+		Scan(&metadata.AccountID, &metadata.TokenHash, &metadata.ExpiresAt, &metadata.Purpose, &metadata.Email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return accounts.TokenMetadata{}, hs_errors.WithCause(accounts.ErrTokenNotFound, fmt.Errorf("get token by value"))
 	}
@@ -209,8 +209,8 @@ func (s *AccountRepository) InsertToken(ctx context.Context, metadata accounts.T
 	}
 
 	_, err := s.db.ExecContext(ctx, `INSERT INTO `+userTokenTableName+`
-		(user_id, token_hash, expires_at, token_type) VALUES (?, ?, ?, ?)`,
-		metadata.AccountID, metadata.TokenHash, metadata.ExpiresAt, metadata.Purpose)
+		(user_id, token_hash, expires_at, token_type, email) VALUES (?, ?, ?, ?, ?)`,
+		metadata.AccountID, metadata.TokenHash, metadata.ExpiresAt, metadata.Purpose, metadata.Email)
 	return err
 }
 
@@ -361,7 +361,7 @@ func (s *AccountRepository) ChangePassword(ctx context.Context, u *accounts.User
 }
 
 // ResetPassword consumes a validated reset token and updates the password in one
-// transaction. The caller must check the signature before supplying authorization.
+// transaction. The caller must read authorization metadata by token hash.
 func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User, authorization accounts.ResetAuthorization, passwordHash string) error {
 	if u == nil || u.ID == "" {
 		return accounts.ErrUserNotSpecified
@@ -382,7 +382,7 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 	}
 	defer tx.Rollback()
 
-	if err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, accounts.ResetTokenPurpose, authorization.ExpiresAt); err != nil {
+	if err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, accounts.ResetTokenPurpose, "", authorization.ExpiresAt); err != nil {
 		return err
 	}
 	now := time.Now()
@@ -409,7 +409,7 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 }
 
 // Verify consumes a validated verification token and verifies its email address
-// in one transaction. The caller must check the signature before supplying authorization.
+// in one transaction. The caller must read authorization metadata by token hash.
 func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.VerificationAuthorization) (*accounts.User, error) {
 	if s.db == nil {
 		return nil, database.ErrDatabaseUnavailable
@@ -424,7 +424,7 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 	}
 	defer tx.Rollback()
 
-	if err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, accounts.VerificationTokenPurpose, authorization.ExpiresAt); err != nil {
+	if err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, accounts.VerificationTokenPurpose, authorization.Email, authorization.ExpiresAt); err != nil {
 		return nil, err
 	}
 
@@ -448,14 +448,15 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 }
 
 // deleteTokenAndCheckExpiry deletes the matching token, then checks its stored
-// and signed expiry after acquiring the write lock. The caller must roll back on
+// and supplied expiry after acquiring the write lock. The caller must roll back on
 // any error to restore the token.
-func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, tokenHash, purpose string, signedExpiry time.Time) error {
+func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, tokenHash, purpose, email string, suppliedExpiry time.Time) error {
 	var expiresAt time.Time
+	var storedEmail string
 	err := tx.QueryRowContext(ctx, `DELETE FROM `+userTokenTableName+`
 		WHERE user_id = ? AND token_hash = ? AND token_type = ?
-		RETURNING expires_at`, accountID, tokenHash, purpose).
-		Scan(&expiresAt)
+		RETURNING expires_at, email`, accountID, tokenHash, purpose).
+		Scan(&expiresAt, &storedEmail)
 	if errors.Is(err, sql.ErrNoRows) {
 		return hs_errors.WithCause(accounts.ErrTokenNotFound, err)
 	}
@@ -464,8 +465,11 @@ func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, token
 	}
 
 	now := time.Now()
-	if !now.Before(expiresAt) || !now.Before(signedExpiry) {
+	if !now.Before(expiresAt) || !now.Before(suppliedExpiry) {
 		return accounts.ErrTokenExpired
+	}
+	if purpose == accounts.VerificationTokenPurpose && (accounts.EmailKey(storedEmail) == "" || accounts.EmailKey(storedEmail) != accounts.EmailKey(email)) {
+		return accounts.ErrToken
 	}
 	return nil
 }

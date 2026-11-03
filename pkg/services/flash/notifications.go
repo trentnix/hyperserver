@@ -40,6 +40,8 @@ func GetNotifications(w http.ResponseWriter, r *http.Request) ([]messages.Notifi
 // retried after failure. Successful acknowledgment is a no-op on subsequent calls.
 // Both loading and acknowledgment belong to one request, not concurrent goroutines.
 // HEAD and missing categories return no notifications or acknowledgment.
+// Invalid cookies return no notifications and an acknowledgment that expires the
+// cookie unless a new session replaced it. Storage and decoding failures return errors.
 func LoadNotifications(r *http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
 	return loadNotifications(r, "")
 }

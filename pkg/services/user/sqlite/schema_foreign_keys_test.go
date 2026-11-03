@@ -77,11 +77,11 @@ func TestTokenForeignKeyDeclarations(t *testing.T) {
 			}
 
 			// Exercise enforcement and cascading deletion for every accepted shape.
-			if _, err := db.ExecContext(t.Context(), `INSERT INTO usertoken VALUES ('missing', 'orphan', CURRENT_TIMESTAMP, 'auth-reset')`); err == nil {
+			if _, err := db.ExecContext(t.Context(), `INSERT INTO usertoken (user_id, token_hash, expires_at, token_type) VALUES ('missing', 'orphan', CURRENT_TIMESTAMP, 'auth-reset')`); err == nil {
 				t.Fatal("token without an account accepted")
 			}
 			if _, err := db.ExecContext(t.Context(), `INSERT INTO user (id, email, email_key) VALUES ('account', 'person@example.invalid', 'person@example.invalid');
-				INSERT INTO usertoken VALUES ('account', 'stored', CURRENT_TIMESTAMP, 'auth-reset');
+				INSERT INTO usertoken (user_id, token_hash, expires_at, token_type) VALUES ('account', 'stored', CURRENT_TIMESTAMP, 'auth-reset');
 				DELETE FROM user WHERE id = 'account'`); err != nil {
 				t.Fatal(err)
 			}
@@ -96,7 +96,7 @@ func TestTokenForeignKeyDeclarations(t *testing.T) {
 func TestTokenForeignKeyFailurePreservesDataAndAllowsRepair(t *testing.T) {
 	db := versionedAccountTestDB(t)
 	schema := strings.Replace(tokenKeyTestSchema, ",\n\tFOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE", "", 1)
-	if _, err := db.ExecContext(t.Context(), accountKeyTestSchema+`;`+schema+`; INSERT INTO usertoken VALUES ('account', 'preserved', '2030-01-01', 'auth-reset')`); err != nil {
+	if _, err := db.ExecContext(t.Context(), accountKeyTestSchema+`;`+schema+`; INSERT INTO usertoken (user_id, token_hash, expires_at, token_type) VALUES ('account', 'preserved', '2030-01-01', 'auth-reset')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := NewAccountRepository(db).Initialize(t.Context()); err == nil || !strings.Contains(err.Error(), "requires a foreign key") {

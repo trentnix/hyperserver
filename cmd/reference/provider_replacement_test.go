@@ -14,9 +14,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	"github.com/trentnix/hyperserver/internal/test/sessiontest"
 	site "github.com/trentnix/hyperserver/modules/site"
 	"github.com/trentnix/hyperserver/modules/site/models"
@@ -266,8 +266,8 @@ func (s *replacementSessionStore) Get(r *http.Request, name string) (*session.Se
 	}
 	cookie, err := r.Cookie(name)
 	if err == nil {
-		if _, err := uuid.Parse(cookie.Value); err != nil {
-			return nil, hs_errors.WithCause(session.ErrInvalidToken, err)
+		if !opaquetoken.Valid(cookie.Value) {
+			return nil, session.ErrInvalidToken
 		}
 		record, ok := s.records[cookie.Value]
 		if ok && record.name == name && time.Now().Before(record.expires) {

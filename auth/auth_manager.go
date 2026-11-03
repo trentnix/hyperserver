@@ -38,7 +38,6 @@ type AuthManager struct {
 	contentManager *content_services.ContentManagerService
 	templates      map[string]*content.Templates
 
-	verificationJwtKey   string
 	resetTokenExpiration time.Duration
 
 	resetRequiresNewCredentials bool
@@ -83,7 +82,6 @@ func (a *AuthManager) Init(_ context.Context, s *server.ApplicationServer) error
 
 	a.contentManager = s.ContentManager
 
-	a.verificationJwtKey = s.Config.Auth.JwtKey
 	a.resetTokenExpiration = s.Config.Auth.ResetTokenExpiration
 
 	a.resetRequiresNewCredentials = s.Config.Auth.ResetRequiresNewCredentials

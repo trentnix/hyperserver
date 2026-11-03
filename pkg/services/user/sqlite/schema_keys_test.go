@@ -13,7 +13,7 @@ import (
 func versionedAccountTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db := unpreparedUserTestDB(t)
-	if _, err := db.ExecContext(t.Context(), accountVersionSchema+`; INSERT INTO hyperserver_account_version (version, dirty) VALUES (2, false);`+accountSchemaV2); err != nil {
+	if _, err := db.ExecContext(t.Context(), accountVersionSchema+`; INSERT INTO hyperserver_account_version (version, dirty) VALUES (3, false);`+accountSchemaV2); err != nil {
 		t.Fatal(err)
 	}
 	return db
@@ -37,6 +37,7 @@ const tokenKeyTestSchema = `CREATE TABLE usertoken (
 	token_hash VARCHAR(255) NOT NULL,
 	expires_at TIMESTAMP NOT NULL,
 	token_type VARCHAR(255) NOT NULL,
+	email TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (user_id, token_hash),
 	FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
 )`

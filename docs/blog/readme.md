@@ -11,11 +11,9 @@ Use the Go version in [go.mod](../../go.mod), CGO, and a C compiler. From the re
 ```sh
 cp config-template.yaml config.yaml
 cp modules/blog/config-template.yaml modules/blog/config.yaml
-openssl rand -hex 32
-openssl rand -hex 32
 ```
 
-Put the two different generated values in `http.session.jwtKey` and `auth.jwtKey`. Set `adminEmail` in `modules/blog/config.yaml` before starting. Only that address can register or log in. The supplied configuration requires email verification before administrative access.
+Set `adminEmail` in `modules/blog/config.yaml` before starting. Only that address can register or log in. The supplied configuration requires email verification before administrative access.
 
 You can enable [Google authentication](../google-authentication.md) alongside email or on its own. The login page shows only enabled providers. Existing administrators must log in and connect Google before disabling their original login method.
 
@@ -90,7 +88,7 @@ Migration files are immutable after release. Add numbered migrations for later c
 
 ## Deployment limits
 
-Configure real SMTP delivery, independent signing keys, HTTPS, and `http.publicOrigin` before public use. The default Mailpit credentials are local-only. Review [proxy settings](../http.md#addresses-tls-and-proxies) and the project's [security status](../../SECURITY.md).
+Configure real SMTP delivery, HTTPS, and `http.publicOrigin` before public use. The default Mailpit credentials are local-only. Review [proxy settings](../http.md#addresses-tls-and-proxies) and the project's [security status](../../SECURITY.md).
 
 Edit content through the application. Direct database writes bypass reference tracking and cache invalidation. Use persistent storage for databases and uploads, protect configuration files, and keep verified backups off the serving machine. The [container rehearsal](../deployment.md) exercises `cmd/reference`, not the blog.
 

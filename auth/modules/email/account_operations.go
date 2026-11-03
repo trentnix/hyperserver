@@ -86,7 +86,7 @@ func (a *EmailAuthService) resetPassword(ctx context.Context, u *user.User, toke
 	if err != nil {
 		return err
 	}
-	return u.ResetPassword(ctx, a.accounts, token, []byte(a.config.Auth.JwtKey), hash)
+	return u.ResetPassword(ctx, a.accounts, token, hash)
 }
 
 func (a *EmailAuthService) sendRegistrationVerification(ctx context.Context, email string, origin url.URL) error {
@@ -136,7 +136,7 @@ func (a *EmailAuthService) SendVerificationEmail(ctx context.Context, u *user.Us
 		tokenExpiration = 24 * time.Hour
 	}
 
-	verificationToken, err := user.NewAuthVerificationToken(u, []byte(a.config.Auth.JwtKey), tokenExpiration)
+	verificationToken, err := user.NewAuthVerificationToken(u, tokenExpiration)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, exp
 		return messaging.ErrMailUnavailable
 	}
 
-	token, err := user.NewAuthResetToken(u, []byte(a.config.Auth.JwtKey), expiration)
+	token, err := user.NewAuthResetToken(u, expiration)
 	if err != nil {
 		return err
 	}

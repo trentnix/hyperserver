@@ -8,7 +8,6 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/session/internal/sessioncookie"
 )
 
 // ConfiguredProvider adapts SQLite sessions to configuration-driven setup.
@@ -23,7 +22,10 @@ func ConfiguredProvider(cfg config.Config) session.ConfiguredProvider {
 			if _, err := configuredTable(options); err != nil {
 				return err
 			}
-			return sessioncookie.ValidateConfig(settings.JwtKey, settings.TokenAge, settings.CookieAge)
+			if err := config.ValidateLifetime("http.session.tokenAge", settings.TokenAge); err != nil {
+				return err
+			}
+			return config.ValidateLifetime("http.session.cookieAge", settings.CookieAge)
 		},
 		Open: func(ctx context.Context, options map[string]string) (session.SessionStore, error) {
 			table, err := configuredTable(options)
@@ -37,7 +39,6 @@ func ConfiguredProvider(cfg config.Config) session.ConfiguredProvider {
 			return NewSQLiteStore(ctx, Options{
 				Connection:     connection,
 				Table:          table,
-				SigningKey:     settings.JwtKey,
 				TokenLifetime:  settings.TokenAge,
 				CookieLifetime: settings.CookieAge,
 			})

@@ -36,7 +36,7 @@ func TestHTTPPasswordBoundaries(t *testing.T) {
 						}
 						if operation == "reset" {
 							var err error
-							token, err = user.NewAuthResetToken(account, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+							token, err = user.NewAuthResetToken(account, time.Hour)
 							if err != nil {
 								t.Fatal(err)
 							}
@@ -140,7 +140,7 @@ func TestHTTPAuthenticationRejectsPasswordSuffixBeyondByteLimit(t *testing.T) {
 func TestHTTPResetRejectsInvalidPassword(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
-		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+		token, err := user.NewAuthResetToken(u, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}

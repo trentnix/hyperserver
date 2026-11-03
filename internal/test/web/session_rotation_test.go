@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/trentnix/hyperserver/auth/identity"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
@@ -78,7 +77,7 @@ func TestHTTPAuthenticationRotation(t *testing.T) {
 				}
 				var w *httptest.ResponseRecorder
 				if operation == "verification" {
-					token, err := user.NewAuthVerificationToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+					token, err := user.NewAuthVerificationToken(u, time.Hour)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -133,7 +132,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 				}
 				h.establishSession(t, u)
 				old := h.authenticationCookie(t)
-				token, err := user.NewAuthVerificationToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+				token, err := user.NewAuthVerificationToken(u, time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -220,7 +219,7 @@ func TestHTTPPasswordChangesRevokeAllSessions(t *testing.T) {
 				if strings.HasSuffix(operation, "reset") {
 					base, _ := url.Parse(h.baseURL)
 					h.cookies.SetCookies(base, []*http.Cookie{{Name: "auth-user-session", Path: "/", MaxAge: -1}})
-					token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+					token, err := user.NewAuthResetToken(u, time.Hour)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -338,10 +337,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 				if captured == nil {
 					t.Fatal("missing authentication cookie")
 				}
-				claims := &sessionCookieClaims{}
-				if _, err := jwt.ParseWithClaims(captured.Value, claims, func(*jwt.Token) (any, error) { return []byte(h.app.Config.HTTP.Session.JwtKey), nil }); err != nil {
-					t.Fatal(err)
-				}
+				token := captured.Value
 				called := false
 				h.app.Web.Handle("GET /revocation-protected", authmiddleware.RequireAuthentication(h.accounts, h.app.ContentManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
@@ -369,15 +365,15 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 						t.Fatal(err)
 					}
 					if failLogout {
-						if u == nil || u.ID != account.ID || s.ID != claims.ID {
+						if u == nil || u.ID != account.ID || s.ID != token {
 							t.Fatal("failed logout cleared request-local identity")
 						}
-					} else if u != nil || user.GetUserFromContext(r.Context()) != nil || !s.IsNew || len(s.Data) != 0 || s.ID == claims.ID {
+					} else if u != nil || user.GetUserFromContext(r.Context()) != nil || !s.IsNew || len(s.Data) != 0 || s.ID == token {
 						t.Fatal("successful logout retained request-local identity")
 					}
 				}))
 				if scenario == "stored expiry" {
-					if _, err := h.db.Exec(`UPDATE session SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Minute), claims.ID); err != nil {
+					if _, err := h.db.Exec(`UPDATE session SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Minute), sqliteSessionKey(token, captured.Name)); err != nil {
 						t.Fatal(err)
 					}
 				} else {
@@ -403,7 +399,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 						t.Fatalf("logout failed: %d %s", w.Code, w.Body.String())
 					}
 					var count int
-					if err := h.db.QueryRowContext(t.Context(), `SELECT count(*) FROM session WHERE id = ?`, claims.ID).Scan(&count); err != nil || count != 0 {
+					if err := h.db.QueryRowContext(t.Context(), `SELECT count(*) FROM session WHERE id = ?`, sqliteSessionKey(token, captured.Name)).Scan(&count); err != nil || count != 0 {
 						t.Fatalf("logout left its stored session: %d, %v", count, err)
 					}
 				}

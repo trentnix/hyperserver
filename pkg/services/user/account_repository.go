@@ -50,7 +50,7 @@ type AccountRepository interface {
 	// InsertToken inserts only. The account ID and token hash identify the record.
 	// Duplicate records must return an error without replacing the stored token.
 	// Failure must leave storage unchanged. Success must not change other tokens or accounts.
-	// Token generation, signing, and delivery belong to the caller.
+	// Token generation and delivery belong to the caller. Preserve the recipient Email.
 	InsertToken(context.Context, TokenMetadata) error
 	// Update changes an existing account by ID. Missing accounts return ErrUserNotFound,
 	// stale SessionVersion values return ErrUserChanged, and duplicate emails return
@@ -71,10 +71,10 @@ type AccountRepository interface {
 	// The caller must validate and hash the new password before calling.
 	ChangePassword(ctx context.Context, u *User, passwordHash string) error
 	// ResetPassword atomically consumes the exact reset token, replaces the password,
-	// and increments SessionVersion. The caller must validate the token's signature,
+	// and increments SessionVersion. The caller must validate the token's stored hash,
 	// reset purpose, and account identity, and validate and hash the new password.
 	// Implementations must match the stored token's hash, account, and reset purpose
-	// and recheck both signed and stored expiry when consuming it, including after
+	// and recheck both supplied and stored expiry when consuming it, including after
 	// any wait for storage.
 	// A missing token returns ErrTokenNotFound. Expiry returns ErrTokenExpired.
 	// A missing account or changed password or provider returns ErrToken, ErrUserNotFound,
@@ -83,10 +83,10 @@ type AccountRepository interface {
 	// Other account fields and tokens must remain unchanged.
 	ResetPassword(ctx context.Context, u *User, authorization ResetAuthorization, passwordHash string) error
 	// Verify atomically consumes the exact verification token and marks its account
-	// verified only if the current and signed emails have the same EmailKey. The caller must
-	// validate the token's signature, verification purpose, account ID, and email.
+	// verified only if the current and stored recipient emails have the same EmailKey.
+	// The caller must validate the stored hash, verification purpose, account ID, and email.
 	// Implementations must match the stored token's hash, account, and verification
-	// purpose and recheck signed and stored expiry when consuming it, including after
+	// purpose and recipient email and recheck supplied and stored expiry, including after
 	// any wait for storage. Missing tokens return ErrTokenNotFound. Expiry returns ErrTokenExpired.
 	// A missing account or changed email returns ErrToken or ErrUserNotFound.
 	// Storage failures must remain separate from token rejections.
@@ -99,26 +99,26 @@ type AccountRepository interface {
 // TokenMetadata contains only the fields needed to store an issued account token.
 // AccountID, TokenHash, and ExpiresAt must be set. Purpose must be "auth-reset" or
 // "auth-verification". TokenHash is the lowercase hexadecimal SHA-256 hash of the
-// signed token. The raw token and signing key must not be passed to storage.
+// opaque token. The raw token must not be passed to storage. Email is required for
+// verification tokens and must contain the recipient address at issuance.
 type TokenMetadata struct {
 	AccountID string
 	TokenHash string
 	Purpose   string
 	ExpiresAt time.Time
+	Email     string
 }
 
-// ResetAuthorization carries the storage checks for a signature-validated reset token.
-// ExpiresAt is the signed expiry, not the stored expiry. Construct this value only
-// after validating the token's signature, reset purpose, and account identity.
+// ResetAuthorization carries metadata read by hash from account storage.
+// Providers must recheck the metadata when consuming the token.
 type ResetAuthorization struct {
 	AccountID string
 	TokenHash string
 	ExpiresAt time.Time
 }
 
-// VerificationAuthorization carries the storage checks for a signature-validated
-// verification token. Email and ExpiresAt must come from its signed claims.
-// Construct this value only after validating the signature and verification purpose.
+// VerificationAuthorization carries metadata read by hash from account storage.
+// Providers must recheck the recipient email and expiry when consuming the token.
 type VerificationAuthorization struct {
 	AccountID string
 	Email     string

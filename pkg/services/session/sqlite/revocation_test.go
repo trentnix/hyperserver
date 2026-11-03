@@ -20,7 +20,7 @@ func revocationStore(t *testing.T) *SQLiteStore {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	s := &SQLiteStore{db: db, tableName: "sessions", JwtKey: []byte("revocation-test-key"), TokenLifetime: time.Hour, CookieLifetime: time.Hour}
+	s := &SQLiteStore{db: db, tableName: "sessions", TokenLifetime: time.Hour, CookieLifetime: time.Hour}
 	if err := s.configureDatabase(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestSQLiteSessionRevocation(t *testing.T) {
 		t.Fatalf("captured cookie restored a revoked session: %+v, %v", loaded, err)
 	}
 	var count int
-	if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions WHERE id = ?`, other.ID).Scan(&count); err != nil || count != 1 {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions WHERE id = ?`, sessionKey(other.ID, other.Name)).Scan(&count); err != nil || count != 1 {
 		t.Fatal("logout removed an unrelated session", err)
 	}
 
@@ -151,12 +151,12 @@ func TestSQLiteStoredExpiration(t *testing.T) {
 			if state == "zero" {
 				expires = time.Time{}
 			}
-			if _, err := store.db.Exec(`UPDATE sessions SET expires_at = ? WHERE id = ?`, expires, original.ID); err != nil {
+			if _, err := store.db.Exec(`UPDATE sessions SET expires_at = ? WHERE id = ?`, expires, sessionKey(original.ID, original.Name)); err != nil {
 				t.Fatal(err)
 			}
 			if state != "active" {
 				// Expired data must not be decoded or restored, even with a valid signed cookie.
-				if _, err := store.db.Exec(`UPDATE sessions SET session = 'invalid base64!' WHERE id = ?`, original.ID); err != nil {
+				if _, err := store.db.Exec(`UPDATE sessions SET session = 'invalid base64!' WHERE id = ?`, sessionKey(original.ID, original.Name)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -179,7 +179,7 @@ func TestSQLiteSaveDoesNotExtendStoredExpiration(t *testing.T) {
 	store := revocationStore(t)
 	original, r := savedSession(t, store)
 	expired := time.Now().Add(-time.Minute)
-	if _, err := store.db.Exec(`UPDATE sessions SET expires_at = ? WHERE id = ?`, expired, original.ID); err != nil {
+	if _, err := store.db.Exec(`UPDATE sessions SET expires_at = ? WHERE id = ?`, expired, sessionKey(original.ID, original.Name)); err != nil {
 		t.Fatal(err)
 	}
 	if err := original.Save(httptest.NewRecorder(), r); err != nil {
@@ -229,7 +229,7 @@ func TestSQLiteEndFailurePreservesState(t *testing.T) {
 			}
 			if store.db != nil {
 				var count int
-				if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions WHERE id = ?`, id).Scan(&count); err != nil || count != 1 {
+				if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions WHERE id = ?`, sessionKey(id, s.Name)).Scan(&count); err != nil || count != 1 {
 					t.Fatal("failed logout removed the stored session", err)
 				}
 			}

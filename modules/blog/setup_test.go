@@ -56,7 +56,7 @@ func TestSetupExpiredVerification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := user.NewAuthVerificationToken(account, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+	token, err := user.NewAuthVerificationToken(account, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

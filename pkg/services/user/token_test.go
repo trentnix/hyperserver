@@ -7,95 +7,54 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 )
 
 func TestTokenPurposeValues(t *testing.T) {
 	if ResetTokenPurpose != "auth-reset" || VerificationTokenPurpose != "auth-verification" {
-		t.Fatal("token purposes must match existing signed tokens and stored metadata")
+		t.Fatal("token purposes must match stored metadata")
 	}
 }
 
 func TestTokenCreationRejectsUnsupportedPurpose(t *testing.T) {
 	for _, purpose := range []string{"", "session"} {
 		t.Run(purpose, func(t *testing.T) {
-			if _, err := newAuthToken(&User{ID: "test-user"}, []byte("test-key"), time.Hour, purpose); err == nil {
+			if _, err := newAuthToken(&User{ID: "test-user"}, time.Hour, purpose); err == nil {
 				t.Fatal("created a token with an unsupported purpose")
 			}
 		})
 	}
 }
 
-func TestSignedTokenValidation(t *testing.T) {
-	for _, purpose := range []string{ResetTokenPurpose, VerificationTokenPurpose} {
-		for _, failure := range []string{
-			"missing purpose", "unknown purpose", "wrong purpose", "missing user",
-			"missing expiry", "null expiry", "zero expiry", "invalid expiry", "expired", "expired wrong key",
-			"wrong key", "empty key", "HS384", "HS512", "unsigned",
-			"future issued at", "future not before", "malformed",
-		} {
-			t.Run(purpose+"/"+failure, func(t *testing.T) {
-				claims := jwt.MapClaims{"Id": "test-user", "purpose": purpose, "email": "person@example.invalid", "exp": time.Now().Add(time.Hour).Unix()}
-				key := []byte("test-signing-key")
-				var signingKey any = key
-				var method jwt.SigningMethod = jwt.SigningMethodHS256
-				switch failure {
-				case "missing purpose":
-					delete(claims, "purpose")
-				case "unknown purpose":
-					claims["purpose"] = "session"
-				case "wrong purpose":
-					claims["purpose"] = ResetTokenPurpose
-					if purpose == ResetTokenPurpose {
-						claims["purpose"] = VerificationTokenPurpose
-					}
-				case "missing user":
-					delete(claims, "Id")
-				case "missing expiry":
-					delete(claims, "exp")
-				case "null expiry":
-					claims["exp"] = nil
-				case "zero expiry":
-					claims["exp"] = 0
-				case "invalid expiry":
-					claims["exp"] = "tomorrow"
-				case "expired", "expired wrong key":
-					claims["exp"] = time.Now().Add(-time.Hour).Unix()
-				case "HS384":
-					method = jwt.SigningMethodHS384
-				case "HS512":
-					method = jwt.SigningMethodHS512
-				case "unsigned":
-					method, signingKey = jwt.SigningMethodNone, jwt.UnsafeAllowNoneSignatureType
-				case "future issued at":
-					claims["iat"] = time.Now().Add(time.Hour).Unix()
-				case "future not before":
-					claims["nbf"] = time.Now().Add(time.Hour).Unix()
-				}
-				raw, err := jwt.NewWithClaims(method, claims).SignedString(signingKey)
-				if err != nil {
-					t.Fatal(err)
-				}
-				switch failure {
-				case "wrong key", "expired wrong key":
-					key = []byte("another-key")
-				case "empty key":
-					key = nil
-				case "malformed":
-					raw = "not-a-token"
-				}
-				if _, err := parseAuthToken(raw, key, purpose); err == nil {
-					t.Fatal("invalid token accepted")
-				} else if failure == "expired" {
-					if !errors.Is(err, ErrTokenExpired) {
-						t.Fatalf("error = %v, want ErrTokenExpired", err)
-					}
-				} else if failure == "expired wrong key" {
-					if errors.Is(err, ErrTokenExpired) {
-						t.Fatal("invalid signature was classified as an expired valid token")
-					}
-				}
-			})
+func TestOpaqueTokenFormat(t *testing.T) {
+	calls := 0
+	failure := errors.New("token lookup reached")
+	repo := tokenLookupRepository{token: func(context.Context, string, string) (TokenMetadata, error) {
+		calls++
+		return TokenMetadata{}, failure
+	}}
+	for _, raw := range []string{"", "legacy.jwt.token", "hs1_invalid", opaquetoken.New() + "x", opaquetoken.Hash(opaquetoken.New())} {
+		want := ErrToken
+		if raw == "" {
+			want = ErrTokenNotSpecified
+		}
+		if _, err := loadToken(t.Context(), repo, raw, ResetTokenPurpose); !errors.Is(err, want) || calls != 0 {
+			t.Fatalf("malformed token: error=%v, want=%v, repository calls=%d", err, want, calls)
+		}
+	}
+	if _, err := loadToken(t.Context(), repo, opaquetoken.New(), ResetTokenPurpose); !errors.Is(err, failure) || calls != 1 {
+		t.Fatalf("valid format did not reach repository: error=%v, calls=%d", err, calls)
+	}
+	u := &User{ID: "account", Email: "person@example.invalid"}
+	seen := map[string]bool{}
+	for range 100 {
+		token, err := newAuthToken(u, time.Hour, VerificationTokenPurpose)
+		if err != nil || !opaquetoken.Valid(token.Token) || token.TokenHash != opaquetoken.Hash(token.Token) || seen[token.Token] {
+			t.Fatal("invalid or duplicate token", err)
+		}
+		seen[token.Token] = true
+		if token.Metadata().Email != u.Email {
+			t.Fatal("recipient not bound")
 		}
 	}
 }
@@ -116,23 +75,22 @@ func (s tokenLookupRepository) GetByID(ctx context.Context, id string) (*User, e
 
 func TestValidateTokenUsesRepository(t *testing.T) {
 	for _, purpose := range []string{ResetTokenPurpose, VerificationTokenPurpose} {
-		for _, scenario := range []string{"success", "wrong signature", "wrong signed purpose", "empty token", "nil repository", "missing token", "token failure", "wrong stored account", "wrong stored hash", "wrong stored purpose", "stored expiry", "missing account", "account failure", "nil account", "wrong account", "changed email", "canceled", "account canceled"} {
+		for _, scenario := range []string{"success", "malformed", "wrong purpose", "empty token", "nil repository", "missing token", "token failure", "wrong stored account", "wrong stored hash", "wrong stored purpose", "stored expiry", "missing account", "account failure", "nil account", "wrong account", "changed email", "canceled", "account canceled"} {
 			t.Run(purpose+"/"+scenario, func(t *testing.T) {
 				account := &User{ID: "account", Email: "person@example.invalid"}
-				key := []byte("test-signing-key")
 				tokenPurpose := purpose
-				if scenario == "wrong signed purpose" {
+				if scenario == "wrong purpose" {
 					tokenPurpose = ResetTokenPurpose
 					if purpose == ResetTokenPurpose {
 						tokenPurpose = VerificationTokenPurpose
 					}
 				}
-				token, err := newAuthToken(account, key, time.Hour, tokenPurpose)
+				token, err := newAuthToken(account, time.Hour, tokenPurpose)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if scenario == "wrong signature" {
-					key = []byte("wrong-key")
+				if scenario == "malformed" {
+					token.Token = "not-a-token"
 				} else if scenario == "empty token" {
 					token.Token = ""
 				}
@@ -156,7 +114,7 @@ func TestValidateTokenUsesRepository(t *testing.T) {
 						case "token failure":
 							return TokenMetadata{}, failure
 						case "wrong stored account":
-							metadata.AccountID = "another-account"
+							metadata.AccountID = ""
 						case "wrong stored hash":
 							metadata.TokenHash = "another-hash"
 						case "wrong stored purpose":
@@ -198,7 +156,7 @@ func TestValidateTokenUsesRepository(t *testing.T) {
 				if purpose == VerificationTokenPurpose {
 					validate = ValidateVerificationToken
 				}
-				got, err := validate(ctx, repository, token.Token, key)
+				got, err := validate(ctx, repository, token.Token)
 				wantSuccess := scenario == "success" || (scenario == "changed email" && purpose == ResetTokenPurpose)
 				if wantSuccess {
 					if err != nil || got != account {
@@ -209,7 +167,7 @@ func TestValidateTokenUsesRepository(t *testing.T) {
 				}
 				wantTokenCalls, wantAccountCalls := 1, 0
 				switch scenario {
-				case "wrong signature", "wrong signed purpose", "empty token", "nil repository":
+				case "malformed", "empty token", "nil repository":
 					wantTokenCalls = 0
 				case "success", "missing account", "account failure", "nil account", "wrong account", "changed email", "account canceled":
 					wantAccountCalls = 1
@@ -234,45 +192,33 @@ func TestValidateTokenUsesRepository(t *testing.T) {
 func TestValidateTokenExpiryDuringLookup(t *testing.T) {
 	for _, purpose := range []string{ResetTokenPurpose, VerificationTokenPurpose} {
 		for _, waitAt := range []string{"token", "account"} {
-			for _, deadline := range []string{"signed", "stored"} {
-				t.Run(purpose+"/"+waitAt+"/"+deadline, func(t *testing.T) {
-					synctest.Test(t, func(t *testing.T) {
-						account := &User{ID: "account", Email: "person@example.invalid"}
-						key := []byte("test-signing-key")
-						lifetime := time.Hour
-						if deadline == "signed" {
-							lifetime = time.Second
-						}
-						token, err := newAuthToken(account, key, lifetime, purpose)
-						if err != nil {
-							t.Fatal(err)
-						}
-						metadata := token.Metadata()
-						metadata.ExpiresAt = time.Now().Add(time.Hour)
-						if deadline == "stored" {
-							metadata.ExpiresAt = time.Now().Add(time.Second)
-						}
-						repository := tokenLookupRepository{
-							token: func(context.Context, string, string) (TokenMetadata, error) {
-								if waitAt == "token" {
-									time.Sleep(time.Second)
-								}
-								return metadata, nil
-							},
-							account: func(context.Context, string) (*User, error) {
-								if waitAt == "account" {
-									time.Sleep(time.Second)
-								}
-								return account, nil
-							},
-						}
-						got, err := validateToken(context.Background(), repository, token.Token, key, purpose)
-						if got != nil || !errors.Is(err, ErrTokenExpired) {
-							t.Fatalf("lookup accepted token at its expiry boundary: %v, %v", got, err)
-						}
-					})
+			t.Run(purpose+"/"+waitAt, func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					account := &User{ID: "account", Email: "person@example.invalid"}
+					token, err := newAuthToken(account, time.Second, purpose)
+					if err != nil {
+						t.Fatal(err)
+					}
+					repository := tokenLookupRepository{
+						token: func(context.Context, string, string) (TokenMetadata, error) {
+							if waitAt == "token" {
+								time.Sleep(time.Second)
+							}
+							return token.Metadata(), nil
+						},
+						account: func(context.Context, string) (*User, error) {
+							if waitAt == "account" {
+								time.Sleep(time.Second)
+							}
+							return account, nil
+						},
+					}
+					got, err := validateToken(context.Background(), repository, token.Token, purpose)
+					if got != nil || !errors.Is(err, ErrTokenExpired) {
+						t.Fatalf("lookup accepted token at its expiry boundary: %v, %v", got, err)
+					}
 				})
-			}
+			})
 		}
 	}
 }

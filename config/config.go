@@ -64,7 +64,7 @@ type (
 		RateLimit                    *ModuleRateLimitConfig // Capacity for each authentication mutation route. Nil uses defaults.
 		Enabled                      bool                   // Enables authentication routes and provider initialization.
 		RegistrationEnabled          bool                   // Allows new accounts. Defaults to false without disabling existing-account recovery.
-		JwtKey                       string                 // Signs account tokens. Must differ from the session signing key.
+		JwtKey                       string                 // Deprecated: ignored. Account tokens are opaque and need no signing key.
 		VerificationEndpoint         string
 		VerificationTokenExpiration  time.Duration
 		ResetTokenExpiration         time.Duration

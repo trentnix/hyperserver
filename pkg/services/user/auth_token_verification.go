@@ -2,56 +2,36 @@ package user
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
 	"time"
 )
 
-type (
-	// AuthVerificationToken contains a verification token and its storage metadata.
-	AuthVerificationToken struct {
-		AuthToken
-	}
-)
+// AuthVerificationToken contains a verification token and its storage metadata.
+type AuthVerificationToken struct{ AuthToken }
 
 // NewAuthVerificationToken creates a distinct token bound to u.ID and u.Email.
-// Store its Metadata with AccountRepository.InsertToken before sending the link.
-// Other tokens remain valid.
-func NewAuthVerificationToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthVerificationToken, error) {
-	authToken, err := newAuthToken(u, jwtKey, expiration, VerificationTokenPurpose)
+// Store its Metadata before sending the link. Other tokens remain valid.
+func NewAuthVerificationToken(u *User, expiration time.Duration) (*AuthVerificationToken, error) {
+	token, err := newAuthToken(u, expiration, VerificationTokenPurpose)
 	if err != nil {
 		return nil, err
 	}
-
-	return &AuthVerificationToken{AuthToken: *authToken}, nil
+	return &AuthVerificationToken{AuthToken: *token}, nil
 }
 
-// ValidateVerificationToken checks a signed verification token against its stored
-// hash, purpose, expiry, and current email address. It does not consume the token.
-func ValidateVerificationToken(ctx context.Context, accounts AccountRepository, tokenString string, jwtKey []byte) (*User, error) {
-	return validateToken(ctx, accounts, tokenString, jwtKey, VerificationTokenPurpose)
+// ValidateVerificationToken checks stored metadata and current email without consuming it.
+func ValidateVerificationToken(ctx context.Context, accounts AccountRepository, raw string) (*User, error) {
+	return validateToken(ctx, accounts, raw, VerificationTokenPurpose)
 }
 
-// Verify validates the signed verification token and asks accounts to atomically
-// consume it and verify its email address. A changed email address rejects the
-// token. Failed operations leave both the account and token unchanged.
-func Verify(ctx context.Context, accounts AccountRepository, verificationToken string, jwtKey []byte) (*User, error) {
-	if accounts == nil {
-		return nil, errors.New("the account repository is not configured")
-	}
-
-	claims, err := parseAuthToken(verificationToken, jwtKey, VerificationTokenPurpose)
+// Verify consumes the token and verifies its recipient email atomically.
+// A changed email address rejects the token. Failures leave account and token unchanged.
+func Verify(ctx context.Context, accounts AccountRepository, raw string) (*User, error) {
+	token, err := loadToken(ctx, accounts, raw, VerificationTokenPurpose)
 	if err != nil {
 		return nil, err
 	}
-
-	hash := sha256.Sum256([]byte(verificationToken))
-	authorization := VerificationAuthorization{
-		AccountID: claims.Id,
-		Email:     claims.Email,
-		TokenHash: hex.EncodeToString(hash[:]),
-		ExpiresAt: claims.ExpiresAt.Time,
-	}
-	return accounts.Verify(ctx, authorization)
+	return accounts.Verify(ctx, VerificationAuthorization{
+		AccountID: token.AccountID, Email: token.Email,
+		TokenHash: token.TokenHash, ExpiresAt: token.ExpiresAt,
+	})
 }

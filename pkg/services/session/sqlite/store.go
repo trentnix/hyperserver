@@ -1,4 +1,4 @@
-// Package sqlite provides SQLite-backed sessions with signed identifier cookies.
+// Package sqlite provides SQLite-backed sessions with opaque bearer cookies.
 package sqlite
 
 import (
@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	"github.com/trentnix/hyperserver/pkg/database"
 	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
@@ -21,17 +22,15 @@ import (
 )
 
 type (
-	// SQLiteStore persists session data in SQLite and signs session IDs in cookies.
+	// SQLiteStore persists session data under hashed, name-bound token identifiers.
 	// Each store owns its pool. Close it after its consumers stop.
 	SQLiteStore struct {
 		// Serializer selects the payload format. Nil uses JSON. Set it before use
 		// and do not change it while requests are active.
 		Serializer sessions.Serializer
-		// JwtKey signs the session-ID cookie. It does not encrypt its contents.
-		JwtKey []byte
-		// lifetime of the JWT
+		// lifetime of the stored session
 		TokenLifetime time.Duration
-		// lifetime of the cookie containing the JWT
+		// lifetime of the cookie containing the opaque token
 		CookieLifetime time.Duration
 		// table that will store sessions
 		tableName string
@@ -63,7 +62,7 @@ type Options struct {
 	Connection string
 	// Table names the session table to prepare and use.
 	Table string
-	// SigningKey signs session-ID cookies. Use at least 32 bytes from a secure random source.
+	// Deprecated: SigningKey is ignored. Opaque session cookies need no signing key.
 	SigningKey string
 	// TokenLifetime and CookieLifetime must each be at least one second.
 	TokenLifetime  time.Duration
@@ -79,7 +78,10 @@ func NewSQLiteStore(ctx context.Context, options Options) (*SQLiteStore, error) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := sessioncookie.ValidateOptions(options.SigningKey, options.TokenLifetime, options.CookieLifetime); err != nil {
+	if err := config.ValidateLifetime("session token lifetime", options.TokenLifetime); err != nil {
+		return nil, err
+	}
+	if err := config.ValidateLifetime("session cookie lifetime", options.CookieLifetime); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(options.Connection) == "" || strings.TrimSpace(options.Table) == "" {
@@ -99,7 +101,6 @@ func NewSQLiteStore(ctx context.Context, options Options) (*SQLiteStore, error) 
 		return nil, err
 	}
 	sqliteStore := &SQLiteStore{
-		JwtKey:         []byte(options.SigningKey),
 		TokenLifetime:  options.TokenLifetime,
 		CookieLifetime: options.CookieLifetime,
 		tableName:      options.Table,
@@ -112,7 +113,7 @@ func NewSQLiteStore(ctx context.Context, options Options) (*SQLiteStore, error) 
 	return sqliteStore, nil
 }
 
-// Get loads the session identified by the signed request cookie.
+// Get loads the session identified by the opaque request cookie.
 // A missing or expired cookie or stored session returns a new session. Invalid
 // cookies, database failures, and corrupt unexpired data return an error.
 func (s *SQLiteStore) Get(r *http.Request, name string) (*sessions.Session, error) {
@@ -121,12 +122,12 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*sessions.Session, erro
 	}
 
 	// get the session ID from the request cookie
-	jwtValue := ""
+	token := ""
 
 	// check the request for a cookie
 	cookie, errCookie := r.Cookie(name)
 	if errCookie == nil {
-		jwtValue = cookie.Value
+		token = cookie.Value
 	}
 
 	if cookie == nil {
@@ -138,18 +139,12 @@ func (s *SQLiteStore) Get(r *http.Request, name string) (*sessions.Session, erro
 		return nil, hs_errors.WithCause(sessions.ErrInvalidToken, err)
 	}
 
-	// return the decoded Session data
-	claimsData, sessionError := sessioncookie.Parse(jwtValue, s.JwtKey, name)
-	if errors.Is(sessionError, jwt.ErrTokenExpired) {
-		return sessions.NewSession(s, name), nil
-	}
-	if sessionError != nil {
-		return nil, sessionError
+	if !opaquetoken.Valid(token) {
+		return nil, sessions.ErrInvalidToken
 	}
 
 	// get the session from the database
-	sessionID := claimsData.ID
-	session, sessionError := s.getSessionFromDatabase(r.Context(), sessionID, name)
+	session, sessionError := s.getSessionFromDatabase(r.Context(), token, name)
 	if sessionError != nil {
 		// return an error
 		return nil, sessionError
@@ -172,7 +167,7 @@ func (s *SQLiteStore) New(r *http.Request, name string) (*sessions.Session, erro
 	return sessions.NewSession(s, name), nil
 }
 
-// Save stores session data and writes its signed identifier to an HTTP cookie.
+// Save stores session data and writes its opaque identifier to an HTTP cookie.
 // Updating a session does not extend its stored lifetime or recreate a deleted row.
 func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *sessions.Session) error {
 	if s.db == nil {
@@ -196,37 +191,18 @@ func (s *SQLiteStore) Save(w http.ResponseWriter, r *http.Request, session *sess
 }
 
 func (s *SQLiteStore) sessionCookie(session *sessions.Session, secure bool) (*http.Cookie, error) {
-	var tokenExpiration time.Time
-
+	if !opaquetoken.Valid(session.ID) {
+		return nil, sessions.ErrSessionInvalid
+	}
 	if session.IsNew {
-		tokenExpiration = time.Now().UTC().Add(s.TokenLifetime)
-		session.ExpiresAt = tokenExpiration
-	} else {
-		tokenExpiration = session.ExpiresAt
-	}
-
-	claims := &sessioncookie.Claims{
-		ID:      session.ID,
-		Name:    session.Name,
-		Purpose: sessioncookie.Purpose,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(tokenExpiration),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-
-	// Create and sign the token with the specified algorithm and claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(s.JwtKey)
-	if err != nil {
-		return nil, hs_errors.WithCause(sessions.ErrSessionKeyInvalid, err)
+		session.ExpiresAt = time.Now().UTC().Add(s.TokenLifetime)
 	}
 
 	cookieAge := int(s.CookieLifetime / time.Second)
 
 	cookie := &http.Cookie{
 		Name:     session.Name,
-		Value:    tokenString,
+		Value:    session.ID,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
@@ -273,7 +249,7 @@ func (s *SQLiteStore) Rotate(w http.ResponseWriter, r *http.Request, previous *s
 
 	if !previous.IsNew {
 		result, err := tx.ExecContext(r.Context(), "DELETE FROM "+quoteIdentifier(s.tableName)+" WHERE id = ? AND julianday(expires_at) > julianday(?)",
-			previous.ID, time.Now())
+			sessionKey(previous.ID, previous.Name), time.Now())
 		if err != nil {
 			return nil, err
 		}
@@ -287,7 +263,7 @@ func (s *SQLiteStore) Rotate(w http.ResponseWriter, r *http.Request, previous *s
 	}
 
 	_, err = tx.ExecContext(r.Context(), "INSERT INTO "+quoteIdentifier(s.tableName)+" (id, session, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		next.ID, encoded, next.ExpiresAt, time.Now(), time.Now())
+		sessionKey(next.ID, next.Name), encoded, next.ExpiresAt, time.Now(), time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +290,7 @@ func (s *SQLiteStore) End(w http.ResponseWriter, r *http.Request, session *sessi
 	}
 
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", quoteIdentifier(s.tableName))
-	if _, err := s.db.ExecContext(r.Context(), query, session.ID); err != nil {
+	if _, err := s.db.ExecContext(r.Context(), query, sessionKey(session.ID, session.Name)); err != nil {
 		return err
 	}
 
@@ -433,7 +409,7 @@ func (s *SQLiteStore) getSessionFromDatabase(ctx context.Context, sessionID stri
 	// Read only a bounded prefix so corrupt oversized rows cannot allocate their
 	// entire payload in Go. loadSession rejects the extra byte before decoding.
 	query := fmt.Sprintf("SELECT id, substr(CAST(session AS BLOB), 1, ?) AS session, expires_at, created_at, updated_at FROM %s WHERE id = ?", quoteIdentifier(s.tableName))
-	err := s.db.QueryRowContext(ctx, query, sessions.MaxEncodedSessionSize+1, sessionID).
+	err := s.db.QueryRowContext(ctx, query, sessions.MaxEncodedSessionSize+1, sessionKey(sessionID, name)).
 		Scan(&dbSession.ID, &dbSession.Session, &dbSession.Expires_at, &dbSession.Created_at, &dbSession.Updated_at)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -445,7 +421,7 @@ func (s *SQLiteStore) getSessionFromDatabase(ctx context.Context, sessionID stri
 		return nil, nil
 	}
 
-	return sessions.LoadSession(dbSession.ID, name, dbSession.Expires_at, s, dbSession.Session, s.Serializer)
+	return sessions.LoadSession(sessionID, name, dbSession.Expires_at, s, dbSession.Session, s.Serializer)
 }
 
 // saveSessionToDatabase creates or updates the specified session in the database
@@ -460,7 +436,7 @@ func (s *SQLiteStore) save(ctx context.Context, session *sessions.Session) error
 	}
 
 	dbSession := &SQLiteSession{
-		ID:         session.ID,
+		ID:         sessionKey(session.ID, session.Name),
 		Session:    valueData,
 		Expires_at: session.ExpiresAt,
 	}
@@ -522,4 +498,10 @@ func (s *SQLiteStore) update(ctx context.Context, session *SQLiteSession) error 
 // quoteIdentifier treats configured names as single SQLite identifiers.
 func quoteIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+// Bind tokens to their cookie name even when several stores share a table.
+// The prefix also separates hashed identifiers from legacy plaintext row IDs.
+func sessionKey(token, name string) string {
+	return "sha256:" + opaquetoken.Hash(name+"\x00"+token)
 }

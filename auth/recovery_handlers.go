@@ -98,7 +98,7 @@ func (a *AuthManager) Reset(w http.ResponseWriter, r *http.Request) {
 // resetAccount applies the same token checks to the form and its submission.
 func (a *AuthManager) resetAccount(w http.ResponseWriter, r *http.Request) (string, *user.User) {
 	token := r.URL.Query().Get("token")
-	u, err := user.ValidateResetToken(r.Context(), a.accounts, token, []byte(a.verificationJwtKey))
+	u, err := user.ValidateResetToken(r.Context(), a.accounts, token)
 	if err != nil {
 		a.recoveryError(w, r, "Unable to reset password", err)
 		return "", nil

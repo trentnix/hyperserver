@@ -24,14 +24,14 @@ func TestHTTPRecoveryRequestErrors(t *testing.T) {
 			t.Run(operation+"/"+scenario, func(t *testing.T) {
 				runSiteScenario(t, func(h *httpHarness) {
 					u := h.seedUser(t, "recovery@example.invalid")
-					key := []byte(h.app.Config.Auth.JwtKey)
-					reset, err := user.NewAuthResetToken(u, key, time.Hour)
+
+					reset, err := user.NewAuthResetToken(u, time.Hour)
 					if err != nil {
 						t.Fatal(err)
 					}
 					token := reset.AuthToken
 					if operation == "verify POST" {
-						verification, err := user.NewAuthVerificationToken(u, key, time.Hour)
+						verification, err := user.NewAuthVerificationToken(u, time.Hour)
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -134,7 +134,7 @@ func TestHTTPCommittedChangesSurviveAuxiliaryFailures(t *testing.T) {
 							t.Fatal(err)
 						}
 						h.cookies.SetCookies(r.URL, w.Result().Cookies())
-						statement = fmt.Sprintf(`CREATE TRIGGER fail_auxiliary BEFORE DELETE ON session WHEN OLD.id = '%s' BEGIN SELECT RAISE(ABORT, 'private auxiliary failure'); END`, s.ID)
+						statement = fmt.Sprintf(`CREATE TRIGGER fail_auxiliary BEFORE DELETE ON session WHEN OLD.id = '%s' BEGIN SELECT RAISE(ABORT, 'private auxiliary failure'); END`, sqliteSessionKey(s.ID, s.Name))
 						target = "/about"
 					}
 					if operation == "verification notification" {
@@ -142,7 +142,7 @@ func TestHTTPCommittedChangesSurviveAuxiliaryFailures(t *testing.T) {
 						if err := h.accounts.Update(t.Context(), u); err != nil {
 							t.Fatal(err)
 						}
-						token, err := user.NewAuthVerificationToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+						token, err := user.NewAuthVerificationToken(u, time.Hour)
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -194,7 +194,7 @@ func TestHTTPAuthCommitsSurviveNotificationFailure(t *testing.T) {
 					var account *user.User
 					if operation == "reset" {
 						account = h.seedUser(t, "person@example.invalid")
-						token, err := user.NewAuthResetToken(account, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+						token, err := user.NewAuthResetToken(account, time.Hour)
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -305,7 +305,7 @@ func TestHTTPAuthCommitsSurviveRenderingFailure(t *testing.T) {
 						}
 						if operation == "reset request" {
 							link := mailLink(t, mail[0], "/auth/reset/email")
-							if _, err := user.ValidateResetToken(t.Context(), h.accounts, link.Query().Get("token"), []byte(h.app.Config.Auth.JwtKey)); err != nil {
+							if _, err := user.ValidateResetToken(t.Context(), h.accounts, link.Query().Get("token")); err != nil {
 								t.Fatalf("delivered reset link became unusable: %v", err)
 							}
 						}

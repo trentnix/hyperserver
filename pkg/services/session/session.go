@@ -8,13 +8,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
 type (
 	// Session is used to manage a user or usage session
 	Session struct {
+		// ID is a bearer credential for server-side stores. Never log it.
 		ID string
 		// Data contains JSON-compatible values. The JSON decoder uses json.Number.
 		// Cookie stores expose these values to the browser. Never store secrets there.
@@ -36,7 +37,7 @@ const (
 // NewSession creates an empty, unsaved session for a store implementation.
 // Request handlers should use New to also cache the session in the request.
 func NewSession(s SessionStore, name string) *Session {
-	sessionID := uuid.New().String()
+	sessionID := opaquetoken.New()
 	session := Session{
 		ID:    sessionID,
 		Name:  name,

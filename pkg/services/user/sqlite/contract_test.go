@@ -54,7 +54,7 @@ func TestSQLiteAccountCreationTime(t *testing.T) {
 // exact expiry against its own clock rather than the client's virtual clock.
 func TestSQLiteTokenExpiryBoundary(t *testing.T) {
 	for _, purpose := range []string{user.ResetTokenPurpose, user.VerificationTokenPurpose} {
-		for _, expiry := range []string{"stored", "signed"} {
+		for _, expiry := range []string{"stored", "supplied"} {
 			t.Run(purpose+"/"+expiry, func(t *testing.T) {
 				synctest.Test(t, func(t *testing.T) {
 					repo := NewAccountRepository(userTestDB(t))
@@ -63,14 +63,14 @@ func TestSQLiteTokenExpiryBoundary(t *testing.T) {
 						t.Fatal(err)
 					}
 					before := *u
-					token := user.TokenMetadata{AccountID: u.ID, TokenHash: "expiry-boundary", Purpose: purpose, ExpiresAt: time.Now().Add(time.Hour)}
+					token := user.TokenMetadata{AccountID: u.ID, TokenHash: "expiry-boundary", Email: u.Email, Purpose: purpose, ExpiresAt: time.Now().Add(time.Hour)}
 					if err := repo.InsertToken(t.Context(), token); err != nil {
 						t.Fatal(err)
 					}
-					deadline, signedExpiry := token.ExpiresAt, token.ExpiresAt.Add(time.Hour)
-					if expiry == "signed" {
+					deadline, suppliedExpiry := token.ExpiresAt, token.ExpiresAt.Add(time.Hour)
+					if expiry == "supplied" {
 						deadline = token.ExpiresAt.Add(-time.Minute)
-						signedExpiry = deadline
+						suppliedExpiry = deadline
 					}
 
 					time.Sleep(time.Until(deadline))
@@ -78,11 +78,11 @@ func TestSQLiteTokenExpiryBoundary(t *testing.T) {
 					var err error
 					if purpose == user.ResetTokenPurpose {
 						err = repo.ResetPassword(t.Context(), u, user.ResetAuthorization{
-							AccountID: u.ID, TokenHash: token.TokenHash, ExpiresAt: signedExpiry,
+							AccountID: u.ID, TokenHash: token.TokenHash, ExpiresAt: suppliedExpiry,
 						}, "new hash")
 					} else {
 						result, err = repo.Verify(t.Context(), user.VerificationAuthorization{
-							AccountID: u.ID, Email: u.Email, TokenHash: token.TokenHash, ExpiresAt: signedExpiry,
+							AccountID: u.ID, Email: u.Email, TokenHash: token.TokenHash, ExpiresAt: suppliedExpiry,
 						})
 					}
 					if result != nil || !errors.Is(err, user.ErrTokenExpired) {

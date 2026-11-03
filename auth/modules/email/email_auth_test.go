@@ -18,10 +18,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	auth_services "github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
@@ -332,11 +332,16 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 
 type emailAccountRepository struct {
 	user.AccountRepository
+	getToken       func(context.Context, string, string) (user.TokenMetadata, error)
 	lookup         func(context.Context, string) (*user.User, error)
 	create         func(context.Context, *user.User) error
 	createToken    func(context.Context, user.TokenMetadata) error
 	changePassword func(context.Context, *user.User, string) error
 	resetPassword  func(context.Context, *user.User, user.ResetAuthorization, string) error
+}
+
+func (s emailAccountRepository) GetToken(ctx context.Context, hash, purpose string) (user.TokenMetadata, error) {
+	return s.getToken(ctx, hash, purpose)
 }
 
 func (s emailAccountRepository) Create(ctx context.Context, u *user.User) error {
@@ -615,7 +620,7 @@ func TestResetUsesAccountRepository(t *testing.T) {
 			}[scenario]
 			account := &user.User{ID: "account", SessionVersion: 1}
 			key := "test-signing-key"
-			token, err := user.NewAuthResetToken(account, []byte(key), time.Hour)
+			token, err := user.NewAuthResetToken(account, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -624,7 +629,7 @@ func TestResetUsesAccountRepository(t *testing.T) {
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			r.Header.Set("HX-Request", "true")
 			calls := 0
-			accounts := emailAccountRepository{resetPassword: func(ctx context.Context, u *user.User, authorization user.ResetAuthorization, hash string) error {
+			accounts := emailAccountRepository{getToken: func(context.Context, string, string) (user.TokenMetadata, error) { return token.Metadata(), nil }, resetPassword: func(ctx context.Context, u *user.User, authorization user.ResetAuthorization, hash string) error {
 				calls++
 				if ctx != r.Context() || u != account || authorization.AccountID != account.ID || authorization.TokenHash != token.TokenHash || !password.CheckPasswordHash(form.Get("password"), hash) {
 					t.Fatal("reset did not pass the request context, account, token identity, and hashed password")
@@ -718,13 +723,12 @@ func TestAccountEmailStoresTokenBeforeDelivery(t *testing.T) {
 						t.Fatalf("wrong account link: %s", link)
 					}
 					raw := link.Query().Get("token")
-					claims := &user.VerificationClaims{}
-					if _, err := jwt.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) { return []byte(key), nil }, jwt.WithExpirationRequired(), jwt.WithValidMethods([]string{"HS256"})); err != nil {
-						t.Fatal(err)
+					if !opaquetoken.Valid(raw) {
+						t.Fatal("invalid opaque token")
 					}
 					hash := sha256.Sum256([]byte(raw))
 					metadata := saved[attempt]
-					if metadata.TokenHash != hex.EncodeToString(hash[:]) || claims.Id != account.ID || claims.Purpose != purpose || claims.ExpiresAt.Unix() != metadata.ExpiresAt.Unix() || (purpose == "auth-verification" && claims.Email != account.Email) {
+					if metadata.TokenHash != hex.EncodeToString(hash[:]) || metadata.AccountID != account.ID || metadata.Purpose != purpose || (purpose == "auth-verification" && metadata.Email != account.Email) {
 						t.Fatal("emailed token does not match stored metadata or recipient")
 					}
 					if attempt == 1 && scenario == "mail failure" {

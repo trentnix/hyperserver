@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 type resetAccountRepository struct {
@@ -19,33 +17,27 @@ func (s resetAccountRepository) ResetPassword(ctx context.Context, u *User, auth
 }
 
 func TestResetPasswordValidatesBeforeCallingRepository(t *testing.T) {
-	for _, scenario := range []string{"success", "storage failure", "canceled", "wrong signature", "wrong purpose", "wrong account", "expired", "malformed", "empty hash", "nil account", "missing ID", "nil repository"} {
+	for _, scenario := range []string{"success", "storage failure", "canceled", "wrong hash", "wrong purpose", "wrong account", "expired", "malformed", "empty hash", "nil account", "missing ID", "nil repository"} {
 		t.Run(scenario, func(t *testing.T) {
 			u := &User{ID: "account", Email: "person@example.invalid", Password: "old hash", SessionVersion: 1}
-			key := []byte("test-signing-key")
 			purpose, lifetime := ResetTokenPurpose, time.Hour
 			if scenario == "wrong purpose" {
 				purpose = VerificationTokenPurpose
 			}
-			token, err := newAuthToken(u, key, lifetime, purpose)
+			token, err := newAuthToken(u, lifetime, purpose)
 			if err != nil {
 				t.Fatal(err)
 			}
 			hash := "new hash"
 			switch scenario {
-			case "wrong signature":
-				key = []byte("wrong-key")
+			case "wrong hash":
+				token.TokenHash = "other-hash"
 			case "wrong account":
 				u.ID = "other-account"
 			case "malformed":
 				token.Token = "not-a-token"
 			case "expired":
-				claims := &VerificationClaims{Id: u.ID, Purpose: ResetTokenPurpose,
-					RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour))}}
-				token.Token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
-				if err != nil {
-					t.Fatal(err)
-				}
+				token.ExpiresAt = time.Now().Add(-time.Hour)
 			case "empty hash":
 				hash = ""
 			case "nil account":
@@ -63,17 +55,17 @@ func TestResetPasswordValidatesBeforeCallingRepository(t *testing.T) {
 				wantErr = context.Canceled
 			}
 			calls := 0
-			var repository AccountRepository = resetAccountRepository{reset: func(got context.Context, account *User, authorization ResetAuthorization, passwordHash string) error {
+			var repository AccountRepository = resetAccountRepository{AccountRepository: tokenLookupRepository{token: func(context.Context, string, string) (TokenMetadata, error) { return token.Metadata(), nil }}, reset: func(got context.Context, account *User, authorization ResetAuthorization, passwordHash string) error {
 				calls++
-				if got != ctx || account != u || passwordHash != hash || authorization.AccountID != token.UserId || authorization.TokenHash != token.TokenHash || !authorization.ExpiresAt.Equal(time.Unix(token.ExpiresAt.Unix(), 0)) {
-					t.Fatal("reset lost its context, account, password hash, or signed authorization")
+				if got != ctx || account != u || passwordHash != hash || authorization.AccountID != token.UserId || authorization.TokenHash != token.TokenHash || !authorization.ExpiresAt.Equal(token.ExpiresAt) {
+					t.Fatal("reset lost its context, account, password hash, or stored authorization")
 				}
 				return wantErr
 			}}
 			if scenario == "nil repository" {
 				repository = nil
 			}
-			err = u.ResetPassword(ctx, repository, token.Token, key, hash)
+			err = u.ResetPassword(ctx, repository, token.Token, hash)
 			if scenario == "success" || wantErr != nil {
 				if calls != 1 || !errors.Is(err, wantErr) {
 					t.Fatalf("reset error=%v, repository calls=%d, want %v and 1", err, calls, wantErr)

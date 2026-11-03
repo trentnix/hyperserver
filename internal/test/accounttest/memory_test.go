@@ -224,7 +224,8 @@ func (m *memoryRepository) Verify(ctx context.Context, auth user.VerificationAut
 		return nil, err
 	}
 	stored, ok := m.accounts[auth.AccountID]
-	if !ok || user.EmailKey(stored.Email) != user.EmailKey(auth.Email) {
+	token := m.tokens[tokenKey{auth.AccountID, auth.TokenHash}]
+	if !ok || token.Email == "" || user.EmailKey(token.Email) != user.EmailKey(auth.Email) || user.EmailKey(stored.Email) != user.EmailKey(auth.Email) {
 		return nil, hs_errors.WithCause(user.ErrToken, errors.New("verification address changed"))
 	}
 
@@ -247,13 +248,13 @@ func (m *memoryRepository) emailExists(email, exceptID string) bool {
 	return false
 }
 
-func (m *memoryRepository) checkToken(id, hash, purpose string, signedExpiry time.Time) error {
+func (m *memoryRepository) checkToken(id, hash, purpose string, suppliedExpiry time.Time) error {
 	token, ok := m.tokens[tokenKey{id, hash}]
 	if !ok || token.Purpose != purpose {
 		return user.ErrTokenNotFound
 	}
 	now := m.now()
-	if !now.Before(token.ExpiresAt) || !now.Before(signedExpiry) {
+	if !now.Before(token.ExpiresAt) || !now.Before(suppliedExpiry) {
 		return user.ErrTokenExpired
 	}
 	return nil

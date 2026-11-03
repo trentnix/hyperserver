@@ -86,14 +86,14 @@ func TestCSRFCrossOriginMutationsHaveNoSideEffects(t *testing.T) {
 		t.Run(fmt.Sprintf("authenticated=%t", authenticated), func(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
 				u := h.seedUser(t, "csrf@example.invalid")
-				verification, err := user.NewAuthVerificationToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+				verification, err := user.NewAuthVerificationToken(u, time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
 				if err := h.accounts.InsertToken(t.Context(), verification.Metadata()); err != nil {
 					t.Fatal(err)
 				}
-				reset, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+				reset, err := user.NewAuthResetToken(u, time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}

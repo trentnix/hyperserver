@@ -333,14 +333,14 @@ func TestSigningKeys(t *testing.T) {
 	}
 }
 
-func TestSigningKeyFileAndEnvironmentValidation(t *testing.T) {
+func TestLegacyAuthSigningKeyIsIgnored(t *testing.T) {
 	shortKey, validKey := strings.Repeat("s", 31), strings.Repeat("v", 32)
 	for _, tc := range []struct {
 		name, fileKey, environmentKey string
 		wantError                     bool
 	}{
-		{"short file key", shortKey, "", true},
-		{"short environment override", validKey, shortKey, true},
+		{"short file key", shortKey, "", false},
+		{"short environment override", validKey, shortKey, false},
 		{"valid file key", validKey, "", false},
 		{"valid environment override", shortKey, validKey, false},
 	} {
@@ -413,9 +413,6 @@ func TestSharedConfigValidation(t *testing.T) {
 		change func(*Config)
 		want   string
 	}{
-		{"auth missing key", func(c *Config) { c.Auth.JwtKey = "" }, "auth.jwtKey"},
-		{"auth short key", func(c *Config) { c.Auth.JwtKey = strings.Repeat("s", 31) }, "auth.jwtKey must be at least 32 bytes"},
-		{"auth placeholder", func(c *Config) { c.Auth.JwtKey = "<your auth token key goes here>" }, "auth.jwtKey"},
 		{"missing verification age", func(c *Config) { c.Auth.VerificationTokenExpiration = 0 }, "auth.verificationTokenExpiration"},
 		{"negative reset age", func(c *Config) { c.Auth.ResetTokenExpiration = -time.Second }, "auth.resetTokenExpiration"},
 		{"subsecond reset age", func(c *Config) { c.Auth.ResetTokenExpiration = time.Millisecond }, "auth.resetTokenExpiration"},
@@ -441,7 +438,7 @@ func TestTemplateSessionSigningKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	const fileKey = "test-session-signing-key"
-	yaml := strings.Replace(string(template), "REPLACE_WITH_RANDOM_SESSION_KEY", fileKey, 1)
+	yaml := strings.Replace(string(template), "  session:\n", "  session:\n    jwtKey: "+fileKey+"\n", 1)
 	for _, tc := range []struct {
 		name, environmentKey, want string
 	}{

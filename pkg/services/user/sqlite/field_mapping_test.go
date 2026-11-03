@@ -51,7 +51,7 @@ func TestAccountFieldMappings(t *testing.T) {
 				}
 				expires := time.Now().Add(time.Hour)
 				if err := repository.InsertToken(t.Context(), accounts.TokenMetadata{
-					AccountID: original.ID, TokenHash: "stored hash", Purpose: purpose, ExpiresAt: expires,
+					AccountID: original.ID, TokenHash: "stored hash", Purpose: purpose, ExpiresAt: expires, Email: original.Email,
 				}); err != nil {
 					t.Fatal(err)
 				}
@@ -105,7 +105,7 @@ func assertAccountFields(t *testing.T, got, want accounts.User) {
 func TestAccountScanFailure(t *testing.T) {
 	for _, operation := range []string{"lookup ID", "lookup email", "reset", "verify"} {
 		t.Run(operation, func(t *testing.T) {
-			db, account, _, _ := verificationFixture(t)
+			db, account, _ := verificationFixture(t)
 			repository := NewAccountRepository(db)
 			before := *account
 			purpose := accounts.ResetTokenPurpose

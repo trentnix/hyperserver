@@ -14,7 +14,7 @@ HYPERSERVER_AUTH_SERVICES__custom__api_key=secret
 
 The existing single-underscore format still addresses lowercase option names, such as `HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION`. Use the exact-key format for mixed-case keys. Provider names in session and auth maps remain case-insensitive. Option names must be nonempty and cannot contain dots.
 
-The root [template](../config-template.yaml) configures the default blog. The [reference-site template](../examples/reference/config-template.yaml) documents additional settings and defaults. Enabled authentication and signed session stores require independent [signing keys](application.md#signing-keys).
+The root [template](../config-template.yaml) configures the default blog. The [reference-site template](../examples/reference/config-template.yaml) documents additional settings and defaults. Only cookie-backed sessions require a [signing key](application.md#signing-keys). SQLite sessions and account tokens do not. The legacy `auth.jwtKey` setting is ignored.
 
 ## Registration and email
 

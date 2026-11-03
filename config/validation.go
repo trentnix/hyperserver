@@ -71,9 +71,6 @@ func (c Config) Validate() error {
 	}
 
 	if c.Auth.Enabled {
-		if err := ValidateSigningKey("auth.jwtKey", c.Auth.JwtKey); err != nil {
-			return err
-		}
 		if err := ValidateLifetime("auth.verificationTokenExpiration", c.Auth.VerificationTokenExpiration); err != nil {
 			return err
 		}

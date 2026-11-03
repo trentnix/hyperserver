@@ -99,10 +99,6 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 		return fmt.Errorf("initialize email authentication: %w", err)
 	}
 
-	if err := config.ValidateSigningKey("auth.jwtKey", s.Config.Auth.JwtKey); err != nil {
-		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, err)
-	}
-
 	a.config = s.Config
 	a.contentManager = s.ContentManager
 

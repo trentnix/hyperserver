@@ -105,7 +105,7 @@ func (a *AuthManager) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	verifiedUser, err := user.Verify(r.Context(), a.accounts, verificationToken, []byte(a.verificationJwtKey))
+	verifiedUser, err := user.Verify(r.Context(), a.accounts, verificationToken)
 	if err != nil {
 		logger.Audit(r.Context(), "verification", "failed")
 	} else {

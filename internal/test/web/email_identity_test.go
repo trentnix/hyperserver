@@ -51,7 +51,7 @@ func TestHTTPEmailSpellingPreserved(t *testing.T) {
 						t.Fatal("reset mail did not use the stored account address")
 					}
 					link := mailLink(t, mail[1], "/auth/reset/email")
-					resetUser, err := user.ValidateResetToken(t.Context(), h.accounts, link.Query().Get("token"), []byte(h.app.Config.Auth.JwtKey))
+					resetUser, err := user.ValidateResetToken(t.Context(), h.accounts, link.Query().Get("token"))
 					if err != nil || resetUser.ID != u.ID {
 						t.Fatalf("reset token did not identify the account: %v", err)
 					}

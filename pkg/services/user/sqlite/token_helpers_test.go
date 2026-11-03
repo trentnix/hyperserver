@@ -8,16 +8,16 @@ import (
 )
 
 // Exercise token operations through the same public API used by applications.
-func newTestToken(account *user.User, key []byte, lifetime time.Duration, purpose string) (*user.AuthToken, error) {
+func newTestToken(account *user.User, lifetime time.Duration, purpose string) (*user.AuthToken, error) {
 	switch purpose {
 	case user.ResetTokenPurpose:
-		token, err := user.NewAuthResetToken(account, key, lifetime)
+		token, err := user.NewAuthResetToken(account, lifetime)
 		if err != nil {
 			return nil, err
 		}
 		return &token.AuthToken, nil
 	case user.VerificationTokenPurpose:
-		token, err := user.NewAuthVerificationToken(account, key, lifetime)
+		token, err := user.NewAuthVerificationToken(account, lifetime)
 		if err != nil {
 			return nil, err
 		}

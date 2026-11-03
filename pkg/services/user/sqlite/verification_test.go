@@ -7,49 +7,35 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-func verificationFixture(t *testing.T) (*sql.DB, *accounts.User, *accounts.AuthVerificationToken, []byte) {
+func verificationFixture(t *testing.T) (*sql.DB, *accounts.User, *accounts.AuthVerificationToken) {
 	t.Helper()
 	db := userTestDB(t)
 	u := &accounts.User{Email: "person@example.invalid", Password: "original hash", VerificationRequired: true, RegistrationAuthType: "email"}
 	if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	key := []byte("test-verification-key")
-	token, err := accounts.NewAuthVerificationToken(u, key, time.Hour)
+	token, err := accounts.NewAuthVerificationToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 		t.Fatal(err)
 	}
-	return db, u, token, key
+	return db, u, token
 }
 
 func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
-	db, u, first, key := verificationFixture(t)
-	second, err := accounts.NewAuthVerificationToken(u, key, time.Hour)
+	db, u, first := verificationFixture(t)
+	second, err := accounts.NewAuthVerificationToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if second.Token == first.Token {
 		t.Fatal("resend produced the same token")
-	}
-	firstClaims := &accounts.VerificationClaims{}
-	_, err = jwt.ParseWithClaims(first.Token, firstClaims, func(*jwt.Token) (any, error) { return key, nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	secondClaims := &accounts.VerificationClaims{}
-	_, err = jwt.ParseWithClaims(second.Token, secondClaims, func(*jwt.Token) (any, error) { return key, nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstClaims.ID == "" || secondClaims.ID == "" || firstClaims.ID == secondClaims.ID {
-		t.Fatal("resend must have a distinct token ID even when issued in the same second")
 	}
 	if err := NewAccountRepository(db).InsertToken(t.Context(), second.Metadata()); err != nil {
 		t.Fatal(err)
@@ -58,7 +44,7 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verified, err := accounts.Verify(context.Background(), NewAccountRepository(db), second.Token, key)
+	verified, err := accounts.Verify(context.Background(), NewAccountRepository(db), second.Token)
 	if err != nil || verified == nil || !verified.Verified {
 		t.Fatalf("verification failed: %v", err)
 	}
@@ -77,12 +63,12 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	if _, err := NewAccountRepository(db).GetToken(t.Context(), first.TokenHash, accounts.VerificationTokenPurpose); err != nil {
 		t.Fatalf("different token was consumed: %v", err)
 	}
-	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), second.Token, key); !errors.Is(err, accounts.ErrTokenNotFound) || got != nil {
+	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), second.Token); !errors.Is(err, accounts.ErrTokenNotFound) || got != nil {
 		t.Fatalf("replayed token accepted: %v", err)
 	}
 	// Each outstanding token remains independently usable once, including when
 	// another link has already verified the same address.
-	alreadyVerified, err := accounts.Verify(context.Background(), NewAccountRepository(db), first.Token, key)
+	alreadyVerified, err := accounts.Verify(context.Background(), NewAccountRepository(db), first.Token)
 	if err != nil {
 		t.Fatalf("earlier delivered link was invalidated by resend: %v", err)
 	}
@@ -93,7 +79,7 @@ func TestVerifyConsumesExactTokenAndRejectsReplay(t *testing.T) {
 }
 
 func TestEmailCaseChangePreservesVerification(t *testing.T) {
-	db, account, token, key := verificationFixture(t)
+	db, account, token := verificationFixture(t)
 	repository := NewAccountRepository(db)
 	version := account.SessionVersion
 	account.Email = "Person@EXAMPLE.invalid"
@@ -103,19 +89,19 @@ func TestEmailCaseChangePreservesVerification(t *testing.T) {
 	if account.SessionVersion != version {
 		t.Fatal("case-only edit invalidated sessions")
 	}
-	if _, err := accounts.ValidateVerificationToken(t.Context(), repository, token.Token, key); err != nil {
+	if _, err := accounts.ValidateVerificationToken(t.Context(), repository, token.Token); err != nil {
 		t.Fatal("case-only edit invalidated verification lookup:", err)
 	}
-	verified, err := accounts.Verify(t.Context(), repository, token.Token, key)
+	verified, err := accounts.Verify(t.Context(), repository, token.Token)
 	if err != nil || !verified.Verified || verified.Email != account.Email || verified.SessionVersion != version+1 {
 		t.Fatalf("verification after case-only edit = %+v, %v", verified, err)
 	}
 }
 
 func TestVerifyFailureRollsBack(t *testing.T) {
-	for _, failure := range []string{"update", "delete", "commit", "email changed", "missing account", "missing token", "stored account", "stored purpose", "expired", "wrong key", "canceled"} {
+	for _, failure := range []string{"update", "delete", "commit", "email changed", "missing account", "missing token", "stored account", "stored purpose", "expired", "unknown token", "canceled"} {
 		t.Run(failure, func(t *testing.T) {
-			db, u, token, key := verificationFixture(t)
+			db, u, token := verificationFixture(t)
 			ctx := context.Background()
 			purpose := accounts.VerificationTokenPurpose
 			var statements []string
@@ -131,11 +117,11 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 					`CREATE TRIGGER fail_verify AFTER UPDATE ON user BEGIN INSERT INTO verification_failure VALUES ('missing'); END`,
 				}
 			case "email changed":
-				// Bypass Update's revocation to test the signed email check itself.
+				// Bypass Update's revocation to test the stored recipient email check itself.
 				if _, err := db.Exec(`UPDATE user SET email = ?, email_key = ? WHERE id = ?`, "changed@example.invalid", accounts.EmailKey("changed@example.invalid"), u.ID); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token, key); err == nil {
+				if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token); err == nil {
 					t.Fatal("old address token passed validation")
 				}
 			case "missing account":
@@ -155,8 +141,8 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				if _, err := db.Exec(`UPDATE usertoken SET expires_at = ?`, time.Now().Add(-time.Hour)); err != nil {
 					t.Fatal(err)
 				}
-			case "wrong key":
-				key = []byte("wrong-key")
+			case "unknown token":
+				token.Token = opaquetoken.New()
 			case "canceled":
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
@@ -171,7 +157,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 			if failure != "missing account" && err != nil {
 				t.Fatal(err)
 			}
-			if got, err := accounts.Verify(ctx, NewAccountRepository(db), token.Token, key); err == nil || got != nil {
+			if got, err := accounts.Verify(ctx, NewAccountRepository(db), token.Token); err == nil || got != nil {
 				t.Fatal("verification succeeded despite failure")
 			}
 			if failure != "missing account" {
@@ -189,7 +175,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 				if _, err := db.Exec(`DROP TRIGGER fail_verify`); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := accounts.Verify(ctx, NewAccountRepository(db), token.Token, key); err != nil {
+				if _, err := accounts.Verify(ctx, NewAccountRepository(db), token.Token); err != nil {
 					t.Fatalf("retry failed: %v", err)
 				}
 			}
@@ -198,7 +184,7 @@ func TestVerifyFailureRollsBack(t *testing.T) {
 }
 
 func TestVerifyConcurrentRedemption(t *testing.T) {
-	db, u, token, key := verificationFixture(t)
+	db, u, token := verificationFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	observed, started := observeTokenDeletes(t, db)
@@ -213,7 +199,7 @@ func TestVerifyConcurrentRedemption(t *testing.T) {
 	results := make(chan error, 2)
 	for range 2 {
 		go func() {
-			_, err := accounts.Verify(ctx, NewAccountRepository(observed), token.Token, key)
+			_, err := accounts.Verify(ctx, NewAccountRepository(observed), token.Token)
 			results <- err
 		}()
 	}
@@ -252,7 +238,7 @@ func TestVerifyConcurrentRedemption(t *testing.T) {
 func TestSQLiteAccountRepositoryVerifyRejectsInvalidInput(t *testing.T) {
 	for _, scenario := range []string{"nil database", "missing account", "missing email", "missing hash", "missing expiry", "expired authorization"} {
 		t.Run(scenario, func(t *testing.T) {
-			db, u, token, _ := verificationFixture(t)
+			db, u, token := verificationFixture(t)
 			repository := NewAccountRepository(db)
 			before, err := repository.GetByID(context.Background(), u.ID)
 			if err != nil {
@@ -288,19 +274,19 @@ func TestSQLiteAccountRepositoryVerifyRejectsInvalidInput(t *testing.T) {
 }
 
 func TestVerifyCancellationAndExpiryDuringContention(t *testing.T) {
-	for _, scenario := range []string{"cancellation", "signed expiry", "stored expiry"} {
+	for _, scenario := range []string{"cancellation", "supplied expiry", "stored expiry"} {
 		t.Run(scenario, func(t *testing.T) {
-			db, u, token, _ := verificationFixture(t)
+			db, u, token := verificationFixture(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			before, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			// Exercise storage after signature validation with a short deadline.
+			// Exercise storage after metadata validation with a short deadline.
 			authorization := accounts.VerificationAuthorization{AccountID: u.ID, Email: u.Email, TokenHash: token.TokenHash, ExpiresAt: time.Unix(token.ExpiresAt.Unix(), 0)}
 			deadline := time.Now().Add(2 * time.Second)
-			if scenario == "signed expiry" {
+			if scenario == "supplied expiry" {
 				authorization.ExpiresAt = deadline
 			} else if scenario == "stored expiry" {
 				if _, err := db.Exec(`UPDATE usertoken SET expires_at = ? WHERE token_hash = ?`, deadline, token.TokenHash); err != nil {
@@ -376,15 +362,15 @@ func TestVerifyCancellationAndExpiryDuringContention(t *testing.T) {
 }
 
 func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
-	db, u, first, key := verificationFixture(t)
-	second, err := accounts.NewAuthVerificationToken(u, key, time.Hour)
+	db, u, first := verificationFixture(t)
+	second, err := accounts.NewAuthVerificationToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := NewAccountRepository(db).InsertToken(t.Context(), second.Metadata()); err != nil {
 		t.Fatal(err)
 	}
-	reset, err := accounts.NewAuthResetToken(u, key, time.Hour)
+	reset, err := accounts.NewAuthResetToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +381,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	if err := NewAccountRepository(db).Create(context.Background(), other); err != nil {
 		t.Fatal(err)
 	}
-	otherToken, err := accounts.NewAuthVerificationToken(other, key, time.Hour)
+	otherToken, err := accounts.NewAuthVerificationToken(other, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +395,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, token := range []*accounts.AuthVerificationToken{first, second} {
-		if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token, key); err != nil {
+		if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token); err != nil {
 			t.Fatalf("unchanged email invalidated verification: %v", err)
 		}
 	}
@@ -421,7 +407,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, token := range []*accounts.AuthVerificationToken{first, second} {
-			if _, err := accounts.Verify(context.Background(), NewAccountRepository(db), token.Token, key); !errors.Is(err, accounts.ErrTokenNotFound) {
+			if _, err := accounts.Verify(context.Background(), NewAccountRepository(db), token.Token); !errors.Is(err, accounts.ErrTokenNotFound) {
 				t.Fatalf("old link at %s: got %v, want revoked token", email, err)
 			}
 		}
@@ -429,21 +415,21 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 	if _, err := NewAccountRepository(db).GetToken(t.Context(), reset.TokenHash, accounts.ResetTokenPurpose); err != nil {
 		t.Fatalf("email change revoked a reset token: %v", err)
 	}
-	if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), otherToken.Token, key); err != nil {
+	if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), otherToken.Token); err != nil {
 		t.Fatalf("email change revoked another account's token: %v", err)
 	}
 	stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil || stored.Verified {
 		t.Fatalf("revoked link verified the account: %v", err)
 	}
-	newToken, err := accounts.NewAuthVerificationToken(u, key, time.Hour)
+	newToken, err := accounts.NewAuthVerificationToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := NewAccountRepository(db).InsertToken(t.Context(), newToken.Metadata()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := accounts.Verify(context.Background(), NewAccountRepository(db), newToken.Token, key); err != nil {
+	if _, err := accounts.Verify(context.Background(), NewAccountRepository(db), newToken.Token); err != nil {
 		t.Fatalf("fresh link was rejected: %v", err)
 	}
 }
@@ -451,7 +437,7 @@ func TestEmailChangeRevokesStoredVerificationTokens(t *testing.T) {
 func TestEmailChangeRevocationRollsBack(t *testing.T) {
 	for _, failure := range []string{"delete", "update", "commit", "email conflict"} {
 		t.Run(failure, func(t *testing.T) {
-			db, u, token, key := verificationFixture(t)
+			db, u, token := verificationFixture(t)
 			before, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -492,7 +478,7 @@ func TestEmailChangeRevocationRollsBack(t *testing.T) {
 			if err != nil || *stored != *before {
 				t.Fatalf("failed email change mutated the account: %v", err)
 			}
-			if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token, key); err != nil {
+			if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token); err != nil {
 				t.Fatalf("failed email change revoked the verification link: %v", err)
 			}
 		})

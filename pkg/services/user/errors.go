@@ -23,8 +23,6 @@ var (
 	ErrTokenExpired = errors.New("token expired")
 	// ErrTokenExpirationNotSpecified indicates no expiration value has been provided
 	ErrTokenExpirationNotSpecified = errors.New("token expiration not set")
-	// ErrJwtKeyNotSet indicates no JWT key was set
-	ErrJwtKeyNotSet = errors.New("JWT key is not set")
 )
 
 // IsTokenRejection distinguishes invalid authorization from storage and configuration failures.

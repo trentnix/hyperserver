@@ -274,7 +274,7 @@ func TestBuiltInConfiguredProvidersValidateBeforeOpening(t *testing.T) {
 					cfg.HTTP.Session.CookieAge = 0
 				}
 				providers := map[string]session.ConfiguredProvider{name: factory(cfg)}
-				if setting == "valid" {
+				if setting == "valid" || (name == "sqlite" && setting == "jwtKey") {
 					if err := session.ValidateConfiguredStores(&cfg, providers); err != nil {
 						t.Fatal(err)
 					}

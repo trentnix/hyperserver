@@ -126,9 +126,7 @@ func TestExternalIdentityMigrationUpDown(t *testing.T) {
 	if _, err := db.Exec(accountSchemaV2 + `UPDATE hyperserver_account_version SET version = 2`); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.Initialize(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	assertAccountSetupRejected(t, db, "requires version 3")
 	if err := repo.LinkExternalIdentity(t.Context(), u, user.ExternalIdentity{Issuer: "issuer", Subject: "subject"}); err != nil {
 		t.Fatal(err)
 	}
@@ -146,9 +144,7 @@ func TestExternalIdentityMigrationUpDown(t *testing.T) {
 	if _, err := db.Exec(accountSchemaV2 + `UPDATE hyperserver_account_version SET version = 2`); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.Initialize(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	assertAccountSetupRejected(t, db, "requires version 3")
 	if _, err := repo.GetExternalAccount(t.Context(), user.ExternalIdentity{Issuer: "issuer", Subject: "subject"}); !errors.Is(err, user.ErrUserNotFound) {
 		t.Fatal("down retained identity", err)
 	}

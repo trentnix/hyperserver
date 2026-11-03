@@ -29,6 +29,7 @@ func TestAccountColumnDeclarations(t *testing.T) {
 		{"usertoken", "token_hash", "VARCHAR(255)", true},
 		{"usertoken", "expires_at", "TIMESTAMP", true},
 		{"usertoken", "token_type", "VARCHAR(255)", true},
+		{"usertoken", "email", "TEXT", true},
 	} {
 		for _, change := range []string{"type", "nullability"} {
 			if change == "nullability" && !column.notNull {

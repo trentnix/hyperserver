@@ -2,76 +2,46 @@ package user
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"time"
-
-	"github.com/golang-jwt/jwt/v5"
-	hs_errors "github.com/trentnix/hyperserver/pkg/errors"
 )
 
-type (
-	// AuthResetToken provides a container for a reset AuthToken
-	AuthResetToken struct {
-		AuthToken
-	}
-
-	// VerificationClaims contains the signed account identity, purpose, and expiry.
-	// Email binds verification tokens to their recipient address.
-	VerificationClaims struct {
-		Id      string
-		Purpose string `json:"purpose"`
-		Email   string `json:"email,omitempty"`
-		jwt.RegisteredClaims
-	}
-)
+// AuthResetToken contains a password-reset token and its storage metadata.
+type AuthResetToken struct{ AuthToken }
 
 // NewAuthResetToken creates a reset token and its hash.
 // Store its Metadata with AccountRepository.InsertToken before sending the link.
-func NewAuthResetToken(u *User, jwtKey []byte, expiration time.Duration) (*AuthResetToken, error) {
-	authToken, err := newAuthToken(u, jwtKey, expiration, ResetTokenPurpose)
+func NewAuthResetToken(u *User, expiration time.Duration) (*AuthResetToken, error) {
+	token, err := newAuthToken(u, expiration, ResetTokenPurpose)
 	if err != nil {
 		return nil, err
 	}
-
-	return &AuthResetToken{AuthToken: *authToken}, nil
+	return &AuthResetToken{AuthToken: *token}, nil
 }
 
-// ValidateResetToken checks the signature, reset purpose, stored hash, and expiry,
-// then returns the account. jwtKey is the account-token signing key. It does not consume the token.
-func ValidateResetToken(ctx context.Context, accounts AccountRepository, tokenString string, jwtKey []byte) (*User, error) {
-	return validateToken(ctx, accounts, tokenString, jwtKey, ResetTokenPurpose)
+// ValidateResetToken checks the stored hash, purpose, and expiry without consuming it.
+func ValidateResetToken(ctx context.Context, accounts AccountRepository, raw string) (*User, error) {
+	return validateToken(ctx, accounts, raw, ResetTokenPurpose)
 }
 
-// ResetPassword validates the signed reset token and asks accounts to atomically
-// consume it and store passwordHash. The caller must validate and hash the new
-// password. A concurrent password or provider change rejects the operation.
-// Success refreshes the receiver and invalidates existing authenticated sessions.
-func (u *User) ResetPassword(ctx context.Context, accounts AccountRepository, token string, jwtKey []byte, passwordHash string) error {
+// ResetPassword consumes the token and stores passwordHash atomically.
+// The caller must validate and hash the new password. Success refreshes u and
+// invalidates existing authenticated sessions. A concurrent credential change rejects it.
+func (u *User) ResetPassword(ctx context.Context, accounts AccountRepository, raw, passwordHash string) error {
 	if u == nil || u.ID == "" {
 		return ErrUserNotSpecified
-	}
-	if accounts == nil {
-		return errors.New("the account repository is not configured")
 	}
 	if passwordHash == "" {
 		return errors.New("a password hash is required")
 	}
-
-	claims, err := parseAuthToken(token, jwtKey, ResetTokenPurpose)
+	token, err := loadToken(ctx, accounts, raw, ResetTokenPurpose)
 	if err != nil {
 		return err
 	}
-	if claims.Id != u.ID {
-		return hs_errors.WithCause(ErrToken, errors.New("reset token belongs to another account"))
+	if token.AccountID != u.ID {
+		return ErrToken
 	}
-
-	hash := sha256.Sum256([]byte(token))
-	authorization := ResetAuthorization{
-		AccountID: claims.Id,
-		TokenHash: hex.EncodeToString(hash[:]),
-		ExpiresAt: claims.ExpiresAt.Time,
-	}
-	return accounts.ResetPassword(ctx, u, authorization, passwordHash)
+	return accounts.ResetPassword(ctx, u, ResetAuthorization{
+		AccountID: token.AccountID, TokenHash: token.TokenHash, ExpiresAt: token.ExpiresAt,
+	}, passwordHash)
 }

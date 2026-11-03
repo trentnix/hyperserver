@@ -55,7 +55,7 @@ func TestHTTPCredentialResponses(t *testing.T) {
 						u = h.seedUser(t, email)
 					}
 					if operation == "reset" {
-						token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+						token, err := user.NewAuthResetToken(u, time.Hour)
 						if err != nil {
 							t.Fatal(err)
 						}

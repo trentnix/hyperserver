@@ -182,8 +182,7 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 			if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
-			key := []byte("cleanup-test-key")
-			token, err := newTestToken(u, key, time.Hour, purpose)
+			token, err := newTestToken(u, time.Hour, purpose)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -200,9 +199,9 @@ func TestTokenCleanupDuringRedemption(t *testing.T) {
 			go func() {
 				<-start
 				if purpose == accounts.ResetTokenPurpose {
-					redeemed <- u.ResetPassword(context.Background(), NewAccountRepository(db), token.Token, key, "new hash")
+					redeemed <- u.ResetPassword(context.Background(), NewAccountRepository(db), token.Token, "new hash")
 				} else {
-					_, err := accounts.Verify(context.Background(), NewAccountRepository(db), token.Token, key)
+					_, err := accounts.Verify(context.Background(), NewAccountRepository(db), token.Token)
 					redeemed <- err
 				}
 			}()

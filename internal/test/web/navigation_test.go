@@ -245,7 +245,7 @@ func TestHTTPReadRequestsDoNotSendMail(t *testing.T) {
 func TestHTTPResetRequiresPasswordSubmission(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "reset-method@example.invalid")
-		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+		token, err := user.NewAuthResetToken(u, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}

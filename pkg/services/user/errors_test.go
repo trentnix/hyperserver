@@ -21,7 +21,6 @@ func TestIsTokenRejection(t *testing.T) {
 		{"expired", ErrTokenExpired, true},
 		{"missing account", ErrUserNotFound, true},
 		{"changed account", ErrUserChanged, true},
-		{"missing key", ErrJwtKeyNotSet, false},
 		{"missing account argument", ErrUserNotSpecified, false},
 		{"storage", errors.New("storage unavailable"), false},
 		{"canceled", context.Canceled, false},

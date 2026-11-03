@@ -9,9 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	sessions "github.com/trentnix/hyperserver/pkg/services/session"
-	"github.com/trentnix/hyperserver/pkg/services/session/internal/sessioncookie"
 )
 
 // setupSQLiteStore creates and returns a SQLiteStore instance for testing.
@@ -229,7 +228,7 @@ func TestSQLiteStore_New_NotConfigured(t *testing.T) {
 }
 
 // TestSQLiteStore_Save_NewSession verifies that Save properly saves a new session,
-// writes a valid JWT cookie, and sets the session expiration.
+// writes an opaque cookie, and sets the session expiration.
 func TestSQLiteStore_Save_NewSession(t *testing.T) {
 	store := setupSQLiteStore(t)
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
@@ -270,15 +269,8 @@ func TestSQLiteStore_Save_NewSession(t *testing.T) {
 		t.Errorf("expected cookie MaxAge to be %d, got %d", expectedMaxAge, cookie.MaxAge)
 	}
 
-	// Verify that the JWT in the cookie is valid and contains the expected claims.
-	token, err := jwt.ParseWithClaims(cookie.Value, &sessioncookie.Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return store.JwtKey, nil
-	})
-	if err != nil {
-		t.Errorf("failed to parse JWT from cookie: %v", err)
-	}
-	if !token.Valid {
-		t.Error("JWT from cookie is not valid")
+	if !opaquetoken.Valid(cookie.Value) || cookie.Value != session.ID {
+		t.Fatal("invalid opaque session token")
 	}
 
 	// Ensure that session.ExpiresAt has been set.

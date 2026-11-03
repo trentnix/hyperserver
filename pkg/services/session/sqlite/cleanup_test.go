@@ -161,7 +161,7 @@ func TestSQLiteCleanupFailures(t *testing.T) {
 func TestSQLiteSaveAndEndAfterCleanup(t *testing.T) {
 	store := revocationStore(t)
 	original, r := savedSession(t, store)
-	if _, err := store.db.Exec(`UPDATE sessions SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Hour), original.ID); err != nil {
+	if _, err := store.db.Exec(`UPDATE sessions SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Hour), sessionKey(original.ID, original.Name)); err != nil {
 		t.Fatal(err)
 	}
 	if count, err := store.DeleteExpired(context.Background(), 1); err != nil || count != 1 {
@@ -222,7 +222,7 @@ func TestSQLiteCleanupDuringSave(t *testing.T) {
 			store.db.SetMaxOpenConns(4)
 			original, r := savedSession(t, store)
 			if expired {
-				if _, err := store.db.Exec(`UPDATE sessions SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Hour), original.ID); err != nil {
+				if _, err := store.db.Exec(`UPDATE sessions SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Hour), sessionKey(original.ID, original.Name)); err != nil {
 					t.Fatal(err)
 				}
 			}

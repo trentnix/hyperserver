@@ -51,7 +51,7 @@ func TestConfiguredTableNameSessionLifecycle(t *testing.T) {
 				t.Fatal("rotate:", err)
 			}
 			var oldCount int
-			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM "+quoteIdentifier(table)+" WHERE id = ?", original.ID).Scan(&oldCount); err != nil || oldCount != 0 {
+			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM "+quoteIdentifier(table)+" WHERE id = ?", sessionKey(original.ID, original.Name)).Scan(&oldCount); err != nil || oldCount != 0 {
 				t.Fatalf("old session survived rotation: %d, %v", oldCount, err)
 			}
 			rotatedRequest := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -67,7 +67,7 @@ func TestConfiguredTableNameSessionLifecycle(t *testing.T) {
 			}
 
 			expired, _ := savedSession(t, store)
-			if _, err := store.db.ExecContext(t.Context(), "UPDATE "+quoteIdentifier(table)+" SET expires_at = ? WHERE id = ?", time.Now().Add(-time.Hour), expired.ID); err != nil {
+			if _, err := store.db.ExecContext(t.Context(), "UPDATE "+quoteIdentifier(table)+" SET expires_at = ? WHERE id = ?", time.Now().Add(-time.Hour), sessionKey(expired.ID, expired.Name)); err != nil {
 				t.Fatal(err)
 			}
 			maintenance, closeStore, err := OpenMaintenance(t.Context(), path, table)

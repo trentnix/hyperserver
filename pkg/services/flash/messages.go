@@ -50,6 +50,9 @@ func newMessage(message string, messageType string) messages.SessionMessage {
 // specified category in the messages session
 func addMessage(w http.ResponseWriter, r *http.Request, message string, messageType string, category string) error {
 	s, err := session.Get(r, messagesSession.String())
+	if errors.Is(err, session.ErrInvalidToken) {
+		s, err = session.New(r, messagesSession.String())
+	}
 	if err != nil {
 		return hs_errors.WithCause(ErrRetrievingContentMessages, err)
 	}
@@ -97,6 +100,24 @@ func loadMessagesOfType(r *http.Request, category, messageType string) ([]messag
 		return nil, nil, nil
 	}
 	s, err := session.Get(r, messagesSession.String())
+	if errors.Is(err, session.ErrInvalidToken) {
+		// Discard invalid cookies only after successful rendering. A message
+		// added before acknowledgment replaces the cookie and must survive.
+		acknowledged := false
+		return nil, func(w http.ResponseWriter) error {
+			if acknowledged {
+				return nil
+			}
+			_, err := session.Get(r, messagesSession.String())
+			if errors.Is(err, session.ErrInvalidToken) {
+				session.ExpireCookie(w, r, messagesSession.String())
+			} else if err != nil {
+				return hs_errors.WithCause(ErrRetrievingContentMessages, err)
+			}
+			acknowledged = true
+			return nil
+		}, nil
+	}
 	if err != nil {
 		return nil, nil, hs_errors.WithCause(ErrRetrievingContentMessages, err)
 	}

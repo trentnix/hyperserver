@@ -20,29 +20,29 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				t.Fatal(err)
 			}
 			stale := *u
-			key := []byte("test-signing-key")
+
 			var err error
 			switch change {
 			case "password change":
 				err = NewAccountRepository(db).ChangePassword(ctx, u, "new hash")
 			case "password reset":
-				token, tokenErr := accounts.NewAuthResetToken(u, key, time.Hour)
+				token, tokenErr := accounts.NewAuthResetToken(u, time.Hour)
 				if tokenErr != nil {
 					t.Fatal(tokenErr)
 				}
 				if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
-				err = u.ResetPassword(ctx, repository, token.Token, key, "new hash")
+				err = u.ResetPassword(ctx, repository, token.Token, "new hash")
 			case "verification token":
-				token, tokenErr := accounts.NewAuthVerificationToken(u, key, time.Hour)
+				token, tokenErr := accounts.NewAuthVerificationToken(u, time.Hour)
 				if tokenErr != nil {
 					t.Fatal(tokenErr)
 				}
 				if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
-				u, err = accounts.Verify(ctx, NewAccountRepository(db), token.Token, key)
+				u, err = accounts.Verify(ctx, NewAccountRepository(db), token.Token)
 			default:
 				switch change {
 				case "password update":
@@ -69,7 +69,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			token, err := accounts.NewAuthVerificationToken(current, key, time.Hour)
+			token, err := accounts.NewAuthVerificationToken(current, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +92,7 @@ func TestUpdateRejectsStaleSecurityState(t *testing.T) {
 				if err != nil || *stored != *current {
 					t.Fatalf("rejected update changed the stored account: %v", err)
 				}
-				if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token, key); err != nil {
+				if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token); err != nil {
 					t.Fatalf("rejected update revoked a verification token: %v", err)
 				}
 			}

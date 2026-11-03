@@ -28,7 +28,9 @@ These extension points remain experimental. See the [compatibility policy](compa
 
 ### Signing keys
 
-Generate independent values for `auth.jwtKey` and `http.session.jwtKey`, for example with `openssl rand -hex 32` separately for each key. Configuration uses the output's bytes unchanged, without decoding. Constructors reject keys shorter than 32 bytes and known placeholders. Length alone cannot establish randomness.
+SQLite sessions and account recovery/verification tokens use opaque random tokens and need no signing keys. `auth.jwtKey` is deprecated and ignored.
+
+If you enable cookie-backed sessions, generate `http.session.jwtKey` with `openssl rand -hex 32`. Configuration uses the output's bytes unchanged, without decoding. The cookie provider rejects keys shorter than 32 bytes and known placeholders. Cookie-backed sessions remain signed, not encrypted.
 
 ### Services and serving
 

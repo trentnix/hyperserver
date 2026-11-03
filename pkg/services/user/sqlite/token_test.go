@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -22,16 +23,15 @@ func TestTokenPurposeStorage(t *testing.T) {
 			if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 				t.Fatal(err)
 			}
-			key := []byte("test-signing-key")
 			var token accounts.AuthToken
 			if purpose == accounts.ResetTokenPurpose {
-				reset, err := accounts.NewAuthResetToken(u, key, time.Hour)
+				reset, err := accounts.NewAuthResetToken(u, time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
 				token = reset.AuthToken
 			} else {
-				verification, err := accounts.NewAuthVerificationToken(u, key, time.Hour)
+				verification, err := accounts.NewAuthVerificationToken(u, time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -40,17 +40,11 @@ func TestTokenPurposeStorage(t *testing.T) {
 			if token.Type != purpose {
 				t.Errorf("token type = %q, want %q", token.Type, purpose)
 			}
-			claims := jwt.MapClaims{}
-			if _, err := jwt.ParseWithClaims(token.Token, claims, func(*jwt.Token) (interface{}, error) { return key, nil }); err != nil {
-				t.Fatal(err)
-			}
-			if claims["purpose"] != purpose {
-				t.Errorf("signed purpose = %v, want %q", claims["purpose"], purpose)
-			}
-			if purpose == accounts.VerificationTokenPurpose && claims["email"] != u.Email {
-				t.Error("verification token is not bound to the recipient address")
-			}
 			repository := NewAccountRepository(db)
+			if !opaquetoken.Valid(token.Token) {
+				t.Fatal("invalid opaque token")
+			}
+
 			if err := repository.InsertToken(context.Background(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
@@ -79,7 +73,7 @@ func TestTokenPurposeStorage(t *testing.T) {
 			if err != nil || stored != byHash {
 				t.Fatalf("duplicate insertion changed token metadata: %v", err)
 			}
-			resend, err := newTestToken(u, key, time.Hour, purpose)
+			resend, err := newTestToken(u, time.Hour, purpose)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +85,7 @@ func TestTokenPurposeStorage(t *testing.T) {
 				if purpose == accounts.VerificationTokenPurpose {
 					validate = accounts.ValidateVerificationToken
 				}
-				if _, err := validate(context.Background(), NewAccountRepository(db), raw, key); err != nil {
+				if _, err := validate(context.Background(), NewAccountRepository(db), raw); err != nil {
 					t.Fatalf("resend invalidated an issued token: %v", err)
 				}
 			}
@@ -105,67 +99,64 @@ func TestTokensCannotSubstituteForEachOther(t *testing.T) {
 	if err := NewAccountRepository(db).Create(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	key := []byte("test-signing-key")
-	reset, err := accounts.NewAuthResetToken(u, key, time.Hour)
+
+	reset, err := accounts.NewAuthResetToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := NewAccountRepository(db).InsertToken(t.Context(), reset.Metadata()); err != nil {
 		t.Fatal(err)
 	}
-	verification, err := accounts.NewAuthVerificationToken(u, key, 2*time.Hour)
+	verification, err := accounts.NewAuthVerificationToken(u, 2*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := NewAccountRepository(db).InsertToken(t.Context(), verification.Metadata()); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), reset.Token, key); err == nil || got != nil {
+	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), reset.Token); err == nil || got != nil {
 		t.Error("reset token verified the account")
 	}
-	if got, err := accounts.ValidateResetToken(context.Background(), NewAccountRepository(db), verification.Token, key); err == nil || got != nil {
+	if got, err := accounts.ValidateResetToken(context.Background(), NewAccountRepository(db), verification.Token); err == nil || got != nil {
 		t.Error("verification token authorized a password reset")
 	}
-	if got, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), reset.Token, key); err == nil || got != nil {
+	if got, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), reset.Token); err == nil || got != nil {
 		t.Error("reset token passed stored verification-token validation")
 	}
 	stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 	if err != nil || stored.Verified || stored.Password != u.Password {
 		t.Fatal("wrong-purpose token changed the account")
 	}
-	if got, err := accounts.ValidateResetToken(context.Background(), NewAccountRepository(db), reset.Token, key); err != nil || got.ID != u.ID {
+	if got, err := accounts.ValidateResetToken(context.Background(), NewAccountRepository(db), reset.Token); err != nil || got.ID != u.ID {
 		t.Fatalf("valid reset token rejected: %v", err)
 	}
-	if got, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), verification.Token, key); err != nil || got.ID != u.ID {
+	if got, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), verification.Token); err != nil || got.ID != u.ID {
 		t.Fatalf("valid stored verification token rejected: %v", err)
 	}
-	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), verification.Token, key); err != nil || !got.Verified {
+	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), verification.Token); err != nil || !got.Verified {
 		t.Fatalf("valid verification token rejected: %v", err)
 	}
 }
 
-func TestVerifyRejectsUnboundOrExpiredSignedTokens(t *testing.T) {
-	for _, failure := range []string{"missing email", "signed expiry"} {
+func TestVerifyRejectsUnboundOrExpiredTokens(t *testing.T) {
+	for _, failure := range []string{"missing email", "stored expiry"} {
 		t.Run(failure, func(t *testing.T) {
-			db, u, _, key := verificationFixture(t)
-			claims := accounts.VerificationClaims{Id: u.ID, Purpose: accounts.VerificationTokenPurpose, Email: u.Email,
-				RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}}
-			if failure == "missing email" {
-				claims.Email = ""
-			} else {
-				claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(-time.Hour))
-			}
-			raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+			db, u, _ := verificationFixture(t)
+			token, err := accounts.NewAuthVerificationToken(u, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
-			hash := sha256.Sum256([]byte(raw))
-			token := accounts.AuthToken{UserId: u.ID, TokenHash: hex.EncodeToString(hash[:]), Type: accounts.VerificationTokenPurpose, ExpiresAt: time.Now().Add(time.Hour)}
+			if failure == "missing email" {
+				token.Email = ""
+			} else {
+				token.ExpiresAt = time.Now().Add(-time.Hour)
+			}
+			raw := token.Token
 			if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
-			if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), raw, key); err == nil || got != nil {
-				t.Fatal("invalid signed verification token accepted")
+			if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), raw); err == nil || got != nil {
+				t.Fatal("invalid verification token accepted")
 			}
 			stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
 			if err != nil || stored.Verified {
@@ -179,8 +170,8 @@ func TestVerifyRejectsUnboundOrExpiredSignedTokens(t *testing.T) {
 }
 
 func TestInsertTokenHonorsCancellation(t *testing.T) {
-	db, u, _, key := verificationFixture(t)
-	token, err := accounts.NewAuthVerificationToken(u, key, time.Hour)
+	db, u, _ := verificationFixture(t)
+	token, err := accounts.NewAuthVerificationToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +188,7 @@ func TestInsertTokenHonorsCancellation(t *testing.T) {
 func TestSQLiteAccountRepositoryInsertTokenFailure(t *testing.T) {
 	for _, scenario := range []string{"nil database", "closed database", "insert failure", "missing account", "missing hash", "missing expiry", "invalid purpose"} {
 		t.Run(scenario, func(t *testing.T) {
-			db, u, original, _ := verificationFixture(t)
+			db, u, original := verificationFixture(t)
 			repository := NewAccountRepository(db)
 			metadata := original.Metadata()
 			metadata.TokenHash = "new hash"
@@ -240,7 +231,7 @@ func TestSQLiteAccountRepositoryInsertTokenFailure(t *testing.T) {
 
 func TestSQLiteAccountRepositoryInsertTokenCancellationWhileWaiting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		db, _, token, _ := verificationFixture(t)
+		db, _, token := verificationFixture(t)
 		metadata := token.Metadata()
 		metadata.TokenHash = "new hash"
 		connection, err := db.Conn(context.Background())
@@ -274,7 +265,7 @@ func TestSQLiteAccountRepositoryInsertTokenCancellationWhileWaiting(t *testing.T
 }
 
 func TestSQLiteAccountRepositoryConcurrentTokenInsertion(t *testing.T) {
-	db, _, token, _ := verificationFixture(t)
+	db, _, token := verificationFixture(t)
 	repository := NewAccountRepository(db)
 	metadata := token.Metadata()
 	metadata.TokenHash = "new hash"
@@ -309,9 +300,9 @@ func TestSQLiteAccountRepositoryConcurrentTokenInsertion(t *testing.T) {
 func TestSQLiteAccountRepositoryGetToken(t *testing.T) {
 	for _, purpose := range []string{accounts.ResetTokenPurpose, accounts.VerificationTokenPurpose} {
 		t.Run(purpose, func(t *testing.T) {
-			db, u, _, key := verificationFixture(t)
+			db, u, _ := verificationFixture(t)
 			repository := NewAccountRepository(db)
-			token, err := newTestToken(u, key, time.Hour, purpose)
+			token, err := newTestToken(u, time.Hour, purpose)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -339,7 +330,7 @@ func TestSQLiteAccountRepositoryGetToken(t *testing.T) {
 func TestSQLiteAccountRepositoryGetTokenFailures(t *testing.T) {
 	for _, scenario := range []string{"missing", "wrong purpose", "empty hash", "invalid purpose", "nil database", "closed database", "missing schema", "invalid stored expiry", "canceled"} {
 		t.Run(scenario, func(t *testing.T) {
-			db, _, token, _ := verificationFixture(t)
+			db, _, token := verificationFixture(t)
 			repository := NewAccountRepository(db)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -384,7 +375,7 @@ func TestSQLiteAccountRepositoryGetTokenFailures(t *testing.T) {
 
 func TestSQLiteAccountRepositoryGetTokenCancellationWhileWaiting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		db, _, token, _ := verificationFixture(t)
+		db, _, token := verificationFixture(t)
 		connection, err := db.Conn(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -424,7 +415,7 @@ func TestLegacyStoredResetTokenRejected(t *testing.T) {
 	}
 	key := []byte("test-signing-key")
 	expires := time.Now().Add(time.Hour)
-	claims := jwt.MapClaims{"Id": u.ID, "exp": expires.Unix()}
+	claims := jwt.MapClaims{"Id": u.ID, "purpose": accounts.ResetTokenPurpose, "exp": expires.Unix()}
 	raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
 	if err != nil {
 		t.Fatal(err)
@@ -434,11 +425,11 @@ func TestLegacyStoredResetTokenRejected(t *testing.T) {
 	if err := NewAccountRepository(db).InsertToken(t.Context(), token.Metadata()); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := accounts.ValidateResetToken(context.Background(), NewAccountRepository(db), raw, key); err == nil || got != nil {
-		t.Fatal("stored legacy token without a purpose was accepted")
+	if got, err := accounts.ValidateResetToken(context.Background(), NewAccountRepository(db), raw); err == nil || got != nil {
+		t.Fatal("stored legacy JWT was accepted")
 	}
-	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), raw, key); err == nil || got != nil {
-		t.Fatal("legacy token without a purpose verified the account")
+	if got, err := accounts.Verify(context.Background(), NewAccountRepository(db), raw); err == nil || got != nil {
+		t.Fatal("legacy JWT verified the account")
 	}
 }
 

@@ -28,7 +28,7 @@ Set `http.formActionOrigins` to permit Google's form redirect destination. The f
 
 `/auth/login` normally shows all configured login methods. With exactly one registered account, the blog shows only methods available to that account: email for a stored password, Google for a connected Google identity, or both. If a provider's availability check fails, its control remains visible. Direct login routes still work if presentation lookups fail. Credential validation and admission remain mandatory. Registration still offers all configured registration methods. Multiple-account sites and account storage without `user.SingleAccountReader` keep all configured login choices. The forms work without JavaScript. A disabled provider has no usable login or callback. Google-only authentication does not require a mail service. Existing global authentication and session settings still apply.
 
-Existing SQLite account databases must migrate from version 1 to version 2 before starting the new application. See [account migrations](storage.md#account-schema-migrations). Fresh databases initialize automatically.
+Existing SQLite account databases must use the current schema before starting the application. See [account migrations](storage.md#account-schema-migrations) for the required version and upgrade commands. Fresh databases initialize automatically.
 
 ## Existing accounts
 

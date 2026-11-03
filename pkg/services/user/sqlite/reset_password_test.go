@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -17,10 +18,10 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	key := []byte("test-signing-key")
+
 	var tokens []*accounts.AuthResetToken
 	for _, lifetime := range []time.Duration{time.Hour, 2 * time.Hour} {
-		token, err := accounts.NewAuthResetToken(u, key, lifetime)
+		token, err := accounts.NewAuthResetToken(u, lifetime)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -33,7 +34,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := u.ResetPassword(ctx, NewAccountRepository(db), tokens[1].Token, key, "new hash"); err != nil {
+	if err := u.ResetPassword(ctx, NewAccountRepository(db), tokens[1].Token, "new hash"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := NewAccountRepository(db).GetToken(t.Context(), tokens[0].TokenHash, accounts.ResetTokenPurpose); err != nil {
@@ -42,7 +43,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 	if _, err := NewAccountRepository(db).GetToken(t.Context(), tokens[1].TokenHash, accounts.ResetTokenPurpose); !errors.Is(err, accounts.ErrTokenNotFound) {
 		t.Fatalf("presented token still exists: %v", err)
 	}
-	if err := u.ResetPassword(ctx, NewAccountRepository(db), tokens[1].Token, key, "replayed hash"); !errors.Is(err, accounts.ErrTokenNotFound) {
+	if err := u.ResetPassword(ctx, NewAccountRepository(db), tokens[1].Token, "replayed hash"); !errors.Is(err, accounts.ErrTokenNotFound) {
 		t.Fatalf("replay error = %v, want ErrTokenNotFound", err)
 	}
 	stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)
@@ -58,7 +59,7 @@ func TestResetPasswordConsumesExactToken(t *testing.T) {
 }
 
 func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
-	for _, failure := range []string{"update", "delete", "commit", "missing account", "stale password", "stale provider", "wrong account", "wrong purpose", "wrong signature", "signed expiry", "stored expiry", "stored account", "stored purpose", "missing token", "canceled", "empty password"} {
+	for _, failure := range []string{"update", "delete", "commit", "missing account", "stale password", "stale provider", "wrong account", "wrong purpose", "unknown token", "supplied expiry", "stored expiry", "stored account", "stored purpose", "missing token", "canceled", "empty password"} {
 		t.Run(failure, func(t *testing.T) {
 			db := userTestDB(t)
 			ctx := context.Background()
@@ -66,15 +67,15 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 			if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 				t.Fatal(err)
 			}
-			key := []byte("test-signing-key")
+
 			purpose, lifetime := accounts.ResetTokenPurpose, time.Hour
 			if failure == "wrong purpose" {
 				purpose = accounts.VerificationTokenPurpose
 			}
-			if failure == "signed expiry" {
+			if failure == "supplied expiry" {
 				lifetime = time.Nanosecond
 			}
-			token, err := newTestToken(u, key, lifetime, purpose)
+			token, err := newTestToken(u, lifetime, purpose)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -114,8 +115,8 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 				u.RegistrationAuthType = "another-provider"
 			case "wrong account":
 				u.ID = "another-account"
-			case "wrong signature":
-				key = []byte("wrong-key")
+			case "unknown token":
+				token.Token = opaquetoken.New()
 			case "stored account":
 				if _, err := db.Exec(`UPDATE usertoken SET user_id = ? WHERE token_hash = ?`, "another-account", token.TokenHash); err != nil {
 					t.Fatal(err)
@@ -143,7 +144,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 			if failure == "empty password" {
 				hash = ""
 			}
-			if err := u.ResetPassword(ctx, NewAccountRepository(db), token.Token, key, hash); err == nil {
+			if err := u.ResetPassword(ctx, NewAccountRepository(db), token.Token, hash); err == nil {
 				t.Fatal("reset succeeded despite failure")
 			}
 			if *u != before {
@@ -164,7 +165,7 @@ func TestResetPasswordFailureLeavesAccountAndTokenUnchanged(t *testing.T) {
 				if _, err := db.Exec(`DROP TRIGGER fail_reset`); err != nil {
 					t.Fatal(err)
 				}
-				if err := u.ResetPassword(ctx, NewAccountRepository(db), token.Token, key, hash); err != nil {
+				if err := u.ResetPassword(ctx, NewAccountRepository(db), token.Token, hash); err != nil {
 					t.Fatalf("retry after rollback failed: %v", err)
 				}
 			}
@@ -180,8 +181,8 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 	if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	key := []byte("test-signing-key")
-	token, err := accounts.NewAuthResetToken(u, key, time.Hour)
+
+	token, err := accounts.NewAuthResetToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +208,7 @@ func TestResetPasswordConcurrentRedemption(t *testing.T) {
 		account := *u
 		go func() {
 			hash := fmt.Sprintf("new hash %d", i)
-			results <- result{hash, account.ResetPassword(ctx, NewAccountRepository(observed), token.Token, key, hash)}
+			results <- result{hash, account.ResetPassword(ctx, NewAccountRepository(observed), token.Token, hash)}
 		}()
 	}
 	// Both transactions must reach deletion while a separate connection owns
@@ -259,7 +260,7 @@ func TestSQLiteAccountRepositoryResetRejectsInvalidInput(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			token, err := accounts.NewAuthResetToken(u, []byte("test-signing-key"), time.Hour)
+			token, err := accounts.NewAuthResetToken(u, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -303,7 +304,7 @@ func TestSQLiteAccountRepositoryResetRejectsInvalidInput(t *testing.T) {
 }
 
 func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
-	for _, scenario := range []string{"cancellation", "signed expiry", "stored expiry"} {
+	for _, scenario := range []string{"cancellation", "supplied expiry", "stored expiry"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := userTestDB(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -312,18 +313,18 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 			if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 				t.Fatal(err)
 			}
-			key := []byte("test-signing-key")
+
 			lifetime := time.Hour
-			if scenario == "signed expiry" {
+			if scenario == "supplied expiry" {
 				lifetime = 2 * time.Second
 			}
-			token, err := accounts.NewAuthResetToken(u, key, lifetime)
+			token, err := accounts.NewAuthResetToken(u, lifetime)
 			if err != nil {
 				t.Fatal(err)
 			}
 			deadline := time.Unix(token.ExpiresAt.Unix(), 0)
-			if scenario == "signed expiry" {
-				// Keep stored expiry valid so only the signed deadline rejects use.
+			if scenario == "supplied expiry" {
+				// Keep stored expiry valid so the previously read deadline rejects use.
 				token.ExpiresAt = time.Now().Add(time.Hour)
 			} else if scenario == "stored expiry" {
 				deadline = time.Now().Add(time.Second)
@@ -347,7 +348,7 @@ func TestResetPasswordCancellationAndExpiryDuringContention(t *testing.T) {
 			before := *u
 			result := make(chan error, 1)
 			go func() {
-				result <- u.ResetPassword(resetCtx, NewAccountRepository(observed), token.Token, key, "new hash")
+				result <- NewAccountRepository(observed).ResetPassword(resetCtx, u, accounts.ResetAuthorization{AccountID: u.ID, TokenHash: token.TokenHash, ExpiresAt: deadline}, "new hash")
 			}()
 			waitForTokenDelete(t, ctx, started)
 			if scenario != "cancellation" && !time.Now().Before(deadline) {
@@ -402,8 +403,8 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 	if err := NewAccountRepository(db).Create(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	key := []byte("test-signing-key")
-	token, err := accounts.NewAuthResetToken(u, key, time.Hour)
+
+	token, err := accounts.NewAuthResetToken(u, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,7 +416,7 @@ func TestResetPasswordPreservesUnrelatedAccountChanges(t *testing.T) {
 	if err := NewAccountRepository(db).Update(ctx, &verified); err != nil {
 		t.Fatal(err)
 	}
-	if err := u.ResetPassword(ctx, NewAccountRepository(db), token.Token, key, "new hash"); err != nil {
+	if err := u.ResetPassword(ctx, NewAccountRepository(db), token.Token, "new hash"); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := NewAccountRepository(db).GetByID(t.Context(), u.ID)

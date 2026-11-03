@@ -89,7 +89,7 @@ func TestPasswordOperations(t *testing.T) {
 				account := &user.User{ID: "account", Password: hash, SessionVersion: 1}
 				before := *account
 				key := "operation-test-key"
-				token, err := user.NewAuthResetToken(account, []byte(key), time.Hour)
+				token, err := user.NewAuthResetToken(account, time.Hour)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -119,6 +119,7 @@ func TestPasswordOperations(t *testing.T) {
 					return nil
 				}
 				accounts := emailAccountRepository{
+					getToken:       func(context.Context, string, string) (user.TokenMetadata, error) { return token.Metadata(), nil },
 					changePassword: write,
 					resetPassword: func(got context.Context, u *user.User, authorization user.ResetAuthorization, encoded string) error {
 						if authorization.TokenHash != token.TokenHash || authorization.AccountID != account.ID || authorization.ExpiresAt.Unix() != token.ExpiresAt.Unix() {

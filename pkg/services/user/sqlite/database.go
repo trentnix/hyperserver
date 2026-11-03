@@ -30,7 +30,10 @@ var accountSchemaV1 string
 //go:embed migrations/000002_external_identities.up.sql
 var accountSchemaV2 string
 
-// PrepareDatabase creates version 2 in fresh account storage and checks required
+//go:embed migrations/000003_opaque_tokens.up.sql
+var accountSchemaV3 string
+
+// PrepareDatabase creates version 3 in fresh account storage and checks required
 // columns, supported types, nullability, unique keys, and the token foreign key.
 // Applications must call it before using account storage. Repeated calls preserve
 // data. Existing storage must already have supported version metadata. It does
@@ -101,8 +104,11 @@ func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, accountSchemaV2); err != nil {
 			return fmt.Errorf("create account schema version 2: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO hyperserver_account_version (version, dirty) VALUES (2, false)`); err != nil {
-			return fmt.Errorf("record account schema version 2: %w", err)
+		if _, err := tx.ExecContext(ctx, accountSchemaV3); err != nil {
+			return fmt.Errorf("create account schema version 3: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO hyperserver_account_version (version, dirty) VALUES (3, false)`); err != nil {
+			return fmt.Errorf("record account schema version 3: %w", err)
 		}
 		return nil
 	}
@@ -129,8 +135,8 @@ func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 	if dirty.Bool {
 		return fmt.Errorf("SQLite account schema version %d is dirty: explicit migration repair is required before startup", version.Int64)
 	}
-	if version.Int64 != 2 {
-		return fmt.Errorf("unsupported SQLite account schema version %d: this provider requires version 2. Back up the database and run the account migrations", version.Int64)
+	if version.Int64 != 3 {
+		return fmt.Errorf("unsupported SQLite account schema version %d: this provider requires version 3. Back up the database and run the account migrations", version.Int64)
 	}
 	return nil
 }
@@ -215,6 +221,7 @@ func validateAccountColumns(ctx context.Context, tx *sql.Tx) error {
 		{"usertoken", "token_hash", "text", true},
 		{"usertoken", "expires_at", "timestamp", true},
 		{"usertoken", "token_type", "text", true},
+		{"usertoken", "email", "text", true},
 	} {
 		var declaredType string
 		var notNull bool

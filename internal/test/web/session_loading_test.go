@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/opaquetoken"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -100,15 +101,8 @@ func TestHTTPProtectedRouteSessionExpiry(t *testing.T) {
 				if authCookie == nil {
 					t.Fatal("login did not issue an authentication cookie")
 				}
-				key := []byte(h.app.Config.HTTP.Session.JwtKey)
-				claims := &sessionCookieClaims{}
-				if _, err := jwt.ParseWithClaims(authCookie.Value, claims, func(*jwt.Token) (any, error) { return key, nil }); err != nil {
-					t.Fatal(err)
-				}
-				// Expire only the signed token. Keep the browser cookie and stored data.
-				claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(-time.Hour))
-				authCookie.Value, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
-				if err != nil {
+				// Expire server-side state without changing the browser cookie.
+				if _, err := h.db.Exec("UPDATE session SET expires_at = ? WHERE id = ?", time.Now().Add(-time.Hour), sqliteSessionKey(authCookie.Value, authCookie.Name)); err != nil {
 					t.Fatal(err)
 				}
 				authCookie.Path = "/"
@@ -163,8 +157,9 @@ func TestHTTPSessionLoading(t *testing.T) {
 						RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(expires)},
 					}
 					if provider == "sqliteStore" {
+						claims.ID = opaquetoken.New()
 						if outcome != "missing row" {
-							_, err := h.db.Exec(`INSERT INTO session (id, session, expires_at) VALUES (?, ?, ?)`, claims.ID, encoded, time.Now().Add(time.Hour))
+							_, err := h.db.Exec(`INSERT INTO session (id, session, expires_at) VALUES (?, ?, ?)`, sqliteSessionKey(claims.ID, name), encoded, expires)
 							if err != nil {
 								t.Fatal(err)
 							}
@@ -183,6 +178,9 @@ func TestHTTPSessionLoading(t *testing.T) {
 					raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
 					if err != nil {
 						t.Fatal(err)
+					}
+					if provider == "sqliteStore" && !strings.Contains(outcome, "invalid signature") {
+						raw = claims.ID
 					}
 					if outcome == "malformed" {
 						raw = "not-a-token"
@@ -323,7 +321,7 @@ func TestHTTPLoginRedirectSessionFailure(t *testing.T) {
 						cookie.Value = "invalid.jwt.token"
 					case "corrupt data":
 						if provider == "sqliteStore" {
-							if _, err := h.db.Exec(`UPDATE session SET session = 'invalid base64!' WHERE id = ?`, redirect.ID); err != nil {
+							if _, err := h.db.Exec(`UPDATE session SET session = 'invalid base64!' WHERE id = ?`, sqliteSessionKey(redirect.ID, redirect.Name)); err != nil {
 								t.Fatal(err)
 							}
 						} else {
@@ -387,4 +385,9 @@ type sessionCookieClaims struct {
 	Purpose string `json:"purpose"`
 	Value   string `json:"data"`
 	jwt.RegisteredClaims
+}
+
+// sqliteSessionKey mirrors the documented, name-bound storage digest.
+func sqliteSessionKey(token, name string) string {
+	return "sha256:" + opaquetoken.Hash(name+"\x00"+token)
 }

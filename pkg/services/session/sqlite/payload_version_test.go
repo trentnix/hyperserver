@@ -57,11 +57,7 @@ func storedPayload(t *testing.T, store sessions.SessionStore, r *http.Request, n
 		}
 		encoded = claims.Value
 	case *SQLiteStore:
-		claims, err := sessioncookie.Parse(requestCookie.Value, store.JwtKey, name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := store.db.QueryRowContext(t.Context(), `SELECT session FROM sessions WHERE id = ?`, claims.ID).Scan(&encoded); err != nil {
+		if err := store.db.QueryRowContext(t.Context(), `SELECT session FROM sessions WHERE id = ?`, sessionKey(requestCookie.Value, name)).Scan(&encoded); err != nil {
 			t.Fatal(err)
 		}
 	default:

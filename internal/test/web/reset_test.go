@@ -28,7 +28,7 @@ func TestHTTPResetPasswordPolicy(t *testing.T) {
 						email = "htmx@example.invalid"
 					}
 					u := h.seedUser(t, email)
-					token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+					token, err := user.NewAuthResetToken(u, time.Hour)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -66,7 +66,7 @@ func TestHTTPResetPasswordPolicy(t *testing.T) {
 func TestHTTPResetOversizedPasswordPreservesToken(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
-		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+		token, err := user.NewAuthResetToken(u, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,12 +97,12 @@ func TestHTTPResetOversizedPasswordPreservesToken(t *testing.T) {
 func TestHTTPResetConsumesExactTokenAndRejectsReplay(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
-		key := []byte(h.app.Config.Auth.JwtKey)
-		first, err := user.NewAuthResetToken(u, key, time.Hour)
+
+		first, err := user.NewAuthResetToken(u, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := user.NewAuthResetToken(u, key, 2*time.Hour)
+		second, err := user.NewAuthResetToken(u, 2*time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +148,7 @@ func TestHTTPResetConsumesExactTokenAndRejectsReplay(t *testing.T) {
 func TestHTTPResetDeletionFailureRollsBackPassword(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
-		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+		token, err := user.NewAuthResetToken(u, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -183,15 +183,15 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		key := []byte(h.app.Config.Auth.JwtKey)
-		reset, err := user.NewAuthResetToken(u, key, time.Hour)
+
+		reset, err := user.NewAuthResetToken(u, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := h.accounts.InsertToken(t.Context(), reset.Metadata()); err != nil {
 			t.Fatal(err)
 		}
-		verification, err := user.NewAuthVerificationToken(u, key, time.Hour)
+		verification, err := user.NewAuthVerificationToken(u, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -221,7 +221,7 @@ func TestHTTPRejectsWrongPurposeTokens(t *testing.T) {
 func TestHTTPExpiredResetTokenIsBadRequest(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
-		token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+		token, err := user.NewAuthResetToken(u, time.Hour)
 		if err != nil {
 			t.Fatal(err)
 		}

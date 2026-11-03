@@ -27,7 +27,7 @@ func TestHTTPAccountLookupCancellation(t *testing.T) {
 					values := url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}
 					var tokenHash string
 					if workflow != "login" {
-						token, err := user.NewAuthResetToken(u, []byte(h.app.Config.Auth.JwtKey), time.Hour)
+						token, err := user.NewAuthResetToken(u, time.Hour)
 						if err != nil {
 							t.Fatal(err)
 						}

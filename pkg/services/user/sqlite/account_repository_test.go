@@ -439,7 +439,7 @@ func TestSQLiteAccountRepositoryChangePasswordCancellationWhileWaiting(t *testin
 
 func TestSQLiteAccountRepositoryUpdateCancellationWhileWaiting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		db, u, token, key := verificationFixture(t)
+		db, u, token := verificationFixture(t)
 		repository := NewAccountRepository(db)
 		storedBefore, err := repository.GetByID(context.Background(), u.ID)
 		if err != nil {
@@ -475,7 +475,7 @@ func TestSQLiteAccountRepositoryUpdateCancellationWhileWaiting(t *testing.T) {
 		if err != nil || *stored != *storedBefore {
 			t.Fatalf("canceled update changed the stored account: %v", err)
 		}
-		if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token, key); err != nil {
+		if _, err := accounts.ValidateVerificationToken(context.Background(), NewAccountRepository(db), token.Token); err != nil {
 			t.Fatalf("canceled update revoked the verification token: %v", err)
 		}
 	})

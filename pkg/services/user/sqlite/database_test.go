@@ -35,7 +35,7 @@ func TestInitializeCreatesVersionedDatabaseFile(t *testing.T) {
 	}
 	var version int
 	var dirty bool
-	if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != 2 || dirty {
+	if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != 3 || dirty {
 		t.Fatalf("initial version = %d, dirty = %t, error = %v", version, dirty, err)
 	}
 	u := &accounts.User{Email: "person@example.invalid"}

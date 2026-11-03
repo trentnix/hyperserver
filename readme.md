@@ -10,7 +10,7 @@ The core provides rendering and HTMX responses. Authentication, sessions, persis
 
 Use the Go version in [go.mod](go.mod). SQLite and race tests require CGO and a C compiler.
 
-The default application is the [blog](docs/blog/readme.md), with posts, pages, images, search, and administrator-only publishing. Follow its [setup instructions](docs/blog/readme.md#run-locally) to configure signing keys, mail, and the administrator address. Then run from the repository root:
+The default application is the [blog](docs/blog/readme.md), with posts, pages, images, search, and administrator-only publishing. Follow its [setup instructions](docs/blog/readme.md#run-locally) to configure mail and the administrator address. Then run from the repository root:
 
 ```sh
 go run ./cmd/web

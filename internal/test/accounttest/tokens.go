@@ -13,6 +13,21 @@ import (
 )
 
 func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
+	t.Run("verification recipient binding", func(t *testing.T) {
+		repo := open(t)
+		u := create(t, repo, "current@example.invalid")
+		token := user.TokenMetadata{AccountID: u.ID, TokenHash: tokenHash("old recipient"), Purpose: user.VerificationTokenPurpose, ExpiresAt: tokenExpiry(time.Hour), Email: "old@example.invalid"}
+		must(t, repo.InsertToken(t.Context(), token))
+		for _, email := range []string{u.Email, token.Email} {
+			got, err := repo.Verify(t.Context(), user.VerificationAuthorization{AccountID: u.ID, TokenHash: token.TokenHash, ExpiresAt: token.ExpiresAt, Email: email})
+			if got != nil || !errors.Is(err, user.ErrToken) {
+				t.Fatalf("mismatched recipient accepted: %v, %v", got, err)
+			}
+			assertToken(t, repo, token)
+			assertAccount(t, load(t, repo, u.ID), u)
+		}
+	})
+
 	t.Run("token metadata and insert only", func(t *testing.T) {
 		repo := open(t)
 		u := create(t, repo, "token@example.invalid")
@@ -92,12 +107,12 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			assertAccount(t, load(t, repo, other.ID), other)
 		})
 
-		for _, failure := range []string{"stored expiry", "signed expiry", "wrong purpose", "wrong hash", "wrong account", "account mismatch"} {
+		for _, failure := range []string{"stored expiry", "supplied expiry", "wrong purpose", "wrong hash", "wrong account", "account mismatch"} {
 			t.Run(purpose+"/rollback/"+failure, func(t *testing.T) {
 				repo := open(t)
 				original := create(t, repo, "rollback@example.invalid")
 				other := create(t, repo, "other@example.invalid")
-				token := user.TokenMetadata{AccountID: original.ID, TokenHash: tokenHash("rollback"), Purpose: purpose, ExpiresAt: tokenExpiry(time.Hour)}
+				token := user.TokenMetadata{AccountID: original.ID, TokenHash: tokenHash("rollback"), Purpose: purpose, ExpiresAt: tokenExpiry(time.Hour), Email: original.Email}
 				if failure == "stored expiry" {
 					token.ExpiresAt = tokenExpiry(-time.Hour)
 				}
@@ -114,7 +129,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				auth.Purpose, auth.ExpiresAt = purpose, tokenExpiry(time.Hour)
 				input := original
 				switch failure {
-				case "signed expiry":
+				case "supplied expiry":
 					auth.ExpiresAt = tokenExpiry(-time.Hour)
 				case "wrong hash":
 					auth.TokenHash = tokenHash("missing")
@@ -305,6 +320,7 @@ func tokenExpiry(offset time.Duration) time.Time {
 func insertToken(t *testing.T, repo user.AccountRepository, id, purpose string) user.TokenMetadata {
 	t.Helper()
 	token := user.TokenMetadata{AccountID: id, TokenHash: tokenHash(id + purpose), Purpose: purpose, ExpiresAt: tokenExpiry(time.Hour)}
+	token.Email = load(t, repo, id).Email
 	must(t, repo.InsertToken(t.Context(), token))
 	return token
 }

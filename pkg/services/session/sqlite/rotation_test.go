@@ -35,10 +35,10 @@ func TestSQLiteSessionRotation(t *testing.T) {
 				t.Fatal("rotation did not replace the request cache")
 			}
 			var count int
-			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions WHERE id = ?", oldID).Scan(&count); err != nil || count != 0 {
+			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions WHERE id = ?", sessionKey(oldID, original.Name)).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("old row survived: %d, %v", count, err)
 			}
-			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions WHERE id = ?", unrelated.ID).Scan(&count); err != nil || count != 1 {
+			if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM sessions WHERE id = ?", sessionKey(unrelated.ID, unrelated.Name)).Scan(&count); err != nil || count != 1 {
 				t.Fatalf("unrelated session changed: %d, %v", count, err)
 			}
 			nextRequest := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -86,11 +86,11 @@ func TestSQLiteRotationFailurePreservesSession(t *testing.T) {
 			case "encoding":
 				data["unsupported"] = make(chan int)
 			case "revoked":
-				if _, err := store.db.Exec("DELETE FROM sessions WHERE id = ?", oldID); err != nil {
+				if _, err := store.db.Exec("DELETE FROM sessions WHERE id = ?", sessionKey(oldID, original.Name)); err != nil {
 					t.Fatal(err)
 				}
 			case "expired":
-				if _, err := store.db.Exec("UPDATE sessions SET expires_at = ? WHERE id = ?", time.Now().UTC().Add(-time.Hour), oldID); err != nil {
+				if _, err := store.db.Exec("UPDATE sessions SET expires_at = ? WHERE id = ?", time.Now().UTC().Add(-time.Hour), sessionKey(oldID, original.Name)); err != nil {
 					t.Fatal(err)
 				}
 			}
