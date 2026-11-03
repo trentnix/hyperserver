@@ -27,6 +27,7 @@ type editorPage struct {
 	Post
 	revisionSelection
 	Error                      string
+	ErrorFields                string
 	PublishedSlug              string
 	ScheduledSlug              string
 	ScheduledAt                int64
@@ -167,17 +168,26 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	}
 	publicationError := m.readPublication(r, &p)
 	if publicationError != "" {
-		m.editorError(w, r, p, publicationError, http.StatusUnprocessableEntity)
+		fields := []string{"published"}
+		if r.PostForm.Get("published") == "scheduled" {
+			fields = []string{"publishDate", "publishTime"}
+		}
+		m.editorError(w, r, p, publicationError, http.StatusUnprocessableEntity, fields...)
 		return
 	}
 	saved, err := m.writePost(r.Context(), p)
 	var invalid contentError
 	if errors.As(err, &invalid) || errors.Is(err, errMissingMedia) {
-		m.editorError(w, r, p, err.Error(), http.StatusUnprocessableEntity)
+		var fieldError writingFieldError
+		var fields []string
+		if errors.As(err, &fieldError) {
+			fields = append(fields, fieldError.field)
+		}
+		m.editorError(w, r, p, err.Error(), http.StatusUnprocessableEntity, fields...)
 		return
 	}
 	if errors.Is(err, errSlugTaken) {
-		m.editorError(w, r, p, slugConflictMessage, http.StatusConflict)
+		m.editorError(w, r, p, slugConflictMessage, http.StatusConflict, "slug")
 		return
 	}
 	if errors.Is(err, errEditConflict) {
@@ -185,7 +195,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, errAlreadyPublished) {
-		m.editorError(w, r, p, "This post has already been published. Choose Draft or Publish.", http.StatusUnprocessableEntity)
+		m.editorError(w, r, p, "This post has already been published. Choose Draft or Publish.", http.StatusUnprocessableEntity, "published")
 		return
 	}
 	if err != nil {
@@ -203,16 +213,17 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 
 // editorError keeps an HTMX editor mounted so its unsaved draft survives errors.
 // Ordinary submissions render the form again with the submitted values.
-func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, message string, status int) {
+func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, message string, status int, fields ...string) {
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
 	data := editorPage{Post: p, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
+	data.ErrorFields = strings.Join(fields, " ")
 	data.SaveActions = editorActions("post", false, false)
 	data.Publication = r.PostForm.Get("published")
 	data.ScheduleDate, data.ScheduleTime = r.PostForm.Get("publishDate"), r.PostForm.Get("publishTime")
 	page := m.views["editor"].Content(r, data)
 	if page.IsHtmx() {
-		page = m.views["message"].Content(r, message)
+		page = m.views["editorError"].Content(r, data)
 	} else {
 		data.TagSuggestions = m.tagSuggestions(r)
 		if p.ID != "" {

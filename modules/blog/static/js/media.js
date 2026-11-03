@@ -79,10 +79,16 @@ export async function uploadImage(file) {
   return path;
 }
 
+export function setUploadStatus(status, message, failed = false) {
+  status.classList.toggle('upload-error', failed);
+  status.setAttribute('role', failed && status.closest('#post-form') ? 'alert' : 'status');
+  status.textContent = message;
+}
+
 // Authentication happens in another tab so neither unsaved fields nor the
 // selected File leave this page. Retrying is always an explicit user action.
 export function showUploadFailure(status, error, retry) {
-  status.textContent = error.message + ' Your edits are unchanged.';
+  setUploadStatus(status, error.message + ' Your edits are unchanged.', true);
   const verify = error.code === 'verification_required';
   if (error.code !== 'authentication_required' && !verify) return;
   status.append(' Keep this page open. After ' + (verify ? 'verifying your email' : 'signing in') + ', return here and retry.');
@@ -132,7 +138,7 @@ document.addEventListener('click', event => {
       input.dispatchEvent(new Event('input', {bubbles: true}));
       input.dispatchEvent(new Event('change', {bubbles: true}));
       picker.querySelector('input[type="file"]').value = '';
-      picker.querySelector('[data-image-status]').textContent = 'Image selected. Save to apply.';
+      setUploadStatus(picker.querySelector('[data-image-status]'), 'Image selected. Save to apply.');
     });
   }
   const remove = event.target.closest('[data-image-reset]');
@@ -145,7 +151,7 @@ document.addEventListener('click', event => {
     input.dispatchEvent(new Event('input', {bubbles: true}));
     picker.querySelector('input[type="file"]').value = '';
     updateImagePreview(picker);
-    picker.querySelector('[data-image-status]').textContent = 'Selection cleared. Save to apply.';
+    setUploadStatus(picker.querySelector('[data-image-status]'), 'Selection cleared. Save to apply.');
   }
 
 });
@@ -156,7 +162,7 @@ document.addEventListener('change', event => {
   const input = event.target;
   if (input.matches('[data-image-value]')) {
     updateImagePreview(input.closest('[data-image-picker]'));
-    input.closest('[data-image-picker]').querySelector('[data-image-status]').textContent = '';
+    setUploadStatus(input.closest('[data-image-picker]').querySelector('[data-image-status]'), '');
     return;
   }
   if (!input.matches('[data-image-picker] input[type="file"]') || !input.files.length) return;
@@ -170,20 +176,20 @@ async function uploadPickerImage(picker, file) {
   if (!picker.isConnected || form.dataset.uploading) return;
   const status = picker.querySelector('[data-image-status]');
   if (file.size > 8 * 1024 * 1024) {
-    status.textContent = 'Choose an image of at most 8 MiB. The current image is unchanged.';
+    setUploadStatus(status, 'Choose an image of at most 8 MiB. The current image is unchanged.', true);
     input.value = '';
     return;
   }
   form.dataset.uploading = 'true';
   const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [data-image-upload], [data-media-browse], [data-upload-retry], [type="submit"]')].filter(control => !control.disabled);
   controls.forEach(control => { control.disabled = true; });
-  status.textContent = 'Uploading image…';
+  setUploadStatus(status, 'Uploading image…');
   try {
     const path = await uploadImage(file);
     picker.querySelector('[data-image-value]').value = path.slice((picker.dataset.imagePrefix || '').length);
     picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
     updateImagePreview(picker);
-    status.textContent = 'Image uploaded. Save to apply.';
+    setUploadStatus(status, 'Image uploaded. Save to apply.');
   } catch (error) {
     showUploadFailure(status, error, () => uploadPickerImage(picker, file));
   } finally {

@@ -90,17 +90,23 @@ type repository interface {
 
 // validatePost returns the first user-facing validation error, or an empty string.
 func validatePost(p Post) string {
+	_, message := validatePostField(p)
+	return message
+}
+
+// validatePostField identifies the control associated with a validation error.
+func validatePostField(p Post) (string, string) {
 	if p.Title == "" || !utf8.ValidString(p.Title) || utf8.RuneCountInString(p.Title) > 240 {
-		return "Enter a title of at most 240 characters."
+		return "title", "Enter a title of at most 240 characters."
 	}
 	if !utf8.ValidString(p.Summary) || utf8.RuneCountInString(p.Summary) > 2000 {
-		return "Keep the summary under 2,000 characters."
+		return "summary", "Keep the summary under 2,000 characters."
 	}
 	if strings.TrimSpace(p.Markdown) == "" || len(p.Markdown) > maxMarkdownBytes || !utf8.ValidString(p.Markdown) {
-		return "Enter valid Markdown of at most 256 KiB."
+		return "content", "Enter valid Markdown of at most 256 KiB."
 	}
 	if !validSlug(p.Slug) {
-		return "Use a slug of at most 120 lowercase letters, numbers, and single hyphens."
+		return "slug", "Use a slug of at most 120 lowercase letters, numbers, and single hyphens."
 	}
-	return ""
+	return "", ""
 }

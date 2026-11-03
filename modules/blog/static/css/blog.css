@@ -425,6 +425,17 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 @media (max-width: 480px) { .post-schedule-fields { grid-template-columns: minmax(0, 1fr); } }
 #editor-errors:not(:empty) { margin-top: 20px; padding: 12px 16px; border-left: 3px solid currentColor; border-radius: 3px; background: #fff3f2; }
 #editor-errors .page-message { padding: 0; }
+/* Trial error treatment in posts before applying it to other forms. */
+#post-form :is(#editor-errors, .upload-error):not(:empty) { padding: 12px 16px; border: 1px solid #dba6a6; border-left: 4px solid #a12626; border-radius: 4px; background: #fff3f2; color: #a12626; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+#post-form :is(input, textarea, select):not(#post-publish-time):is(:user-invalid, [aria-invalid=true]),
+#post-form :is(.CodeMirror, .post-time-field, .image-picker):has([aria-invalid=true]),
+#post-form .post-time-field:has(:user-invalid),
+#post-form .image-picker:has(.upload-error),
+#post-form .EasyMDEContainer:has(.upload-error) .CodeMirror { border-color: #a12626; }
+#post-form :is(input, textarea, select):not(#post-publish-time):is(:user-invalid, [aria-invalid=true]):focus-visible,
+#post-form :is(.CodeMirror, .post-time-field):has([aria-invalid=true]):focus-within,
+#post-form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a12626; outline-offset: 0; }
+#post-form .post-field-error { margin: 6px 0 0; color: #a12626; font-size: .85em; line-height: 1.5; }
 .draft-recovery { margin: 16px 0; padding: 12px 16px; background: var(--surface); border-left: 3px solid #cbd1da; }
 .draft-recovery p { margin: 0; }
 .draft-recovery .form-actions { margin-top: 12px; }

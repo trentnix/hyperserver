@@ -11,20 +11,28 @@ type contentError string
 // Error returns the author-facing validation message.
 func (e contentError) Error() string { return string(e) }
 
+// writingFieldError associates a writing failure with its editable field.
+type writingFieldError struct {
+	error
+	field string
+}
+
+func (e writingFieldError) Unwrap() error { return e.error }
+
 // writePost applies the same validation, media checks, and invalidation to editor
 // saves and history restores. The repository saves content, references, and history atomically.
 func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
 	var err error
 	p.Tags, err = normalizeTags(p.Tags)
 	if err != nil {
-		return p, err
+		return p, writingFieldError{err, "tags"}
 	}
 	generated := p.Slug == ""
 	if generated {
 		p.Slug = slugFromTitle(p.Title)
 	}
-	if message := validatePost(p); message != "" {
-		return p, contentError(message)
+	if field, message := validatePostField(p); message != "" {
+		return p, writingFieldError{contentError(message), field}
 	}
 	if p.ID != "" && p.Version < 1 {
 		return p, errEditConflict
@@ -93,7 +101,7 @@ func (m *module) writingImages(ctx context.Context, source, path, preview string
 	if preview != "" {
 		image, err := m.images.Open(ctx, preview)
 		if errors.Is(err, errNotFound) {
-			return nil, errMissingMedia
+			return nil, writingFieldError{errMissingMedia, "previewImage"}
 		}
 		if err != nil {
 			return nil, err
@@ -104,7 +112,10 @@ func (m *module) writingImages(ctx context.Context, source, path, preview string
 	if err != nil {
 		return nil, err
 	}
-	return refs, m.checkMediaReferences(ctx, refs)
+	if err := m.checkMediaReferences(ctx, refs); err != nil {
+		return nil, writingFieldError{err, "content"}
+	}
+	return refs, nil
 }
 
 // invalidatePosts expires every public view derived from post storage.

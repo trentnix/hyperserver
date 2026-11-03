@@ -15,6 +15,52 @@ func activeMarkup(markup string) string {
 	return regexp.MustCompile(`(?s)<template\b[^>]*>.*?</template>`).ReplaceAllString(markup, "")
 }
 
+func TestPostEditorErrorFields(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	post, err := h.blog.writePost(t.Context(), Post{Title: "Existing", Slug: "existing", Markdown: "Content", Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, field, value, want string
+		status                   int
+	}{
+		{"title", "title", " ", "title", http.StatusUnprocessableEntity},
+		{"summary", "summary", strings.Repeat("s", 2001), "summary", http.StatusUnprocessableEntity},
+		{"markdown", "content", " ", "content", http.StatusUnprocessableEntity},
+		{"slug format", "slug", "Invalid!", "slug", http.StatusUnprocessableEntity},
+		{"slug conflict", "slug", post.Slug, "slug", http.StatusConflict},
+		{"tags", "tags", strings.Repeat("t", 51), "tags", http.StatusUnprocessableEntity},
+		{"missing preview", "previewImage", strings.Repeat("a", 64) + ".png", "previewImage", http.StatusUnprocessableEntity},
+		{"missing body image", "content", "![](/images/" + strings.Repeat("b", 64) + ".png)", "content", http.StatusUnprocessableEntity},
+		{"schedule", "published", "scheduled", "publishDate publishTime", http.StatusUnprocessableEntity},
+		{"publication", "published", "invalid", "published", http.StatusUnprocessableEntity},
+		{"edit conflict", "version", "0", "", http.StatusConflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, hx := range []bool{false, true} {
+				fields := url.Values{"title": {"A title"}, "content": {"Content"}, "slug": {"new-post"}}
+				fields.Set(tc.field, tc.value)
+				path := "/post"
+				if tc.name == "edit conflict" {
+					path += "/" + post.ID
+				}
+				w := h.request("POST", path, fields, hx)
+				requireStatus(t, w, tc.status)
+				if !strings.Contains(w.Body.String(), `data-error-fields="`+tc.want+`"`) {
+					t.Fatalf("missing field association %q: %s", tc.want, w.Body.String())
+				}
+				if hx && strings.Contains(w.Body.String(), `id="post-form"`) {
+					t.Fatal("validation must not replace the mounted post editor")
+				}
+			}
+		})
+	}
+}
+
 // TestEditorSaveActions checks initial labels and ordinary validation redisplays.
 // Submitted choices must not be mistaken for the saved publication state.
 func TestEditorSaveActions(t *testing.T) {

@@ -873,7 +873,7 @@ func TestSaveFailurePreservesDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &module{app: h.app.ApplicationServer, posts: failingRepository{}, tags: h.blog.tags, views: make(map[string]*content.View)}
-	for _, name := range []string{"editor", "message"} {
+	for _, name := range []string{"editor", "editorError"} {
 		m.views[name], err = templates.View(h.app.ContentManager, "blog."+name)
 		if err != nil {
 			t.Fatal(err)
@@ -897,6 +897,9 @@ func TestSaveFailurePreservesDraft(t *testing.T) {
 		}
 		if hx && strings.Contains(w.Body.String(), "post-form") {
 			t.Fatal("HTMX failure replaced the editor")
+		}
+		if !strings.Contains(w.Body.String(), `data-error-fields=""`) {
+			t.Fatal("storage failure must not mark fields invalid")
 		}
 	}
 }

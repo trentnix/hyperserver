@@ -1,6 +1,63 @@
-import {openMediaLibrary, uploadImage, showUploadFailure} from './media.js';
+import {openMediaLibrary, uploadImage, showUploadFailure, setUploadStatus} from './media.js';
 
 const editors = new WeakMap();
+
+// Keep server validation attached to the existing controls, not a replaced editor.
+function markPostField(control, invalid, description = 'editor-errors') {
+  const controls = control.name === 'published' ? [...control.form.querySelectorAll('[name=published]')] :
+    [control, editors.get(control)?.editor.codemirror.getInputField(), control.matches('[data-image-value]') ? control.closest('[data-image-picker]') : null].filter(Boolean);
+  for (const input of controls) {
+    const descriptions = new Set((input.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+    descriptions.delete('editor-errors');
+    descriptions.delete(control.id + '-error');
+    if (invalid) {
+      input.setAttribute('aria-invalid', 'true');
+      descriptions.add(description);
+    } else {
+      input.removeAttribute('aria-invalid');
+    }
+    if (descriptions.size) input.setAttribute('aria-describedby', [...descriptions].join(' '));
+    else input.removeAttribute('aria-describedby');
+  }
+  if (!invalid) document.getElementById(control.id + '-error')?.remove();
+}
+
+// Keep native constraint checks, but show their feedback inline instead of in a popup.
+const invalidForms = new WeakSet();
+document.addEventListener('invalid', event => {
+  const input = event.target;
+  const form = input.form;
+  if (form?.id !== 'post-form' || !input.id) return;
+  event.preventDefault();
+  const id = input.id + '-error';
+  let message = document.getElementById(id);
+  if (!message) {
+    message = document.createElement('p');
+    message.id = id;
+    message.className = 'post-field-error';
+    (input.closest('.post-time-field') || input).after(message);
+  }
+  const required = {title: 'Enter a title.', publishDate: 'Choose a publication date.', publishTime: 'Enter a publication time.'};
+  message.textContent = input.validity.valueMissing ? required[input.name] || input.validationMessage : input.validationMessage;
+  markPostField(input, true, id);
+  if (!invalidForms.has(form)) {
+    invalidForms.add(form);
+    queueMicrotask(() => {
+      invalidForms.delete(form);
+      if (form.isConnected) form.querySelector('input:invalid, textarea:invalid, select:invalid')?.focus();
+    });
+  }
+}, true);
+function showPostFieldErrors(root) {
+  const message = root.querySelector('[data-error-fields]');
+  const form = message?.closest('#post-form');
+  if (!form) return;
+  for (const control of form.querySelectorAll('[name][aria-invalid]')) markPostField(control, false);
+  const fields = message.dataset.errorFields.split(' ');
+  for (const control of form.querySelectorAll('[name]')) {
+    if (fields.includes(control.name)) markPostField(control, true);
+  }
+}
 
 // Native suggestions replace the last comma-separated tag, keeping earlier tags.
 // Without JavaScript, the same field still accepts ordinary comma-separated input.
@@ -38,6 +95,7 @@ function updatePublication(form) {
   for (const input of field.querySelectorAll('input')) {
     input.disabled = field.hidden;
     input.required = !field.hidden;
+    if (field.hidden && form.id === 'post-form') markPostField(input, false);
   }
   const menu = field.querySelector('.post-time-menu');
   menu.hidden = false;
@@ -73,6 +131,7 @@ document.addEventListener('click', event => {
 for (const name of ['input', 'change']) {
   document.addEventListener(name, event => {
     const form = event.target.closest('form');
+    if (form?.id === 'post-form' && event.target.name) markPostField(event.target, false);
     updateSlugPlaceholder(form);
     updatePublication(form);
     if (event.target.matches('input[name="tags"]')) updateTagSuggestions(event.target);
@@ -103,7 +162,7 @@ function initialize(root) {
         editor.codemirror.getWrapperElement().after(status);
         const attempt = async () => {
           if (!textarea.isConnected) return;
-          status.textContent = 'Uploading ' + file.name + '…';
+          setUploadStatus(status, 'Uploading ' + file.name + '…');
           try {
             const path = await uploadImage(file);
             if (!textarea.isConnected) return;
@@ -160,6 +219,7 @@ function initialize(root) {
     editors.set(textarea, {editor, cancelPreview: () => previewRequest?.abort()});
     editor.codemirror.on('change', () => textarea.dispatchEvent(new Event('input', {bubbles: true})));
   }
+  showPostFieldErrors(root);
 }
 
 const approvedSlugs = new WeakMap();
