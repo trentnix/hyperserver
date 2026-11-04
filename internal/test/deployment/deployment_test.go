@@ -121,7 +121,7 @@ func TestDeploymentRecovery(t *testing.T) {
 	stamp := fmt.Sprint(time.Now().UnixNano())
 	email := "recovery-" + stamp + "@example.invalid"
 	password := "Local-Rehearsal-Password1!"
-	response, body := request(t, c, "/auth/register/email", url.Values{"email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
+	response, body := request(t, c, "/register", url.Values{"provider": {"email"}, "email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
 	if response.StatusCode != 303 && response.StatusCode != 302 {
 		t.Fatalf("registration: %d %s", response.StatusCode, body)
 	}
@@ -170,7 +170,7 @@ func TestDeploymentRecovery(t *testing.T) {
 
 	_, second := deployment(t)
 	otherEmail := "other-" + stamp + "@example.invalid"
-	response, body = request(t, second, "/auth/register/email", url.Values{"email": {otherEmail}, "password": {password}, "passwordMatch": {password}}, false, false)
+	response, body = request(t, second, "/register", url.Values{"provider": {"email"}, "email": {otherEmail}, "password": {password}, "passwordMatch": {password}}, false, false)
 	if response.StatusCode != 303 {
 		t.Fatalf("second registration: %d %s", response.StatusCode, body)
 	}
@@ -286,7 +286,7 @@ func exerciseLoad(t *testing.T, dir string, c *http.Client, duration, spacing ti
 	_, authenticated := deployment(t)
 	email := fmt.Sprintf("load-%d@example.invalid", time.Now().UnixNano())
 	password := "Local-Rehearsal-Password1!"
-	response, body := request(t, authenticated, "/auth/register/email", url.Values{"email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
+	response, body := request(t, authenticated, "/register", url.Values{"provider": {"email"}, "email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
 	if response.StatusCode != 303 {
 		t.Fatalf("registration: %d %s", response.StatusCode, body)
 	}

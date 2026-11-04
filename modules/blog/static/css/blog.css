@@ -501,7 +501,7 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
 .page-content .auth-login-panel { max-width: 440px; }
 .auth-login-panel .auth-email-form { padding-top: 0; }
 .auth-login-panel .auth-email-form label { margin: 16px 0 6px; }
-.auth-login-panel .auth-email-form label:first-child { margin-top: 0; }
+.auth-login-panel .auth-email-form label:first-of-type { margin-top: 0; }
 .auth-login-panel .auth-email-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 20px; }
 .auth-login-panel .auth-email-actions button { margin: 0; }
 .auth-login-panel .auth-email-actions a { color: var(--muted); }
@@ -543,7 +543,7 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
 .setup-complete > div { display: flex; flex-wrap: wrap; gap: 12px; }
 :where(.auth-email-form, #reset-request-form, #reset-password-form) {
   label { margin: 24px 0 8px; color: var(--button-bg); }
-  label:first-child { margin-top: 0; }
+  label:first-of-type { margin-top: 0; }
   input { min-height: 46px; border-color: #cbd1da; border-radius: 6px; }
   button { min-height: 44px; min-width: 120px; margin: 28px 0 12px; border-radius: 6px; font-weight: 600; }
   button:hover { background: var(--button-hover); border-color: var(--button-hover); }
@@ -553,7 +553,7 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
   .form-messages li + li { margin-top: 6px; }
   .setup-panel & {
     label { margin: 14px 0 4px; }
-    label:first-child { margin-top: 0; }
+    label:first-of-type { margin-top: 0; }
     button { margin: 18px 0 0; }
   }
 }

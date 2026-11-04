@@ -36,7 +36,6 @@ func siteWithViews(t *testing.T, repository ContactRepository) *SiteModule {
 	if err := m.Init(t.Context(), &server.ApplicationServer{Config: &config.Config{}, ContentManager: cm}); err != nil {
 		t.Fatal(err)
 	}
-	m.registrationEnabled = true
 	return m
 }
 
@@ -48,7 +47,6 @@ func TestSitePreparedViews(t *testing.T) {
 		status                    int
 	}{
 		{"home", "/", homePagePartialName, "Welcome!", m.Home, http.StatusOK},
-		{"register", "/register", registerPagePartialName, `hx-get="/auth/register/email"`, m.Register, http.StatusOK},
 		{"message", "/message", messagePagePartialName, "&lt;public message&gt;", func(w http.ResponseWriter, r *http.Request) {
 			m.HandleMessage(w, r, "<public message>")
 		}, http.StatusOK},
@@ -94,7 +92,6 @@ func TestSiteDeliveryFailuresDoNotRenderErrorPages(t *testing.T) {
 	}
 	for name, handler := range map[string]http.HandlerFunc{
 		"home":      m.Home,
-		"register":  m.Register,
 		"contact":   m.GetContact,
 		"not found": m.NotFound,
 		"message":   func(w http.ResponseWriter, r *http.Request) { m.HandleMessage(w, r, "message") },

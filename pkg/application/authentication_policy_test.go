@@ -143,13 +143,13 @@ func TestEmailRegistrationUsesSharedPolicy(t *testing.T) {
 			t.Cleanup(func() { app.Shutdown() })
 			request := browserRequests(t, app, false)
 			if outcome == "closed" {
-				for _, path := range []string{"/auth/register", "/auth/register/email"} {
+				for _, path := range []string{"/register", "/register?provider=email"} {
 					if w := request("GET", path, nil); w.Code != http.StatusGone {
 						t.Fatalf("closed form returned %d", w.Code)
 					}
 				}
 			}
-			w := request("POST", "/auth/register/email", url.Values{"email": {"reader@example.com"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"}})
+			w := request("POST", "/register", url.Values{"provider": {"email"}, "email": {"reader@example.com"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"}})
 			want := map[string]int{"allowed": http.StatusSeeOther, "denied": http.StatusForbidden, "unavailable": http.StatusServiceUnavailable, "closed": http.StatusGone}[outcome]
 			if w.Code != want {
 				t.Fatalf("status=%d body=%s", w.Code, w.Body)

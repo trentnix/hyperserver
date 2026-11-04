@@ -31,7 +31,7 @@ func TestHTTPEmailSpellingPreserved(t *testing.T) {
 				runSiteScenario(t, func(h *httpHarness) {
 					registration := registrationForm()
 					registration.Set("email", email)
-					w := h.request(http.MethodPost, "/auth/register/email", registration, htmx)
+					w := h.request(http.MethodPost, "/register", registration, htmx)
 					assertRedirectResponse(t, w, "/login", htmx)
 					u, err := h.accounts.GetByEmail(t.Context(), email)
 					if err != nil || u.Email != email {
@@ -69,7 +69,7 @@ func TestHTTPInternationalizedEmailIdentity(t *testing.T) {
 	for _, htmx := range []bool{false, true} {
 		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
-				for _, path := range []string{"/auth/register/email", "/login", "/auth/reset/request/email"} {
+				for _, path := range []string{"/register", "/login", "/auth/reset/request/email"} {
 					w := h.request(http.MethodGet, path, nil, htmx)
 					input := emailInput.FindString(w.Body.String())
 					for _, attribute := range []string{`type="text"`, `inputmode="email"`, `autocomplete="username"`, `required`} {
@@ -83,7 +83,7 @@ func TestHTTPInternationalizedEmailIdentity(t *testing.T) {
 				const equivalent = "élodie@xn--bcher-kva.invalid"
 				registration := registrationForm()
 				registration.Set("email", original)
-				w := h.request(http.MethodPost, "/auth/register/email", registration, htmx)
+				w := h.request(http.MethodPost, "/register", registration, htmx)
 				assertRedirectResponse(t, w, "/login", htmx)
 				account, err := h.accounts.GetByEmail(t.Context(), equivalent)
 				if err != nil || account == nil || account.Email != original {
@@ -91,7 +91,7 @@ func TestHTTPInternationalizedEmailIdentity(t *testing.T) {
 				}
 
 				registration.Set("email", equivalent)
-				w = h.request(http.MethodPost, "/auth/register/email", registration, htmx)
+				w = h.request(http.MethodPost, "/register", registration, htmx)
 				assertFormRejected(t, w, "The specified user is already registered")
 				var count int
 				if err := h.db.QueryRowContext(t.Context(), "SELECT count(*) FROM user").Scan(&count); err != nil || count != 1 {
@@ -146,7 +146,7 @@ func TestHTTPLoginAndResetRequestRejectInvalidEmail(t *testing.T) {
 				runSiteScenario(t, func(h *httpHarness) {
 					registration := registrationForm()
 					registration.Set("email", tc.email)
-					w := h.request(http.MethodPost, "/auth/register/email", registration, htmx)
+					w := h.request(http.MethodPost, "/register", registration, htmx)
 					assertFormRejected(t, w, "Enter a valid email address.")
 					h.assertRowCount(t, "user", 0)
 					if len(h.mail.snapshot()) != 0 {

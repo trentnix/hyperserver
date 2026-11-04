@@ -146,7 +146,7 @@ func TestHTTPFormLimits(t *testing.T) {
 			"oldPassword": {"TestPassword1!"}, "newPassword": {"NewPassword1!"}, "newPasswordMatch": {"NewPassword1!"},
 		}.Encode()
 		for _, path := range []string{
-			"/contact", "/login", "/auth/register/email", "/auth/reset/request/email",
+			"/contact", "/login", "/register", "/auth/reset/request/email",
 			"/auth/reset/email", "/auth/verify", "/auth/change/email",
 		} {
 			if path == "/auth/change/email" {

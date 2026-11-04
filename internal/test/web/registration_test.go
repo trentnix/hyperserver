@@ -19,6 +19,7 @@ import (
 
 func registrationForm() url.Values {
 	return url.Values{
+		"provider": {"email"},
 		"email":    {"person@example.invalid"},
 		"password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
 	}
@@ -31,7 +32,7 @@ func TestHTTPRegistration(t *testing.T) {
 				if _, err := h.accounts.GetByEmail(t.Context(), "person@example.invalid"); !errors.Is(err, sql.ErrNoRows) {
 					t.Fatalf("expected an empty database, got %v", err)
 				}
-				w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), htmx)
+				w := h.request(http.MethodPost, "/register", registrationForm(), htmx)
 				assertRedirectResponse(t, w, "/login", htmx)
 				u, err := h.accounts.GetByEmail(t.Context(), "person@example.invalid")
 				if err != nil {
@@ -81,7 +82,7 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 			}
 			for _, path := range []string{"/", "/login"} {
 				w := h.request(http.MethodGet, path, nil, htmx)
-				if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "/auth/register") || strings.Contains(w.Body.String(), `href="/register"`) {
+				if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "/register") || strings.Contains(w.Body.String(), `href="/register"`) {
 					t.Errorf("page %s failed or offered disabled registration", path)
 				}
 			}
@@ -116,7 +117,7 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 func TestHTTPRegistrationWithoutVerification(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		h.mail.err = messaging.ErrMailUnavailable
-		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		w := h.request(http.MethodPost, "/register", registrationForm(), true)
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatal("registration without verification failed")
 		}
@@ -134,7 +135,7 @@ func TestHTTPRegistrationWithoutVerification(t *testing.T) {
 func TestHTTPRegistrationCanRecoverFromMailFailure(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		h.mail.err = errors.New("delivery temporarily unavailable")
-		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		w := h.request(http.MethodPost, "/register", registrationForm(), true)
 		assertFormRejected(t, w, "Your account was created, but we could not send the verification email.")
 		if len(h.mail.snapshot()) != 1 {
 			t.Fatal("registration did not attempt delivery")
@@ -174,7 +175,7 @@ func TestHTTPRegistrationMailFailure(t *testing.T) {
 				h.mail.err = tc.err
 				form := registrationForm()
 				form.Set("email", fmt.Sprintf("mail-failure-%d@example.invalid", i))
-				w := h.request(http.MethodPost, "/auth/register/email", form, true)
+				w := h.request(http.MethodPost, "/register", form, true)
 				assertFormRejected(t, w, "Your account was created, but we could not send the verification email.")
 				if len(h.mail.snapshot()) != i+1 {
 					t.Fatalf("mail attempts = %d, want %d", len(h.mail.snapshot()), i+1)
@@ -210,8 +211,8 @@ func TestHTTPConcurrentRegistration(t *testing.T) {
 				requests.Add(1)
 				go func() {
 					defer requests.Done()
-					form := url.Values{"email": {email}, "password": {pw}, "passwordMatch": {pw}}
-					r := httptest.NewRequest(http.MethodPost, "/auth/register/email", strings.NewReader(form.Encode()))
+					form := url.Values{"provider": {"email"}, "email": {email}, "password": {pw}, "passwordMatch": {pw}}
+					r := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
 					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 					r.Header.Set("HX-Request", "true")
 					w := httptest.NewRecorder()
@@ -263,7 +264,7 @@ func TestHTTPRegistrationRejectsExistingAccount(t *testing.T) {
 		form.Set("email", "PERSON@EXAMPLE.INVALID")
 		form.Set("password", "DifferentPassword1!")
 		form.Set("passwordMatch", "DifferentPassword1!")
-		w := h.request(http.MethodPost, "/auth/register/email", form, true)
+		w := h.request(http.MethodPost, "/register", form, true)
 		assertFormRejected(t, w, "The specified user is already registered")
 		h.assertUserUnchanged(t, u)
 		h.assertRowCount(t, "user", 1)
@@ -294,8 +295,8 @@ func TestHTTPRegistrationRejectsInvalidForm(t *testing.T) {
 					{"missing confirmation", "person@example.invalid", "TestPassword1!", "", "This field is required."},
 				} {
 					t.Run(tc.name, func(t *testing.T) {
-						form := url.Values{"email": {tc.email}, "password": {tc.password}, "passwordMatch": {tc.confirmation}}
-						w := h.request(http.MethodPost, "/auth/register/email", form, htmx)
+						form := url.Values{"provider": {"email"}, "email": {tc.email}, "password": {tc.password}, "passwordMatch": {tc.confirmation}}
+						w := h.request(http.MethodPost, "/register", form, htmx)
 						assertFormRejected(t, w, tc.message)
 						h.assertRowCount(t, "user", 0)
 						h.assertRowCount(t, "usertoken", 0)

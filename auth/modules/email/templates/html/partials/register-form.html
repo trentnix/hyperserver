@@ -1,14 +1,14 @@
 {{ define "auth.partial.email.register.form" }}
     {{ with .Data }}
-    <div id="register" class="container">
         <form id="register-form"
             class="auth-email-form"
             method="post"
             action="{{ .ActionUrl }}"
             hx-post="{{ .ActionUrl }}"
-            hx-target="closest div"
+            hx-target="#register"
             hx-swap="outerHTML"
             hx-trigger="submit">
+            <input type="hidden" name="provider" value="email">
 
             {{ if .HasInfoMessages }}
                 <div class="form-messages">
@@ -38,14 +38,14 @@
             {{ with .GetFieldErrors "Email" }}<p id="email-error" class="field-error" data-field-error="email">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
 
             <label for="password">Password</label>
-            <input type="password" id="password"
+            <input type="password" autocomplete="new-password" id="password"
                 name="password"
                 required
                 {{ if .HasFieldErrors "Password" }} class="input-error" aria-invalid="true" aria-describedby="password-error" {{ end }}>
             {{ with .GetFieldErrors "Password" }}<p id="password-error" class="field-error" data-field-error="password">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
 
             <label for="passwordMatch">Confirm Password</label>
-            <input type="password" id="passwordMatch"
+            <input type="password" autocomplete="new-password" id="passwordMatch"
                 name="passwordMatch"
                 required
                 {{ if .HasFieldErrors "PasswordMatch" }} class="input-error" aria-invalid="true" aria-describedby="passwordMatch-error" {{ end }}>
@@ -63,13 +63,6 @@
                 </div>
             {{ end }}
         </form>
-        {{ if .Alternatives }}
-        <div class="auth-alternatives" aria-label="Other ways to register">
-            <p>Or sign up with</p>
-            {{ range .Alternatives }}{{ . }}{{ end }}
-        </div>
-        {{ end }}
-    </div>
     {{ else }}
         <div>Unable to display registration details.</div>
     {{ end }}

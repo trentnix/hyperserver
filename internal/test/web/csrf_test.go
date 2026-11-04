@@ -111,7 +111,7 @@ func TestCSRFCrossOriginMutationsHaveNoSideEffects(t *testing.T) {
 						path string
 						form url.Values
 					}{
-						{"/auth/register/email", registrationForm()},
+						{"/register", registrationForm()},
 						{"/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}},
 						{"/auth/logout", nil},
 						{"/logout", nil},

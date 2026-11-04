@@ -23,8 +23,8 @@ func TestHTTPCredentialFormActions(t *testing.T) {
 						h.establishSession(t, h.seedUser(t, "change@example.invalid"))
 					}
 					path := "/auth/" + name + "/email"
-					if name == "login" {
-						path = "/login"
+					if name == "login" || name == "register" {
+						path = "/" + name
 					}
 					formID := name + "-form"
 					if name == "change" {
@@ -64,7 +64,7 @@ func TestBrowserNativeForms(t *testing.T) {
 		}{
 			{path: "/contact", fields: url.Values{"name": {"Native visitor"}, "email": {"native@example.invalid"}, "message": {"Native & ordinary submission"}}},
 			{path: "/login", fields: url.Values{"provider": {"email"}, "email": {"native@example.invalid"}, "password": {secret}}},
-			{path: "/auth/register/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}, "passwordMatch": {secret}}},
+			{path: "/register", fields: url.Values{"provider": {"email"}, "email": {"native@example.invalid"}, "password": {secret}, "passwordMatch": {secret}}},
 			{path: "/auth/reset/request/email", fields: url.Values{"email": {"native@example.invalid"}}},
 			{path: "/auth/change/email", fields: url.Values{"oldPassword": {secret}, "newPassword": {secret}, "newPasswordMatch": {secret}}},
 			{path: "/auth/logout", fields: url.Values{}},

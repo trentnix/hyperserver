@@ -224,7 +224,7 @@ func TestHTTPReadRequestsDoNotSendMail(t *testing.T) {
 						"/test-email?to=" + url.QueryEscape(u.Email),
 						"/auth/request/verify",
 						"/auth/reset/request/email?email=" + url.QueryEscape(u.Email),
-						"/auth/register/email?" + registrationForm().Encode(),
+						"/register?" + registrationForm().Encode(),
 					} {
 						for _, method := range []string{http.MethodGet, http.MethodHead} {
 							h.request(method, path, nil, htmx)

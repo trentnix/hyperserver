@@ -73,7 +73,7 @@ func (m *module) requireSetup(next http.HandlerFunc) http.HandlerFunc {
 				m.setupError(w, r, "Setup requires an administrator account. Enable auth.registrationEnabled in the application configuration to register.", nil)
 				return
 			}
-			util.RedirectToURL(w, r, "/auth/register")
+			util.RedirectToURL(w, r, "/register")
 			return
 		}
 		if err != nil {

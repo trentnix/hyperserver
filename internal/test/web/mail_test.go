@@ -37,7 +37,7 @@ func TestHTTPMailEscapesDynamicHTML(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		input := `<img src=x onerror="alert(1)"> & test`
 		h.app.Config.App.Name = input
-		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		w := h.request(http.MethodPost, "/register", registrationForm(), true)
 		if w.Header().Get("HX-Redirect") != "/login" || len(h.mail.snapshot()) != 1 {
 			t.Fatal("registration failed")
 		}
@@ -100,7 +100,7 @@ func TestHTTPAccountLinkOrigins(t *testing.T) {
 					return link
 				}
 
-				h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+				h.request(http.MethodPost, "/register", registrationForm(), true)
 				checkLink(0, "/auth/verify")
 				h.request(http.MethodPost, "/auth/reset/request/email", url.Values{"email": {"person@example.invalid"}}, false)
 				resetLink := checkLink(1, "/auth/reset/email")

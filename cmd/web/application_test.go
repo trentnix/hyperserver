@@ -95,10 +95,10 @@ func TestDefaultApplication(t *testing.T) {
 	}
 
 	w := request("GET", "/", nil, http.StatusSeeOther)
-	if w.Header().Get("Location") != "/auth/register" {
+	if w.Header().Get("Location") != "/register" {
 		t.Fatal("fresh installation did not open registration", w.Header())
 	}
-	w = request("GET", "/auth/register/email", nil, http.StatusOK)
+	w = request("GET", "/register", nil, http.StatusOK)
 	if !strings.Contains(w.Body.String(), "Set up your blog") {
 		t.Fatal("registration did not use the blog setup layout")
 	}
@@ -106,12 +106,12 @@ func TestDefaultApplication(t *testing.T) {
 	credentials := url.Values{
 		"provider": {"email"}, "email": {"other@example.com"}, "password": {"Sample-Password-123!"}, "passwordMatch": {"Sample-Password-123!"},
 	}
-	request("POST", "/auth/register/email", credentials, http.StatusForbidden)
+	request("POST", "/register", credentials, http.StatusForbidden)
 	if account, err := app.Accounts.GetByEmail(t.Context(), "other@example.com"); !errors.Is(err, user.ErrUserNotFound) || account != nil {
 		t.Fatalf("rejected address lookup: account=%v err=%v", account, err)
 	}
 	credentials.Set("email", "admin@example.com")
-	request("POST", "/auth/register/email", credentials, http.StatusSeeOther)
+	request("POST", "/register", credentials, http.StatusSeeOther)
 	w = request("GET", "/", nil, http.StatusOK)
 	for _, want := range []string{"My Blog", "No posts yet."} {
 		if !strings.Contains(w.Body.String(), want) {

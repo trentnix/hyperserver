@@ -22,7 +22,7 @@ func TestHTTPVerificationRecoveryNavigation(t *testing.T) {
 				}
 
 				h.mail.err = errors.New("private SMTP failure")
-				w = h.request(http.MethodPost, "/auth/register/email", registrationForm(), htmx)
+				w = h.request(http.MethodPost, "/register", registrationForm(), htmx)
 				body := w.Body.String()
 				for _, text := range []string{"Your account was created", `href="/login"`, "Protected pages remain unavailable"} {
 					if !strings.Contains(body, text) {
@@ -95,7 +95,7 @@ func TestHTTPVerificationRecoveryNavigation(t *testing.T) {
 
 func TestHTTPVerificationSingleUseAndResend(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
-		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		h.request(http.MethodPost, "/register", registrationForm(), true)
 		first := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 		h.request(http.MethodPost, "/auth/request/verify", nil, true)
@@ -120,7 +120,7 @@ func TestHTTPVerificationSingleUseAndResend(t *testing.T) {
 
 func TestHTTPVerificationRequiresConfirmation(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
-		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		h.request(http.MethodPost, "/register", registrationForm(), true)
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 		before, err := h.accounts.GetByEmail(t.Context(), registrationForm().Get("email"))
 		if err != nil {
@@ -185,7 +185,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 					if _, err := h.db.Exec(`CREATE TRIGGER fail_verification BEFORE INSERT ON usertoken BEGIN SELECT RAISE(ABORT, 'failed insertion'); END`); err != nil {
 						t.Fatal(err)
 					}
-					w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+					w := h.request(http.MethodPost, "/register", registrationForm(), true)
 					if !strings.Contains(w.Body.String(), "we could not send the verification email") || len(h.mail.snapshot()) != 0 {
 						t.Fatal("token storage failure was not reported before mail delivery")
 					}
@@ -197,7 +197,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 					h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 					h.request(http.MethodPost, "/auth/request/verify", nil, true)
 				} else {
-					h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+					h.request(http.MethodPost, "/register", registrationForm(), true)
 					statement := `CREATE TRIGGER fail_verification BEFORE UPDATE ON user BEGIN SELECT RAISE(ABORT, 'failed update'); END`
 					if failure == "delete" {
 						statement = `CREATE TRIGGER fail_verification BEFORE DELETE ON usertoken BEGIN SELECT RAISE(ABORT, 'failed deletion'); END`
@@ -242,7 +242,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 
 func TestHTTPVerificationRejectsPreviousEmailAddress(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
-		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		h.request(http.MethodPost, "/register", registrationForm(), true)
 		oldLink := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 		u, err := h.accounts.GetByEmail(t.Context(), "person@example.invalid")
 		if err != nil {
@@ -277,7 +277,7 @@ func TestHTTPVerificationRejectsPreviousEmailAddress(t *testing.T) {
 
 func TestHTTPVerificationFailedResendPreservesDeliveredLink(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
-		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		h.request(http.MethodPost, "/register", registrationForm(), true)
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 		h.mail.err = messaging.ErrMailUnavailable
@@ -294,7 +294,7 @@ func TestHTTPVerificationFailedResendPreservesDeliveredLink(t *testing.T) {
 
 func TestHTTPVerificationUpdatesExistingAccount(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
-		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		w := h.request(http.MethodPost, "/register", registrationForm(), true)
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatal("could not register the test account")
 		}

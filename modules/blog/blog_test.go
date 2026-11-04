@@ -114,7 +114,7 @@ func TestAuthFormNavigation(t *testing.T) {
 				t.Fatal("login page links to itself")
 			}
 			for _, method := range []string{"GET", "POST"} {
-				response := h.request(method, "/auth/register/email", url.Values{"email": {"trentnix@gmail.com"}}, hx)
+				response := h.request(method, "/register", url.Values{"provider": {"email"}, "email": {"trentnix@gmail.com"}}, hx)
 				requireStatus(t, response, http.StatusOK)
 				body := response.Body.String()
 				if method == "POST" && !strings.Contains(body, "This field is required.") {
@@ -586,7 +586,7 @@ func requireStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
 
 func (h *harness) register(t *testing.T) {
 	t.Helper()
-	requireStatus(t, h.request("POST", "/auth/register/email", credentials("TrentNix@gmail.com"), false), http.StatusSeeOther)
+	requireStatus(t, h.request("POST", "/register", credentials("TrentNix@gmail.com"), false), http.StatusSeeOther)
 	if len(h.mail.messages) != 1 || h.mail.messages[0].To != "TrentNix@gmail.com" {
 		t.Fatal("registration must send one message to the configured account")
 	}
@@ -609,7 +609,7 @@ func (h *harness) login(t *testing.T) {
 
 func TestAuthenticationPagesAndAdmission(t *testing.T) {
 	h := newHarness(t)
-	for _, path := range []string{"/", "/about", "/projects", "/posts", "/login", "/auth/register/email", "/auth/reset/request/email"} {
+	for _, path := range []string{"/", "/about", "/projects", "/posts", "/login", "/register", "/auth/reset/request/email"} {
 		w := h.request("GET", path, nil, false)
 		requireStatus(t, w, http.StatusOK)
 		if !strings.Contains(w.Body.String(), "/assets/css/blog.css") || !strings.Contains(w.Body.String(), "profile-name") {
@@ -618,12 +618,12 @@ func TestAuthenticationPagesAndAdmission(t *testing.T) {
 	}
 	requireStatus(t, h.request("GET", "/missing", nil, false), http.StatusNotFound)
 	requireStatus(t, h.request("GET", "/setup", nil, false), http.StatusNotFound)
-	if !strings.Contains(h.request("GET", "/", nil, false).Body.String(), `href="/auth/register">Register</a>`) {
+	if !strings.Contains(h.request("GET", "/", nil, false).Body.String(), `href="/register">Register</a>`) {
 		t.Fatal("registration link is missing")
 	}
 	requireStatus(t, h.request("GET", "/post/create", nil, false), http.StatusForbidden)
 	for _, hx := range []bool{false, true} {
-		for _, path := range []string{"/auth/register/email", "/login"} {
+		for _, path := range []string{"/register", "/login"} {
 			w := h.request("POST", path+"?email=trentnix@gmail.com", credentials("stranger@example.test"), hx)
 			requireStatus(t, w, http.StatusForbidden)
 			if strings.Contains(w.Body.String(), "<html") == hx {
@@ -659,7 +659,7 @@ func TestRegistrationCanBeDisabledWithoutAdministrator(t *testing.T) {
 	h = startHarness(t, cfg)
 	w := h.request("GET", "/", nil, false)
 	requireStatus(t, w, http.StatusOK)
-	if strings.Contains(w.Body.String(), `href="/auth/register/email"`) {
+	if strings.Contains(w.Body.String(), `href="/register"`) {
 		t.Fatal("disabled registration is still linked")
 	}
 	requireStatus(t, h.request("GET", "/setup", nil, false), http.StatusNotFound)
@@ -678,7 +678,7 @@ func TestRegistrationLinkDisappears(t *testing.T) {
 		for _, path := range []string{"/", "/login"} {
 			w := h.request(http.MethodGet, path, nil, false)
 			requireStatus(t, w, http.StatusOK)
-			if strings.Contains(w.Body.String(), `href="/auth/register/email"`) {
+			if strings.Contains(w.Body.String(), `href="/register"`) {
 				t.Errorf("%s still links registration after the administrator registered", path)
 			}
 		}
@@ -841,7 +841,7 @@ func TestImageUpload(t *testing.T) {
 func TestMailFailurePreservesVerificationRequirement(t *testing.T) {
 	h := newHarness(t)
 	h.mail.err = errors.New("mail unavailable")
-	w := h.request("POST", "/auth/register/email", credentials("trentnix@gmail.com"), false)
+	w := h.request("POST", "/register", credentials("trentnix@gmail.com"), false)
 	if !strings.Contains(w.Body.String(), "verification-panel") || !strings.Contains(w.Body.String(), "could not send") {
 		t.Fatal("missing styled delivery failure")
 	}

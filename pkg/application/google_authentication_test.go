@@ -62,19 +62,19 @@ func TestConfiguredLoginChoices(t *testing.T) {
 						t.Fatal("disabled email remains reachable", w.Code)
 					}
 				}
-				w = request("GET", "/auth/register", nil)
+				w = request("GET", "/register", nil)
 				if w.Code != 200 || strings.Contains(w.Body.String(), `id="register-form"`) != (mode != "google") ||
-					strings.Contains(w.Body.String(), `action="/auth/register/google"`) != (mode != "email") {
+					strings.Contains(w.Body.String(), `name="provider" value="google"`) != (mode != "email") {
 					t.Fatalf("incorrect registration forms: %d %s", w.Code, w.Body)
 				}
 				if mode != "google" {
-					w = request("GET", "/auth/register/email", nil)
-					if strings.Contains(w.Body.String(), `action="/auth/register/google"`) != (mode == "both") {
+					w = request("GET", "/register?provider=email", nil)
+					if strings.Contains(w.Body.String(), `name="provider" value="google"`) != (mode == "both") {
 						t.Fatal("direct registration lost provider alternatives", w.Body)
 					}
-					w = request("POST", "/auth/register/email", url.Values{"email": {"invalid"}, "password": {"short"}, "passwordMatch": {"different"}})
+					w = request("POST", "/register", url.Values{"provider": {"email"}, "email": {"invalid"}, "password": {"short"}, "passwordMatch": {"different"}})
 					if !strings.Contains(w.Body.String(), `id="register-form"`) ||
-						strings.Contains(w.Body.String(), `action="/auth/register/google"`) != (mode == "both") ||
+						strings.Contains(w.Body.String(), `name="provider" value="google"`) != (mode == "both") ||
 						strings.Contains(w.Body.String(), `value="short"`) {
 						t.Fatal("registration validation lost alternatives or exposed the password", w.Body)
 					}

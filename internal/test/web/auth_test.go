@@ -74,7 +74,7 @@ func TestHTTPLoginOnlyProvider(t *testing.T) {
 				}
 				w = h.request(http.MethodGet, "/auth/login/login-only", nil, htmx)
 				assertRedirectResponse(t, w, "/login", htmx)
-				w = h.request(http.MethodGet, "/auth/register", nil, htmx)
+				w = h.request(http.MethodGet, "/register", nil, htmx)
 				if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "Registration is not available.") {
 					t.Fatalf("registration selection = %d %s", w.Code, w.Body.String())
 				}

@@ -109,7 +109,7 @@ func TestBlogAuthenticationChoices(t *testing.T) {
 				cfg.Auth.Services["email"]["enabled"] = "false"
 			}
 			h := startHarness(t, cfg)
-			if w := h.request("GET", "/", nil, false); w.Header().Get("Location") != "/auth/register" {
+			if w := h.request("GET", "/", nil, false); w.Header().Get("Location") != "/register" {
 				t.Fatal("wizard bypasses provider choices", w.Header())
 			}
 			for _, hx := range []bool{false, true} {
@@ -118,7 +118,7 @@ func TestBlogAuthenticationChoices(t *testing.T) {
 				if strings.Contains(w.Body.String(), `name="password"`) != (mode != "google") || strings.Contains(w.Body.String(), "Sign in with Google") != (mode != "email") {
 					t.Fatal("incorrect blog login choices", w.Body)
 				}
-				w = h.request("GET", "/auth/register", nil, hx)
+				w = h.request("GET", "/register", nil, hx)
 				requireStatus(t, w, 200)
 				if strings.Contains(w.Body.String(), "Sign up with Google") != (mode != "email") {
 					t.Fatal("incorrect registration choices", w.Body)
@@ -127,12 +127,12 @@ func TestBlogAuthenticationChoices(t *testing.T) {
 					t.Fatal("registration did not show the email form inline", w.Body)
 				}
 				if mode == "both" {
-					if strings.Contains(w.Body.String(), `href="/auth/register/email"`) ||
-						!strings.Contains(w.Body.String(), `action="/auth/register/google"`) {
+					if strings.Contains(w.Body.String(), `href="/register"`) ||
+						!strings.Contains(w.Body.String(), `name="provider" value="google"`) {
 						t.Fatal("registration still requires an intermediate provider page", w.Body)
 					}
-					w = h.request("POST", "/auth/register/email", url.Values{"email": {"invalid"}}, hx)
-					if !strings.Contains(w.Body.String(), `id="register-form"`) || !strings.Contains(w.Body.String(), `action="/auth/register/google"`) {
+					w = h.request("POST", "/register", url.Values{"provider": {"email"}, "email": {"invalid"}}, hx)
+					if !strings.Contains(w.Body.String(), `id="register-form"`) || !strings.Contains(w.Body.String(), `name="provider" value="google"`) {
 						t.Fatal("validation removed registration alternatives", w.Body)
 					}
 				}

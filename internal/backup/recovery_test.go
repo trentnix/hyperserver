@@ -113,7 +113,7 @@ func TestApplicationRecovery(t *testing.T) {
 		return request("GET", path, nil, "", http.StatusOK).Body.String()
 	}
 	credentials := url.Values{"provider": {"email"}, "email": {"admin@example.com"}, "password": {"Recovery-Test-123!"}, "passwordMatch": {"Recovery-Test-123!"}}
-	form("/auth/register/email", credentials)
+	form("/register", credentials)
 	account, err := app.Accounts.GetByEmail(t.Context(), "admin@example.com")
 	if err != nil {
 		t.Fatal(err)

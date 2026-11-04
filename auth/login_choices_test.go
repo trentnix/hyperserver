@@ -33,11 +33,12 @@ func (failingLoginMessages) End(http.ResponseWriter, *http.Request, *session.Ses
 	return errors.New("private message storage failure")
 }
 
-func TestSharedLoginReportsMessageRemovalFailure(t *testing.T) {
+func TestSharedAuthPagesReportMessageRemovalFailure(t *testing.T) {
 	for _, operation := range []string{"save", "end"} {
 		for _, hx := range []bool{false, true} {
 			manager, _, sessions, _ := newLookupTestManager(t)
-			manager.Services = &Registry{services: []AuthService{&loginOnlyProvider{}}}
+			manager.Services = &Registry{services: []AuthService{&loginOnlyProvider{}, &registrationOnlyProvider{}}}
+			manager.registrationEnabled = true
 			r := session.AddSessionManagerToRequestContext(httptest.NewRequest("GET", "/login", nil), sessions)
 			if hx {
 				r.Header.Set("HX-Request", "true")
@@ -55,10 +56,12 @@ func TestSharedLoginReportsMessageRemovalFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			s.Store = failingLoginMessages{s.Store}
-			w := httptest.NewRecorder()
-			manager.GetLogin(w, r)
-			if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Unable to load authentication messages.") || strings.Contains(w.Body.String(), "private") {
-				t.Fatalf("%s HTMX=%t: %d %s", operation, hx, w.Code, w.Body)
+			for _, handler := range []http.HandlerFunc{manager.GetLogin, manager.GetRegister} {
+				w := httptest.NewRecorder()
+				handler(w, r)
+				if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Unable to load authentication messages.") || strings.Contains(w.Body.String(), "private") {
+					t.Fatalf("%s HTMX=%t: %d %s", operation, hx, w.Code, w.Body)
+				}
 			}
 		}
 	}

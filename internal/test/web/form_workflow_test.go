@@ -135,7 +135,7 @@ func TestHTTPRegistrationRedirectWorkflow(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
 				fields := registrationForm()
 				fields.Set("passwordMatch", "DifferentPassword1!")
-				w := h.request(http.MethodPost, "/auth/register/email", fields, htmx)
+				w := h.request(http.MethodPost, "/register", fields, htmx)
 				assertFormRejected(t, w, "Passwords do not match.")
 				assertBlankPasswordFields(t, w.Body.String(), fields.Get("password"), fields.Get("passwordMatch"))
 				if !strings.Contains(w.Body.String(), `value="`+fields.Get("email")+`"`) {
@@ -144,7 +144,7 @@ func TestHTTPRegistrationRedirectWorkflow(t *testing.T) {
 				h.assertRowCount(t, "user", 0)
 
 				fields.Set("passwordMatch", fields.Get("password"))
-				w = h.request(http.MethodPost, "/auth/register/email", fields, htmx)
+				w = h.request(http.MethodPost, "/register", fields, htmx)
 				assertRedirectResponse(t, w, "/login", htmx)
 				h.assertRowCount(t, "user", 1)
 				// Both a 303 and HX-Redirect navigate with a fresh, ordinary GET.
@@ -168,7 +168,7 @@ func TestHTTPRejectedFormsHaveNoSideEffects(t *testing.T) {
 	for _, htmx := range []bool{false, true} {
 		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
-				for _, path := range []string{"/contact", "/auth/register/email", "/login", "/auth/reset/request/email"} {
+				for _, path := range []string{"/contact", "/register", "/login", "/auth/reset/request/email"} {
 					for _, malformed := range []bool{false, true} {
 						body, status := "provider=email&email=not-an-email", http.StatusOK
 						if malformed {

@@ -184,17 +184,21 @@ type RegistrationHandler interface {
 	AuthType() string
 	// GetRegisterButton returns trusted HTML linking to registration.
 	GetRegisterButton() template.HTML
-	// GetRegister renders the provider's registration form.
-	GetRegister(http.ResponseWriter, *http.Request)
-	// Register processes registration and writes its response, including any redirect.
-	// Delivery or rendering can fail after the account has been created.
-	Register(http.ResponseWriter, *http.Request)
+	// Register returns a form for validation failures. A zero result means the
+	// provider wrote a response, including redirects and post-creation failures.
+	Register(http.ResponseWriter, *http.Request) RegistrationResult
+}
+
+// RegistrationResult contains escaped controls with errors and non-secret input.
+// Return Form only before account creation, without writing an HTTP response.
+type RegistrationResult struct {
+	Form template.HTML
 }
 
 // RegistrationFormHandler offers an inline form on the shared registration page.
-// Other enabled providers remain available through RegistrationAlternatives.
+// Its alternative control must link to /register?provider=<AuthType>.
 type RegistrationFormHandler interface {
-	GetRegisterForm(http.ResponseWriter, *http.Request)
+	RegistrationForm(*http.Request) (template.HTML, error)
 }
 
 // ResetHandler supplies the request and redemption steps for credential recovery.

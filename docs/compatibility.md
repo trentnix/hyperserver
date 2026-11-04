@@ -12,9 +12,17 @@ Storage compatibility is separate from source compatibility. A format change mus
 
 ## Login entry point
 
-The auth module now owns `GET /login` and `POST /login`. Applications must remove their own `/login` handlers and point sign-in links at `/login`. Old `GET /auth/login` and enabled-provider `GET /auth/login/{authType}` URLs redirect there. Provider-specific login POST routes no longer exist. Callbacks, registration, password recovery, and stored data are unchanged.
+The auth module now owns `GET /login` and `POST /login`. Applications must remove their own `/login` handlers and point sign-in links at `/login`. Old `GET /auth/login` and enabled-provider `GET /auth/login/{authType}` URLs redirect there. Provider-specific login POST routes no longer exist. Callbacks, password recovery, and stored data are unchanged.
 
 Custom providers must return `auth.LoginResult` from `Login` instead of `*user.User`. Return `LoginResult{Account: account}` on success, `LoginResult{Form: markup}` for validation errors, or an empty result after writing a response. Replace `GetLogin` and `GetLoginForm` page handlers with `LoginForm(*http.Request) (template.HTML, error)` for inline controls or `GetLoginButton()` for a provider button. Forms must post to `/login` with a hidden `provider` field. Inline providers must link their alternative control to `/login?provider=<AuthType>`. The shared page now preserves alternatives, so providers must remove calls to `auth.LoginAlternatives`. See [provider composition](application.md#catalog-selection).
+
+## Registration entry point
+
+The auth module owns `GET /register` and `POST /register`. Applications must remove their own `/register` handlers. Old `GET /auth/register` and enabled-provider `GET /auth/register/{authType}` URLs redirect there. Provider-specific registration POST routes no longer exist. When registration is disabled, the canonical and legacy routes return the existing unavailable response.
+
+Providers must replace `GetRegister` and `GetRegisterForm` with optional `RegistrationForm(*http.Request) (template.HTML, error)` controls. `Register` returns `auth.RegistrationResult`. Before account creation, return `RegistrationResult{Form: markup}` for validation errors without writing a response. Otherwise, write the response and return an empty result. Forms post to `/register` with a hidden `provider` field. Inline alternatives link to `/register?provider=<AuthType>`.
+
+Remove calls to `auth.RegistrationAlternatives` and uses of `ProviderPage.Alternatives`. The shared page owns alternatives, messages, and the outer wrapper. Application overrides of `auth.partial.email.register.form` must render the form, not the surrounding page. Use `auth.registration.footer` for page-level navigation.
 
 ## Stabilization candidates
 

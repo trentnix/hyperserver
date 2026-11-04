@@ -283,6 +283,7 @@ func (h *httpHarness) seedUser(t testing.TB, email string) *user.User {
 
 func registrationForm() url.Values {
 	return url.Values{
+		"provider": {"email"},
 		"email":    {"person@example.invalid"},
 		"password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
 	}

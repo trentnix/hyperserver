@@ -185,7 +185,7 @@ func TestAuthenticationAudit(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		email := "audit-private@example.invalid"
 		password := "Audit-Secret-Password1!"
-		h.request(http.MethodPost, "/auth/register/email", url.Values{"email": {email}, "password": {password}, "passwordMatch": {password}}, false)
+		h.request(http.MethodPost, "/register", url.Values{"provider": {"email"}, "email": {email}, "password": {password}, "passwordMatch": {password}}, false)
 		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {"incorrect"}}, false)
 		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {password}}, false)
 		h.request(http.MethodPost, "/auth/logout", url.Values{}, false)

@@ -144,10 +144,12 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 
 		// register
 		if a.registrationEnabled {
-			mux.Handle("GET /auth/register", anonymous(http.HandlerFunc(a.GetRegister)))
-			mux.Handle("GET /auth/register/{authType}", anonymous(http.HandlerFunc(a.GetRegisterService)))
-			mutations.Handle("POST /auth/register/{authType}", anonymous(http.HandlerFunc(a.Register)))
+			mux.Handle("GET "+registrationEndpoint, anonymous(http.HandlerFunc(a.GetRegister)))
+			mutations.Handle("POST "+registrationEndpoint, anonymous(http.HandlerFunc(a.Register)))
+			mux.Handle("GET /auth/register", noStore(http.HandlerFunc(a.redirectRegistration)))
+			mux.Handle("GET /auth/register/{authType}", noStore(http.HandlerFunc(a.GetRegisterService)))
 		} else {
+			mux.Handle(registrationEndpoint, noStore(http.HandlerFunc(RegistrationUnavailable)))
 			mux.Handle("/auth/register", noStore(http.HandlerFunc(RegistrationUnavailable)))
 			mux.Handle("/auth/register/{authType}", noStore(http.HandlerFunc(RegistrationUnavailable)))
 		}

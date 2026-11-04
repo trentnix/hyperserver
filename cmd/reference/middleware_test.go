@@ -63,7 +63,7 @@ func assertReferenceCSP(t *testing.T, policy, page string) {
 func TestHTTPBrowserSecurityHeaders(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		for _, htmx := range []bool{false, true} {
-			for _, path := range []string{"/contact", "/login", "/auth/register/email", "/auth/reset/request/email", "/missing", "/js/site.js"} {
+			for _, path := range []string{"/contact", "/login", "/register", "/auth/reset/request/email", "/missing", "/js/site.js"} {
 				w := h.request(http.MethodGet, path, nil, htmx)
 				wantStatus := http.StatusOK
 				if path == "/missing" {

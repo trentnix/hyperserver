@@ -140,12 +140,7 @@ func (*Service) GetLoginButton() template.HTML {
 
 // GetRegisterButton starts Google registration directly from the shared form.
 func (*Service) GetRegisterButton() template.HTML {
-	return `<form method="post" action="/auth/register/google" hx-boost="false" class="auth-provider-button"><button type="submit" class="auth-google-button"><img src="/auth/google/icon.png" alt="" width="20" height="20">Sign up with Google</button></form>`
-}
-
-// GetRegister renders the explicit registration entry point.
-func (s *Service) GetRegister(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, auth.ProviderPage{Workflow: "register", Title: "Register", Controls: []template.HTML{s.GetRegisterButton()}, Message: "Use the Google account you want to associate with this site.", Alternatives: auth.RegistrationAlternatives(r)})
+	return `<form method="post" action="/register" hx-boost="false" class="auth-provider-button"><input type="hidden" name="provider" value="google"><button type="submit" class="auth-google-button"><img src="/auth/google/icon.png" alt="" width="20" height="20">Sign up with Google</button></form>`
 }
 
 func (s *Service) render(w http.ResponseWriter, r *http.Request, page auth.ProviderPage) {

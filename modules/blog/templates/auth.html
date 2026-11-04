@@ -1,35 +1,5 @@
-{{/* Keep registration navigation consistent when HTMX replaces validation responses. */}}
-{{ define "auth.partial.email.register.form" }}
-{{ with .Data }}
-<div id="register" class="container">
-  <form id="register-form" class="auth-email-form" method="post" action="{{ .ActionUrl }}" hx-post="{{ .ActionUrl }}" hx-target="#register" hx-swap="outerHTML">
-    {{ if .HasInfoMessages }}<div class="form-messages"><ul>{{ range .GetInfoMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}
-    {{ if .HasSuccessMessages }}<div class="form-messages"><ul>{{ range .GetSuccessMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}
-
-    <label for="email">Email</label>
-    <input type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" id="email" name="email" value="{{ .Email }}" required{{ if .HasFieldErrors "Email" }} aria-invalid="true" aria-describedby="email-error"{{ end }}>
-    {{ with .GetFieldErrors "Email" }}<p id="email-error" class="field-error" data-field-error="email">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
-
-    <label for="password">Password</label>
-    <input type="password" autocomplete="new-password" id="password" name="password" required{{ if .HasFieldErrors "Password" }} aria-invalid="true" aria-describedby="password-error"{{ end }}>
-    {{ with .GetFieldErrors "Password" }}<p id="password-error" class="field-error" data-field-error="password">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
-
-    <label for="passwordMatch">Confirm Password</label>
-    <input type="password" autocomplete="new-password" id="passwordMatch" name="passwordMatch" required{{ if .HasFieldErrors "PasswordMatch" }} aria-invalid="true" aria-describedby="passwordMatch-error"{{ end }}>
-    {{ with .GetFieldErrors "PasswordMatch" }}<p id="passwordMatch-error" class="field-error" data-field-error="passwordMatch">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
-
-    <button type="submit">Register</button>
-    {{ if .HasErrorMessages }}<div class="form-messages" role="alert"><ul>{{ range .GetErrorMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}
-  </form>
-  {{ if .Alternatives }}
-  <div class="auth-alternatives" aria-label="Other ways to register">
-    <p>Or sign up with</p>
-    {{ range .Alternatives }}{{ . }}{{ end }}
-  </div>
-  {{ end }}
-  {{ if not $.LayoutData.Setup }}<p class="auth-form-footer"><a href="/login">Sign in</a></p>{{ end }}
-</div>
-{{ else }}<p>Unable to display registration details.</p>{{ end }}
+{{ define "auth.registration.footer" }}
+  {{ if not .LayoutData.Setup }}<p class="auth-form-footer"><a href="/login">Sign in</a></p>{{ end }}
 {{ end }}
 
 {{ define "auth.provider.introduction" }}

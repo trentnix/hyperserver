@@ -125,8 +125,8 @@ func TestConfiguredAuthenticationHTTPFlow(t *testing.T) {
 			if w := request(http.MethodGet, "/login", nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `action="/login"`) {
 				t.Fatal("login form unavailable", w.Code, w.Body)
 			}
-			fields := url.Values{"email": {"reader@example.com"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"}}
-			assertRedirect(request(http.MethodPost, "/auth/register/email", fields), "/login")
+			fields := url.Values{"provider": {"email"}, "email": {"reader@example.com"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"}}
+			assertRedirect(request(http.MethodPost, "/register", fields), "/login")
 			if _, err := app.Accounts.GetByEmail(t.Context(), fields.Get("email")); err != nil {
 				t.Fatal("registration did not use configured accounts", err)
 			}
@@ -183,8 +183,9 @@ func TestConfiguredVerificationUsesSuppliedMail(t *testing.T) {
 	if len(sender.messages) != 0 {
 		t.Fatal("startup attempted delivery")
 	}
-	w := browserRequests(t, app, false)(http.MethodPost, "/auth/register/email", url.Values{
-		"email": {"reader@example.com"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
+	w := browserRequests(t, app, false)(http.MethodPost, "/register", url.Values{
+		"provider": {"email"},
+		"email":    {"reader@example.com"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
 	})
 	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/login" || len(sender.messages) != 1 {
 		t.Fatalf("registration status=%d deliveries=%d body=%s", w.Code, len(sender.messages), w.Body)

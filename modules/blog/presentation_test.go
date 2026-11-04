@@ -161,7 +161,7 @@ func TestAuthenticationPagesOmitReaderSearch(t *testing.T) {
 	if err := h.blog.access.setup.finish(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/login", "/auth/register", "/auth/register/email", "/auth/register/google", "/auth/reset/request/email", "/"} {
+	for _, path := range []string{"/login", "/register", "/register?provider=email", "/auth/reset/request/email", "/"} {
 		for _, mode := range []string{"page", "fragment", "history"} {
 			t.Run(path+"/"+mode, func(t *testing.T) {
 				r := httptest.NewRequest(http.MethodGet, path, nil)

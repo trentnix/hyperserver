@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
@@ -56,11 +55,6 @@ func (m *SiteModule) Routes(mux *routing.Routes) error {
 		return u != nil && !u.NeedsVerification(), nil
 	}
 	submissions.Handle("POST /test-email", middleware.RequireAuthorization(mailPolicy)(http.HandlerFunc(m.TestEmail)))
-	if m.registrationEnabled {
-		mux.Handle("GET "+registerURL, http.HandlerFunc(m.Register))
-	} else {
-		mux.HandleFunc(registerURL, auth.RegistrationUnavailable)
-	}
 	mux.Handle("POST /session-example", http.HandlerFunc(m.SessionExample))
 	mux.WithoutRateLimit().Handle("POST /logout", http.HandlerFunc(m.Logout))
 	return mux.Err()

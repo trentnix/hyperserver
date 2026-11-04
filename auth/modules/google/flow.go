@@ -31,12 +31,13 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) auth.LoginResult
 }
 
 // Register starts registration only when application configuration permits it.
-func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
+func (s *Service) Register(w http.ResponseWriter, r *http.Request) auth.RegistrationResult {
 	if !s.registration {
 		s.fail(w, r, "Registration is not available.", nil, http.StatusForbidden)
-		return
+		return auth.RegistrationResult{}
 	}
 	s.start(w, r, "register")
+	return auth.RegistrationResult{}
 }
 
 func (s *Service) start(w http.ResponseWriter, r *http.Request, mode string) {

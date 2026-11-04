@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -33,23 +32,6 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	err := homepage.Render(w, r)
 	if err != nil {
 		homepage.HandleRenderError(w, r, "there was an error rendering the home page", err)
-	}
-}
-
-// Register provides a handler to act as a portal to user registration
-func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
-	if !m.registrationEnabled {
-		auth.RegistrationUnavailable(w, r)
-		return
-	}
-
-	register := m.views[registerPagePartialName].Content(r, nil)
-	register.Title = "Register"
-
-	err := register.Render(w, r)
-	if err != nil {
-		register.HandleRenderError(w, r, "there was an error rendering the register page", err)
-		return
 	}
 }
 

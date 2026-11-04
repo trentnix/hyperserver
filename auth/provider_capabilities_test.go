@@ -41,11 +41,9 @@ func (p *loginOnlyProvider) Login(w http.ResponseWriter, _ *http.Request) LoginR
 type registrationOnlyProvider struct{ capabilityProvider }
 
 func (*registrationOnlyProvider) GetRegisterButton() template.HTML { return "register-choice" }
-func (p *registrationOnlyProvider) GetRegister(w http.ResponseWriter, _ *http.Request) {
+func (p *registrationOnlyProvider) Register(w http.ResponseWriter, _ *http.Request) RegistrationResult {
 	p.respond(w)
-}
-func (p *registrationOnlyProvider) Register(w http.ResponseWriter, _ *http.Request) {
-	p.respond(w)
+	return RegistrationResult{}
 }
 
 type resetOnlyProvider struct{ capabilityProvider }
@@ -133,7 +131,6 @@ func TestProviderCapabilityDispatch(t *testing.T) {
 		handler  http.HandlerFunc
 	}{
 		{"login", login, manager.Login},
-		{"registration form", registration, manager.GetRegisterService},
 		{"registration", registration, manager.Register},
 		{"reset request form", reset, manager.GetResetRequest},
 		{"reset request", reset, manager.ResetRequest},
@@ -153,7 +150,7 @@ func TestProviderCapabilityDispatch(t *testing.T) {
 			}
 		})
 	}
-	if login.calls != 1 || registration.calls != 2 || reset.calls != 2 || change.calls != 2 {
+	if login.calls != 1 || registration.calls != 1 || reset.calls != 2 || change.calls != 2 {
 		t.Fatal("a workflow did not reach its provider")
 	}
 }
@@ -173,7 +170,7 @@ func TestProviderChoicesMatchCapabilities(t *testing.T) {
 		{"single login", []AuthService{login, registration}, false, 200, "login-choice"},
 		{"multiple logins", []AuthService{login, otherLogin, registration}, false, 200, "login-choice"},
 		{"no login", []AuthService{registration}, false, 404, "404 page not found"},
-		{"single registration", []AuthService{login, registration}, true, 204, ""},
+		{"single registration", []AuthService{login, registration}, true, 200, "register-choice"},
 		{"multiple registrations", []AuthService{login, registration, otherRegistration}, true, 200, "register-choice"},
 		{"no registration", []AuthService{login}, true, 403, "Registration is not available."},
 		{"no providers", nil, true, 403, "Registration is not available."},

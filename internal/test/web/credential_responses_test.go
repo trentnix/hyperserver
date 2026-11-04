@@ -50,8 +50,8 @@ func TestHTTPCredentialResponses(t *testing.T) {
 					const wrong = "Wrong&A1!"
 					const replacement = "Replacement&B1!"
 					path := "/auth/" + operation + "/email"
-					if operation == "login" {
-						path = "/login"
+					if operation == "login" || operation == "register" {
+						path = "/" + operation
 					}
 					var u *user.User
 					if operation != "register" {
@@ -120,7 +120,7 @@ func TestHTTPAuthCachePolicy(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		for _, htmx := range []bool{false, true} {
 			for _, path := range []string{
-				"/login", "/auth/register", "/auth/reset/request/email",
+				"/login", "/register", "/auth/reset/request/email",
 				"/auth/login/missing", "/auth/reset/email?token=invalid", "/auth/verify?token=invalid",
 				"/auth/change/email", "/auth/request/verify",
 			} {
@@ -129,7 +129,7 @@ func TestHTTPAuthCachePolicy(t *testing.T) {
 			h.mail.err = errors.New("mail unavailable")
 			fields := registrationForm()
 			fields.Set("email", fmt.Sprintf("mail-failure-%t@example.invalid", htmx))
-			w := h.request(http.MethodPost, "/auth/register/email", fields, htmx)
+			w := h.request(http.MethodPost, "/register", fields, htmx)
 			assertNoStore(t, w)
 			if strings.Contains(w.Body.String(), fields.Get("password")) || strings.Contains(w.Body.String(), `type="password"`) {
 				t.Fatal("mail failure exposed credentials or offered another registration")
@@ -151,7 +151,7 @@ func TestHTTPAuthCachePolicy(t *testing.T) {
 
 func TestHTTPDisabledRegistrationNoStore(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
-		for _, path := range []string{"/auth/register", "/auth/register/email"} {
+		for _, path := range []string{"/register", "/auth/register", "/auth/register/email"} {
 			for _, method := range []string{http.MethodGet, http.MethodPost} {
 				for _, htmx := range []bool{false, true} {
 					w := h.request(method, path, registrationForm(), htmx)

@@ -14,7 +14,7 @@
     assert(document.documentElement.scrollWidth <= innerWidth, 'Setup overflows the viewport.');
     const stage = sessionStorage.getItem('setup-stage');
     if (!stage) {
-      assert(location.pathname === '/auth/register', 'Fresh site must start at registration.');
+      assert(location.pathname === '/register', 'Fresh site must start at registration.');
       assert(document.querySelector('.setup-panel') && !document.querySelector('.site-sidebar'), 'Registration must use the setup layout.');
       document.querySelector('#email').value = 'trentnix@gmail.com';
       document.querySelector('#password').value = 'Sample-Password-123!';
@@ -22,7 +22,7 @@
       document.querySelector('#register-form').requestSubmit();
       await wait(() => document.querySelector('.field-error'));
       const form = document.querySelector('#register-form');
-      for (const input of form.querySelectorAll('input')) {
+      for (const input of form.querySelectorAll('input:not([type=hidden])')) {
         assert(input.getBoundingClientRect().right <= innerWidth, 'Registration field overflows.');
         assert(input.getBoundingClientRect().height >= 44, 'Registration field is too small.');
       }

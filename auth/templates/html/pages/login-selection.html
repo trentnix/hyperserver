@@ -1,13 +1,3 @@
 {{ define "auth.page.login.selection" }}
-<section id="login" class="{{ if .Data.Form }}container auth-login-panel{{ else }}auth-provider{{ end }}">
-  {{ template "auth.provider.introduction" . }}
-  {{ range .Data.Messages }}<p class="form-messages"{{ if .IsError }} role="alert"{{ end }}>{{ .Message }}</p>{{ end }}
-  {{ .Data.Form }}
-  {{ if .Data.Controls }}
-  <div{{ if .Data.Form }} class="auth-alternatives" aria-label="Other ways to sign in"{{ end }}>
-    {{ if .Data.Form }}<p>Or continue with</p>{{ end }}
-    {{ range .Data.Controls }}{{ . }}{{ end }}
-  </div>
-  {{ end }}
-</section>
+{{ template "auth.page.form" . }}
 {{ end }}

@@ -76,7 +76,7 @@ func TestDeploymentFailures(t *testing.T) {
 
 	email := "slow-mail-" + time.Now().Format("150405.000000000") + "@example.invalid"
 	password := "Local-Rehearsal-Password1!"
-	response, body := request(t, c, "/auth/register/email", url.Values{"email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
+	response, body := request(t, c, "/register", url.Values{"provider": {"email"}, "email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
 	if response.StatusCode != 303 {
 		t.Fatalf("registration: %d %s", response.StatusCode, body)
 	}

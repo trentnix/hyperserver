@@ -16,7 +16,7 @@ const (
 	emailRegisterFormTemplate       = "templates/html/partials/register-form.html"
 	emailRegisterButtonTemplateName = "templates/html/partials/register-link.html"
 	emailRegisterFormPartial        = "auth.partial.email.register.form"
-	emailRegisterPath               = "/auth/register/email"
+	emailRegisterPath               = "/register"
 )
 
 // RegisterForm binds an email address and matching passwords for account creation.
@@ -24,7 +24,6 @@ type RegisterForm struct {
 	Email         string
 	Password      string
 	PasswordMatch string
-	Alternatives  []template.HTML
 
 	form.Form
 }
@@ -53,54 +52,32 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 	return a.registerButton
 }
 
-// GetRegisterForm renders email registration alongside other enabled providers.
-func (a *EmailAuthService) GetRegisterForm(w http.ResponseWriter, r *http.Request) {
-	a.GetRegister(w, r)
+// RegistrationForm returns escaped controls for the shared registration page.
+func (a *EmailAuthService) RegistrationForm(r *http.Request) (template.HTML, error) {
+	return a.renderRegistrationForm(r, &RegisterForm{})
 }
 
-// GetRegister serves the register form.
-func (a *EmailAuthService) GetRegister(w http.ResponseWriter, r *http.Request) {
-	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
-		auth_services.RegistrationUnavailable(w, r)
-		return
-	}
-
-	registerForm := &RegisterForm{Alternatives: auth_services.RegistrationAlternatives(r)}
-	registerForm.ActionUrl = emailRegisterPath
-	register := a.views[emailRegisterFormPartial].Content(r, registerForm)
-
-	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
-	if err != nil {
-		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
-		return
-	}
-	registerForm.SetMessages(authMessages)
-
-	err = register.Render(w, r)
-	if err != nil {
-		register.HandleRenderError(w, r,
-			"Unable to display the email authorization service registration form",
-			err)
-	}
+func (a *EmailAuthService) renderRegistrationForm(r *http.Request, f *RegisterForm) (template.HTML, error) {
+	f.ActionUrl = emailRegisterPath
+	f.Password, f.PasswordMatch = "", ""
+	return a.views[emailRegisterFormPartial].RenderPartial(r, f)
 }
 
 // Register validates input, creates an account, and sends verification instructions
-// when required. It owns the response, including the success redirect. Delivery failure
-// can occur after the account has been created, leaving it available for verification resend.
-func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
+// when required. Validation failures return controls for the shared page. After
+// account creation, it owns the response, including verification delivery failures.
+func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) (result auth_services.RegistrationResult) {
 	if !a.config.Auth.Enabled || !a.config.Auth.RegistrationEnabled {
 		auth_services.RegistrationUnavailable(w, r)
 		return
 	}
 
-	registerForm := &RegisterForm{Alternatives: auth_services.RegistrationAlternatives(r)}
+	registerForm := &RegisterForm{}
 	registerForm.ActionUrl = emailRegisterPath
-	register := a.views[emailRegisterFormPartial].Content(r, registerForm)
 
 	err := form.ParseAndValidate(r, registerForm)
 	if err != nil {
-		form.HandleFormError(w, r, register, registerForm, "Unable to process form data", err)
-		return
+		return a.registrationFormError(w, r, registerForm, "Unable to process form data", err)
 	}
 
 	if !a.Policy.RegistrationAvailable(w, r) || !a.Policy.Admit(w, r, registerForm.Email, a.contentManager) {
@@ -109,14 +86,14 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 	userMessage, registrationErr := auth_services.ProcessRegistration(r.Context(), a.accounts, registerForm.Email, registerForm.Password, AuthTypeEmail, a.config.Auth.RegisterRequiresVerification)
 	if registrationErr != nil {
 		logger.Audit(r.Context(), "registration", "failed")
-		form.HandleFormError(w, r, register, registerForm, userMessage, registrationErr)
-		return
+		return a.registrationFormError(w, r, registerForm, userMessage, registrationErr)
 	}
 
 	logger.Audit(r.Context(), "registration", "succeeded")
 	if a.config.Auth.RegisterRequiresVerification {
 		// The account already exists. Offer sign-in instead of another registration.
-		register = a.views["auth.partial.email.registration.pending"].Content(r, registerForm)
+		registerForm.Password, registerForm.PasswordMatch = "", ""
+		register := a.views["auth.partial.email.registration.pending"].Content(r, registerForm)
 		const deliveryFailure = "Your account was created, but we could not send the verification email. You can sign in to request another email. Protected pages remain unavailable until you verify your address."
 		origin, err := util.BuildPublicURL(r, a.config.HTTP, "", nil)
 		if err == nil {
@@ -136,4 +113,24 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) {
 		logger.LogRequestError(r, errors.New("registration succeeded but its notification could not be saved"))
 	}
 	util.RedirectToURL(w, r, a.contentManager.AuthURL)
+	return result
+}
+
+func (a *EmailAuthService) registrationFormError(w http.ResponseWriter, r *http.Request, f *RegisterForm, message string, err error) auth_services.RegistrationResult {
+	var parseErr *form.ParseError
+	if errors.As(err, &parseErr) {
+		util.HttpError(w, r, parseErr.Error(), nil, parseErr.StatusCode)
+		return auth_services.RegistrationResult{}
+	}
+	var fields form.FieldErrors
+	if !errors.As(err, &fields) {
+		logger.LogRequestError(r, err)
+		f.AddErrorMessage(message)
+	}
+	markup, err := a.renderRegistrationForm(r, f)
+	if err != nil {
+		a.contentManager.HandleError(w, r, "Unable to display the registration form.", err, http.StatusInternalServerError)
+		return auth_services.RegistrationResult{}
+	}
+	return auth_services.RegistrationResult{Form: markup}
 }

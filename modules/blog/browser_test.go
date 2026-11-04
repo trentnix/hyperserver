@@ -628,7 +628,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	if strings.HasPrefix(mode, "auth-choices-") {
 		pagePath = "/login"
 		if strings.Contains(mode, "-register-") {
-			pagePath = "/auth/register"
+			pagePath = "/register"
 		}
 		pagePath += "?email=" + fmt.Sprint(strings.HasSuffix(mode, "-both"))
 	} else if mode == "setup" {

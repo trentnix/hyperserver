@@ -4,12 +4,24 @@
   {{ if .Data.Message }}<p>{{ .Data.Message }}</p>{{ end }}
   {{ if .Data.Controls }}{{ range .Data.Controls }}{{ . }}{{ end }}
   {{ else }}<p><a href="/login" hx-boost="false">Sign in</a></p>{{ end }}
-  {{ if .Data.Alternatives }}
-  <div class="auth-alternatives" aria-label="Other authentication methods">
-    {{ range .Data.Alternatives }}{{ . }}{{ end }}
-  </div>
-  {{ end }}
 </section>
 {{ end }}
 
 {{ define "auth.provider.introduction" }}<h1>{{ .Data.Title }}</h1>{{ end }}
+
+{{ define "auth.page.form" }}
+<section id="{{ .Data.Workflow }}" class="{{ if .Data.Form }}container{{ if eq .Data.Workflow "login" }} auth-login-panel{{ end }}{{ else }}auth-provider{{ end }}">
+  {{ template "auth.provider.introduction" . }}
+  {{ range .Data.Messages }}<p class="form-messages"{{ if .IsError }} role="alert"{{ end }}>{{ .Message }}</p>{{ end }}
+  {{ .Data.Form }}
+  {{ if .Data.Controls }}
+  <div{{ if .Data.Form }} class="auth-alternatives" aria-label="Other authentication methods"{{ end }}>
+    {{ if .Data.Form }}<p>{{ if eq .Data.Workflow "register" }}Or sign up with{{ else }}Or continue with{{ end }}</p>{{ end }}
+    {{ range .Data.Controls }}{{ . }}{{ end }}
+  </div>
+  {{ end }}
+  {{ if eq .Data.Workflow "register" }}{{ template "auth.registration.footer" . }}{{ end }}
+</section>
+{{ end }}
+
+{{ define "auth.registration.footer" }}{{ end }}

@@ -52,7 +52,7 @@ func (*contractAuthProvider) GetLoginButton() template.HTML {
 	return `<form method="post" action="/login" hx-boost="false" class="auth-provider-button"><input type="hidden" name="provider" value="test-external"><button>Sign in with Example</button></form>`
 }
 func (*contractAuthProvider) GetRegisterButton() template.HTML {
-	return `<form method="post" action="/auth/register/test-external" hx-boost="false" class="auth-provider-button"><button>Register with Example</button></form>`
+	return `<form method="post" action="/register" hx-boost="false" class="auth-provider-button"><input type="hidden" name="provider" value="test-external"><button>Register with Example</button></form>`
 }
 func (p *contractAuthProvider) render(w http.ResponseWriter, r *http.Request, page auth.ProviderPage) {
 	c := p.view.Content(r, page)
@@ -60,15 +60,13 @@ func (p *contractAuthProvider) render(w http.ResponseWriter, r *http.Request, pa
 		c.HandleRenderError(w, r, "Unable to display test provider", err)
 	}
 }
-func (p *contractAuthProvider) GetRegister(w http.ResponseWriter, r *http.Request) {
-	p.render(w, r, auth.ProviderPage{Workflow: "register", Title: "Register", Controls: []template.HTML{p.GetRegisterButton()}, Alternatives: auth.RegistrationAlternatives(r)})
-}
 func (p *contractAuthProvider) Login(w http.ResponseWriter, r *http.Request) auth.LoginResult {
 	p.start(w, r, "login")
 	return auth.LoginResult{}
 }
-func (p *contractAuthProvider) Register(w http.ResponseWriter, r *http.Request) {
+func (p *contractAuthProvider) Register(w http.ResponseWriter, r *http.Request) auth.RegistrationResult {
 	p.start(w, r, "register")
+	return auth.RegistrationResult{}
 }
 func (p *contractAuthProvider) LoginAvailable(ctx context.Context, account *user.User) (bool, error) {
 	if p.availabilityFailure {
@@ -148,15 +146,13 @@ func completeThirdProviderFlow(t *testing.T, h *harness, path string) *httptest.
 func TestThirdProviderRegistrationAndLogin(t *testing.T) {
 	h := thirdProviderHarness(t, "trentnix@gmail.com", false)
 	for _, hx := range []bool{false, true} {
-		for _, path := range []string{"/auth/register", "/auth/register/test-external"} {
-			w := h.request("GET", path, nil, hx)
-			requireStatus(t, w, 200)
-			if !strings.Contains(w.Body.String(), "Register with Example") || !hx && !strings.Contains(w.Body.String(), "Set up your blog") {
-				t.Fatal("new provider lost registration choices or onboarding", w.Body)
-			}
+		w := h.request("GET", "/register", nil, hx)
+		requireStatus(t, w, 200)
+		if !strings.Contains(w.Body.String(), "Register with Example") || !hx && !strings.Contains(w.Body.String(), "Set up your blog") {
+			t.Fatal("new provider lost registration choices or onboarding", w.Body)
 		}
 	}
-	w := completeThirdProviderFlow(t, h, "/auth/register/test-external")
+	w := completeThirdProviderFlow(t, h, "/register")
 	requireStatus(t, w, 200)
 	if !strings.Contains(w.Body.String(), "Account ready") || h.cookies["auth-user-session"] != nil {
 		t.Fatal("registration must complete without login", w.Body)
@@ -232,7 +228,7 @@ func TestThirdProviderAlongsideGoogle(t *testing.T) {
 	cfg.Auth.Services["test-external"] = map[string]string{"enabled": "true"}
 	h := startHarness(t, cfg)
 	for _, hx := range []bool{false, true} {
-		w := h.request("GET", "/auth/register", nil, hx)
+		w := h.request("GET", "/register", nil, hx)
 		requireStatus(t, w, 200)
 		if !strings.Contains(w.Body.String(), "Sign up with Google") || !strings.Contains(w.Body.String(), "Register with Example") {
 			t.Fatal("external registration choices missing", w.Body)
@@ -262,7 +258,7 @@ func TestThirdProviderAdmissionAndRegistrationClosure(t *testing.T) {
 			email = "trentnix@gmail.com"
 		}
 		h := thirdProviderHarness(t, email, false)
-		w := h.request("POST", "/auth/register/test-external", nil, false)
+		w := h.request("POST", "/register", url.Values{"provider": {"test-external"}}, false)
 		requireStatus(t, w, 303)
 		if closed {
 			h.register(t)

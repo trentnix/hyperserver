@@ -62,7 +62,7 @@
             {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
             <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>
             {{ else }}
-            {{ if .LayoutData.Registration }}<a href="/auth/register">Register</a>{{ end }}
+            {{ if .LayoutData.Registration }}<a href="/register">Register</a>{{ end }}
             {{ end }}
           </nav>
         </div>

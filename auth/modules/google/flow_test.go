@@ -313,7 +313,7 @@ func TestGoogleRegistrationAndExplicitLink(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			path := "/auth/register/google"
+			path := "/register"
 			if mode == "link" || mode == "changed session" {
 				h.signIn(account)
 				path = "/auth/link/google"
@@ -472,7 +472,7 @@ func TestGoogleStorageFailuresDoNotLogIn(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			h := newHarness(t)
 			h.service.identities = failedIdentityStorage{ExternalIdentityRepository: h.accounts, operation: operation}
-			path := "/auth/register/google"
+			path := "/register"
 			if operation == "link" {
 				account := &user.User{Email: "local@example.com"}
 				if err := h.accounts.Create(t.Context(), account); err != nil {

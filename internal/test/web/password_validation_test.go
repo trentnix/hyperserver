@@ -27,8 +27,11 @@ func TestHTTPPasswordBoundaries(t *testing.T) {
 				t.Run(fmt.Sprintf("%s/htmx=%t/%s", operation, htmx, tc.name), func(t *testing.T) {
 					runSiteScenario(t, func(h *httpHarness) {
 						const email = "boundary@example.invalid"
-						path, field := "/auth/register/email", "password"
+						path, field := "/register", "password"
 						values := url.Values{"email": {email}, "password": {tc.value}, "passwordMatch": {tc.value}}
+						if operation == "register" {
+							values.Set("provider", "email")
+						}
 						var account *user.User
 						var token *user.AuthResetToken
 						if operation != "register" {

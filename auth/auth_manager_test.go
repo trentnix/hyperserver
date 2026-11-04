@@ -147,8 +147,9 @@ func TestAuthRouteMethods(t *testing.T) {
 		{"/auth/login", "/auth/login", true, false},
 		{"/auth/login/email", "/auth/login/{authType}", true, false},
 		{"/auth/logout", "/auth/logout", false, true},
+		{"/register", "/register", true, true},
 		{"/auth/register", "/auth/register", true, false},
-		{"/auth/register/email", "/auth/register/{authType}", true, true},
+		{"/auth/register/email", "/auth/register/{authType}", true, false},
 		{"/auth/verify", "/auth/verify", true, true},
 		{"/auth/request/verify", "/auth/request/verify", true, true},
 		{"/auth/reset/request/email", "/auth/reset/request/{authType}", true, true},
@@ -185,7 +186,7 @@ func TestDisabledRegistrationHandlers(t *testing.T) {
 	manager := &AuthManager{Enabled: true}
 	for _, handler := range []http.HandlerFunc{manager.GetRegister, manager.GetRegisterService, manager.Register} {
 		w := httptest.NewRecorder()
-		handler(w, httptest.NewRequest(http.MethodPost, "/auth/register/email", nil))
+		handler(w, httptest.NewRequest(http.MethodPost, "/register", nil))
 		if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
 			t.Errorf("disabled registration returned %d %q, want 403 and an explanation", w.Code, w.Body.String())
 		}

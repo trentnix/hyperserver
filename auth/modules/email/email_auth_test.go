@@ -95,9 +95,12 @@ func TestEmailFormsUseStartupTemplates(t *testing.T) {
 		if err != nil || !strings.Contains(string(markup), `name="provider" value="email"`) {
 			t.Fatalf("prepared login controls: %s, %v", markup, err)
 		}
+		markup, err = service.RegistrationForm(httptest.NewRequest(http.MethodGet, "/register", nil))
+		if err != nil || !strings.Contains(string(markup), `name="provider" value="email"`) {
+			t.Fatalf("prepared registration controls: %s, %v", markup, err)
+		}
 	}
 	for name, handler := range map[string]http.HandlerFunc{
-		"registration":  service.GetRegister,
 		"reset request": service.GetResetRequest, "change": service.GetChange,
 		"reset": func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") },
 	} {
@@ -168,6 +171,54 @@ func TestEmailLoginMissingPartialFailsStartup(t *testing.T) {
 	}, contentManager: content.NewContentManager()}
 	if err := service.prepareTemplates(); err == nil || !strings.Contains(err.Error(), emailLoginFormPartial) {
 		t.Fatalf("missing login partial must fail preparation: %v", err)
+	}
+}
+
+func TestRegistrationFormUsesApplicationOverrides(t *testing.T) {
+	cm := content.NewContentManager()
+	cm.BuildLayoutData = func(r *http.Request) any { return r.URL.Path }
+	for _, variant := range []string{"page", "fragment"} {
+		files := fstest.MapFS{"override.html": {Data: []byte(`{{define "auth.partial.email.register.form"}}` + variant + `:{{template "registration-value" .}}{{end}}{{define "registration-value"}}{{.LayoutData}}:{{.Data.Email}}:{{.Data.Password}}:{{.Data.PasswordMatch}}{{end}}`)}}
+		if variant == "page" {
+			cm.AddPageComponent(files, "override.html")
+		} else {
+			cm.AddHtmxComponent(files, "override.html")
+		}
+	}
+	service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, contentManager: cm}
+	if err := service.prepareTemplates(); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"page", "fragment", "history"} {
+		r := httptest.NewRequest("GET", "/register", nil)
+		if mode != "page" {
+			r.Header.Set("HX-Request", "true")
+		}
+		if mode == "history" {
+			r.Header.Set("HX-History-Restore-Request", "true")
+		}
+		variant := "page"
+		if mode == "fragment" {
+			variant = "fragment"
+		}
+		markup, err := service.RegistrationForm(r)
+		if err != nil || string(markup) != variant+":/register:::" {
+			t.Fatalf("%s registration form: %q, %v", mode, markup, err)
+		}
+		markup, err = service.renderRegistrationForm(r, &RegisterForm{Email: "<email>", Password: "secret", PasswordMatch: "confirmation"})
+		if err != nil || string(markup) != variant+":/register:&lt;email&gt;::" {
+			t.Fatalf("%s submitted form: %q, %v", mode, markup, err)
+		}
+	}
+}
+
+func TestEmailRegistrationMissingPartialFailsStartup(t *testing.T) {
+	service := &EmailAuthService{TemplateFS: fstest.MapFS{
+		emailLoginFormTemplate:    {Data: []byte(`{{define "auth.partial.email.login.form"}}login{{end}}`)},
+		emailRegisterFormTemplate: {Data: []byte(`{{define "wrong.partial"}}register{{end}}`)},
+	}, contentManager: content.NewContentManager()}
+	if err := service.prepareTemplates(); err == nil || !strings.Contains(err.Error(), emailRegisterFormPartial) {
+		t.Fatalf("missing registration partial must fail preparation: %v", err)
 	}
 }
 
@@ -256,8 +307,8 @@ func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	handlers := map[string]http.HandlerFunc{
-		"registration": service.GetRegister, "reset request": service.GetResetRequest,
-		"reset": func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") }, "change": service.GetChange,
+		"reset request": service.GetResetRequest,
+		"reset":         func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") }, "change": service.GetChange,
 	}
 	for name, handler := range handlers {
 		for _, operation := range []string{"save", "end"} {
@@ -310,13 +361,8 @@ func TestDisabledRegistration(t *testing.T) {
 		if service.GetRegisterButton() != "" {
 			t.Error("disabled registration returned a link")
 		}
-		r := httptest.NewRequest(http.MethodPost, "/auth/register/email", nil)
+		r := httptest.NewRequest(http.MethodPost, "/register", nil)
 		w := httptest.NewRecorder()
-		service.GetRegister(w, r)
-		if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
-			t.Errorf("registration form returned %d %q, want 403 and an explanation", w.Code, w.Body.String())
-		}
-		w = httptest.NewRecorder()
 		service.Register(w, r)
 		if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Registration is not available." {
 			t.Errorf("registration submission returned %d %q, want 403 and an explanation", w.Code, w.Body.String())

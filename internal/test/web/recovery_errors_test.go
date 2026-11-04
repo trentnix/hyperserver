@@ -190,7 +190,7 @@ func TestHTTPAuthCommitsSurviveNotificationFailure(t *testing.T) {
 		for _, htmx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", operation, htmx), func(t *testing.T) {
 				runSiteScenario(t, func(h *httpHarness) {
-					path, fields := "/auth/register/email", registrationForm()
+					path, fields := "/register", registrationForm()
 					var account *user.User
 					if operation == "reset" {
 						account = h.seedUser(t, "person@example.invalid")
@@ -254,7 +254,7 @@ func TestHTTPAuthCommitsSurviveRenderingFailure(t *testing.T) {
 		for _, htmx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", operation, htmx), func(t *testing.T) {
 				runSiteScenarioWithCatalog(t, brokenRendering, func(h *httpHarness) {
-					path, fields := "/auth/register/email", registrationForm()
+					path, fields := "/register", registrationForm()
 					var account *user.User
 					switch operation {
 					case "registration":

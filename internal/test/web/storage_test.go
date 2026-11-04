@@ -20,7 +20,7 @@ func TestHTTPMixedStorage(t *testing.T) {
 		return siteCatalog(h, directory)
 	}
 	runSiteScenarioWithCatalog(t, catalog, func(h *httpHarness) {
-		w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
+		w := h.request(http.MethodPost, "/register", registrationForm(), true)
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatalf("SQL-backed registration failed: %d %s", w.Code, w.Body.String())
 		}
@@ -74,7 +74,7 @@ func TestHTTPMixedStorage(t *testing.T) {
 		h.assertUserUnchanged(t, account)
 		form = registrationForm()
 		form.Set("email", "another@example.invalid")
-		w = h.request(http.MethodPost, "/auth/register/email", form, true)
+		w = h.request(http.MethodPost, "/register", form, true)
 		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatalf("file failure affected SQL registration: %d %s", w.Code, w.Body.String())
 		}

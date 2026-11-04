@@ -21,7 +21,7 @@ func TestHTTPRateLimitedRoutes(t *testing.T) {
 		paths             []string
 	}{
 		{"auth", "/login", 20, []string{
-			"/login", "/auth/register/email", "/auth/reset/request/email",
+			"/login", "/register", "/auth/reset/request/email",
 			"/auth/reset/email", "/auth/verify", "/auth/request/verify", "/auth/change/email",
 		}},
 		{"site", "/contact", 10, []string{"/contact", "/test-email"}},

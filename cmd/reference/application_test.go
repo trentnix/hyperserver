@@ -23,7 +23,7 @@ func TestReferenceRegistrationLoginAndContact(t *testing.T) {
 			if htmx {
 				status, redirect = http.StatusOK, "HX-Redirect"
 			}
-			w := h.request(http.MethodPost, "/auth/register/email", registrationForm(), htmx)
+			w := h.request(http.MethodPost, "/register", registrationForm(), htmx)
 			if w.Code != status || w.Header().Get(redirect) != "/login" {
 				t.Fatalf("registration: status=%d headers=%v body=%s", w.Code, w.Header(), w.Body)
 			}

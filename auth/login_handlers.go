@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/auth/identity"
-	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -77,18 +76,7 @@ func (a *AuthManager) renderLogin(w http.ResponseWriter, r *http.Request, choice
 			page.Controls = append(page.Controls, provider.GetLoginButton())
 		}
 	}
-	var err error
-	page.Messages, err = flash.GetMessages(w, r, flash.AuthMessages)
-	if err != nil {
-		a.contentManager.HandleError(w, r, "Unable to load authentication messages.", err, http.StatusInternalServerError)
-		return
-	}
-	c := content.NewManagedContent(r, a.contentManager)
-	c.Title = page.Title
-	c.PartialName, c.Templates, c.Data = authLoginSelectionPartial, a.templates[authLoginSelectionTemplate], page
-	if err := c.Render(w, r); err != nil {
-		c.HandleRenderError(w, r, "Unable to display the login page.", err)
-	}
+	a.renderAuthPage(w, r, page, authLoginSelectionTemplate, authLoginSelectionPartial)
 }
 
 // GetLoginService redirects supported legacy provider pages to the shared page.

@@ -35,10 +35,9 @@ type (
 		// supply the factory before initialization.
 		NewContacts func(context.Context) (ContactRepository, error)
 
-		contacts            ContactRepository
-		mailClient          *messaging.MailClient
-		registrationEnabled bool
-		settings            Settings
+		contacts   ContactRepository
+		mailClient *messaging.MailClient
+		settings   Settings
 	}
 )
 
@@ -66,12 +65,10 @@ const (
 	notificationsComponentTemplate   = "templates/html/components/notifications.html"
 	consoleMessagesComponentTemplate = "templates/html/components/console-messages.html"
 	homePageTemplate                 = "templates/html/pages/home.html"
-	registerPageTemplate             = "templates/html/pages/register.html"
 	errorPageTemplate                = "templates/html/pages/error.html"
 	messagePageTemplate              = "templates/html/pages/message.html"
 	notFoundPageTemplate             = "templates/html/pages/not-found.html"
 	homePagePartialName              = "site.page.home"
-	registerPagePartialName          = "site.page.register"
 	errorPagePartialName             = "site.page.error"
 	messagePagePartialName           = "site.page.message"
 	notFoundPagePartialName          = "site.page.not_found"
@@ -80,7 +77,6 @@ const (
 
 	homeURL     = "/"
 	authURL     = "/login"
-	registerURL = "/register"
 	errorURL    = "/error"
 	notFoundURL = "/404"
 )
@@ -122,7 +118,6 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	}
 	for _, page := range []struct{ file, partial string }{
 		{homePageTemplate, homePagePartialName},
-		{registerPageTemplate, registerPagePartialName},
 		{contactPageTemplate, contactPagePartialName},
 		{contactFormTemplate, contactFormPartialName},
 	} {
@@ -146,7 +141,6 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	}
 
 	m.contacts = contacts
-	m.registrationEnabled = s.Config.Auth.Enabled && s.Config.Auth.RegistrationEnabled
 
 	return nil
 }

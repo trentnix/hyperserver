@@ -203,7 +203,7 @@ func TestSetupRegistrationNavigation(t *testing.T) {
 	h.cookies[returningUserCookie] = &http.Cookie{Name: returningUserCookie, Value: "1"}
 	for _, hx := range []bool{false, true} {
 		for _, method := range []string{"GET", "POST"} {
-			w := h.request(method, "/auth/register/email", url.Values{"email": {"trentnix@gmail.com"}}, hx)
+			w := h.request(method, "/register", url.Values{"provider": {"email"}, "email": {"trentnix@gmail.com"}}, hx)
 			requireStatus(t, w, http.StatusOK)
 			body := w.Body.String()
 			if !strings.Contains(body, `id="register-form"`) || strings.Contains(body, `href="/login"`) {
@@ -238,9 +238,9 @@ func TestSetupLifecycle(t *testing.T) {
 		}
 	}
 	for _, path := range []string{"/", "/posts", "/search?q=test", "/posts/recent", "/rss", "/sitemap.xml", "/robots.txt", "/page/about", "/post/s/test", "/images/test", "/profile", "/pages", "/missing"} {
-		redirect(h, path, "/auth/register")
+		redirect(h, path, "/register")
 	}
-	w := h.request("GET", "/auth/register/email", nil, false)
+	w := h.request("GET", "/register", nil, false)
 	requireStatus(t, w, http.StatusOK)
 	for _, want := range []string{"Set up your blog", `id="register-form"`, `class="setup-panel"`} {
 		if !strings.Contains(w.Body.String(), want) {
@@ -253,11 +253,11 @@ func TestSetupLifecycle(t *testing.T) {
 		}
 	}
 	requireStatus(t, h.request("GET", "/assets/css/blog.css", nil, false), http.StatusOK)
-	requireStatus(t, h.request("POST", "/auth/register/email", credentials("other@example.test"), false), http.StatusForbidden)
+	requireStatus(t, h.request("POST", "/register", credentials("other@example.test"), false), http.StatusForbidden)
 	h.register(t)
 	redirect(h, "/", loginURL)
 	redirect(h, "/posts", loginURL)
-	redirect(h, "/auth/register/email", loginURL)
+	redirect(h, "/register", loginURL)
 	if !strings.Contains(h.request("GET", loginURL, nil, false).Body.String(), "Check your email") {
 		t.Fatal("missing verification guidance")
 	}
@@ -314,7 +314,7 @@ func TestSetupWithoutVerification(t *testing.T) {
 	cfg := harnessConfig(t, 10)
 	cfg.Auth.RegisterRequiresVerification = false
 	h := startHarness(t, cfg)
-	requireStatus(t, h.request("POST", "/auth/register/email", credentials("trentnix@gmail.com"), false), http.StatusSeeOther)
+	requireStatus(t, h.request("POST", "/register", credentials("trentnix@gmail.com"), false), http.StatusSeeOther)
 	if len(h.mail.messages) != 0 {
 		t.Fatal("sent verification despite disabled policy")
 	}
@@ -343,7 +343,7 @@ func TestSetupFailures(t *testing.T) {
 	t.Run("mail delivery", func(t *testing.T) {
 		h := startHarness(t, harnessConfig(t, 10))
 		h.mail.err = errors.New("mail offline")
-		h.request("POST", "/auth/register/email", credentials("trentnix@gmail.com"), false)
+		h.request("POST", "/register", credentials("trentnix@gmail.com"), false)
 		account, err := h.app.Accounts.GetByEmail(t.Context(), "trentnix@gmail.com")
 		if err != nil || !account.NeedsVerification() {
 			t.Fatalf("expected pending account: %v", err)
@@ -375,7 +375,7 @@ func TestSetupFailures(t *testing.T) {
 		if strings.Contains(w.Body.String(), "Private identity") || strings.Contains(w.Body.String(), "site-sidebar") {
 			t.Fatal("setup error exposed site content")
 		}
-		requireStatus(t, h.request("GET", "/auth/register/email", nil, false), http.StatusServiceUnavailable)
+		requireStatus(t, h.request("GET", "/register", nil, false), http.StatusServiceUnavailable)
 	})
 	t.Run("missing setup record", func(t *testing.T) {
 		h := startHarness(t, harnessConfig(t, 10))
