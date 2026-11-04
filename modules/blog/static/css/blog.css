@@ -266,6 +266,7 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .media-details .page-manager-title { font-size: .85em; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr)); gap: 16px; list-style: none; padding: 0; }
 .media-grid > li { display: flex; flex-direction: column; min-width: 0; border: 1px solid #dce0e6; border-radius: 6px; background: #fff; }
+.media-grid > .page-manager-empty { grid-column: 1 / -1; }
 .media-card { display: block; flex: 1; border-radius: inherit; overflow: hidden; }
 .media-card:hover { color: inherit; text-decoration: none; background: #f8f9fb; }
 .media-card:focus-visible { outline-offset: 0; }
@@ -275,7 +276,7 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .media-card-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: .75em; color: var(--muted); }
 .media-card-meta > * { white-space: nowrap; }
 .media-grid button.media-card { width: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; color: inherit; text-align: left; }
-.media-grid button.media-card:hover:not(:disabled) { outline: 2px solid #94a3b8; outline-offset: 0; background: #f8f9fb; }
+.media-grid .media-card:hover:not(:disabled) { outline: 2px solid #94a3b8; outline-offset: 0; background: #f8f9fb; }
 .media-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 20px; margin-top: 24px; }
 :is(.media-filters, .management-search) { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 24px 0 12px; }
 :is(.media-filters, .management-search) > div { flex: 1 1 130px; min-width: 0; }
@@ -604,8 +605,9 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 #notifications > :is(.notification--error, [data-request-error]) { margin: 0; }
 .notification { display: flex; align-items: start; gap: 16px; overflow-wrap: anywhere; }
 .notification p { margin: 0; }
-.notification-dismiss { display: none; flex-shrink: 0; font-size: 1.3em; line-height: 1; text-decoration: none; }
-.js .notification-dismiss { display: block; }
+.notification-dismiss { display: none; flex-shrink: 0; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 3px; font-size: 1.3em; line-height: 1; text-decoration: none; }
+.notification-dismiss:hover { background: rgb(128 128 128 / 15%); }
+.js .notification-dismiss { display: inline-flex; }
 .js .notification--success { animation: notification-fade .25s ease 5s forwards; }
 .js .notification--success:hover, .js .notification--success:focus-within { animation-play-state: paused; }
 @keyframes notification-fade { to { opacity: 0; } }

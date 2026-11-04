@@ -40,7 +40,7 @@ func TestBrowserAccessibility(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check keyboard accessibility")
 	}
-	for _, width := range []string{"320", "1100", "3440"} {
+	for _, width := range []string{"320", "768", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "accessibility") })
 	}
 }

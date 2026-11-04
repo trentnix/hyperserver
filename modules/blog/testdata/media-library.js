@@ -27,7 +27,7 @@
     cards[0].focus({preventScroll: true});
     const focusedCard = getComputedStyle(cards[0]);
     assert(focusedCard.outlineStyle === 'solid' && focusedCard.outlineWidth === '2px' && focusedCard.outlineOffset === '0px', 'Keyboard focus must outline the whole image card.');
-    const hoverRule = [...document.styleSheets].flatMap(sheet => [...sheet.cssRules]).find(rule => rule.selectorText === '.media-grid button.media-card:hover:not(:disabled)');
+    const hoverRule = [...document.styleSheets].flatMap(sheet => [...sheet.cssRules]).find(rule => rule.selectorText === '.media-grid .media-card:hover:not(:disabled)');
     assert(hoverRule?.style.outlineStyle === 'solid' && hoverRule.style.outlineWidth === '2px' && hoverRule.style.outlineOffset === '0px', 'Hover must use an outer outline that the image cannot cover.');
     assert(!library().querySelector('.media-grid a, .media-grid button:not(.media-card)'), 'Choosing an image must not require a separate button or open another window.');
     assert(!library().querySelector('[name=format]'), 'Browsing must not require an image-format filter.');
@@ -258,6 +258,8 @@
       }
       await filter({q: 'not-an-existing-image'});
       assert(!library().querySelector('[data-media-select]') && library().textContent.includes('No images match'), 'Empty search did not explain the result.');
+      const emptyGrid = library().querySelector('.media-grid');
+      assert(Math.abs(emptyGrid.querySelector('.page-manager-empty').getBoundingClientRect().width - emptyGrid.getBoundingClientRect().width) < 1, 'Empty media results must span the grid instead of occupying an image tile.');
       assert(form.elements.title.value === 'Unsaved ' + stage && editor.getValue() === 'Keep this writing.\n\n', 'Filtering lost unsaved writing.');
       library().querySelector('[data-media-page]').click();
       await wait(() => !library().querySelector('[data-media-results]').hasAttribute('aria-busy'));

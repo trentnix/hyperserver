@@ -291,6 +291,10 @@ document.removeEventListener = function(type, callback, options) {
       const success = document.querySelector('.notification--success');
       const failure = document.querySelector('.notification:not(.notification--success)');
       assert(success && failure, 'HTMX notifications did not reach the page.');
+      for (const notification of [success, failure]) {
+        const dismiss = notification.querySelector('[data-dismiss-notification]').getBoundingClientRect();
+        assert(dismiss.width >= 32 && dismiss.height >= 32, 'Notification dismissal needs a usable pointer target.');
+      }
       assert(getComputedStyle(success).animationDelay === '5s', 'Success notification has no reading delay.');
       if (innerWidth === 390) {
         assert(matchMedia('(prefers-reduced-motion: reduce)').matches, 'Reduced-motion test preference is not active.');
