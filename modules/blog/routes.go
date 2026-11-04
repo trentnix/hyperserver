@@ -12,6 +12,15 @@ import (
 
 // Routes binds public reading and explicitly protected publishing endpoints.
 func (m *module) Routes(routes *routing.Routes) error {
+	pages, err := m.auth.PageHandlers(routes)
+	if err != nil {
+		return err
+	}
+	routes.Handle("GET /login", pages.Login)
+	pages.Submissions.Handle("POST /login", pages.LoginSubmit)
+	routes.Handle("GET /register", pages.Registration)
+	pages.Submissions.Handle("POST /register", pages.RegistrationSubmit)
+
 	assets, err := fs.Sub(blogModuleFS, "static")
 	if err != nil {
 		return err

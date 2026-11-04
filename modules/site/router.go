@@ -16,6 +16,17 @@ import (
 // Routes registers routes with the provided router and, along with Init, satisfies
 // the Handler interface
 func (m *SiteModule) Routes(mux *routing.Routes) error {
+	if m.auth != nil && m.auth.Enabled {
+		pages, err := m.auth.PageHandlers(mux)
+		if err != nil {
+			return err
+		}
+		mux.Handle("GET /login", pages.Login)
+		pages.Submissions.Handle("POST /login", pages.LoginSubmit)
+		mux.Handle("GET /register", pages.Registration)
+		pages.Submissions.Handle("POST /register", pages.RegistrationSubmit)
+	}
+
 	maxClients, err := m.settings.RateLimit.ClientCapacity()
 	if err != nil {
 		return fmt.Errorf("site.rateLimit.%w", err)

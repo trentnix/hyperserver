@@ -27,6 +27,7 @@ import (
 	"github.com/trentnix/hyperserver/auth/identity"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/test/authpages"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -85,7 +86,7 @@ func newHarness(t *testing.T) *harness {
 	app.ContentManager.AddPageLayout(layouts, "page.html")
 	app.ContentManager.AddHtmxLayout(layouts, "page.html")
 	provider := New(accounts, sessions)
-	if err := handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{auth.Module(auth.Dependencies{Accounts: accounts, Sessions: sessions}, []auth.Descriptor{{Name: AuthType, New: func(_ auth.Dependencies) auth.AuthService { return provider }}})}, nil); err != nil {
+	if err := handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{auth.Module(auth.Dependencies{Accounts: accounts, Sessions: sessions}, []auth.Descriptor{{Name: AuthType, New: func(_ auth.Dependencies) auth.AuthService { return provider }}}), authpages.Module()}, nil); err != nil {
 		t.Fatal(err)
 	}
 	h := &harness{t: t, accounts: accounts, sessions: sessions, service: provider, handler: authmiddleware.LoadSessionManagement(accounts, sessions)(app.Web)}

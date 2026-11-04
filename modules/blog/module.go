@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -73,6 +74,7 @@ type module struct {
 	access          *Access
 	accounts        user.AccountRepository
 	app             *server.ApplicationServer
+	auth            *auth.AuthManager
 	posts           repository
 	pageStore       pageRepository
 	searchStore     publicSearchRepository
@@ -101,9 +103,15 @@ type module struct {
 
 // init registers the factory without opening storage or creating runtime state.
 func init() {
-	handlers.Register(handlers.Descriptor{Name: "blog", New: func() handlers.Handler {
+	handlers.Register(handlers.Descriptor{Name: "blog", Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}, New: func() handlers.Handler {
 		return &module{settings: &Settings{}}
 	}})
+}
+
+func (m *module) BindDependencies(d handlers.Dependencies) error {
+	var err error
+	m.auth, err = handlers.GetDependency[*auth.AuthManager](d, auth.ManagerCapability)
+	return err
 }
 
 // Configuration supplies the destination for the module's YAML settings.

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	"github.com/trentnix/hyperserver/pkg/components/content"
@@ -38,6 +39,7 @@ type (
 		contacts   ContactRepository
 		mailClient *messaging.MailClient
 		settings   Settings
+		auth       *auth.AuthManager
 	}
 )
 
@@ -91,9 +93,15 @@ func init() {
 // Mail is optional. Without a client, the test-email route reports delivery unavailable.
 // Applications own shared services and any connections supplied by the factory.
 func Module(newContacts func(context.Context) (ContactRepository, error), mail *messaging.MailClient) handlers.Descriptor {
-	return handlers.Descriptor{Name: "site", New: func() handlers.Handler {
+	return handlers.Descriptor{Name: "site", Requires: []handlers.Requirement{{Capability: auth.ManagerCapability, Optional: true}}, New: func() handlers.Handler {
 		return &SiteModule{NewContacts: newContacts, mailClient: mail}
 	}}
+}
+
+func (m *SiteModule) BindDependencies(d handlers.Dependencies) error {
+	var err error
+	m.auth, err = handlers.GetDependency[*auth.AuthManager](d, auth.ManagerCapability)
+	return err
 }
 
 // Init validates required services and prepares templates and contact storage. It does not change

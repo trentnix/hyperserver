@@ -18,6 +18,7 @@ import (
 	"github.com/trentnix/hyperserver/auth"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/test/authpages"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
@@ -49,7 +50,7 @@ func authenticationModules(_ context.Context, app *application.Application) ([]h
 	layouts := fstest.MapFS{"page.html": {Data: []byte(`{{renderPartial .PartialName .}}`)}}
 	app.ContentManager.RegisterLayouts(contentservices.PageType, layouts, "page.html")
 	app.ContentManager.RegisterLayouts(contentservices.HtmxType, layouts, "page.html")
-	return []handlers.Descriptor{auth.Module(auth.Dependencies{}, nil)}, nil
+	return []handlers.Descriptor{auth.Module(auth.Dependencies{}, nil), authpages.Module()}, nil
 }
 
 // Requests use the returned handler directly, without adding auth middleware.

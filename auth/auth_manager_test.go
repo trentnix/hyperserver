@@ -118,17 +118,19 @@ func TestVerificationFailureWithoutRequestLogger(t *testing.T) {
 	}
 }
 
-func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
+func TestAuthDoesNotRegisterRootPages(t *testing.T) {
 	mux := http.NewServeMux()
 	manager := &AuthManager{Enabled: true}
 	if err := manager.Routes(routing.NewRoutes(mux)); err != nil {
 		t.Fatal(err)
 	}
-	for _, host := range []string{"localhost", "example.com"} {
-		req := httptest.NewRequest(http.MethodGet, "http://"+host+"/login", nil)
-		_, pattern := mux.Handler(req)
-		if pattern != "GET /login" {
-			t.Errorf("host %s: pattern = %q, want GET /login", host, pattern)
+	for _, path := range []string{"/login", "/register"} {
+		for _, method := range []string{"GET", "POST"} {
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, httptest.NewRequest(method, path, nil))
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("auth registered %s %s: status %d", method, path, w.Code)
+			}
 		}
 	}
 }
@@ -143,11 +145,9 @@ func TestAuthRouteMethods(t *testing.T) {
 		path, pattern string
 		get, post     bool
 	}{
-		{"/login", "/login", true, true},
 		{"/auth/login", "/auth/login", true, false},
 		{"/auth/login/email", "/auth/login/{authType}", true, false},
 		{"/auth/logout", "/auth/logout", false, true},
-		{"/register", "/register", true, true},
 		{"/auth/register", "/auth/register", true, false},
 		{"/auth/register/email", "/auth/register/{authType}", true, false},
 		{"/auth/verify", "/auth/verify", true, true},

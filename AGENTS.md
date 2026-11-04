@@ -27,6 +27,8 @@ Before writing setup code, inspect `pkg/application.Options` and the relevant se
 
 Authentication requires selecting `auth.Module` and enabling authentication in configuration. The constructor supplies configured services to registered provider factories, including email and Google. Configuration selects which providers initialize. Use `Options.AuthPolicy` for shared admission and login behavior. Use `Options.AuthProviders` only for an explicit local provider catalog. Business permissions remain application or module rules, not core framework policy.
 
+Site modules register `/login` and `/register`. Require `auth.ManagerCapability`, receive `*auth.AuthManager` through `BindDependencies`, and call `PageHandlers(routes)` during route setup. Register GET handlers with `routes` and POST handlers with the returned `Submissions` scope. Auth supplies the protections but does not register root paths. Provider forms keep the established URLs.
+
 For an application in its own repository, pin the framework revision and give that application its own configuration and tests.
 
 ## Architecture

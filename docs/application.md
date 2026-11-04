@@ -69,6 +69,24 @@ For an explicit local catalog, set `Options.AuthProviders` to a callback returni
 
 With `auth.enabled: false`, the constructor removes auth from the selected catalog before dependency resolution. It does not initialize auth, prepare its templates, or bind its routes. Sessions remain available independently.
 
+Site modules own `/login` and `/register`. Declare `Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}` in the module descriptor. In `BindDependencies`, receive the initialized manager with `handlers.GetDependency[*auth.AuthManager](dependencies, auth.ManagerCapability)`. In the module's `Routes` method, register its prepared handlers:
+
+```go
+pages, err := m.auth.PageHandlers(routes)
+if err != nil {
+    return err
+}
+routes.Handle("GET /login", pages.Login)
+pages.Submissions.Handle("POST /login", pages.LoginSubmit)
+routes.Handle("GET /register", pages.Registration)
+pages.Submissions.Handle("POST /register", pages.RegistrationSubmit)
+return routes.Err()
+```
+
+Prepare these handlers once during startup. They preserve anonymous-user checks and no-store headers. Register POST handlers through `Submissions` to retain the auth rate limits and startup diagnostics. `routing.Routes` supplies body limits and rejects route conflicts. Registration handlers return an unavailable response when registration is disabled.
+
+A site that can run without auth can declare an optional dependency and skip registration when the manager is absent or disabled. The blog and reference site demonstrate both cases. Provider forms and links still use `/login` and `/register`. Custom paths are not supported by this API. Auth registers only its `/auth/...` operations and legacy redirects.
+
 Serve `app.Handler`, not `app.Web`. The handler includes the standard web middleware, attaches selected sessions, and, when authentication is active, loads the current identity. Modules still choose protected routes with `auth/middleware.RequireAuthentication(app.Accounts, app.ContentManager)`. The constructor defaults the login destination to `/login`. Set presentation overrides on `app.ContentManager` in the module-selection callback. Login and home destinations must be local absolute paths.
 
 `app.renderNotifications` enables session-backed page notifications, independently of authentication. The constructor validates the required session store before module initialization. A custom `ContentManager.LoadNotifications` supplied in the callback takes precedence over the flag and owns its dependency requirements. Authentication forms still use their own flash messages when page notifications are disabled.
@@ -159,7 +177,7 @@ Imports register descriptors, not live modules. Use `handlers.Registered()` for 
 
 Auth has a separate descriptor catalog. Only configured, enabled providers initialize. An explicit empty catalog does not fall back to imports. Providers implement `AuthService` (`AuthType` and `Init`) and their supported workflow interfaces, such as `LoginHandler` or `ResetHandler`. If `Init` fails, startup stops before routes are bound.
 
-The auth module owns `GET /login` and `POST /login`. Providers supply controls with `GetLoginButton` or an inline form with `LoginFormHandler.LoginForm`. Login forms must submit a hidden `provider` field containing their `AuthType` to `/login`. Inline providers must link their alternative control to `/login?provider=<AuthType>` so users can switch forms. Prepare templates during initialization and return escaped markup without a page layout. Use `content.View.RenderPartial` to preserve application template overrides and request-local layout data. The shared page displays the inline form and other available provider controls, including after validation failures.
+The auth manager composes the login page registered by the site module. Providers supply controls with `GetLoginButton` or an inline form with `LoginFormHandler.LoginForm`. Login forms must submit a hidden `provider` field containing their `AuthType` to `/login`. Inline providers must link their alternative control to `/login?provider=<AuthType>` so users can switch forms. Prepare templates during initialization and return escaped markup without a page layout. Use `content.View.RenderPartial` to preserve application template overrides and request-local layout data. The shared page displays the inline form and other available provider controls, including after validation failures.
 
 `Login` returns a `LoginResult` with either an authenticated `Account` or a rendered `Form` containing errors and non-secret submitted values. It must not write an HTTP response when returning either field. A zero result means the provider wrote its own response, such as an OAuth redirect. External providers implement `LoginCallbackHandler` to return a validated local account through the same session-completion path. The provider must validate its own browser-bound callback state. Use `ProviderRoutes` for additional provider-specific endpoints, with explicit access checks. Its `Routes(routes, mutations)` method receives a general scope and a scope with the authentication mutation rate limit. Register state-changing endpoints on `mutations`.
 

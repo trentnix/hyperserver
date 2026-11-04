@@ -111,12 +111,13 @@ func (a *AuthManager) prepareTemplates() error {
 	return nil
 }
 
-// Routes defines the routes the AuthManager handler will be responsible for
+// Routes registers auth-owned /auth operations. Site modules register the root
+// login and registration pages using PageHandlers.
 func (a *AuthManager) Routes(mux *routing.Routes) error {
 	if a.Enabled {
-		maxClients, err := a.rateLimit.ClientCapacity()
+		policy, err := a.mutationPolicy()
 		if err != nil {
-			return fmt.Errorf("auth.rateLimit.%w", err)
+			return err
 		}
 		anonymous := func(handler http.Handler) http.Handler {
 			return noStore(authmiddleware.RequireAnonymous(a.accounts, a.contentManager)(handler))
@@ -124,14 +125,12 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		authenticated := func(handler http.Handler) http.Handler {
 			return noStore(authmiddleware.RequireAuthentication(a.accounts, a.contentManager)(handler))
 		}
-		mutations, err := mux.WithRateLimit(ratelimit.Policy{Requests: 20, Window: time.Minute, MaxClients: maxClients})
+		mutations, err := mux.WithRateLimit(policy)
 		if err != nil {
 			return err
 		}
 
 		// login / logout
-		mux.Handle("GET "+authEndpoint, anonymous(http.HandlerFunc(a.GetLogin)))
-		mutations.Handle("POST "+authEndpoint, anonymous(http.HandlerFunc(a.Login)))
 		mux.Handle("GET /auth/login", noStore(http.HandlerFunc(a.redirectLogin)))
 		mux.Handle("GET /auth/login/{authType}", noStore(http.HandlerFunc(a.GetLoginService)))
 		for _, provider := range a.Services.Services() {
@@ -144,12 +143,9 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 
 		// register
 		if a.registrationEnabled {
-			mux.Handle("GET "+registrationEndpoint, anonymous(http.HandlerFunc(a.GetRegister)))
-			mutations.Handle("POST "+registrationEndpoint, anonymous(http.HandlerFunc(a.Register)))
 			mux.Handle("GET /auth/register", noStore(http.HandlerFunc(a.redirectRegistration)))
 			mux.Handle("GET /auth/register/{authType}", noStore(http.HandlerFunc(a.GetRegisterService)))
 		} else {
-			mux.Handle(registrationEndpoint, noStore(http.HandlerFunc(RegistrationUnavailable)))
 			mux.Handle("/auth/register", noStore(http.HandlerFunc(RegistrationUnavailable)))
 			mux.Handle("/auth/register/{authType}", noStore(http.HandlerFunc(RegistrationUnavailable)))
 		}
@@ -183,6 +179,14 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		}
 	}
 	return mux.Err()
+}
+
+func (a *AuthManager) mutationPolicy() (ratelimit.Policy, error) {
+	maxClients, err := a.rateLimit.ClientCapacity()
+	if err != nil {
+		return ratelimit.Policy{}, fmt.Errorf("auth.rateLimit.%w", err)
+	}
+	return ratelimit.Policy{Requests: 20, Window: time.Minute, MaxClients: maxClients}, nil
 }
 
 // noStore applies the auth response policy before handlers or access checks write

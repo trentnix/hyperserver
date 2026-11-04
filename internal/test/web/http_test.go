@@ -21,6 +21,7 @@ import (
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
+	"github.com/trentnix/hyperserver/internal/test/authpages"
 	"github.com/trentnix/hyperserver/pkg/application"
 	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -221,7 +222,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 			app.ContentManager.RegisterLayouts(content.PageType, layouts, "page.html")
 			app.ContentManager.RegisterLayouts(content.HtmxType, layouts, "fragment.html")
 			app.ContentManager.AuthURL, app.ContentManager.HomeURL = "/login", "/"
-			return []handlers.Descriptor{auth.Module(auth.Dependencies{Accounts: app.Accounts, Sessions: app.Sessions}, nil)}, nil
+			return []handlers.Descriptor{auth.Module(auth.Dependencies{Accounts: app.Accounts, Sessions: app.Sessions}, nil), authpages.Module()}, nil
 		},
 	})
 	if err != nil {

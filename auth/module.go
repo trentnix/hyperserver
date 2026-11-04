@@ -15,6 +15,9 @@ import (
 // ModuleName identifies authentication in the module catalog.
 const ModuleName = "auth"
 
+// ManagerCapability supplies the initialized manager to site modules.
+const ManagerCapability = "auth.manager"
+
 // Module supplies shared dependencies, application policy, and a provider catalog.
 // Each enabled provider factory receives those dependencies. Each instance
 // owns its manager and enabled providers. An empty catalog does not use imports.
@@ -23,7 +26,7 @@ const ModuleName = "auth"
 // after failed startup or after HTTP requests drain, not the auth module.
 func Module(dependencies Dependencies, providers []Descriptor) handlers.Descriptor {
 	providers = slices.Clone(providers)
-	return handlers.Descriptor{Name: ModuleName, New: func() handlers.Handler {
+	return handlers.Descriptor{Name: ModuleName, Provides: []string{ManagerCapability}, New: func() handlers.Handler {
 		manager := NewAuthManager(dependencies.Accounts, dependencies.Sessions)
 		manager.Policy = dependencies.Policy
 		return &module{manager: manager, providers: providers, dependencies: dependencies}
@@ -39,7 +42,7 @@ type module struct {
 func init() {
 	// Snapshot providers when an application creates the module, after all Go
 	// package initialization has finished registering available providers.
-	handlers.Register(handlers.Descriptor{Name: ModuleName, New: func() handlers.Handler {
+	handlers.Register(handlers.Descriptor{Name: ModuleName, Provides: []string{ManagerCapability}, New: func() handlers.Handler {
 		return &module{manager: NewAuthManager(nil, nil), providers: Registered()}
 	}})
 }
@@ -81,4 +84,8 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 
 func (m *module) Routes(routes *routing.Routes) error {
 	return m.manager.Routes(routes)
+}
+
+func (m *module) Capabilities() map[string]any {
+	return map[string]any{ManagerCapability: m.manager}
 }

@@ -38,12 +38,14 @@ func TestSiteConfiguration(t *testing.T) {
 				t.Fatal(err)
 			}
 			opened := false
-			module := Module(func(context.Context) (ContactRepository, error) {
+			descriptor := Module(func(context.Context) (ContactRepository, error) {
 				opened = true
 				return nil, nil
-			}, nil).New().(*SiteModule)
+			}, nil)
+			module := descriptor.New().(*SiteModule)
+			descriptor.New = func() handlers.Handler { return module }
 			// A valid configuration reaches storage. The nil repository then stops Init.
-			_, err = handlers.Initialize(t.Context(), app, []handlers.Descriptor{{Name: "site", New: func() handlers.Handler { return module }}}, nil)
+			_, err = handlers.Initialize(t.Context(), app, []handlers.Descriptor{descriptor}, nil)
 			if err == nil || opened != (test.capacity > 0) {
 				t.Fatalf("opened=%v error=%v", opened, err)
 			}

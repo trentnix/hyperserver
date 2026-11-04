@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
@@ -40,7 +41,7 @@ func (s *Site) Configure(app *application.Application) (handlers.Descriptor, err
 	s.configured = true
 	s.content = app.ContentManager
 	accounts := app.Accounts
-	return handlers.Descriptor{Name: "blog", New: func() handlers.Handler {
+	return handlers.Descriptor{Name: "blog", Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}, New: func() handlers.Handler {
 		return &module{settings: &Settings{}, access: &s.access, profile: &s.profile, accounts: accounts, site: s}
 	}}, nil
 }

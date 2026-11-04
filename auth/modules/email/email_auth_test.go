@@ -22,6 +22,7 @@ import (
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/opaquetoken"
+	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/content"
@@ -260,6 +261,12 @@ func TestEmailAuthModuleRequiresFlashSession(t *testing.T) {
 			if err := module.Routes(routing.NewRoutes(app.Web)); err != nil {
 				t.Fatal(err)
 			}
+			manager := module.(handlers.CapabilityProvider).Capabilities()[auth_services.ManagerCapability].(*auth_services.AuthManager)
+			pages, err := manager.PageHandlers(routing.NewRoutes(app.Web))
+			if err != nil {
+				t.Fatal(err)
+			}
+			app.Web.Handle("GET /login", pages.Login)
 
 			for _, htmx := range []bool{false, true} {
 				r := httptest.NewRequest(http.MethodGet, "/login", nil)
