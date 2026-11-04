@@ -4,6 +4,7 @@ import (
 	"html/template"
 
 	"github.com/trentnix/hyperserver/pkg/components/content"
+	"github.com/trentnix/hyperserver/pkg/components/messages"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
@@ -14,6 +15,8 @@ type ProviderPage struct {
 	Workflow, Title, Message string
 	Controls                 []template.HTML
 	Alternatives             []template.HTML
+	Form                     template.HTML
+	Messages                 []messages.Message
 }
 
 // PrepareProviderView prepares the shared external-provider page and optional

@@ -185,7 +185,7 @@
       await wait(() => form.querySelector('#profile-errors .page-message'));
       const failure = form.querySelector('#profile-errors');
       assert(getComputedStyle(failure).borderLeftWidth === '4px' && getComputedStyle(failure.querySelector('.page-message')).borderLeftWidth === '0px', 'General errors inside an editor must have one border, not nested panels.');
-      const login = await fetch('/auth/login/email', {method: 'POST', redirect: 'manual', body: new URLSearchParams({email: 'trentnix@gmail.com', password: 'Sample-Password-123!'})});
+      const login = await fetch('/login', {method: 'POST', redirect: 'manual', body: new URLSearchParams({provider: 'email', email: 'trentnix@gmail.com', password: 'Sample-Password-123!'})});
       assert(login.type === 'opaqueredirect', 'Reauthentication did not succeed.');
       authStatus.querySelector('[data-upload-retry]').click();
       await wait(() => !form.dataset.uploading);
@@ -299,7 +299,7 @@
       assert(cm.getValue() === 'Unsaved writing', 'Failed Markdown upload changed the writing.');
       const link = document.querySelector('.image-upload-recovery a');
       assert(link?.getAttribute('href') === '/login' && link.target === '_blank', 'Markdown upload lacks sign-in recovery.');
-      await fetch('/auth/login/email', {method: 'POST', redirect: 'manual', body: new URLSearchParams({email: 'trentnix@gmail.com', password: 'Sample-Password-123!'})});
+      await fetch('/login', {method: 'POST', redirect: 'manual', body: new URLSearchParams({provider: 'email', email: 'trentnix@gmail.com', password: 'Sample-Password-123!'})});
       cm.setCursor(cm.lineCount(), 0);
       document.querySelector('[data-upload-retry]').click();
       assert(!document.querySelector('.upload-error'), 'Retry must clear stale error styling while uploading.');

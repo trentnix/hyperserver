@@ -32,7 +32,7 @@
       return;
     }
     if (stage === 'registered') {
-      assert(location.pathname === '/auth/login', 'Registration must lead to login.');
+      assert(location.pathname === '/login', 'Registration must lead to login.');
       assert(document.body.textContent.includes('Check your email'), 'Missing verification guidance.');
       const login = document.querySelector('.setup-login');
       assert(login && !login.open, 'Login should be secondary until verification.');
@@ -50,7 +50,7 @@
       return;
     }
     if (stage === 'login') {
-      assert(location.pathname === '/auth/login', 'Verification must return to login.');
+      assert(location.pathname === '/login', 'Verification must return to login.');
       for (const path of ['/', '/posts']) {
         const publicPage = await fetch(path);
         assert(publicPage.ok && new URL(publicPage.url).pathname === path, 'Verification must open public content: ' + path);

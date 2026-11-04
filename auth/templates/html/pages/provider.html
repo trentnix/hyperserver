@@ -3,7 +3,7 @@
   {{ template "auth.provider.introduction" . }}
   {{ if .Data.Message }}<p>{{ .Data.Message }}</p>{{ end }}
   {{ if .Data.Controls }}{{ range .Data.Controls }}{{ . }}{{ end }}
-  {{ else }}<p><a href="/auth/login" hx-boost="false">Sign in</a></p>{{ end }}
+  {{ else }}<p><a href="/login" hx-boost="false">Sign in</a></p>{{ end }}
   {{ if .Data.Alternatives }}
   <div class="auth-alternatives" aria-label="Other authentication methods">
     {{ range .Data.Alternatives }}{{ . }}{{ end }}

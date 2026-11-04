@@ -121,25 +121,26 @@ func TestConfiguredAuthenticationHTTPFlow(t *testing.T) {
 			if w := request(http.MethodGet, "/public", nil); w.Code != http.StatusOK || w.Body.String() != "public" {
 				t.Fatal("public route requires authentication", w.Code, w.Body)
 			}
-			assertRedirect(request(http.MethodGet, "/private", nil), "/auth/login")
-			if w := request(http.MethodGet, "/auth/login/email", nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `action="/auth/login/email"`) {
+			assertRedirect(request(http.MethodGet, "/private", nil), "/login")
+			if w := request(http.MethodGet, "/login", nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `action="/login"`) {
 				t.Fatal("login form unavailable", w.Code, w.Body)
 			}
 			fields := url.Values{"email": {"reader@example.com"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"}}
-			assertRedirect(request(http.MethodPost, "/auth/register/email", fields), "/auth/login")
+			assertRedirect(request(http.MethodPost, "/auth/register/email", fields), "/login")
 			if _, err := app.Accounts.GetByEmail(t.Context(), fields.Get("email")); err != nil {
 				t.Fatal("registration did not use configured accounts", err)
 			}
-			bad := url.Values{"email": {fields.Get("email")}, "password": {"wrong"}}
-			if w := request(http.MethodPost, "/auth/login/email", bad); w.Header().Get(redirectHeader) != "" || !strings.Contains(w.Body.String(), "Invalid login/password") {
+			bad := url.Values{"provider": {"email"}, "email": {fields.Get("email")}, "password": {"wrong"}}
+			if w := request(http.MethodPost, "/login", bad); w.Header().Get(redirectHeader) != "" || !strings.Contains(w.Body.String(), "Invalid login/password") {
 				t.Fatal("invalid credentials were accepted", w.Code, w.Header())
 			}
-			assertRedirect(request(http.MethodPost, "/auth/login/email", fields), "/private")
+			fields.Set("provider", "email")
+			assertRedirect(request(http.MethodPost, "/login", fields), "/private")
 			if w := request(http.MethodGet, "/private", nil); w.Code != http.StatusOK || w.Body.String() != fields.Get("email") {
 				t.Fatal("authenticated request failed", w.Code, w.Body)
 			}
 			request(http.MethodPost, "/auth/logout", nil)
-			assertRedirect(request(http.MethodGet, "/private", nil), "/auth/login")
+			assertRedirect(request(http.MethodGet, "/private", nil), "/login")
 
 			r := httptest.NewRequest(http.MethodGet, "http://example.test/public", nil)
 			r.AddCookie(&http.Cookie{Name: "auth-user-session", Value: "invalid"})
@@ -185,7 +186,7 @@ func TestConfiguredVerificationUsesSuppliedMail(t *testing.T) {
 	w := browserRequests(t, app, false)(http.MethodPost, "/auth/register/email", url.Values{
 		"email": {"reader@example.com"}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
 	})
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/auth/login" || len(sender.messages) != 1 {
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/login" || len(sender.messages) != 1 {
 		t.Fatalf("registration status=%d deliveries=%d body=%s", w.Code, len(sender.messages), w.Body)
 	}
 	message := sender.messages[0]
@@ -204,16 +205,9 @@ func (p *customAuthProvider) Init(*server.ApplicationServer) error {
 }
 func (*customAuthProvider) AuthType() string              { return "custom" }
 func (*customAuthProvider) GetLoginButton() template.HTML { return "custom" }
-func (p *customAuthProvider) GetLogin(w http.ResponseWriter, r *http.Request) {
-	if !p.initialized {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-func (*customAuthProvider) Login(w http.ResponseWriter, r *http.Request) *user.User {
+func (*customAuthProvider) Login(w http.ResponseWriter, r *http.Request) auth.LoginResult {
 	w.WriteHeader(http.StatusUnauthorized)
-	return nil
+	return auth.LoginResult{}
 }
 
 func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T) {
@@ -263,9 +257,9 @@ func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T
 	if len(selections) != 2 || selections[0] != apps[0] || selections[1] != apps[1] {
 		t.Fatal("provider selection did not receive each application exactly once")
 	}
-	for _, app := range apps {
+	for i, app := range apps {
 		request := browserRequests(t, app, false)
-		if w := request(http.MethodGet, "/auth/login/custom", nil); w.Code != http.StatusNoContent {
+		if w := request(http.MethodGet, "/login", nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "custom") || !providers[i].initialized {
 			t.Fatal("custom provider was not connected", w.Code, w.Body)
 		}
 		if w := request(http.MethodGet, "/auth/login/email", nil); w.Code != http.StatusNotFound {
@@ -275,7 +269,7 @@ func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T
 	if err := apps[1].Shutdown(); err != nil {
 		t.Fatal(err)
 	}
-	if w := browserRequests(t, apps[0], false)(http.MethodGet, "/auth/login/custom", nil); w.Code != http.StatusNoContent {
+	if w := browserRequests(t, apps[0], false)(http.MethodGet, "/login", nil); w.Code != http.StatusOK {
 		t.Fatal("closing another app affected this app", w.Code, w.Body)
 	}
 }
@@ -473,7 +467,7 @@ func TestAuthenticationSelectionAndPresentationOverrides(t *testing.T) {
 			if app.ContentManager.AuthURL != "/sign-in" || app.ContentManager.HomeURL != "/home" || app.ContentManager.BuildLayoutData(nil) != "custom" {
 				t.Fatal("replaced presentation overrides")
 			}
-			w := browserRequests(t, app, false)(http.MethodGet, "/auth/login/email", nil)
+			w := browserRequests(t, app, false)(http.MethodGet, "/login", nil)
 			want := http.StatusNotFound
 			if mode == "selected" {
 				want = http.StatusOK

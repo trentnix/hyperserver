@@ -16,7 +16,7 @@ const (
 	responsesFile = "templates/responses.html"
 	responseView  = "blog.message"
 	notFoundView  = "blog.notFound"
-	loginURL      = "/auth/login"
+	loginURL      = "/login"
 	authReturnURL = "/auth/continue"
 )
 
@@ -39,9 +39,9 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
 			data := navigation{Profile: profile.Current(), SignedIn: account != nil, Admin: access.IsAdmin(account)}
-			loginPage := r.URL.Path == loginURL || strings.HasPrefix(r.URL.Path, loginURL+"/")
+			loginPage := r.URL.Path == loginURL
 			registerPage := r.URL.Path == "/auth/register" || strings.HasPrefix(r.URL.Path, "/auth/register/")
-			if r.Context().Value(setupPageKey{}) != nil || access.setup != nil && !access.setup.complete.Load() && strings.HasPrefix(r.URL.Path, "/auth/") {
+			if r.Context().Value(setupPageKey{}) != nil || access.setup != nil && !access.setup.complete.Load() && (loginPage || strings.HasPrefix(r.URL.Path, "/auth/")) {
 				data.Setup = true
 				data.Profile = Profile{Name: "My Blog"}
 				switch {
@@ -60,7 +60,7 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 				}
 				return data
 			}
-			data.ReaderSearch = r.Context().Value(adminPageKey{}) == nil && !strings.HasPrefix(r.URL.Path, "/auth/")
+			data.ReaderSearch = r.Context().Value(adminPageKey{}) == nil && !loginPage && !strings.HasPrefix(r.URL.Path, "/auth/")
 			data.Description = data.Profile.Bio
 			if data.Admin {
 				data.EditorOwner = account.ID

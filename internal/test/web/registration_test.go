@@ -79,7 +79,7 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 					}
 				}
 			}
-			for _, path := range []string{"/", "/login", "/auth/login", "/auth/login/email"} {
+			for _, path := range []string{"/", "/login"} {
 				w := h.request(http.MethodGet, path, nil, htmx)
 				if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "/auth/register") || strings.Contains(w.Body.String(), `href="/register"`) {
 					t.Errorf("page %s failed or offered disabled registration", path)
@@ -93,7 +93,7 @@ func TestHTTPRegistrationDisabled(t *testing.T) {
 		if len(h.mail.snapshot()) != 1 {
 			t.Fatal("disabling registration broke password recovery")
 		}
-		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, true)
 		if w.Header().Get("HX-Redirect") != "/auth/request/verify" {
 			t.Fatal("disabling registration broke login")
 		}
@@ -124,7 +124,7 @@ func TestHTTPRegistrationWithoutVerification(t *testing.T) {
 		if err != nil || u.NeedsVerification() || len(h.mail.snapshot()) != 0 {
 			t.Fatal("optional verification blocked the account or attempted delivery")
 		}
-		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, true)
 		if w.Header().Get("HX-Redirect") != "/" {
 			t.Fatal("new account could not log in without verification")
 		}
@@ -141,7 +141,7 @@ func TestHTTPRegistrationCanRecoverFromMailFailure(t *testing.T) {
 		}
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
 		h.assertNoTokenExposure(t, w, link.Query().Get("token"))
-		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
+		w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 		if w.Header().Get("HX-Redirect") != "/auth/request/verify" {
 			t.Fatal("pending account could not log in to request verification")
 		}

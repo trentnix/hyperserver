@@ -36,7 +36,7 @@ func (a *Application) configureAuthentication(ctx context.Context, catalog []han
 	}
 	cm := a.ContentManager
 	if cm.AuthURL == "" {
-		cm.AuthURL = "/auth/login"
+		cm.AuthURL = "/login"
 	}
 	if util.SafeRedirectURL(cm.AuthURL, "") != cm.AuthURL {
 		return nil, errors.New("auth login URL must be a local absolute path")

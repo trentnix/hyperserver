@@ -112,7 +112,7 @@ func TestApplicationRecovery(t *testing.T) {
 		t.Helper()
 		return request("GET", path, nil, "", http.StatusOK).Body.String()
 	}
-	credentials := url.Values{"email": {"admin@example.com"}, "password": {"Recovery-Test-123!"}, "passwordMatch": {"Recovery-Test-123!"}}
+	credentials := url.Values{"provider": {"email"}, "email": {"admin@example.com"}, "password": {"Recovery-Test-123!"}, "passwordMatch": {"Recovery-Test-123!"}}
 	form("/auth/register/email", credentials)
 	account, err := app.Accounts.GetByEmail(t.Context(), "admin@example.com")
 	if err != nil {
@@ -122,7 +122,7 @@ func TestApplicationRecovery(t *testing.T) {
 	if err := app.Accounts.Update(t.Context(), account); err != nil {
 		t.Fatal(err)
 	}
-	form("/auth/login/email", credentials)
+	form("/login", credentials)
 	request("GET", "/", nil, "", http.StatusSeeOther) // Follow the first login into Site Profile.
 	get("/profile")
 	upload := func(red uint8) string {
@@ -209,6 +209,6 @@ func TestApplicationRecovery(t *testing.T) {
 	get(publicImage)
 	request("GET", privateImage, nil, "", http.StatusNotFound)
 	request("GET", "/post/s/private", nil, "", http.StatusNotFound)
-	form("/auth/login/email", credentials)
+	form("/login", credentials)
 	get("/media")
 }

@@ -79,7 +79,7 @@ func TestHTTPProtectedRouteSessionExpiry(t *testing.T) {
 					}
 					w.WriteHeader(http.StatusNoContent)
 				})))
-				w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {account.Email}, "password": {"TestPassword1!"}}, true)
+				w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {account.Email}, "password": {"TestPassword1!"}}, true)
 				if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 					t.Fatalf("login failed: %d %s", w.Code, w.Body.String())
 				}
@@ -283,7 +283,7 @@ func TestHTTPInvalidAuthCookieRecovery(t *testing.T) {
 						t.Fatalf("cookie cleanup changed the wrong cookies: %v", cookies)
 					}
 					w = h.request(http.MethodGet, "/login", nil, false)
-					if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `hx-get="/auth/login/email"`) {
+					if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `id="login-form"`) {
 						t.Fatalf("login page did not recover: %d %s", w.Code, w.Body.String())
 					}
 				}, func(cfg *config.Config) {
@@ -342,8 +342,8 @@ func TestHTTPLoginRedirectSessionFailure(t *testing.T) {
 					}
 					h.cookies.SetCookies(base, []*http.Cookie{cookie})
 
-					form := url.Values{"email": {account.Email}, "password": {"TestPassword1!"}}
-					w := h.request(http.MethodPost, "/auth/login/email", form, true)
+					form := url.Values{"provider": {"email"}, "email": {account.Email}, "password": {"TestPassword1!"}}
+					w := h.request(http.MethodPost, "/login", form, true)
 					wantStatus, wantBody := http.StatusInternalServerError, "Unable to load the login session\n"
 					if failure == "invalid cookie" {
 						wantStatus, wantBody = http.StatusBadRequest, "Invalid session cookie\n"
@@ -356,7 +356,7 @@ func TestHTTPLoginRedirectSessionFailure(t *testing.T) {
 						if len(cookies) != 1 || cookies[0].Name != session.AuthSession || cookies[0].MaxAge != -1 {
 							t.Fatalf("login did not expire only the invalid redirect cookie: %v", cookies)
 						}
-						w = h.request(http.MethodPost, "/auth/login/email", form, true)
+						w = h.request(http.MethodPost, "/login", form, true)
 						if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 							t.Fatalf("login did not recover: %d %s", w.Code, w.Body.String())
 						}

@@ -33,24 +33,20 @@ func (p *loginOnlyHTTPProvider) Init(*server.ApplicationServer) error {
 }
 
 func (*loginOnlyHTTPProvider) GetLoginButton() template.HTML {
-	return `<a href="/auth/login/login-only">Test login</a>`
+	return `<form method="post" action="/login"><input type="hidden" name="provider" value="login-only"><input name="credential"><button>Test login</button></form>`
 }
 
-func (*loginOnlyHTTPProvider) GetLogin(w http.ResponseWriter, _ *http.Request) {
-	fmt.Fprint(w, "Login-only provider form")
-}
-
-func (p *loginOnlyHTTPProvider) Login(w http.ResponseWriter, r *http.Request) *user.User {
+func (p *loginOnlyHTTPProvider) Login(w http.ResponseWriter, r *http.Request) auth.LoginResult {
 	if r.FormValue("credential") != "test-only-credential" {
 		http.Error(w, "Test credential rejected", http.StatusUnauthorized)
-		return nil
+		return auth.LoginResult{}
 	}
 	account, err := p.accounts.GetByEmail(r.Context(), "login-only@example.invalid")
 	if err != nil {
 		http.Error(w, "Test account unavailable", http.StatusInternalServerError)
-		return nil
+		return auth.LoginResult{}
 	}
-	return account
+	return auth.LoginResult{Account: account}
 }
 
 func TestHTTPLoginOnlyProvider(t *testing.T) {
@@ -72,14 +68,12 @@ func TestHTTPLoginOnlyProvider(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				w := h.request(http.MethodGet, "/auth/login", nil, htmx)
-				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Login-only provider form") {
+				w := h.request(http.MethodGet, "/login", nil, htmx)
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Test login") {
 					t.Fatalf("login selection = %d %s", w.Code, w.Body.String())
 				}
 				w = h.request(http.MethodGet, "/auth/login/login-only", nil, htmx)
-				if w.Code != http.StatusOK || w.Body.String() != "Login-only provider form" {
-					t.Fatalf("login form = %d %s", w.Code, w.Body.String())
-				}
+				assertRedirectResponse(t, w, "/login", htmx)
 				w = h.request(http.MethodGet, "/auth/register", nil, htmx)
 				if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "Registration is not available.") {
 					t.Fatalf("registration selection = %d %s", w.Code, w.Body.String())
@@ -97,7 +91,7 @@ func TestHTTPLoginOnlyProvider(t *testing.T) {
 					}
 				}
 
-				w = h.request(http.MethodPost, "/auth/login/login-only", url.Values{"credential": {"wrong"}}, htmx)
+				w = h.request(http.MethodPost, "/login", url.Values{"provider": {"login-only"}, "credential": {"wrong"}}, htmx)
 				if w.Code != http.StatusUnauthorized || strings.TrimSpace(w.Body.String()) != "Test credential rejected" || w.Header().Get("Location") != "" || w.Header().Get("HX-Redirect") != "" {
 					t.Fatalf("provider failure response changed: %d %s", w.Code, w.Body.String())
 				}
@@ -105,9 +99,12 @@ func TestHTTPLoginOnlyProvider(t *testing.T) {
 				h.assertRowCount(t, "user", 1)
 				h.assertRowCount(t, "usertoken", 0)
 
-				w = h.request(http.MethodPost, "/auth/login/login-only", url.Values{"credential": {"test-only-credential"}}, htmx)
+				w = h.request(http.MethodPost, "/login", url.Values{"provider": {"login-only"}, "credential": {"test-only-credential"}}, htmx)
 				assertRedirectResponse(t, w, "/", htmx)
 				h.authenticationCookie(t) // The harness only saves cookies from committed response headers.
+				for _, alias := range []string{"/auth/login", "/auth/login/login-only"} {
+					assertRedirectResponse(t, h.request(http.MethodGet, alias, nil, htmx), "/login", htmx)
+				}
 				h.assertRowCount(t, "session", 1)
 				w = h.request(http.MethodGet, "/", nil, htmx)
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), account.Email) {

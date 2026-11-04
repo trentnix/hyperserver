@@ -8,9 +8,9 @@ import (
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/components/form"
-	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // LoginAvailable reports whether the account has password credentials.
@@ -22,14 +22,13 @@ const (
 	emailLoginFormTemplate       = "templates/html/partials/login-form.html"
 	emailLoginButtonTemplateName = "templates/html/partials/login-link.html"
 	emailLoginFormPartial        = "auth.partial.email.login.form"
-	emailLoginPath               = "/auth/login/email"
+	emailLoginPath               = "/login"
 )
 
 // LoginForm defines the fields used when logging in via email/password
 type LoginForm struct {
-	Email        string
-	Password     string
-	Alternatives []template.HTML
+	Email    string
+	Password string
 
 	form.Form
 }
@@ -52,66 +51,54 @@ func (a *EmailAuthService) GetLoginButton() template.HTML {
 	return a.loginButton
 }
 
-// GetLoginForm renders email credentials alongside other enabled providers.
-func (a *EmailAuthService) GetLoginForm(w http.ResponseWriter, r *http.Request) {
-	a.GetLogin(w, r)
+// LoginForm returns escaped controls for the shared login page.
+func (a *EmailAuthService) LoginForm(r *http.Request) (template.HTML, error) {
+	return a.renderLoginForm(r, &LoginForm{})
 }
 
-// GetLogin serves the login form
-func (a *EmailAuthService) GetLogin(w http.ResponseWriter, r *http.Request) {
-	loginForm := &LoginForm{Alternatives: auth.LoginAlternatives(r)}
-	loginForm.ActionUrl = emailLoginPath
-	login := a.views[emailLoginFormPartial].Content(r, loginForm)
-
-	authMessages, err := flash.GetMessages(w, r, flash.AuthMessages)
-	if err != nil {
-		a.contentManager.HandleError(w, r, "Unable to load authentication messages", err, http.StatusInternalServerError)
-		return
-	}
-	loginForm.SetMessages(authMessages)
-
-	err = login.Render(w, r)
-	if err != nil {
-		login.HandleRenderError(w, r,
-			"Unable to display the email authorization service login form",
-			err)
-	}
+func (a *EmailAuthService) renderLoginForm(r *http.Request, f *LoginForm) (template.HTML, error) {
+	f.ActionUrl = emailLoginPath
+	f.Password = ""
+	return a.views[emailLoginFormPartial].RenderPartial(r, f)
 }
 
-// Login validates credentials and renders failures. The auth manager establishes
-// the session and redirects after a successful login.
-func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) (account *user.User) {
+// Login validates credentials. The shared manager renders validation failures
+// with the other enabled providers and establishes the session on success.
+func (a *EmailAuthService) Login(w http.ResponseWriter, r *http.Request) (result auth.LoginResult) {
 	defer func() {
-		if account == nil {
+		if result.Account == nil {
 			logger.Audit(r.Context(), "login", "rejected")
 		}
 	}()
-	loginForm := &LoginForm{Alternatives: auth.LoginAlternatives(r)}
-	loginForm.ActionUrl = emailLoginPath
-	login := a.views[emailLoginFormPartial].Content(r, loginForm)
-
-	err := form.ParseAndValidate(r, loginForm)
+	f := &LoginForm{}
+	err := form.ParseAndValidate(r, f)
+	if err == nil {
+		if !a.Policy.Admit(w, r, f.Email, a.contentManager) {
+			return result
+		}
+		result.Account, err = a.authenticate(r.Context(), f.Email, f.Password)
+		if err == nil {
+			return result
+		}
+	}
+	var parseErr *form.ParseError
+	var fields form.FieldErrors
+	switch {
+	case errors.As(err, &parseErr):
+		util.HttpError(w, r, parseErr.Error(), nil, parseErr.StatusCode)
+		return result
+	case errors.As(err, &fields):
+		// ParseAndValidate already recorded the field errors.
+	case errors.Is(err, errInvalidCredentials):
+		f.AddErrorMessage("Invalid login/password")
+	default:
+		logger.LogRequestError(r, err)
+		f.AddErrorMessage("The user specified could not be retrieved from the database")
+	}
+	result.Form, err = a.renderLoginForm(r, f)
 	if err != nil {
-		form.HandleFormError(w, r, login, loginForm, "Unable to process form data", err)
-		return nil
+		a.contentManager.HandleError(w, r, "Unable to display the login form.", err, http.StatusInternalServerError)
+		return auth.LoginResult{}
 	}
-
-	if !a.Policy.Admit(w, r, loginForm.Email, a.contentManager) {
-		return nil
-	}
-	u, err := a.authenticate(r.Context(), loginForm.Email, loginForm.Password)
-	if errors.Is(err, errInvalidCredentials) {
-		form.HandleFormError(w, r, login, loginForm, "Invalid login/password", nil)
-		return nil
-	}
-	if err != nil {
-		form.HandleFormError(w, r,
-			login,
-			loginForm,
-			"The user specified could not be retrieved from the database",
-			err)
-		return nil
-	}
-
-	return u
+	return result
 }

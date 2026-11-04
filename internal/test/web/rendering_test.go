@@ -140,7 +140,7 @@ func TestHTTPTemplatesPreparedBeforeRequests(t *testing.T) {
 			h.app.ContentManager.HandleError(w, r, "prepared error", nil, http.StatusForbidden)
 		})
 		for _, htmx := range []bool{false, true} {
-			for _, path := range []string{"/", "/login", "/register", "/contact", "/auth/login/email", "/auth/register/email", "/auth/reset/request/email", "/missing", "/test/prepared-message", "/test/prepared-error"} {
+			for _, path := range []string{"/", "/login", "/register", "/contact", "/login", "/auth/register/email", "/auth/reset/request/email", "/missing", "/test/prepared-message", "/test/prepared-error"} {
 				w := h.request(http.MethodGet, path, nil, htmx)
 				want := http.StatusOK
 				if path == "/missing" {

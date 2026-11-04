@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -48,7 +49,7 @@ func (p *contractAuthProvider) Init(app *server.ApplicationServer) error {
 	return err
 }
 func (*contractAuthProvider) GetLoginButton() template.HTML {
-	return `<form method="post" action="/auth/login/test-external" hx-boost="false" class="auth-provider-button"><button>Sign in with Example</button></form>`
+	return `<form method="post" action="/login" hx-boost="false" class="auth-provider-button"><input type="hidden" name="provider" value="test-external"><button>Sign in with Example</button></form>`
 }
 func (*contractAuthProvider) GetRegisterButton() template.HTML {
 	return `<form method="post" action="/auth/register/test-external" hx-boost="false" class="auth-provider-button"><button>Register with Example</button></form>`
@@ -59,15 +60,12 @@ func (p *contractAuthProvider) render(w http.ResponseWriter, r *http.Request, pa
 		c.HandleRenderError(w, r, "Unable to display test provider", err)
 	}
 }
-func (p *contractAuthProvider) GetLogin(w http.ResponseWriter, r *http.Request) {
-	p.render(w, r, auth.ProviderPage{Workflow: "login", Title: "Sign in", Controls: []template.HTML{p.GetLoginButton()}, Alternatives: auth.LoginAlternatives(r)})
-}
 func (p *contractAuthProvider) GetRegister(w http.ResponseWriter, r *http.Request) {
 	p.render(w, r, auth.ProviderPage{Workflow: "register", Title: "Register", Controls: []template.HTML{p.GetRegisterButton()}, Alternatives: auth.RegistrationAlternatives(r)})
 }
-func (p *contractAuthProvider) Login(w http.ResponseWriter, r *http.Request) *user.User {
+func (p *contractAuthProvider) Login(w http.ResponseWriter, r *http.Request) auth.LoginResult {
 	p.start(w, r, "login")
-	return nil
+	return auth.LoginResult{}
 }
 func (p *contractAuthProvider) Register(w http.ResponseWriter, r *http.Request) {
 	p.start(w, r, "register")
@@ -142,7 +140,7 @@ func thirdProviderHarness(t *testing.T, email string, failure bool) *harness {
 
 func completeThirdProviderFlow(t *testing.T, h *harness, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	w := h.request("POST", path, nil, false)
+	w := h.request("POST", path, url.Values{"provider": {"test-external"}}, false)
 	requireStatus(t, w, http.StatusSeeOther)
 	return h.request("GET", w.Header().Get("Location"), nil, false)
 }
@@ -168,7 +166,7 @@ func TestThirdProviderRegistrationAndLogin(t *testing.T) {
 		t.Fatal("incorrect external account", err)
 	}
 	requireStatus(t, h.request("GET", "/", nil, false), 200)
-	w = h.request("GET", "/auth/login", nil, false)
+	w = h.request("GET", "/login", nil, false)
 	if strings.Contains(w.Body.String(), `name="password"`) || !strings.Contains(w.Body.String(), "Sign in with Example") || !strings.Contains(w.Body.String(), "Sign in to your blog") {
 		t.Fatal("single-account choices or onboarding incorrect", w.Body)
 	}
@@ -176,7 +174,7 @@ func TestThirdProviderRegistrationAndLogin(t *testing.T) {
 	if !strings.Contains(policy, "form-action 'self' https://identity.example") || strings.Contains(policy, "accounts.google.com") {
 		t.Fatal("provider-specific CSP", policy)
 	}
-	w = completeThirdProviderFlow(t, h, "/auth/login/test-external")
+	w = completeThirdProviderFlow(t, h, "/login")
 	requireStatus(t, w, 303)
 	if h.cookies[returningUserCookie] == nil {
 		t.Fatal("shared after-login policy was skipped")
@@ -188,7 +186,7 @@ func TestThirdProviderRegistrationAndLogin(t *testing.T) {
 	requireStatus(t, h.request("GET", "/auth/account", nil, false), 200)
 	requireStatus(t, h.request("POST", "/auth/logout", nil, false), 303)
 	for _, hx := range []bool{false, true} {
-		w = h.request("GET", "/auth/login/test-external", nil, hx)
+		w = h.request("GET", "/login", nil, hx)
 		requireStatus(t, w, 200)
 		if !strings.Contains(w.Body.String(), "Welcome back") || strings.Contains(w.Body.String(), `class="header-sign-in"`) || strings.Contains(w.Body.String(), "reader-search-form") {
 			t.Fatal("provider-neutral presentation missing", w.Body)
@@ -219,11 +217,11 @@ func TestThirdProviderLinkingAndFailureIsolation(t *testing.T) {
 			t.Fatal("link changed credentials or failed to revoke sessions", err)
 		}
 		requireStatus(t, h.request("POST", "/auth/logout", nil, false), 303)
-		w = h.request("GET", "/auth/login", nil, false)
+		w = h.request("GET", "/login", nil, false)
 		if !strings.Contains(w.Body.String(), `name="password"`) || !strings.Contains(w.Body.String(), "Sign in with Example") {
 			t.Fatal("linked methods missing")
 		}
-		requireStatus(t, completeThirdProviderFlow(t, h, "/auth/login/test-external"), 303)
+		requireStatus(t, completeThirdProviderFlow(t, h, "/login"), 303)
 	}
 }
 
@@ -249,7 +247,7 @@ func TestThirdProviderAlongsideGoogle(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, hx := range []bool{false, true} {
-		w := h.request("GET", "/auth/login", nil, hx)
+		w := h.request("GET", "/login", nil, hx)
 		requireStatus(t, w, 200)
 		if !strings.Contains(w.Body.String(), `class="auth-provider"`) || !strings.Contains(w.Body.String(), "Sign in with Google") || !strings.Contains(w.Body.String(), "Sign in with Example") || strings.Contains(w.Body.String(), `name="password"`) {
 			t.Fatal("external login choices lost shared presentation", w.Body)

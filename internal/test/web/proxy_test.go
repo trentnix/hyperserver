@@ -156,9 +156,9 @@ func TestHTTPThroughTLSProxy(t *testing.T) {
 func TestHTTPProxyLoginLogoutAndOriginProtection(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "proxy@example.invalid")
-		form := url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}
+		form := url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}
 		for _, origin := range []string{"https://attacker.test", "https://example.test"} {
-			r := proxyRequest(http.MethodPost, "/auth/login/email", "203.0.113.1", form)
+			r := proxyRequest(http.MethodPost, "/login", "203.0.113.1", form)
 			r.Header.Set("Origin", origin)
 			r.Header.Set("X-Forwarded-Host", "attacker.test")
 			w := httptest.NewRecorder()

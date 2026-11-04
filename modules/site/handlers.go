@@ -36,18 +36,6 @@ func (m *SiteModule) Home(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Login provides a handler to act as a portal to user authentication
-func (m *SiteModule) Login(w http.ResponseWriter, r *http.Request) {
-	login := m.views[loginPagePartialName].Content(r, nil)
-	login.Title = "Login"
-
-	err := login.Render(w, r)
-	if err != nil {
-		login.HandleRenderError(w, r, "there was an error rendering the login page", err)
-		return
-	}
-}
-
 // Register provides a handler to act as a portal to user registration
 func (m *SiteModule) Register(w http.ResponseWriter, r *http.Request) {
 	if !m.registrationEnabled {

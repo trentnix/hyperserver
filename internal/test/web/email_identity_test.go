@@ -56,7 +56,7 @@ func TestHTTPEmailSpellingPreserved(t *testing.T) {
 						t.Fatalf("reset token did not identify the account: %v", err)
 					}
 
-					w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {strings.ToUpper(email)}, "password": {"TestPassword1!"}}, htmx)
+					w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {strings.ToUpper(email)}, "password": {"TestPassword1!"}}, htmx)
 					assertRedirectResponse(t, w, "/auth/request/verify", htmx)
 				})
 			})
@@ -69,7 +69,7 @@ func TestHTTPInternationalizedEmailIdentity(t *testing.T) {
 	for _, htmx := range []bool{false, true} {
 		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
-				for _, path := range []string{"/auth/register/email", "/auth/login/email", "/auth/reset/request/email"} {
+				for _, path := range []string{"/auth/register/email", "/login", "/auth/reset/request/email"} {
 					w := h.request(http.MethodGet, path, nil, htmx)
 					input := emailInput.FindString(w.Body.String())
 					for _, attribute := range []string{`type="text"`, `inputmode="email"`, `autocomplete="username"`, `required`} {
@@ -116,7 +116,7 @@ func TestHTTPInternationalizedEmailIdentity(t *testing.T) {
 				if len(mail) != 2 || mail[1].To != original {
 					t.Fatal("reset lookup failed or delivery used the comparison address")
 				}
-				w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {equivalent}, "password": {"TestPassword1!"}}, htmx)
+				w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {equivalent}, "password": {"TestPassword1!"}}, htmx)
 				assertRedirectResponse(t, w, "/", htmx)
 			})
 		})
@@ -156,8 +156,8 @@ func TestHTTPLoginAndResetRequestRejectInvalidEmail(t *testing.T) {
 					// Seed a legacy account to prove validation blocks valid credentials
 					// and reset-token creation before using the stored account.
 					u := h.seedUser(t, tc.email)
-					for _, path := range []string{"/auth/login/email", "/auth/reset/request/email"} {
-						w := h.request(http.MethodPost, path, url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, htmx)
+					for _, path := range []string{"/login", "/auth/reset/request/email"} {
+						w := h.request(http.MethodPost, path, url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, htmx)
 						assertFormRejected(t, w, "Enter a valid email address.")
 						if !strings.Contains(w.Body.String(), `hx-post="`+path+`"`) {
 							t.Error("validation response does not preserve the form submission URL")

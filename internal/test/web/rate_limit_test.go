@@ -20,8 +20,8 @@ func TestHTTPRateLimitedRoutes(t *testing.T) {
 		budget            int
 		paths             []string
 	}{
-		{"auth", "/auth/login/email", 20, []string{
-			"/auth/login/email", "/auth/register/email", "/auth/reset/request/email",
+		{"auth", "/login", 20, []string{
+			"/login", "/auth/register/email", "/auth/reset/request/email",
 			"/auth/reset/email", "/auth/verify", "/auth/request/verify", "/auth/change/email",
 		}},
 		{"site", "/contact", 10, []string{"/contact", "/test-email"}},
@@ -43,7 +43,7 @@ func TestHTTPRateLimitedRoutes(t *testing.T) {
 					for _, htmx := range []bool{false, true} {
 						for _, email := range []string{account.Email, "unknown@example.invalid"} {
 							w := h.request(http.MethodPost, path, url.Values{
-								"email": {email}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
+								"provider": {"email"}, "email": {email}, "password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
 								"name": {"Test person"}, "message": {"Hello"},
 							}, htmx)
 							retry, err := strconv.Atoi(w.Header().Get("Retry-After"))
@@ -94,7 +94,7 @@ func TestHTTPGlobalAndRouteRateLimits(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
 				// Exhaust one route while leaving room in the shared application budget.
 				for i := 0; i < 20; i++ {
-					r := httptest.NewRequest(http.MethodPost, h.baseURL+"/auth/login/email", strings.NewReader("x=%ZZ"))
+					r := httptest.NewRequest(http.MethodPost, h.baseURL+"/login", strings.NewReader("x=%ZZ"))
 					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 					w := httptest.NewRecorder()
 					h.handler.ServeHTTP(w, r)
@@ -102,7 +102,7 @@ func TestHTTPGlobalAndRouteRateLimits(t *testing.T) {
 						t.Fatalf("admitted request %d: status=%d", i+1, w.Code)
 					}
 				}
-				if w := h.request(http.MethodPost, "/auth/login/email", nil, htmx); w.Code != 429 {
+				if w := h.request(http.MethodPost, "/login", nil, htmx); w.Code != 429 {
 					t.Fatal("global budget bypassed the route budget")
 				}
 				if w := h.request(http.MethodGet, "/contact", nil, htmx); w.Code != 200 {
@@ -112,7 +112,7 @@ func TestHTTPGlobalAndRouteRateLimits(t *testing.T) {
 				if w := h.request(http.MethodGet, "/css/no-such-file.css", nil, htmx); w.Code != 404 {
 					t.Fatalf("asset status=%d, want 404 before the global budget is exhausted", w.Code)
 				}
-				for _, path := range []string{"/contact", "/css/no-such-file.css", "/auth/login"} {
+				for _, path := range []string{"/contact", "/css/no-such-file.css", "/login"} {
 					w := h.request(http.MethodGet, path, nil, htmx)
 					if w.Code != 429 || w.Header().Get("Retry-After") == "" {
 						t.Fatalf("%s escaped the global limit: %d", path, w.Code)
@@ -129,7 +129,7 @@ func TestHTTPGlobalAndRouteRateLimits(t *testing.T) {
 				if len(h.mail.snapshot()) != 0 {
 					t.Fatal("global rejection sent mail")
 				}
-				if !strings.Contains(h.logs.String(), "shared application") || !strings.Contains(h.logs.String(), "route POST /auth/login/{authType}") {
+				if !strings.Contains(h.logs.String(), "shared application") || !strings.Contains(h.logs.String(), "route POST /login") {
 					t.Fatal("logs did not distinguish shared and route limits")
 				}
 			}, func(cfg *config.Config) {
@@ -141,7 +141,7 @@ func TestHTTPGlobalAndRouteRateLimits(t *testing.T) {
 
 func TestHTTPDefaultRateLimitInheritance(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
-		for _, path := range []string{"/contact", "/auth/login/email"} {
+		for _, path := range []string{"/contact", "/login"} {
 			if w := h.request(http.MethodGet, path, nil, false); w.Code != 200 {
 				t.Fatalf("%s first status=%d", path, w.Code)
 			}
@@ -175,14 +175,14 @@ func TestHTTPRatePolicyStartupWarnings(t *testing.T) {
 		if count := strings.Count(logs, "Confirm this restriction is intentional."); count != 9 {
 			t.Fatalf("startup warning count = %d, want 7 auth and 2 site routes: %s", count, logs)
 		}
-		for _, route := range []string{"POST /auth/login/{authType}", "POST /auth/reset/request/{authType}", "POST /contact", "POST /test-email"} {
+		for _, route := range []string{"POST /login", "POST /auth/reset/request/{authType}", "POST /contact", "POST /test-email"} {
 			if !strings.Contains(logs, route) {
 				t.Errorf("missing startup warning for %s", route)
 			}
 		}
 		// Warnings neither prevent startup nor change enforcement of the shared cap.
 		for i := 0; i < 6; i++ {
-			w := h.request(http.MethodPost, "/auth/login/email", nil, false)
+			w := h.request(http.MethodPost, "/login", nil, false)
 			if (i < 5 && w.Code == 429) || (i == 5 && w.Code != 429) {
 				t.Fatalf("request %d status = %d", i+1, w.Code)
 			}
@@ -201,7 +201,7 @@ func TestHTTPModuleClientCapacities(t *testing.T) {
 			path     string
 			capacity int
 		}{
-			{"/auth/login/email", 2}, {"/auth/reset/request/email", 2},
+			{"/login", 2}, {"/auth/reset/request/email", 2},
 			{"/contact", 3}, {"/test-email", 3},
 		} {
 			request := func(client int) *httptest.ResponseRecorder {

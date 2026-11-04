@@ -54,7 +54,7 @@ func TestReturningUserNavigation(t *testing.T) {
 	}, false), http.StatusSeeOther)
 	h.publish(t, "welcome")
 
-	const link = `href="/auth/login">Sign in</a>`
+	const link = `href="/login">Sign in</a>`
 	if body := h.request(http.MethodGet, "/post/s/welcome", nil, false).Body.String(); strings.Contains(body, link) || !strings.Contains(body, ">Log out</button>") {
 		t.Fatal("signed-in navigation must show logout instead of login")
 	}
@@ -102,7 +102,7 @@ func TestReturningUserNavigation(t *testing.T) {
 // TestAuthFormNavigation keeps login below registration, including validation responses.
 func TestAuthFormNavigation(t *testing.T) {
 	h := newHarness(t)
-	const link = `href="/auth/login">Sign in</a>`
+	const link = `href="/login">Sign in</a>`
 	for _, returning := range []bool{false, true} {
 		if returning {
 			h.cookies[returningUserCookie] = &http.Cookie{Name: returningUserCookie, Value: "1"}
@@ -149,7 +149,7 @@ func TestReturningUserCookie(t *testing.T) {
 				if !accepted {
 					values.Set("password", "Wrong-Password-123!")
 				}
-				r := httptest.NewRequest(http.MethodPost, scheme+"://blog.example/auth/login/email", strings.NewReader(values.Encode()))
+				r := httptest.NewRequest(http.MethodPost, scheme+"://blog.example/login", strings.NewReader(values.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				if hx {
 					r.Header.Set("HX-Request", "true")
@@ -173,11 +173,11 @@ func TestReturningUserCookie(t *testing.T) {
 	}
 }
 
-// TestLoginRedirect checks the short login route for ordinary and HTMX navigation.
+// TestLoginRedirect checks the old login route for ordinary and HTMX navigation.
 func TestLoginRedirect(t *testing.T) {
 	h := newHarness(t)
 	for _, hx := range []bool{false, true} {
-		w := h.request(http.MethodGet, "/login", nil, hx)
+		w := h.request(http.MethodGet, "/auth/login", nil, hx)
 		status, header := http.StatusSeeOther, "Location"
 		if hx {
 			status, header = http.StatusOK, "HX-Redirect"
@@ -574,7 +574,7 @@ func (h *harness) request(method, path string, values url.Values, hx bool) *http
 }
 
 func credentials(email string) url.Values {
-	return url.Values{"email": {email}, "password": {"Sample-Password-123!"}, "passwordMatch": {"Sample-Password-123!"}}
+	return url.Values{"provider": {"email"}, "email": {email}, "password": {"Sample-Password-123!"}, "passwordMatch": {"Sample-Password-123!"}}
 }
 
 func requireStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
@@ -604,12 +604,12 @@ func (h *harness) verify(t *testing.T) {
 
 func (h *harness) login(t *testing.T) {
 	t.Helper()
-	requireStatus(t, h.request("POST", "/auth/login/email", credentials("trentnix@gmail.com"), false), http.StatusSeeOther)
+	requireStatus(t, h.request("POST", "/login", credentials("trentnix@gmail.com"), false), http.StatusSeeOther)
 }
 
 func TestAuthenticationPagesAndAdmission(t *testing.T) {
 	h := newHarness(t)
-	for _, path := range []string{"/", "/about", "/projects", "/posts", "/auth/login/email", "/auth/register/email", "/auth/reset/request/email"} {
+	for _, path := range []string{"/", "/about", "/projects", "/posts", "/login", "/auth/register/email", "/auth/reset/request/email"} {
 		w := h.request("GET", path, nil, false)
 		requireStatus(t, w, http.StatusOK)
 		if !strings.Contains(w.Body.String(), "/assets/css/blog.css") || !strings.Contains(w.Body.String(), "profile-name") {
@@ -623,7 +623,7 @@ func TestAuthenticationPagesAndAdmission(t *testing.T) {
 	}
 	requireStatus(t, h.request("GET", "/post/create", nil, false), http.StatusForbidden)
 	for _, hx := range []bool{false, true} {
-		for _, path := range []string{"/auth/register/email", "/auth/login/email"} {
+		for _, path := range []string{"/auth/register/email", "/login"} {
 			w := h.request("POST", path+"?email=trentnix@gmail.com", credentials("stranger@example.test"), hx)
 			requireStatus(t, w, http.StatusForbidden)
 			if strings.Contains(w.Body.String(), "<html") == hx {
@@ -675,7 +675,7 @@ func TestRegistrationLinkDisappears(t *testing.T) {
 	h.register(t)
 	check := func() {
 		t.Helper()
-		for _, path := range []string{"/", "/auth/login/email"} {
+		for _, path := range []string{"/", "/login"} {
 			w := h.request(http.MethodGet, path, nil, false)
 			requireStatus(t, w, http.StatusOK)
 			if strings.Contains(w.Body.String(), `href="/auth/register/email"`) {

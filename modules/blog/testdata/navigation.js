@@ -21,7 +21,7 @@
     const signInLinks = [...document.querySelectorAll('.header-sign-in')];
     assert(signInLinks.length === 2 && signInLinks.every(link => link.closest('.site-header')), 'Sign-in links belong in the responsive header, not the content area.');
     assert(signInLinks.every(link => link.getAttribute('hx-boost') === 'false'), 'Sign-in navigation must refresh the account shell.');
-    assert(!document.querySelector('.account-panel a[href="/auth/login"]'), 'Sign in remains in the content area.');
+    assert(!document.querySelector('.account-panel a[href="/login"]'), 'Sign in remains in the content area.');
     const checkSignIn = () => {
       const visible = signInLinks.filter(link => link.getClientRects().length > 0);
       assert(visible.length === 1, 'Only one responsive sign-in link should be visible.');

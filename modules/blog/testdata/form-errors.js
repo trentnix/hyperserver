@@ -73,7 +73,7 @@
         await wait(() => document.querySelector(selector + ' [data-field-error]') && settled());
         assertField(document.querySelector(selector).elements[invalid]);
       }
-      form = await navigate('/auth/login/email', '#login-form');
+      form = await navigate('/login', '#login-form');
       edit(form.elements.email, 'trentnix@gmail.com');
       edit(form.elements.password, 'Sample-Password-123!');
       sessionStorage.setItem('form-errors-stage', 'admin');

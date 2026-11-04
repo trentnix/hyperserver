@@ -33,11 +33,8 @@ func (p *policyTestProvider) Init(*server.ApplicationServer) error {
 	return nil
 }
 func (*policyTestProvider) GetLoginButton() template.HTML { return "Test login" }
-func (*policyTestProvider) GetLogin(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusNoContent)
-}
-func (p *policyTestProvider) Login(w http.ResponseWriter, r *http.Request) *user.User {
-	return p.Callback(w, r)
+func (p *policyTestProvider) Login(w http.ResponseWriter, r *http.Request) auth.LoginResult {
+	return auth.LoginResult{Account: p.Callback(w, r)}
 }
 func (p *policyTestProvider) Callback(w http.ResponseWriter, r *http.Request) *user.User {
 	u, err := p.dependencies.Accounts.GetByEmail(r.Context(), "reader@example.com")
@@ -87,14 +84,14 @@ func TestRegisteredProviderUsesSharedPolicy(t *testing.T) {
 					if err := app.Accounts.Create(t.Context(), u); err != nil {
 						t.Fatal(err)
 					}
-					method, path := "POST", "/auth/login/policy-test"
+					method, path := "POST", "/login"
 					if callback {
 						method, path = "GET", "/auth/callback/policy-test"
 					}
 					if outcome == "session failure" {
 						path += "?invalid=true"
 					}
-					w := browserRequests(t, app, htmx)(method, path, nil)
+					w := browserRequests(t, app, htmx)(method, path, url.Values{"provider": {"policy-test"}})
 					want := map[string]int{"allowed": http.StatusSeeOther, "denied": http.StatusForbidden, "unavailable": http.StatusServiceUnavailable, "session failure": http.StatusInternalServerError}[outcome]
 					if htmx && outcome == "allowed" {
 						want = http.StatusOK

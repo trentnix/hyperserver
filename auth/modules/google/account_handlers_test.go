@@ -30,7 +30,7 @@ func TestGoogleBrandControls(t *testing.T) {
 			t.Fatalf("missing local decorative icon or browser navigation: %s", markup)
 		}
 	}
-	for _, path := range []string{"/auth/login/google", "/auth/register/google"} {
+	for _, path := range []string{"/login", "/auth/register/google"} {
 		w := h.request(http.MethodGet, path)
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `class="auth-google-button"`) ||
 			!strings.Contains(w.Body.String(), `src="/auth/google/icon.png"`) {

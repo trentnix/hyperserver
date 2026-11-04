@@ -30,7 +30,7 @@ func TestConfiguredLoginChoices(t *testing.T) {
 			t.Cleanup(func() { app.Shutdown() })
 			for _, htmx := range []bool{false, true} {
 				request := browserRequests(t, app, htmx)
-				w := request("GET", "/auth/login", nil)
+				w := request("GET", "/login", nil)
 				if w.Code != 200 {
 					t.Fatalf("login: %d %s", w.Code, w.Body)
 				}
@@ -45,7 +45,7 @@ func TestConfiguredLoginChoices(t *testing.T) {
 					t.Fatal("credentials exposed or login depends on JavaScript")
 				}
 				if mode == "both" {
-					w = request("POST", "/auth/login/email", nil)
+					w = request("POST", "/login", url.Values{"provider": {"email"}})
 					if !strings.Contains(w.Body.String(), "Sign in with Google") {
 						t.Fatal("validation removed alternative provider")
 					}
@@ -58,7 +58,7 @@ func TestConfiguredLoginChoices(t *testing.T) {
 					}
 				}
 				if mode == "google" {
-					if w := request("GET", "/auth/login/email", nil); w.Code != 404 {
+					if w := request("POST", "/login", url.Values{"provider": {"email"}}); w.Code != 404 {
 						t.Fatal("disabled email remains reachable", w.Code)
 					}
 				}

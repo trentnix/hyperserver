@@ -48,7 +48,7 @@ func TestHTTPResetPasswordPolicy(t *testing.T) {
 					if _, err := h.accounts.GetToken(t.Context(), token.TokenHash, "auth-reset"); !errors.Is(err, user.ErrTokenNotFound) {
 						t.Fatalf("accepted password did not consume token: %v", err)
 					}
-					assertRedirectResponse(t, w, "/auth/login/email", htmx)
+					assertRedirectResponse(t, w, "/login", htmx)
 					stored, err := h.accounts.GetByID(t.Context(), u.ID)
 					wantPassword := "TestPassword1!"
 					if requireNew {
@@ -88,7 +88,7 @@ func TestHTTPResetOversizedPasswordPreservesToken(t *testing.T) {
 			}
 		}
 		w := h.request(http.MethodPost, path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, true)
-		if w.Header().Get("HX-Redirect") != "/auth/login/email" {
+		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatal("retry with a valid password failed")
 		}
 	})
@@ -122,7 +122,7 @@ func TestHTTPResetConsumesExactTokenAndRejectsReplay(t *testing.T) {
 		}
 		path := "/auth/reset/email?token=" + url.QueryEscape(presented.Token)
 		w := h.request(http.MethodPost, path, url.Values{"password": {"NewPassword1!"}, "passwordMatch": {"NewPassword1!"}}, true)
-		if w.Header().Get("HX-Redirect") != "/auth/login/email" {
+		if w.Header().Get("HX-Redirect") != "/login" {
 			t.Fatal("reset did not succeed")
 		}
 		if _, err := h.accounts.GetToken(t.Context(), presented.TokenHash, "auth-reset"); !errors.Is(err, user.ErrTokenNotFound) {

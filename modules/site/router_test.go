@@ -71,7 +71,6 @@ func TestSiteRegistersSampleRoutes(t *testing.T) {
 	for _, route := range []struct{ method, path string }{
 		{http.MethodPost, "/test-email"},
 		{http.MethodPost, "/session-example"},
-		{http.MethodGet, "/login"},
 		{http.MethodGet, "/register"},
 		{http.MethodPost, "/logout"},
 	} {

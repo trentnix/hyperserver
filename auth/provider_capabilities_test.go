@@ -11,6 +11,7 @@ import (
 
 	"github.com/trentnix/hyperserver/pkg/server"
 	contentservices "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -32,12 +33,9 @@ func (p *capabilityProvider) respond(w http.ResponseWriter) {
 type loginOnlyProvider struct{ capabilityProvider }
 
 func (*loginOnlyProvider) GetLoginButton() template.HTML { return "login-choice" }
-func (p *loginOnlyProvider) GetLogin(w http.ResponseWriter, _ *http.Request) {
+func (p *loginOnlyProvider) Login(w http.ResponseWriter, _ *http.Request) LoginResult {
 	p.respond(w)
-}
-func (p *loginOnlyProvider) Login(w http.ResponseWriter, _ *http.Request) *user.User {
-	p.respond(w)
-	return nil // Provider owns the response when no account is returned.
+	return LoginResult{} // Provider owns the response when no account is returned.
 }
 
 type registrationOnlyProvider struct{ capabilityProvider }
@@ -101,7 +99,8 @@ func TestUnsupportedProviderWorkflows(t *testing.T) {
 				if name == "login-only" && route.path == "/auth/login/" {
 					continue
 				}
-				r := httptest.NewRequest(route.method, route.path+name+"?token=unused", nil)
+				r := httptest.NewRequest(route.method, route.path+name+"?token=unused", strings.NewReader("provider="+name))
+				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				r.SetPathValue("authType", name)
 				if htmx {
 					r.Header.Set("HX-Request", "true")
@@ -133,7 +132,6 @@ func TestProviderCapabilityDispatch(t *testing.T) {
 		provider AuthService
 		handler  http.HandlerFunc
 	}{
-		{"login form", login, manager.GetLoginService},
 		{"login", login, manager.Login},
 		{"registration form", registration, manager.GetRegisterService},
 		{"registration", registration, manager.Register},
@@ -144,7 +142,8 @@ func TestProviderCapabilityDispatch(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			manager.Services = &Registry{services: []AuthService{tc.provider}}
-			r := httptest.NewRequest(http.MethodPost, "/", nil)
+			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("provider=custom"))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			r.SetPathValue("authType", "custom")
 			r = user.AddUserToRequestContext(r, &user.User{ID: "account"})
 			w := httptest.NewRecorder()
@@ -154,7 +153,7 @@ func TestProviderCapabilityDispatch(t *testing.T) {
 			}
 		})
 	}
-	if login.calls != 2 || registration.calls != 2 || reset.calls != 2 || change.calls != 2 {
+	if login.calls != 1 || registration.calls != 2 || reset.calls != 2 || change.calls != 2 {
 		t.Fatal("a workflow did not reach its provider")
 	}
 }
@@ -171,7 +170,7 @@ func TestProviderChoicesMatchCapabilities(t *testing.T) {
 		wantStatus   int
 		want         string
 	}{
-		{"single login", []AuthService{login, registration}, false, 204, ""},
+		{"single login", []AuthService{login, registration}, false, 200, "login-choice"},
 		{"multiple logins", []AuthService{login, otherLogin, registration}, false, 200, "login-choice"},
 		{"no login", []AuthService{registration}, false, 404, "404 page not found"},
 		{"single registration", []AuthService{login, registration}, true, 204, ""},
@@ -188,8 +187,10 @@ func TestProviderChoicesMatchCapabilities(t *testing.T) {
 			if err := manager.prepareTemplates(); err != nil {
 				t.Fatal(err)
 			}
+			_, _, sessions, _ := newLookupTestManager(t)
 			for _, htmx := range []bool{false, true} {
 				r := httptest.NewRequest(http.MethodGet, "/", nil)
+				r = session.AddSessionManagerToRequestContext(r, sessions)
 				if htmx {
 					r.Header.Set("HX-Request", "true")
 				}

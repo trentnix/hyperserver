@@ -49,7 +49,7 @@ func TestBlogSingleAccountLoginChoices(t *testing.T) {
 				h.blog.access.setup.accounts = basicAccountRepository{accounts}
 			}
 			for _, hx := range []bool{false, true} {
-				w := h.request("GET", "/auth/login", nil, hx)
+				w := h.request("GET", "/login", nil, hx)
 				if kind == "unlinked Google registration" {
 					requireStatus(t, w, 503)
 					continue
@@ -60,14 +60,9 @@ func TestBlogSingleAccountLoginChoices(t *testing.T) {
 				if strings.Contains(w.Body.String(), `name="password"`) != wantEmail || strings.Contains(w.Body.String(), "Sign in with Google") != wantGoogle {
 					t.Fatal("incorrect single-account choices", w.Body)
 				}
-				// A direct email entry point stays available. Its failed submissions
-				// must preserve the same filtered alternatives.
-				w = h.request("GET", "/auth/login/email", nil, hx)
-				requireStatus(t, w, 200)
-				if strings.Contains(w.Body.String(), "Sign in with Google") != wantGoogle {
-					t.Fatal("direct login lost filtered alternatives", w.Body)
-				}
-				w = h.request("POST", "/auth/login/email", url.Values{"email": {"invalid"}}, hx)
+				// Availability controls presentation, not admission. A submitted
+				// email form must preserve the same filtered alternatives on error.
+				w = h.request("POST", "/login", url.Values{"provider": {"email"}, "email": {"invalid"}}, hx)
 				if strings.Contains(w.Body.String(), "Sign in with Google") != wantGoogle {
 					t.Fatal("validation changed login alternatives", w.Body)
 				}
@@ -118,7 +113,7 @@ func TestBlogAuthenticationChoices(t *testing.T) {
 				t.Fatal("wizard bypasses provider choices", w.Header())
 			}
 			for _, hx := range []bool{false, true} {
-				w := h.request("GET", "/auth/login", nil, hx)
+				w := h.request("GET", "/login", nil, hx)
 				requireStatus(t, w, 200)
 				if strings.Contains(w.Body.String(), `name="password"`) != (mode != "google") || strings.Contains(w.Body.String(), "Sign in with Google") != (mode != "email") {
 					t.Fatal("incorrect blog login choices", w.Body)

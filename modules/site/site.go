@@ -66,13 +66,11 @@ const (
 	notificationsComponentTemplate   = "templates/html/components/notifications.html"
 	consoleMessagesComponentTemplate = "templates/html/components/console-messages.html"
 	homePageTemplate                 = "templates/html/pages/home.html"
-	loginPageTemplate                = "templates/html/pages/login.html"
 	registerPageTemplate             = "templates/html/pages/register.html"
 	errorPageTemplate                = "templates/html/pages/error.html"
 	messagePageTemplate              = "templates/html/pages/message.html"
 	notFoundPageTemplate             = "templates/html/pages/not-found.html"
 	homePagePartialName              = "site.page.home"
-	loginPagePartialName             = "site.page.login"
 	registerPagePartialName          = "site.page.register"
 	errorPagePartialName             = "site.page.error"
 	messagePagePartialName           = "site.page.message"
@@ -124,7 +122,6 @@ func (m *SiteModule) Init(ctx context.Context, s *server.ApplicationServer) erro
 	}
 	for _, page := range []struct{ file, partial string }{
 		{homePageTemplate, homePagePartialName},
-		{loginPageTemplate, loginPagePartialName},
 		{registerPageTemplate, registerPagePartialName},
 		{contactPageTemplate, contactPagePartialName},
 		{contactFormTemplate, contactFormPartialName},

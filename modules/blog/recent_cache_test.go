@@ -270,7 +270,7 @@ func TestRecentHandlerCache(t *testing.T) {
 			if !strings.Contains(body, "One &lt;post&gt;") {
 				t.Fatal("missing escaped post title")
 			}
-			if strings.Contains(body, `href="/auth/login">Sign in</a>`) != (i == 2) {
+			if strings.Contains(body, `href="/login">Sign in</a>`) != (i == 2) {
 				t.Fatal("cached metadata interfered with request-specific navigation")
 			}
 		}

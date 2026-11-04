@@ -135,17 +135,12 @@ func (s *Service) LoginAvailable(ctx context.Context, account *user.User) (bool,
 
 // GetLoginButton returns a static, reviewed form that starts a full-page redirect.
 func (*Service) GetLoginButton() template.HTML {
-	return `<form method="post" action="/auth/login/google" hx-boost="false" class="auth-provider-button"><button type="submit" class="auth-google-button"><img src="/auth/google/icon.png" alt="" width="20" height="20">Sign in with Google</button></form>`
+	return `<form method="post" action="/login" hx-boost="false" class="auth-provider-button"><input type="hidden" name="provider" value="google"><button type="submit" class="auth-google-button"><img src="/auth/google/icon.png" alt="" width="20" height="20">Sign in with Google</button></form>`
 }
 
 // GetRegisterButton starts Google registration directly from the shared form.
 func (*Service) GetRegisterButton() template.HTML {
 	return `<form method="post" action="/auth/register/google" hx-boost="false" class="auth-provider-button"><button type="submit" class="auth-google-button"><img src="/auth/google/icon.png" alt="" width="20" height="20">Sign up with Google</button></form>`
-}
-
-// GetLogin renders a Google sign-in control without starting a flow on a GET.
-func (s *Service) GetLogin(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, auth.ProviderPage{Workflow: "login", Title: "Sign in", Controls: []template.HTML{s.GetLoginButton()}, Alternatives: auth.LoginAlternatives(r)})
 }
 
 // GetRegister renders the explicit registration entry point.

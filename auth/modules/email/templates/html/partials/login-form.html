@@ -1,7 +1,5 @@
 {{ define "auth.partial.email.login.form" }}
     {{ with .Data }}
-    <div id="login" class="container auth-login-panel">
-        {{ block "auth.email.login.introduction" $ }}{{ end }}
         <form id="login-form"
             class="auth-email-form"
             method="post"
@@ -10,6 +8,7 @@
             hx-target="#login"
             hx-swap="outerHTML"
             hx-trigger="submit">
+            <input type="hidden" name="provider" value="email">
 
             {{ if .HasInfoMessages }}
                 <div class="form-messages">
@@ -63,13 +62,6 @@
                 </div>
             {{ end }}
         </form>
-        {{ if .Alternatives }}
-        <div class="auth-alternatives" aria-label="Other ways to sign in">
-            <p>Or continue with</p>
-            {{ range .Alternatives }}{{ . }}{{ end }}
-        </div>
-        {{ end }}
-    </div>
     {{ else }}
         <div>Unable to display login details.</div>
     {{ end }}

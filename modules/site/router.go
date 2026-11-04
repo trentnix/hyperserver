@@ -56,7 +56,6 @@ func (m *SiteModule) Routes(mux *routing.Routes) error {
 		return u != nil && !u.NeedsVerification(), nil
 	}
 	submissions.Handle("POST /test-email", middleware.RequireAuthorization(mailPolicy)(http.HandlerFunc(m.TestEmail)))
-	mux.Handle("GET "+authURL, http.HandlerFunc(m.Login))
 	if m.registrationEnabled {
 		mux.Handle("GET "+registerURL, http.HandlerFunc(m.Register))
 	} else {

@@ -140,25 +140,29 @@ type AccountActionsProvider interface {
 	AccountActions(*user.User) []AccountAction
 }
 
-// LoginHandler supplies login pages and credential submission handling.
-// Login returns an account for the manager to establish its authenticated session.
+// LoginHandler supplies a provider control and handles authentication.
+// Providers do not own login pages. The manager composes them at /login.
 type LoginHandler interface {
 	AuthType() string
-	// GetLoginButton returns trusted HTML linking to the provider's login form.
+	// GetLoginButton returns reviewed provider markup, never unescaped input.
 	GetLoginButton() template.HTML
-	// GetLogin renders the provider's login form.
-	GetLogin(http.ResponseWriter, *http.Request)
-	// Login returns the authenticated account without committing response headers
-	// or writing a body. The manager creates the session and writes the success redirect.
-	// When Login returns nil, the provider must write the complete response,
-	// including a failure response or a redirect that continues authentication.
-	Login(http.ResponseWriter, *http.Request) *user.User
+	// Login returns an account or a validated form for the shared page. A zero
+	// result means the provider wrote a response, such as an OAuth redirect.
+	Login(http.ResponseWriter, *http.Request) LoginResult
 }
 
-// LoginFormHandler offers an inline form on the shared login page. Other enabled
-// providers remain available through LoginAlternatives, including on failed submissions.
+// LoginResult contains either an authenticated account or escaped form markup.
+// Providers must not include passwords in Form or write a response with either result.
+type LoginResult struct {
+	Account *user.User
+	Form    template.HTML
+}
+
+// LoginFormHandler offers an inline credential form instead of a button.
+// LoginForm renders only provider controls, without a page layout or HTTP response.
+// Its alternative control must link to /login?provider=<AuthType>.
 type LoginFormHandler interface {
-	GetLoginForm(http.ResponseWriter, *http.Request)
+	LoginForm(*http.Request) (template.HTML, error)
 }
 
 // LoginAvailability reports whether an account has credentials for this provider.

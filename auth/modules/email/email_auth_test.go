@@ -90,8 +90,14 @@ func TestEmailFormsUseStartupTemplates(t *testing.T) {
 	}
 	// Neither the first request nor later requests may reopen the selected files.
 	service.TemplateFS = fstest.MapFS{}
+	for range 2 {
+		markup, err := service.LoginForm(httptest.NewRequest(http.MethodGet, "/login", nil))
+		if err != nil || !strings.Contains(string(markup), `name="provider" value="email"`) {
+			t.Fatalf("prepared login controls: %s, %v", markup, err)
+		}
+	}
 	for name, handler := range map[string]http.HandlerFunc{
-		"login": service.GetLogin, "registration": service.GetRegister,
+		"registration":  service.GetRegister,
 		"reset request": service.GetResetRequest, "change": service.GetChange,
 		"reset": func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") },
 	} {
@@ -114,6 +120,54 @@ func TestEmailFormsUseStartupTemplates(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestLoginFormUsesApplicationOverrides(t *testing.T) {
+	cm := content.NewContentManager()
+	cm.BuildLayoutData = func(r *http.Request) any { return r.URL.Path }
+	for _, variant := range []string{"page", "fragment"} {
+		files := fstest.MapFS{"override.html": {Data: []byte(`{{define "auth.partial.email.login.form"}}` + variant + `:{{template "login-value" .}}{{end}}{{define "login-value"}}{{.LayoutData}}:{{.Data.Email}}:{{.Data.Password}}{{end}}`)}}
+		if variant == "page" {
+			cm.AddPageComponent(files, "override.html")
+		} else {
+			cm.AddHtmxComponent(files, "override.html")
+		}
+	}
+	service := &EmailAuthService{TemplateFS: emailAuthTemplatesFS, contentManager: cm}
+	if err := service.prepareTemplates(); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"page", "fragment", "history"} {
+		r := httptest.NewRequest("GET", "/login", nil)
+		if mode != "page" {
+			r.Header.Set("HX-Request", "true")
+		}
+		if mode == "history" {
+			r.Header.Set("HX-History-Restore-Request", "true")
+		}
+		variant := "page"
+		if mode == "fragment" {
+			variant = "fragment"
+		}
+		markup, err := service.LoginForm(r)
+		if err != nil || string(markup) != variant+":/login::" {
+			t.Fatalf("%s login form: %q, %v", mode, markup, err)
+		}
+		markup, err = service.renderLoginForm(r, &LoginForm{Email: "<email>", Password: "secret"})
+		if err != nil || string(markup) != variant+":/login:&lt;email&gt;:" {
+			t.Fatalf("%s submitted form: %q, %v", mode, markup, err)
+		}
+	}
+}
+
+func TestEmailLoginMissingPartialFailsStartup(t *testing.T) {
+	// The login view is prepared first. No other files are needed to reject it.
+	service := &EmailAuthService{TemplateFS: fstest.MapFS{
+		emailLoginFormTemplate: {Data: []byte(`{{define "wrong.partial"}}login{{end}}`)},
+	}, contentManager: content.NewContentManager()}
+	if err := service.prepareTemplates(); err == nil || !strings.Contains(err.Error(), emailLoginFormPartial) {
+		t.Fatalf("missing login partial must fail preparation: %v", err)
 	}
 }
 
@@ -157,7 +211,7 @@ func TestEmailAuthModuleRequiresFlashSession(t *testing.T) {
 			}
 
 			for _, htmx := range []bool{false, true} {
-				r := httptest.NewRequest(http.MethodGet, "/auth/login/email", nil)
+				r := httptest.NewRequest(http.MethodGet, "/login", nil)
 				if htmx {
 					r.Header.Set("HX-Request", "true")
 				}
@@ -202,7 +256,7 @@ func TestAuthFormsReportMessageRemovalFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	handlers := map[string]http.HandlerFunc{
-		"login": service.GetLogin, "registration": service.GetRegister, "reset request": service.GetResetRequest,
+		"registration": service.GetRegister, "reset request": service.GetResetRequest,
 		"reset": func(w http.ResponseWriter, r *http.Request) { service.GetReset(w, r, "test-token") }, "change": service.GetChange,
 	}
 	for name, handler := range handlers {
@@ -431,7 +485,7 @@ func TestLoginUsesAccountRepository(t *testing.T) {
 			if err := service.prepareTemplates(); err != nil {
 				t.Fatal(err)
 			}
-			form := url.Values{"email": {account.Email}, "password": {"TestPassword1!"}}
+			form := url.Values{"provider": {"email"}, "email": {account.Email}, "password": {"TestPassword1!"}}
 			if scenario == "wrong password" {
 				form.Set("password", "WrongPassword1!")
 			}
@@ -444,7 +498,7 @@ func TestLoginUsesAccountRepository(t *testing.T) {
 				t.Fatalf("lookup calls = %d, want 1", calls)
 			}
 			if scenario == "success" {
-				if got != account {
+				if got.Account != account {
 					t.Fatal("successful reader lookup did not authenticate")
 				}
 				return
@@ -453,8 +507,8 @@ func TestLoginUsesAccountRepository(t *testing.T) {
 			if scenario == "storage failure" || scenario == "canceled" {
 				want = "The user specified could not be retrieved from the database"
 			}
-			if got != nil || !strings.Contains(w.Body.String(), want) || strings.Contains(w.Body.String(), "private storage failure") {
-				t.Fatalf("failed login authenticated or rendered an incorrect error: %d %s", w.Code, w.Body.String())
+			if got.Account != nil || !strings.Contains(string(got.Form), want) || strings.Contains(string(got.Form), "private storage failure") || w.Body.Len() != 0 {
+				t.Fatalf("failed login authenticated or rendered an incorrect error: %+v", got)
 			}
 		})
 	}

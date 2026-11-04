@@ -106,6 +106,10 @@ func TestViewsShareTemplatesNotRequestState(t *testing.T) {
 				r.Header.Set("HX-History-Restore-Request", "true")
 			}
 			data := fmt.Sprintf("<data-%d>", i)
+			markup, err := view.RenderPartial(r, data)
+			if want := fmt.Sprintf("%s&lt;data-%d&gt;", prefix, i); err != nil || string(markup) != want {
+				t.Fatalf("concurrent partial: %q, %v, want %q", markup, err, want)
+			}
 			page := view.Content(r, data)
 			page.Title = fmt.Sprintf("Title-%d", i)
 			page.ResponseStatusCode = http.StatusAccepted
@@ -207,5 +211,36 @@ func TestViewWithoutManager(t *testing.T) {
 	w = httptest.NewRecorder()
 	if err := page.Render(w, r); err == nil || w.Body.Len() != 0 {
 		t.Fatal("zero view rendered successfully")
+	}
+}
+
+func TestViewRenderPartial(t *testing.T) {
+	files := fstest.MapFS{"view.html": {Data: []byte(`<main>{{renderPartial .PartialName .}}</main>{{define "body"}}{{.Data}}{{end}}{{define "failure"}}prefix{{.Data.Fail}}{{end}}`)}}
+	cm := contentservice.NewContentManager()
+	cm.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+		t.Fatal("partial rendering must not load notifications")
+		return nil, nil, nil
+	}
+	view, err := PrepareView(cm, "body", TemplatePath{FS: files, Path: "view.html"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	markup, err := view.RenderPartial(httptest.NewRequest("GET", "/", nil), "<value>")
+	if err != nil || markup != "&lt;value&gt;" {
+		t.Fatalf("partial: %q, %v", markup, err)
+	}
+	failure := errors.New("execution failure")
+	failedView, err := view.templates.View(cm, "failure")
+	if err != nil {
+		t.Fatal(err)
+	}
+	markup, err = failedView.RenderPartial(nil, failingTemplateData{err: failure})
+	if !errors.Is(err, failure) || markup != "" {
+		t.Fatalf("failed partial returned output or lost cause: %q, %v", markup, err)
+	}
+	for _, invalid := range []*View{nil, {}} {
+		if markup, err := invalid.RenderPartial(nil, nil); err == nil || markup != "" {
+			t.Fatalf("unprepared partial: %q, %v", markup, err)
+		}
 	}
 }

@@ -24,7 +24,7 @@
       const article = document.querySelector('#article-content').getBoundingClientRect();
       assert(Math.abs((panel.left + panel.right) / 2 - (article.left + article.right) / 2) < 1, 'Login cards must stay horizontally centered, including when their maximum width takes effect.');
     }
-    const googleSelector = 'form[action="/auth/' + flow + '/google"]';
+    const googleSelector = registering ? 'form[action="/auth/register/google"]' : 'form:has(input[name="provider"][value="google"])';
     const google = document.querySelector(googleSelector);
     assert(google && google.method === 'post', 'Google sign-in control missing.');
     assert(google.getAttribute('hx-boost') === 'false', 'Google must use full browser navigation.');

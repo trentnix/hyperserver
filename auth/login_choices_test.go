@@ -5,9 +5,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"testing/fstest"
 
 	contentservices "github.com/trentnix/hyperserver/pkg/services/content"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
+	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -17,6 +21,47 @@ type availableLoginProvider struct {
 	err       error
 	account   *user.User
 	ctx       context.Context
+}
+
+type failingLoginMessages struct{ session.SessionStore }
+
+func (failingLoginMessages) Save(http.ResponseWriter, *http.Request, *session.Session) error {
+	return errors.New("private message storage failure")
+}
+
+func (failingLoginMessages) End(http.ResponseWriter, *http.Request, *session.Session) error {
+	return errors.New("private message storage failure")
+}
+
+func TestSharedLoginReportsMessageRemovalFailure(t *testing.T) {
+	for _, operation := range []string{"save", "end"} {
+		for _, hx := range []bool{false, true} {
+			manager, _, sessions, _ := newLookupTestManager(t)
+			manager.Services = &Registry{services: []AuthService{&loginOnlyProvider{}}}
+			r := session.AddSessionManagerToRequestContext(httptest.NewRequest("GET", "/login", nil), sessions)
+			if hx {
+				r.Header.Set("HX-Request", "true")
+			}
+			if err := flash.AddMessage(httptest.NewRecorder(), r, "pending", flash.AuthMessages); err != nil {
+				t.Fatal(err)
+			}
+			if operation == "save" {
+				if err := flash.AddSuccessNotification(httptest.NewRecorder(), r, "other"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s, err := session.Get(r, "hs-message-session")
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.Store = failingLoginMessages{s.Store}
+			w := httptest.NewRecorder()
+			manager.GetLogin(w, r)
+			if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Unable to load authentication messages.") || strings.Contains(w.Body.String(), "private") {
+				t.Fatalf("%s HTMX=%t: %d %s", operation, hx, w.Code, w.Body)
+			}
+		}
+	}
 }
 
 func (p *availableLoginProvider) LoginAvailable(ctx context.Context, account *user.User) (bool, error) {
@@ -77,6 +122,12 @@ func TestLoginChoicesErrors(t *testing.T) {
 				http.Error(w, message, status)
 			}
 			provider.name = "test"
+			manager.contentManager.AddPageLayout(fstest.MapFS{"layout": {Data: []byte(`{{renderPartial .PartialName .}}`)}}, "layout")
+			manager.contentManager.AddHtmxLayout(fstest.MapFS{"layout": {Data: []byte(`{{renderPartial .PartialName .}}`)}}, "layout")
+			if err := manager.prepareTemplates(); err != nil {
+				t.Fatal(err)
+			}
+			_, _, sessions, _ := newLookupTestManager(t)
 			if kind == "provider lookup" {
 				provider.err = errors.New("identity storage failed")
 			}
@@ -91,7 +142,9 @@ func TestLoginChoicesErrors(t *testing.T) {
 					{"POST", manager.Login, true},
 				} {
 					provider.calls = 0
-					r := httptest.NewRequest(route.method, "/auth/login/test", nil)
+					r := httptest.NewRequest(route.method, "/login", strings.NewReader("provider=test"))
+					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					r = session.AddSessionManagerToRequestContext(r, sessions)
 					r.SetPathValue("authType", "test")
 					if hx {
 						r.Header.Set("HX-Request", "true")
@@ -99,8 +152,15 @@ func TestLoginChoicesErrors(t *testing.T) {
 					w := httptest.NewRecorder()
 					route.handler(w, r)
 					status, calls := http.StatusServiceUnavailable, 0
-					if route.direct || kind == "provider lookup" {
+					if route.method == "POST" {
 						status, calls = http.StatusNoContent, 1
+					} else if route.direct {
+						status = http.StatusSeeOther
+						if hx {
+							status = http.StatusOK
+						}
+					} else if kind == "provider lookup" {
+						status = http.StatusOK
 					}
 					if w.Code != status || provider.calls != calls {
 						t.Fatalf("failed lookup: status=%d, provider calls=%d", w.Code, provider.calls)
@@ -122,7 +182,8 @@ func TestHealthyLoginSurvivesAlternativeFailure(t *testing.T) {
 		}},
 	}
 	for _, hx := range []bool{false, true} {
-		r := httptest.NewRequest("POST", "/auth/login/healthy", nil)
+		r := httptest.NewRequest("POST", "/login", strings.NewReader("provider=healthy"))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.SetPathValue("authType", "healthy")
 		if hx {
 			r.Header.Set("HX-Request", "true")

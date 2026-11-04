@@ -142,11 +142,11 @@ func TestHTTPApplicationSuppliedProviders(t *testing.T) {
 	t.Chdir(directory)
 	for _, htmx := range []bool{false, true} {
 		h, accounts, sessions, contacts := newReplacementHTTPHarness(t)
-		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {accounts.account.Email}, "password": {"WrongPassword1!"}}, htmx)
+		w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {accounts.account.Email}, "password": {"WrongPassword1!"}}, htmx)
 		if w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" || sessions.rotations != 0 {
 			t.Fatal("replacement login accepted incorrect credentials")
 		}
-		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {accounts.account.Email}, "password": {"Password1!"}}, htmx)
+		w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {accounts.account.Email}, "password": {"Password1!"}}, htmx)
 		if w.Header().Get("HX-Redirect") != "/" && w.Header().Get("Location") != "/" {
 			t.Fatalf("replacement login failed: %d %s", w.Code, w.Body.String())
 		}

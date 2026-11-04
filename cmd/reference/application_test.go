@@ -30,7 +30,7 @@ func TestReferenceRegistrationLoginAndContact(t *testing.T) {
 			if _, err := h.app.Accounts.GetByEmail(t.Context(), "person@example.invalid"); err != nil {
 				t.Fatal(err)
 			}
-			w = h.request(http.MethodPost, "/auth/login/email", url.Values{
+			w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"},
 				"email": {"person@example.invalid"}, "password": {"TestPassword1!"},
 			}, htmx)
 			if w.Code != status || w.Header().Get(redirect) != "/" {

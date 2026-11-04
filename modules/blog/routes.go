@@ -8,7 +8,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	"github.com/trentnix/hyperserver/pkg/ratelimit"
 	"github.com/trentnix/hyperserver/pkg/routing"
-	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 // Routes binds public reading and explicitly protected publishing endpoints.
@@ -75,13 +74,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("POST /post/delete/{id}", m.requireAdmin(m.delete))
 	routes.HandleWithBodyLimit("POST /post/preview", m.requireAdmin(m.preview), routing.MiB)
 	routes.HandleWithBodyLimit("POST /post/images/upload", http.HandlerFunc(m.upload), 10*routing.MiB)
-	routes.HandleFunc("GET /login", m.login)
 	routes.HandleFunc("GET "+authReturnURL, m.requireSetup(m.continueSetup))
 	routes.HandleFunc("/", m.requireSetup(m.app.ContentManager.HandleNotFound))
 	return routes.Err()
-}
-
-// login redirects the short login URL to the configured authentication choices.
-func (m *module) login(w http.ResponseWriter, r *http.Request) {
-	util.RedirectToURL(w, r, loginURL)
 }

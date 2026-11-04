@@ -12,7 +12,7 @@ import (
 
 func TestRequireAnonymousExplainsExistingLogin(t *testing.T) {
 	for _, hx := range []bool{false, true} {
-		r := user.AddUserToRequestContext(httptest.NewRequest(http.MethodGet, "/auth/login/email", nil), &user.User{ID: "user"})
+		r := user.AddUserToRequestContext(httptest.NewRequest(http.MethodGet, "/login", nil), &user.User{ID: "user"})
 		if hx {
 			r.Header.Set("HX-Request", "true")
 		}

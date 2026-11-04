@@ -149,7 +149,7 @@ func TestHTTPRequestLogsExcludeSecrets(t *testing.T) {
 		}{
 			{http.MethodGet, "/contact", http.StatusOK},
 			{http.MethodGet, "/missing-log-route", http.StatusNotFound},
-			{http.MethodPost, "/auth/login/email", http.StatusForbidden},
+			{http.MethodPost, "/login", http.StatusForbidden},
 			{http.MethodGet, "/request-log-error", http.StatusInternalServerError},
 		} {
 			for _, htmx := range []bool{false, true} {
@@ -186,8 +186,8 @@ func TestAuthenticationAudit(t *testing.T) {
 		email := "audit-private@example.invalid"
 		password := "Audit-Secret-Password1!"
 		h.request(http.MethodPost, "/auth/register/email", url.Values{"email": {email}, "password": {password}, "passwordMatch": {password}}, false)
-		h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {email}, "password": {"incorrect"}}, false)
-		h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {email}, "password": {password}}, false)
+		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {"incorrect"}}, false)
+		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {password}}, false)
 		h.request(http.MethodPost, "/auth/logout", url.Values{}, false)
 		logs := h.logs.String()
 		for _, event := range []string{"event=registration outcome=succeeded", "event=login outcome=rejected", "event=login outcome=succeeded", "event=logout outcome=succeeded"} {

@@ -24,7 +24,7 @@ func TestHTTPVerificationRecoveryNavigation(t *testing.T) {
 				h.mail.err = errors.New("private SMTP failure")
 				w = h.request(http.MethodPost, "/auth/register/email", registrationForm(), htmx)
 				body := w.Body.String()
-				for _, text := range []string{"Your account was created", `href="/auth/login/email"`, "Protected pages remain unavailable"} {
+				for _, text := range []string{"Your account was created", `href="/login"`, "Protected pages remain unavailable"} {
 					if !strings.Contains(body, text) {
 						t.Fatalf("registration failure is missing %q", text)
 					}
@@ -42,7 +42,7 @@ func TestHTTPVerificationRecoveryNavigation(t *testing.T) {
 				if strings.Contains(body, `id="register-form"`) || strings.Contains(body, "private SMTP failure") {
 					t.Fatal("registration failure offered duplicate registration or exposed SMTP details")
 				}
-				w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, htmx)
+				w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, htmx)
 				assertRedirectResponse(t, w, "/auth/request/verify", htmx)
 				w = h.request(http.MethodGet, "/auth/request/verify", nil, htmx)
 				if w.Code != http.StatusOK || len(h.mail.snapshot()) != 1 || !strings.Contains(w.Body.String(), "You are signed in") {
@@ -97,7 +97,7 @@ func TestHTTPVerificationSingleUseAndResend(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
 		first := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
-		h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
+		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 		h.request(http.MethodPost, "/auth/request/verify", nil, true)
 		second := mailLink(t, h.mail.snapshot()[1], "/auth/verify")
 		if first.String() == second.String() {
@@ -194,7 +194,7 @@ func TestHTTPVerificationStorageFailure(t *testing.T) {
 					if _, err := h.db.Exec(`DROP TRIGGER fail_verification`); err != nil {
 						t.Fatal(err)
 					}
-					h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
+					h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 					h.request(http.MethodPost, "/auth/request/verify", nil, true)
 				} else {
 					h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
@@ -262,7 +262,7 @@ func TestHTTPVerificationRejectsPreviousEmailAddress(t *testing.T) {
 		if err != nil || stored.Verified {
 			t.Fatalf("old link verified account: %v", err)
 		}
-		h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, true)
 		h.request(http.MethodPost, "/auth/request/verify", nil, true)
 		message := h.mail.snapshot()[1]
 		if message.To != u.Email {
@@ -279,7 +279,7 @@ func TestHTTPVerificationFailedResendPreservesDeliveredLink(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		h.request(http.MethodPost, "/auth/register/email", registrationForm(), true)
 		link := mailLink(t, h.mail.snapshot()[0], "/auth/verify")
-		h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
+		h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 		h.mail.err = messaging.ErrMailUnavailable
 		w := h.request(http.MethodPost, "/auth/request/verify", nil, true)
 		if !strings.Contains(w.Body.String(), "Unable to send verification instructions") {
@@ -325,7 +325,7 @@ func TestHTTPVerificationResendEmailsInstructions(t *testing.T) {
 		if err := h.accounts.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
-		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, true)
 		if w.Header().Get("HX-Redirect") != "/auth/request/verify" {
 			t.Fatal("login failed")
 		}
@@ -365,7 +365,7 @@ func TestHTTPVerificationResendAuthorizationAndFailure(t *testing.T) {
 		if err := h.accounts.Update(context.Background(), u); err != nil {
 			t.Fatal(err)
 		}
-		w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, true)
 		if w.Header().Get("HX-Redirect") != "/auth/request/verify" {
 			t.Fatal("login failed")
 		}

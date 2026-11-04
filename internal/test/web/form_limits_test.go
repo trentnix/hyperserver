@@ -141,12 +141,12 @@ func TestHTTPFormLimits(t *testing.T) {
 		u := h.seedUser(t, "limits@example.invalid")
 		requestNumber := 0
 		valid := url.Values{
-			"email": {u.Email}, "name": {"Test person"}, "message": {"Hello"},
+			"provider": {"email"}, "email": {u.Email}, "name": {"Test person"}, "message": {"Hello"},
 			"password": {"TestPassword1!"}, "passwordMatch": {"TestPassword1!"},
 			"oldPassword": {"TestPassword1!"}, "newPassword": {"NewPassword1!"}, "newPasswordMatch": {"NewPassword1!"},
 		}.Encode()
 		for _, path := range []string{
-			"/contact", "/auth/login/email", "/auth/register/email", "/auth/reset/request/email",
+			"/contact", "/login", "/auth/register/email", "/auth/reset/request/email",
 			"/auth/reset/email", "/auth/verify", "/auth/change/email",
 		} {
 			if path == "/auth/change/email" {

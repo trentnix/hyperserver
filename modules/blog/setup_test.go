@@ -29,7 +29,7 @@ func TestSetupVerificationGuidance(t *testing.T) {
 		}
 	}
 	for _, hx := range []bool{false, true} {
-		w = h.request("POST", "/auth/login/email", url.Values{"email": {"trentnix@gmail.com"}, "password": {"wrong"}}, hx)
+		w = h.request("POST", "/login", url.Values{"provider": {"email"}, "email": {"trentnix@gmail.com"}, "password": {"wrong"}}, hx)
 		requireStatus(t, w, http.StatusOK)
 		if !strings.Contains(w.Body.String(), "Invalid login/password") || !hx && !strings.Contains(w.Body.String(), `class="setup-login" open>`) {
 			t.Fatal("failed login must leave validation visible")
@@ -182,7 +182,7 @@ func TestSetupAuthenticationReturns(t *testing.T) {
 			assertRedirect(h.request("POST", "/auth/verify", url.Values{"token": {u.Query().Get("token")}}, hx), authReturnURL)
 			assertRedirect(h.request("GET", authReturnURL, nil, hx), loginURL)
 			requireStatus(t, h.request("GET", "/", nil, hx), http.StatusOK)
-			assertRedirect(h.request("POST", "/auth/login/email", credentials("trentnix@gmail.com"), hx), authReturnURL)
+			assertRedirect(h.request("POST", "/login", credentials("trentnix@gmail.com"), hx), authReturnURL)
 			assertRedirect(h.request("GET", authReturnURL, nil, hx), "/profile")
 			requireStatus(t, h.request("GET", "/profile", nil, hx), http.StatusOK)
 			assertRedirect(h.request("POST", "/auth/logout", nil, hx), authReturnURL)
@@ -206,7 +206,7 @@ func TestSetupRegistrationNavigation(t *testing.T) {
 			w := h.request(method, "/auth/register/email", url.Values{"email": {"trentnix@gmail.com"}}, hx)
 			requireStatus(t, w, http.StatusOK)
 			body := w.Body.String()
-			if !strings.Contains(body, `id="register-form"`) || strings.Contains(body, `href="/auth/login"`) {
+			if !strings.Contains(body, `id="register-form"`) || strings.Contains(body, `href="/login"`) {
 				t.Fatalf("%s HTMX=%v: registration must render without a login link", method, hx)
 			}
 			if method == "POST" && !strings.Contains(body, "This field is required.") {
@@ -284,7 +284,7 @@ func TestSetupLifecycle(t *testing.T) {
 	if h.blog.access.setup.complete.Load() {
 		t.Fatal("restart skipped the first login")
 	}
-	requireStatus(t, h.request("POST", "/auth/login/email", url.Values{"email": {"trentnix@gmail.com"}, "password": {"wrong"}}, false), http.StatusOK)
+	requireStatus(t, h.request("POST", "/login", url.Values{"provider": {"email"}, "email": {"trentnix@gmail.com"}, "password": {"wrong"}}, false), http.StatusOK)
 	if h.blog.access.setup.complete.Load() {
 		t.Fatal("failed login completed setup")
 	}

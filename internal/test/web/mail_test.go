@@ -123,7 +123,7 @@ func TestHTTPAccountLinkOrigins(t *testing.T) {
 					}
 					checkResetAction(w)
 				}
-				h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
+				h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"person@example.invalid"}, "password": {"TestPassword1!"}}, true)
 				h.request(http.MethodPost, "/auth/request/verify", nil, true)
 				checkLink(2, "/auth/verify")
 			}, func(cfg *config.Config) {

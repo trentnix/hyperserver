@@ -98,11 +98,11 @@ func TestStartupHelperProcess(t *testing.T) {
 		// Exercise successful initialization without binding a network port.
 		s := newStartupApplication(t)
 		defer s.Shutdown()
-		_, pattern := s.Web.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil))
-		if s.Config.Auth.Enabled && pattern != "GET /auth/login" {
-			t.Fatalf("login pattern = %q, want GET /auth/login", pattern)
+		_, pattern := s.Web.Handler(httptest.NewRequest(http.MethodGet, "/login", nil))
+		if s.Config.Auth.Enabled && pattern != "GET /login" {
+			t.Fatalf("login pattern = %q, want GET /login", pattern)
 		}
-		if !s.Config.Auth.Enabled && pattern == "GET /auth/login" {
+		if !s.Config.Auth.Enabled && pattern == "GET /login" {
 			t.Fatal("disabled authentication registered a login route")
 		}
 		w := httptest.NewRecorder()
@@ -119,7 +119,7 @@ func TestStartupHelperProcess(t *testing.T) {
 		}
 		if s.Config.Auth.Enabled {
 			w := httptest.NewRecorder()
-			r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/auth/login/email", nil), s.Sessions)
+			r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/login", nil), s.Sessions)
 			s.Handler.ServeHTTP(w, r)
 			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "login-form") {
 				t.Fatalf("bundled auth template: status=%d body=%s", w.Code, w.Body.String())

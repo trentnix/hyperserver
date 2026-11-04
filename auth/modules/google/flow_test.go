@@ -80,7 +80,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	t.Cleanup(func() { app.Shutdown() })
 	app.ContentManager.HomeURL = "/"
-	app.ContentManager.AuthURL = "/auth/login"
+	app.ContentManager.AuthURL = "/login"
 	layouts := fstest.MapFS{"page.html": {Data: []byte(`{{renderPartial .PartialName .}}`)}}
 	app.ContentManager.AddPageLayout(layouts, "page.html")
 	app.ContentManager.AddHtmxLayout(layouts, "page.html")
@@ -132,7 +132,8 @@ func newHarness(t *testing.T) *harness {
 
 func (h *harness) request(method, target string) *httptest.ResponseRecorder {
 	h.t.Helper()
-	r := httptest.NewRequest(method, "http://localhost"+target, nil)
+	r := httptest.NewRequest(method, "http://localhost"+target, strings.NewReader("provider=google"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	for _, c := range h.cookies {
 		r.AddCookie(c)
 	}
@@ -194,7 +195,7 @@ func (h *harness) signIn(account *user.User) {
 func TestGoogleLoginAndReplay(t *testing.T) {
 	h := newHarness(t)
 	account := h.linkedAccount()
-	callback := h.start("/auth/login/google")
+	callback := h.start("/login")
 	oldCookies := append([]*http.Cookie(nil), h.cookies...)
 	w := h.request("GET", callback)
 	if w.Code != 303 || w.Header().Get("Location") != "/" {
@@ -221,7 +222,7 @@ func TestGoogleInvalidFlowCookieCanStartAgain(t *testing.T) {
 	h := newHarness(t)
 	h.linkedAccount()
 	h.cookies = []*http.Cookie{{Name: flowSession, Value: "broken-cookie"}}
-	callback := h.start("/auth/login/google")
+	callback := h.start("/login")
 	if w := h.request("GET", callback); w.Code != 303 {
 		t.Fatalf("invalid cookie prevented retry: %d %s", w.Code, w.Body)
 	}
@@ -232,7 +233,7 @@ func TestGoogleRejectsInvalidProofs(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t)
 			h.linkedAccount()
-			callback := h.start("/auth/login/google")
+			callback := h.start("/login")
 			switch name {
 			case "state":
 				callback = callbackPath + "?state=wrong&code=test-code"
@@ -347,7 +348,7 @@ func TestGoogleRegistrationAndExplicitLink(t *testing.T) {
 						t.Fatal("registration logged in without a separate login")
 					}
 				}
-				callback = h.start("/auth/login/google")
+				callback = h.start("/login")
 				if w := h.request("GET", callback); w.Code != 303 {
 					t.Fatalf("first login: %d %s", w.Code, w.Body)
 				}
@@ -374,7 +375,7 @@ func TestGoogleRegistrationAndExplicitLink(t *testing.T) {
 func TestGoogleConcurrentCallbackIsSingleUse(t *testing.T) {
 	h := newHarness(t)
 	h.linkedAccount()
-	callback := h.start("/auth/login/google")
+	callback := h.start("/login")
 	var group sync.WaitGroup
 	var successes atomic.Int32
 	for range 4 {
@@ -412,7 +413,7 @@ func TestGoogleLinkRequiresUnchangedVerifiedSession(t *testing.T) {
 			}
 			if mode == "anonymous" || mode == "unverified" {
 				w := h.request("POST", "/auth/link/google")
-				if mode == "anonymous" && (w.Code != 303 || w.Header().Get("Location") != "/auth/login") || mode == "unverified" && w.Code != 403 {
+				if mode == "anonymous" && (w.Code != 303 || w.Header().Get("Location") != "/login") || mode == "unverified" && w.Code != 403 {
 					t.Fatal("link started without verified login", w.Code, w.Header())
 				}
 				return
@@ -497,7 +498,7 @@ func TestGoogleStorageFailuresDoNotLogIn(t *testing.T) {
 func TestPendingGoogleLoginCannotReplaceAnotherLogin(t *testing.T) {
 	h := newHarness(t)
 	h.linkedAccount()
-	callback := h.start("/auth/login/google")
+	callback := h.start("/login")
 	other := &user.User{Email: "other@example.com"}
 	if err := h.accounts.Create(t.Context(), other); err != nil {
 		t.Fatal(err)

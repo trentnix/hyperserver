@@ -131,8 +131,9 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 
 		// login / logout
 		mux.Handle("GET "+authEndpoint, anonymous(http.HandlerFunc(a.GetLogin)))
-		mux.Handle("GET /auth/login/{authType}", anonymous(http.HandlerFunc(a.GetLoginService)))
-		mutations.Handle("POST /auth/login/{authType}", anonymous(http.HandlerFunc(a.Login)))
+		mutations.Handle("POST "+authEndpoint, anonymous(http.HandlerFunc(a.Login)))
+		mux.Handle("GET /auth/login", noStore(http.HandlerFunc(a.redirectLogin)))
+		mux.Handle("GET /auth/login/{authType}", noStore(http.HandlerFunc(a.GetLoginService)))
 		for _, provider := range a.Services.Services() {
 			if _, ok := provider.(LoginCallbackHandler); ok {
 				mutations.Handle("GET /auth/callback/{authType}", noStore(http.HandlerFunc(a.Callback)))

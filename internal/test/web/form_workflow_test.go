@@ -152,7 +152,7 @@ func TestHTTPRegistrationRedirectWorkflow(t *testing.T) {
 				if w.Code != http.StatusOK || !strings.Contains(strings.ToLower(w.Body.String()), "<!doctype html>") {
 					t.Fatal("registration redirect did not reach a full login page")
 				}
-				w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {fields.Get("email")}, "password": {fields.Get("password")}}, htmx)
+				w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {fields.Get("email")}, "password": {fields.Get("password")}}, htmx)
 				assertRedirectResponse(t, w, "/", htmx)
 				w = h.request(http.MethodGet, "/", nil, false)
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Log out") {
@@ -168,9 +168,9 @@ func TestHTTPRejectedFormsHaveNoSideEffects(t *testing.T) {
 	for _, htmx := range []bool{false, true} {
 		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
-				for _, path := range []string{"/contact", "/auth/register/email", "/auth/login/email", "/auth/reset/request/email"} {
+				for _, path := range []string{"/contact", "/auth/register/email", "/login", "/auth/reset/request/email"} {
 					for _, malformed := range []bool{false, true} {
-						body, status := "email=not-an-email", http.StatusOK
+						body, status := "provider=email&email=not-an-email", http.StatusOK
 						if malformed {
 							body, status = "email=%zz", http.StatusBadRequest
 						}

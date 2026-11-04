@@ -197,7 +197,7 @@ func TestModuleProviderSelection(t *testing.T) {
 		if err := module.Routes(routing.NewRoutes(app.Web)); err != nil {
 			t.Fatal(err)
 		}
-		_, pattern := app.Web.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil))
+		_, pattern := app.Web.Handler(httptest.NewRequest(http.MethodGet, "/login", nil))
 		if pattern != "" {
 			t.Fatalf("disabled authentication registered %q", pattern)
 		}

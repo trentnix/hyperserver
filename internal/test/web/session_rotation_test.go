@@ -86,7 +86,7 @@ func TestHTTPAuthenticationRotation(t *testing.T) {
 					}
 					w = h.request(http.MethodPost, "/auth/verify", url.Values{"token": {token.Token}}, true)
 				} else {
-					w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+					w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, true)
 				}
 				failed := operation == "failed login rotation"
 				if failed {
@@ -186,7 +186,7 @@ func TestHTTPVerificationSurvivesRotationFailure(t *testing.T) {
 				}
 				h.assertUserUnchanged(t, stored)
 
-				w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+				w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, true)
 				if !strings.HasSuffix(w.Header().Get("HX-Redirect"), "/verification-protected") || h.authenticationCookie(t).Value == old.Value {
 					t.Fatalf("fresh login failed: %d %s", w.Code, w.Body.String())
 				}
@@ -251,7 +251,7 @@ func TestHTTPPasswordChangesRevokeAllSessions(t *testing.T) {
 				}
 				if !failed {
 					h.cookies.SetCookies(base, []*http.Cookie{first})
-					w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"NewPassword1!"}}, true)
+					w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"NewPassword1!"}}, true)
 					if redirect := w.Header().Get("HX-Redirect"); w.Code != http.StatusOK || !strings.HasSuffix(redirect, "/password-protected") {
 						t.Fatalf("new credentials could not establish a session: %d, redirect=%q, %s", w.Code, redirect, w.Body.String())
 					}
@@ -320,7 +320,7 @@ func TestHTTPSQLiteSessionRevocation(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
 				account := h.seedUser(t, "revoke@example.invalid")
-				w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {account.Email}, "password": {"TestPassword1!"}}, true)
+				w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {account.Email}, "password": {"TestPassword1!"}}, true)
 				if w.Header().Get("HX-Redirect") != "/" {
 					t.Fatal("login failed", w.Body.String())
 				}

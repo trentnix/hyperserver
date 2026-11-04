@@ -115,8 +115,8 @@ func TestHTTPCommittedChangesSurviveAuxiliaryFailures(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/htmx=%t", operation, htmx), func(t *testing.T) {
 				runSiteScenario(t, func(h *httpHarness) {
 					u := h.seedUser(t, "committed@example.invalid")
-					path, target := "/auth/login/email", "/"
-					values := url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}
+					path, target := "/login", "/"
+					values := url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}
 					statement := `CREATE TRIGGER fail_auxiliary BEFORE INSERT ON session BEGIN SELECT RAISE(ABORT, 'private auxiliary failure'); END`
 					if operation == "login notification" {
 						// Allow the authenticated session, then reject the notification session.

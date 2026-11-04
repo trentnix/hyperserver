@@ -50,6 +50,9 @@ func TestHTTPCredentialResponses(t *testing.T) {
 					const wrong = "Wrong&A1!"
 					const replacement = "Replacement&B1!"
 					path := "/auth/" + operation + "/email"
+					if operation == "login" {
+						path = "/login"
+					}
 					var u *user.User
 					if operation != "register" {
 						u = h.seedUser(t, email)
@@ -75,7 +78,7 @@ func TestHTTPCredentialResponses(t *testing.T) {
 						assertNoStore(t, w)
 					}
 
-					fields := url.Values{"email": {email}, "password": {wrong}}
+					fields := url.Values{"provider": {"email"}, "email": {email}, "password": {wrong}}
 					switch operation {
 					case "register", "reset":
 						fields.Set("passwordMatch", replacement)
@@ -117,7 +120,7 @@ func TestHTTPAuthCachePolicy(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		for _, htmx := range []bool{false, true} {
 			for _, path := range []string{
-				"/auth/login", "/auth/register", "/auth/reset/request/email",
+				"/login", "/auth/register", "/auth/reset/request/email",
 				"/auth/login/missing", "/auth/reset/email?token=invalid", "/auth/verify?token=invalid",
 				"/auth/change/email", "/auth/request/verify",
 			} {
@@ -137,7 +140,7 @@ func TestHTTPAuthCachePolicy(t *testing.T) {
 		}
 		h.establishSession(t, h.seedUser(t, "signed-in@example.invalid"))
 		for _, htmx := range []bool{false, true} {
-			assertNoStore(t, h.request(http.MethodGet, "/auth/login/email", nil, htmx))
+			assertNoStore(t, h.request(http.MethodGet, "/login", nil, htmx))
 		}
 		// The auth policy must not disable caching for unrelated resources.
 		if w := h.request(http.MethodGet, "/js/site.js", nil, false); w.Header().Get("Cache-Control") == "no-store" {

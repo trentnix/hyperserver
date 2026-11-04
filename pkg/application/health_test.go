@@ -101,8 +101,8 @@ func TestHealthEndpointsBypassAuthAndRateLimits(t *testing.T) {
 		path   string
 		status int
 	}{
-		{"/auth/login", http.StatusBadRequest}, // Invalid cookie reaches identity loading.
-		{"/auth/login", http.StatusTooManyRequests},
+		{"/login", http.StatusBadRequest}, // Invalid cookie reaches identity loading.
+		{"/login", http.StatusTooManyRequests},
 		{"/health/ready", http.StatusNoContent},
 		{"/health/live", http.StatusNoContent},
 	} {

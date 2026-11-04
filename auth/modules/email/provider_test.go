@@ -87,7 +87,7 @@ func TestProviderSetupLeavesServiceOwnershipWithApplication(t *testing.T) {
 				return provider
 			}}
 			if tc.name == "route failure" {
-				app.Web.HandleFunc("GET /auth/login", func(http.ResponseWriter, *http.Request) {})
+				app.Web.HandleFunc("GET /login", func(http.ResponseWriter, *http.Request) {})
 			}
 
 			err = handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{

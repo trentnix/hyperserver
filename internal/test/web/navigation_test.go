@@ -23,7 +23,7 @@ func TestHTTPNavigationLogout(t *testing.T) {
 	for _, pending := range []bool{false, true} {
 		t.Run(fmt.Sprintf("pending=%t", pending), func(t *testing.T) {
 			runSiteScenario(t, func(h *httpHarness) {
-				for _, path := range []string{"/", "/login", "/auth/login/email"} {
+				for _, path := range []string{"/", "/login"} {
 					w := h.request(http.MethodGet, path, nil, false)
 					if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `<a href="/login">Log in</a>`) || strings.Contains(w.Body.String(), `action="/auth/logout"`) {
 						t.Fatalf("%s did not show only the login action to a signed-out visitor", path)
@@ -106,7 +106,7 @@ func TestHTTPLoginRedirectDestinations(t *testing.T) {
 				h.cookies.SetCookies(base, w.Result().Cookies())
 
 				h.app.ContentManager.HomeURL = tc.home
-				w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, htmx)
+				w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, htmx)
 				assertRedirectResponse(t, w, tc.want, htmx)
 				for _, cookie := range h.cookies.Cookies(base) {
 					if cookie.Name == session.AuthSession {
@@ -142,7 +142,7 @@ func TestHTTPLoginReturnsToRequestedPath(t *testing.T) {
 				if called {
 					t.Fatal("anonymous request reached the protected handler")
 				}
-				w = h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, htmx)
+				w = h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, htmx)
 				assertRedirectResponse(t, w, path, htmx)
 				w = h.request(http.MethodGet, path, nil, false)
 				if w.Code != http.StatusNoContent || !called {

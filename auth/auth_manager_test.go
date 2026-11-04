@@ -125,10 +125,10 @@ func TestLoginRouteUsesPathRatherThanHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, host := range []string{"localhost", "example.com"} {
-		req := httptest.NewRequest(http.MethodGet, "http://"+host+"/auth/login", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://"+host+"/login", nil)
 		_, pattern := mux.Handler(req)
-		if pattern != "GET /auth/login" {
-			t.Errorf("host %s: pattern = %q, want GET /auth/login", host, pattern)
+		if pattern != "GET /login" {
+			t.Errorf("host %s: pattern = %q, want GET /login", host, pattern)
 		}
 	}
 }
@@ -143,8 +143,9 @@ func TestAuthRouteMethods(t *testing.T) {
 		path, pattern string
 		get, post     bool
 	}{
+		{"/login", "/login", true, true},
 		{"/auth/login", "/auth/login", true, false},
-		{"/auth/login/email", "/auth/login/{authType}", true, true},
+		{"/auth/login/email", "/auth/login/{authType}", true, false},
 		{"/auth/logout", "/auth/logout", false, true},
 		{"/auth/register", "/auth/register", true, false},
 		{"/auth/register/email", "/auth/register/{authType}", true, true},
@@ -316,7 +317,7 @@ func TestDisabledAuthDoesNotRegisterLogin(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/auth/login", nil))
+	mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/login", nil))
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", w.Code)
 	}
@@ -330,7 +331,7 @@ func TestAuthRoutesRejectInvalidClientCapacity(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "auth.rateLimit.maxClients") {
 			t.Fatalf("capacity %d: error = %v", capacity, err)
 		}
-		if _, pattern := mux.Handler(httptest.NewRequest(http.MethodGet, "/auth/login", nil)); pattern != "" {
+		if _, pattern := mux.Handler(httptest.NewRequest(http.MethodGet, "/login", nil)); pattern != "" {
 			t.Fatal("invalid capacity left routes registered")
 		}
 	}

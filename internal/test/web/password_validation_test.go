@@ -115,12 +115,12 @@ func TestHTTPAuthenticationRejectsPasswordSuffixBeyondByteLimit(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				values := url.Values{"email": {u.Email}, "password": {value + "x"}}
-				w := h.request(http.MethodPost, "/auth/login/email", values, htmx)
+				values := url.Values{"provider": {"email"}, "email": {u.Email}, "password": {value + "x"}}
+				w := h.request(http.MethodPost, "/login", values, htmx)
 				assertFormRejected(t, w, "Invalid login/password")
 				h.assertRowCount(t, "session", 0)
 				values.Set("password", value)
-				w = h.request(http.MethodPost, "/auth/login/email", values, htmx)
+				w = h.request(http.MethodPost, "/login", values, htmx)
 				assertRedirectResponse(t, w, "/", htmx)
 
 				values = url.Values{"oldPassword": {value + "x"}, "newPassword": {"NewPassword1!"}, "newPasswordMatch": {"NewPassword1!"}}
@@ -183,7 +183,7 @@ func TestHTTPResetRejectsInvalidPassword(t *testing.T) {
 func TestHTTPChangeRejectsInvalidPassword(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		u := h.seedUser(t, "person@example.invalid")
-		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}, true)
+		w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, true)
 		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != "/" {
 			t.Fatal("could not log in the test user")
 		}

@@ -48,7 +48,6 @@ func TestSitePreparedViews(t *testing.T) {
 		status                    int
 	}{
 		{"home", "/", homePagePartialName, "Welcome!", m.Home, http.StatusOK},
-		{"login", "/login", loginPagePartialName, `hx-get="/auth/login/email"`, m.Login, http.StatusOK},
 		{"register", "/register", registerPagePartialName, `hx-get="/auth/register/email"`, m.Register, http.StatusOK},
 		{"message", "/message", messagePagePartialName, "&lt;public message&gt;", func(w http.ResponseWriter, r *http.Request) {
 			m.HandleMessage(w, r, "<public message>")
@@ -95,7 +94,6 @@ func TestSiteDeliveryFailuresDoNotRenderErrorPages(t *testing.T) {
 	}
 	for name, handler := range map[string]http.HandlerFunc{
 		"home":      m.Home,
-		"login":     m.Login,
 		"register":  m.Register,
 		"contact":   m.GetContact,
 		"not found": m.NotFound,

@@ -437,9 +437,9 @@ document.removeEventListener = function(type, callback, options) {
         assert(document.querySelector('#post-title') === title && title.value === 'An unsaved title', 'Error lost the title.');
       };
       for (let attempt = 0; attempt < 20; attempt++) {
-        await fetch('/auth/login/email', {method: 'POST', body: new URLSearchParams({email: 'trentnix@gmail.com', password: 'unused'})});
+        await fetch('/login', {method: 'POST', body: new URLSearchParams({provider: 'email', email: 'trentnix@gmail.com', password: 'unused'})});
       }
-      await htmx.ajax('POST', '/auth/login/email', {target: '#editor-errors', values: {email: 'trentnix@gmail.com', password: 'unused'}});
+      await htmx.ajax('POST', '/login', {target: '#editor-errors', values: {provider: 'email', email: 'trentnix@gmail.com', password: 'unused'}});
       assert(form.querySelector('[data-request-error]')?.textContent.includes('Too many requests'), 'Rate limiting produced no feedback.');
       unchanged();
 

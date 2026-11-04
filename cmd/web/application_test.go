@@ -104,7 +104,7 @@ func TestDefaultApplication(t *testing.T) {
 	}
 	request("GET", "/assets/css/blog.css", nil, http.StatusOK)
 	credentials := url.Values{
-		"email": {"other@example.com"}, "password": {"Sample-Password-123!"}, "passwordMatch": {"Sample-Password-123!"},
+		"provider": {"email"}, "email": {"other@example.com"}, "password": {"Sample-Password-123!"}, "passwordMatch": {"Sample-Password-123!"},
 	}
 	request("POST", "/auth/register/email", credentials, http.StatusForbidden)
 	if account, err := app.Accounts.GetByEmail(t.Context(), "other@example.com"); !errors.Is(err, user.ErrUserNotFound) || account != nil {
@@ -124,7 +124,7 @@ func TestDefaultApplication(t *testing.T) {
 		}
 	}
 
-	request("POST", "/auth/login/email", credentials, http.StatusSeeOther)
+	request("POST", "/login", credentials, http.StatusSeeOther)
 	w = request("GET", "/auth/continue", nil, http.StatusSeeOther)
 	if w.Header().Get("Location") != "/profile" {
 		t.Fatal("first login did not open Site Profile", w.Header())

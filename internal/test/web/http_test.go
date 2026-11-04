@@ -220,7 +220,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
 			app.ContentManager.RegisterLayouts(content.PageType, layouts, "page.html")
 			app.ContentManager.RegisterLayouts(content.HtmxType, layouts, "fragment.html")
-			app.ContentManager.AuthURL, app.ContentManager.HomeURL = "/auth/login/email", "/"
+			app.ContentManager.AuthURL, app.ContentManager.HomeURL = "/login", "/"
 			return []handlers.Descriptor{auth.Module(auth.Dependencies{Accounts: app.Accounts, Sessions: app.Sessions}, nil)}, nil
 		},
 	})

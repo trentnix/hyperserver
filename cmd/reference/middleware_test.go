@@ -63,7 +63,7 @@ func assertReferenceCSP(t *testing.T, policy, page string) {
 func TestHTTPBrowserSecurityHeaders(t *testing.T) {
 	runHTTPScenario(t, func(h *httpHarness) {
 		for _, htmx := range []bool{false, true} {
-			for _, path := range []string{"/contact", "/auth/login/email", "/auth/register/email", "/auth/reset/request/email", "/missing", "/js/site.js"} {
+			for _, path := range []string{"/contact", "/login", "/auth/register/email", "/auth/reset/request/email", "/missing", "/js/site.js"} {
 				w := h.request(http.MethodGet, path, nil, htmx)
 				wantStatus := http.StatusOK
 				if path == "/missing" {
@@ -88,7 +88,7 @@ func TestHTTPBrowserSecurityHeaders(t *testing.T) {
 		}
 		h.baseURL = "https://127.0.0.1:8080"
 		h.seedUser(t, "cookies@example.invalid")
-		w := h.request(http.MethodPost, "/auth/login/email", url.Values{"email": {"cookies@example.invalid"}, "password": {"TestPassword1!"}}, true)
+		w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {"cookies@example.invalid"}, "password": {"TestPassword1!"}}, true)
 		assertBrowserHeaders(t, w)
 		if w.Code != 200 || w.Header().Get("HX-Redirect") == "" || w.Header().Get("Strict-Transport-Security") != "max-age=86400" {
 			t.Fatalf("HTTPS login: status=%d headers=%v", w.Code, w.Header())

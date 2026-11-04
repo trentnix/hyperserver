@@ -125,7 +125,7 @@ func TestDeploymentRecovery(t *testing.T) {
 	if response.StatusCode != 303 && response.StatusCode != 302 {
 		t.Fatalf("registration: %d %s", response.StatusCode, body)
 	}
-	response, body = request(t, c, "/auth/login/email", url.Values{"email": {email}, "password": {password}}, false, false)
+	response, body = request(t, c, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {password}}, false, false)
 	if response.StatusCode != 303 && response.StatusCode != 302 {
 		t.Fatalf("login: %d %s", response.StatusCode, body)
 	}
@@ -162,7 +162,7 @@ func TestDeploymentRecovery(t *testing.T) {
 	}
 	checkCache(t, c, email)
 	_, freshLogin := deployment(t)
-	response, body = request(t, freshLogin, "/auth/login/email", url.Values{"email": {email}, "password": {password}}, false, false)
+	response, body = request(t, freshLogin, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {password}}, false, false)
 	if response.StatusCode != 303 {
 		t.Fatalf("restored credentials failed: %d %s", response.StatusCode, body)
 	}
@@ -174,7 +174,7 @@ func TestDeploymentRecovery(t *testing.T) {
 	if response.StatusCode != 303 {
 		t.Fatalf("second registration: %d %s", response.StatusCode, body)
 	}
-	response, body = request(t, second, "/auth/login/email", url.Values{"email": {otherEmail}, "password": {password}}, false, false)
+	response, body = request(t, second, "/login", url.Values{"provider": {"email"}, "email": {otherEmail}, "password": {password}}, false, false)
 	if response.StatusCode != 303 {
 		t.Fatalf("second login: %d %s", response.StatusCode, body)
 	}
@@ -290,7 +290,7 @@ func exerciseLoad(t *testing.T, dir string, c *http.Client, duration, spacing ti
 	if response.StatusCode != 303 {
 		t.Fatalf("registration: %d %s", response.StatusCode, body)
 	}
-	response, body = request(t, authenticated, "/auth/login/email", url.Values{"email": {email}, "password": {password}}, false, false)
+	response, body = request(t, authenticated, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {password}}, false, false)
 	if response.StatusCode != 303 {
 		t.Fatalf("login: %d %s", response.StatusCode, body)
 	}

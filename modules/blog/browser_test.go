@@ -624,9 +624,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	result := make(chan string, 1)
 	ready := make(chan struct{})
 	var readyOnce sync.Once
-	pagePath := "/auth/login/email"
+	pagePath := "/login"
 	if strings.HasPrefix(mode, "auth-choices-") {
-		pagePath = "/auth/login"
+		pagePath = "/login"
 		if strings.Contains(mode, "-register-") {
 			pagePath = "/auth/register"
 		}

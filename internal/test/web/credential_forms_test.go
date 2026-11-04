@@ -23,13 +23,16 @@ func TestHTTPCredentialFormActions(t *testing.T) {
 						h.establishSession(t, h.seedUser(t, "change@example.invalid"))
 					}
 					path := "/auth/" + name + "/email"
+					if name == "login" {
+						path = "/login"
+					}
 					formID := name + "-form"
 					if name == "change" {
 						formID = "change-password-form"
 					}
 					for _, method := range []string{http.MethodGet, http.MethodPost} {
 						// Empty POST fields force redisplay without changing account state.
-						w := h.request(method, path, url.Values{}, htmx)
+						w := h.request(method, path, url.Values{"provider": {"email"}}, htmx)
 						if w.Code >= http.StatusInternalServerError {
 							t.Fatalf("%s failed: %d", method, w.Code)
 						}
@@ -60,7 +63,7 @@ func TestBrowserNativeForms(t *testing.T) {
 			body   string
 		}{
 			{path: "/contact", fields: url.Values{"name": {"Native visitor"}, "email": {"native@example.invalid"}, "message": {"Native & ordinary submission"}}},
-			{path: "/auth/login/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}}},
+			{path: "/login", fields: url.Values{"provider": {"email"}, "email": {"native@example.invalid"}, "password": {secret}}},
 			{path: "/auth/register/email", fields: url.Values{"email": {"native@example.invalid"}, "password": {secret}, "passwordMatch": {secret}}},
 			{path: "/auth/reset/request/email", fields: url.Values{"email": {"native@example.invalid"}}},
 			{path: "/auth/change/email", fields: url.Values{"oldPassword": {secret}, "newPassword": {secret}, "newPasswordMatch": {secret}}},

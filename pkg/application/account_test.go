@@ -69,7 +69,7 @@ func TestAccountPage(t *testing.T) {
 							if hx {
 								header = "HX-Redirect"
 							}
-							if w.Header().Get(header) != "/auth/login" {
+							if w.Header().Get(header) != "/login" {
 								t.Fatalf("anonymous response: %d %s", w.Code, body)
 							}
 							continue

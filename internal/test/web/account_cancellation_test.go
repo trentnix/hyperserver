@@ -23,8 +23,8 @@ func TestHTTPAccountLookupCancellation(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				runSiteScenario(t, func(h *httpHarness) {
 					u := h.seedUser(t, "person@example.invalid")
-					method, path := http.MethodPost, "/auth/login/email"
-					values := url.Values{"email": {u.Email}, "password": {"TestPassword1!"}}
+					method, path := http.MethodPost, "/login"
+					values := url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}
 					var tokenHash string
 					if workflow != "login" {
 						token, err := user.NewAuthResetToken(u, time.Hour)

@@ -271,7 +271,7 @@ func TestSharingVisibility(t *testing.T) {
 			h.verify(t)
 			h.login(t)
 		}
-		for _, path := range []string{"/post/s/private-post", parent.URL(), child.URL(), "/missing", "/post/s/missing", "/auth/login/email", "/auth/register/email", "/auth/reset/request/email", "/post/manage", "/pages", "/profile", "/post/create", "/post/update/" + post.ID, "/pages/update/" + child.ID} {
+		for _, path := range []string{"/post/s/private-post", parent.URL(), child.URL(), "/missing", "/post/s/missing", "/login", "/auth/register/email", "/auth/reset/request/email", "/post/manage", "/pages", "/profile", "/post/create", "/post/update/" + post.ID, "/pages/update/" + child.ID} {
 			response := h.request("GET", path, nil, false)
 			requireCanonical(t, response.Body.String(), "")
 			if tags := sharingTags(t, response.Body.String()); len(tags) != 0 {

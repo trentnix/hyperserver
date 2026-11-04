@@ -25,9 +25,9 @@ type flow struct {
 }
 
 // Login starts sign-in. The callback returns the account to the shared manager.
-func (s *Service) Login(w http.ResponseWriter, r *http.Request) *user.User {
+func (s *Service) Login(w http.ResponseWriter, r *http.Request) auth.LoginResult {
 	s.start(w, r, "login")
-	return nil
+	return auth.LoginResult{}
 }
 
 // Register starts registration only when application configuration permits it.

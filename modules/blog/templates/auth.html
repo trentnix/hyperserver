@@ -27,7 +27,7 @@
     {{ range .Alternatives }}{{ . }}{{ end }}
   </div>
   {{ end }}
-  {{ if not $.LayoutData.Setup }}<p class="auth-form-footer"><a href="/auth/login">Sign in</a></p>{{ end }}
+  {{ if not $.LayoutData.Setup }}<p class="auth-form-footer"><a href="/login">Sign in</a></p>{{ end }}
 </div>
 {{ else }}<p>Unable to display registration details.</p>{{ end }}
 {{ end }}
@@ -36,10 +36,6 @@
   {{ if and (eq .Data.Workflow "login") (not .LayoutData.Setup) }}
   {{ template "blog.authWelcome" . }}
   {{ else if not .LayoutData.SetupTitle }}<h1>{{ .Data.Title }}</h1>{{ end }}
-{{ end }}
-
-{{ define "auth.email.login.introduction" }}
-  {{ if not .LayoutData.Setup }}{{ template "blog.authWelcome" . }}{{ end }}
 {{ end }}
 
 {{ define "blog.authWelcome" }}

@@ -10,6 +10,12 @@ If an old Go API is retained during a transition, its documentation must include
 
 Storage compatibility is separate from source compatibility. A format change must state whether to migrate, invalidate disposable data, or recreate example storage. It must not silently discard durable application data. Follow the provider's [migration procedures](storage.md) and [session format rules](../pkg/services/session/readme.md#replacing-serialization).
 
+## Login entry point
+
+The auth module now owns `GET /login` and `POST /login`. Applications must remove their own `/login` handlers and point sign-in links at `/login`. Old `GET /auth/login` and enabled-provider `GET /auth/login/{authType}` URLs redirect there. Provider-specific login POST routes no longer exist. Callbacks, registration, password recovery, and stored data are unchanged.
+
+Custom providers must return `auth.LoginResult` from `Login` instead of `*user.User`. Return `LoginResult{Account: account}` on success, `LoginResult{Form: markup}` for validation errors, or an empty result after writing a response. Replace `GetLogin` and `GetLoginForm` page handlers with `LoginForm(*http.Request) (template.HTML, error)` for inline controls or `GetLoginButton()` for a provider button. Forms must post to `/login` with a hidden `provider` field. Inline providers must link their alternative control to `/login?provider=<AuthType>`. The shared page now preserves alternatives, so providers must remove calls to `auth.LoginAlternatives`. See [provider composition](application.md#catalog-selection).
+
 ## Stabilization candidates
 
 Module registration, lifecycle hooks, and `MailSender` are candidates for stabilization. The [blog](../modules/blog) uses framework setup without reference-site wiring, but shares the framework's Go module. Test a separately pinned external application before promising stable interfaces.
