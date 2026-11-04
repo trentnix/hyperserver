@@ -303,7 +303,7 @@ func TestBrowserAuthChoices(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check provider choices")
 	}
 	for _, mode := range []string{"auth-choices-both", "auth-choices-google", "auth-choices-register-both", "auth-choices-register-google"} {
-		for _, width := range []string{"320", "1100", "3440"} {
+		for _, width := range []string{"320", "390", "500", "767", "1100", "3440"} {
 			t.Run(mode+"/"+width, func(t *testing.T) { testBrowser(t, browser, width, mode) })
 		}
 	}

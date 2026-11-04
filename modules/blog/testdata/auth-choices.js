@@ -4,11 +4,26 @@
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   try {
     await document.fonts.ready;
+    const root = document.documentElement;
+    assert(getComputedStyle(root).scrollbarGutter === (innerWidth < 768 ? 'auto' : 'stable'), 'Only desktop layouts should reserve scrollbar space.');
+    if (innerWidth < 768) {
+      // Exercise both states even when the browser uses overlay scrollbars.
+      root.style.overflowY = 'hidden';
+      assert(document.body.getBoundingClientRect().width === innerWidth, 'Mobile pages without a scrollbar must fill the viewport.');
+      root.style.overflowY = 'scroll';
+      assert(document.body.getBoundingClientRect().width === Math.max(320, root.clientWidth), 'Mobile pages must use the available width, subject to the 320px layout minimum.');
+      root.style.removeProperty('overflow-y');
+    }
     const email = new URLSearchParams(location.search).get('email') === 'true';
     const registering = location.pathname === '/auth/register';
     const flow = registering ? 'register' : 'login';
     const form = document.querySelector('#' + flow + '-form');
     assert(!!form === email, 'Email visibility does not match configuration.');
+    if (!registering && innerWidth < 1680) {
+      const panel = document.querySelector('.auth-login-panel, .auth-provider').getBoundingClientRect();
+      const article = document.querySelector('#article-content').getBoundingClientRect();
+      assert(Math.abs((panel.left + panel.right) / 2 - (article.left + article.right) / 2) < 1, 'Login cards must stay horizontally centered, including when their maximum width takes effect.');
+    }
     const googleSelector = 'form[action="/auth/' + flow + '/google"]';
     const google = document.querySelector(googleSelector);
     assert(google && google.method === 'post', 'Google sign-in control missing.');

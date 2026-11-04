@@ -21,8 +21,8 @@ button:enabled { cursor: pointer; }
 
 /* Page layout and navigation. */
 body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-background, none) no-repeat fixed right max(0px, calc((100vw - 960px) / 2)) bottom / min(480px, 70vw) auto; }
-/* Keep layout and text wrapping stable when navigation changes page height. */
-:root { scrollbar-gutter: stable; }
+/* Keep desktop text wrapping stable. Mobile uses the full width without an empty scrollbar strip. */
+@media (min-width: 768px) { :root { scrollbar-gutter: stable; } }
 /* Reserve the first 200px of the footer without constraining its full height. */
 .page-top { min-height: calc(100vh - 200px); }
 .site-sidebar { background: var(--surface); }
@@ -564,7 +564,10 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
 @media (min-width: 768px) and (max-width: 1679px) {
   .auth-email-form, .auth-form-footer, .auth-alternatives, .auth-provider, .auth-login-panel, .auth-account, .auth-options { margin-inline: auto; }
 }
-@media (max-width: 767px) { .page-content .auth-login-panel { padding: 20px; } }
+@media (max-width: 767px) {
+  .page-content :is(.auth-provider, .auth-login-panel) { margin-inline: auto; }
+  .page-content .auth-login-panel { padding: 20px; }
+}
 @media (max-width: 767px) { .verification-panel { padding: 20px; } }
 
 /* Editor and dialogs. */
