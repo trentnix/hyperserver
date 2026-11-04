@@ -1,5 +1,5 @@
 // Package contacttest checks the development site's contact-storage contract.
-// It is test support, not an application storage implementation.
+// Import it from provider tests, not application code.
 package contacttest
 
 import (

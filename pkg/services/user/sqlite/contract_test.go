@@ -8,8 +8,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/trentnix/hyperserver/internal/test/accounttest"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	"github.com/trentnix/hyperserver/pkg/services/user/accounttest"
 )
 
 func TestSQLiteAccountContract(t *testing.T) {

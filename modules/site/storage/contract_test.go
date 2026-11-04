@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trentnix/hyperserver/internal/test/contacttest"
+	"github.com/trentnix/hyperserver/modules/site/contacttest"
 	"github.com/trentnix/hyperserver/modules/site/models"
 )
 

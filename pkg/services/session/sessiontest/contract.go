@@ -1,5 +1,5 @@
 // Package sessiontest checks common and revocable session-storage contracts.
-// It is test support, not an application storage implementation.
+// Import it from provider tests, not application code.
 package sessiontest
 
 import (

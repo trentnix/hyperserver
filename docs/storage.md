@@ -32,6 +32,33 @@ Factories must reject unsupported settings and release partially acquired resour
 
 Accounts, contacts, and each configured SQLite session table have independent schema versions. Default session payloads have a separate format version and support reading unversioned JSON objects. See [session serialization](../pkg/services/session/readme.md#replacing-serialization) for compatibility and size limits.
 
+## Testing a replacement provider
+
+Import the shared suites from your provider's `_test.go` files. They work from another Go module and require no registration or application startup.
+
+| Contract | Test package and entry point |
+| --- | --- |
+| Account storage | [`pkg/services/user/accounttest.Run`](../pkg/services/user/accounttest/contract.go) |
+| Common session behavior | [`pkg/services/session/sessiontest.RunCommon`](../pkg/services/session/sessiontest/contract.go) |
+| Server-side sessions with revocable rotation | [`pkg/services/session/sessiontest.Run`](../pkg/services/session/sessiontest/contract.go), which also runs the common suite |
+| Reference-site contact storage | [`modules/site/contacttest.Run`](../modules/site/contacttest/contract.go) |
+
+Pass a factory that creates empty, initialized storage for each call and registers cleanup with the supplied `*testing.T`. Use temporary databases, isolated schemas, or unique namespaces. Never point the suites at production data. Providers must support the concurrent operations exercised by their suite.
+
+For example, call the account suite from your provider package:
+
+```go
+func TestAccountContract(t *testing.T) {
+    accounttest.Run(t, func(t *testing.T) user.AccountRepository {
+        return openTestRepository(t)
+    })
+}
+```
+
+Your `openTestRepository` helper owns backend setup and cleanup. See the [SQLite account test](../pkg/services/user/sqlite/contract_test.go) and [session test](../pkg/services/session/sqlite/contract_test.go) for complete factories. The contact suite takes a `Fixture` with independent committed-record reads and a reversible write-failure hook. See the [SQLite contact test](../modules/site/storage/contract_test.go).
+
+These suites check shared behavior, not every provider capability. Keep tests for backend failures, schema migrations, exact expiration boundaries, timestamp precision, durability, and optional interfaces with the provider. Test external identity storage separately when supporting external authentication. Run the suites with `go test` and `go test -race` alongside application integration tests. The test APIs follow the framework's [experimental compatibility policy](compatibility.md).
+
 ## Account schema migrations
 
 Accounts use the separately installed [golang-migrate v4.20.1 CLI](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1). [Version 1](../pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates accounts and tokens. [Version 2](../pkg/services/user/sqlite/migrations/000002_external_identities.up.sql) adds external identity links without changing existing accounts or passwords. [Version 3](../pkg/services/user/sqlite/migrations/000003_opaque_tokens.up.sql) adds the verification recipient email and an index for token-hash and purpose lookups. It removes outstanding JWT recovery and verification records. On first startup, the application creates the SQLite file if needed. If no account storage objects exist, initialization runs all three embedded migrations and records version 3 in one transaction. Fresh databases need no migration executable or manual setup.

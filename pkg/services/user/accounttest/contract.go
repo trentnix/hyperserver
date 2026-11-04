@@ -1,5 +1,5 @@
 // Package accounttest checks account storage through its consumer contract.
-// It is test support, not an application storage implementation.
+// Import it from provider tests, not application code.
 package accounttest
 
 import (

@@ -17,7 +17,6 @@ import (
 	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/opaquetoken"
-	"github.com/trentnix/hyperserver/internal/test/sessiontest"
 	site "github.com/trentnix/hyperserver/modules/site"
 	"github.com/trentnix/hyperserver/modules/site/models"
 	framework "github.com/trentnix/hyperserver/pkg/application"
@@ -26,6 +25,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/sessiontest"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 

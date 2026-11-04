@@ -9,8 +9,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/trentnix/hyperserver/internal/test/sessiontest"
 	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/session/sessiontest"
 )
 
 func TestSQLiteSessionContract(t *testing.T) {
