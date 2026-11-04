@@ -272,9 +272,14 @@ document.removeEventListener = function(type, callback, options) {
       const password = document.querySelector('#password');
       assert(!document.querySelector('a[href="/auth/register"]'), 'Registered administrator must not see a registration link.');
       assert(email && password, 'Missing login controls.');
+      const panel = document.querySelector('.auth-login-panel');
+      const panelWidth = panel.getBoundingClientRect().width;
+      const panelStyle = getComputedStyle(panel);
       const formWidth = document.querySelector('#login-form').getBoundingClientRect().width;
       const availableWidth = article.width - parseFloat(articleStyle.paddingLeft) - parseFloat(articleStyle.paddingRight);
-      assert(Math.abs(formWidth - Math.min(440, availableWidth)) < 1, 'Login form must stay within its maximum width and available content space.');
+      const panelContentWidth = panelWidth - parseFloat(panelStyle.paddingLeft) - parseFloat(panelStyle.paddingRight) - parseFloat(panelStyle.borderLeftWidth) - parseFloat(panelStyle.borderRightWidth);
+      assert(Math.abs(panelWidth - Math.min(440, availableWidth)) < 1, 'Login card must stay within its maximum width and available content space.');
+      assert(Math.abs(formWidth - panelContentWidth) < 1, 'Login form must fill the padded card content area.');
       assert(Math.abs(email.getBoundingClientRect().width - password.getBoundingClientRect().width) < 1, 'Email and password widths differ.');
       assert(getComputedStyle(email).paddingLeft === '12px', 'Email field has no blog styling.');
 

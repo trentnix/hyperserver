@@ -99,7 +99,7 @@
       const rows = [...list.querySelectorAll('[data-content-id]')];
       const index = rows.indexOf(row);
       const next = rows[index + 1] || rows[index - 1];
-      const focus = next?.querySelector('.page-manager-actions a') || list.querySelector('input[type=search]');
+      const focusHref = next?.querySelector('.page-manager-actions a')?.getAttribute('href');
       const url = row.querySelector('.page-manager-title a').getAttribute('href');
       row.scrollIntoView({block: 'center'});
       row.querySelector('a[href^="/pages/delete/"]').click();
@@ -110,7 +110,9 @@
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const expected = Math.min(before, Math.max(0, document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight));
       assert(Math.abs(scrollY - expected) <= 1, 'Page deletion lost scroll position: ' + JSON.stringify({before, expected, actual: scrollY}));
-      assert(article.querySelector('[data-content-list]') === list && (document.activeElement === focus || (focus?.tagName === 'A' && document.activeElement?.getAttribute('href') === focus.getAttribute('href'))), 'Page deletion replaced the list or lost adjacent focus.');
+      const focus = focusHref ? [...list.querySelectorAll('.page-manager-actions a')].find(link => link.getAttribute('href') === focusHref) :
+        list.querySelector('input[type=search]') || list.querySelector('.page-create');
+      assert(article.querySelector('[data-content-list]') === list && focus && document.activeElement === focus, 'Page deletion replaced the list or lost adjacent focus.');
       assert(![...document.querySelectorAll('#site-menu a, .profile-links a')].some(link => link.getAttribute('href') === url), 'Deleted page remains in navigation.');
       assert((await fetch(url)).status === 404, 'Deleted page remains readable.');
       const count = list.querySelector('[data-result-count]');

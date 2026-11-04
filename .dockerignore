@@ -4,6 +4,7 @@
 !auth/**
 !cmd/**
 !config/**
+!internal/**
 !modules/**
 !pkg/**
 !deploy/local/**

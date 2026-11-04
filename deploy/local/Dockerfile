@@ -5,6 +5,7 @@ RUN go mod download
 COPY auth ./auth
 COPY cmd ./cmd
 COPY config ./config
+COPY internal ./internal
 COPY modules ./modules
 COPY pkg ./pkg
 ARG VERSION=development
