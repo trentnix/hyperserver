@@ -54,3 +54,4 @@ config.yaml
 
 # Local implementation guidance
 /production-readiness-checklist.md
+/hyperserver-work-list.md
