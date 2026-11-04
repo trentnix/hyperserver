@@ -15,6 +15,54 @@ func activeMarkup(markup string) string {
 	return regexp.MustCompile(`(?s)<template\b[^>]*>.*?</template>`).ReplaceAllString(markup, "")
 }
 
+func TestPageEditorErrorFields(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	page, err := h.blog.writePage(t.Context(), Page{Title: "Existing", Slug: "existing", ChildrenDisplay: "hidden"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, field, value, want string
+		status                   int
+	}{
+		{"title", "title", " ", "title", http.StatusUnprocessableEntity},
+		{"summary", "summary", strings.Repeat("s", 2001), "summary", http.StatusUnprocessableEntity},
+		{"markdown", "content", strings.Repeat("x", maxMarkdownBytes+1), "content", http.StatusUnprocessableEntity},
+		{"slug format", "slug", "Invalid!", "slug", http.StatusUnprocessableEntity},
+		{"slug conflict", "slug", page.Slug, "slug", http.StatusConflict},
+		{"tags", "tags", strings.Repeat("t", 51), "tags", http.StatusUnprocessableEntity},
+		{"missing preview", "previewImage", strings.Repeat("a", 64) + ".png", "previewImage", http.StatusUnprocessableEntity},
+		{"missing body image", "content", "![](/images/" + strings.Repeat("b", 64) + ".png)", "content", http.StatusUnprocessableEntity},
+		{"subpages", "childrenDisplay", "invalid", "childrenDisplay", http.StatusUnprocessableEntity},
+		{"order", "displayOrder", "1000001", "displayOrder", http.StatusUnprocessableEntity},
+		{"parent", "parentID", "missing", "parentID", http.StatusUnprocessableEntity},
+		{"publication", "published", "invalid", "published", http.StatusUnprocessableEntity},
+		{"edit conflict", "version", "0", "", http.StatusConflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, hx := range []bool{false, true} {
+				fields := url.Values{"title": {"A title"}, "content": {"Content"}, "slug": {"new-page"}}
+				fields.Set(tc.field, tc.value)
+				path := "/pages"
+				if tc.name == "edit conflict" {
+					path += "/" + page.ID
+				}
+				w := h.request("POST", path, fields, hx)
+				requireStatus(t, w, tc.status)
+				if !strings.Contains(w.Body.String(), `data-error-fields="`+tc.want+`"`) {
+					t.Fatalf("missing field association %q: %s", tc.want, w.Body.String())
+				}
+				if hx && strings.Contains(w.Body.String(), `id="page-form"`) {
+					t.Fatal("validation must not replace the mounted page editor")
+				}
+			}
+		})
+	}
+}
+
 func TestPostEditorErrorFields(t *testing.T) {
 	h := newHarness(t)
 	h.register(t)

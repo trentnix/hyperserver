@@ -35,15 +35,15 @@
             <input type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" id="email"
                 name="email"
                 value="{{ .Email }}"
-                required {{ if .HasFieldErrors "Email" }} aria-invalid="true" {{ end }}>
-            {{ template "auth.partial.email.login.form.field_errors" (.GetFieldErrors "Email") }}
+                required {{ if .HasFieldErrors "Email" }} class="input-error" aria-invalid="true" aria-describedby="email-error" {{ end }}>
+            {{ with .GetFieldErrors "Email" }}<p id="email-error" class="field-error" data-field-error="email">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
 
             <label for="password">Password</label>
             <input type="password" autocomplete="current-password" id="password"
                 name="password"
                 required
-                {{ if .HasFieldErrors "Password" }} aria-invalid="true" {{ end }}>
-            {{ template "auth.partial.email.login.form.field_errors" (.GetFieldErrors "Password") }}
+                {{ if .HasFieldErrors "Password" }} class="input-error" aria-invalid="true" aria-describedby="password-error" {{ end }}>
+            {{ with .GetFieldErrors "Password" }}<p id="password-error" class="field-error" data-field-error="password">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
 
             <div class="auth-email-actions">
                 <button type="submit">Sign in</button>
@@ -54,7 +54,7 @@
             </div>
 
             {{ if .HasErrorMessages }}
-                <div class="form-messages">
+                <div class="form-messages" role="alert">
                     <ul>
                         {{ range .GetErrorMessages }}
                             <li>{{ .Message }}</li>
@@ -73,10 +73,4 @@
     {{ else }}
         <div>Unable to display login details.</div>
     {{ end }}
-{{ end }}
-
-{{ define "auth.partial.email.login.form.field_errors" }}
-    {{- range . }}
-        <span class="field-error">{{ . }}</span>
-    {{- end }}
 {{ end }}

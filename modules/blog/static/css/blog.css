@@ -401,7 +401,9 @@ input:not([type=hidden], [type=checkbox], [type=radio]), textarea, select { disp
 textarea { resize: vertical; }
 button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .55; cursor: not-allowed; }
 .image-picker input:disabled::file-selector-button, .media-upload input:disabled::file-selector-button { cursor: not-allowed; }
-.field-error, [data-request-error], .verification-status--error { color: #a12626; }
+.field-error { display: block; margin: 6px 0 0; color: #a12626; font-size: .85em; line-height: 1.5; }
+.field-error:empty { display: none; }
+.field-error > span { display: block; }
 .form-hint { color: var(--muted); font-size: .85em; }
 .publication-footer { display: flex; flex-direction: column; overflow-anchor: none; }
 /* Reserve the schedule's actual height below the actions until it is selected. */
@@ -423,19 +425,18 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
 .post-time-menu option { padding: 8px 10px; }
 .post-schedule .form-hint { margin: 12px 0 0; }
 @media (max-width: 480px) { .post-schedule-fields { grid-template-columns: minmax(0, 1fr); } }
-#editor-errors:not(:empty) { margin-top: 20px; padding: 12px 16px; border-left: 3px solid currentColor; border-radius: 3px; background: #fff3f2; }
-#editor-errors .page-message { padding: 0; }
-/* Trial error treatment in posts before applying it to other forms. */
-#post-form :is(#editor-errors, .upload-error):not(:empty) { padding: 12px 16px; border: 1px solid #dba6a6; border-left: 4px solid #a12626; border-radius: 4px; background: #fff3f2; color: #a12626; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
-#post-form :is(input, textarea, select):not(#post-publish-time):is(:user-invalid, [aria-invalid=true]),
-#post-form :is(.CodeMirror, .post-time-field, .image-picker):has([aria-invalid=true]),
-#post-form .post-time-field:has(:user-invalid),
-#post-form .image-picker:has(.upload-error),
-#post-form .EasyMDEContainer:has(.upload-error) .CodeMirror { border-color: #a12626; }
-#post-form :is(input, textarea, select):not(#post-publish-time):is(:user-invalid, [aria-invalid=true]):focus-visible,
-#post-form :is(.CodeMirror, .post-time-field):has([aria-invalid=true]):focus-within,
-#post-form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a12626; outline-offset: 0; }
-#post-form .post-field-error { margin: 6px 0 0; color: #a12626; font-size: .85em; line-height: 1.5; }
+/* Shared field and operation errors. Success and informational messages stay neutral. */
+:is(.form-error, .field-error[role=alert], .form-messages[role=alert], .upload-error, [data-request-error], .verification-status--error, .notification--error):not(:empty) { margin-block: 16px; padding: 12px 16px; border: 1px solid #dba6a6; border-left: 4px solid #a12626; border-radius: 4px; background: #fff3f2; color: #a12626; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.form-error:empty { display: none; }
+.form-error .page-message.form-error { margin: 0; padding: 0; border: 0; background: transparent; }
+form :is(input, textarea, select):not(#post-publish-time):is(:user-invalid, [aria-invalid=true]),
+form :is(.CodeMirror, .post-time-field, .image-picker):has([aria-invalid=true]),
+form .post-time-field:has(:user-invalid),
+form .image-picker:has(.upload-error),
+form .EasyMDEContainer:has(.upload-error) .CodeMirror { border-color: #a12626; }
+form :is(input, textarea, select):not(#post-publish-time):is(:user-invalid, [aria-invalid=true]):focus-visible,
+form :is(.CodeMirror, .post-time-field):has([aria-invalid=true]):focus-within,
+form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a12626; outline-offset: 0; }
 .draft-recovery { margin: 16px 0; padding: 12px 16px; background: var(--surface); border-left: 3px solid #cbd1da; }
 .draft-recovery p { margin: 0; }
 .draft-recovery .form-actions { margin-top: 12px; }
@@ -544,12 +545,10 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .
   label { margin: 24px 0 8px; color: var(--button-bg); }
   label:first-child { margin-top: 0; }
   input { min-height: 46px; border-color: #cbd1da; border-radius: 6px; }
-  input[aria-invalid=true], input.input-error { border-color: #a12626; }
   button { min-height: 44px; min-width: 120px; margin: 28px 0 12px; border-radius: 6px; font-weight: 600; }
   button:hover { background: var(--button-hover); border-color: var(--button-hover); }
   a { display: inline-block; padding-block: 6px; font-size: .9em; text-underline-offset: .2em; }
-  .field-error, [data-request-error] { display: block; margin-top: 6px; font-size: .9em; }
-  .form-messages { padding: 12px 16px; border-left: 3px solid #cbd1da; background: var(--surface); }
+  .form-messages:not([role=alert]) { padding: 12px 16px; border-left: 3px solid #cbd1da; background: var(--surface); }
   .form-messages ul { margin: 0; padding: 0; list-style: none; }
   .form-messages li + li { margin-top: 6px; }
   .setup-panel & {
@@ -598,7 +597,8 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 /* Notifications. */
 /* Only success notifications expire. Without JavaScript, all messages stay visible. */
 #notifications { position: fixed; bottom: 20px; right: 20px; max-width: min(420px, 90vw); display: grid; gap: 10px; z-index: 2; }
-.notification, #notifications > [data-request-error] { margin: 0; padding: 12px 20px; background: var(--button-bg); color: white; border-radius: 5px; }
+.notification:not(.notification--error) { margin: 0; padding: 12px 20px; background: var(--button-bg); color: white; border-radius: 5px; }
+#notifications > :is(.notification--error, [data-request-error]) { margin: 0; }
 .notification { display: flex; align-items: start; gap: 16px; overflow-wrap: anywhere; }
 .notification p { margin: 0; }
 .notification-dismiss { display: none; flex-shrink: 0; font-size: 1.3em; line-height: 1; text-decoration: none; }

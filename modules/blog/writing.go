@@ -19,6 +19,14 @@ type writingFieldError struct {
 
 func (e writingFieldError) Unwrap() error { return e.error }
 
+func validationFields(err error) []string {
+	var invalid writingFieldError
+	if errors.As(err, &invalid) {
+		return []string{invalid.field}
+	}
+	return nil
+}
+
 // writePost applies the same validation, media checks, and invalidation to editor
 // saves and history restores. The repository saves content, references, and history atomically.
 func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
@@ -63,14 +71,14 @@ func (m *module) writePage(ctx context.Context, p Page) (Page, error) {
 	var err error
 	p.Tags, err = normalizeTags(p.Tags)
 	if err != nil {
-		return p, err
+		return p, writingFieldError{err, "tags"}
 	}
 	generated := p.Slug == ""
 	if generated {
 		p.Slug = slugFromTitle(p.Title)
 	}
-	if message := validatePage(p); message != "" {
-		return p, contentError(message)
+	if field, message := validatePageField(p); message != "" {
+		return p, writingFieldError{contentError(message), field}
 	}
 	if p.ID != "" && p.Version < 1 {
 		return p, errEditConflict

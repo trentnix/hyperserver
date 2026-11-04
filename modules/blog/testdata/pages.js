@@ -86,7 +86,7 @@
       await wait(() => document.querySelector('#editor-errors').textContent.includes('This URL slug is already in use.'));
       const conflict = form.querySelector('#editor-errors');
       assert(conflict.textContent.includes('leave it blank to generate one from the title'), 'Slug conflict must explain how to recover.');
-      assert(getComputedStyle(conflict).borderLeftWidth === '3px' && getComputedStyle(conflict.querySelector('.page-message')).paddingTop === '0px', 'Editor error must use a compact, distinct callout.');
+      assert(getComputedStyle(conflict).borderLeftWidth === '4px' && getComputedStyle(conflict).color === 'rgb(161, 38, 38)' && conflict.querySelector('[data-error-fields="slug"]'), 'Editor error must use the shared callout and identify the invalid field.');
       assert(conflict.getBoundingClientRect().top > form.querySelector('.publication-options').getBoundingClientRect().bottom, 'Editor error must appear near the save controls.');
       assert(document.querySelector('.CodeMirror').CodeMirror === cm && cm.getValue() === 'A **contact** page.', 'Conflict lost the mounted editor or draft.');
       form.elements.slug.value = '';

@@ -85,7 +85,11 @@ func (m *module) uploadMedia(w http.ResponseWriter, r *http.Request) {
 		util.RedirectToURL(w, r, "/media/"+id)
 		return
 	}
-	page := m.views["mediaUploadError"].Content(r, err.Error())
+	data := formErrorMessage{Error: err.Error()}
+	if status == http.StatusBadRequest || status == http.StatusRequestEntityTooLarge || status == http.StatusUnprocessableEntity {
+		data.ErrorFields = "image"
+	}
+	page := m.views["mediaUploadError"].Content(r, data)
 	page.Title, page.ResponseStatusCode = "Upload image", status
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display the upload error.", err)

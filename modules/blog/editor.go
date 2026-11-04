@@ -1,5 +1,10 @@
 package blog
 
+// formErrorMessage describes an operation failure and any fields to correct.
+type formErrorMessage struct {
+	Error, ErrorFields string
+}
+
 // publicationActions names the outcomes available from the saved publication state.
 type publicationActions struct {
 	Draft, Publish, Schedule string

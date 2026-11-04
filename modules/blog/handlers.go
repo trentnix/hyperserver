@@ -178,12 +178,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	saved, err := m.writePost(r.Context(), p)
 	var invalid contentError
 	if errors.As(err, &invalid) || errors.Is(err, errMissingMedia) {
-		var fieldError writingFieldError
-		var fields []string
-		if errors.As(err, &fieldError) {
-			fields = append(fields, fieldError.field)
-		}
-		m.editorError(w, r, p, err.Error(), http.StatusUnprocessableEntity, fields...)
+		m.editorError(w, r, p, err.Error(), http.StatusUnprocessableEntity, validationFields(err)...)
 		return
 	}
 	if errors.Is(err, errSlugTaken) {
@@ -223,7 +218,7 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	data.ScheduleDate, data.ScheduleTime = r.PostForm.Get("publishDate"), r.PostForm.Get("publishTime")
 	page := m.views["editor"].Content(r, data)
 	if page.IsHtmx() {
-		page = m.views["editorError"].Content(r, data)
+		page = m.views["formError"].Content(r, data)
 	} else {
 		data.TagSuggestions = m.tagSuggestions(r)
 		if p.ID != "" {

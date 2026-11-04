@@ -6,7 +6,7 @@
 {{ if .Data.MissingImages }}<p class="revision-notice">Some images are no longer available. Replace or remove their references before saving.</p>{{ end }}
 <form id="profile-form" method="post" action="/profile{{ with .Data.LoadedRevision }}?revision={{ .ID }}{{ end }}" hx-post="/profile{{ with .Data.LoadedRevision }}?revision={{ .ID }}{{ end }}" hx-target="#profile-errors">
   <input type="hidden" name="version" value="{{ .Data.Version }}">
-  <div id="profile-errors" class="field-error" role="alert">{{ .Data.Error }}</div>
+  <div id="profile-errors" class="form-error" role="alert">{{ if .Data.Error }}{{ template "blog.formError" . }}{{ end }}</div>
   <div class="profile-identity">
     <label for="profile-name">Display name</label><input id="profile-name" name="name" value="{{ .Data.Name }}" maxlength="240" required autocomplete="name">
     <label for="profile-bio">Short bio</label><textarea id="profile-bio" name="bio" rows="3" maxlength="500" aria-describedby="profile-bio-help">{{ .Data.Bio }}</textarea>

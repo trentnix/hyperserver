@@ -407,7 +407,7 @@ func TestNotificationRendering(t *testing.T) {
 		for _, want := range []string{
 			`class="notification notification--success"`,
 			`role="status">Saved &lt;script&gt;alert(1)&lt;/script&gt;`,
-			`class="notification">`,
+			`class="notification notification--error">`,
 			`role="alert">Delivery failed`,
 			`aria-label="Dismiss notification"`,
 		} {
@@ -873,7 +873,7 @@ func TestSaveFailurePreservesDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &module{app: h.app.ApplicationServer, posts: failingRepository{}, tags: h.blog.tags, views: make(map[string]*content.View)}
-	for _, name := range []string{"editor", "editorError"} {
+	for _, name := range []string{"editor", "formError"} {
 		m.views[name], err = templates.View(h.app.ContentManager, "blog."+name)
 		if err != nil {
 			t.Fatal(err)

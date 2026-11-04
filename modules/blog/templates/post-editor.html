@@ -85,12 +85,9 @@
     <p class="form-hint" id="schedule-help">When Schedule is selected, your post stays private until this time. Use UTC, not your device’s time zone.</p>
   </div>{{ end }}
   <p class="form-hint">Changes take effect when you save.</p>
-  <div id="editor-errors" class="field-error" role="alert">{{ if .Data.Error }}{{ template "blog.editorError" . }}{{ end }}</div>
+  <div id="editor-errors" class="form-error" role="alert">{{ if .Data.Error }}{{ template "blog.formError" . }}{{ end }}</div>
   <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/post/manage{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
   </div>
 </form></section>
 {{ end }}
-
-{{ define "blog.editorError" }}<span data-error-fields="{{ .Data.ErrorFields }}">{{ .Data.Error }}</span>{{ end }}
-

@@ -102,6 +102,9 @@ func TestProfileValidation(t *testing.T) {
 			fields.Set(tt.field, tt.value)
 			w := h.request("POST", "/profile", fields, hx)
 			requireStatus(t, w, http.StatusUnprocessableEntity)
+			if !strings.Contains(w.Body.String(), `data-error-fields="`+tt.field+`"`) {
+				t.Fatal("profile validation must identify the field to correct")
+			}
 			if hx == strings.Contains(w.Body.String(), `id="profile-form"`) {
 				t.Fatal("wrong error rendering mode")
 			}

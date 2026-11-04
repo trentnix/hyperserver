@@ -24,6 +24,7 @@ type pageContent struct {
 	HasHistory       bool
 	HTML             template.HTML
 	Error            string
+	ErrorFields      string
 	Parent           *Page
 	Children         []Page
 	Parents          []Page
@@ -224,30 +225,32 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 	if p.ChildrenDisplay == "" {
 		p.ChildrenDisplay = "hidden"
 	}
-	var message string
+	var message, field string
 	if value := strings.TrimSpace(r.PostForm.Get("displayOrder")); value != "" {
 		order, err := strconv.Atoi(value)
 		if err == nil && order >= 0 && order <= 1_000_000 {
 			p.DisplayOrder = &order
 		} else if message == "" {
 			message = "Enter a display order from 0 to 1,000,000, or leave it blank."
+			field = "displayOrder"
 		}
 	}
 	if message == "" && r.PostForm.Get("published") != "" && r.PostForm.Get("published") != "on" {
 		message = "Choose whether to publish the page."
+		field = "published"
 	}
 	if message != "" {
-		m.renderPageEditor(w, r, p, message, http.StatusUnprocessableEntity)
+		m.renderPageEditor(w, r, p, message, http.StatusUnprocessableEntity, field)
 		return
 	}
 	saved, err := m.writePage(r.Context(), p)
 	var invalid contentError
 	if errors.As(err, &invalid) || errors.Is(err, errMissingMedia) {
-		m.renderPageEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity)
+		m.renderPageEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity, validationFields(err)...)
 		return
 	}
 	if errors.Is(err, errPageSlugTaken) {
-		m.renderPageEditor(w, r, p, slugConflictMessage, http.StatusConflict)
+		m.renderPageEditor(w, r, p, slugConflictMessage, http.StatusConflict, "slug")
 		return
 	}
 	if errors.Is(err, errEditConflict) {
@@ -255,7 +258,7 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, errPageParent) {
-		m.renderPageEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity)
+		m.renderPageEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity, "parentID")
 		return
 	}
 	if err != nil {
@@ -273,8 +276,9 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 
 // renderPageEditor keeps the HTMX editor mounted on errors. Ordinary requests
 // redisplay submitted values, including the publication setting.
-func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page, message string, status int) {
+func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page, message string, status int, fields ...string) {
 	data := pageContent{Page: p, Error: message, revisionSelection: editorRevision(r, "page", p.ID)}
+	data.ErrorFields = strings.Join(fields, " ")
 	if r.Method == http.MethodGet && status == http.StatusOK {
 		selection, err := m.selectRevision(r, "page", p.ID, p.URL(), Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags})
 		if err != nil {
@@ -296,7 +300,7 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 	}
 	page := m.views["pageEditor"].Content(r, data)
 	if page.IsHtmx() && status >= 400 {
-		page = m.views["message"].Content(r, message)
+		page = m.views["formError"].Content(r, data)
 	} else {
 		data.TagSuggestions = m.tagSuggestions(r)
 		stored := p

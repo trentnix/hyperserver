@@ -174,13 +174,17 @@
       await wait(() => !form.dataset.uploading);
       const authStatus = picker('imageURL').querySelector('[data-image-status]');
       assert(authStatus.textContent.includes("You're signed out"), 'Expired login was not explained.');
-      assert(getComputedStyle(authStatus).borderLeftWidth === '0px' && authStatus.getAttribute('role') === 'status', 'The post error-style trial must not change Site Profile.');
+      assert(getComputedStyle(authStatus).borderLeftWidth === '4px' && authStatus.getAttribute('role') === 'alert', 'Site Profile must use the shared upload-error treatment.');
       assert(document.querySelector('#profile-form') === form && form.elements.name.value === 'Unsaved profile name', 'Authentication failure lost unsaved profile edits.');
       const signIn = authStatus.querySelector('a');
       assert(signIn?.getAttribute('href') === '/login' && signIn.target === '_blank' && signIn.rel === 'noopener' && signIn.getAttribute('hx-boost') === 'false', 'Recovery must sign in separately without navigating the editor.');
       authStatus.querySelector('[data-upload-retry]').click();
       await wait(() => !form.dataset.uploading);
       assert(authStatus.textContent.includes("You're signed out") && !form.querySelector('[type="submit"]').disabled, 'Failed retry lost the recovery flow or disabled Save.');
+      form.requestSubmit();
+      await wait(() => form.querySelector('#profile-errors .page-message'));
+      const failure = form.querySelector('#profile-errors');
+      assert(getComputedStyle(failure).borderLeftWidth === '4px' && getComputedStyle(failure.querySelector('.page-message')).borderLeftWidth === '0px', 'General errors inside an editor must have one border, not nested panels.');
       const login = await fetch('/auth/login/email', {method: 'POST', redirect: 'manual', body: new URLSearchParams({email: 'trentnix@gmail.com', password: 'Sample-Password-123!'})});
       assert(login.type === 'opaqueredirect', 'Reauthentication did not succeed.');
       authStatus.querySelector('[data-upload-retry]').click();

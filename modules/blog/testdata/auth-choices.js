@@ -73,6 +73,24 @@
       const response = await fetch(form.action, {method: 'POST', body: new URLSearchParams(new FormData(form)), headers: {'HX-Request': 'true'}});
       const fragment = new DOMParser().parseFromString(await response.text(), 'text/html');
       assert(fragment.querySelector(googleSelector), 'Validation removes the Google alternative.');
+      if (registering) {
+        form.elements.passwordMatch.value = 'different';
+        form.requestSubmit();
+        const deadline = Date.now() + 12000;
+        while (!document.querySelector('#email-error') || document.querySelector('.htmx-settling, .htmx-request')) {
+          if (Date.now() > deadline) throw new Error('Registration validation did not render.');
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        const input = document.querySelector('#email');
+        assert(input.getAttribute('aria-invalid') === 'true' && input.getAttribute('aria-describedby') === 'email-error', 'Registration must associate field errors.');
+        input.focus();
+        const style = getComputedStyle(input);
+        assert(style.borderTopColor === 'rgb(161, 38, 38)' && style.outlineColor === 'rgb(161, 38, 38)' && style.outlineOffset === '0px', 'Registration must use the shared red error and focus styling.');
+        input.value = 'corrected@example.com';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        assert(!input.hasAttribute('aria-invalid') && !document.querySelector('#email-error'), 'Editing must clear registration feedback.');
+        assert(document.documentElement.scrollWidth <= innerWidth, 'Registration errors must not overflow.');
+      }
     }
     await fetch('/test/result', {method: 'POST', body: 'PASS'});
   } catch (error) {

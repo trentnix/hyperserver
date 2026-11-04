@@ -42,7 +42,7 @@
 
 {{ define "blog.mediaUploadError" }}
 {{ if not .IsHtmx }}<h1>Upload image</h1>{{ end }}
-<p class="field-error" role="alert">{{ .Data }}</p>
+<p id="media-upload-error" class="form-error" role="alert">{{ template "blog.formError" . }}</p>
 {{ if not .IsHtmx }}<a href="/media">Back to Media</a>{{ end }}
 {{ end }}
 
@@ -66,7 +66,7 @@
       <p>Labels appear in Media and the image chooser, not as image alt text. Use up to 20 tags, 50 characters each.</p>
       {{ with .Data.Filename }}<p>Original filename: {{ . }}</p>{{ end }}
     </details>
-    {{ with .Data.Error }}<p class="field-error" role="alert">{{ . }}</p>{{ end }}
+    {{ if .Data.Error }}<p id="media-detail-errors" class="form-error" role="alert">{{ template "blog.formError" . }}</p>{{ end }}
     <div class="form-actions"><button type="submit">Save details</button>{{ if .Data.Error }}<a href="/media/{{ .Data.ID }}">Reload details</a>{{ end }}</div>
   </form>
   </div>

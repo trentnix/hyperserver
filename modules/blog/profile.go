@@ -34,25 +34,25 @@ func (p Profile) sameContent(other Profile) bool {
 // validate rejects incomplete text and unsafe image URLs before saving.
 func (p Profile) validate() error {
 	if strings.TrimSpace(p.Name) == "" || !utf8.ValidString(p.Name) || utf8.RuneCountInString(p.Name) > 240 {
-		return errors.New("Enter a name of 1–240 characters.")
+		return writingFieldError{errors.New("Enter a name of 1–240 characters."), "name"}
 	}
 	if !utf8.ValidString(p.Bio) || utf8.RuneCountInString(p.Bio) > 500 {
-		return errors.New("Keep the short bio under 500 characters.")
+		return writingFieldError{errors.New("Keep the short bio under 500 characters."), "bio"}
 	}
-	for _, image := range []struct{ name, value string }{
-		{"Portrait", p.ImageURL},
-		{"Favicon", p.FaviconURL},
-		{"Background", p.BackgroundURL},
+	for _, image := range []struct{ name, value, field string }{
+		{"Portrait", p.ImageURL, "imageURL"},
+		{"Favicon", p.FaviconURL, "faviconURL"},
+		{"Background", p.BackgroundURL, "backgroundURL"},
 	} {
 		if !utf8.ValidString(image.value) || len(image.value) > 2048 {
-			return errors.New(image.name + " URL must contain at most 2,048 UTF-8 bytes.")
+			return writingFieldError{errors.New(image.name + " URL must contain at most 2,048 UTF-8 bytes."), image.field}
 		}
 		if image.value == "" || util.SafeRedirectURL(image.value, "") == image.value {
 			continue
 		}
 		u, err := url.Parse(image.value)
 		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
-			return errors.New(image.name + " URL must be a local absolute path or HTTPS URL.")
+			return writingFieldError{errors.New(image.name + " URL must be a local absolute path or HTTPS URL."), image.field}
 		}
 	}
 	return nil
@@ -107,6 +107,7 @@ type profileRepository interface {
 type profileEditorData struct {
 	Profile
 	Error          string
+	ErrorFields    string
 	LoadedRevision *ProfileRevision
 	HasHistory     bool
 	InitialProfile bool
@@ -191,7 +192,7 @@ func (m *module) saveProfile(w http.ResponseWriter, r *http.Request) {
 // Failed restores open the editor so missing images or stale content can be addressed.
 func (m *module) saveProfileContent(w http.ResponseWriter, r *http.Request, p Profile, restore bool) {
 	if err := p.validate(); err != nil {
-		m.renderProfileEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity)
+		m.renderProfileEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity, validationFields(err)...)
 		return
 	}
 	destination := "/profile"
@@ -204,7 +205,7 @@ func (m *module) saveProfileContent(w http.ResponseWriter, r *http.Request, p Pr
 			return
 		}
 		if errors.Is(err, errMissingMedia) {
-			m.renderProfileEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity)
+			m.renderProfileEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity, validationFields(err)...)
 			return
 		}
 		logger.LogRequestError(r, err)
@@ -226,8 +227,10 @@ func (m *module) writeProfile(ctx context.Context, p Profile) error {
 
 	m.profile.saveMu.Lock()
 	defer m.profile.saveMu.Unlock()
-	if err := m.checkMediaReferences(ctx, []string{p.ImageURL, p.FaviconURL, p.BackgroundURL}); err != nil {
-		return err
+	for _, image := range []struct{ field, value string }{{"imageURL", p.ImageURL}, {"faviconURL", p.FaviconURL}, {"backgroundURL", p.BackgroundURL}} {
+		if err := m.checkMediaReferences(ctx, []string{image.value}); err != nil {
+			return writingFieldError{err, image.field}
+		}
 	}
 	if err := m.profileStore.SaveProfile(ctx, p); errors.Is(err, errProfileUnchanged) {
 		return nil
@@ -244,8 +247,8 @@ func (m *module) writeProfile(ctx context.Context, p Profile) error {
 }
 
 // renderProfileEditor preserves ordinary form values and mounted HTMX inputs on errors.
-func (m *module) renderProfileEditor(w http.ResponseWriter, r *http.Request, p Profile, message string, status int) {
-	data := profileEditorData{Profile: p, Error: message}
+func (m *module) renderProfileEditor(w http.ResponseWriter, r *http.Request, p Profile, message string, status int, fields ...string) {
+	data := profileEditorData{Profile: p, Error: message, ErrorFields: strings.Join(fields, " ")}
 	current := m.profile.Current()
 	data.InitialProfile = current.Version == 0
 	// The redirect flag only selects a confirmation. Stored state determines whether it applies.
@@ -254,7 +257,7 @@ func (m *module) renderProfileEditor(w http.ResponseWriter, r *http.Request, p P
 	view := m.views["profileEditor"]
 	page := view.Content(r, data)
 	if page.IsHtmx() && status >= 400 {
-		page = m.views["message"].Content(r, message)
+		page = m.views["formError"].Content(r, data)
 	} else {
 		versions, err := m.profileStore.ListProfileRevisions(r.Context())
 		if err != nil && status < 400 {

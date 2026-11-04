@@ -39,6 +39,7 @@ type mediaDetailPage struct {
 	Usage mediaUsage
 	mediaMetadata
 	Error          string
+	ErrorFields    string
 	TagSuggestions []string
 }
 
@@ -48,7 +49,7 @@ func (m *module) mediaDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderMediaDetail preserves invalid input without losing the image or usage information.
-func (m *module) renderMediaDetail(w http.ResponseWriter, r *http.Request, submitted *mediaMetadata, message string, status int) {
+func (m *module) renderMediaDetail(w http.ResponseWriter, r *http.Request, submitted *mediaMetadata, message string, status int, fields ...string) {
 	id := r.PathValue("id")
 	image, err := m.images.Open(r.Context(), id)
 	if err != nil {
@@ -70,7 +71,7 @@ func (m *module) renderMediaDetail(w http.ResponseWriter, r *http.Request, submi
 		return
 	}
 
-	page := m.views["mediaDetail"].Content(r, mediaDetailPage{ID: id, Usage: used[id], mediaMetadata: metadata, Error: message, TagSuggestions: m.mediaTagSuggestions(r)})
+	page := m.views["mediaDetail"].Content(r, mediaDetailPage{ID: id, Usage: used[id], mediaMetadata: metadata, Error: message, ErrorFields: strings.Join(fields, " "), TagSuggestions: m.mediaTagSuggestions(r)})
 	page.Title, page.ResponseStatusCode = "Image details", status
 	if err := page.Render(w, r); err != nil {
 		page.HandleRenderError(w, r, "Unable to display this image.", err)
@@ -91,12 +92,12 @@ func (m *module) saveMediaMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	submitted := mediaMetadata{Label: label, Tags: r.PostForm.Get("tags"), Version: version}
 	if !utf8.ValidString(label) || utf8.RuneCountInString(label) > 240 || strings.ContainsFunc(label, unicode.IsControl) {
-		m.renderMediaDetail(w, r, &submitted, "Use at most 240 characters without control characters.", http.StatusUnprocessableEntity)
+		m.renderMediaDetail(w, r, &submitted, "Use at most 240 characters without control characters.", http.StatusUnprocessableEntity, "label")
 		return
 	}
 	tags, err := normalizeTags(submitted.Tags)
 	if err != nil {
-		m.renderMediaDetail(w, r, &submitted, err.Error(), http.StatusUnprocessableEntity)
+		m.renderMediaDetail(w, r, &submitted, err.Error(), http.StatusUnprocessableEntity, "tags")
 		return
 	}
 	submitted.Tags = tags

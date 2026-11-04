@@ -144,7 +144,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		"pageEditor",
 		"pageDelete",
 		"editor",
-		"editorError",
+		"formError",
 		"delete",
 		"message",
 		"profileEditor",

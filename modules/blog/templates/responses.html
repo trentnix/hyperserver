@@ -1,3 +1,3 @@
-{{ define "blog.message" }}<div class="page-message" role="status">{{ .Data }}</div>{{ if .LayoutData.Setup }}<p><a href="/auth/continue">Continue setup</a></p>{{ end }}{{ end }}
+{{ define "blog.message" }}<div class="page-message{{ if ge .ResponseStatusCode 400 }} form-error{{ end }}" role="{{ if ge .ResponseStatusCode 400 }}alert{{ else }}status{{ end }}">{{ .Data }}</div>{{ if .LayoutData.Setup }}<p><a href="/auth/continue">Continue setup</a></p>{{ end }}{{ end }}
 
 {{ define "blog.notFound" }}<div class="page-message" role="status">That page could not be found.</div>{{ end }}

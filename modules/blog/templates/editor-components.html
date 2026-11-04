@@ -3,6 +3,8 @@
   <datalist id="tag-suggestions">{{ range .TagSuggestions }}<option value="{{ . }}" data-tag="{{ . }}"></option>{{ end }}</datalist>
 {{ end }}
 
+{{ define "blog.formError" }}<span data-error-fields="{{ .Data.ErrorFields }}">{{ .Data.Error }}</span>{{ end }}
+
 {{ define "blog.tagField" }}
   {{ template "blog.tagInput" . }}
   <small id="tags-help" class="form-hint">Search keywords, separated by commas. Up to 20 tags, 50 characters each.</small>

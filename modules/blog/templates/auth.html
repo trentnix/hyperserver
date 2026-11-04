@@ -7,16 +7,16 @@
     {{ if .HasSuccessMessages }}<div class="form-messages"><ul>{{ range .GetSuccessMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}
 
     <label for="email">Email</label>
-    <input type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" id="email" name="email" value="{{ .Email }}" required{{ if .HasFieldErrors "Email" }} aria-invalid="true"{{ end }}>
-    {{ range .GetFieldErrors "Email" }}<span class="field-error">{{ . }}</span>{{ end }}
+    <input type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" id="email" name="email" value="{{ .Email }}" required{{ if .HasFieldErrors "Email" }} aria-invalid="true" aria-describedby="email-error"{{ end }}>
+    {{ with .GetFieldErrors "Email" }}<p id="email-error" class="field-error" data-field-error="email">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
 
     <label for="password">Password</label>
-    <input type="password" autocomplete="new-password" id="password" name="password" required{{ if .HasFieldErrors "Password" }} aria-invalid="true"{{ end }}>
-    {{ range .GetFieldErrors "Password" }}<span class="field-error">{{ . }}</span>{{ end }}
+    <input type="password" autocomplete="new-password" id="password" name="password" required{{ if .HasFieldErrors "Password" }} aria-invalid="true" aria-describedby="password-error"{{ end }}>
+    {{ with .GetFieldErrors "Password" }}<p id="password-error" class="field-error" data-field-error="password">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
 
     <label for="passwordMatch">Confirm Password</label>
-    <input type="password" autocomplete="new-password" id="passwordMatch" name="passwordMatch" required{{ if .HasFieldErrors "PasswordMatch" }} aria-invalid="true"{{ end }}>
-    {{ range .GetFieldErrors "PasswordMatch" }}<span class="field-error">{{ . }}</span>{{ end }}
+    <input type="password" autocomplete="new-password" id="passwordMatch" name="passwordMatch" required{{ if .HasFieldErrors "PasswordMatch" }} aria-invalid="true" aria-describedby="passwordMatch-error"{{ end }}>
+    {{ with .GetFieldErrors "PasswordMatch" }}<p id="passwordMatch-error" class="field-error" data-field-error="passwordMatch">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
 
     <button type="submit">Register</button>
     {{ if .HasErrorMessages }}<div class="form-messages" role="alert"><ul>{{ range .GetErrorMessages }}<li>{{ .Message }}</li>{{ end }}</ul></div>{{ end }}

@@ -285,6 +285,17 @@ func TestBrowserAuthStyles(t *testing.T) {
 	}
 }
 
+// TestBrowserFormErrors checks shared validation and operation feedback at each layout.
+func TestBrowserFormErrors(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check shared form errors")
+	}
+	for _, width := range []string{"390", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "form-errors") })
+	}
+}
+
 // TestBrowserAuthChoices checks login and registration controls at each layout.
 func TestBrowserAuthChoices(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -401,6 +412,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		for i := range mediaPageSize + 1 {
 			mediaUpload(t, h.blog, fmt.Sprintf("library image %d", i))
 		}
+	}
+	if mode == "form-errors" {
+		mediaUpload(t, h.blog, "form errors image")
 	}
 	if mode == "media-cleanup" {
 		mediaUpload(t, h.blog, "unused browser image")
@@ -532,6 +546,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/profile-history.js"
 	case "auth-styles":
 		scriptFile = "testdata/auth-styles.js"
+	case "form-errors":
+		scriptFile = "testdata/form-errors.js"
 	case "draft-recovery":
 		scriptFile = "testdata/draft-recovery.js"
 	case "confirmations":
@@ -593,7 +609,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		}
 		script = bytes.ReplaceAll(script, []byte("__REVISION_TARGETS__"), data)
 	}
-	if mode == "auth-styles" {
+	if mode == "auth-styles" || mode == "form-errors" {
 		requireStatus(t, h.request("POST", "/auth/reset/request/email", url.Values{"email": {"trentnix@gmail.com"}}, false), http.StatusOK)
 		if len(h.mail.messages) != 2 {
 			t.Fatal("expected one reset email after registration")

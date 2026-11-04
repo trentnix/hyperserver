@@ -68,7 +68,7 @@
 <section id="page-delete-confirmation" class="confirmation-panel">
 {{ if .Data.Error }}
 <h1 id="delete-title">Cannot delete page</h1>
-<p role="alert">{{ .Data.Error }}</p>
+<p class="form-error" role="alert">{{ .Data.Error }}</p>
 <div class="form-actions">{{ if .IsHtmx }}<button type="button" data-close-dialog autofocus>OK</button>{{ else }}<a class="button-secondary" href="{{ .Data.URL }}">OK</a>{{ end }}</div>
 {{ else }}
 <h1 id="delete-title">Delete page?</h1><p>Delete “{{ .Data.Title }}” and its saved versions? This cannot be undone. Move or delete its subpages first. Uploaded images are kept.</p>

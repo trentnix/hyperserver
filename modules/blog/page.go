@@ -68,20 +68,25 @@ type pageRepository interface {
 
 // validatePage returns the first invalid-field message, or an empty string.
 func validatePage(p Page) string {
+	_, message := validatePageField(p)
+	return message
+}
+
+func validatePageField(p Page) (string, string) {
 	if p.Title == "" || !utf8.ValidString(p.Title) || utf8.RuneCountInString(p.Title) > 240 {
-		return "Enter a title of at most 240 characters."
+		return "title", "Enter a title of at most 240 characters."
 	}
 	if !validSlug(p.Slug) {
-		return "Use a slug of at most 120 lowercase letters, numbers, and single hyphens."
+		return "slug", "Use a slug of at most 120 lowercase letters, numbers, and single hyphens."
 	}
 	if !utf8.ValidString(p.Markdown) || len(p.Markdown) > maxMarkdownBytes {
-		return "Enter valid Markdown of at most 256 KiB."
+		return "content", "Enter valid Markdown of at most 256 KiB."
 	}
 	if !utf8.ValidString(p.Summary) || utf8.RuneCountInString(p.Summary) > 2000 {
-		return "Enter a preview description of at most 2,000 characters."
+		return "summary", "Enter a preview description of at most 2,000 characters."
 	}
 	if p.ChildrenDisplay != "hidden" && p.ChildrenDisplay != "list" && p.ChildrenDisplay != "blocks" {
-		return "Choose hidden, preview list, or preview blocks for subpages."
+		return "childrenDisplay", "Choose hidden, preview list, or preview blocks for subpages."
 	}
-	return ""
+	return "", ""
 }

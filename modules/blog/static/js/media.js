@@ -13,12 +13,13 @@ export function openMediaLibrary(select) {
     if (choosing) { event.preventDefault(); return; }
     browsing = event.detail.xhr;
     results.setAttribute('aria-busy', 'true');
-    status.textContent = 'Loading images…';
+    setMediaStatus(status, 'Loading images…');
   });
   dialog.addEventListener('htmx:afterRequest', event => {
     if (event.detail.xhr !== browsing) return;
     results.removeAttribute('aria-busy');
-    status.textContent = event.detail.xhr.status >= 200 && event.detail.xhr.status < 300 ? '' : 'Unable to load images. Close the library and try again.';
+    const failed = event.detail.xhr.status < 200 || event.detail.xhr.status >= 300;
+    setMediaStatus(status, failed ? 'Unable to load images. Close the library and try again.' : '', failed);
   });
   dialog.addEventListener('htmx:afterSwap', event => {
     results.scrollTop = 0;
@@ -33,7 +34,7 @@ export function openMediaLibrary(select) {
     if (!/^[a-f0-9]{64}\.(png|jpeg|gif)$/.test(id)) return;
     choosing = true;
     button.disabled = true;
-    status.textContent = 'Checking image…';
+    setMediaStatus(status, 'Checking image…');
     try {
       // Cleanup can remove an image after the library was opened. Saving also
       // checks references, because choosing an image does not reserve it.
@@ -45,7 +46,7 @@ export function openMediaLibrary(select) {
       select(path);
       dialog.close();
     } catch (error) {
-      if (error.name !== 'AbortError') status.textContent = error.message;
+      if (error.name !== 'AbortError') setMediaStatus(status, error.message, true);
     } finally {
       choosing = false;
       button.disabled = false;
@@ -79,16 +80,16 @@ export async function uploadImage(file) {
   return path;
 }
 
-export function setUploadStatus(status, message, failed = false) {
+export function setMediaStatus(status, message, failed = false) {
   status.classList.toggle('upload-error', failed);
-  status.setAttribute('role', failed && status.closest('#post-form') ? 'alert' : 'status');
+  status.setAttribute('role', failed ? 'alert' : 'status');
   status.textContent = message;
 }
 
 // Authentication happens in another tab so neither unsaved fields nor the
 // selected File leave this page. Retrying is always an explicit user action.
 export function showUploadFailure(status, error, retry) {
-  setUploadStatus(status, error.message + ' Your edits are unchanged.', true);
+  setMediaStatus(status, error.message + ' Your edits are unchanged.', true);
   const verify = error.code === 'verification_required';
   if (error.code !== 'authentication_required' && !verify) return;
   status.append(' Keep this page open. After ' + (verify ? 'verifying your email' : 'signing in') + ', return here and retry.');
@@ -138,7 +139,7 @@ document.addEventListener('click', event => {
       input.dispatchEvent(new Event('input', {bubbles: true}));
       input.dispatchEvent(new Event('change', {bubbles: true}));
       picker.querySelector('input[type="file"]').value = '';
-      setUploadStatus(picker.querySelector('[data-image-status]'), 'Image selected. Save to apply.');
+      setMediaStatus(picker.querySelector('[data-image-status]'), 'Image selected. Save to apply.');
     });
   }
   const remove = event.target.closest('[data-image-reset]');
@@ -151,7 +152,7 @@ document.addEventListener('click', event => {
     input.dispatchEvent(new Event('input', {bubbles: true}));
     picker.querySelector('input[type="file"]').value = '';
     updateImagePreview(picker);
-    setUploadStatus(picker.querySelector('[data-image-status]'), 'Selection cleared. Save to apply.');
+    setMediaStatus(picker.querySelector('[data-image-status]'), 'Selection cleared. Save to apply.');
   }
 
 });
@@ -162,7 +163,7 @@ document.addEventListener('change', event => {
   const input = event.target;
   if (input.matches('[data-image-value]')) {
     updateImagePreview(input.closest('[data-image-picker]'));
-    setUploadStatus(input.closest('[data-image-picker]').querySelector('[data-image-status]'), '');
+    setMediaStatus(input.closest('[data-image-picker]').querySelector('[data-image-status]'), '');
     return;
   }
   if (!input.matches('[data-image-picker] input[type="file"]') || !input.files.length) return;
@@ -176,20 +177,20 @@ async function uploadPickerImage(picker, file) {
   if (!picker.isConnected || form.dataset.uploading) return;
   const status = picker.querySelector('[data-image-status]');
   if (file.size > 8 * 1024 * 1024) {
-    setUploadStatus(status, 'Choose an image of at most 8 MiB. The current image is unchanged.', true);
+    setMediaStatus(status, 'Choose an image of at most 8 MiB. The current image is unchanged.', true);
     input.value = '';
     return;
   }
   form.dataset.uploading = 'true';
   const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [data-image-upload], [data-media-browse], [data-upload-retry], [type="submit"]')].filter(control => !control.disabled);
   controls.forEach(control => { control.disabled = true; });
-  setUploadStatus(status, 'Uploading image…');
+  setMediaStatus(status, 'Uploading image…');
   try {
     const path = await uploadImage(file);
     picker.querySelector('[data-image-value]').value = path.slice((picker.dataset.imagePrefix || '').length);
     picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
     updateImagePreview(picker);
-    setUploadStatus(status, 'Image uploaded. Save to apply.');
+    setMediaStatus(status, 'Image uploaded. Save to apply.');
   } catch (error) {
     showUploadFailure(status, error, () => uploadPickerImage(picker, file));
   } finally {

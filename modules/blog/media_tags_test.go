@@ -34,6 +34,9 @@ func TestMediaTags(t *testing.T) {
 	for _, invalid := range []string{strings.Repeat("a", 51), "a\nb", strings.Repeat("a", 4097)} {
 		w := h.request("POST", path, url.Values{"tags": {invalid}, "version": {"1"}}, false)
 		requireStatus(t, w, http.StatusUnprocessableEntity)
+		if !strings.Contains(w.Body.String(), `data-error-fields="tags"`) {
+			t.Fatal("invalid tags must identify their control")
+		}
 	}
 	if status := save("stale", "0"); status != http.StatusConflict {
 		t.Fatal(status)
