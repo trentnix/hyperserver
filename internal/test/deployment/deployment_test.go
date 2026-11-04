@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -119,45 +120,32 @@ func TestDeploymentRecovery(t *testing.T) {
 	dir, c := deployment(t)
 	command(t, dir, "docker", "compose", "up", "-d", "--wait")
 	stamp := fmt.Sprint(time.Now().UnixNano())
-	email := "recovery-" + stamp + "@example.invalid"
-	password := "Local-Rehearsal-Password1!"
-	response, body := request(t, c, "/register", url.Values{"provider": {"email"}, "email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
-	if response.StatusCode != 303 && response.StatusCode != 302 {
-		t.Fatalf("registration: %d %s", response.StatusCode, body)
-	}
-	response, body = request(t, c, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {password}}, false, false)
-	if response.StatusCode != 303 && response.StatusCode != 302 {
-		t.Fatalf("login: %d %s", response.StatusCode, body)
-	}
-	response, body = request(t, c, "/", nil, false, false)
-	if response.StatusCode != 200 || !strings.Contains(body, email) {
-		t.Fatal("login did not establish a persistent session")
-	}
-	response, body = request(t, c, "/contact", url.Values{"name": {"Recovery test"}, "email": {email}, "message": {stamp}}, false, false)
-	if response.StatusCode != 200 || !strings.Contains(body, "Your message has been submitted.") {
-		t.Fatalf("contact: %d %s", response.StatusCode, body)
+	loginAdministrator(t, c)
+	email, password := rehearsalEmail, rehearsalPassword
+	response, body := request(t, c, "/post", url.Values{"title": {"Recovery " + stamp}, "slug": {"recovery-" + stamp}, "content": {stamp}, "published": {"on"}}, false, false)
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("create post: %d %s", response.StatusCode, body)
 	}
 
 	backup := "recovery-" + stamp
 	command(t, dir, "bash", "storage.sh", "backup", backup)
-	// Exercise the established migrator on the disposable deployment. Version 1
-	// down removes contacts. Restore, not force, is the recovery procedure.
-	command(t, dir, "docker", "compose", "run", "--rm", "--no-deps", "maintenance", "migrate", "-path", "/migrations/contacts", "-database", "sqlite3:///data/hyperserver.db?x-migrations-table=hyperserver_contact_version", "down", "1")
+	// Exercise the real blog down migration. Restore, not force, is the recovery procedure.
+	command(t, dir, "docker", "compose", "run", "--rm", "--no-deps", "maintenance", "migrate", "-path", "/migrations/blog", "-database", "sqlite3:///data/blog.db?x-migrations-table=blog_schema_version", "down", "1")
 	command(t, dir, "bash", "storage.sh", "restore", backup)
 	command(t, dir, "docker", "compose", "up", "-d", "--wait", "app")
 	response, body = request(t, c, "/", nil, false, false)
-	if response.StatusCode != 200 || !strings.Contains(body, email) {
+	if response.StatusCode != 200 || !strings.Contains(body, "Log out") {
 		t.Fatal("restored account/session did not preserve login")
 	}
-	count := command(t, dir, "docker", "compose", "run", "--rm", "--no-deps", "maintenance", "sqlite3", "/data/hyperserver.db", "SELECT COUNT(*) FROM hyperserver_contact_submission WHERE message='"+stamp+"';")
+	count := command(t, dir, "docker", "compose", "run", "--rm", "--no-deps", "maintenance", "sqlite3", "/data/blog.db", "SELECT COUNT(*) FROM blog_posts WHERE markdown='"+stamp+"';")
 	fields := strings.Fields(count)
 	if len(fields) == 0 || fields[len(fields)-1] != "1" {
-		t.Fatal("contact record was not restored:", count)
+		t.Fatal("post was not restored:", count)
 	}
 	command(t, dir, "docker", "compose", "restart", "app")
 	command(t, dir, "docker", "compose", "up", "-d", "--wait", "app")
 	response, body = request(t, c, "/", nil, false, false)
-	if response.StatusCode != 200 || !strings.Contains(body, email) {
+	if response.StatusCode != 200 || !strings.Contains(body, "Log out") {
 		t.Fatal("restart lost restored account/session")
 	}
 	checkCache(t, c, email)
@@ -168,30 +156,11 @@ func TestDeploymentRecovery(t *testing.T) {
 	}
 	checkCache(t, freshLogin, email)
 
-	_, second := deployment(t)
-	otherEmail := "other-" + stamp + "@example.invalid"
-	response, body = request(t, second, "/register", url.Values{"provider": {"email"}, "email": {otherEmail}, "password": {password}, "passwordMatch": {password}}, false, false)
-	if response.StatusCode != 303 {
-		t.Fatalf("second registration: %d %s", response.StatusCode, body)
-	}
-	response, body = request(t, second, "/login", url.Values{"provider": {"email"}, "email": {otherEmail}, "password": {password}}, false, false)
-	if response.StatusCode != 303 {
-		t.Fatalf("second login: %d %s", response.StatusCode, body)
-	}
-	checkCache(t, second, otherEmail)
-	response, body = request(t, second, "/", nil, false, false)
-	if strings.Contains(body, email) {
-		t.Fatal("second account received first account's content")
-	}
-	response, body = request(t, c, "/", nil, false, false)
-	if strings.Contains(body, otherEmail) {
-		t.Fatal("first account received second account's content")
-	}
 	_, anonymous := deployment(t)
 	checkCache(t, anonymous, "")
 	response, body = request(t, anonymous, "/", nil, false, false)
-	if strings.Contains(body, email) {
-		t.Fatal("shared cache leaked account")
+	if strings.Contains(body, "Log out") {
+		t.Fatal("shared cache leaked administrator controls")
 	}
 
 	command(t, dir, "docker", "compose", "stop", "mail")
@@ -231,7 +200,7 @@ func checkCache(t *testing.T, c *http.Client, email string) {
 					t.Fatal("missing cache variance")
 				}
 			}
-			if email != "" && !strings.Contains(body, email) {
+			if email != "" && (!variant.hx || variant.history) && !strings.Contains(body, "Log out") {
 				t.Fatal("lost personalized response")
 			}
 		}
@@ -240,7 +209,7 @@ func checkCache(t *testing.T, c *http.Client, email string) {
 	var hit bool
 	_, anon := deployment(t)
 	for range 3 {
-		r, _ := request(t, anon, "/css/site.css", nil, false, false)
+		r, _ := request(t, anon, "/assets/css/blog.css", nil, false, false)
 		hit = hit || r.Header.Get("X-Cache-Status") == "HIT"
 	}
 	if !hit {
@@ -248,7 +217,7 @@ func checkCache(t *testing.T, c *http.Client, email string) {
 	}
 	// Unique query keys let us prove that each HTMX variant starts with its own
 	// cache miss and then hits, even though this public asset has identical bytes.
-	path := fmt.Sprintf("/css/site.css?cache-probe=%d", time.Now().UnixNano())
+	path := fmt.Sprintf("/assets/css/blog.css?cache-probe=%d", time.Now().UnixNano())
 	for _, variant := range []struct{ hx, history bool }{{false, false}, {true, false}, {true, true}, {false, true}} {
 		for _, want := range []string{"MISS", "HIT"} {
 			r, _ := request(t, anon, path, nil, variant.hx, variant.history)
@@ -284,20 +253,7 @@ func exerciseLoad(t *testing.T, dir string, c *http.Client, duration, spacing ti
 	t.Helper()
 	command(t, dir, "docker", "compose", "up", "-d", "--wait")
 	_, authenticated := deployment(t)
-	email := fmt.Sprintf("load-%d@example.invalid", time.Now().UnixNano())
-	password := "Local-Rehearsal-Password1!"
-	response, body := request(t, authenticated, "/register", url.Values{"provider": {"email"}, "email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
-	if response.StatusCode != 303 {
-		t.Fatalf("registration: %d %s", response.StatusCode, body)
-	}
-	response, body = request(t, authenticated, "/login", url.Values{"provider": {"email"}, "email": {email}, "password": {password}}, false, false)
-	if response.StatusCode != 303 {
-		t.Fatalf("login: %d %s", response.StatusCode, body)
-	}
-	response, body = request(t, authenticated, "/", nil, false, false)
-	if response.StatusCode != 200 || !strings.Contains(body, email) {
-		t.Fatal("load fixture did not establish authentication")
-	}
+	loginAdministrator(t, authenticated)
 	clients := []*http.Client{c, c, authenticated, authenticated}
 	for worker, client := range clients {
 		for range 25 {
@@ -385,8 +341,80 @@ running:
 	if result.OOMKilled || !result.Running {
 		t.Fatal("container did not stay healthy")
 	}
-	response, _ = request(t, c, "/health/ready", nil, false, false)
+	response, _ := request(t, c, "/health/ready", nil, false, false)
 	if response.StatusCode != 204 {
 		t.Fatal("deployment was not ready after load")
 	}
+}
+
+const rehearsalEmail = "admin@example.invalid"
+const rehearsalPassword = "Local-Rehearsal-Password1!"
+
+func loginAdministrator(t *testing.T, c *http.Client) {
+	t.Helper()
+	credentials := url.Values{"provider": {"email"}, "email": {rehearsalEmail}, "password": {rehearsalPassword}, "passwordMatch": {rehearsalPassword}}
+	response, body := request(t, c, "/login", credentials, false, false)
+	if response.StatusCode != http.StatusSeeOther {
+		response, body = request(t, c, "/register", credentials, false, false)
+		if response.StatusCode != http.StatusSeeOther {
+			t.Fatalf("register rehearsal administrator: %d %s", response.StatusCode, body)
+		}
+		token := verificationToken(t)
+		response, body = request(t, c, "/auth/verify", url.Values{"token": {token}}, false, false)
+		if response.StatusCode != http.StatusSeeOther {
+			t.Fatalf("verify administrator: %d %s", response.StatusCode, body)
+		}
+		response, body = request(t, c, "/login", credentials, false, false)
+		if response.StatusCode != http.StatusSeeOther {
+			t.Fatalf("login: %d %s", response.StatusCode, body)
+		}
+	}
+	// Complete first-login guidance without following arbitrary external redirects.
+	request(t, c, "/", nil, false, false)
+	response, body = request(t, c, "/post/manage", nil, false, false)
+	if response.StatusCode != http.StatusOK || !strings.Contains(body, "Log out") {
+		t.Fatal("administrator session was not established")
+	}
+}
+
+// Read only the disposable Mailpit instance, never a real mailbox.
+func verificationToken(t *testing.T) string {
+	t.Helper()
+	client := &http.Client{Timeout: 5 * time.Second}
+	read := func(path string, value any) {
+		t.Helper()
+		response, err := client.Get("http://localhost:18025" + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("Mailpit: %d", response.StatusCode)
+		}
+		if err := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes)).Decode(value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var inbox struct {
+		Messages []struct {
+			ID string
+			To []struct{ Address string }
+		}
+	}
+	read("/api/v1/messages", &inbox)
+	for _, message := range inbox.Messages {
+		for _, recipient := range message.To {
+			if recipient.Address != rehearsalEmail {
+				continue
+			}
+			var detail struct{ Text, HTML string }
+			read("/api/v1/message/"+url.PathEscape(message.ID), &detail)
+			match := regexp.MustCompile(`/auth/verify\?token=([A-Za-z0-9_-]+)`).FindStringSubmatch(detail.Text + " " + detail.HTML)
+			if len(match) == 2 {
+				return match[1]
+			}
+		}
+	}
+	t.Fatal("verification message not found in disposable Mailpit")
+	return ""
 }

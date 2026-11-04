@@ -30,7 +30,7 @@ type budgets struct {
 func main() {
 	baseline := flag.String("budgets", "docs/performance-budgets.json", "budget file")
 	results := flag.String("results", "", "output of go version followed by repeated go test -bench runs")
-	binary := flag.String("binary", "", "reference binary built with -trimpath -ldflags='-s -w'")
+	binary := flag.String("binary", "", "blog binary built with -trimpath -ldflags='-s -w'")
 	timing := flag.Bool("timing", false, "also enforce ns/op budgets on the recorded CPU")
 	flag.Parse()
 	if err := run(*baseline, *results, *binary, *timing, os.Stdout); err != nil {

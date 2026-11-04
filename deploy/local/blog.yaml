@@ -1,0 +1,7 @@
+# Disposable administrator. Mailpit captures its verification and recovery mail.
+adminEmail: admin@example.invalid
+uploadsDirectory: /data/uploads
+recentPostCount: 10
+storage:
+  provider: sqlite
+  connection: /data/blog.db?_journal=WAL&_timeout=1000&_fk=true

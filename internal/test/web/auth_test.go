@@ -53,7 +53,7 @@ func TestHTTPLoginOnlyProvider(t *testing.T) {
 	for _, htmx := range []bool{false, true} {
 		t.Run(fmt.Sprintf("htmx=%t", htmx), func(t *testing.T) {
 			catalog := func(h *httpHarness) ([]handlers.Descriptor, error) {
-				modules, err := siteCatalog(h, "")
+				modules, err := siteCatalog(h, nil)
 				if err != nil {
 					return nil, err
 				}

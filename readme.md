@@ -16,8 +16,6 @@ The default application is the [blog](docs/blog/readme.md), with posts, pages, i
 go run ./cmd/web
 ```
 
-The [reference site](examples/reference/README.md) remains available through `cmd/reference` for contact forms, health checks, and development routes. It is restricted to an explicit loopback IP and must not be publicly deployed, including through a tunnel or proxy. Do not load its [site module](modules/site) in a production application.
-
 ## Build an application
 
 Use `application.New` to open configured services and initialize the modules selected by `application.Options.Modules`. Configure shared rendering in that callback, before modules prepare their templates. Serve `app.Handler` through `app.Run` so shutdown drains requests before closing resources.
@@ -36,7 +34,7 @@ Start with [application setup](docs/application.md) and the blog's [application.
 | [Sessions](pkg/services/session/readme.md) | Stores, rotation, revocation, and serialization. |
 | [Image processing](pkg/imaging/example_test.go) | Upload validation, orientation, resizing, and metadata removal. |
 | [Testing](docs/testing.md) | Framework and blog checks, browsers, and diagnostics. |
-| [Local deployment](docs/deployment.md) | The disposable reference-site container rehearsal. |
+| [Local deployment](docs/deployment.md) | The disposable blog container rehearsal. |
 | [Roadmap](roadmap.md) | Architectural direction and remaining work. |
 
 ## Configuration
@@ -53,14 +51,14 @@ Fresh stores initialize automatically. Existing framework account and session st
 
 ## Checks
 
-The framework, blog, reference site, and maintenance commands share one Go module. From the repository root:
+The framework, blog, and maintenance commands share one Go module. From the repository root:
 
 ```sh
 go test ./...
 go vet ./...
 ```
 
-See [testing](docs/testing.md) for race, browser, and migration checks. [Performance measurements](docs/performance.md) describe reference-site workloads, not production capacity.
+See [testing](docs/testing.md) for race, browser, and migration checks. [Performance measurements](docs/performance.md) describe framework fixture workloads, not production capacity.
 
 ## Feedback and license
 

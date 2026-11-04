@@ -41,7 +41,7 @@ func TestBrowserResponseDispatch(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
 	}
 	runSiteScenario(t, func(h *httpHarness) {
-		file := testTemplateFile(t, "modules/site/testdata/response-dispatch.html")
+		file := testTemplateFile(t, "internal/test/web/testdata/response-dispatch.html")
 		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.sessions)
 		page := content.NewManagedContent(r, h.app.ContentManager)
 		page.PartialName = "test.browser.dispatch"
@@ -80,7 +80,7 @@ func TestBrowserResponseDispatch(t *testing.T) {
 			io.WriteString(w, html)
 		})
 		h.app.Web.HandleFunc("GET /test/responses/run.js", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(h.app.Config.App.WorkingDirectory, "modules/site/testdata/response-dispatch.js"))
+			http.ServeFile(w, r, filepath.Join(h.app.Config.App.WorkingDirectory, "internal/test/web/testdata/response-dispatch.js"))
 		})
 		h.app.Web.HandleFunc("POST /test/responses/update", func(w http.ResponseWriter, r *http.Request) {
 			updates.Add(1)

@@ -52,8 +52,10 @@ services:
     environment:
       GOMEMLIMIT: 192MiB
       GOMAXPROCS: "2"
+    tmpfs: ["/tmp:size=64m,mode=1777"]
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+      - ./blog.yaml:/data/modules/blog/config.yaml:ro
       - ./state/data:/data
     stop_grace_period: 25s
     healthcheck:
@@ -73,5 +75,6 @@ services:
     env_file: ./state/app.env
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+      - ./blog.yaml:/data/modules/blog/config.yaml:ro
       - ./state/data:/data
       - ./state/backups:/backups

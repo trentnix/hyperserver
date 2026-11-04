@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/modules/site/models"
 )
 
 func assertContactForm(t *testing.T, w *httptest.ResponseRecorder, htmx bool, values url.Values) {
@@ -105,7 +104,7 @@ func TestHTTPContactWorkflow(t *testing.T) {
 					t.Fatal("successful retry did not show success with cleared fields and errors")
 				}
 				h.assertRowCount(t, "hyperserver_contact_submission", 1)
-				var stored models.ContactSubmission
+				var stored contactSubmission
 				err := h.db.QueryRowContext(t.Context(), "SELECT id, name, email, message, created_at FROM hyperserver_contact_submission").
 					Scan(&stored.Id, &stored.Name, &stored.Email, &stored.Message, &stored.CreatedAt)
 				if err != nil {

@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 umask 077
-mkdir -p state/data state/backups state/tls
+mkdir -p state/data/modules/blog state/data/uploads state/backups state/tls
 if [[ ! -e state/app.env ]]; then
   printf 'HYPERSERVER_HTTP_SESSION_JWTKEY=%s\nHYPERSERVER_AUTH_JWTKEY=%s\n' \
     "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > state/app.env

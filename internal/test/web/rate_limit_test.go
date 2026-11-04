@@ -233,7 +233,7 @@ func TestHTTPModuleClientCapacities(t *testing.T) {
 	}, func(cfg *config.Config) {
 		cfg.Auth.RateLimit = &config.ModuleRateLimitConfig{MaxClients: 2}
 		cfg.App.WorkingDirectory = t.TempDir()
-		directory := filepath.Join(cfg.App.WorkingDirectory, "modules", "site")
+		directory := filepath.Join(cfg.App.WorkingDirectory, "modules", "forms")
 		if err := os.MkdirAll(directory, 0700); err != nil {
 			t.Fatal(err)
 		}

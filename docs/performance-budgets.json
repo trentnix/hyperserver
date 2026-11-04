@@ -67,27 +67,27 @@
       "B/op": 9415,
       "allocs/op": 97
     },
-    "BenchmarkReferenceRequest/anonymous-page": {
+    "BenchmarkFrameworkRequest/anonymous-page": {
       "ns/op": 20487,
       "B/op": 34654,
       "allocs/op": 199
     },
-    "BenchmarkReferenceRequest/anonymous-fragment": {
+    "BenchmarkFrameworkRequest/anonymous-fragment": {
       "ns/op": 15392,
       "B/op": 30684,
       "allocs/op": 150
     },
-    "BenchmarkReferenceRequest/authenticated-page": {
+    "BenchmarkFrameworkRequest/authenticated-page": {
       "ns/op": 49434,
       "B/op": 40374,
       "allocs/op": 392
     },
-    "BenchmarkReferenceRequest/authenticated-fragment": {
+    "BenchmarkFrameworkRequest/authenticated-fragment": {
       "ns/op": 45071,
       "B/op": 36389,
       "allocs/op": 360
     },
-    "BenchmarkReferenceLoad": {
+    "BenchmarkFrameworkLoad": {
       "ns/op": 29795,
       "B/op": 35573,
       "allocs/op": 275

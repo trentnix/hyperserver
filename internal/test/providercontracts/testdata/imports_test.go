@@ -3,7 +3,6 @@ package provider_test
 import (
 	"testing"
 
-	"github.com/trentnix/hyperserver/modules/site/contacttest"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/session/sessiontest"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -15,5 +14,4 @@ var (
 	_ func(*testing.T, func(*testing.T) user.AccountRepository) = accounttest.Run
 	_ func(*testing.T, func(*testing.T) session.SessionStore)   = sessiontest.Run
 	_ func(*testing.T, func(*testing.T) session.SessionStore)   = sessiontest.RunCommon
-	_ func(*testing.T, func(*testing.T) contacttest.Fixture)    = contacttest.Run
 )

@@ -1,0 +1,101 @@
+package web_test
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/trentnix/hyperserver/pkg/services/session"
+	"github.com/trentnix/hyperserver/pkg/services/user"
+)
+
+// Home renders the homepage
+func (m *formFixture) Home(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != homeURL {
+		m.contentManager.HandleNotFound(w, r)
+		return
+	}
+
+	welcomeMessage := "Welcome!"
+	u := user.GetUserFromContext(r.Context())
+	if u != nil {
+		welcomeMessage = "Welcome " + u.Email + "!"
+	}
+
+	homepage := m.views[homePagePartialName].Content(r, nil)
+	homepage.Title = welcomeMessage
+
+	err := homepage.Render(w, r)
+	if err != nil {
+		homepage.HandleRenderError(w, r, "there was an error rendering the home page", err)
+	}
+}
+
+// HandleMessage renders message as text escaped by the page template.
+func (m *pageRenderer) HandleMessage(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "(no message)"
+	}
+
+	messagePage := m.views[messagePagePartialName].Content(r, message)
+	err := messagePage.Render(w, r)
+	if err != nil {
+		messagePage.HandleRenderError(w, r,
+			fmt.Sprintf("Unable to display the following message: %s", message),
+			err)
+	}
+}
+
+// SessionExample provides a handler that exercises session code by creating a session to store
+// a visit counter that will keep track of how many visits a particular user has made to
+// the URL this handler serves.
+func (m *formFixture) SessionExample(w http.ResponseWriter, r *http.Request) {
+	const counterKey = "counter"
+
+	mySession, sessionManagerErr := session.Get(r, "counterSession")
+	if sessionManagerErr != nil || mySession == nil {
+		m.contentManager.HandleError(w, r, "there was an error retrieving the session", sessionManagerErr, http.StatusInternalServerError)
+		return
+	}
+
+	var counter int
+	if err := mySession.DecodeValue(counterKey, &counter); err != nil {
+		m.contentManager.HandleError(w, r, "unable to decode the counter session", err, http.StatusInternalServerError)
+		return
+	}
+	counter++ // add this visit
+
+	page := m.views[homePagePartialName].Content(r, nil)
+	page.Title = fmt.Sprintf("# of My Visits: %d", counter)
+
+	// save the updated counter value in the session
+	mySession.Data[counterKey] = counter
+	sessionSaveErr := mySession.Save(w, r)
+	if sessionSaveErr != nil {
+		m.contentManager.HandleError(w, r, "unable to save the counter session", sessionSaveErr, http.StatusInternalServerError)
+		return
+	}
+
+	// render the result
+	renderErr := page.Render(w, r)
+	if renderErr != nil {
+		page.HandleRenderError(w, r, "there was an error rendering the home page", renderErr)
+		return
+	}
+}
+
+// NotFound handles the /404 endpoint by displaying the "NotFound" page
+func (m *pageRenderer) NotFound(w http.ResponseWriter, r *http.Request) {
+	notFound := m.views[notFoundPagePartialName].Content(r, fmt.Sprintf("The resource you requested was not found: %s", r.URL.Path))
+	notFound.Title = "Resource Not Found"
+	notFound.ResponseStatusCode = http.StatusNotFound
+
+	err := notFound.Render(w, r)
+	if err != nil {
+		notFound.HandleRenderError(w, r, "there was an error rendering the home page", err)
+	}
+}
+
+// Logout forwards the site's POST to authentication logout without changing its method.
+func (m *formFixture) Logout(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/auth/logout", http.StatusTemporaryRedirect)
+}

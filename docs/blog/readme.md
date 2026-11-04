@@ -41,7 +41,7 @@ Runtime configuration, databases, uploads, and local assets are ignored by Git. 
 
 The blog now runs through `cmd/web` instead of `examples/blog`. The source move does not move configuration or data. To keep an existing installation, build with `go build -o /tmp/hyperserver-blog ./cmd/web` from the repository root, then run that binary from the existing configuration directory. Review [database upgrades](#database-upgrades) before starting it.
 
-If the root `config.yaml` belongs to the old contact demo, keep that configuration separate. Use the blog templates in a new configuration directory and copy the module template into its `modules/blog/` directory. Run the built blog binary there. The contact demo remains available through [cmd/reference](../../examples/reference/README.md).
+If the root `config.yaml` belongs to the old contact demo, keep that configuration separate. Use the blog templates in a new configuration directory and copy the module template into its `modules/blog/` directory. Run the built blog binary there. The old contact demo has been removed.
 
 ## Guides
 
@@ -90,7 +90,7 @@ Migration files are immutable after release. Add numbered migrations for later c
 
 Configure real SMTP delivery, HTTPS, and `http.publicOrigin` before public use. The default Mailpit credentials are local-only. Review [proxy settings](../http.md#addresses-tls-and-proxies) and the project's [security status](../../SECURITY.md).
 
-Edit content through the application. Direct database writes bypass reference tracking and cache invalidation. Use persistent storage for databases and uploads, protect configuration files, and keep verified backups off the serving machine. The [container rehearsal](../deployment.md) exercises `cmd/reference`, not the blog.
+Edit content through the application. Direct database writes bypass reference tracking and cache invalidation. Use persistent storage for databases and uploads, protect configuration files, and keep verified backups off the serving machine. The [container rehearsal](../deployment.md) runs the blog with disposable data.
 
 ## Tests
 

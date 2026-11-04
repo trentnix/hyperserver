@@ -248,7 +248,7 @@ func TestHTTPAuthCommitsSurviveRenderingFailure(t *testing.T) {
 		files := fstest.MapFS{"failure.html": {Data: []byte(`prefix{{.Data.NonexistentField}}`)}}
 		h.app.ContentManager.RegisterLayouts("page", files, "failure.html")
 		h.app.ContentManager.RegisterLayouts("htmx", files, "failure.html")
-		return siteCatalog(h, "")
+		return siteCatalog(h, nil)
 	}
 	for _, operation := range []string{"registration", "reset request", "change"} {
 		for _, htmx := range []bool{false, true} {

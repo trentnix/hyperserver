@@ -16,8 +16,8 @@
 
 # Dependency directories (remove the comment below to include it)
 vendor
-# Browser dependencies are embedded and checked in with the site module.
-!/modules/site/templates/html/js/vendor/
+# Browser dependencies are embedded in the framework's test fixtures.
+!/internal/test/web/testdata/js/vendor/
 
 # Go workspace file
 go.work
@@ -38,7 +38,6 @@ config.yaml
 
 # executable
 /web
-/reference
 /blog-maintenance
 /optimize-images
 

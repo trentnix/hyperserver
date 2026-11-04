@@ -41,9 +41,7 @@ mail:
   password: local-mailpit-only
   fromAddress: noreply@example.invalid
   timeout: 5s
-database:
-  driver: sqlite3
-  connection: /data/hyperserver.db?_journal=WAL&_timeout=1000&_fk=true
 app:
-  name: HyperServer rehearsal
+  name: Blog rehearsal
+  workingDirectory: /data
   renderNotifications: true

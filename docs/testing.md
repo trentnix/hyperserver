@@ -2,7 +2,7 @@
 
 Run commands from the repository root with the Go version in [go.mod](../go.mod). SQLite and race tests require CGO and a C compiler.
 
-Unit tests live beside the code they exercise. Framework HTTP integration and browser tests live in [internal/test/web](../internal/test/web) and assemble public APIs. Blog tests live in [modules/blog](../modules/blog). Command setup tests stay in `cmd/web` and `cmd/reference`. Shared storage contract helpers live in [internal/test](../internal/test).
+Unit tests live beside the code they exercise. Framework HTTP integration and browser tests live in [internal/test/web](../internal/test/web) and assemble public APIs. Blog tests live in [modules/blog](../modules/blog). Command setup tests stay in `cmd/web`. Shared account and session contract suites live beside their service contracts.
 
 Run:
 
@@ -25,6 +25,16 @@ HS_TEST_FIREFOX=firefox go test ./modules/blog -run '^TestBrowser' -count=1 -tim
 ```
 
 Blog backup tests use isolated temporary data, including an application restart after manual recovery. They never delete the local blog's data.
+
+## Framework fixtures
+
+The blog is the only application. The retired contact demo is not needed to test the framework.
+
+- [HTTP fixtures](../internal/test/web/module_fixture_test.go) retain ordinary and HTMX forms, error responses, notifications, authenticated navigation, and optional authentication. Templates and browser assets live under `internal/test/web/testdata`.
+- [Provider replacement](../internal/test/web/provider_replacement_test.go) injects account, session, mail, and form-storage doubles through public APIs. [Independent storage](../internal/test/web/storage_test.go) checks failure isolation.
+- [Application tests](../pkg/application) cover optional services, module selection, startup failure cleanup, readiness, and borrowed-resource ownership.
+- [Lifecycle integration tests](../pkg/application/run_drain_test.go) cover HTTP/TLS draining, drain deadlines, and resource cleanup. [Shared-pool tests](../pkg/handlers/storage_initialization_test.go) cover dependency order and native queries.
+- Account and session packages retain their provider contracts and migration tests. Contact-specific storage, configuration, and presentation tests were removed with the demo.
 
 ## Browser tests
 

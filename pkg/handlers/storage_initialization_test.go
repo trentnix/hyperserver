@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/config"
-	"github.com/trentnix/hyperserver/modules/site/models"
-	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/database"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
@@ -42,7 +40,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 			}
 			var accounts user.AccountRepository
 			var consumerPool *sql.DB
-			var contacts *storage.SQLiteContactRepository
+			var consumerReady bool
 			var setupErr error
 			provider := dependencyDescriptor("accounts", &dependencyModule{
 				init: func(ctx context.Context) error {
@@ -89,7 +87,8 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 					}
 					// The consumer can build its own repository on the same borrowed pool.
 					var err error
-					contacts, err = storage.NewSQLiteContactRepository(ctx, consumerPool)
+					_, err = consumerPool.ExecContext(ctx, `CREATE TABLE test_messages (email TEXT, message TEXT)`)
+					consumerReady = err == nil
 					return err
 				},
 			})
@@ -99,7 +98,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 			}
 			instances, err := handlers.Initialize(t.Context(), app, []handlers.Descriptor{consumer, provider}, nil)
 			if failed {
-				if err == nil || setupErr == nil || !errors.Is(err, setupErr) || len(instances) != 0 || contacts != nil {
+				if err == nil || setupErr == nil || !errors.Is(err, setupErr) || len(instances) != 0 || consumerReady {
 					t.Fatalf("failed startup: instances=%v error=%v storage error=%v", instances, err, setupErr)
 				}
 			} else {
@@ -114,7 +113,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 				if err := accounts.Create(t.Context(), account); err != nil {
 					t.Fatal(err)
 				}
-				if err := contacts.Create(t.Context(), &models.ContactSubmission{Email: account.Email, Message: "Shared storage"}); err != nil {
+				if _, err := consumerPool.ExecContext(t.Context(), `INSERT INTO test_messages VALUES (?, ?)`, account.Email, "Shared storage"); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := accounts.GetByID(t.Context(), account.ID); err != nil {
@@ -124,7 +123,7 @@ func TestInitializeStorageBeforeConsumersUsingSharedPool(t *testing.T) {
 				// Application-specific queries can use the native pool alongside repositories.
 				var email, message string
 				err = consumerPool.QueryRowContext(t.Context(), `SELECT u.email, c.message
-					FROM user u JOIN hyperserver_contact_submission c ON c.email = u.email
+					FROM user u JOIN test_messages c ON c.email = u.email
 					WHERE u.id = ?`, account.ID).Scan(&email, &message)
 				if err != nil || email != account.Email || message != "Shared storage" {
 					t.Fatalf("native query: email=%q message=%q error=%v", email, message, err)

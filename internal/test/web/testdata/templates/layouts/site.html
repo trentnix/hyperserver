@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The framework script handles HTML, plain-text, and connection errors. -->
+    <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"historyCacheSize":0,"responseHandling": [
+      {"code":"204","swap":false},
+      {"code":"[23]..","swap":true},
+      {"code":"[45]..","swap":false,"error":true},
+      {"code":"...","swap":false}
+    ]}' />
+    <link rel="stylesheet" href="/css/site.css" />
+    <script src="/js/vendor/htmx/2.0.11/htmx.min.js"
+      integrity="sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg"
+      defer>
+    </script>
+    <script src="/js/htmx-errors.js" defer></script>
+    <script src="/js/site.js" defer></script>
+    <title>{{ .Site }} | {{ .Title }}</title>
+  </head>
+
+  <body>
+    <header>
+      {{ template "site.component.nav" . }}
+    
+    </header>
+
+    <main>
+    
+      {{ renderPartial .PartialName . }}
+    
+    </main>
+	<footer>HTTP test fixture</footer>
+
+    {{ template "site.component.notifications" . }}
+
+    {{ template "site.component.console_messages" . }}
+  </body>
+  
+</html>

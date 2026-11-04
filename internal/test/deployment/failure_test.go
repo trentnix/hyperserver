@@ -41,9 +41,9 @@ func TestDeploymentFailures(t *testing.T) {
 	if logs := command(t, dir, "docker", "compose", "logs", "edge"); strings.Contains(logs, "private-rehearsal-token") {
 		t.Fatal("proxy failure logged a recovery token")
 	}
-	cmd := localCommand(t.Context(), dir, "docker", "compose", "run", "--rm", "--no-deps", "-e", "HYPERSERVER_DATABASE_CONNECTION=/missing/storage.db", "app")
+	cmd := localCommand(t.Context(), dir, "docker", "compose", "run", "--rm", "--no-deps", "-e", "HYPERSERVER_AUTH_ACCOUNTSTORAGE_OPTIONS_CONNECTION=/missing/storage.db", "app")
 	out, err := cmd.CombinedOutput()
-	if err == nil || !strings.Contains(string(out), "Application lifecycle failed") {
+	if err == nil || !strings.Contains(string(out), "Blog stopped") {
 		t.Fatalf("failed startup not reported: %v %s", err, out)
 	}
 	command(t, dir, "docker", "compose", "up", "-d", "--wait", "app")
@@ -74,12 +74,9 @@ func TestDeploymentFailures(t *testing.T) {
 		t.Fatal("storage outage killed liveness")
 	}
 
-	email := "slow-mail-" + time.Now().Format("150405.000000000") + "@example.invalid"
-	password := "Local-Rehearsal-Password1!"
-	response, body := request(t, c, "/register", url.Values{"provider": {"email"}, "email": {email}, "password": {password}, "passwordMatch": {password}}, false, false)
-	if response.StatusCode != 303 {
-		t.Fatalf("registration: %d %s", response.StatusCode, body)
-	}
+	_, administrator := deployment(t)
+	loginAdministrator(t, administrator)
+	email, password := rehearsalEmail, rehearsalPassword
 	command(t, dir, "docker", "compose", "pause", "mail")
 	form := url.Values{"email": {email}}
 	r, err := http.NewRequestWithContext(t.Context(), "POST", origin+"/auth/reset/request/email", strings.NewReader(form.Encode()))
@@ -135,7 +132,7 @@ func TestDeploymentFailures(t *testing.T) {
 	logs := command(t, dir, "docker", "compose", "logs", "--since", start.Format(time.RFC3339Nano), "app")
 	observed := false
 	for line := range strings.SplitSeq(logs, "\n") {
-		if strings.Contains(line, "password reset instructions could not be sent") && strings.Contains(line, `"requestID":"`+value.requestID+`"`) {
+		if strings.Contains(line, "password reset instructions could not be sent") && strings.Contains(line, "requestID="+value.requestID) {
 			observed = true
 		}
 	}

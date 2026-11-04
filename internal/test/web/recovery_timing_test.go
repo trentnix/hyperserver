@@ -299,7 +299,7 @@ func TestHTTPResetTokenStorageCancellation(t *testing.T) {
 				h.app.OnShutdown("instrumented account database", func(context.Context) error { return db.Close() })
 				// The harness already prepared the schema. Supply the instrumented pool before route setup.
 				h.accounts = usersqlite.NewAccountRepository(db)
-				return siteCatalog(h, "")
+				return siteCatalog(h, nil)
 			}
 			runSiteScenarioWithCatalog(t, catalog, func(h *httpHarness) {
 				u := h.seedUser(t, "person@example.invalid")

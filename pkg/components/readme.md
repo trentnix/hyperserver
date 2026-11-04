@@ -1,6 +1,6 @@
 # Rendering and forms
 
-The [contact handler](../../modules/site/contact.go) demonstrates validation, persistence, and errors for both ordinary forms and HTMX.
+The test-only [contact handler](../../internal/test/web/contact_fixture_test.go) demonstrates validation, persistence, and errors for both ordinary forms and HTMX.
 
 ## Prepare views once
 
@@ -48,7 +48,7 @@ Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplate
 
 Configure `ContentManagerService` before serving. It selects shared page and HTMX templates, `HomeURL`, `AuthURL`, and response callbacks. `HandleMessage`, `HandleError`, and `HandleNotFound` render responses when called. Assigning them does not register routes.
 
-The reference application's [rendering setup](../../cmd/reference/modules.go) selects site defaults. Apply overrides afterward, before template preparation. `ApplyDefaults` rejects a second defaults policy. Explicit field and template overrides remain available.
+The blog's [rendering setup](../../modules/blog/presentation.go) selects application defaults. Apply overrides afterward, before template preparation. `ApplyDefaults` rejects a second defaults policy. Explicit field and template overrides remain available.
 
 `AddPage*` and `AddHtmx*` append template paths. `RegisterLayouts`, `RegisterContents`, and `RegisterComponents` replace the selected response type's paths. Calling a `Register*` method without filenames clears them.
 
@@ -142,7 +142,7 @@ For categorized messages, `flash.AddSuccessMessage(w, r, text, category)` and `f
 
 ## Forms
 
-Embed `form.Form` for errors and messages. Implement `Bind(*http.Request) error` to copy parsed inputs and `Validate() form.FieldErrors` for ordinary Go validation. Validation returns plain-text messages keyed by field name and must not change application data. See the [contact form](../../modules/site/contact.go) and [account rules](../../auth/modules/email/form_validation.go).
+Embed `form.Form` for errors and messages. Implement `Bind(*http.Request) error` to copy parsed inputs and `Validate() form.FieldErrors` for ordinary Go validation. Validation returns plain-text messages keyed by field name and must not change application data. See the [contact form](../../internal/test/web/contact_fixture_test.go) and [account rules](../../auth/modules/email/form_validation.go).
 
 The POST handler stops on any parsing, binding, or validation error:
 
@@ -164,4 +164,4 @@ If rendering fails, `HandleFormError` uses `ContentManager.HandleError`, or a pl
 
 Parsing limits decoded fields to 16 KiB and encoded queries to 64 KiB, independently of the route body limit. `ParseAndValidateWithOptions` can change field limits or explicitly disable them. Account and contact forms return 413 for oversized input, 400 for malformed forms, and 415 for unsupported encodings.
 
-Use both ordinary `method`/`action` attributes and HTMX attributes when a form must work without JavaScript. See the [contact template](../../modules/site/templates/html/partials/contact-form.html). Render submitted values and messages through `html/template`. For internationalized email addresses, use `type="text" inputmode="email"` and validate on the server.
+Use both ordinary `method`/`action` attributes and HTMX attributes when a form must work without JavaScript. See the [contact template](../../internal/test/web/testdata/templates/partials/contact-form.html). Render submitted values and messages through `html/template`. For internationalized email addresses, use `type="text" inputmode="email"` and validate on the server.

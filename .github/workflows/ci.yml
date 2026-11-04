@@ -112,14 +112,14 @@ jobs:
           mkdir -p tmp/performance
           {
             go version
-            go test -run '^$' -bench 'Benchmark(RenderTemplates|Middleware|Session|Reference)' \
+            go test -run '^$' -bench 'Benchmark(RenderTemplates|Middleware|Session|Framework)' \
               -benchmem -benchtime=500ms -count=5 \
-              ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./cmd/reference
+              ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./internal/test/web
           } | tee tmp/performance/results.txt
-          go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/reference
+          go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/web
           # Shared runners are not a stable environment for latency budgets.
           go run ./internal/test/perfcheck -results tmp/performance/results.txt -binary tmp/performance/web
-          HS_TEST_PERFORMANCE=1 go test -v -count=5 ./cmd/reference -run '^TestReferenceHeapBudget$'
+          HS_TEST_PERFORMANCE=1 go test -v -count=5 ./internal/test/web -run '^TestFrameworkHeapBudget$'
 
   browser:
     name: Firefox browser checks

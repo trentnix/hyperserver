@@ -8,7 +8,7 @@ Use [application.New](application.md#services-and-serving) for configured accoun
 
 For accounts that share an existing SQLite pool, supply `user/sqlite.ConfiguredProvider(cfg, pool)` as the `"sqlite"` factory. The pool keeps its existing owner. Runtime setup needs no connection option in that case. If using maintenance, set the option to the same database. Without an override, account setup opens and owns its pool.
 
-SQLite account connections use the config directory or `app.workingDirectory` for relative paths. Missing connections and unsupported options stop startup. Accounts do not read `database`, which configures the reference application's contact storage. Accounts and contacts can name the same file, but own separate pools. `:memory:` creates a separate database per pool.
+SQLite account connections use the config directory or `app.workingDirectory` for relative paths. Missing connections and unsupported options stop startup. Accounts do not read the legacy `database` setting. Modules choose their own storage and can share a database file without sharing a pool. `:memory:` creates a separate database per pool.
 
 Account models and contracts live in [`user`](../pkg/services/user), with SQLite support in [`user/sqlite`](../pkg/services/user/sqlite). For explicit setup, call `sqlite.NewAccountRepository(pool)` and then `Initialize(ctx)` before supplying it to consumers. A supplied pool keeps its existing owner.
 
@@ -16,7 +16,7 @@ Initialization checks writable columns, supported types, required `NOT NULL` dec
 
 ## Storage guarantees
 
-Replacement providers must preserve the [account](../pkg/services/user/account_repository.go), [session](../pkg/services/session/store.go), and [contact](../modules/site/site.go) guarantees, not just their method signatures. Account security changes use version checks and atomic writes. Contact creation inserts a new submission on each call, so retries can create duplicates. Sessions support [serializer replacement](../pkg/services/session/readme.md#replacing-serialization) independently of storage, with JSON as the default.
+Replacement providers must preserve the [account](../pkg/services/user/account_repository.go) and [session](../pkg/services/session/store.go) guarantees, not just their method signatures. Account security changes use version checks and atomic writes. Sessions support [serializer replacement](../pkg/services/session/readme.md#replacing-serialization) independently of storage, with JSON as the default.
 
 Account providers must distinguish rejected recovery tokens from storage failures using the [documented errors](../pkg/services/user/errors.go) and `errors.Is`. Reset-link validation and token redemption return HTTP 400 for rejected tokens and HTTP 500 for infrastructure failures. Error responses and diagnostics omit token values and private provider details. Notification or redirect-session cleanup failures after a committed account change or login are logged without undoing the successful operation.
 
@@ -24,13 +24,9 @@ Account matching and uniqueness use [EmailKey](../pkg/services/user/email.go). U
 
 SQLite writes complete before reporting success. File-backed data survives normal close and reopen. Crash durability depends on SQLite settings and the filesystem. In-memory databases are temporary.
 
-The sample file contact provider publishes complete files without overwriting records, but does not sync them to disk or promise power-loss durability. Its filesystem calls cannot be interrupted by context cancellation. Applications needing stronger guarantees must select another provider.
-
-To try file-backed contacts with SQLite accounts, configure the [reference site](../examples/reference/README.md). From `examples/reference`, run `go run ../../cmd/reference -contact-directory ./contacts`. The contact directory must be on a filesystem with hard-link support. See the [file format](../modules/site/storage/readme.md).
-
 Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](../pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
 
-Accounts, contacts, and each configured SQLite session table have independent schema versions. Default session payloads have a separate format version and support reading unversioned JSON objects. See [session serialization](../pkg/services/session/readme.md#replacing-serialization) for compatibility and size limits.
+Accounts and each configured SQLite session table have independent schema versions. Default session payloads have a separate format version and support reading unversioned JSON objects. See [session serialization](../pkg/services/session/readme.md#replacing-serialization) for compatibility and size limits.
 
 ## Testing a replacement provider
 
@@ -41,7 +37,6 @@ Import the shared suites from your provider's `_test.go` files. They work from a
 | Account storage | [`pkg/services/user/accounttest.Run`](../pkg/services/user/accounttest/contract.go) |
 | Common session behavior | [`pkg/services/session/sessiontest.RunCommon`](../pkg/services/session/sessiontest/contract.go) |
 | Server-side sessions with revocable rotation | [`pkg/services/session/sessiontest.Run`](../pkg/services/session/sessiontest/contract.go), which also runs the common suite |
-| Reference-site contact storage | [`modules/site/contacttest.Run`](../modules/site/contacttest/contract.go) |
 
 Pass a factory that creates empty, initialized storage for each call and registers cleanup with the supplied `*testing.T`. Use temporary databases, isolated schemas, or unique namespaces. Never point the suites at production data. Providers must support the concurrent operations exercised by their suite.
 
@@ -55,7 +50,7 @@ func TestAccountContract(t *testing.T) {
 }
 ```
 
-Your `openTestRepository` helper owns backend setup and cleanup. See the [SQLite account test](../pkg/services/user/sqlite/contract_test.go) and [session test](../pkg/services/session/sqlite/contract_test.go) for complete factories. The contact suite takes a `Fixture` with independent committed-record reads and a reversible write-failure hook. See the [SQLite contact test](../modules/site/storage/contract_test.go).
+Your `openTestRepository` helper owns backend setup and cleanup. See the [SQLite account test](../pkg/services/user/sqlite/contract_test.go) and [session test](../pkg/services/session/sqlite/contract_test.go) for complete factories.
 
 These suites check shared behavior, not every provider capability. Keep tests for backend failures, schema migrations, exact expiration boundaries, timestamp precision, durability, and optional interfaces with the provider. Test external identity storage separately when supporting external authentication. Run the suites with `go test` and `go test -race` alongside application integration tests. The test APIs follow the framework's [experimental compatibility policy](compatibility.md).
 
@@ -89,22 +84,13 @@ HS_TEST_MIGRATE=migrate go test ./pkg/services/user/sqlite -run '^TestAccountMig
 
 The command fails if `migrate` is not on `PATH`. You can also set `HS_TEST_MIGRATE` to an absolute executable path. Without `HS_TEST_MIGRATE`, CLI integration tests skip. Schema and version-validation tests still run.
 
-## Contact and session migrations
-
-SQLite contact startup checks writable columns, supported types, required email values (`NOT NULL`), and a non-partial unique submission-ID key with binary comparison. Incompatible tables stop site initialization. Setup does not repair existing tables or validate stored records.
-
-Contact storage follows the same first-start and version-check policy as accounts, using [contact migrations](../modules/site/database/migrations/000001_contacts.up.sql) and `hyperserver_contact_version`. To run its migrations explicitly:
-
-```sh
-migrate -path modules/site/database/migrations \
-  -database 'sqlite3://file:///absolute/path/database.db?x-migrations-table=hyperserver_contact_version&_foreign_keys=on' up
-```
+## Session migrations
 
 See [session migrations](../pkg/services/session/readme.md#sqlite-schema-migrations) for per-table versions and custom table names. These providers can share a database without sharing version markers. Run each provider's migrations separately.
 
 ## SQLite connections
 
-The reference application and built-in session and maintenance providers use the [SQLite pool opener](../pkg/database/sqlite/pool.go). Each pool allows one open connection and retains it while idle. Every new or replacement connection enables foreign keys and waits up to 5000 milliseconds for locks. Set `_timeout` or `_busy_timeout` in the connection string to change that wait. Zero disables waiting. Disabling foreign keys is rejected.
+The blog and built-in session and maintenance providers use the [SQLite pool opener](../pkg/database/sqlite/pool.go). Each pool allows one open connection and retains it while idle. Every new or replacement connection enables foreign keys and waits up to 5000 milliseconds for locks. Set `_timeout` or `_busy_timeout` in the connection string to change that wait. Zero disables waiting. Disabling foreign keys is rejected.
 
 Cancellation stops a wait for a free pool connection. During a SQLite lock wait, cancellation can be delayed until the lock timeout and return a lock error instead of a context error. Caller-supplied pools retain their owner's settings.
 
@@ -119,7 +105,7 @@ if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM user").Scan(&accountCo
 }
 ```
 
-Use a typed constructor parameter such as `*sql.DB` for application-supplied clients. If another module supplies the client, publish it as a capability, declare the requirement, and retrieve it with `handlers.GetDependency[*sql.DB](d, "sqlite-pool")`. The [shared-pool test](../pkg/handlers/storage_initialization_test.go) covers native queries alongside account and contact repositories. Other backends can use their own client types without adding a framework interface.
+Use a typed constructor parameter such as `*sql.DB` for application-supplied clients. If another module supplies the client, publish it as a capability, declare the requirement, and retrieve it with `handlers.GetDependency[*sql.DB](d, "sqlite-pool")`. The [shared-pool test](../pkg/handlers/storage_initialization_test.go) covers native queries alongside an account repository and a test-only consumer table. Other backends can use their own client types without adding a framework interface.
 
 Application setup owns the clients it supplies and closes them after modules stop. Modules must not close supplied clients. A module that creates its own client owns its cleanup. Modules must still close query results and any dedicated `*sql.Conn` they acquire. Closing a dedicated connection returns it to the pool without closing the pool.
 

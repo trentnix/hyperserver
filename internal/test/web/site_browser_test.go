@@ -38,7 +38,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 		page := content.NewManagedContent(r, h.app.ContentManager)
 		page.PartialName = "test.browser.errors"
 		page.SystemMessages = []messages.SystemMessage{messages.NewSystemMessage(`</script><script>window.systemMessageInjected=true</script>`, messages.SystemMessageTypeDebug)}
-		file := testTemplateFile(t, "modules/site/testdata/error-responses.html")
+		file := testTemplateFile(t, "internal/test/web/testdata/error-responses.html")
 		page.AddContent(file.FS, file.Path)
 		w := httptest.NewRecorder()
 		if err := page.Render(w, r); err != nil {
@@ -51,7 +51,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 			io.WriteString(w, html)
 		})
 		h.app.Web.HandleFunc("GET /test/browser/run.js", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(h.app.Config.App.WorkingDirectory, "modules/site/testdata/error-responses.js"))
+			http.ServeFile(w, r, filepath.Join(h.app.Config.App.WorkingDirectory, "internal/test/web/testdata/error-responses.js"))
 		})
 		for path, status := range map[string]int{"bad-request": 400, "forbidden": 403, "unavailable": 503} {
 			h.app.Web.HandleFunc("GET /test/browser/"+path, func(w http.ResponseWriter, r *http.Request) {

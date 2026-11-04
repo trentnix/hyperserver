@@ -9,9 +9,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/maintenance"
+	"github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/health"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 )
@@ -44,7 +47,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 	return app.Run(ctx, func(ctx context.Context) (*http.Server, net.Listener, error) {
-		httpServer, err := server.NewHTTPServer(app.Config.HTTP, app.Handler)
+		httpServer, err := newHTTPServer(ctx, app)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -54,4 +57,16 @@ func run(ctx context.Context) error {
 		}
 		return httpServer, listener, err
 	})
+}
+
+func newHTTPServer(ctx context.Context, app *application.Application) (*http.Server, error) {
+	var checks []health.Check
+	if app.Config.Auth.RegistrationEnabled && app.Config.Auth.RegisterRequiresVerification && app.Mail != nil {
+		checks = append(checks, health.Check{Name: "mail", Run: app.Mail.CheckHealth})
+	}
+	handler, err := app.HealthHandler(ctx, 2*time.Second, checks...)
+	if err != nil {
+		return nil, err
+	}
+	return server.NewHTTPServer(app.Config.HTTP, handler)
 }

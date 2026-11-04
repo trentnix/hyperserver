@@ -1,8 +1,8 @@
 # Performance checks
 
-These benchmarks measure the local reference application, not deployment capacity. Run them before adding a cache or changing a storage or rendering policy.
+These benchmarks measure framework HTTP fixtures, not blog performance or deployment capacity. Run them before adding a cache or changing a storage or rendering policy.
 
-The reference executable now lives in `cmd/reference`. Historical output retains its original `cmd/web` package path. These budgets do not measure the blog.
+The former reference application has been removed. Request benchmarks now use test-only forms and layouts in `internal/test/web`. The binary-size check builds the blog. Historical measurements below describe the retired workload and are not a new baseline for the smaller fixtures.
 
 ## Workload and baseline
 
@@ -22,7 +22,7 @@ The [raw baseline](performance-baseline.txt) records five 500 ms samples per ben
 
 Rendering compares per-render parsing with prepared templates using a layout, partial, and escaped input. Middleware measures a bare handler and a chain containing request logging, security headers, proxy handling, HSTS, and cross-origin protection. Session benchmarks save one 256-byte string, then measure reads, request-local reuse, and saves. SQLite writes use the provider's default durability settings. Their timing depends heavily on the filesystem.
 
-Reference benchmarks serve `GET /` through the actual application handler with isolated SQLite accounts and sessions. They cover pages and fragments for anonymous and authenticated users. The concurrent workload splits those four cases evenly across two workers. Setup, password hashing, and schema preparation are outside benchmark timers. Requests are cloned and responses recorded inside the timers. Logging formats JSON into `io.Discard`. Mail is fake and is not exercised. The results exclude sockets, TLS, browser work, and external log delivery. Concurrent ns/op measures throughput-normalized cost, not a latency percentile.
+Framework benchmarks serve `GET /` through the HTTP fixture handler with isolated SQLite accounts and sessions. They cover pages and fragments for anonymous and authenticated users. The concurrent workload splits those four cases evenly across two workers. Setup, password hashing, and schema preparation are outside benchmark timers. Requests are cloned and responses recorded inside the timers. Logging formats JSON into `io.Discard`. Mail is fake and is not exercised. The results exclude sockets, TLS, browser work, and external log delivery. Concurrent ns/op measures throughput-normalized cost, not a latency percentile.
 
 The stripped reference binary measured 14,508,568 bytes. Across five retained-heap checks, 10,000 mixed requests changed the live Go heap by −51,856 to +26,304 bytes after warm-up and garbage collection. These checks do not measure SQLite's C allocations, RSS, or a long-running deployment.
 
@@ -36,25 +36,25 @@ mkdir -p tmp/performance
 export GOTOOLCHAIN=local GOMAXPROCS=2 CGO_ENABLED=1 GOGC=100 GOMEMLIMIT=off
 {
   go version
-  go test -run '^$' -bench 'Benchmark(RenderTemplates|Middleware|Session|Reference)' \
+  go test -run '^$' -bench 'Benchmark(RenderTemplates|Middleware|Session|Framework)' \
     -benchmem -benchtime=500ms -count=5 \
-    ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./cmd/reference
+    ./pkg/components/content ./pkg/services/middleware ./pkg/services/session ./internal/test/web
 } | tee tmp/performance/results.txt
-go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/reference
+go build -trimpath -ldflags='-s -w' -o tmp/performance/web ./cmd/web
 go run ./internal/test/perfcheck -results tmp/performance/results.txt -binary tmp/performance/web
-HS_TEST_PERFORMANCE=1 go test -v -count=5 ./cmd/reference -run '^TestReferenceHeapBudget$'
+HS_TEST_PERFORMANCE=1 go test -v -count=5 ./internal/test/web -run '^TestFrameworkHeapBudget$'
 ```
 
 [Budgets](performance-budgets.json) allow 25% above baseline medians for allocations and bytes allocated, rounded up. At least five samples are required. The checker reports each range and uses the median so one noisy sample cannot fail the run. It rejects missing benchmarks, malformed metrics, failed runs, and mismatched Go version, OS, architecture, or parallelism. CI checks these budgets, a stripped binary limit of 18,000,000 bytes, and a retained-heap growth limit of 1 MiB after 10,000 requests.
 
-The unchanged allocation, binary-size, and retained-heap limits were revalidated on Go 1.27.3 using the commands above and the same local hardware. The historical baseline remains unchanged. Timing limits were not revalidated.
+The existing allocation and retained-heap limits remain regression ceilings. The blog uses the same 18,000,000-byte binary-size limit. The historical baseline remains unchanged. Remeasure before using timing limits for the new fixtures.
 
 Latency budgets allow 50% above the baseline median. Add `-timing` to `perfcheck` only on comparable storage and otherwise idle hardware. The checker requires the recorded CPU model, but cannot verify equivalent storage, CPU scheduling, or background load. CI does not enforce timing. Investigate a failure before changing a budget. Remeasure and review the baseline when the toolchain, workload, or intended behavior changes. These are coarse regression guards, not service-level objectives.
 
 ## Profile before optimizing
 
 ```bash
-go test ./cmd/reference -run '^$' -bench '^BenchmarkReferenceLoad$' -benchtime=5s \
+go test ./internal/test/web -run '^$' -bench '^BenchmarkFrameworkLoad$' -benchtime=5s \
   -cpuprofile="$PWD/tmp/performance/cpu.pprof" \
   -memprofile="$PWD/tmp/performance/heap.pprof" \
   -o "$PWD/tmp/performance/web.test"

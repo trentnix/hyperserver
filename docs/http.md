@@ -81,7 +81,7 @@ Both routes consume the same five-request allowance per IP. Every attached limit
 
 ### Application settings
 
-The [reference configuration template](../examples/reference/config-template.yaml) documents independent controls that can also be added to the blog configuration:
+Add these independent controls to the application configuration when needed:
 
 ```yaml
 http:
@@ -95,7 +95,7 @@ http:
 
 Both default to one-minute windows and 4,096 tracked IPs per limiter. Both are disabled by default. The inherited default applies to each route. The shared budget runs before sessions and covers all requests, including assets, logout, and unmatched routes. A route override cannot bypass it.
 
-Authentication mutations use 20 requests/minute per route. Reference-site contact and test-email routes use 10. Logout opts out of the inherited limit, but not the shared budget. Their capacities come from `auth.rateLimit.maxClients` and the optional `modules/site/config.yaml` setting `rateLimit.maxClients`. Both default to 4,096 and must be positive. HTTP default capacities do not change them. Module files have no environment overrides.
+Authentication mutations use 20 requests/minute per route. Logout opts out of the inherited limit, but not the shared budget. Authentication capacity comes from `auth.rateLimit.maxClients`, which defaults to 4,096 and must be positive. HTTP default capacities do not change it. Modules can declare their own route limits and optional configuration. Module files have no environment overrides.
 
 Startup warns when a route allowance exceeds an enabled shared allowance with the same window duration. Both limits remain enforced.
 

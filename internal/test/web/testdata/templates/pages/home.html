@@ -1,0 +1,4 @@
+{{ define "site.page.home" }}
+<section id="showcase"><h2>{{ .Title }}</h2></section>
+<section id="contact" hx-get="/contact" hx-target="this" hx-swap="outerHTML" hx-trigger="load">Loading contact form...</section>
+{{ end }}

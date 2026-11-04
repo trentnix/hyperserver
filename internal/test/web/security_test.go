@@ -13,7 +13,7 @@ import (
 func assertBrowserHeaders(t *testing.T, w *httptest.ResponseRecorder) {
 	t.Helper()
 	for name, want := range map[string]string{
-		"Content-Security-Policy": referenceContentSecurityPolicy,
+		"Content-Security-Policy": fixtureContentSecurityPolicy,
 		"X-Content-Type-Options":  "nosniff",
 		"X-Frame-Options":         "DENY",
 		"Referrer-Policy":         "no-referrer",

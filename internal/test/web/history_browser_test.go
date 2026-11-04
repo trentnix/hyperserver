@@ -21,7 +21,7 @@ func TestBrowserHistory(t *testing.T) {
 	}
 
 	runSiteScenario(t, func(h *httpHarness) {
-		file := testTemplateFile(t, "modules/site/testdata/history.html")
+		file := testTemplateFile(t, "internal/test/web/testdata/history.html")
 		templates, err := content.PrepareTemplates(h.app.ContentManager, file)
 		if err != nil {
 			t.Fatal(err)
@@ -70,7 +70,7 @@ func TestBrowserHistory(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		})
 		h.app.Web.HandleFunc("GET /test/history-run.js", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(h.app.Config.App.WorkingDirectory, "modules/site/testdata/history.js"))
+			http.ServeFile(w, r, filepath.Join(h.app.Config.App.WorkingDirectory, "internal/test/web/testdata/history.js"))
 		})
 		h.app.Web.HandleFunc("GET /test/history/{page}", func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get(htmx.HeaderRequest) == "" && r.PathValue("page") == "a" {

@@ -10,7 +10,7 @@ COPY modules ./modules
 COPY pkg ./pkg
 ARG VERSION=development
 ARG COMMIT=unknown
-RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o /out/web ./cmd/reference && \
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/web ./cmd/web && \
     CGO_ENABLED=1 go build -trimpath -o /out/cleanup ./cmd/cleanup
 
 FROM build AS migrationtools
@@ -31,6 +31,6 @@ USER root
 RUN apt-get update && apt-get install -y --no-install-recommends sqlite3 && rm -rf /var/lib/apt/lists/*
 COPY --from=migrationtools /out/migrate /usr/local/bin/
 COPY pkg/services/user/sqlite/migrations /migrations/accounts
-COPY modules/site/database/migrations /migrations/contacts
+COPY modules/blog/migrations /migrations/blog
 USER 10001:10001
 ENTRYPOINT []

@@ -10,7 +10,7 @@ Treat public interfaces as unstable during the `v0` phase. Change an interface w
 
 ## Building an application with HyperServer
 
-Use [docs/application.md](docs/application.md) for the supported setup path. The default [blog application](cmd/web/application.go) demonstrates it with real content and storage. The [reference site](cmd/reference) demonstrates contact forms, health checks, and development routes. Do not copy its diagnostic routes into another application.
+Use [docs/application.md](docs/application.md) for the supported setup path. The default [blog application](cmd/web/application.go) demonstrates it with real content and storage. Framework HTTP examples live in test-only fixtures under [internal/test/web](internal/test/web). Do not expose fixture routes in an application.
 
 Before writing setup code, inspect `pkg/application.Options` and the relevant service contracts. Prefer the configured constructor over assembling accounts, sessions, mail, and middleware by hand. Change framework code only when the requested task requires it.
 
@@ -23,7 +23,7 @@ Before writing setup code, inspect `pkg/application.Options` and the relevant se
 7. Register method-qualified routes and return `routes.Err()`. Set explicit upload body limits. Validate requests and authorization before changing data. Preserve submitted non-secret values on validation errors. Use ordinary form actions where operation without JavaScript is required.
 8. Keep storage rules with the feature. Use narrow repositories where substitution or testing benefits the application. Do not create a capability provider, generic repository, or separate service layer without a concrete need. Application-supplied resources keep their owner. Modules close only resources they acquire.
 9. Serve `app.Handler` with `server.NewHTTPServer` and `app.Run`. Do not install the standard middleware twice or call `handlers.Setup` after `application.New`. Use `app.OnShutdown` for callback-owned resources and module `Shutdown(context.Context) error` for module-owned resources.
-10. Test a fresh installation, full-page and HTMX success/failure paths, authorization, and shutdown. Run checks from the repository root. The framework, blog, and reference site share one Go module.
+10. Test a fresh installation, full-page and HTMX success/failure paths, authorization, and shutdown. Run checks from the repository root. The framework and blog share one Go module.
 
 Authentication requires selecting `auth.Module` and enabling authentication in configuration. The constructor supplies configured services to registered provider factories, including email and Google. Configuration selects which providers initialize. Use `Options.AuthPolicy` for shared admission and login behavior. Use `Options.AuthProviders` only for an explicit local provider catalog. Business permissions remain application or module rules, not core framework policy.
 
@@ -53,7 +53,7 @@ Let cache consumers choose keys, freshness, invalidation, and failure behavior. 
 
 Keep `net/http` types and standard Go composition available. Do not hide them behind a mandatory proprietary request model.
 
-Support ordinary navigation and form submissions when an application requires them. Applications can depend on HTMX. Keep the reference application's progressive-enhancement example working.
+Support ordinary navigation and form submissions when an application requires them. Applications can depend on HTMX. Keep ordinary-form and HTMX coverage in the framework's HTTP fixtures.
 
 ## Dependencies
 

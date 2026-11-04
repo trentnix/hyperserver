@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	email "github.com/trentnix/hyperserver/auth/modules/email"
-	site "github.com/trentnix/hyperserver/modules/site"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/util"
@@ -109,8 +108,8 @@ func TestHTTPFormMessageEscaping(t *testing.T) {
 				func() messageForm { return &email.ChangePasswordForm{} },
 			},
 			{
-				"contact", "modules/site/templates/html/partials/contact-form.html", "site.partial.contact.form",
-				func() messageForm { return &site.ContactForm{} },
+				"contact", "internal/test/web/testdata/templates/partials/contact-form.html", "site.partial.contact.form",
+				func() messageForm { return &ContactForm{} },
 			},
 		} {
 			h.app.Web.HandleFunc("GET /test/form-messages/"+tc.name, func(w http.ResponseWriter, r *http.Request) {

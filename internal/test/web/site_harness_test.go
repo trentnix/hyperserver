@@ -15,8 +15,6 @@ import (
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	email "github.com/trentnix/hyperserver/auth/modules/email"
 	"github.com/trentnix/hyperserver/config"
-	site "github.com/trentnix/hyperserver/modules/site"
-	"github.com/trentnix/hyperserver/modules/site/storage"
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/handlers"
@@ -31,8 +29,7 @@ import (
 	usersqlite "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
 
-// Site scenarios exercise real forms, layouts, and assets through public APIs.
-// Command startup, provider selection, and middleware ordering stay in cmd/reference's tests.
+// Site scenarios exercise forms, layouts, and assets through test-only modules.
 func runSiteScenario(t *testing.T, scenario func(*httpHarness), configure ...func(*config.Config)) {
 	t.Helper()
 	scenario(newSiteHTTPHarness(t, nil, configure...))
@@ -114,14 +111,14 @@ func newSiteHTTPHarness(t testing.TB, catalogFactory func(*httpHarness) ([]handl
 	}
 	h := &httpHarness{baseURL: "http://127.0.0.1:8080", app: app, db: db, accounts: accounts, sessions: sessions, mailClient: mail, mail: sender, logs: &capturedLogs{}, cookies: jar}
 
-	if err := site.ConfigureRendering(app.ContentManager, cfg.Auth.Enabled); err != nil {
+	if err := configureFixtureRendering(app.ContentManager, cfg.Auth.Enabled); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.App.RenderNotifications {
 		app.ContentManager.LoadNotifications = flash.LoadNotifications
 	}
 	if catalogFactory == nil {
-		catalogFactory = func(h *httpHarness) ([]handlers.Descriptor, error) { return siteCatalog(h, "") }
+		catalogFactory = func(h *httpHarness) ([]handlers.Descriptor, error) { return siteCatalog(h, nil) }
 	}
 	catalog, err := catalogFactory(h)
 	if err != nil {
@@ -138,27 +135,28 @@ func newSiteHTTPHarness(t testing.TB, catalogFactory func(*httpHarness) ([]handl
 	return h
 }
 
-func siteCatalog(h *httpHarness, directory string) ([]handlers.Descriptor, error) {
-	contacts := func(ctx context.Context) (site.ContactRepository, error) {
-		if directory != "" {
-			return storage.NewFileContactRepository(ctx, directory)
+func siteCatalog(h *httpHarness, contacts contactWriter) ([]handlers.Descriptor, error) {
+	if contacts == nil {
+		var err error
+		contacts, err = sqlContacts(context.Background(), h.db)
+		if err != nil {
+			return nil, err
 		}
-		return storage.NewSQLiteContactRepository(ctx, h.db)
 	}
 	return []handlers.Descriptor{
-		site.Module(contacts, h.mailClient),
+		formModule(contacts, h.mailClient),
 		auth.Module(auth.Dependencies{Accounts: h.accounts, Sessions: h.sessions, Mail: h.mailClient}, []auth.Descriptor{email.Provider()}),
 	}, nil
 }
 
-const referenceContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
+const fixtureContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 
 func siteHTTPHandler(h *httpHarness, log *slog.Logger) (http.Handler, error) {
 	loadSession := session.WithSessionManager(h.sessions)
 	if h.app.Config.Auth.Enabled {
 		loadSession = authmiddleware.LoadSessionManagement(h.accounts, h.sessions)
 	}
-	return middleware.Web(loadSession(h.app.Web), h.app.Config.HTTP, referenceContentSecurityPolicy, log)
+	return middleware.Web(loadSession(h.app.Web), h.app.Config.HTTP, fixtureContentSecurityPolicy, log)
 }
 
 func testTemplateFile(t *testing.T, name string) content.TemplatePath {

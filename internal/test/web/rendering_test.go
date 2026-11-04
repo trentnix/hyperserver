@@ -124,7 +124,7 @@ func TestHTTPTemplatesPreparedBeforeRequests(t *testing.T) {
 				paths[kind] = files
 			}
 		}
-		return siteCatalog(h, "")
+		return siteCatalog(h, nil)
 	}
 	runSiteScenarioWithCatalog(t, catalog, func(h *httpHarness) {
 		if len(filesystems) == 0 {

@@ -1,1 +1,0 @@
-DROP TABLE hyperserver_contact_submission;

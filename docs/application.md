@@ -1,6 +1,6 @@
 # Application setup and modules
 
-The default [blog application](../cmd/web/application.go) uses `application.New` for service startup, modules, middleware, and cleanup. It selects shared rendering and administrator-only authentication. Modules own their internal resources and routes. The separate [reference application](../cmd/reference/application.go) demonstrates contact storage selection and readiness checks.
+The default [blog application](../cmd/web/application.go) uses `application.New` for service startup, modules, middleware, and cleanup. It selects shared rendering and administrator-only authentication. Modules own their internal resources and routes. The [HTTP fixtures](../internal/test/web) test independent providers and ordinary forms without a second application.
 
 The blog uses one [`blog.Site`](../modules/blog/site.go) per application. Its `Configure(app)` method configures shared rendering and returns the blog descriptor. Its `AuthenticationPolicy()` method supplies the administrator restriction, registration availability, and successful-login behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider selection and credentials belong in `config.yaml`, not in blog assembly code.
 
@@ -85,7 +85,7 @@ return routes.Err()
 
 Prepare these handlers once during startup. They preserve anonymous-user checks and no-store headers. Register POST handlers through `Submissions` to retain the auth rate limits and startup diagnostics. `routing.Routes` supplies body limits and rejects route conflicts. Registration handlers return an unavailable response when registration is disabled.
 
-A site that can run without auth can declare an optional dependency and skip registration when the manager is absent or disabled. The blog and reference site demonstrate both cases. Provider forms and links still use `/login` and `/register`. Custom paths are not supported by this API. Auth registers only its `/auth/...` operations and legacy redirects.
+A site that can run without auth can declare an optional dependency and skip registration when the manager is absent or disabled. The blog requires authentication. The [HTTP fixture](../internal/test/web/module_fixture_test.go) demonstrates optional authentication. Provider forms and links still use `/login` and `/register`. Custom paths are not supported by this API. Auth registers only its `/auth/...` operations and legacy redirects.
 
 Serve `app.Handler`, not `app.Web`. The handler includes the standard web middleware, attaches selected sessions, and, when authentication is active, loads the current identity. Modules still choose protected routes with `auth/middleware.RequireAuthentication(app.Accounts, app.ContentManager)`. The constructor defaults the login destination to `/login`. Set presentation overrides on `app.ContentManager` in the module-selection callback. Login and home destinations must be local absolute paths.
 
@@ -101,7 +101,7 @@ Use the returned application's `Run` method to drain requests and close owned re
 
 `app.HealthHandler(runContext, timeout, checks...)` returns a handler with `GET /health/live` and `GET /health/ready` outside sessions, rate limits, and module routes. Readiness checks the run context, account repositories and session stores that implement `CheckHealth(context.Context) error`, then the supplied checks. Pass the application's run context, not a startup deadline. Checks share the timeout and must honor cancellation.
 
-The reference application adds contact-storage checks and SMTP connectivity when registration requires email verification. Add `health.Check{Name: "mail", Run: app.Mail.CheckHealth}` when mail must affect readiness. Mail clients delegate to senders that implement the same optional method. Providers without that method are not probed. Custom probes must be read-only, safe for concurrent calls, and honor cancellation.
+The blog command adds SMTP connectivity when registration requires email verification. Add `health.Check{Name: "mail", Run: app.Mail.CheckHealth}` when mail must affect readiness. Mail clients delegate to senders that implement the same optional method. Providers without that method are not probed. Custom probes must be read-only, safe for concurrent calls, and honor cancellation.
 
 ### Explicit setup
 
@@ -127,7 +127,7 @@ Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware
 
 [`server.NewHTTPServer(app.Config.HTTP, handler)`](../pkg/server/http.go) creates a standard `*http.Server` with the configured address, timeouts, and optional TLS certificate. Resolve configuration paths first. It does not wrap the handler or open a listener. Timeout values pass through unchanged, including zero. Omitted read, write, and idle timeouts remain zero. The [configuration template](../config-template.yaml) supplies example values. Applications can still construct `http.Server` directly.
 
-The HTTP write timeout includes handler work. For synchronous mail, allow time for `mail.timeout`, storage, and rendering. The reference values are 30 seconds for SMTP and 40 seconds for the HTTP response. The write timeout does not cancel handler work or replace the password-reset minimum response time.
+The HTTP write timeout includes handler work. For synchronous mail, allow time for `mail.timeout`, storage, and rendering. For example, allow a 40-second HTTP response budget for a 30-second SMTP timeout. The write timeout does not cancel handler work or replace the password-reset minimum response time.
 
 `app.Run(ctx, prepare)` coordinates startup, serving, and shutdown. The preparation function returns the HTTP server, a `net.Listener` opened on its `Addr`, and an error. It must not start serving. Run cleans up startup failures and drains requests before closing services. Applications managing HTTP themselves can use `server.ServeHTTP` and call `Shutdown` after requests drain.
 
@@ -229,4 +229,4 @@ Resource-owning modules can implement `Shutdown(context.Context) error`. `Initia
 
 When called directly, `Initialize` uses the caller's deadline or defaults to ten seconds. Context deadlines cannot interrupt code that ignores cancellation. Initialization contexts must not be retained for request I/O.
 
-If HTTP draining fails, Run closes HTTP connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. The reference command exits with an error, and a second signal forces exit. Applications must manage hijacked connections separately.
+If HTTP draining fails, Run closes HTTP connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. The blog command exits with an error. Applications must manage hijacked connections separately.

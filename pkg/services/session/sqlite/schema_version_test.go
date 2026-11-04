@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
-	contacts "github.com/trentnix/hyperserver/modules/site/database"
 	sqlitedb "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	accounts "github.com/trentnix/hyperserver/pkg/services/user/sqlite"
 )
@@ -110,22 +109,13 @@ func TestProviderMigrationVersionsAreIndependent(t *testing.T) {
 				if err := accounts.PrepareDatabase(t.Context(), db); err != nil {
 					t.Fatal(err)
 				}
-				if err := contacts.PrepareDatabase(t.Context(), db); err != nil {
-					t.Fatal(err)
-				}
 			}
 			accountMigrations := "../../user/sqlite/migrations"
-			contactMigrations := "../../../../modules/site/database/migrations"
 			runProviderMigration(t, path, accountMigrations, "hyperserver_account_version", "up")
-			runProviderMigration(t, path, contactMigrations, "hyperserver_contact_version", "up")
 			if err := accounts.PrepareDatabase(t.Context(), db); err != nil {
 				t.Fatal(err)
 			}
-			if err := contacts.PrepareDatabase(t.Context(), db); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := db.ExecContext(t.Context(), `INSERT INTO user (id, email, email_key) VALUES ('preserved', 'a@example.invalid', 'A@EXAMPLE.INVALID');
-				INSERT INTO hyperserver_contact_submission (id, email) VALUES ('preserved', 'a@example.invalid')`); err != nil {
+			if _, err := db.ExecContext(t.Context(), `INSERT INTO user (id, email, email_key) VALUES ('preserved', 'a@example.invalid', 'A@EXAMPLE.INVALID')`); err != nil {
 				t.Fatal(err)
 			}
 
@@ -176,9 +166,9 @@ func TestProviderMigrationVersionsAreIndependent(t *testing.T) {
 				}
 			}
 
-			runProviderMigration(t, path, contactMigrations, "hyperserver_contact_version", "down", "1")
-			if err := contacts.PrepareDatabase(t.Context(), db); err == nil {
-				t.Fatal("contact startup recreated explicitly removed schema")
+			runProviderMigration(t, path, accountMigrations, "hyperserver_account_version", "down", "1")
+			if err := accounts.PrepareDatabase(t.Context(), db); err == nil {
+				t.Fatal("account startup accepted a downgraded schema")
 			}
 			for _, table := range []string{"user", "sessions"} {
 				var count int
@@ -186,19 +176,19 @@ func TestProviderMigrationVersionsAreIndependent(t *testing.T) {
 					t.Fatalf("unrelated %s changed: %d, %v", table, count, err)
 				}
 			}
-			runProviderMigration(t, path, contactMigrations, "hyperserver_contact_version", "up")
-			if err := contacts.PrepareDatabase(t.Context(), db); err != nil {
+			runProviderMigration(t, path, accountMigrations, "hyperserver_account_version", "up")
+			if err := accounts.PrepareDatabase(t.Context(), db); err != nil {
 				t.Fatal(err)
 			}
 			// A dirty provider must not prevent another provider from checking its own version.
-			if _, err := db.ExecContext(t.Context(), `UPDATE hyperserver_contact_version SET dirty = true`); err != nil {
+			if _, err := db.ExecContext(t.Context(), `UPDATE hyperserver_account_version SET dirty = true`); err != nil {
 				t.Fatal(err)
 			}
-			if err := contacts.PrepareDatabase(t.Context(), db); err == nil {
-				t.Fatal("dirty contact schema accepted")
+			if err := accounts.PrepareDatabase(t.Context(), db); err == nil {
+				t.Fatal("dirty account schema accepted")
 			}
-			if err := accounts.PrepareDatabase(t.Context(), db); err != nil {
-				t.Fatal("dirty contacts affected accounts:", err)
+			if err := (&SQLiteStore{db: db, tableName: "sessions"}).configureDatabase(t.Context()); err != nil {
+				t.Fatal("dirty accounts affected sessions:", err)
 			}
 		})
 	}
@@ -232,7 +222,7 @@ func TestProviderMigrationFailureLeavesDirtyVersion(t *testing.T) {
 	if os.Getenv("HS_TEST_MIGRATE") == "" {
 		t.Skip("set HS_TEST_MIGRATE to run migration CLI integration")
 	}
-	for _, provider := range []string{"sessions", "contacts"} {
+	for _, provider := range []string{"sessions", "accounts"} {
 		t.Run(provider, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "failed.db")
 			db, err := sqlitedb.Open(path)
@@ -242,12 +232,12 @@ func TestProviderMigrationFailureLeavesDirtyVersion(t *testing.T) {
 			defer db.Close()
 			up, _ := sessionMigrationSQL("sessions")
 			versionTable := sessionVersionTable("sessions")
-			if provider == "contacts" {
-				data, err := os.ReadFile("../../../../modules/site/database/migrations/000001_contacts.up.sql")
+			if provider == "accounts" {
+				data, err := os.ReadFile("../../user/sqlite/migrations/000001_accounts.up.sql")
 				if err != nil {
 					t.Fatal(err)
 				}
-				up, versionTable = string(data), "hyperserver_contact_version"
+				up, versionTable = string(data), "hyperserver_account_version"
 			}
 			directory := t.TempDir()
 			if err := os.WriteFile(filepath.Join(directory, "000001_failure.up.sql"), []byte(up+"\nINSERT INTO missing_table VALUES (1);"), 0600); err != nil {
@@ -257,12 +247,12 @@ func TestProviderMigrationFailureLeavesDirtyVersion(t *testing.T) {
 				t.Fatalf("failed migration = %v, %s", err, output)
 			}
 			var count int
-			if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name IN ('sessions', 'sessions_expiration', 'hyperserver_contact_submission')`).Scan(&count); err != nil || count != 0 {
+			if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name IN ('sessions', 'sessions_expiration', 'user', 'usertoken')`).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("migration left partial schema: %d, %v", count, err)
 			}
 			before := versionStorageSnapshot(t, db)
-			if provider == "contacts" {
-				err = contacts.PrepareDatabase(t.Context(), db)
+			if provider == "accounts" {
+				err = accounts.PrepareDatabase(t.Context(), db)
 			} else {
 				err = (&SQLiteStore{db: db, tableName: "sessions"}).configureDatabase(t.Context())
 			}
