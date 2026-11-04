@@ -147,16 +147,13 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) *user.User {
 		Identities: s.identities, Policy: s.Policy, Content: s.content,
 		Provider: AuthType, RegistrationEnabled: s.registration,
 	}
-	account, created := accounts.Resolve(w, r, auth.ExternalAccountRequest{
+	account, _ := accounts.Resolve(w, r, auth.ExternalAccountRequest{
 		Identity: user.ExternalIdentity{Issuer: issuer, Subject: token.Subject},
 		Mode:     f.Mode, AccountID: f.AccountID, SessionVersion: f.SessionVersion, VerifiedEmail: verifiedEmail,
 	})
-	if !created {
-		return account
-	}
-	// Registration and first login remain separate, including during blog setup.
-	s.render(w, r, auth.ProviderPage{Title: "Account ready", Message: "Your account is verified. Log in with Google to continue."})
-	return nil
+	// Google has authenticated newly registered accounts too. Let the manager
+	// establish the session and apply the application's normal login behavior.
+	return account
 }
 
 func (s *Service) fail(w http.ResponseWriter, r *http.Request, message string, err error, status int) {

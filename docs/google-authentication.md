@@ -38,7 +38,7 @@ Matching email addresses never link accounts automatically. A Google identity ca
 
 ## First-time setup
 
-The wizard offers the enabled registration providers. Google registration requires `auth.registrationEnabled`. The blog accepts only its configured `adminEmail`. Registration creates a verified local account, then asks the administrator to log in. The first successful login opens Site Profile. The public site opens after registration verifies the account, before that first login.
+The wizard offers the enabled registration providers. Google registration requires `auth.registrationEnabled`. The blog accepts only its configured `adminEmail`. Google registration creates a verified local account and signs the administrator in through the normal login flow. First-time setup continues directly to Site Profile without a verification page or second Google sign-in. Email registration still requires a separate login and email verification when configured.
 
 Google registration accepts Gmail addresses and Google Workspace addresses identified by Google's verified hosted-domain claim. For other addresses attached to Google accounts, register and verify through email first, then connect Google. Google's `email_verified` claim alone does not establish current ownership of those third-party addresses.
 

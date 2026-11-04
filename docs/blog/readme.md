@@ -31,7 +31,7 @@ go run ./cmd/web
 
 Open <http://127.0.0.1:8080/>. First-time setup asks you to register the configured administrator address. Use the verification message at <http://127.0.0.1:8025>, then log in. Your first login opens Site Profile. Add your name and bio, then save. Images are optional. After the first save, you can view your site or write your first post.
 
-Public content, including the homepage, opens after registration and any required verification. Verification leads the administrator to login, and the first login opens Site Profile. Setup progress survives restarts. Existing installations with a verified administrator skip setup. If no administrator exists, enable `auth.registrationEnabled` to register.
+Public content, including the homepage, opens after registration and any required verification. Email verification leads the administrator to login, and the first login opens Site Profile. Google registration signs the administrator in immediately and continues to Site Profile. Setup progress survives restarts. Existing installations with a verified administrator skip setup. If no administrator exists, enable `auth.registrationEnabled` to register.
 
 A fresh installation shows “My Blog,” neutral portrait/favicon assets, no background, and no posts or pages. Use **Site Profile** for the name, bio, and images. Create About or Projects through **Pages**. Content belongs in the database. Operational settings and the administrator allowlist belong in configuration.
 

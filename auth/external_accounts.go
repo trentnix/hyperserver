@@ -34,9 +34,9 @@ type ExternalAccounts struct {
 	RegistrationEnabled bool
 }
 
-// Resolve returns the account and whether it was just created. Newly created
-// accounts must complete a separate login. A nil account means a rejection was
-// written. Existing email addresses never cause automatic identity linking.
+// Resolve returns the account and whether it was just created. The provider can
+// return either account to the manager to establish a session. A nil account means
+// a rejection was written. Existing emails never cause automatic identity linking.
 func (a ExternalAccounts) Resolve(w http.ResponseWriter, r *http.Request, request ExternalAccountRequest) (*user.User, bool) {
 	fail := func(message string, err error, status int) (*user.User, bool) {
 		logger.Audit(r.Context(), "external_account", "rejected")

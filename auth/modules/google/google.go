@@ -142,12 +142,3 @@ func (*Service) GetLoginButton() template.HTML {
 func (*Service) GetRegisterButton() template.HTML {
 	return `<form method="post" action="/register" hx-boost="false" class="auth-provider-button"><input type="hidden" name="provider" value="google"><button type="submit" class="auth-google-button"><img src="/auth/google/icon.png" alt="" width="20" height="20">Sign up with Google</button></form>`
 }
-
-func (s *Service) render(w http.ResponseWriter, r *http.Request, page auth.ProviderPage) {
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Referrer-Policy", "no-referrer")
-	c := s.view.Content(r, page)
-	if err := c.Render(w, r); err != nil {
-		c.HandleRenderError(w, r, "Unable to display Google authentication.", err)
-	}
-}

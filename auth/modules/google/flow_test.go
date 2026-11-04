@@ -320,6 +320,7 @@ func TestGoogleRegistrationAndExplicitLink(t *testing.T) {
 				path = "/auth/link/google"
 			}
 			callback := h.start(path)
+			flowCookies := append([]*http.Cookie(nil), h.cookies...)
 			if mode == "registration disabled" {
 				h.service.registration = false
 			}
@@ -337,21 +338,27 @@ func TestGoogleRegistrationAndExplicitLink(t *testing.T) {
 			}
 			w := h.request("GET", callback)
 			if mode == "register" {
-				if w.Code != 200 || !strings.Contains(w.Body.String(), "Account ready") {
+				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
 					t.Fatalf("registration: %d %s", w.Code, w.Body)
 				}
 				u, err := h.accounts.GetByEmail(t.Context(), "admin@gmail.com")
 				if err != nil || u.NeedsVerification() || u.Password != "" {
 					t.Fatalf("account: %+v %v", u, err)
 				}
-				for _, c := range w.Result().Cookies() {
-					if c.Name == "auth-user-session" {
-						t.Fatal("registration logged in without a separate login")
-					}
+				r := session.AddSessionManagerToRequestContext(httptest.NewRequest("GET", "http://localhost/", nil), h.sessions)
+				for _, cookie := range h.cookies {
+					r.AddCookie(cookie)
 				}
-				callback = h.start("/login")
-				if w := h.request("GET", callback); w.Code != 303 {
-					t.Fatalf("first login: %d %s", w.Code, w.Body)
+				current, err := identity.GetAuthenticatedUser(r, h.accounts)
+				if err != nil || current == nil || current.ID != u.ID {
+					t.Fatalf("registration did not establish login: %+v %v", current, err)
+				}
+				h.cookies = flowCookies
+				if w := h.request("GET", callback); w.Code != http.StatusBadRequest {
+					t.Fatalf("registration callback replay accepted: %d", w.Code)
+				}
+				if h.exchanges.Load() != 1 {
+					t.Fatal("registration must need only one Google exchange")
 				}
 			} else if mode == "link" {
 				if w.Code != 303 {
@@ -370,6 +377,38 @@ func TestGoogleRegistrationAndExplicitLink(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGoogleRegistrationLoginFailureCanRetry(t *testing.T) {
+	h := newHarness(t)
+	callback := h.start("/register")
+	// The redirect session is read only after account resolution. A failure there
+	// must not issue a login cookie or undo an already committed registration.
+	h.cookies = append(h.cookies, &http.Cookie{Name: session.AuthSession, Value: "invalid"})
+	w := h.request("GET", callback)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("invalid redirect session: %d %s", w.Code, w.Body)
+	}
+	account, err := h.accounts.GetByEmail(t.Context(), "admin@gmail.com")
+	if err != nil || account.NeedsVerification() {
+		t.Fatal("registration was not preserved", err)
+	}
+	for _, cookie := range w.Result().Cookies() {
+		if cookie.Name == "auth-user-session" {
+			t.Fatal("failed login issued an authenticated session")
+		}
+	}
+	// The manager expires the invalid redirect cookie. Model browser removal.
+	for i, cookie := range h.cookies {
+		if cookie.Name == session.AuthSession {
+			h.cookies = append(h.cookies[:i], h.cookies[i+1:]...)
+			break
+		}
+	}
+	callback = h.start("/login")
+	if w := h.request("GET", callback); w.Code != http.StatusSeeOther {
+		t.Fatalf("existing account could not retry login: %d %s", w.Code, w.Body)
 	}
 }
 

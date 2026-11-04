@@ -29,12 +29,13 @@ func init() {
 }
 
 type contractAuthProvider struct {
-	dependencies        auth.Dependencies
-	accounts            auth.ExternalAccounts
-	view                *content.View
-	app                 *server.ApplicationServer
-	email               string
-	availabilityFailure bool
+	dependencies         auth.Dependencies
+	accounts             auth.ExternalAccounts
+	view                 *content.View
+	app                  *server.ApplicationServer
+	email                string
+	availabilityFailure  bool
+	signInOnRegistration bool
 }
 
 func (*contractAuthProvider) AuthType() string            { return "test-external" }
@@ -43,6 +44,7 @@ func (p *contractAuthProvider) Init(app *server.ApplicationServer) error {
 	p.app = app
 	options := auth.GetAuthConfigOptions(app.Config, p.AuthType())
 	p.email, p.availabilityFailure = options["email"], options["availabilityFailure"] == "true"
+	p.signInOnRegistration = options["signInOnRegistration"] == "true"
 	p.accounts = auth.ExternalAccounts{Identities: p.dependencies.Accounts.(user.ExternalIdentityRepository), Policy: p.dependencies.Policy, Content: app.ContentManager, Provider: p.AuthType(), RegistrationEnabled: app.Config.Auth.RegistrationEnabled}
 	var err error
 	p.view, err = auth.PrepareProviderView(app.ContentManager)
@@ -118,7 +120,7 @@ func (p *contractAuthProvider) Callback(w http.ResponseWriter, r *http.Request) 
 		return nil
 	}
 	account, created := p.accounts.Resolve(w, r, request)
-	if created {
+	if created && !p.signInOnRegistration {
 		p.render(w, r, auth.ProviderPage{Title: "Account ready", Message: "Sign in to continue."})
 		return nil
 	}
@@ -186,6 +188,34 @@ func TestThirdProviderRegistrationAndLogin(t *testing.T) {
 		requireStatus(t, w, 200)
 		if !strings.Contains(w.Body.String(), "Welcome back") || strings.Contains(w.Body.String(), `class="header-sign-in"`) || strings.Contains(w.Body.String(), "reader-search-form") {
 			t.Fatal("provider-neutral presentation missing", w.Body)
+		}
+	}
+}
+
+// Google and other providers can complete registration and login in one callback.
+// The blog must apply its onboarding and returning-user behavior without knowing
+// which provider authenticated the account.
+func TestRegistrationLoginOpensSiteProfile(t *testing.T) {
+	cfg := harnessConfig(t, 10)
+	cfg.Auth.Services["test-external"] = map[string]string{
+		"enabled": "true", "email": "trentnix@gmail.com", "signInOnRegistration": "true",
+	}
+	h := startHarness(t, cfg)
+	w := completeThirdProviderFlow(t, h, "/register")
+	requireStatus(t, w, http.StatusSeeOther)
+	if w.Header().Get("Location") != authReturnURL || h.cookies["auth-user-session"] == nil || h.cookies[returningUserCookie] == nil {
+		t.Fatal("registration skipped the normal login flow", w.Header())
+	}
+	w = h.request("GET", w.Header().Get("Location"), nil, false)
+	requireStatus(t, w, http.StatusSeeOther)
+	if w.Header().Get("Location") != "/profile" || !h.blog.access.setup.complete.Load() {
+		t.Fatal("registration login did not finish onboarding", w.Header())
+	}
+	for _, hx := range []bool{false, true} {
+		w = h.request("GET", "/profile", nil, hx)
+		requireStatus(t, w, http.StatusOK)
+		if !strings.Contains(w.Body.String(), "Give your blog a name and a short introduction.") {
+			t.Fatal("new administrator did not receive profile guidance")
 		}
 	}
 }
