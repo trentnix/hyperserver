@@ -131,7 +131,7 @@ func Create(ctx context.Context, cfg config.Config, destination string) (err err
 	return os.Rename(archive, destination)
 }
 
-// Verify checks the inventory, checksums, and SQLite snapshots without restoring
+// Verify checks inventory, checksums, SQLite integrity, and schema versions without restoring
 // files or loading archived configuration. Restore only archives you trust.
 func Verify(ctx context.Context, archive string) error {
 	stage, err := os.MkdirTemp("", "blog-verify-")
@@ -270,10 +270,31 @@ func verify(ctx context.Context, filename, stage string) error {
 		return errors.New("invalid backup manifest")
 	}
 	if m.Format != formatVersion {
-		return errors.New("unsupported backup format")
+		return fmt.Errorf("unsupported backup format %d: supported format is %d", m.Format, formatVersion)
 	}
 	if len(m.Files)+len(m.Directories) != len(files)-1 {
 		return errors.New("incomplete backup inventory")
+	}
+	databaseRoles := make(map[string][]string)
+	roles := make(map[string]bool)
+	resources := make(map[string]bool)
+	for _, resource := range m.Resources {
+		file := files[resource.Path]
+		if file == nil || resource.Source == "" || resources[resource.Path] {
+			return errors.New("invalid resource inventory")
+		}
+		resources[resource.Path] = true
+		for _, role := range resource.Roles {
+			if roles[role] || !strings.HasPrefix(resource.Path, "databases/") || !file.Mode().IsRegular() ||
+				(role != "blog" && role != "accounts" && role != "sessions") {
+				return errors.New("invalid database inventory")
+			}
+			roles[role] = true
+		}
+		databaseRoles[resource.Path] = resource.Roles
+	}
+	if !roles["blog"] || !roles["accounts"] || !roles["sessions"] {
+		return errors.New("backup is missing a database role")
 	}
 	expected := map[string]bool{"manifest.json": true}
 	for _, name := range m.Directories {
@@ -308,6 +329,9 @@ func verify(ctx context.Context, filename, stage string) error {
 		var database *os.File
 		// Database entries always have fixed names, independent of the manifest's source paths.
 		if strings.HasPrefix(item.Path, "databases/") {
+			if len(databaseRoles[item.Path]) == 0 {
+				return errors.New("database snapshot is missing its role")
+			}
 			database, err = os.OpenFile(filepath.Join(stage, "check.db"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 			if err != nil {
 				in.Close()
@@ -332,9 +356,12 @@ func verify(ctx context.Context, filename, stage string) error {
 				return err
 			}
 			err = checkDatabase(ctx, db)
+			if err == nil {
+				err = checkCompatibility(ctx, db, databaseRoles[item.Path])
+			}
 			db.Close()
 			if err != nil {
-				return err
+				return fmt.Errorf("verify %s: %w", item.Path, err)
 			}
 		}
 	}
@@ -343,22 +370,10 @@ func verify(ctx context.Context, filename, stage string) error {
 			return fmt.Errorf("backup is missing %s", name)
 		}
 	}
-	roles := make(map[string]bool)
-	resources := make(map[string]bool)
 	for _, resource := range m.Resources {
-		if !expected[resource.Path] || resource.Source == "" || resources[resource.Path] {
+		if !expected[resource.Path] {
 			return errors.New("invalid resource inventory")
 		}
-		resources[resource.Path] = true
-		for _, role := range resource.Roles {
-			if roles[role] || !strings.HasPrefix(resource.Path, "databases/") {
-				return errors.New("invalid database inventory")
-			}
-			roles[role] = true
-		}
-	}
-	if !roles["blog"] || !roles["accounts"] || !roles["sessions"] {
-		return errors.New("backup is missing a database role")
 	}
 	return nil
 }

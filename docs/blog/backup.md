@@ -21,7 +21,19 @@ Stop the blog and other processes that write its data. From the application's co
 
 The destination's parent directory must exist. Existing archives are never overwritten. Keep backups outside uploads, local assets, and web-served directories.
 
-Verification checks the inventory, file checksums, SQLite integrity, and foreign keys. It does not load archived configuration, restore files, or run migrations. Backup verifies the archive before publishing it.
+Verification checks the inventory, file checksums, SQLite integrity, foreign keys, and supported schema version markers. It does not load archived configuration, restore files, or run migrations. Backup verifies the archive before publishing it.
+
+## Compatibility
+
+This maintenance binary supports ZIP archive format **1** with blog schema **1**, account schema **1**, and SQLite session schema **1**. Each database role must be present exactly once, including when roles share a snapshot. Custom session table names are supported. Every session version table in a session snapshot must have a supported version.
+
+Missing, malformed, duplicate, dirty, older, or newer schema version markers fail verification. A valid checksum or SQLite integrity check alone does not establish recovery compatibility. Earlier development account databases marked version 3 are not compatible with the consolidated version 1 baseline. Verification does not relabel them.
+
+Use the maintenance binary for the release you intend to recover. If a backup has an unsupported version, use a compatible release to recover into a separate application directory, then follow explicit migration instructions before upgrading. Preserve the original archive. Do not overwrite the current installation to test compatibility.
+
+The archive format version is independent of database schema versions. A database migration does not by itself require a new ZIP format. When adding a migration, update the recovery compatibility policy and its tests deliberately. Once deployed, existing migration files must remain unchanged.
+
+Verification reads only temporary snapshot copies. Failed verification leaves the archive and existing installation unchanged. A failed backup is not published. Recovery remains manual, and application startup performs its normal schema validation. Verification does not prove that archived credentials, configuration, or session payloads work with another release. Confirm those during staged recovery before switching traffic.
 
 ## Maintenance locking
 

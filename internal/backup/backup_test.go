@@ -18,6 +18,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/maintenance"
 	dbsqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
+	sessionsqlite "github.com/trentnix/hyperserver/pkg/services/session/sqlite"
 	"gopkg.in/yaml.v3"
 )
 
@@ -67,6 +68,8 @@ func fixture(t *testing.T) config.Config {
 			t.Fatal(err)
 		}
 	}
+	_, stop := recoveryApp(t, cfg)
+	stop()
 	return cfg
 }
 
@@ -337,7 +340,7 @@ func TestUnsafeArchives(t *testing.T) {
 	if err := Create(t.Context(), cfg, source); err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"traversal", "absolute", "symlink", "duplicate", "missing", "checksum", "format", "oversized", "invalid-db", "missing-manifest", "invalid-manifest", "directory-traversal", "duplicate-directory", "duplicate-inventory", "invalid-checksum", "missing-role", "missing-resource", "duplicate-role"} {
+	for _, scenario := range []string{"traversal", "absolute", "symlink", "duplicate", "missing", "checksum", "format", "old-format", "oversized", "invalid-db", "missing-manifest", "invalid-manifest", "directory-traversal", "duplicate-directory", "duplicate-inventory", "invalid-checksum", "missing-role", "missing-resource", "duplicate-role", "unknown-role"} {
 		t.Run(scenario, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), "bad.zip")
 			changed := make(map[string][]byte)
@@ -372,6 +375,8 @@ func TestUnsafeArchives(t *testing.T) {
 					switch scenario {
 					case "format":
 						m.Format++
+					case "old-format":
+						m.Format = 0
 					case "oversized":
 						m.Files[0].Size = maxBytes + 1
 					case "directory-traversal":
@@ -388,6 +393,8 @@ func TestUnsafeArchives(t *testing.T) {
 						m.Resources[0].Path = "missing.db"
 					case "duplicate-role":
 						m.Resources[1].Roles = append(m.Resources[1].Roles, "blog")
+					case "unknown-role":
+						m.Resources[1].Roles = append(m.Resources[1].Roles, "unknown")
 					}
 					// Exercise configuration/database validation, not just checksums.
 					for i := range m.Files {
@@ -464,6 +471,13 @@ func TestSeparateSessionDatabase(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE separate_session (value TEXT); INSERT INTO separate_session VALUES ('session')")
 	db.Close()
 	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := sessionsqlite.NewSQLiteStore(t.Context(), sessionsqlite.Options{Connection: source, Table: "sessions", TokenLifetime: time.Hour, CookieLifetime: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
 	for key := range cfg.HTTP.Session.Stores {
