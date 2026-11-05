@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/trentnix/hyperserver/internal/maintenance"
 )
 
 func TestMaintenanceRejectsUnsafeInputsBeforeDocker(t *testing.T) {
@@ -88,6 +90,10 @@ func TestMaintenanceRestoresBothDatabasesAndUploads(t *testing.T) {
 	write("bin/docker", `#!/usr/bin/env bash
 set -euo pipefail
 if [[ "$*" == *" stop app" ]]; then exit 0; fi
+if flock -n "$FIXTURE_ROOT/state/data/.blog-maintenance.lock" true; then
+  echo 'Storage operation ran without the blog lock.' >&2
+  exit 98
+fi
 while [[ "$1" != sqlite3 ]]; do shift; done
 database="$FIXTURE_ROOT/state/${2#/}"
 case "$3" in
@@ -103,10 +109,28 @@ esac
 	t.Setenv("PATH", filepath.Join(dir, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
 	run := func(action string) {
 		t.Helper()
+		// A server or another offline command must prevent either operation.
+		lock, err := maintenance.Lock(filepath.Join(dir, "state/data"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		blocked := exec.CommandContext(t.Context(), "bash", filepath.Join(dir, "storage.sh"), action, "snapshot")
+		output, runErr := blocked.CombinedOutput()
+		if err := lock.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if runErr == nil || !strings.Contains(string(output), "Blog or maintenance is already running") {
+			t.Fatalf("%s ignored the blog lock: %v %s", action, runErr, output)
+		}
 		cmd := exec.CommandContext(t.Context(), "bash", filepath.Join(dir, "storage.sh"), action, "snapshot")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s: %v %s", action, err, output)
 		}
+		lock, err = maintenance.Lock(filepath.Join(dir, "state/data"))
+		if err != nil {
+			t.Fatal("completed operation retained the blog lock", err)
+		}
+		lock.Close()
 	}
 	run("backup")
 	write("state/app.env", "changed keys")
@@ -163,6 +187,11 @@ esac
 		if output, err := cmd.CombinedOutput(); err == nil {
 			t.Fatalf("invalid uploads archive accepted: %s", output)
 		}
+		lock, err := maintenance.Lock(filepath.Join(dir, "state/data"))
+		if err != nil {
+			t.Fatal("failed restore retained the blog lock", err)
+		}
+		lock.Close()
 		for name, want := range unchanged {
 			got, err := os.ReadFile(filepath.Join(dir, name))
 			if err != nil || string(got) != want {

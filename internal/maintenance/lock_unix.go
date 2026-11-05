@@ -10,7 +10,10 @@ import (
 	"syscall"
 )
 
-// Lock excludes other cooperating processes until the returned file is closed.
+// Lock acquires a nonblocking exclusive lock for one application directory.
+// The caller owns the returned file and must close it after storage activity stops.
+// Other cooperating processes using that directory are excluded until then.
+// Different directories do not coordinate, even if they reference the same storage.
 // The persistent lock file must not be removed: doing so would split the lock.
 // Kernel locks are released automatically if a process exits unexpectedly.
 func Lock(directory string) (*os.File, error) {

@@ -69,7 +69,11 @@ docker --context default compose -p hyperserver-rehearsal -f deploy/local/compos
 docker --context default compose -p hyperserver-rehearsal -f deploy/local/compose.yaml up -d --wait app
 ```
 
-Backups contain both SQLite snapshots, an uploads archive, and signing keys needed to restore sessions. Treat all backup files as private. The script refuses to overwrite a named backup. It stops the app, uses SQLite's backup command, and leaves the app stopped on success or failure. The maintenance lock prevents two script invocations from overlapping, not independently started writers.
+Backups contain both SQLite snapshots, an uploads archive, and signing keys needed to restore sessions. Treat all backup files as private. The script refuses to overwrite a named backup. It stops the app, uses SQLite's backup command, and never restarts the app, including after failure.
+
+The script holds `state/maintenance.lock` to prevent overlapping script runs. After stopping the app, it also acquires `state/data/.blog-maintenance.lock`, the same file the container sees at `/data/.blog-maintenance.lock`. It holds both locks through backup or restore. A cooperating blog restart or offline command cannot access storage during that operation. If another process acquires the blog lock first, the script fails before accessing storage. Cleanup jobs, raw SQL tools, and older binaries do not honor this lock and must be stopped separately. Do not remove either lock file. See [maintenance locking](blog/backup.md#maintenance-locking).
+
+If a script or Docker command is interrupted, confirm that no maintenance container is still running before restarting the app. Host process locks do not track work that continues inside a container after its Docker client exits.
 
 ```sh
 bash deploy/local/storage.sh restore before-upgrade

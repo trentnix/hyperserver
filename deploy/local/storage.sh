@@ -19,6 +19,9 @@ else
   [[ -s "state/backups/$name.db" && -s "state/backups/$name.blog.db" && -s "state/backups/$name.uploads.tar" && -s "state/backups/$name.env" && -f "state/backups/$name.complete" ]] || fail 'The backup is missing or incomplete.'
 fi
 "${compose[@]}" stop app
+# Share the server's lock after shutdown, before reading or replacing its data.
+exec 8>>state/data/.blog-maintenance.lock
+flock -n 8 || fail 'Blog or maintenance is already running. No data was changed.'
 # Keep the app stopped on any failure. The operator decides when to restart.
 if [[ "$action" == backup ]]; then
   "${compose[@]}" run --rm --no-deps maintenance sqlite3 /data/hyperserver.db ".backup '/backups/$name.db'"

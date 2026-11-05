@@ -21,9 +21,27 @@ Stop the blog and other processes that write its data. From the application's co
 
 The destination's parent directory must exist. Existing archives are never overwritten. Keep backups outside uploads, local assets, and web-served directories.
 
-The server, image optimizer, and backup command share a process lock. Older binaries, SQL tools, and other applications do not honor the lock and must be stopped separately. Do not delete `.blog-maintenance.lock`. The operating system releases the lock when its process exits.
-
 Verification checks the inventory, file checksums, SQLite integrity, and foreign keys. It does not load archived configuration, restore files, or run migrations. Backup verifies the archive before publishing it.
+
+## Maintenance locking
+
+The lock is the persistent `.blog-maintenance.lock` file under `app.workingDirectory`. It coordinates cooperating processes that use the same application directory, not every process that opens a database. Two different application directories can reference the same storage without sharing a lock. Run only one blog instance per content database and uploads directory.
+
+| Operation | Lock ownership |
+| --- | --- |
+| `cmd/web` | Holds the lock from before application initialization until shutdown finishes. |
+| `blog-maintenance backup` | Holds the lock through snapshots, file copying, verification, and archive publication. |
+| `blog-maintenance adopt-schema` | Holds the lock while validating and adopting the existing schema. |
+| `optimize-images` | Holds the lock for the entire optimization run. |
+| `blog-maintenance verify` | Reads only the archive. No application lock is needed. |
+| `cmd/cleanup` | Does not acquire the blog lock. Can run alongside the server, but must be stopped before offline maintenance. |
+| SQL tools, migrations, manual recovery, and older binaries | Do not acquire the lock. Stop conflicting writers and prevent restarts yourself. |
+
+Acquisition is exclusive and fails immediately if another cooperating process holds the lock. Open or locking failures stop the command before it accesses storage. The acquiring operation owns the file handle and closes it after storage activity ends, including on errors. The operating system also releases the lock on process exit. The lock does not roll back partial work or replace SQLite transactions.
+
+Do not delete or replace the lock file, even after a crash. The file's presence does not mean it is locked. Removing it can let another process acquire a different file while the original owner still runs. Keep the application directory and lock file on a filesystem that supports process locking, with permissions for the service account.
+
+The [deployment rehearsal script](../deployment.md) also holds this lock after stopping the app. Its separate script lock serializes the stop-and-maintain sequence. Stop cleanup jobs and noncooperating writers separately.
 
 ## Recover manually
 

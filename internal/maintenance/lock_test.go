@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -28,6 +29,39 @@ func TestLock(t *testing.T) {
 		t.Fatal("released lock cannot be reacquired", err)
 	}
 	next.Close()
+}
+
+func TestLockDirectoryScope(t *testing.T) {
+	directory := t.TempDir()
+	first, err := Lock(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	alias := filepath.Join(t.TempDir(), "application")
+	if err := os.Symlink(directory, alias); err != nil {
+		t.Fatal(err)
+	}
+	if second, err := Lock(alias); err == nil {
+		second.Close()
+		t.Fatal("directory alias bypassed the lock")
+	}
+	other, err := Lock(t.TempDir())
+	if err != nil {
+		t.Fatal("independent application directory was blocked", err)
+	}
+	other.Close()
+	before, err := first.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(filepath.Join(directory, ".blog-maintenance.lock"))
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatalf("closing a lock must preserve its file: %v", err)
+	}
 }
 
 func TestLockProcessExit(t *testing.T) {

@@ -158,3 +158,5 @@ Providers own maintenance setup and pool handling. SQLite files and tables must 
 The supplied command includes the built-in providers. Custom account and session providers must also be supplied to the application's maintenance executable. Unknown providers and missing maintenance capabilities produce an error without falling back to SQLite. Independent session cleanup still runs.
 
 Schedule the command externally for regular cleanup. The server does not run cleanup automatically. The command reports deleted counts and exits with an error if either cleanup fails. Expiration checks still reject expired sessions and tokens before cleanup runs.
+
+Cleanup can run alongside the server, but it does not acquire the blog's process lock. Pause scheduled cleanup and wait for active runs to finish before backup, restore, or migrations. SQLite locking protects individual transactions, not an offline operation spanning databases and uploads. See [maintenance locking](blog/backup.md#maintenance-locking).
