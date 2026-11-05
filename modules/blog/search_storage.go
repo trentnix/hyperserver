@@ -6,35 +6,49 @@ import (
 )
 
 // SearchPublic scans only visible current content in one database snapshot.
-// Each rank retains a bounded prefix. Later title matches can therefore displace
-// earlier body matches without retaining every matching post or page in memory.
+// SQLite orders metadata without loading bodies into temporary sort storage.
+// Each rank retains only its first searchResultLimit matches.
 func (s *sqliteRepository) SearchPublic(ctx context.Context, query string) (searchResults, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return searchResults{}, nil
 	}
-	rows, err := s.db.QueryContext(ctx, publishedPages+`
-SELECT 'post' AS kind, slug, title, tags, summary, markdown, published AS sort_time, id
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return searchResults{}, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, publishedPages+`
+SELECT 'post' AS kind, slug, title, tags, summary, published AS sort_time, id, version
 FROM blog_posts WHERE draft=0 AND published<=?
 UNION ALL
-SELECT 'page', slug, title, tags, summary, markdown, updated / 1000000000, id
+SELECT 'page', slug, title, tags, summary, updated / 1000000000, id, version
 FROM blog_pages WHERE id IN (SELECT id FROM visible)
 ORDER BY sort_time DESC, kind, id`, s.now().Unix())
 	if err != nil {
 		return searchResults{}, err
 	}
 	defer rows.Close()
-	match := contentMatcher(query)
+	match := newContentMatcher(query)
 	var ranks [4][]searchResult
 	var results searchResults
+	var item searchResult
+	var tags, id string
+	var sortTime, version int64
 	for rows.Next() {
-		var item searchResult
-		var markdown, tags, id string
-		var sortTime int64
-		if err := rows.Scan(&item.Kind, &item.Slug, &item.Title, &tags, &item.Summary, &markdown, &sortTime, &id); err != nil {
+		if err := rows.Scan(&item.Kind, &item.Slug, &item.Title, &tags, &item.Summary, &sortTime, &id, &version); err != nil {
 			return searchResults{}, err
 		}
-		rank := match(item.Title, tags, item.Summary, markdown)
+		rank := match.rank(item.Title, tags, item.Summary)
+		if rank < 0 {
+			found, err := s.matchBody(ctx, tx, match, item.Kind, id, version)
+			if err != nil {
+				return searchResults{}, err
+			}
+			if found {
+				rank = 3
+			}
+		}
 		if rank < 0 {
 			continue
 		}

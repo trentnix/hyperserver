@@ -1,0 +1,90 @@
+goos: linux
+goarch: amd64
+pkg: github.com/trentnix/hyperserver/modules/blog
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor
+BenchmarkSearch/posts=100/public/title/workers=1-2         	    2254	    232210 ns/op	         0.2205 p50-ms	         0.3325 p95-ms	         0.3918 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	  482884 B/op	    2240 allocs/op
+BenchmarkSearch/posts=100/public/title/workers=1-2         	    2378	    225538 ns/op	         0.2097 p50-ms	         0.3176 p95-ms	         0.3811 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	  482883 B/op	    2240 allocs/op
+BenchmarkSearch/posts=100/public/title/workers=1-2         	    2678	    226551 ns/op	         0.2145 p50-ms	         0.3176 p95-ms	         0.3710 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	  482880 B/op	    2240 allocs/op
+BenchmarkSearch/posts=100/public/body/workers=1-2          	     226	   2644555 ns/op	         2.607 p50-ms	         2.841 p95-ms	         2.942 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2240080 B/op	    3167 allocs/op
+BenchmarkSearch/posts=100/public/body/workers=1-2          	     228	   2614410 ns/op	         2.599 p50-ms	         2.764 p95-ms	         2.893 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2240081 B/op	    3167 allocs/op
+BenchmarkSearch/posts=100/public/body/workers=1-2          	     223	   2706403 ns/op	         2.660 p50-ms	         3.005 p95-ms	         3.742 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2240080 B/op	    3167 allocs/op
+BenchmarkSearch/posts=100/public/unicode/workers=1-2       	     220	   2735703 ns/op	         2.680 p50-ms	         3.038 p95-ms	         3.553 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2240080 B/op	    3168 allocs/op
+BenchmarkSearch/posts=100/public/unicode/workers=1-2       	     220	   2742659 ns/op	         2.689 p50-ms	         3.121 p95-ms	         3.640 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2240080 B/op	    3168 allocs/op
+BenchmarkSearch/posts=100/public/unicode/workers=1-2       	     214	   2688098 ns/op	         2.636 p50-ms	         3.034 p95-ms	         3.655 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2240081 B/op	    3168 allocs/op
+BenchmarkSearch/posts=100/public/miss/workers=1-2          	     225	   2647462 ns/op	         2.623 p50-ms	         2.812 p95-ms	         2.968 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2236480 B/op	    3142 allocs/op
+BenchmarkSearch/posts=100/public/miss/workers=1-2          	     226	   2682650 ns/op	         2.635 p50-ms	         2.963 p95-ms	         3.184 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2236480 B/op	    3142 allocs/op
+BenchmarkSearch/posts=100/public/miss/workers=1-2          	     226	   2670547 ns/op	         2.636 p50-ms	         2.864 p95-ms	         3.260 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2236483 B/op	    3142 allocs/op
+BenchmarkSearch/posts=1000/public/title/workers=1-2        	     160	   3708561 ns/op	         3.649 p50-ms	         4.206 p95-ms	         4.394 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 4876699 B/op	   20060 allocs/op
+BenchmarkSearch/posts=1000/public/title/workers=1-2        	     175	   3503440 ns/op	         3.420 p50-ms	         4.138 p95-ms	         4.357 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 4876697 B/op	   20060 allocs/op
+BenchmarkSearch/posts=1000/public/title/workers=1-2        	     170	   3504096 ns/op	         3.478 p50-ms	         3.791 p95-ms	         4.041 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 4876698 B/op	   20060 allocs/op
+BenchmarkSearch/posts=1000/public/body/workers=1-2         	      19	  30119179 ns/op	        30.14 p50-ms	        30.78 p95-ms	        30.78 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24579543 B/op	   31387 allocs/op
+BenchmarkSearch/posts=1000/public/body/workers=1-2         	      19	  30069822 ns/op	        30.00 p50-ms	        31.12 p95-ms	        31.12 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24579545 B/op	   31387 allocs/op
+BenchmarkSearch/posts=1000/public/body/workers=1-2         	      19	  29912840 ns/op	        29.93 p50-ms	        30.49 p95-ms	        30.49 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24579549 B/op	   31387 allocs/op
+BenchmarkSearch/posts=1000/public/unicode/workers=1-2      	      19	  30138430 ns/op	        30.21 p50-ms	        30.62 p95-ms	        30.62 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24579547 B/op	   31388 allocs/op
+BenchmarkSearch/posts=1000/public/unicode/workers=1-2      	      19	  30539072 ns/op	        30.32 p50-ms	        32.23 p95-ms	        32.23 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24579547 B/op	   31388 allocs/op
+BenchmarkSearch/posts=1000/public/unicode/workers=1-2      	      19	  30676915 ns/op	        30.69 p50-ms	        32.02 p95-ms	        32.02 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24579548 B/op	   31388 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=1-2         	      18	  30669480 ns/op	        30.71 p50-ms	        31.42 p95-ms	        31.42 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24543606 B/op	   31179 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=1-2         	      18	  31044417 ns/op	        30.96 p50-ms	        32.29 p95-ms	        32.29 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24543606 B/op	   31179 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=1-2         	      19	  30415127 ns/op	        30.39 p50-ms	        31.09 p95-ms	        31.09 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	24543608 B/op	   31179 allocs/op
+BenchmarkSearch/posts=10000/public/title/workers=1-2       	      10	  53651086 ns/op	        53.66 p50-ms	        54.26 p95-ms	        54.26 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	48590503 B/op	  198260 allocs/op
+BenchmarkSearch/posts=10000/public/title/workers=1-2       	      10	  54188432 ns/op	        54.30 p50-ms	        54.83 p95-ms	        54.83 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	48590536 B/op	  198260 allocs/op
+BenchmarkSearch/posts=10000/public/title/workers=1-2       	      10	  54137229 ns/op	        53.95 p50-ms	        55.51 p95-ms	        55.51 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	48590482 B/op	  198260 allocs/op
+BenchmarkSearch/posts=10000/public/body/workers=1-2        	       2	 320669434 ns/op	       320.3 p50-ms	       321.0 p95-ms	       321.0 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246321772 B/op	  311612 allocs/op
+BenchmarkSearch/posts=10000/public/body/workers=1-2        	       2	 320266844 ns/op	       315.5 p50-ms	       325.0 p95-ms	       325.0 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246321780 B/op	  311612 allocs/op
+BenchmarkSearch/posts=10000/public/body/workers=1-2        	       2	 322223536 ns/op	       319.8 p50-ms	       324.6 p95-ms	       324.6 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246321780 B/op	  311612 allocs/op
+BenchmarkSearch/posts=10000/public/unicode/workers=1-2     	       2	 319771225 ns/op	       319.2 p50-ms	       320.3 p95-ms	       320.3 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246321668 B/op	  311612 allocs/op
+BenchmarkSearch/posts=10000/public/unicode/workers=1-2     	       2	 325067964 ns/op	       321.1 p50-ms	       329.0 p95-ms	       329.0 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246321676 B/op	  311612 allocs/op
+BenchmarkSearch/posts=10000/public/unicode/workers=1-2     	       2	 332696518 ns/op	       317.6 p50-ms	       347.8 p95-ms	       347.8 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246321740 B/op	  311612 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=1-2        	       2	 319994826 ns/op	       319.6 p50-ms	       320.4 p95-ms	       320.4 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246285748 B/op	  311403 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=1-2        	       2	 321796638 ns/op	       321.4 p50-ms	       322.2 p95-ms	       322.2 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246285724 B/op	  311403 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=1-2        	       2	 324914188 ns/op	       318.3 p50-ms	       331.5 p95-ms	       331.5 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	246285732 B/op	  311402 allocs/op
+PASS
+ok  	github.com/trentnix/hyperserver/modules/blog	36.068s
+goos: linux
+goarch: amd64
+pkg: github.com/trentnix/hyperserver/modules/blog
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor
+BenchmarkSearch/posts=100/admin/posts/body-2         	     206	   2827214 ns/op	         2.791 p50-ms	         3.007 p95-ms	         3.203 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2492610 B/op	    3086 allocs/op
+BenchmarkSearch/posts=100/admin/posts/body-2         	     210	   2870383 ns/op	         2.831 p50-ms	         3.108 p95-ms	         3.412 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2492607 B/op	    3086 allocs/op
+BenchmarkSearch/posts=100/admin/posts/body-2         	     208	   2830022 ns/op	         2.806 p50-ms	         3.004 p95-ms	         3.053 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2492607 B/op	    3086 allocs/op
+BenchmarkSearch/posts=100/admin/pages/body-2         	    3604	    158370 ns/op	         0.1513 p50-ms	         0.2030 p95-ms	         0.2456 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	  127369 B/op	     386 allocs/op
+BenchmarkSearch/posts=100/admin/pages/body-2         	    3660	    158396 ns/op	         0.1511 p50-ms	         0.2014 p95-ms	         0.2468 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	  127369 B/op	     386 allocs/op
+BenchmarkSearch/posts=100/admin/pages/body-2         	    3758	    157911 ns/op	         0.1512 p50-ms	         0.2037 p95-ms	         0.2467 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	  127368 B/op	     386 allocs/op
+BenchmarkSearch/posts=1000/admin/posts/body-2        	      18	  33070628 ns/op	        32.68 p50-ms	        35.36 p95-ms	        35.36 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	26801060 B/op	   30559 allocs/op
+BenchmarkSearch/posts=1000/admin/posts/body-2        	      18	  32603338 ns/op	        32.53 p50-ms	        33.19 p95-ms	        33.19 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	26801066 B/op	   30559 allocs/op
+BenchmarkSearch/posts=1000/admin/posts/body-2        	      18	  32504854 ns/op	        32.49 p50-ms	        32.96 p95-ms	        32.96 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	26801061 B/op	   30559 allocs/op
+BenchmarkSearch/posts=1000/admin/pages/body-2        	     208	   2868024 ns/op	         2.835 p50-ms	         3.093 p95-ms	         3.257 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2508595 B/op	    3456 allocs/op
+BenchmarkSearch/posts=1000/admin/pages/body-2        	     210	   2903996 ns/op	         2.862 p50-ms	         3.115 p95-ms	         3.750 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2508595 B/op	    3456 allocs/op
+BenchmarkSearch/posts=1000/admin/pages/body-2        	     206	   2876162 ns/op	         2.848 p50-ms	         3.048 p95-ms	         3.175 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	 2508595 B/op	    3456 allocs/op
+BenchmarkSearch/posts=10000/admin/posts/body-2       	       2	 330769195 ns/op	       329.9 p50-ms	       331.7 p95-ms	       331.7 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	267970468 B/op	  305063 allocs/op
+BenchmarkSearch/posts=10000/admin/posts/body-2       	       2	 330923954 ns/op	       330.4 p50-ms	       331.5 p95-ms	       331.5 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	267970476 B/op	  305063 allocs/op
+BenchmarkSearch/posts=10000/admin/posts/body-2       	       2	 332907896 ns/op	       332.6 p50-ms	       333.2 p95-ms	       333.2 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	267970468 B/op	  305062 allocs/op
+BenchmarkSearch/posts=10000/admin/pages/body-2       	      18	  32587695 ns/op	        32.72 p50-ms	        33.10 p95-ms	        33.10 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	26959166 B/op	   34169 allocs/op
+BenchmarkSearch/posts=10000/admin/pages/body-2       	      18	  32707260 ns/op	        32.21 p50-ms	        41.57 p95-ms	        41.57 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	26959157 B/op	   34169 allocs/op
+BenchmarkSearch/posts=10000/admin/pages/body-2       	      18	  32341097 ns/op	        32.33 p50-ms	        32.98 p95-ms	        32.98 p99-ms	         0 pool-wait-ms/op	         0 timeout-%	26959157 B/op	   34169 allocs/op
+PASS
+ok  	github.com/trentnix/hyperserver/modules/blog	16.771s
+goos: linux
+goarch: amd64
+pkg: github.com/trentnix/hyperserver/modules/blog
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor
+BenchmarkSearch/posts=100/public/miss/workers=4-2         	      64	   2693675 ns/op	         8.008 p50-ms	        26.55 p95-ms	        42.87 p99-ms	         7.837 pool-wait-ms/op	         0 timeout-%	 2236738 B/op	    3145 allocs/op
+BenchmarkSearch/posts=100/public/miss/workers=4-2         	      64	   2605514 ns/op	         8.157 p50-ms	        20.62 p95-ms	        28.47 p99-ms	         7.554 pool-wait-ms/op	         0 timeout-%	 2236630 B/op	    3145 allocs/op
+BenchmarkSearch/posts=100/public/miss/workers=4-2         	      64	   2630666 ns/op	         7.976 p50-ms	        23.96 p95-ms	        26.43 p99-ms	         7.648 pool-wait-ms/op	         0 timeout-%	 2236631 B/op	    3145 allocs/op
+BenchmarkSearch/posts=100/public/miss/workers=16-2        	      64	   2583385 ns/op	        25.74 p50-ms	        97.87 p95-ms	       160.2 p99-ms	        33.98 pool-wait-ms/op	         0 timeout-%	 2236710 B/op	    3145 allocs/op
+BenchmarkSearch/posts=100/public/miss/workers=16-2        	      64	   2630536 ns/op	        29.19 p50-ms	        99.32 p95-ms	       131.5 p99-ms	        34.56 pool-wait-ms/op	         0 timeout-%	 2236699 B/op	    3145 allocs/op
+BenchmarkSearch/posts=100/public/miss/workers=16-2        	      64	   2649042 ns/op	        36.64 p50-ms	        79.98 p95-ms	       119.9 p99-ms	        34.86 pool-wait-ms/op	         0 timeout-%	 2236694 B/op	    3145 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=4-2        	      64	  29985140 ns/op	        89.94 p50-ms	       272.3 p95-ms	       361.0 p99-ms	        87.19 pool-wait-ms/op	         0 timeout-%	24543746 B/op	   31182 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=4-2        	      64	  30072258 ns/op	        90.54 p50-ms	       269.9 p95-ms	       361.5 p99-ms	        87.43 pool-wait-ms/op	         0 timeout-%	24543749 B/op	   31182 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=4-2        	      64	  30633618 ns/op	        92.07 p50-ms	       272.8 p95-ms	       463.1 p99-ms	        89.02 pool-wait-ms/op	         0 timeout-%	24543755 B/op	   31182 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=16-2       	      64	  30376151 ns/op	       333.4 p50-ms	      1064 p95-ms	      1731 p99-ms	       398.6 pool-wait-ms/op	         0 timeout-%	24543825 B/op	   31182 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=16-2       	      64	  30380187 ns/op	       305.5 p50-ms	      1126 p95-ms	      1339 p99-ms	       399.1 pool-wait-ms/op	         0 timeout-%	24543818 B/op	   31182 allocs/op
+BenchmarkSearch/posts=1000/public/miss/workers=16-2       	      64	  30356165 ns/op	       333.7 p50-ms	      1121 p95-ms	      1638 p99-ms	       398.5 pool-wait-ms/op	         0 timeout-%	24543804 B/op	   31182 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=4-2       	      64	 294160748 ns/op	       972.4 p50-ms	      2001 p95-ms	      2004 p99-ms	       852.4 pool-wait-ms/op	         9.375 timeout-%	224820263 B/op	  284249 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=4-2       	      64	 288477105 ns/op	       957.0 p50-ms	      2003 p95-ms	      2004 p99-ms	       841.3 pool-wait-ms/op	        12.50 timeout-%	221355357 B/op	  279866 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=4-2       	      64	 280857835 ns/op	       959.2 p50-ms	      2003 p95-ms	      2004 p99-ms	       812.4 pool-wait-ms/op	        14.06 timeout-%	214264033 B/op	  270893 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=16-2      	      64	 123823830 ns/op	      2000 p50-ms	      2003 p95-ms	      2004 p99-ms	      1621 pool-wait-ms/op	        64.06 timeout-%	94150858 B/op	  119029 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=16-2      	      64	 125087045 ns/op	      2000 p50-ms	      2003 p95-ms	      2004 p99-ms	      1568 pool-wait-ms/op	        65.62 timeout-%	93573917 B/op	  118303 allocs/op
+BenchmarkSearch/posts=10000/public/miss/workers=16-2      	      64	 123894900 ns/op	      2000 p50-ms	      2003 p95-ms	      2004 p99-ms	      1568 pool-wait-ms/op	        67.19 timeout-%	94264513 B/op	  119179 allocs/op
+PASS
+ok  	github.com/trentnix/hyperserver/modules/blog	98.603s

@@ -21,8 +21,9 @@ var blogSchemaV1 string
 
 // sqliteRepository stores blog content and the site profile.
 type sqliteRepository struct {
-	db  *sql.DB
-	now func() time.Time
+	db           *sql.DB
+	now          func() time.Time
+	searchBodies searchBodyCache
 }
 
 // openRepository keeps storage selection and schema setup inside the blog.

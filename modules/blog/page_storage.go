@@ -54,19 +54,34 @@ ORDER BY display_order IS NULL, display_order, updated DESC, id`, includeDrafts)
 // SearchPages returns matching metadata in relevance order, retaining the normal
 // page order for ties. It scans bodies without keeping them in the result list.
 func (s *sqliteRepository) SearchPages(ctx context.Context, query string) ([]Page, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+pageColumns+" FROM blog_pages ORDER BY display_order IS NULL, display_order, updated DESC, id")
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, "SELECT id, slug, title, '', published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published, version, tags FROM blog_pages ORDER BY display_order IS NULL, display_order, updated DESC, id")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	match := contentMatcher(query)
+	match := newContentMatcher(query)
 	var matches [4][]Page
 	for rows.Next() {
 		page, err := scanPage(rows)
 		if err != nil {
 			return nil, err
 		}
-		if rank := match(page.Title, page.Tags, page.Summary, page.Markdown); rank >= 0 {
+		rank := match.rank(page.Title, page.Tags, page.Summary)
+		if rank < 0 {
+			found, err := s.matchBody(ctx, tx, match, "page", page.ID, page.Version)
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				rank = 3
+			}
+		}
+		if rank >= 0 {
 			page.Markdown = ""
 			matches[rank] = append(matches[rank], page)
 		}

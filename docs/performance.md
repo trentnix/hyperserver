@@ -2,6 +2,8 @@
 
 These benchmarks measure framework HTTP fixtures, not blog performance or deployment capacity. Run them before adding a cache or changing a storage or rendering policy.
 
+For blog search volumes, concurrent load, and scaling limits, see [search performance](blog/search-performance.md).
+
 The former reference application has been removed. Request benchmarks now use test-only forms and layouts in `internal/test/web`. The binary-size check builds the blog. Historical measurements below describe the retired workload and are not a new baseline for the smaller fixtures.
 
 ## Workload and baseline

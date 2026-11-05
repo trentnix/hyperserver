@@ -222,14 +222,21 @@ func TestPublicSearchPublication(t *testing.T) {
 	start := time.Now().Truncate(time.Second)
 	advance := publicationClock(h, start)
 	store := h.blog.posts.(*sqliteRepository)
-	if _, err := savePostFixture(store, t.Context(), Post{Slug: "scheduled", Title: "Needle scheduled", Published: start.Add(time.Hour)}); err != nil {
+	if _, err := savePostFixture(store, t.Context(), Post{Slug: "scheduled", Title: "Scheduled", Markdown: "Needle scheduled", Published: start.Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	parent, err := savePageFixture(store, t.Context(), Page{Slug: "parent", Title: "Parent", Published: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := savePageFixture(store, t.Context(), Page{Slug: "child", Title: "Needle child", Published: true, ParentID: parent.ID}); err != nil {
+	if _, err := savePageFixture(store, t.Context(), Page{Slug: "child", Title: "Child", Markdown: "Needle child", Published: true, ParentID: parent.ID}); err != nil {
+		t.Fatal(err)
+	}
+	// Warm private bodies through administrator search before checking public visibility.
+	if _, err := store.SearchPosts(t.Context(), "needle"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SearchPages(t.Context(), "needle"); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
@@ -247,6 +254,89 @@ func TestPublicSearchPublication(t *testing.T) {
 	}
 	if got, err := store.SearchPublic(t.Context(), "needle"); err != nil || got.Total != 1 || got.Items[0].Slug != "scheduled" {
 		t.Fatal("unpublishing a parent did not hide its child", got, err)
+	}
+}
+
+func TestPublicSearchBoundedOrderingMatchesSQL(t *testing.T) {
+	h := newHarness(t)
+	store := h.blog.posts.(*sqliteRepository)
+	tx, err := store.db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	for i := 479; i >= 0; i-- {
+		id := fmt.Sprintf("ordering-%03d", i)
+		fields := [4]string{"Unrelated", "", "", ""}
+		fields[i%4] = fmt.Sprintf("Needle %d %s", i%4, id)
+		seconds := int64(10000 + i%7)
+		if i/4%2 == 0 {
+			_, err = tx.ExecContext(t.Context(), `INSERT INTO blog_posts(id,slug,title,tags,summary,markdown,published) VALUES(?,?,?,?,?,?,?)`, id, id, fields[0], fields[1], fields[2], fields[3], seconds)
+		} else {
+			_, err = tx.ExecContext(t.Context(), `INSERT INTO blog_pages(id,slug,title,tags,summary,markdown,published,preview_image,children_display,updated) VALUES(?,?,?,?,?,?,1,'','hidden',?)`, id, id, fields[0], fields[1], fields[2], fields[3], seconds*1e9+int64(i))
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	// Keep the old sorted scan as an independent ordering oracle. There are
+	// more than 50 matches in each rank, with timestamp, kind, and ID ties.
+	rows, err := store.db.QueryContext(t.Context(), publishedPages+`
+SELECT 'post' AS kind, slug, title, tags, summary, markdown, published AS sort_time, id
+FROM blog_posts WHERE draft=0 AND published<=?
+UNION ALL
+SELECT 'page', slug, title, tags, summary, markdown, updated / 1000000000, id
+FROM blog_pages WHERE id IN (SELECT id FROM visible)
+ORDER BY sort_time DESC, kind, id`, store.now().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var groups [4][]searchResult
+	match := newContentMatcher("needle")
+	for rows.Next() {
+		var item searchResult
+		var tags, markdown, id string
+		var seconds int64
+		if err := rows.Scan(&item.Kind, &item.Slug, &item.Title, &tags, &item.Summary, &markdown, &seconds, &id); err != nil {
+			t.Fatal(err)
+		}
+		if rank := match.rank(item.Title, tags, item.Summary, markdown); rank >= 0 {
+			item.Summary = searchSummary(item.Summary)
+			groups[rank] = append(groups[rank], item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	rows.Close()
+
+	type testCase struct {
+		name, query string
+		items       []searchResult
+	}
+	cases := []testCase{{name: "all ranks", query: "needle"}}
+	for rank, name := range []string{"title", "tags", "summary", "body"} {
+		cases[0].items = append(cases[0].items, groups[rank]...)
+		cases = append(cases, testCase{name, fmt.Sprintf("needle %d", rank), groups[rank]})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.items) <= searchResultLimit {
+				t.Fatal("fixture must exceed the result limit")
+			}
+			expected := searchResults{Items: tc.items[:searchResultLimit], Total: len(tc.items)}
+			// Each query starts with an empty cache and then repeats warm.
+			reader := &sqliteRepository{db: store.db, now: store.now}
+			for _, state := range []string{"cold", "warm"} {
+				got, err := reader.SearchPublic(t.Context(), tc.query)
+				if err != nil || !reflect.DeepEqual(got, expected) {
+					t.Fatalf("%s: incorrect bounded ordering: %+v, %v", state, got, err)
+				}
+			}
+		})
 	}
 }
 

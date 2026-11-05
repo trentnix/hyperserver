@@ -37,21 +37,36 @@ func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
 }
 
 // SearchPosts scans current content with Unicode case folding. Only matching
-// metadata is retained. Equal ranks preserve the management list's order.
+// metadata is returned. Equal ranks preserve the management list's order.
 func (s *sqliteRepository) SearchPosts(ctx context.Context, query string) ([]Post, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+postColumns+" FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, "SELECT id, slug, title, summary, '', published, draft, '', version, tags FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	match := contentMatcher(query)
+	match := newContentMatcher(query)
 	var matches [4][]Post
 	for rows.Next() {
 		post, err := scanPost(rows)
 		if err != nil {
 			return nil, err
 		}
-		if rank := match(post.Title, post.Tags, post.Summary, post.Markdown); rank >= 0 {
+		rank := match.rank(post.Title, post.Tags, post.Summary)
+		if rank < 0 {
+			found, err := s.matchBody(ctx, tx, match, "post", post.ID, post.Version)
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				rank = 3
+			}
+		}
+		if rank >= 0 {
 			post.Summary, post.Markdown, post.PreviewImage = "", "", ""
 			matches[rank] = append(matches[rank], post)
 		}

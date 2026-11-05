@@ -10,7 +10,34 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
+
+func FuzzContentNormalization(f *testing.F) {
+	for _, text := range []string{"", "ASCII", "Straße K İ ﬃ Σς", "e\u0301cole", "\xffa\xc3", strings.Repeat("\u0301", 70), strings.Repeat("A Café Straße. ", 1000)} {
+		f.Add(text)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		match := newContentMatcher("irrelevant")
+		want := norm.NFC.String(cases.Fold().String(text))
+		for _, input := range []string{text, "", "Reset", text} {
+			got := string(match.normalize(input))
+			if input == text && got != want {
+				t.Fatalf("normalization differs: got %q, want %q", got, want)
+			}
+		}
+	})
+}
+
+func TestContentNormalizationReusesBuffers(t *testing.T) {
+	match := newContentMatcher("absent")
+	body := strings.Repeat("A Café Straße. ", 16000)
+	if allocations := testing.AllocsPerRun(10, func() { match.normalize(body) }); allocations != 0 {
+		t.Fatalf("normalization allocated %.0f times after warm-up", allocations)
+	}
+}
 
 // TestContentMatcher covers literal search and Unicode case folding without a
 // database-specific wildcard language.
@@ -32,7 +59,7 @@ func TestContentMatcher(t *testing.T) {
 		{"%_", "Anything", "", "", "", -1},
 		{"' OR 1=1 --", "Anything", "", "", "", -1},
 	} {
-		if got := contentMatcher(tc.query)(tc.title, tc.tags, tc.summary, tc.body); got != tc.want {
+		if got := newContentMatcher(tc.query).rank(tc.title, tc.tags, tc.summary, tc.body); got != tc.want {
 			t.Errorf("%q in %q/%q/%q: rank %d, want %d", tc.query, tc.title, tc.summary, tc.body, got, tc.want)
 		}
 	}
