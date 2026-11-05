@@ -1,35 +1,11 @@
 # Compatibility
 
-HyperServer is in `v0` development. No public framework interface is frozen. Applications must pin a version or commit and test upgrades. A documented extension point is supported at that revision, not a promise that its shape will stay unchanged.
+HyperServer is experimental. Public APIs, configuration, HTTP behavior, and stored formats can change during `v0`, including between commits. Applications must pin a version or commit and test upgrades.
 
-## What can change
+A breaking change must document the affected contract and required application changes. Published release notes must link to upgrade instructions. If an old Go API is retained during a transition, its documentation must include a `Deprecated:` comment naming the replacement. There is no guaranteed deprecation period during `v0`.
 
-Public APIs, configuration, HTTP behavior, and stored formats can change during `v0`, including between commits. A breaking change must document the affected contract and the required application changes in the same change. Published release notes must identify those changes and link to upgrade instructions.
+Storage compatibility is separate from source compatibility. Format changes must specify migration, invalidation of disposable data, or recreation of development storage. They must not silently discard durable data. Follow the [storage migration procedures](storage.md), [session format rules](../pkg/services/session/readme.md#replacing-serialization), and [backup compatibility requirements](blog/backup.md#compatibility).
 
-If an old Go API is retained during a transition, its documentation must include a `Deprecated:` comment naming the replacement. There is no guaranteed deprecation period during `v0`. An API can be removed directly when maintaining both versions would add unnecessary complexity. Security fixes do not wait for a deprecation period.
+Documented extension points are supported at the pinned revision, not frozen interfaces. Run the shared provider contracts and application tests when replacing a service. SQLite coverage alone does not establish compatibility with another backend.
 
-Storage compatibility is separate from source compatibility. A format change must state whether to migrate, invalidate disposable data, or recreate example storage. It must not silently discard durable application data. Follow the provider's [migration procedures](storage.md) and [session format rules](../pkg/services/session/readme.md#replacing-serialization).
-
-## Login entry point
-
-Site modules now register `GET /login` and `POST /login` using `AuthManager.PageHandlers(routes)`. Declare a dependency on `auth.ManagerCapability` and receive the manager through `BindDependencies`. Register POST handlers through the returned `Submissions` scope to retain auth rate limits. Selecting auth alone does not register the root page.
-
-Sign-in links still point at `/login`. Old `GET /auth/login` and enabled-provider `GET /auth/login/{authType}` URLs redirect there. Provider-specific login POST routes no longer exist. Callbacks, password recovery, and stored data are unchanged.
-
-Custom providers must return `auth.LoginResult` from `Login` instead of `*user.User`. Return `LoginResult{Account: account}` on success, `LoginResult{Form: markup}` for validation errors, or an empty result after writing a response. Replace `GetLogin` and `GetLoginForm` page handlers with `LoginForm(*http.Request) (template.HTML, error)` for inline controls or `GetLoginButton()` for a provider button. Forms must post to `/login` with a hidden `provider` field. Inline providers must link their alternative control to `/login?provider=<AuthType>`. The shared page now preserves alternatives, so providers must remove calls to `auth.LoginAlternatives`. See [provider composition](application.md#catalog-selection).
-
-## Registration entry point
-
-Site modules also register `GET /register` and `POST /register` with the registration handlers returned by `PageHandlers(routes)`. Old `GET /auth/register` and enabled-provider `GET /auth/register/{authType}` URLs redirect there. Provider-specific registration POST routes no longer exist. When registration is disabled, the registered page and legacy routes return the existing unavailable response. Provider interfaces and templates are unchanged by this ownership move.
-
-Providers must replace `GetRegister` and `GetRegisterForm` with optional `RegistrationForm(*http.Request) (template.HTML, error)` controls. `Register` returns `auth.RegistrationResult`. Before account creation, return `RegistrationResult{Form: markup}` for validation errors without writing a response. Otherwise, write the response and return an empty result. Forms post to `/register` with a hidden `provider` field. Inline alternatives link to `/register?provider=<AuthType>`.
-
-Remove calls to `auth.RegistrationAlternatives` and uses of `ProviderPage.Alternatives`. The shared page owns alternatives, messages, and the outer wrapper. Application overrides of `auth.partial.email.register.form` must render the form, not the surrounding page. Use `auth.registration.footer` for page-level navigation.
-
-## Stabilization candidates
-
-Module registration, lifecycle hooks, and `MailSender` are candidates for stabilization. The [blog](../modules/blog) uses framework setup without reference-site wiring, but shares the framework's Go module. Test a separately pinned external application before promising stable interfaces.
-
-Keep account and session provider interfaces experimental while testing another backend. SQLite coverage alone does not establish that their contracts fit PostgreSQL or other storage platforms. Feature repositories remain application-owned unless reuse demonstrates a framework need.
-
-A future stable release must identify its supported public surface and compatibility policy explicitly. Example internals and packages under `internal` are not reusable framework contracts.
+Packages under `internal` and blog implementation details are not reusable framework contracts. A future stable release must identify its supported public interfaces and compatibility guarantees. Validate a separately pinned application before promising external framework stability.

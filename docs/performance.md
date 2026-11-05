@@ -1,36 +1,10 @@
 # Performance checks
 
-These benchmarks measure framework HTTP fixtures, not blog performance or deployment capacity. Run them before adding a cache or changing a storage or rendering policy.
+Measure the workload you intend to deploy before optimizing. Framework benchmarks use HTTP fixtures, not a running blog or network server. Keep local results and profiles in the ignored `tmp/` directory rather than committing machine-specific output.
 
-For blog search volumes, concurrent load, and scaling limits, see [search performance](blog/search-performance.md).
+## Framework regression checks
 
-The former reference application has been removed. Request benchmarks now use test-only forms and layouts in `internal/test/web`. The binary-size check builds the blog. Historical measurements below describe the retired workload and are not a new baseline for the smaller fixtures.
-
-## Workload and baseline
-
-The [raw baseline](performance-baseline.txt) records five 500 ms samples per benchmark on October 15, 2026, based on `4f86ae4` plus the benchmark changes. Environment: Go 1.27.2, linux/amd64 (`GOAMD64=v1`), Linux Mint 22.3, AMD Ryzen 9 9950X3D, `GOMAXPROCS=2`, CGO enabled with GCC, and temporary SQLite files on local ext4/NVMe storage. No race detector or coverage instrumentation was enabled.
-
-| Workload | Median time/op | Bytes/op | Allocs/op |
-| --- | ---: | ---: | ---: |
-| Prepared page template | 1.79 µs | 1,120 | 31 |
-| Prepared fragment template | 1.26 µs | 864 | 24 |
-| Security and request logging middleware | 1.75 µs | 3,024 | 40 |
-| Cookie session read | 7.28 µs | 9,398 | 77 |
-| SQLite session read | 12.45 µs | 9,472 | 121 |
-| SQLite session save | 13.10 ms | 7,532 | 77 |
-| Anonymous page / fragment | 13.66 / 10.26 µs | 27,723 / 24,547 | 159 / 120 |
-| Authenticated page / fragment | 32.96 / 30.05 µs | 32,299 / 29,111 | 313 / 288 |
-| Mixed concurrent requests | 19.86 µs | 28,458 | 220 |
-
-Rendering compares per-render parsing with prepared templates using a layout, partial, and escaped input. Middleware measures a bare handler and a chain containing request logging, security headers, proxy handling, HSTS, and cross-origin protection. Session benchmarks save one 256-byte string, then measure reads, request-local reuse, and saves. SQLite writes use the provider's default durability settings. Their timing depends heavily on the filesystem.
-
-Framework benchmarks serve `GET /` through the HTTP fixture handler with isolated SQLite accounts and sessions. They cover pages and fragments for anonymous and authenticated users. The concurrent workload splits those four cases evenly across two workers. Setup, password hashing, and schema preparation are outside benchmark timers. Requests are cloned and responses recorded inside the timers. Logging formats JSON into `io.Discard`. Mail is fake and is not exercised. The results exclude sockets, TLS, browser work, and external log delivery. Concurrent ns/op measures throughput-normalized cost, not a latency percentile.
-
-The stripped reference binary measured 14,508,568 bytes. Across five retained-heap checks, 10,000 mixed requests changed the live Go heap by −51,856 to +26,304 bytes after warm-up and garbage collection. These checks do not measure SQLite's C allocations, RSS, or a long-running deployment.
-
-## Run the checks
-
-Run from the repository root with the Go version in `go.mod`. Use an otherwise idle machine for timing comparisons. Keep raw output in the ignored `tmp` directory.
+Run from the repository root with the Go version in [go.mod](../go.mod), CGO, and a C compiler:
 
 ```bash
 set -euo pipefail
@@ -47,29 +21,42 @@ go run ./internal/test/perfcheck -results tmp/performance/results.txt -binary tm
 HS_TEST_PERFORMANCE=1 go test -v -count=5 ./internal/test/web -run '^TestFrameworkHeapBudget$'
 ```
 
-[Budgets](performance-budgets.json) allow 25% above baseline medians for allocations and bytes allocated, rounded up. At least five samples are required. The checker reports each range and uses the median so one noisy sample cannot fail the run. It rejects missing benchmarks, malformed metrics, failed runs, and mismatched Go version, OS, architecture, or parallelism. CI checks these budgets, a stripped binary limit of 18,000,000 bytes, and a retained-heap growth limit of 1 MiB after 10,000 requests.
+[CI](../.github/workflows/ci.yml) runs these allocation, retained-heap, and binary-size checks. [performance-budgets.json](performance-budgets.json) contains the enforced limits and required environment. The checker requires at least five samples and compares medians. It rejects missing results, failed runs, and mismatched Go versions, operating systems, architectures, or parallelism.
 
-The existing allocation and retained-heap limits remain regression ceilings. The blog uses the same 18,000,000-byte binary-size limit. The historical baseline remains unchanged. Remeasure before using timing limits for the new fixtures.
+CI does not enforce latency budgets. Use `perfcheck -timing` only on the recorded CPU with comparable storage and no competing workload. Review the workload and environment before changing a budget. These checks are regression guards, not production capacity guarantees.
 
-Latency budgets allow 50% above the baseline median. Add `-timing` to `perfcheck` only on comparable storage and otherwise idle hardware. The checker requires the recorded CPU model, but cannot verify equivalent storage, CPU scheduling, or background load. CI does not enforce timing. Investigate a failure before changing a budget. Remeasure and review the baseline when the toolchain, workload, or intended behavior changes. These are coarse regression guards, not service-level objectives.
+## Blog search
 
-## Profile before optimizing
+Search scans current metadata and text. It is not a full-text index. SQLite checks publication visibility on every public search and orders metadata without sorting Markdown bodies. Results prefer title, tags, summary, then body matches.
 
-```bash
+The repository caches normalized bodies by content type, ID, and saved version. Metadata and uncached bodies are read in one transaction. The cache holds at most 64 MiB of text and IDs and 16,384 entries, plus map and list overhead.
+
+Run the benchmarks with the environment above:
+
+```sh
+go test ./modules/blog -run '^$' -bench '^BenchmarkSearch$/posts=/public/(title|body|unicode|miss)/workers=1$' -benchmem -benchtime=500ms -count=5
+go test ./modules/blog -run '^$' -bench '^BenchmarkSearch$/posts=/public/miss/workers=(4|16)$' -benchmem -benchtime=64x -count=5
+go test ./modules/blog -run '^$' -bench '^BenchmarkSearch$/posts=/(admin|cold)/' -benchmem -benchtime=500ms -count=5
+go test ./modules/blog -run '^$' -bench '^BenchmarkSearchOverflow$' -benchmem -benchtime=10x -count=5
+```
+
+Fixtures use temporary SQLite files, a one-connection pool, varied Markdown bodies, drafts, scheduled posts, nested pages, and saved revisions. Regular cases warm the cache first. Cold cases clear it before every search. The overflow case uses 20,000 posts and 2,000 pages, exceeding the cache budget.
+
+Public benchmarks apply the handler's two-second deadline but bypass HTTP rendering and per-client admission. `ns/op` measures throughput-normalized cost. Percentiles include connection-pool waiting and timeouts. Allocation counts measure Go heap traffic, not SQLite's native memory. Short runs do not establish reliable tail latency.
+
+Before deployment, measure mixed reading, writing, and search with cold and warm caches on the target host. Include collections larger than the cache. Search still scans uncached content and shares database capacity with other operations.
+
+## Profiling
+
+After creating `tmp/performance`, capture a profile of the workload you want to improve:
+
+```sh
 go test ./internal/test/web -run '^$' -bench '^BenchmarkFrameworkLoad$' -benchtime=5s \
   -cpuprofile="$PWD/tmp/performance/cpu.pprof" \
   -memprofile="$PWD/tmp/performance/heap.pprof" \
-  -o "$PWD/tmp/performance/web.test"
+  -o tmp/performance/web.test
 go tool pprof -top tmp/performance/web.test tmp/performance/cpu.pprof
 go tool pprof -top -alloc_space tmp/performance/web.test tmp/performance/heap.pprof
 ```
 
-Use the same environment as the benchmark command. Profiles include fixture setup and benchmark calibration even though benchmark timers exclude setup. The local five-second mixed-load profile showed SQLite/CGO calls, allocation/garbage collection, and rendering work. It did not establish an expensive reusable application result that needs caching. The local Go 1.27.2 installation lacked `go tool pprof`, so its profiles were inspected using `cmd/pprof` from the already-installed Go 1.27.1 toolchain. No project dependency was added.
-
-## Cache decision
-
-Do not add a general cache yet. Parsed templates are already reused, and sessions are reused within a request. The reference workload does not demonstrate another consumer with a measurable cache benefit and a defined freshness policy. Adding account caching would also require preserving prompt session revocation and account changes. No runtime optimization or cache-related API change is part of this baseline work.
-
-Defer the bounded cache, no-op implementation, cache hit/miss/eviction/error metrics, and cache integration contracts together. When a consumer demonstrates a need, define its keys, user or tenant isolation, expiration, invalidation, concurrent misses, and failure behavior before implementation. Test mutations and failures against cached reads. Distributed caching remains deferred.
-
-The local application sends `Cache-Control: no-store` for rendered pages and fragments and varies by `HX-Request` and `HX-History-Restore-Request`. Tests cover separate users, account changes and revoked sessions, public page/fragment opt-in, history restores, errors, and static-asset separation. The [local deployment rehearsal](deployment.md) exercises an actual Nginx cache. Repeat those checks for a different proxy/CDN configuration. Header tests alone do not verify a deployment cache.
+Profiles can include fixture setup and benchmark calibration even when benchmark timers exclude them. Record the commit, toolchain, machine, storage, settings, and workload when comparing results. Investigate the measured bottleneck before adding a cache, dependency, or abstraction.

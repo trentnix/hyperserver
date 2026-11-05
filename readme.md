@@ -37,18 +37,6 @@ Start with [application setup](docs/application.md) and the blog's [application.
 | [Local deployment](docs/deployment.md) | The disposable blog container rehearsal. |
 | [Roadmap](roadmap.md) | Architectural direction and remaining work. |
 
-## Configuration
-
-The loader reads the first `config.yaml` in `.`, `config`, `../config`, or `../../config`. File values override defaults. `HYPERSERVER_` environment values override the file. Invalid or unknown settings stop startup.
-
-Optional module settings live in `modules/<registered-name>/config.yaml` under the application's resource directory. Modules validate their own requirements. Runtime files stay outside source control. See [configuration](docs/configuration.md) and [module configuration](docs/application.md#optional-module-configuration).
-
-## Account storage
-
-`application.New` selects account storage through `auth.accountStorage`. SQLite is the default provider. Other providers must preserve uniqueness, concurrency, expiration, and atomic security operations, not just implement the methods.
-
-Fresh stores initialize automatically. Existing framework account and session stores require supported schema versions and explicit migrations. See [storage setup and maintenance](docs/storage.md). The blog's content schema has a separate, experimental upgrade policy.
-
 ## Checks
 
 The framework, blog, and maintenance commands share one Go module. From the repository root:
@@ -58,7 +46,7 @@ go test ./...
 go vet ./...
 ```
 
-See [testing](docs/testing.md) for race, browser, and migration checks. [Performance measurements](docs/performance.md) describe framework fixture workloads, not production capacity.
+See [testing](docs/testing.md) for race, browser, and migration checks. [Performance checks](docs/performance.md) cover regression budgets, blog search, and profiling.
 
 ## Feedback and license
 

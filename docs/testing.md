@@ -12,7 +12,7 @@ go vet ./...
 go test -race ./...
 ```
 
-The [CI workflow](../.github/workflows/ci.yml) runs these checks on pushes and pull requests. Browser checks run in an independent job, so a browser failure does not prevent race checks. Both jobs must pass. See [AGENTS.md](../AGENTS.md) for working agreements and regression-test guidance.
+The [CI workflow](../.github/workflows/ci.yml) runs these checks on pushes and pull requests. Browser checks run in an independent job, so a browser failure does not prevent race checks. All required jobs must pass. See [AGENTS.md](../AGENTS.md) for working agreements and regression-test guidance.
 
 [Container recovery and soak tests](deployment.md#start-and-test) are opt-in. Ordinary Go test runs and CI skip them. Never run failure/recovery tests alongside a soak test or against real data.
 
@@ -28,13 +28,11 @@ Blog backup tests use isolated temporary data, including an application restart 
 
 ## Framework fixtures
 
-The blog is the only application. The retired contact demo is not needed to test the framework.
-
 - [HTTP fixtures](../internal/test/web/module_fixture_test.go) retain ordinary and HTMX forms, error responses, notifications, authenticated navigation, and optional authentication. Templates and browser assets live under `internal/test/web/testdata`.
 - [Provider replacement](../internal/test/web/provider_replacement_test.go) injects account, session, mail, and form-storage doubles through public APIs. [Independent storage](../internal/test/web/storage_test.go) checks failure isolation.
 - [Application tests](../pkg/application) cover optional services, module selection, startup failure cleanup, readiness, and borrowed-resource ownership.
 - [Lifecycle integration tests](../pkg/application/run_drain_test.go) cover HTTP/TLS draining, drain deadlines, and resource cleanup. [Shared-pool tests](../pkg/handlers/storage_initialization_test.go) cover dependency order and native queries.
-- Account and session packages retain their provider contracts and migration tests. Contact-specific storage, configuration, and presentation tests were removed with the demo.
+- Account and session packages cover provider contracts and migration behavior. Set `HS_TEST_MIGRATE` to the pinned migration CLI to include its integration tests. See [storage maintenance](storage.md#account-schema-migrations).
 
 ## Browser tests
 
@@ -65,10 +63,10 @@ Automated checks do not establish accessibility compliance. Before release, also
 
 ## Startup diagnostics
 
-CI saves browser diagnostics for seven days, including launch timestamps, readiness timing, [Firefox process-launch logs](https://firefox-source-docs.mozilla.org/xpcom/logging.html), and available crash reports. On Linux, it captures thread waits, page-fault counts, and process I/O counters after successful checks and on failure. On failure, it also captures live process state and probes the test server before stopping Firefox. Whole browser profiles are not uploaded. Reports can contain synthetic test data. Set `HS_TEST_BROWSER_ARTIFACTS` to a directory to retain diagnostics locally.
+CI retains browser startup logs and available crash reports for seven days, but does not upload whole profiles. Set `HS_TEST_BROWSER_ARTIFACTS` to a directory to retain diagnostics locally. Reports can contain synthetic test data.
 
 To investigate startup failures, manually run CI with `browser_diagnostics` enabled. The browser job runs only `TestBrowserErrorReporting`, ten times with fresh profiles. Compare the first launch with later launches: fresh profiles do not clear the operating system's file cache.
 
-`MAJFL` counts page faults that required storage I/O. `MINFL` counts faults that did not. The [Linux I/O counter `read_bytes`](https://www.kernel.org/doc/html/latest/filesystems/proc.html#proc-pid-io-display-the-io-accounting-fields) measures bytes fetched from storage, not bytes served from the file cache. These snapshots cover the browser parent, not every child process. High first-launch values can support an I/O hypothesis, but do not identify the slow files or explain the entire delay. If the browser sends no request and the independent probe succeeds, investigate browser startup before changing application code.
+If Firefox sends no request and the independent server probe succeeds, investigate browser startup before changing application code.
 
 Any failed attempt keeps the run failed. Firefox has 60 seconds to report JavaScript readiness, followed by a separate 15-second deadline for checks. Diagnostic runs do not replace application browser checks on pushes and pull requests.

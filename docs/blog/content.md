@@ -8,13 +8,13 @@ Republishing keeps the original publication date. Canceling before a scheduled t
 
 The Posts list groups Drafts, Scheduled, and Published content. Search matches current titles, tags, summaries, and Markdown, ranked in that order within each group. Empty Drafts and Scheduled groups are hidden. Searching hides every empty group.
 
-Editors are pages, not dialogs. Cancel returns to the management list, or History when editing a saved version. The server validates input and renders Markdown with raw HTML disabled.
+Cancel returns to the management list, or History when editing a saved version. The server validates input and renders Markdown with raw HTML disabled.
 
 ## Slugs and tags
 
 Leave a slug blank to generate it from the title. Generated collisions get `-2`, `-3`, or the next available suffix. Custom slugs must be unique within their content type. Posts and pages have separate URL namespaces. Slugs allow lowercase ASCII letters, digits, and hyphens, up to 120 characters. If a title produces no usable slug, enter one yourself.
 
-Changing a title preserves its existing slug. Changing a slug breaks old links. Editors warn when changing URLs of current or previously published content. Never-published drafts do not warn. Without JavaScript, the field shows the warning but cannot request confirmation. Publication before this tracking existed cannot be inferred for older drafts.
+Changing a title preserves its existing slug. Changing a slug breaks old links. Editors warn when changing URLs of current or previously published content. Never-published drafts do not warn. Without JavaScript, the field shows the warning but cannot request confirmation.
 
 Tags are optional search keywords, not public navigation. Enter comma-separated labels or choose suggestions. Saves normalize case and spacing and remove duplicates. Each item allows 20 tags of 50 characters each. Tags are included in history and browser recovery copies.
 
@@ -42,7 +42,7 @@ Images can be uploaded, selected from Media, or supplied as local absolute paths
 
 Identical content creates no new history and cannot be restored redundantly. If another tab has saved first, stale edits and restores are rejected. Open the current editor in another tab to compare changes.
 
-Older revisions can be deleted. The latest version is protected. Deleting a revision does not delete current content, images, backups, or browser copies. Deleting a post or page removes its history. Only versions saved since history tracking began can be recovered.
+Older revisions can be deleted. The latest version is protected. Deleting a revision does not delete current content, images, backups, or browser copies. Deleting a post or page removes its history.
 
 Historical images do not become public merely because history references them. If an image was deleted, edit the affected version to replace or remove the reference before saving or restoring.
 
@@ -58,7 +58,7 @@ Editors warn about unsaved changes before navigation. Browsers may suppress relo
 
 All Posts lists 30 published posts per page, grouped by month. `recentPostCount` controls Recent Posts and must be positive. Restart after changing it. RSS includes the full published feed. Post changes invalidate the feed and list caches, and scheduled publication expires them on time.
 
-Search at `/search` matches literal phrases in public titles, tags, summaries, and Markdown, in that rank order. It excludes drafts, future posts, hidden descendants, and history. It returns up to 50 matches with a total count. Search is limited to 30 requests/minute per IP and two seconds of database work. Responses are not cached or indexed.
+Search at `/search` matches literal phrases in public titles, tags, summaries, and Markdown, in that rank order. It excludes drafts, future posts, hidden descendants, and history. It returns up to 50 matches with a total count. Search is limited to 30 requests/minute per IP and two seconds of database work. Search responses are not cached. A bounded cache reuses normalized bodies, but search still scans content rather than using a full-text index. See [search limits and benchmarks](../performance.md#blog-search).
 
 Public pages include canonical URLs, descriptions, and Open Graph metadata. Summaries fall back to the site bio. Sharing images use the selected preview, then the first suitable content image, then the site portrait. SVGs are skipped. With no suitable image, sharing is text-only. Page preview blocks use a bundled placeholder when no preview image is selected.
 

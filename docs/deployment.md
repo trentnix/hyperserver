@@ -14,7 +14,7 @@ docker --context default compose -p hyperserver-rehearsal -f deploy/local/compos
 docker --context default compose -p hyperserver-rehearsal -f deploy/local/compose.yaml up -d --wait
 ```
 
-Use a fresh rehearsal data directory when switching from the retired contact demo. Existing demo databases are not migrated automatically. Open https://localhost:18443 and Mailpit at http://localhost:18025. Register `admin@example.invalid`, the address in [blog.yaml](../deploy/local/blog.yaml), and verify it through Mailpit. Automated deployment tests use that address with a fixed disposable password. Do not create a different password before running them. The generated certificate is self-signed and valid for 30 days. Tests trust only that certificate. For command-line checks, use `curl --cacert deploy/local/state/tls/cert.pem https://localhost:18443/health/ready`. Do not disable certificate verification globally.
+Open https://localhost:18443 and Mailpit at http://localhost:18025. Register `admin@example.invalid`, the address in [blog.yaml](../deploy/local/blog.yaml), and verify it through Mailpit. Automated deployment tests use that address with a fixed disposable password. Do not create a different password before running them. The generated certificate is self-signed and valid for 30 days. Tests trust only that certificate. For command-line checks, use `curl --cacert deploy/local/state/tls/cert.pem https://localhost:18443/health/ready`. Do not disable certificate verification globally.
 
 Run the destructive recovery/failure exercises only against this disposable stack, with no other writers or tests running:
 
@@ -38,7 +38,7 @@ Stop the stack with `docker --context default compose -p hyperserver-rehearsal -
 
 The app and maintenance command run as the invoking user's numeric UID/GID with dropped capabilities, no privilege escalation, and a read-only root filesystem. Each service has a 256 MiB memory limit, one CPU allowance, and a 128-process limit. Go's memory target is 192 MiB. The app has a writable 64 MiB temporary filesystem for multipart uploads. Docker logs rotate at three 10 MiB files. Nginx has a 16 MiB cache inside a 64 MiB temporary filesystem. Mailpit retains at most 100 messages. SQLite data and backups use host storage without a quota. Monitor available disk space and remove obsolete rehearsal backups yourself.
 
-`init.sh` generates separate signing keys in `state/app.env` and a TLS key under `state/tls`, with private permissions. It preserves existing keys. Docker administrators can inspect container environment values. Use the target environment's secret-management facility for a real deployment. Never put secrets in image build arguments or commit them.
+`init.sh` creates `state/app.env` and TLS files under `state/tls`, with private permissions. It preserves existing files. The script still generates legacy signing-key settings in `app.env`, but the configured SQLite sessions and account tokens do not use them. Docker administrators can inspect container environment values. Use the target environment's secret-management facility for a real deployment. Never put secrets in image build arguments or commit them.
 
 The build pins Go and container images and uses the module checksums. The image labels report version and commit. Rerun `init.sh` before building to refresh the revision. A dirty checkout is labeled `-dirty`, not presented as the exact committed tree. OS packages receive distribution updates at build time, so rebuilds are not promised to be byte-identical. Record the resulting image digest when testing or deploying.
 
@@ -69,7 +69,7 @@ docker --context default compose -p hyperserver-rehearsal -f deploy/local/compos
 docker --context default compose -p hyperserver-rehearsal -f deploy/local/compose.yaml up -d --wait app
 ```
 
-Backups contain both SQLite snapshots, an uploads archive, and signing keys needed to restore sessions. Treat all backup files as private. The script refuses to overwrite a named backup. It stops the app, uses SQLite's backup command, and never restarts the app, including after failure.
+Backups contain both SQLite snapshots, an uploads archive, and `state/app.env`. Treat all backup files as private. The script refuses to overwrite a named backup. It stops the app, uses SQLite's backup command, and never restarts the app, including after failure.
 
 The script holds `state/maintenance.lock` to prevent overlapping script runs. After stopping the app, it also acquires `state/data/.blog-maintenance.lock`, the same file the container sees at `/data/.blog-maintenance.lock`. It holds both locks through backup or restore. A cooperating blog restart or offline command cannot access storage during that operation. If another process acquires the blog lock first, the script fails before accessing storage. Cleanup jobs, raw SQL tools, and older binaries do not honor this lock and must be stopped separately. Do not remove either lock file. See [maintenance locking](blog/backup.md#maintenance-locking).
 
@@ -80,10 +80,10 @@ bash deploy/local/storage.sh restore before-upgrade
 docker --context default compose -p hyperserver-rehearsal -f deploy/local/compose.yaml up -d --wait app
 ```
 
-Restore checks database integrity and foreign keys, then extracts and validates the uploads archive before replacing either stopped database. It restores signing keys with the snapshot. The recovery test rolls back the blog schema with the real migrator, restores the backup, and verifies account/session continuity and post data after restart. Restore works even when the uploads directory is missing. Existing uploads remain in a `state/data/restore-*/previous-uploads` directory for recovery. Remove staging directories manually after verification. Restore loses writes made after the backup. This rehearsal chooses restore rather than inventing a generic forward-repair procedure. Off-host encrypted backup storage and retention remain deployment-specific decisions.
+Restore checks database integrity and foreign keys, then extracts and validates the uploads archive before replacing either stopped database. It restores `state/app.env` with the snapshots. Restore works even when the uploads directory is missing. Existing uploads remain in a `state/data/restore-*/previous-uploads` directory for recovery. Remove staging directories manually after verification. Restore loses writes made after the backup. Off-host encrypted backup storage and retention remain deployment-specific decisions.
 
 ## Dependency review
 
 [Vulnerability CI](../.github/workflows/vulnerabilities.yml) runs `govulncheck` on pushes, pull requests, a weekly schedule, and manual dispatch. [Dependabot](../.github/dependabot.yml) proposes module, action, Dockerfile, and Compose image updates. CI builds the application and maintenance images but does not run the soak or destructive deployment tests. Review changes and require CI before merging. No workflow auto-merges updates. Repository branch protections must enforce review if required by the maintainer.
 
-The scanner covers reachable Go code, not the container OS, Nginx, Mailpit, or vendored JavaScript. Review their advisories when updating the pinned versions and before a real deployment. Keep maintained bcrypt, OAuth, SQLite, and migration implementations. No replacement cryptography or migration engine is introduced here.
+The scanner covers reachable Go code, not the container OS, Nginx, Mailpit, or vendored JavaScript. Review their advisories when updating the pinned versions and before a real deployment. Keep maintained bcrypt, OAuth, SQLite, and migration implementations.

@@ -22,11 +22,13 @@ auth:
       clientSecret: YOUR_CLIENT_SECRET
 ```
 
-The default application catalog includes both registered providers. No changes to `cmd/web/application.go` are needed to enable email, Google, or both. The blog supplies one `Options.AuthPolicy` for its administrator restriction and onboarding behavior. The framework passes that policy to each provider. Applications using an explicit `Options.AuthProviders` catalog must include Google to make it available.
+The blog includes both providers. Enable email, Google, or both in configuration without changing application code. A custom `Options.AuthProviders` catalog must include Google to make it available. See [authentication providers](application.md#authentication-providers) for framework integration.
 
 Set `http.formActionOrigins` to permit Google's form redirect destination. The framework adds these exact origins to the application's CSP `form-action` directive without changing other directives or inbound CSRF checks. The blog does not hard-code Google origins. Chromium browsers apply this restriction to form redirects. No Google scripts or third-party browser cookies are required.
 
-`/login` normally shows all configured login methods. With exactly one registered account, the blog shows only methods available to that account: email for a stored password, Google for a connected Google identity, or both. If a provider's availability check fails, its control remains visible. Submitted login methods still work if presentation lookups fail. Credential validation and admission remain mandatory. Registration still offers all configured registration methods. Multiple-account sites and account storage without `user.SingleAccountReader` keep all configured login choices. The forms work without JavaScript. A disabled provider has no usable login or callback. Google-only authentication does not require a mail service. Existing global authentication and session settings still apply.
+`/login` normally shows all configured login methods. With exactly one registered account, the blog shows only methods available to that account: email for a stored password, Google for a connected Google identity, or both. If a provider's availability check fails, its control remains visible. Submitted login methods still work if presentation lookups fail. Credential validation and admission remain mandatory.
+
+Registration still offers all configured registration methods. Multiple-account sites and account storage without `user.SingleAccountReader` keep all configured login choices. The forms work without JavaScript. A disabled provider has no usable login or callback. Google-only authentication does not require a mail service. Existing global authentication and session settings still apply.
 
 Existing SQLite account databases must use the current schema before starting the application. See [account migrations](storage.md#account-schema-migrations) for the required version and upgrade commands. Fresh databases initialize automatically.
 
@@ -34,9 +36,13 @@ Existing SQLite account databases must use the current schema before starting th
 
 Sign in using the existing method. Open **Account** (`/auth/account`) and select **Connect Google**. The confirmation page starts the Google flow. The callback links Google's identity to the authenticated local account. Connecting Google preserves the password and invalidates older authenticated sessions. Site Profile only edits public site content.
 
-If email authentication, mail delivery, and account storage with `user.PasswordSetupRepository` support are configured, a Google-only account can select **Add password** in Account. The site emails a single-use setup link to the account's stored address. Open the link while signed in to that account. Setting a password leaves Google connected and invalidates existing sessions. Sign in with email to try the password. Password recovery then works regardless of the original registration method. Setup links cannot be used for password recovery, including unused links left after enrollment.
+If email authentication, mail delivery, and account storage with `user.PasswordSetupRepository` support are configured, a Google-only account can select **Add password** in Account. The site emails a single-use setup link to the account's stored address. Open the link while signed in to that account. Setting a password leaves Google connected and invalidates existing sessions. Sign in with email to try the password. Password recovery then works regardless of the original registration method.
 
-**Disconnect Google** requires an enabled password login provider, a working password, and account storage that supports `user.ExternalIdentityUnlinker`. The shared auth manager confirms the alternative login before authorizing removal. Storage checks the account version in the same transaction that deletes the Google link and revokes sessions. A concurrent password change changes the version and rejects removal. Sign in with email afterward. The site never allows removing Google when it is the only usable method. Disconnection removes the site's local association, not the Google account or its permissions at Google.
+Setup links cannot be used for password recovery, including unused links left after enrollment.
+
+**Disconnect Google** requires an enabled password login provider, a working password, and account storage that supports `user.ExternalIdentityUnlinker`. The shared auth manager confirms the alternative login before authorizing removal. Storage checks the account version in the same transaction that deletes the Google link and revokes sessions. A concurrent password change changes the version and rejects removal. Sign in with email afterward.
+
+The site never allows removing Google when it is the only usable method. Disconnection removes the site's local association, not the Google account or its permissions at Google.
 
 The blog places Account in the header, apart from content management. If no enabled provider offers an account action, the header shows **Sign out** instead.
 

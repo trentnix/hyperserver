@@ -1,10 +1,8 @@
 # Application setup and modules
 
-The default [blog application](../cmd/web/application.go) uses `application.New` for service startup, modules, middleware, and cleanup. It selects shared rendering and administrator-only authentication. Modules own their internal resources and routes. The [HTTP fixtures](../internal/test/web) test independent providers and ordinary forms without a second application.
+Use `application.New` to configure services, modules, middleware, and cleanup. The [blog application](../cmd/web/application.go) demonstrates the setup. [HTTP fixtures](../internal/test/web) test provider replacement and ordinary forms.
 
-The blog uses one [`blog.Site`](../modules/blog/site.go) per application. Its `Configure(app)` method configures shared rendering and returns the blog descriptor. Its `AuthenticationPolicy()` method supplies the administrator restriction, registration availability, and successful-login behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider selection and credentials belong in `config.yaml`, not in blog assembly code.
-
-The site owns the shared profile, administrator rule, and navigation wiring. Callers do not create or connect that state themselves. Create a new site for each application startup, including retries after failed initialization. Service configuration, the content security policy, and module selection remain application choices.
+Create one [`blog.Site`](../modules/blog/site.go) per application startup. `Configure(app)` sets shared rendering and returns the blog descriptor. `AuthenticationPolicy()` supplies the administrator restriction and onboarding behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider settings and credentials belong in `config.yaml`.
 
 ## Adding or replacing a feature
 
@@ -28,7 +26,7 @@ These extension points remain experimental. See the [compatibility policy](compa
 
 ### Signing keys
 
-SQLite sessions and account recovery/verification tokens use opaque random tokens and need no signing keys. `auth.jwtKey` is deprecated and ignored.
+SQLite sessions and account recovery/verification tokens use opaque random tokens and need no signing keys.
 
 If you enable cookie-backed sessions, generate `http.session.jwtKey` with `openssl rand -hex 32`. Configuration uses the output's bytes unchanged, without decoding. The cookie provider rejects keys shorter than 32 bytes and known placeholders. Cookie-backed sessions remain signed, not encrypted.
 
@@ -50,6 +48,8 @@ if err != nil {
 ```
 
 Services, module selection, and module initialization share one `app.initializationTimeout`, defaulting to ten seconds. Set shared rendering overrides in the callback before module setup prepares templates. Register any resources opened by the callback with `app.OnShutdown`. Modules close before those resources and shared services, including on startup failure.
+
+### Authentication providers
 
 If the selected catalog includes `auth` and `auth.enabled` is true, the constructor replaces that descriptor with one wired from the application's services, `Options.AuthPolicy`, and `Options.AuthProviders`. Select `auth.Module(auth.Dependencies{}, nil)` in the module callback. Arguments supplied to that descriptor are replaced, not merged. When using `handlers.Setup` directly, supply initialized dependencies and the provider catalog to `auth.Module` yourself.
 
@@ -73,6 +73,8 @@ For an explicit local catalog, set `Options.AuthProviders` to a callback returni
 
 With `auth.enabled: false`, the constructor removes auth from the selected catalog before dependency resolution. It does not initialize auth, prepare its templates, or bind its routes. Sessions remain available independently.
 
+### Login and registration routes
+
 Site modules own `/login` and `/register`. Declare `Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}` in the module descriptor. In `BindDependencies`, receive the initialized manager with `handlers.GetDependency[*auth.AuthManager](dependencies, auth.ManagerCapability)`. In the module's `Routes` method, register its prepared handlers:
 
 ```go
@@ -90,6 +92,8 @@ return routes.Err()
 Prepare these handlers once during startup. They preserve anonymous-user checks and no-store headers. Register POST handlers through `Submissions` to retain the auth rate limits and startup diagnostics. `routing.Routes` supplies body limits and rejects route conflicts. Registration handlers return an unavailable response when registration is disabled.
 
 A site that can run without auth can declare an optional dependency and skip registration when the manager is absent or disabled. The blog requires authentication. The [HTTP fixture](../internal/test/web/module_fixture_test.go) demonstrates optional authentication. Provider forms and links still use `/login` and `/register`. Custom paths are not supported by this API. Auth registers only its `/auth/...` operations and legacy redirects.
+
+### HTTP serving and middleware
 
 Serve `app.Handler`, not `app.Web`. The handler includes the standard web middleware, attaches selected sessions, and, when authentication is active, loads the current identity. Modules still choose protected routes with `auth/middleware.RequireAuthentication(app.Accounts, app.ContentManager)`. The constructor defaults the login destination to `/login`. Set presentation overrides on `app.ContentManager` in the module-selection callback. Login and home destinations must be local absolute paths.
 
@@ -183,9 +187,13 @@ Auth has a separate descriptor catalog. Only configured, enabled providers initi
 
 The auth manager composes the login page registered by the site module. Providers supply controls with `GetLoginButton` or an inline form with `LoginFormHandler.LoginForm`. Login forms must submit a hidden `provider` field containing their `AuthType` to `/login`. Inline providers must link their alternative control to `/login?provider=<AuthType>` so users can switch forms. Prepare templates during initialization and return escaped markup without a page layout. Use `content.View.RenderPartial` to preserve application template overrides and request-local layout data. The shared page displays the inline form and other available provider controls, including after validation failures.
 
-`Login` returns a `LoginResult` with either an authenticated `Account` or a rendered `Form` containing errors and non-secret submitted values. It must not write an HTTP response when returning either field. A zero result means the provider wrote its own response, such as an OAuth redirect. External providers implement `LoginCallbackHandler` to return a validated local account through the same session-completion path. The provider must validate its own browser-bound callback state. Use `ProviderRoutes` for additional provider-specific endpoints, with explicit access checks. Its `Routes(routes, mutations)` method receives a general scope and a scope with the authentication mutation rate limit. Register state-changing endpoints on `mutations`.
+`Login` returns a `LoginResult` with either an authenticated `Account` or a rendered `Form` containing errors and non-secret submitted values. It must not write an HTTP response when returning either field. A zero result means the provider wrote its own response, such as an OAuth redirect. External providers implement `LoginCallbackHandler` to return a validated local account through the same session-completion path. The provider must validate its own browser-bound callback state.
 
-Registration uses `GET /register` and `POST /register`. Providers implement `RegistrationHandler` and can supply inline controls through `RegistrationFormHandler.RegistrationForm`. Alternative inline controls link to `/register?provider=<AuthType>`. Forms post to `/register` with a hidden `provider` field. Before account creation, return `RegistrationResult{Form: markup}` for validation failures. After account creation or an OAuth redirect, write the response and return an empty result. Providers retain ownership of verification delivery and post-creation recovery guidance. The shared page preserves alternatives without context-based registration helpers.
+Use `ProviderRoutes` for additional provider-specific endpoints, with explicit access checks. Its `Routes(routes, mutations)` method receives a general scope and a scope with the authentication mutation rate limit. Register state-changing endpoints on `mutations`.
+
+Registration uses `GET /register` and `POST /register`. Providers implement `RegistrationHandler` and can supply inline controls through `RegistrationFormHandler.RegistrationForm`. Alternative inline controls link to `/register?provider=<AuthType>`. Forms post to `/register` with a hidden `provider` field. Before account creation, return `RegistrationResult{Form: markup}` for validation failures.
+
+After account creation or an OAuth redirect, write the response and return an empty result. Providers retain ownership of verification delivery and post-creation recovery guidance. The shared page preserves alternative registration methods.
 
 An application can set `Policy.LoginAccount` to tailor login choices to a known account, or return nil to show all configured methods. Providers can implement `LoginAvailability` to report whether that account has credentials. Providers without this capability remain visible. The blog uses this policy when account storage implements `user.SingleAccountReader` and contains exactly one account. This policy controls presentation, not authorization or route availability.
 

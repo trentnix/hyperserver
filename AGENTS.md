@@ -2,86 +2,54 @@
 
 ## Project intent
 
-HyperServer is an experimental Go framework for server-rendered web applications with first-class HTMX support. High performance, low overhead, and readable code are design goals.
+HyperServer is an experimental Go framework for server-rendered applications with first-class HTMX support. High performance, low overhead, and readable code are design goals. Public interfaces are unstable during `v0`. Change an interface when real usage demonstrates a better boundary.
 
-Use [roadmap.md](roadmap.md) for architectural direction and project priorities. The roadmap describes intended capabilities, not necessarily implemented behavior. Check the code before claiming a capability exists.
-
-Treat public interfaces as unstable during the `v0` phase. Change an interface when real usage demonstrates a better boundary.
+Use [roadmap.md](roadmap.md) for direction, not proof of implemented behavior. Check the code before claiming a capability exists.
 
 ## Building an application with HyperServer
 
-Use [docs/application.md](docs/application.md) for the supported setup path. The default [blog application](cmd/web/application.go) demonstrates it with real content and storage. Framework HTTP examples live in test-only fixtures under [internal/test/web](internal/test/web). Do not expose fixture routes in an application.
+Follow [application setup](docs/application.md) and the [blog application](cmd/web/application.go). Inspect `pkg/application.Options` and relevant service contracts before writing setup code. Prefer `application.New` over assembling services and middleware by hand. Change framework code only when the task requires it.
 
-Before writing setup code, inspect `pkg/application.Options` and the relevant service contracts. Prefer the configured constructor over assembling accounts, sessions, mail, and middleware by hand. Change framework code only when the requested task requires it.
+- Keep configuration application-owned. Ignore runtime configuration, secrets, databases, and uploads. Prefer file settings over new flags. Keep display content out of operational configuration.
+- Load configuration with `config.GetConfig()`. Select descriptors through `Options.Modules`. Imports register available factories, not active modules. A nil module callback selects nothing.
+- Configure layouts and `content.ConfigureResponses` in the callback before modules prepare templates. Use [prepared views and named partials](pkg/components/readme.md) for full-page and HTMX responses.
+- Implement `handlers.Handler`. Factories return fresh instances without I/O. Modules validate settings, acquire resources, and prepare templates in `Init`. Optional module configuration comes from the application's resource directory, not an installed Go package.
+- Register method-qualified routes and return `routes.Err()`. Site modules own root paths, including `/login` and `/register`. Use the auth manager's `PageHandlers` and its protected `Submissions` scope as shown in the application guide.
+- Serve `app.Handler` with `server.NewHTTPServer` and `app.Run`. Do not install standard middleware twice or repeat `handlers.Setup`. Register callback-owned resources with `app.OnShutdown`. Modules close resources they acquire through `Shutdown(context.Context) error`.
 
-1. Create an application-owned `config-template.yaml` and ignore runtime `config.yaml`, secrets, databases, and uploads. Prefer file configuration over new command-line flags. Configure only the services the application needs.
-2. Load configuration with `config.GetConfig()`. Call `application.New(ctx, cfg, options)` and select descriptors in `Options.Modules`. Imports register available factories, not active modules. A nil module callback selects nothing.
-3. Configure shared layouts and `content.ConfigureResponses` in the module callback before templates are prepared. Keep display content out of operational configuration. The application decides which modules load. Modules validate their own required settings.
-4. Implement `handlers.Handler`: `Init(context.Context, *server.ApplicationServer) error` and `Routes(*routing.Routes) error`. Use a fresh instance per descriptor factory. Use `init()` only to register immutable metadata. Open resources in `Init`, not in factories or package initialization.
-5. If a module needs settings, implement `Configuration() any` with a pointer to its settings. Supply defaults in its factory and validate in `Init`. The framework reads optional `modules/<registered-name>/config.yaml` under the application resource directory. Do not read configuration from an installed Go package directory.
-6. Prepare embedded templates once with `content.PrepareView` or `content.PrepareTemplates`. Create request-local content through `view.Content(r, data)`. Put request titles and data in handlers. Use named partials for full-page and HTMX rendering. See [rendering and forms](pkg/components/readme.md).
-7. Register method-qualified routes and return `routes.Err()`. Set explicit upload body limits. Validate requests and authorization before changing data. Preserve submitted non-secret values on validation errors. Use ordinary form actions where operation without JavaScript is required.
-8. Keep storage rules with the feature. Use narrow repositories where substitution or testing benefits the application. Do not create a capability provider, generic repository, or separate service layer without a concrete need. Application-supplied resources keep their owner. Modules close only resources they acquire.
-9. Serve `app.Handler` with `server.NewHTTPServer` and `app.Run`. Do not install the standard middleware twice or call `handlers.Setup` after `application.New`. Use `app.OnShutdown` for callback-owned resources and module `Shutdown(context.Context) error` for module-owned resources.
-10. Test a fresh installation, full-page and HTMX success/failure paths, authorization, and shutdown. Run checks from the repository root. The framework and blog share one Go module.
+Authentication requires selecting `auth.Module` and enabling it in configuration. Configuration selects providers. Use `Options.AuthPolicy` for admission and login behavior, and `Options.AuthProviders` for an explicit local provider catalog. Business permissions remain application rules.
 
-Authentication requires selecting `auth.Module` and enabling authentication in configuration. The constructor supplies configured services to registered provider factories, including email and Google. Configuration selects which providers initialize. Use `Options.AuthPolicy` for shared admission and login behavior. Use `Options.AuthProviders` only for an explicit local provider catalog. Business permissions remain application or module rules, not core framework policy.
+The framework and blog share one Go module. Framework HTTP examples are test-only fixtures under [internal/test/web](internal/test/web). Do not expose fixture routes in an application. Applications in other repositories must pin the framework revision and own their configuration and tests.
 
-Site modules register `/login` and `/register`. Require `auth.ManagerCapability`, receive `*auth.AuthManager` through `BindDependencies`, and call `PageHandlers(routes)` during route setup. Register GET handlers with `routes` and POST handlers with the returned `Submissions` scope. Auth supplies the protections but does not register root paths. Provider forms keep the established URLs.
+## Architecture and ownership
 
-For an application in its own repository, pin the framework revision and give that application its own configuration and tests.
+Keep the core small and usable without database, authentication, session, or mail services. Activate optional services only when selected modules or application configuration need them. Preserve `net/http` types and standard Go composition.
 
-## Architecture
+Package `init()` functions must register immutable metadata only. Keep the process-wide catalog separate from per-application instances. Tests must be able to supply a local catalog. Do not add package-global mutable runtime state.
 
-Keep the core small. Rendering and HTMX response handling belong in the core. Authentication, sessions, persistence, caching, and mail use replaceable service contracts.
+Keep dependency resolution, initialization, route binding, and shutdown deterministic. Reject missing or ambiguous providers, dependency cycles, and route conflicts before accepting traffic.
 
-Activate a service only when a loaded module or application configuration requires it. The core must run without database, authentication, session, or mail services.
+Keep HTTP handling, application operations, persistence, serialization, and rendering responsibilities distinct. These boundaries define ownership, not a required package structure. Define narrow repositories near consumers. Do not introduce a universal database API or a service layer without a concrete need.
 
-Preserve self-registering modules. Package `init()` functions must register immutable metadata only. Keep the process-wide module catalog separate from per-application module instances. Tests must be able to supply a local catalog.
-
-Keep dependency resolution, initialization, route binding, and shutdown explicit and deterministic. Reject unresolved dependencies, ambiguous providers, dependency cycles, and route conflicts before accepting traffic.
-
-Keep HTTP handling, application operations, persistence, serialization, and rendering responsibilities distinct. These boundaries define ownership, not a required package structure for applications.
-
-Define narrow repository interfaces near their consumers. Do not introduce a universal database or query API. Providers must satisfy the guarantees their consumers require.
-
-Let the application operation decide which changes must succeed together. Storage providers must bind participating repository operations to the same transaction scope.
-
-Keep storage independent from serialization. Services that store encoded values must allow the serializer to be replaced.
+Let the application operation define transaction boundaries. Providers must bind participating operations to the same transaction and preserve their consumers' guarantees. Keep encoded storage independent of serialization so serializers can be replaced.
 
 Let cache consumers choose keys, freshness, invalidation, and failure behavior. Cache implementations must enforce expiration and resource bounds and handle concurrent access.
 
-Keep `net/http` types and standard Go composition available. Do not hide them behind a mandatory proprietary request model.
+Application-supplied resources keep their owner. Return initialization errors, not startup panics. Clean up partial acquisitions and close initialized modules in reverse dependency order. Drain HTTP requests before closing services.
 
-Support ordinary navigation and form submissions when an application requires them. Applications can depend on HTMX. Keep ordinary-form and HTMX coverage in the framework's HTTP fixtures.
-
-## Dependencies
-
-Prefer the standard library when it meets requirements. A smaller feature set is acceptable if it keeps the code easier to read and maintain.
-
-Before adding a dependency, assess maintenance, transitive dependencies, and replacement cost. Use established, maintained implementations for cryptography and password hashing.
-
-Add abstractions and infrastructure for demonstrated needs. Follow the roadmap's scope limits rather than introducing speculative adapters or services.
+Support ordinary navigation and form submissions when required. Applications can depend on HTMX. Preserve ordinary-form and HTMX coverage in framework fixtures.
 
 ## Implementation
 
-Use blank lines to separate logical phases within a function, not every statement or call. Keep an operation and its error check together. Group closely related operations, such as creating a token and building its URL. Add space when the responsibility changes, such as moving from rendering to persistence and delivery.
+Prefer the standard library when it meets requirements. Before adding a dependency, assess maintenance, transitive dependencies, and replacement cost. Use maintained implementations for cryptography and password hashing. Add abstractions only for demonstrated needs.
 
-Keep short expressions on one line. Split long call chains across lines when the steps become easier to scan. Do not add blank lines merely because an `if` block ends.
+Use blank lines between logical phases, not every statement or completed `if` block. Keep an operation and its error check together. Keep short expressions on one line. Split long call chains when that improves readability.
 
-Do not add package-global mutable runtime state. Limit shared registration state to the module catalog.
+Propagate `context.Context` through I/O. Set explicit upload body limits. Validate requests and authorization before changing data. Preserve submitted non-secret values on validation errors. Report failures accurately, including required operations that were skipped.
 
-Return errors from initialization. Do not introduce new startup panics. Clean up partially acquired resources and close initialized modules in reverse dependency order. During shutdown, drain HTTP requests before closing services.
+Use `html/template` and escape values by default. Restrict `template.HTML` to reviewed trust boundaries. Reuse parsed templates rather than parsing on each request.
 
-Use context-aware operations for I/O and propagate `context.Context`.
-
-Use method-qualified route patterns for state-changing handlers.
-
-Use `html/template` and escape rendered values by default. Restrict `template.HTML` to reviewed trust boundaries. Reuse parsed templates rather than parsing them on each request.
-
-Keep diagnostic and sample routes in development modules. Production applications must not load those modules. Do not add an application-wide development flag to control their routes.
-
-Report service failures accurately. Do not return success when a required operation was skipped or failed.
+Keep diagnostics and sample routes in fixtures or development modules that production applications do not load. Do not introduce an application-wide development flag to control those routes.
 
 ## Verification
 
@@ -90,16 +58,10 @@ Format changed Go files with `gofmt`, then run:
 - `go test ./...`
 - `go vet ./...`
 
-If a change affects concurrent code, run race tests for the affected packages and relevant integration flows:
+For concurrent code, also run `go test -race ./path/to/package` for affected packages and relevant integration flows.
 
-- `go test -race ./path/to/package`
+Add regression tests for corrected defects. Test fresh installation, full-page and HTMX success and failure paths, authorization, and shutdown. Cover service failures and startup cleanup. Use shared provider contracts and migration tests for supported stored formats.
 
-Add regression tests for every corrected defect.
+Do not claim performance improvements without a repeatable benchmark or profile. Record the workload and environment. See [testing](docs/testing.md) and [performance checks](docs/performance.md).
 
-Test failure paths for changed services, startup, and shutdown. Use HTTP integration tests for authentication and response behavior, shared contract tests for storage providers, and migration tests for supported stored formats.
-
-Do not claim a performance improvement without a repeatable benchmark or profile. Record the workload and environment.
-
-For documentation-only changes, check the edited content and links. Go tests are not required.
-
-Report which checks ran, their results, and any checks that were skipped or blocked.
+For documentation-only changes, check edited content and links. Go tests are not required. Report checks that passed, failed, or were skipped.

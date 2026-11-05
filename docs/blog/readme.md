@@ -29,19 +29,13 @@ Mailpit captures mail locally rather than delivering it. In another terminal, st
 go run ./cmd/web
 ```
 
-Open <http://127.0.0.1:8080/>. First-time setup asks you to register the configured administrator address. Use the verification message at <http://127.0.0.1:8025>, then log in. Your first login opens Site Profile. Add your name and bio, then save. Images are optional. After the first save, you can view your site or write your first post.
+Open <http://127.0.0.1:8080/> and register the configured administrator address. With email registration, complete any required verification through Mailpit at <http://127.0.0.1:8025>, then log in. Google registration signs you in immediately. Your first login opens Site Profile. Add your name and bio, then save. Images are optional.
 
-Public content, including the homepage, opens after registration and any required verification. Email verification leads the administrator to login, and the first login opens Site Profile. Google registration signs the administrator in immediately and continues to Site Profile. Setup progress survives restarts. Existing installations with a verified administrator skip setup. If no administrator exists, enable `auth.registrationEnabled` to register.
+Public content opens after registration and any required verification. After saving Site Profile, you can view the site or write a post. Setup progress survives restarts, and verified administrators skip registration. If no administrator exists, enable `auth.registrationEnabled` to register.
 
 A fresh installation shows “My Blog,” neutral portrait/favicon assets, no background, and no posts or pages. Use **Site Profile** for the name, bio, and images. Create About or Projects through **Pages**. Content belongs in the database. Operational settings and the administrator allowlist belong in configuration.
 
 Runtime configuration, databases, uploads, and local assets are ignored by Git. Stop the server with Ctrl+C. Restart after changing configuration. After registering, you can disable registration with `auth.registrationEnabled: false`.
-
-### Existing installations
-
-The blog now runs through `cmd/web` instead of `examples/blog`. The source move does not move configuration or data. To keep an existing installation, build with `go build -o /tmp/hyperserver-blog ./cmd/web` from the repository root, then run that binary from the existing configuration directory. Review [database upgrades](#database-upgrades) before starting it.
-
-If the root `config.yaml` belongs to the old contact demo, keep that configuration separate. Use the blog templates in a new configuration directory and copy the module template into its `modules/blog/` directory. Run the built blog binary there. The old contact demo has been removed.
 
 ## Guides
 
@@ -62,7 +56,7 @@ Fresh startup creates blog schema version 1 from the embedded [SQL migration](..
 
 Before upgrading an existing installation, stop the server and all other writers. Create and verify a [backup](backup.md). Keep the compatible application binary with the backup.
 
-For an unversioned database from the last pre-migration release (`1502fba`), run this once from the application configuration directory:
+For an unversioned database matching the supported blog schema, run this from the application configuration directory:
 
 ```sh
 /path/to/blog-maintenance adopt-schema
@@ -70,7 +64,7 @@ For an unversioned database from the last pre-migration release (`1502fba`), run
 
 Build `blog-maintenance` from this checkout with `go build -o /path/to/blog-maintenance ./cmd/blog-maintenance`. Adoption validates required columns, keys, foreign keys, named indexes, and the page-cycle trigger, then records version 1 in one transaction. Extra indexes are allowed. Validation errors identify the incompatible schema element. Adoption does not change content, history, or image files. Repeating it is safe.
 
-Incomplete or older schemas are rejected. Use the compatible older application to complete its supported upgrades before adopting. Do not add version metadata by hand.
+Incompatible schemas are rejected. Preserve the original database and use a compatible application or an explicit migration. Do not add version metadata by hand.
 
 Later upgrades use the same pinned `golang-migrate` CLI as the framework. From the repository root:
 

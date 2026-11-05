@@ -60,7 +60,7 @@ Accounts use the separately installed [golang-migrate v4.20.1 CLI](https://githu
 
 Each binary supports exactly one account schema version, declared by `accountSchemaVersion`. To change the schema, add the next zero-padded, sequential migration pair and update the required version and repository code together. Startup does not select between schema implementations or upgrade existing storage. The bootstrap runner requires the embedded migrations to end at the declared version.
 
-Existing account storage must match the baseline schema and record version 1 with `dirty = false` in `hyperserver_account_version`. Missing, malformed, dirty, or unsupported versions stop startup without changes. Startup never deletes storage or runs later migrations. The unreleased account migrations were consolidated before deployment. Earlier development databases, including those marked version 3, have no automatic upgrade path to this baseline. Recreate disposable development databases. If development data must be preserved, back it up and validate its schema before an explicit offline conversion. Do not change version metadata merely to bypass startup checks.
+Existing account storage must match the baseline schema and record version 1 with `dirty = false` in `hyperserver_account_version`. Missing, malformed, dirty, or unsupported versions stop startup without changes. Startup never deletes storage or migrates an existing database. Back up unsupported databases before planning an offline migration. Do not change version metadata merely to bypass startup checks.
 
 Install the pinned CLI with its SQLite driver, outside the application's dependency graph. The executable goes in `GOBIN`, or `$(go env GOPATH)/bin` if `GOBIN` is unset. With that directory on `PATH`, run from the repository root against an empty or supported versioned account database:
 
@@ -75,8 +75,6 @@ Before deployment migrations, stop affected writers, including cleanup jobs, and
 `down 1` deletes all accounts, external identity links, tokens, and their indexes. Back up before reversing the baseline. Session and blog schemas have separate version tables and remain unchanged. After the baseline is reversed, startup rejects the empty version table until an explicit `up` recreates the schema. Failed transactional migrations must roll back. Inspect and repair the database before using `force` to correct its version marker. `force` does not run or undo SQL.
 
 After a committed change, use forward repair or restore a compatible backup. Restart an older application only if it supports the resulting format.
-
-The CLI adds no dependencies to this Go module, but its own dependencies still need maintenance. Only the SQLite provider knows its version-table format. Replacing the tool would require converting that metadata, not account records.
 
 CI installs the pinned CLI and tests bootstrap compatibility, up/down, independent version tables, failed-migration rollback, and explicit repair. To run those tests locally:
 

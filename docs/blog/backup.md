@@ -27,7 +27,7 @@ Verification checks the inventory, file checksums, SQLite integrity, foreign key
 
 This maintenance binary supports ZIP archive format **1** with blog schema **1**, account schema **1**, and SQLite session schema **1**. Each database role must be present exactly once, including when roles share a snapshot. Custom session table names are supported. Every session version table in a session snapshot must have a supported version.
 
-Missing, malformed, duplicate, dirty, older, or newer schema version markers fail verification. A valid checksum or SQLite integrity check alone does not establish recovery compatibility. Earlier development account databases marked version 3 are not compatible with the consolidated version 1 baseline. Verification does not relabel them.
+Missing, malformed, duplicate, dirty, older, or newer schema version markers fail verification. A valid checksum or SQLite integrity check alone does not establish recovery compatibility.
 
 Use the maintenance binary for the release you intend to recover. If a backup has an unsupported version, use a compatible release to recover into a separate application directory, then follow explicit migration instructions before upgrading. Preserve the original archive. Do not overwrite the current installation to test compatibility.
 

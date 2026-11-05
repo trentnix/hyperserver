@@ -8,7 +8,7 @@ The `session` package defines session values, storage contracts, and request han
 
 `SQLiteStore` stores session data in SQLite. Its cookie contains a versioned opaque token with 256 random bits, not session data. SQLite stores only a SHA-256 digest bound to the session name. Expiration comes from the stored row. Authentication requires a store that supports revocable rotation, such as SQLite. Cookie-only sessions cannot revoke captured cookies.
 
-Both providers bind cookies to the session name. Renaming a cookie cannot restore its original session. SQLite no longer accepts JWT cookies. Upgrading signs users out and discards pending session workflows. Authentication middleware rejects the first request carrying an old authentication cookie and clears that cookie. Reload the page and sign in again. Flash messages discard invalid cookies after successful rendering or replace them when saving a new message. Old rows remain unreachable until normal expiration cleanup removes them. Cookie-backed sessions keep their signed format. This change does not alter session payload or schema versions.
+Both providers bind cookies to the session name. Renaming a cookie cannot restore its original session.
 
 Both stores default to versioned JSON encoded in URL-safe base64. Each store can select a different [Serializer](serializer.go). `Session.Data` still accepts JSON-compatible values. The JSON serializer restores numbers as `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read values into the expected type. That helper uses JSON conversion independently of the storage format.
 
@@ -102,13 +102,19 @@ For a custom table, make a deployment-local copy of the migration files. Change 
 
 Missing, malformed, dirty, or unsupported versions stop startup without changing storage. Recreate disposable unversioned development databases. After `down 1`, startup rejects the empty version marker until an explicit `up` recreates the schema.
 
-Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Both constructors reject lifetimes shorter than one second. The cookie constructor also rejects signing keys shorter than 32 bytes and placeholders. SQLite needs no signing key. Successful constructors return enabled stores. SQLite also requires a connection string and table name. See [signing-key generation](../../../docs/application.md#signing-keys).
+### Store construction and ownership
+
+Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Both constructors reject lifetimes shorter than one second. The cookie constructor also rejects signing keys shorter than 32 bytes and placeholders. SQLite needs no signing key.
+
+Successful constructors return enabled stores. SQLite also requires a connection string and table name. See [signing-key generation](../../../docs/application.md#signing-keys).
 
 [application.New](../../application/application.go) resolves paths and creates the session manager before initializing modules. Services and modules share `app.initializationTimeout`, defaulting to ten seconds. The constructor registers cleanup for managers it creates. Managers supplied through `Options.Services.Sessions` remain caller-owned.
 
 With lower-level setup, register owned managers with `app.OnShutdown` before their consumers initialize. Shutdown hooks close consumers before session stores after requests drain. Give each resource one owner. A closed manager must not be reused.
 
 Retrieved sessions are cached in the request context. Do not share their mutable data across concurrent requests. Set manager mappings before serving requests, not while requests are active.
+
+### Custom stores
 
 Custom stores implement `SessionStore`. Stores supporting revocable rotation also implement `RotatingStore`. Providers with owned resources implement `io.Closer`. Supply factories directly without importing the built-in providers:
 
@@ -153,7 +159,6 @@ openSessions := func(ctx context.Context) (session.SessionStore, error) {
     store, err := sqlite.NewSQLiteStore(ctx, sqlite.Options{
         Connection:     sessionDatabasePath,
         Table:          "sessions",
-        SigningKey:     sessionSigningKey,
         TokenLifetime:  24 * time.Hour,
         CookieLifetime: 24 * time.Hour,
     })
