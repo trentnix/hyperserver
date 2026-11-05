@@ -31,7 +31,7 @@ func TestAccountSchemaBootstrap(t *testing.T) {
 	}
 	var count, version int
 	var dirty bool
-	if err := db.QueryRowContext(t.Context(), `SELECT count(*), min(version), min(dirty) FROM hyperserver_account_version`).Scan(&count, &version, &dirty); err != nil || count != 1 || version != 3 || dirty {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*), min(version), min(dirty) FROM hyperserver_account_version`).Scan(&count, &version, &dirty); err != nil || count != 1 || version != accountSchemaVersion || dirty {
 		t.Fatalf("version metadata = (%d, %d, %t), %v", count, version, dirty, err)
 	}
 	var otherVersion int
@@ -42,12 +42,13 @@ func TestAccountSchemaBootstrap(t *testing.T) {
 
 func TestAccountSchemaRejectsUnversionedStorage(t *testing.T) {
 	for _, tc := range []struct{ name, schema string }{
-		{"complete schema", accountSchemaV1},
+		{"complete schema", accountBaselineSQL(t)},
 		{"account table only", accountKeyTestSchema},
 		{"token table only", tokenKeyTestSchema},
 		{"account view", `CREATE VIEW user AS SELECT 'preserved' AS value`},
 		{"uppercase name", `CREATE TABLE USER (value TEXT); INSERT INTO USER VALUES ('preserved')`},
 		{"index conflict", `CREATE TABLE unrelated (value TEXT); CREATE INDEX usertoken_expiration ON unrelated(value)`},
+		{"lookup index conflict", `CREATE TABLE unrelated (value TEXT); CREATE INDEX usertoken_lookup ON unrelated(value)`},
 		{"history view", `CREATE VIEW hyperserver_account_version AS SELECT 1 AS version`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -68,6 +69,8 @@ func TestAccountFreshSetupRollsBack(t *testing.T) {
 	}{
 		{"token table", sqlite3.SQLITE_CREATE_TABLE, "usertoken"},
 		{"expiration index", sqlite3.SQLITE_CREATE_INDEX, "usertoken_expiration"},
+		{"lookup index", sqlite3.SQLITE_CREATE_INDEX, "usertoken_lookup"},
+		{"identity table", sqlite3.SQLITE_CREATE_TABLE, "external_identity"},
 		{"version insert", sqlite3.SQLITE_INSERT, accountVersionTable},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -111,13 +114,13 @@ func TestAccountSchemaRejectsUnsupportedHistory(t *testing.T) {
 		{"missing history", `DROP TABLE hyperserver_account_version`, "unversioned"},
 		{"empty history", `DELETE FROM hyperserver_account_version`, "expected one version and dirty flag"},
 		{"version zero", `UPDATE hyperserver_account_version SET version = 0`, "unsupported SQLite account schema version 0"},
-		{"old version", `UPDATE hyperserver_account_version SET version = 1`, "requires version 3"},
-		{"future version", `UPDATE hyperserver_account_version SET version = 4`, "unsupported SQLite account schema version 4"},
+		{"older version", fmt.Sprintf(`UPDATE hyperserver_account_version SET version = %d`, accountSchemaVersion-1), fmt.Sprintf("requires version %d", accountSchemaVersion)},
+		{"future version", fmt.Sprintf(`UPDATE hyperserver_account_version SET version = %d`, accountSchemaVersion+1), fmt.Sprintf("unsupported SQLite account schema version %d", accountSchemaVersion+1)},
 		{"negative version", `UPDATE hyperserver_account_version SET version = -1`, "unsupported SQLite account schema version -1"},
-		{"dirty baseline", `UPDATE hyperserver_account_version SET dirty = true`, "version 3 is dirty"},
-		{"dirty future version", `UPDATE hyperserver_account_version SET version = 2, dirty = true`, "version 2 is dirty"},
+		{"dirty current version", `UPDATE hyperserver_account_version SET dirty = true`, fmt.Sprintf("version %d is dirty", accountSchemaVersion)},
+		{"dirty future version", fmt.Sprintf(`UPDATE hyperserver_account_version SET version = %d, dirty = true`, accountSchemaVersion+1), fmt.Sprintf("version %d is dirty", accountSchemaVersion+1)},
 		{"multiple versions", `INSERT INTO hyperserver_account_version VALUES (2, false)`, "expected one version and dirty flag"},
-		{"duplicate version", `INSERT INTO hyperserver_account_version VALUES (1, false)`, "expected one version and dirty flag"},
+		{"duplicate version", `INSERT INTO hyperserver_account_version SELECT * FROM hyperserver_account_version`, "expected one version and dirty flag"},
 		{"null version", `UPDATE hyperserver_account_version SET version = NULL`, "expected one version and dirty flag"},
 		{"null dirty flag", `UPDATE hyperserver_account_version SET dirty = NULL`, "expected one version and dirty flag"},
 		{"invalid version", `UPDATE hyperserver_account_version SET version = 'invalid'`, "read account schema version"},
@@ -166,11 +169,16 @@ func assertAccountSetupRejected(t *testing.T, db *sql.DB, want string) {
 // history fixtures, so rejected startup cannot silently relabel existing data.
 func accountSchemaSnapshot(t *testing.T, db *sql.DB) string {
 	t.Helper()
-	var snapshot strings.Builder
-	for _, query := range []string{
+	return accountStorageSnapshot(t, db,
 		`SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY name`,
 		`SELECT * FROM hyperserver_account_version ORDER BY 1`,
-	} {
+	)
+}
+
+func accountStorageSnapshot(t *testing.T, db *sql.DB, queries ...string) string {
+	t.Helper()
+	var snapshot strings.Builder
+	for _, query := range queries {
 		rows, err := db.QueryContext(t.Context(), query)
 		if err != nil {
 			if strings.Contains(err.Error(), "no such table: hyperserver_account_version") {

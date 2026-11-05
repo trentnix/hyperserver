@@ -13,7 +13,15 @@ import (
 func versionedAccountTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db := unpreparedUserTestDB(t)
-	if _, err := db.ExecContext(t.Context(), accountVersionSchema+`; INSERT INTO hyperserver_account_version (version, dirty) VALUES (3, false);`+accountSchemaV2); err != nil {
+	if _, err := db.ExecContext(t.Context(), accountVersionSchema+`;
+		CREATE TABLE external_identity (
+			issuer TEXT NOT NULL, subject TEXT NOT NULL, user_id TEXT NOT NULL,
+			PRIMARY KEY (issuer, subject), UNIQUE (user_id, issuer),
+			FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+		);`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(t.Context(), `INSERT INTO hyperserver_account_version (version, dirty) VALUES (?, false)`, accountSchemaVersion); err != nil {
 		t.Fatal(err)
 	}
 	return db

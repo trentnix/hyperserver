@@ -16,9 +16,21 @@ CREATE TABLE usertoken (
     token_hash VARCHAR(255) NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     token_type VARCHAR(255) NOT NULL,
+    email TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (user_id, token_hash),
     FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
 );
 
 CREATE INDEX usertoken_expiration
     ON usertoken (julianday(expires_at), user_id, token_hash);
+
+CREATE INDEX usertoken_lookup ON usertoken(token_hash, token_type);
+
+CREATE TABLE external_identity (
+    issuer TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    PRIMARY KEY (issuer, subject),
+    UNIQUE (user_id, issuer),
+    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+);

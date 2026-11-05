@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	_ "embed"
 	"errors"
 	"fmt"
 	"slices"
@@ -15,26 +14,18 @@ import (
 )
 
 const (
-	userTableName       = "user"
-	userTokenTableName  = "usertoken"
-	accountVersionTable = "hyperserver_account_version"
+	userTableName        = "user"
+	userTokenTableName   = "usertoken"
+	accountVersionTable  = "hyperserver_account_version"
+	accountSchemaVersion = 1
 )
 
 // accountVersionSchema matches golang-migrate's SQLite version/dirty format.
 // Keep this compatibility boundary in the provider, not the core server.
 const accountVersionSchema = `CREATE TABLE hyperserver_account_version (version uint64, dirty bool)`
 
-//go:embed migrations/000001_accounts.up.sql
-var accountSchemaV1 string
-
-//go:embed migrations/000002_external_identities.up.sql
-var accountSchemaV2 string
-
-//go:embed migrations/000003_opaque_tokens.up.sql
-var accountSchemaV3 string
-
-// PrepareDatabase creates version 3 in fresh account storage and checks required
-// columns, supported types, nullability, unique keys, and the token foreign key.
+// PrepareDatabase initializes fresh account storage and checks the required
+// version, columns, supported types, nullability, unique keys, and foreign keys.
 // Applications must call it before using account storage. Repeated calls preserve
 // data. Existing storage must already have supported version metadata. It does
 // not adopt or migrate existing tables or validate every stored value.
@@ -90,27 +81,12 @@ func PrepareDatabase(ctx context.Context, db *sql.DB) error {
 func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 	var objects int
 	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master
-		WHERE name COLLATE NOCASE IN ('user', 'usertoken', 'usertoken_expiration', 'external_identity', ?)`, accountVersionTable).Scan(&objects)
+		WHERE name COLLATE NOCASE IN ('user', 'usertoken', 'usertoken_expiration', 'usertoken_lookup', 'external_identity', ?)`, accountVersionTable).Scan(&objects)
 	if err != nil {
 		return fmt.Errorf("inspect account storage: %w", err)
 	}
 	if objects == 0 {
-		if _, err := tx.ExecContext(ctx, accountVersionSchema); err != nil {
-			return fmt.Errorf("create account schema version table: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, accountSchemaV1); err != nil {
-			return fmt.Errorf("create account schema version 1: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, accountSchemaV2); err != nil {
-			return fmt.Errorf("create account schema version 2: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, accountSchemaV3); err != nil {
-			return fmt.Errorf("create account schema version 3: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO hyperserver_account_version (version, dirty) VALUES (3, false)`); err != nil {
-			return fmt.Errorf("record account schema version 3: %w", err)
-		}
-		return nil
+		return bootstrapAccountSchema(ctx, tx, accountMigrations, accountSchemaVersion)
 	}
 
 	var hasHistory bool
@@ -135,8 +111,8 @@ func prepareAccountVersion(ctx context.Context, tx *sql.Tx) error {
 	if dirty.Bool {
 		return fmt.Errorf("SQLite account schema version %d is dirty: explicit migration repair is required before startup", version.Int64)
 	}
-	if version.Int64 != 3 {
-		return fmt.Errorf("unsupported SQLite account schema version %d: this provider requires version 3. Back up the database and run the account migrations", version.Int64)
+	if version.Int64 != accountSchemaVersion {
+		return fmt.Errorf("unsupported SQLite account schema version %d: this provider requires version %d. Use a compatible database or binary", version.Int64, accountSchemaVersion)
 	}
 	return nil
 }

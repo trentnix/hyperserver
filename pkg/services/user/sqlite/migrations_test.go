@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -72,13 +74,13 @@ func TestAccountMigrationEscapedPaths(t *testing.T) {
 			// Check the original connection before startup can bootstrap a schema.
 			var version int
 			var dirty bool
-			if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != 3 || dirty {
+			if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != accountSchemaVersion || dirty {
 				t.Fatalf("migration did not update the intended database: %d, %t, %v", version, dirty, err)
 			}
 			if err := PrepareDatabase(t.Context(), db); err != nil {
 				t.Fatal(err)
 			}
-			runMigration(t, run, "down", "3")
+			runMigration(t, run, "down", strconv.Itoa(accountSchemaVersion))
 			assertAccountSetupRejected(t, db, "expected one version and dirty flag")
 
 			entries, err := os.ReadDir(directory)
@@ -109,13 +111,14 @@ func TestAccountMigrationDownAndIndependentVersions(t *testing.T) {
 	runMigration(t, other, "up")
 	runMigration(t, run, "up")
 	if _, err := db.ExecContext(t.Context(), `INSERT INTO user (id, email, email_key) VALUES ('account', 'person@example.invalid', 'person@example.invalid');
+		INSERT INTO external_identity (issuer, subject, user_id) VALUES ('issuer', 'subject', 'account');
 		INSERT INTO usertoken (user_id, token_hash, expires_at, token_type) VALUES ('account', 'hash', '2030-01-01', 'reset')`); err != nil {
 		t.Fatal(err)
 	}
 
-	runMigration(t, run, "down", "3")
+	runMigration(t, run, "down", strconv.Itoa(accountSchemaVersion))
 	var count int
-	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name IN ('user', 'usertoken', 'usertoken_expiration')`).Scan(&count); err != nil || count != 0 {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name IN ('user', 'usertoken', 'external_identity', 'usertoken_expiration', 'usertoken_lookup')`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("down left account objects: %d, %v", count, err)
 	}
 	assertAccountSetupRejected(t, db, "expected one version and dirty flag")
@@ -154,7 +157,7 @@ func TestAccountMigrationFailure(t *testing.T) {
 			db := unpreparedUserTestDB(t)
 			valid := migrationCommand(t, db, "migrations", accountVersionTable)
 			files := map[string]string{
-				"000001_accounts.up.sql": accountSchemaV1 + "\nINSERT INTO missing_table VALUES (1);",
+				"000001_accounts.up.sql": accountBaselineSQL(t) + "\nINSERT INTO missing_table VALUES (1);",
 			}
 			wantDirty := "version 1 is dirty"
 			if !initial {
@@ -162,12 +165,20 @@ func TestAccountMigrationFailure(t *testing.T) {
 				if _, err := db.ExecContext(t.Context(), `INSERT INTO user (id, email, email_key) VALUES ('preserved', 'person@example.invalid', 'person@example.invalid')`); err != nil {
 					t.Fatal(err)
 				}
-				files["000001_accounts.up.sql"] = accountSchemaV1
-				files["000002_external_identities.up.sql"] = accountSchemaV2
-				files["000003_opaque_tokens.up.sql"] = accountSchemaV3
-				files["000004_failure.up.sql"] = `CREATE TABLE partial_change (value TEXT);
+				entries, err := accountMigrations.ReadDir("migrations")
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, entry := range entries {
+					data, err := accountMigrations.ReadFile("migrations/" + entry.Name())
+					if err != nil {
+						t.Fatal(err)
+					}
+					files[entry.Name()] = string(data)
+				}
+				files[fmt.Sprintf("%06d_failure.up.sql", accountSchemaVersion+1)] = `CREATE TABLE partial_change (value TEXT);
 					DELETE FROM user; INSERT INTO missing_table VALUES (1);`
-				wantDirty = "version 4 is dirty"
+				wantDirty = fmt.Sprintf("version %d is dirty", accountSchemaVersion+1)
 			}
 			failing := migrationCommand(t, db, writeMigrationFiles(t, files), accountVersionTable)
 			if output, err := failing("up"); err == nil || !strings.Contains(output, "missing_table") {
@@ -180,7 +191,7 @@ func TestAccountMigrationFailure(t *testing.T) {
 
 			var count int
 			if initial {
-				if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name IN ('user', 'usertoken', 'usertoken_expiration')`).Scan(&count); err != nil || count != 0 {
+				if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name IN ('user', 'usertoken', 'external_identity', 'usertoken_expiration', 'usertoken_lookup')`).Scan(&count); err != nil || count != 0 {
 					t.Fatalf("initial migration left partial schema: %d, %v", count, err)
 				}
 				// The failed transaction left no account objects. Explicitly reset
@@ -194,8 +205,8 @@ func TestAccountMigrationFailure(t *testing.T) {
 				if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM user WHERE id = 'preserved'`).Scan(&count); err != nil || count != 1 {
 					t.Fatalf("failed upgrade changed account data: %d, %v", count, err)
 				}
-				// Both schema and data rolled back to version 3.
-				runMigration(t, valid, "force", "3")
+				// Both schema and data rolled back to the current version.
+				runMigration(t, valid, "force", strconv.Itoa(accountSchemaVersion))
 			}
 			if err := PrepareDatabase(t.Context(), db); err != nil {
 				t.Fatal("explicit repair did not restore usable storage:", err)

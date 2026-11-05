@@ -35,7 +35,7 @@ func TestInitializeCreatesVersionedDatabaseFile(t *testing.T) {
 	}
 	var version int
 	var dirty bool
-	if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != 3 || dirty {
+	if err := db.QueryRowContext(t.Context(), `SELECT version, dirty FROM hyperserver_account_version`).Scan(&version, &dirty); err != nil || version != accountSchemaVersion || dirty {
 		t.Fatalf("initial version = %d, dirty = %t, error = %v", version, dirty, err)
 	}
 	u := &accounts.User{Email: "person@example.invalid"}
@@ -158,7 +158,7 @@ func TestAccountOperationsDoNotPrepareDatabase(t *testing.T) {
 func assertNoAccountTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	var count int
-	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken', 'hyperserver_account_version')`).Scan(&count); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('user', 'usertoken', 'external_identity', 'hyperserver_account_version')`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {

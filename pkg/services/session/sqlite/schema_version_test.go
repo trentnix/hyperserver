@@ -166,15 +166,16 @@ func TestProviderMigrationVersionsAreIndependent(t *testing.T) {
 				}
 			}
 
-			runProviderMigration(t, path, accountMigrations, "hyperserver_account_version", "down", "1")
+			runProviderMigration(t, path, accountMigrations, "hyperserver_account_version", "down", "-all")
 			if err := accounts.PrepareDatabase(t.Context(), db); err == nil {
 				t.Fatal("account startup accepted a downgraded schema")
 			}
-			for _, table := range []string{"user", "sessions"} {
-				var count int
-				if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM "+quoteIdentifier(table)).Scan(&count); err != nil || count != 1 {
-					t.Fatalf("unrelated %s changed: %d, %v", table, count, err)
-				}
+			var count int
+			if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sessions`).Scan(&count); err != nil || count != 1 {
+				t.Fatalf("unrelated sessions changed: %d, %v", count, err)
+			}
+			if err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_master WHERE name IN ('user', 'usertoken', 'external_identity')`).Scan(&count); err != nil || count != 0 {
+				t.Fatalf("account down left tables: %d, %v", count, err)
 			}
 			runProviderMigration(t, path, accountMigrations, "hyperserver_account_version", "up")
 			if err := accounts.PrepareDatabase(t.Context(), db); err != nil {

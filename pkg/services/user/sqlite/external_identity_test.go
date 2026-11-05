@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"errors"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -110,42 +109,5 @@ func TestExternalIdentityConcurrentLink(t *testing.T) {
 	got, err := repo.GetByID(t.Context(), account.ID)
 	if err != nil || got.Password != account.Password || got.SessionVersion != account.SessionVersion+1 {
 		t.Fatal("account changed unexpectedly", got, err)
-	}
-}
-
-func TestExternalIdentityMigrationUpDown(t *testing.T) {
-	db := unpreparedUserTestDB(t)
-	if _, err := db.Exec(accountVersionSchema + `; INSERT INTO hyperserver_account_version VALUES (1, false);` + accountSchemaV1); err != nil {
-		t.Fatal(err)
-	}
-	repo := NewAccountRepository(db)
-	u := &user.User{Email: "preserved@example.com", Password: "password"}
-	if err := repo.Create(t.Context(), u); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(accountSchemaV2 + `UPDATE hyperserver_account_version SET version = 2`); err != nil {
-		t.Fatal(err)
-	}
-	assertAccountSetupRejected(t, db, "requires version 3")
-	if err := repo.LinkExternalIdentity(t.Context(), u, user.ExternalIdentity{Issuer: "issuer", Subject: "subject"}); err != nil {
-		t.Fatal(err)
-	}
-	down, err := os.ReadFile("migrations/000002_external_identities.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(string(down) + `UPDATE hyperserver_account_version SET version = 1`); err != nil {
-		t.Fatal(err)
-	}
-	got, err := repo.GetByID(t.Context(), u.ID)
-	if err != nil || got.Password != "password" {
-		t.Fatal("down removed local account", got, err)
-	}
-	if _, err := db.Exec(accountSchemaV2 + `UPDATE hyperserver_account_version SET version = 2`); err != nil {
-		t.Fatal(err)
-	}
-	assertAccountSetupRejected(t, db, "requires version 3")
-	if _, err := repo.GetExternalAccount(t.Context(), user.ExternalIdentity{Issuer: "issuer", Subject: "subject"}); !errors.Is(err, user.ErrUserNotFound) {
-		t.Fatal("down retained identity", err)
 	}
 }
