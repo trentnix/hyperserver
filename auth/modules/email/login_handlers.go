@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/trentnix/hyperserver/auth"
+	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -16,6 +17,11 @@ import (
 // LoginAvailable reports whether the account has password credentials.
 func (*EmailAuthService) LoginAvailable(_ context.Context, account *user.User) (bool, error) {
 	return account.Password != "", nil
+}
+
+// CheckPassword uses the same password verification as email login.
+func (*EmailAuthService) CheckPassword(account *user.User, supplied string) bool {
+	return account != nil && password.CheckPasswordHash(supplied, account.Password)
 }
 
 const (

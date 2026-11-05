@@ -74,11 +74,6 @@ func Provider() auth.Descriptor {
 // AuthType returns the configuration and route identifier.
 func (*Service) AuthType() string { return AuthType }
 
-// AccountActions opens the provider-owned connection status and linking page.
-func (*Service) AccountActions(_ *user.User) []auth.AccountAction {
-	return []auth.AccountAction{{Label: "Google login", URL: "/auth/link/google"}}
-}
-
 // Init validates settings and prepares templates and lazy signing-key retrieval.
 // HTTPS is required except for loopback development origins. Google endpoints
 // are fixed, not configurable through requests or application configuration.

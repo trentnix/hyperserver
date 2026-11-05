@@ -14,6 +14,7 @@ import (
 )
 
 var _ user.ExternalIdentityRepository = (*AccountRepository)(nil)
+var _ user.ExternalIdentityUnlinker = (*AccountRepository)(nil)
 
 // HasExternalIdentity reports whether the account has a login at the issuer.
 func (s *AccountRepository) HasExternalIdentity(ctx context.Context, accountID, issuer string) (bool, error) {
@@ -116,4 +117,49 @@ func insertExternalIdentity(ctx context.Context, tx *sql.Tx, accountID string, i
 		return fmt.Errorf("%w: %w", user.ErrIdentityConflict, err)
 	}
 	return err
+}
+
+// UnlinkExternalIdentity applies an authorized removal to the same account version.
+func (s *AccountRepository) UnlinkExternalIdentity(ctx context.Context, account *user.User, issuer string) error {
+	if s.db == nil {
+		return database.ErrDatabaseUnavailable
+	}
+	if account == nil || account.ID == "" || account.NeedsVerification() || issuer == "" {
+		return errors.New("disconnecting requires a verified account and issuer")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updated := time.Now()
+	result, err := tx.ExecContext(ctx, `UPDATE user SET session_version = session_version + 1, updated_at = ?
+		WHERE id = ? AND session_version = ? AND (verified = 1 OR verification_required = 0)`, updated, account.ID, account.SessionVersion)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return user.ErrUserChanged
+	}
+	result, err = tx.ExecContext(ctx, `DELETE FROM external_identity WHERE user_id = ? AND issuer = ?`, account.ID, issuer)
+	if err != nil {
+		return err
+	}
+	n, err = result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return user.ErrUserChanged
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	account.SessionVersion++
+	account.UpdatedAt = updated
+	return nil
 }

@@ -19,11 +19,14 @@
 {{ define "blog.siteLinks" }}
 <li><a href="/">Home</a></li>
 {{ template "blog.pageLinks" .LayoutData.Pages }}
-{{ if .LayoutData.ShowLogin }}<li class="site-sign-in">{{ template "blog.signInLink" . }}</li>{{ end }}
+{{ if or .LayoutData.ShowLogin .LayoutData.SignedIn }}<li class="site-sign-in">{{ template "blog.signInLink" . }}</li>{{ end }}
 {{ end }}
 
 {{ define "blog.signInLink" }}
-{{ if .LayoutData.ShowLogin }}<a class="header-sign-in" hx-boost="false" href="/login">Sign in</a>{{ end }}
+{{ if .LayoutData.SignedIn }}
+  {{ if .LayoutData.AccountControls }}<a class="header-sign-in" href="/auth/account">Account</a>
+  {{ else }}<form class="header-sign-in" method="post" action="/auth/logout" hx-boost="false"><button class="text-button" type="submit">Sign out</button></form>{{ end }}
+{{ else if .LayoutData.ShowLogin }}<a class="header-sign-in" hx-boost="false" href="/login">Sign in</a>{{ end }}
 {{ end }}
 
 {{ define "blog.pageLinkUpdates" }}

@@ -8,6 +8,16 @@ import (
 // ErrIdentityConflict means an external identity is already linked to an account.
 var ErrIdentityConflict = errors.New("external identity is already linked")
 
+// ExternalIdentityUnlinker optionally removes an external login. The caller must
+// authorize removal and confirm another usable sign-in method. Removal must
+// atomically match the account's SessionVersion, require a verified account,
+// delete the issuer link, and increment the version.
+// Missing links or stale accounts must fail without changing storage or the user.
+// Success updates the user's SessionVersion and UpdatedAt and revokes old sessions.
+type ExternalIdentityUnlinker interface {
+	UnlinkExternalIdentity(context.Context, *User, string) error
+}
+
 // ExternalIdentity identifies an account in a trusted provider's namespace.
 // For OpenID Connect, use the verified issuer and subject. Other protocols use
 // a fixed provider namespace and authenticated stable user ID. Email and display

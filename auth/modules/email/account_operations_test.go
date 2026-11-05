@@ -172,18 +172,31 @@ func TestPasswordOperations(t *testing.T) {
 	}
 }
 
+func TestChangePasswordCannotEnrollPassword(t *testing.T) {
+	service := &EmailAuthService{accounts: emailAccountRepository{changePassword: func(context.Context, *user.User, string) error {
+		t.Fatal("passwordless account bypassed emailed enrollment")
+		return nil
+	}}}
+	if err := service.changePassword(t.Context(), &user.User{ID: "google-account"}, "anything", "NewPassword1!"); !errors.Is(err, errInvalidCredentials) {
+		t.Fatal("change-password accepted password enrollment", err)
+	}
+}
+
 func TestAccountDeliveryOperations(t *testing.T) {
 	for _, operation := range []string{"registration", "reset"} {
-		for _, scenario := range []string{"success", "unknown", "nil account", "other provider", "lookup failure", "canceled", "storage failure", "mail failure", "mail unavailable"} {
+		for _, scenario := range []string{"success", "unknown", "nil account", "other provider", "no password", "lookup failure", "canceled", "storage failure", "mail failure", "mail unavailable"} {
 			t.Run(operation+"/"+scenario, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				if scenario == "canceled" {
 					cancel()
 				}
-				account := &user.User{ID: "account", Email: "stored@example.invalid", RegistrationAuthType: AuthTypeEmail}
+				account := &user.User{ID: "account", Email: "stored@example.invalid", Password: "hash", RegistrationAuthType: AuthTypeEmail}
 				if scenario == "other provider" {
 					account.RegistrationAuthType = "other"
+				}
+				if scenario == "no password" {
+					account.Password = ""
 				}
 				failure := errors.New("private storage or delivery failure")
 				notFound := user.ErrUserNotFound
@@ -243,9 +256,9 @@ func TestAccountDeliveryOperations(t *testing.T) {
 				wantStored, wantSent := 0, 0
 				var wantErr error
 				switch scenario {
-				case "success", "other provider", "mail failure":
+				case "success", "other provider", "no password", "mail failure":
 					wantStored, wantSent = 1, 1
-					if scenario == "other provider" && operation == "reset" {
+					if scenario == "no password" && operation == "reset" {
 						wantStored, wantSent = 0, 0
 					}
 					if scenario == "mail failure" {

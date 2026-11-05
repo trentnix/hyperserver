@@ -1,0 +1,19 @@
+{{ define "auth.page.disconnect" }}
+<section class="auth-account" aria-labelledby="disconnect-title">
+  <h1 id="disconnect-title">Disconnect {{ .Data.Name }}</h1>
+  <div class="account-method-action" id="account-action-disconnect">{{ template "auth.page.disconnect.panel" . }}</div>
+</section>
+{{ end }}
+
+{{ define "auth.page.disconnect.panel" }}
+  <div class="account-action-panel">
+  <p>Enter your password to confirm you can sign in without {{ .Data.Name }}. You'll be signed out on all devices.</p>
+  <form method="post" action="{{ .Data.ActionUrl }}" hx-post="{{ .Data.ActionUrl }}" hx-target="closest .account-method-action" hx-swap="innerHTML show:none">
+    <label for="disconnect-password">Password</label>
+    <input id="disconnect-password" name="password" type="password" autocomplete="current-password" required{{ if .Data.HasFieldErrors "Password" }} class="input-error" aria-invalid="true" aria-describedby="disconnect-password-error"{{ end }}>
+    {{ with .Data.GetFieldErrors "Password" }}<p id="disconnect-password-error" class="field-error" data-field-error="disconnect-password">{{ range . }}<span>{{ . }}</span>{{ end }}</p>{{ end }}
+    {{ if .Data.HasErrorMessages }}<div class="form-error" role="alert">{{ range .Data.GetErrorMessages }}<p>{{ .Message }}</p>{{ end }}</div>{{ end }}
+    <div class="form-actions"><button type="submit">Disconnect {{ .Data.Name }}</button><a class="button-secondary" href="/auth/account">Cancel</a></div>
+  </form>
+  </div>
+{{ end }}

@@ -30,6 +30,7 @@ const (
 
 	emailVerificationTemplate = "templates/email/verification.html"
 	emailResetTemplate        = "templates/email/reset.html"
+	emailSetupTemplate        = "templates/email/password-setup.html"
 	emailVerifyPath           = "/auth/verify"
 )
 
@@ -48,6 +49,7 @@ type EmailAuthService struct {
 	mailClient        *messaging.MailClient
 	verificationEmail *template.Template
 	resetEmail        *template.Template
+	setupEmail        *template.Template
 
 	loginButton    template.HTML
 	registerButton template.HTML
@@ -114,6 +116,10 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	if err != nil {
 		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, fmt.Errorf("load reset email template %s: %w", emailResetTemplate, err))
 	}
+	a.setupEmail, err = template.ParseFS(a.TemplateFS, emailSetupTemplate)
+	if err != nil {
+		return fmt.Errorf("load password setup email: %w", err)
+	}
 
 	loginButtonTemplate := emailLoginButtonTemplateName
 	a.loginButton, err = util.LoadHTML(a.TemplateFS, loginButtonTemplate)
@@ -138,6 +144,7 @@ func (a *EmailAuthService) prepareTemplates() error {
 		{emailResetRequestFormTemplate, emailResetRequestFormPartial},
 		{emailResetPasswordFormTemplate, emailResetPasswordFormPartial},
 		{emailChangePasswordFormTemplate, emailChangePasswordFormPartial},
+		{emailSetupFormTemplate, emailSetupFormPartial},
 		{"templates/html/partials/registration-pending.html", "auth.partial.email.registration.pending"},
 	} {
 		view, err := content.PrepareView(a.contentManager, page.partial, content.TemplatePath{FS: a.TemplateFS, Path: page.file})

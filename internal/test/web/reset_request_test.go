@@ -86,7 +86,8 @@ func TestHTTPResetAcknowledgmentDoesNotRevealAccountState(t *testing.T) {
 	}{
 		{name: "verified", authType: "email", verified: true, wantMail: true},
 		{name: "pending verification", authType: "email", wantMail: true},
-		{name: "other provider", authType: "other", verified: true},
+		{name: "other provider with password", authType: "other", verified: true, wantMail: true},
+		{name: "no password", authType: "other", verified: true},
 		{name: "lookup failure", authType: "email", failure: "lookup"},
 		{name: "token storage failure", authType: "email", failure: "token"},
 	} {
@@ -96,6 +97,9 @@ func TestHTTPResetAcknowledgmentDoesNotRevealAccountState(t *testing.T) {
 					u := h.seedUser(t, "existing@example.invalid")
 					u.Verified, u.VerificationRequired = tc.verified, true
 					u.RegistrationAuthType = tc.authType
+					if tc.name == "no password" {
+						u.Password = ""
+					}
 					if err := h.accounts.Update(context.Background(), u); err != nil {
 						t.Fatal(err)
 					}

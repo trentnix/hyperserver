@@ -32,9 +32,15 @@ Existing SQLite account databases must use the current schema before starting th
 
 ## Existing accounts
 
-Log in using the existing method. Open **Account** (`/auth/account`) and select **Google login**. If Google is not connected, select **Connect Google account**. The callback links Google's identity to the authenticated local account. Connecting Google preserves the password and invalidates older authenticated sessions. Already-connected accounts show their connection status without offering to connect again. Site Profile only edits public site content.
+Sign in using the existing method. Open **Account** (`/auth/account`) and select **Connect Google**. The confirmation page starts the Google flow. The callback links Google's identity to the authenticated local account. Connecting Google preserves the password and invalidates older authenticated sessions. Site Profile only edits public site content.
 
-Matching email addresses never link accounts automatically. A Google identity can belong to only one local account. Each local account can have one Google identity. Connect the account before disabling email if the administrator originally registered with email. Changing Google accounts or disconnecting an identity is not included yet.
+If email authentication, mail delivery, and account storage with `user.PasswordSetupRepository` support are configured, a Google-only account can select **Add password** in Account. The site emails a single-use setup link to the account's stored address. Open the link while signed in to that account. Setting a password leaves Google connected and invalidates existing sessions. Sign in with email to try the password. Password recovery then works regardless of the original registration method. Setup links cannot be used for password recovery, including unused links left after enrollment.
+
+**Disconnect Google** requires an enabled password login provider, a working password, and account storage that supports `user.ExternalIdentityUnlinker`. The shared auth manager confirms the alternative login before authorizing removal. Storage checks the account version in the same transaction that deletes the Google link and revokes sessions. A concurrent password change changes the version and rejects removal. Sign in with email afterward. The site never allows removing Google when it is the only usable method. Disconnection removes the site's local association, not the Google account or its permissions at Google.
+
+The blog places Account in the header, apart from content management. If no enabled provider offers an account action, the header shows **Sign out** instead.
+
+Matching email addresses never link accounts automatically. A Google identity can belong to only one local account. Each local account can have one Google identity. Connect the account before disabling email if the administrator originally registered with email. To change Google accounts, add a password first, disconnect Google, then connect the new Google account.
 
 ## First-time setup
 

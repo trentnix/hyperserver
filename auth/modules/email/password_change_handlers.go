@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,12 +21,18 @@ const (
 	emailChangePath                 = "/auth/change/email"
 )
 
-// AccountActions offers password changes only to accounts with email credentials.
-func (*EmailAuthService) AccountActions(u *user.User) []authservice.AccountAction {
-	if u == nil || u.RegistrationAuthType != AuthTypeEmail || u.Password == "" {
-		return nil
+// AccountMethod offers password setup or changes independently of registration.
+func (a *EmailAuthService) AccountMethod(_ context.Context, u *user.User) (authservice.AccountMethod, error) {
+	method := authservice.AccountMethod{Name: "Email and password", Connected: u.Password != ""}
+	_, setupSupported := a.accounts.(user.PasswordSetupRepository)
+	if method.Connected {
+		method.Description = "You can sign in with your email and password."
+		method.Actions = []authservice.AccountAction{{Label: "Change password", URL: emailChangePath}}
+	} else if a.mailClient != nil && setupSupported {
+		method.Description = "Add a password to sign in with your email."
+		method.Actions = []authservice.AccountAction{{Label: "Add password", URL: emailSetupPath, Inline: true}}
 	}
-	return []authservice.AccountAction{{Label: "Change password", URL: emailChangePath}}
+	return method, nil
 }
 
 // ChangePasswordForm binds the current password and matching replacement passwords.

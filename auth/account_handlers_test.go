@@ -16,9 +16,12 @@ import (
 type accountActionsTestProvider struct {
 	capabilityProvider
 	actions []AccountAction
+	err     error
 }
 
-func (p *accountActionsTestProvider) AccountActions(*user.User) []AccountAction { return p.actions }
+func (p *accountActionsTestProvider) AccountMethod(context.Context, *user.User) (AccountMethod, error) {
+	return AccountMethod{Name: "Example", Description: "Use <Example> to sign in.", Connected: true, Actions: p.actions}, p.err
+}
 
 func TestAccountActions(t *testing.T) {
 	for _, tc := range []struct {
@@ -29,10 +32,12 @@ func TestAccountActions(t *testing.T) {
 		want    string
 	}{
 		{name: "escaped labels", actions: []AccountAction{{Label: "<script>unsafe</script>", URL: "/account-action"}}, status: 200, want: "&lt;script&gt;unsafe&lt;/script&gt;"},
-		{name: "no controls", status: 200, want: "No account controls"},
-		{name: "external URL", actions: []AccountAction{{Label: "External", URL: "https://example.com"}}, status: 500, want: "Account controls are temporarily unavailable"},
-		{name: "missing URL", actions: []AccountAction{{Label: "Missing"}}, status: 500, want: "Account controls are temporarily unavailable"},
-		{name: "missing label", actions: []AccountAction{{URL: "/local"}}, status: 500, want: "Account controls are temporarily unavailable"},
+		{name: "no actions", status: 200, want: "Connected"},
+		{name: "escaped description", status: 200, want: "Use &lt;Example&gt; to sign in."},
+		{name: "inline action", actions: []AccountAction{{Label: "Configure", URL: "/account-action", Inline: true}}, status: 200, want: `hx-get="/account-action"`},
+		{name: "external URL", actions: []AccountAction{{Label: "External", URL: "https://example.com"}}, status: 503, want: "Account controls are temporarily unavailable"},
+		{name: "missing URL", actions: []AccountAction{{Label: "Missing"}}, status: 503, want: "Account controls are temporarily unavailable"},
+		{name: "missing label", actions: []AccountAction{{URL: "/local"}}, status: 503, want: "Account controls are temporarily unavailable"},
 		{name: "denied", policy: Policy{AllowAccount: func(context.Context, string) (bool, error) { return false, nil }}, status: 403, want: "not allowed"},
 		{name: "policy unavailable", policy: Policy{AllowAccount: func(context.Context, string) (bool, error) { return false, errors.New("private failure") }}, status: 503, want: "temporarily unavailable"},
 	} {
@@ -76,5 +81,53 @@ func TestAccountPageRequiresIdentity(t *testing.T) {
 	manager.GetAccount(w, httptest.NewRequest("GET", "/auth/account", nil))
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", w.Code)
+	}
+}
+
+func TestAccountMethodsFailureAndCancellation(t *testing.T) {
+	for _, failure := range []error{context.Canceled, errors.New("storage unavailable")} {
+		manager := &AuthManager{Services: &Registry{services: []AuthService{&accountActionsTestProvider{err: failure}}}}
+		methods, err := manager.AccountMethods(t.Context(), &user.User{Verified: true})
+		if !errors.Is(err, failure) || methods != nil {
+			t.Fatal("method lookup hid its failure", methods, err)
+		}
+	}
+}
+
+type externalAccountTestProvider struct{ accountActionsTestProvider }
+
+func (*externalAccountTestProvider) IdentityIssuer() string { return "https://example.test" }
+
+type passwordAccountTestProvider struct{ loginOnlyProvider }
+
+func (*passwordAccountTestProvider) LoginAvailable(context.Context, *user.User) (bool, error) {
+	return true, nil
+}
+func (*passwordAccountTestProvider) CheckPassword(*user.User, string) bool { return true }
+
+type unlinkAccountTestRepository struct {
+	user.AccountRepository
+	user.ExternalIdentityUnlinker
+}
+
+func TestAccountMethodsPreserveProviderActions(t *testing.T) {
+	// A provider can return immutable shared actions with spare slice capacity.
+	actions := make([]AccountAction, 2)
+	actions[0] = AccountAction{Label: "Manage", URL: "/manage"}
+	external := &externalAccountTestProvider{accountActionsTestProvider{capabilityProvider: capabilityProvider{name: "external"}, actions: actions[:1]}}
+	password := &passwordAccountTestProvider{loginOnlyProvider{capabilityProvider{name: "custom-password"}}}
+	manager := &AuthManager{
+		accounts: &unlinkAccountTestRepository{},
+		Services: &Registry{services: []AuthService{external, password}},
+	}
+	methods, err := manager.AccountMethods(t.Context(), &user.User{Verified: true})
+	if err != nil || len(methods) != 1 || len(methods[0].Actions) != 2 {
+		t.Fatal("missing shared disconnect action", methods, err)
+	}
+	if actions[1] != (AccountAction{}) {
+		t.Fatal("manager modified provider-owned actions")
+	}
+	if methods[0].Actions[1].URL != "/auth/unlink/external" {
+		t.Fatal("disconnect depends on a built-in provider name")
 	}
 }

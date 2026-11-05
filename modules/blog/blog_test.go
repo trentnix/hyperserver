@@ -55,8 +55,8 @@ func TestReturningUserNavigation(t *testing.T) {
 	h.publish(t, "welcome")
 
 	const link = `href="/login">Sign in</a>`
-	if body := h.request(http.MethodGet, "/post/s/welcome", nil, false).Body.String(); strings.Contains(body, link) || !strings.Contains(body, ">Log out</button>") {
-		t.Fatal("signed-in navigation must show logout instead of login")
+	if body := h.request(http.MethodGet, "/post/s/welcome", nil, false).Body.String(); strings.Contains(body, link) || !strings.Contains(body, `class="header-sign-in" href="/auth/account"`) {
+		t.Fatal("signed-in navigation must show Account instead of login")
 	}
 	requireStatus(t, h.request(http.MethodPost, "/auth/logout", nil, false), http.StatusSeeOther)
 	if h.cookies[returningUserCookie] == nil {

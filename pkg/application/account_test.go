@@ -89,8 +89,8 @@ func TestAccountPage(t *testing.T) {
 						if strings.Contains(body, `href="/auth/change/email"`) != (mode != "google" && state != "passwordless") {
 							t.Fatal("wrong password option", body)
 						}
-						if mode == "email" && state == "passwordless" && !strings.Contains(body, "No account controls") {
-							t.Fatal("empty state missing")
+						if mode == "email" && state == "passwordless" && (!strings.Contains(body, "Email and password") || strings.Contains(body, "Change password")) {
+							t.Fatal("passwordless account state is incorrect")
 						}
 					}
 				})

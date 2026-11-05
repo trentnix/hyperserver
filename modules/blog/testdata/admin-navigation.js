@@ -40,10 +40,27 @@
       unchanged();
     };
     for (const [path, title] of [['/auth/account', 'Account'], ['/post/manage', 'Posts'], ['/pages', 'Pages'], ['/profile', 'Site Profile'], ['/media', 'Media']]) {
-      if (innerWidth < 768) account.querySelector('summary').click();
-      account.querySelector(`a[href="${path}"]`).click();
+      if (path === '/auth/account') {
+        const menu = document.querySelector('.site-menu-disclosure');
+        if (innerWidth < 768) menu.querySelector('summary').click();
+        document.querySelector(innerWidth < 768 ? '.header-menu a[href="/auth/account"]' : '.site-header > a[href="/auth/account"]').click();
+      } else {
+        if (innerWidth < 768) account.querySelector('summary').click();
+        account.querySelector(`a[href="${path}"]`).click();
+      }
       await ready(path, title);
-      if (innerWidth < 768) assert(!account.open, 'Management navigation left the mobile menu open.');
+      if (innerWidth < 768 && path !== '/auth/account') assert(!account.open, 'Management navigation left the mobile menu open.');
+      if (path === '/auth/account') {
+        assert(!account.querySelector('a[href="/auth/account"]'), 'Account belongs in the site header, not content navigation.');
+        assert(article.querySelector('.account-methods h3')?.textContent === 'Email and password', 'Account must name its sign-in methods.');
+        assert(article.querySelector('a[href="/auth/change/email"]'), 'Password account must offer Change password.');
+        assert(getComputedStyle(article.querySelector('.account-methods')).listStyleType === 'none', 'Account styles must apply after partial navigation.');
+        assert(getComputedStyle(article.querySelector('.account-method-heading')).display === 'flex', 'Account status must align beside the method name.');
+        for (const element of article.querySelectorAll('.account-methods, .account-method-heading, .account-signout')) {
+          const box = element.getBoundingClientRect();
+          assert(box.left >= 0 && box.right <= innerWidth, 'Account controls overflow the viewport.');
+        }
+      }
       if (path === '/post/manage' || path === '/pages') {
         const form = article.querySelector('.management-search');
         const summaryHeight = article.querySelector('.management-search-results').getBoundingClientRect().height;
@@ -137,7 +154,9 @@
     window.frameElement.style.width = innerWidth < 768 ? '1100px' : '320px';
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     window.frameElement.style.width = width;
-    assert(!document.querySelector('.account-nav form').closest('[hx-boost="true"]'), 'Logout must retain ordinary navigation.');
+    const accountResponse = await fetch('/auth/account', {headers: {'HX-Request': 'true'}});
+    const accountDocument = new DOMParser().parseFromString(await accountResponse.text(), 'text/html');
+    assert(accountDocument.querySelector('.account-signout')?.getAttribute('hx-boost') === 'false', 'Sign out must retain ordinary navigation.');
     const publicReady = async () => {
       await wait(() => location.pathname === '/' && article.querySelector('.post-body') && !article.classList.contains('htmx-settling'));
       assert([...document.querySelectorAll('.reader-search-form')].filter(form => form.getClientRects().length).length === 1, 'Returning to public content must restore reader search for administrators.');

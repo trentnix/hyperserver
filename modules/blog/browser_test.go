@@ -342,6 +342,17 @@ func TestBrowserAdminNavigation(t *testing.T) {
 	}
 }
 
+// TestBrowserAccount checks the Account layout and inline password enrollment.
+func TestBrowserAccount(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check Account")
+	}
+	for _, width := range []string{"320", "390", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "account") })
+	}
+}
+
 // TestBrowserTags checks suggestions and browser recovery in both writing forms.
 func TestBrowserTags(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
@@ -357,7 +368,9 @@ func TestBrowserTags(t *testing.T) {
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
 	var h *harness
-	if mode == "setup" {
+	if mode == "account" {
+		h, _ = accountHarness(t, true)
+	} else if mode == "setup" {
 		h = startHarness(t, harnessConfig(t, 10))
 	} else if strings.HasPrefix(mode, "auth-choices-") {
 		cfg := harnessConfig(t, 10)
@@ -522,6 +535,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/refresh.js"
 	case "admin-navigation":
 		scriptFile = "testdata/admin-navigation.js"
+	case "account":
+		scriptFile = "testdata/account.js"
 	case "media-library":
 		scriptFile = "testdata/media-library.js"
 	case "media-cleanup":
@@ -625,7 +640,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	ready := make(chan struct{})
 	var readyOnce sync.Once
 	pagePath := "/login"
-	if strings.HasPrefix(mode, "auth-choices-") {
+	if mode == "account" {
+		pagePath = "/auth/account"
+	} else if strings.HasPrefix(mode, "auth-choices-") {
 		pagePath = "/login"
 		if strings.Contains(mode, "-register-") {
 			pagePath = "/register"
@@ -652,6 +669,29 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			}
 		}
 		switch r.URL.Path {
+		case "/test/password-setup-link":
+			if mode != "account" {
+				http.NotFound(w, r)
+				return
+			}
+			h.mail.mu.Lock()
+			defer h.mail.mu.Unlock()
+			if len(h.mail.messages) != 1 {
+				http.Error(w, "setup mail missing", http.StatusNotFound)
+				return
+			}
+			match := regexp.MustCompile(`href="([^"]+)"`).FindStringSubmatch(h.mail.messages[0].Body)
+			if len(match) != 2 {
+				http.Error(w, "setup link missing", http.StatusNotFound)
+				return
+			}
+			link, err := url.Parse(html.UnescapeString(match[1]))
+			if err != nil {
+				http.Error(w, "invalid setup link", http.StatusInternalServerError)
+				return
+			}
+			io.WriteString(w, link.RequestURI())
+			return
 		case "/test/verification-link":
 			if mode != "setup" {
 				http.NotFound(w, r)
@@ -682,6 +722,11 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><rect width="100%%" height="100%%" fill="#4477aa"/></svg>`, size[0], size[1])
 			return
 		case "/test/viewport":
+			if mode == "account" {
+				for _, cookie := range h.cookies {
+					http.SetCookie(w, cookie)
+				}
+			}
 			if mode == "navigation" {
 				http.SetCookie(w, &http.Cookie{Name: returningUserCookie, Value: "1", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
 			}

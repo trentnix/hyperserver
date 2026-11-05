@@ -292,8 +292,16 @@ document.removeEventListener = function(type, callback, options) {
       const failure = document.querySelector('.notification:not(.notification--success)');
       assert(success && failure, 'HTMX notifications did not reach the page.');
       for (const notification of [success, failure]) {
-        const dismiss = notification.querySelector('[data-dismiss-notification]').getBoundingClientRect();
-        assert(dismiss.width >= 32 && dismiss.height >= 32, 'Notification dismissal needs a usable pointer target.');
+        const message = notification.querySelector('p');
+        const original = message.textContent;
+        for (const text of [original, 'This longer notification wraps onto multiple lines so its message and close button must remain vertically centered.']) {
+          message.textContent = text;
+          const dismiss = notification.querySelector('[data-dismiss-notification]').getBoundingClientRect();
+          const textBox = message.getBoundingClientRect();
+          assert(dismiss.width >= 32 && dismiss.height >= 32, 'Notification dismissal needs a usable pointer target.');
+          assert(Math.abs((textBox.top + textBox.bottom) - (dismiss.top + dismiss.bottom)) < 2, 'Notification text and close button must be vertically centered.');
+        }
+        message.textContent = original;
       }
       assert(getComputedStyle(success).animationDelay === '5s', 'Success notification has no reading delay.');
       if (innerWidth === 390) {
@@ -331,10 +339,10 @@ document.removeEventListener = function(type, callback, options) {
       const posts = document.querySelector('.account-nav a[href="/post/manage"]');
       assert(posts && !document.querySelector('.account-nav a[href="/post/create"]'), 'Account navigation must link to Posts, not New post.');
       if (innerWidth < 768) document.querySelector('.account-menu summary').click();
-      const logoutStyle = getComputedStyle(document.querySelector('.account-nav button'));
+      const pageStyle = getComputedStyle(document.querySelector('.account-nav a[href="/pages"]'));
       const navStyle = getComputedStyle(posts);
       for (const property of ['color', 'textDecorationLine', 'fontSize', 'lineHeight', 'transition']) {
-        assert(logoutStyle[property] === navStyle[property], 'Log out differs from navigation links in ' + property);
+        assert(pageStyle[property] === navStyle[property], 'Administration links differ in ' + property);
       }
       sessionStorage.setItem('blog-test-stage', 'posts');
       posts.click();
@@ -510,6 +518,8 @@ document.removeEventListener = function(type, callback, options) {
     }
     if (stage === 'republished') {
       assert((await fetch('/post/s/browser-post', {credentials: 'omit'})).ok, 'Republished post is not public.');
+      document.querySelector('.site-header a[href="/auth/account"]').click();
+      await wait(() => document.querySelector('.account-signout'));
       sessionStorage.setItem('blog-test-stage', 'logout');
       document.querySelector('form[action="/auth/logout"]').requestSubmit();
       return;

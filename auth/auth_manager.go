@@ -94,6 +94,7 @@ func (a *AuthManager) prepareTemplates() error {
 	prepared := make(map[string]*content.Templates)
 	for _, name := range []string{
 		accountTemplate,
+		disconnectTemplate,
 		authLoginSelectionTemplate,
 		authRegisterSelectionTemplate,
 		authVerifyTemplate,
@@ -164,6 +165,8 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 
 		// account management
 		mux.Handle("GET /auth/account", authenticated(http.HandlerFunc(a.GetAccount)))
+		mux.Handle("GET /auth/unlink/{authType}", authenticated(http.HandlerFunc(a.Disconnect)))
+		mutations.Handle("POST /auth/unlink/{authType}", authenticated(http.HandlerFunc(a.Disconnect)))
 		mux.Handle("GET /auth/change/{authType}", authenticated(http.HandlerFunc(a.GetChange)))
 		mutations.Handle("POST /auth/change/{authType}", authenticated(http.HandlerFunc(a.Change)))
 

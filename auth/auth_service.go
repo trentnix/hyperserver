@@ -131,13 +131,40 @@ type ProviderRoutes interface {
 type AccountAction struct {
 	Label string
 	URL   string
+	// Inline loads a form inside Account with HTMX. The handler must return
+	// its form fragment for targets prefixed with "account-action-", and
+	// an ordinary page without JavaScript.
+	Inline bool
 }
 
-// AccountActionsProvider offers account controls for the authenticated user.
-// Return only actions the account can use. This method must not perform I/O or
-// change the user. The target handlers must enforce their own authorization.
-type AccountActionsProvider interface {
-	AccountActions(*user.User) []AccountAction
+// AccountMethod describes one enabled sign-in method without exposing credentials.
+type AccountMethod struct {
+	Name        string
+	Description string
+	Connected   bool
+	Actions     []AccountAction
+}
+
+// AccountProvider reports connection status and usable account controls.
+// Reads must honor context cancellation and must not change the account.
+// Action handlers must enforce their own authorization.
+type AccountProvider interface {
+	AccountMethod(context.Context, *user.User) (AccountMethod, error)
+}
+
+// ExternalIdentityProvider identifies the local link shared account controls can
+// remove. The provider must also implement AccountProvider.
+type ExternalIdentityProvider interface {
+	IdentityIssuer() string
+}
+
+// PasswordLoginProvider confirms that the current account password is accepted by
+// an enabled login provider. The manager uses it before disconnecting another method.
+// Confirmation must not change the account or establish a session.
+type PasswordLoginProvider interface {
+	LoginHandler
+	LoginAvailability
+	CheckPassword(*user.User, string) bool
 }
 
 // LoginHandler supplies a provider control and handles authentication.

@@ -1,12 +1,33 @@
 package google
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/trentnix/hyperserver/auth"
 	authmiddleware "github.com/trentnix/hyperserver/auth/middleware"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+// AccountMethod reports the connection and only actions that preserve a way in.
+func (s *Service) AccountMethod(ctx context.Context, u *user.User) (auth.AccountMethod, error) {
+	connected, err := s.LoginAvailable(ctx, u)
+	method := auth.AccountMethod{Name: "Google", Connected: connected}
+	if err != nil {
+		return method, err
+	}
+	if connected {
+		method.Description = "You can sign in with Google."
+	} else {
+		method.Description = "Connect Google as another way to sign in."
+		method.Actions = []auth.AccountAction{{Label: "Connect Google", URL: "/auth/link/google"}}
+	}
+	return method, nil
+}
+
+// IdentityIssuer identifies the stored link managed by shared account controls.
+func (*Service) IdentityIssuer() string { return issuer }
 
 // Routes serves the local brand icon and binds account controls.
 // State-changing routes use the shared authentication mutation limit.

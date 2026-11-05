@@ -172,8 +172,8 @@ func TestHTTPRatePolicyStartupWarnings(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		// Both authentication and site modules must warn before the first request.
 		logs := h.logs.String()
-		if count := strings.Count(logs, "Confirm this restriction is intentional."); count != 9 {
-			t.Fatalf("startup warning count = %d, want 7 auth and 2 site routes: %s", count, logs)
+		if count := strings.Count(logs, "Confirm this restriction is intentional."); count != 12 {
+			t.Fatalf("startup warning count = %d, want 10 auth and 2 site routes: %s", count, logs)
 		}
 		for _, route := range []string{"POST /login", "POST /auth/reset/request/{authType}", "POST /contact", "POST /test-email"} {
 			if !strings.Contains(logs, route) {
@@ -187,7 +187,7 @@ func TestHTTPRatePolicyStartupWarnings(t *testing.T) {
 				t.Fatalf("request %d status = %d", i+1, w.Code)
 			}
 		}
-		if count := strings.Count(h.logs.String(), "Confirm this restriction is intentional."); count != 9 {
+		if count := strings.Count(h.logs.String(), "Confirm this restriction is intentional."); count != 12 {
 			t.Fatal("requests repeated startup warnings")
 		}
 	}, func(cfg *config.Config) {

@@ -53,14 +53,13 @@
       <main id="main-content" class="article-column">
         <div class="account-panel">
           {{ if .LayoutData.Admin }}<span class="account-label">Administration</span>{{ end }}
-          <nav class="account-nav" aria-label="Account">
+          <nav class="account-nav" aria-label="Administration">
             {{ if .LayoutData.Admin }}<details class="account-menu action-menu" open>
               <summary>Manage</summary>
-              <div class="action-menu-items" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace"><a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media">Media</a><a href="/auth/account">Account</a></div>
+              <div class="action-menu-items" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace"><a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media">Media</a></div>
             </details>{{ end }}
             {{ if .LayoutData.SignedIn }}
             {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
-            <form method="post" action="/auth/logout"><button class="text-button" type="submit">Log out</button></form>
             {{ else }}
             {{ if .LayoutData.Registration }}<a href="/register">Register</a>{{ end }}
             {{ end }}

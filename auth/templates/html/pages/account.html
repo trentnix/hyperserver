@@ -1,12 +1,23 @@
 {{ define "auth.page.account" }}
 <section class="auth-account" aria-labelledby="account-title">
   <h1 id="account-title">Account</h1>
-  <p>Signed in as <strong>{{ .Data.Email }}</strong>.</p>
-  {{ if .Data.Actions }}
-  <p>Manage how you log in to this site.</p>
-  <div class="auth-options">
-    {{ range .Data.Actions }}<a class="button-secondary" href="{{ .URL }}">{{ .Label }}</a>{{ end }}
-  </div>
+  <p class="account-email">{{ .Data.Email }}</p>
+  {{ if .Data.Methods }}
+  <h2 class="account-methods-heading">How you sign in</h2>
+  <ul class="account-methods">
+    {{ range $methodIndex, $method := .Data.Methods }}
+    <li>
+      <div class="account-method-heading"><h3>{{ .Name }}</h3>{{ if .Connected }}<span class="account-method-status">Connected</span>{{ end }}</div>
+      {{ with .Description }}<p>{{ . }}</p>{{ end }}
+      {{ range $actionIndex, $action := .Actions }}
+      <div class="account-method-action" id="account-action-{{ $methodIndex }}-{{ $actionIndex }}">
+        <a{{ if not $method.Connected }} class="button-secondary"{{ end }} href="{{ .URL }}"{{ if .Inline }} hx-get="{{ .URL }}" hx-target="closest .account-method-action" hx-swap="innerHTML show:none" hx-push-url="false"{{ end }}>{{ .Label }}</a>
+      </div>
+      {{ end }}
+    </li>
+    {{ end }}
+  </ul>
   {{ else }}<p>No account controls are available for your login method.</p>{{ end }}
+  <form class="account-signout" method="post" action="/auth/logout" hx-boost="false"><button class="text-button" type="submit">Sign out</button></form>
 </section>
 {{ end }}

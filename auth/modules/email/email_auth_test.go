@@ -385,6 +385,9 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 		{name: "invalid verification", path: emailVerificationTemplate, template: "{{if}}"},
 		{name: "missing reset", path: emailResetTemplate},
 		{name: "invalid reset", path: emailResetTemplate, template: "{{if}}"},
+		{name: "missing setup email", path: emailSetupTemplate},
+		{name: "invalid setup email", path: emailSetupTemplate, template: "{{if}}"},
+		{name: "missing setup form", path: emailSetupFormTemplate},
 		{name: "missing login form", path: emailLoginFormTemplate},
 		{name: "invalid registration form", path: emailRegisterFormTemplate, template: "{{if}}"},
 	} {
@@ -396,8 +399,9 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 				emailRegisterButtonTemplateName: "Register",
 				emailVerificationTemplate:       "Verify {{.Name}}: {{.URL}}",
 				emailResetTemplate:              "Reset {{.Name}}: {{.URL}}",
+				emailSetupTemplate:              "Set up {{.Name}}: {{.URL}}",
 			}
-			for _, name := range []string{emailLoginFormTemplate, emailRegisterFormTemplate, emailResetRequestFormTemplate, emailResetPasswordFormTemplate, emailChangePasswordFormTemplate, "templates/html/partials/registration-pending.html"} {
+			for _, name := range []string{emailLoginFormTemplate, emailRegisterFormTemplate, emailResetRequestFormTemplate, emailResetPasswordFormTemplate, emailChangePasswordFormTemplate, emailSetupFormTemplate, "templates/html/partials/registration-pending.html"} {
 				data, err := fs.ReadFile(emailAuthTemplatesFS, name)
 				if err != nil {
 					t.Fatal(err)
@@ -725,7 +729,7 @@ func TestResetUsesAccountRepository(t *testing.T) {
 				"changed account": user.ErrUserChanged,
 				"canceled":        context.Canceled,
 			}[scenario]
-			account := &user.User{ID: "account", SessionVersion: 1}
+			account := &user.User{ID: "account", Password: "existing-password-hash", SessionVersion: 1}
 			key := "test-signing-key"
 			token, err := user.NewAuthResetToken(account, time.Hour)
 			if err != nil {

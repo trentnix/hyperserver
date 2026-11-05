@@ -76,9 +76,11 @@ func (p *contractAuthProvider) LoginAvailable(ctx context.Context, account *user
 	}
 	return p.accounts.Identities.HasExternalIdentity(ctx, account.ID, "https://identity.example")
 }
-func (*contractAuthProvider) AccountActions(*user.User) []auth.AccountAction {
-	return []auth.AccountAction{{Label: "Example login", URL: "/auth/link/test-external"}}
+func (p *contractAuthProvider) AccountMethod(ctx context.Context, u *user.User) (auth.AccountMethod, error) {
+	connected, err := p.LoginAvailable(ctx, u)
+	return auth.AccountMethod{Name: "Example", Connected: connected, Actions: []auth.AccountAction{{Label: "Example login", URL: "/auth/link/test-external"}}}, err
 }
+func (*contractAuthProvider) IdentityIssuer() string { return "https://identity.example" }
 func (p *contractAuthProvider) Routes(routes, mutations *routing.Routes) error {
 	protect := authmiddleware.RequireAuthentication(p.dependencies.Accounts, p.app.ContentManager)
 	routes.Handle("GET /auth/link/test-external", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +235,11 @@ func TestThirdProviderLinkingAndFailureIsolation(t *testing.T) {
 			t.Fatal(err)
 		}
 		w := h.request("GET", "/auth/account", nil, false)
-		if !strings.Contains(w.Body.String(), `href="/auth/link/test-external"`) {
+		if failure {
+			// Account status requires a successful lookup. Login and the
+			// provider's explicit linking route must still work independently.
+			requireStatus(t, w, http.StatusServiceUnavailable)
+		} else if !strings.Contains(w.Body.String(), `href="/auth/link/test-external"`) {
 			t.Fatal("account action missing")
 		}
 		requireStatus(t, h.request("GET", "/auth/link/test-external", nil, false), 200)

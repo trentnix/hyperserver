@@ -122,11 +122,23 @@ type navigation struct {
 	ReaderSearch                             bool
 	EditorOwner, Description                 string
 	SignedIn, Admin, Registration, ShowLogin bool
+	AccountControls                          bool
 }
 
 // populateNavigation loads shell links for full pages and explicit navigation updates.
 func (m *module) populateNavigation(r *http.Request, data navigation) navigation {
 	var err error
+	if data.SignedIn && m.auth != nil {
+		methods, err := m.auth.AccountMethods(r.Context(), user.GetUserFromContext(r.Context()))
+		if err != nil {
+			// Keep Account reachable so its page can report the failed service.
+			data.AccountControls = true
+			logger.LogRequestError(r, err)
+		}
+		for _, method := range methods {
+			data.AccountControls = data.AccountControls || len(method.Actions) > 0
+		}
+	}
 	data.Recent, err = m.loadRecent(r.Context())
 	if err != nil {
 		data.RecentUnavailable = true

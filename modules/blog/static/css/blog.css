@@ -60,6 +60,8 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
 .site-links > li > a { font-weight: 600; }
 .header-sign-in, .header-menu .header-sign-in { color: var(--muted); font-weight: 400; text-decoration: underline; text-underline-offset: .2em; }
 .header-sign-in:hover, .header-menu .header-sign-in:hover { color: #245b85; }
+.header-sign-in .text-button { min-height: 0; padding: 0; color: inherit; font: inherit; text-decoration: inherit; }
+.header-menu .header-sign-in .text-button { min-height: 44px; padding-block: 10px; }
 .site-sign-in { display: none; }
 .site-links li { position: relative; }
 .child-links { list-style: none; margin: 4px 0 8px 8px; padding: 0 0 0 16px; border-left: 1px solid #c6cdd7; font-size: .9em; }
@@ -73,7 +75,6 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
 .account-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; border-bottom: 1px solid #e1e4e8; color: #505969; font-size: 14px; line-height: 1.3; }
 .account-nav:has(.account-menu) { --account-link-padding: 12px; position: relative; gap: 24px; padding: 4px 16px; border: 0; border-radius: 4px; background: #303946; color: #e8edf3; }
 .account-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.3; letter-spacing: .08em; text-transform: uppercase; }
-.account-nav form { margin: 0 0 0 auto; }
 .account-nav a, .account-nav .text-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px var(--account-link-padding, 0px); color: inherit; font-weight: 600; white-space: nowrap; text-decoration: none; text-underline-offset: 6px; text-decoration-thickness: 2px; transition: color .15s; }
 .account-nav a:hover, .account-nav .text-button:hover, .account-nav a:focus-visible, .account-nav .text-button:focus-visible { color: #212529; text-decoration-line: underline; }
 .account-nav:has(.account-menu) a:hover, .account-nav:has(.account-menu) .text-button:hover, .account-nav:has(.account-menu) a:focus-visible, .account-nav:has(.account-menu) .text-button:focus-visible { color: #fff; }
@@ -484,8 +485,25 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
 }
 
 /* Authentication. */
-.auth-alternatives, .auth-provider, .auth-login-panel, .auth-account, .auth-options { max-width: 440px; margin-block: 24px; font-size: 16px; line-height: 1.5; }
+.auth-alternatives, .auth-provider, .auth-login-panel, .auth-form-panel, .auth-account, .auth-options { max-width: 440px; margin-block: 24px; font-size: 16px; line-height: 1.5; }
 .auth-account { overflow-wrap: anywhere; }
+.auth-account h1 { margin: 0; font-size: 1.8em; line-height: 1.2; }
+.auth-account .account-email { color: var(--muted); margin: 8px 0 0; }
+.auth-account .account-methods-heading { font-size: 1em; margin: 28px 0 4px; }
+.auth-account .account-methods { list-style: none; padding: 0; margin: 0; }
+.account-methods > li { padding: 20px 0; border-bottom: 1px solid #e1e4e8; }
+.account-method-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.account-method-heading h3 { font-size: 1.15em; margin: 0; }
+.account-method-status { flex: none; padding: 2px 8px; border-radius: 4px; background: #eff5f0; color: #45614c; font-size: .85em; }
+.account-methods p { color: var(--muted); margin: 6px 0 0; }
+.account-method-action { margin-top: 12px; }
+.account-method-action > a:not(.button-secondary), .account-signout .text-button { color: #505969; text-underline-offset: .2em; }
+.account-method-action > a { display: inline-flex; align-items: center; min-height: 44px; }
+.account-method-action .account-action-panel { padding: 16px; border-radius: 5px; background: var(--surface); }
+.account-action-panel > :first-child { margin-top: 0; }
+.account-action-panel form { margin-top: 16px; }
+.account-action-panel .form-error, .account-action-panel .field-error { color: #a12626; }
+.auth-account .account-signout { margin-top: 28px; }
 .auth-alternatives { padding-top: 16px; border-top: 1px solid #e1e3e8; }
 .auth-provider-button button {
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -498,14 +516,16 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
 .auth-provider-button + .auth-provider-button { margin-top: 12px; }
 .auth-options { display: grid; gap: 16px; }
 .auth-options a { display: block; text-align: center; }
-.page-content :is(.auth-provider, .auth-login-panel) { max-width: 400px; padding: 28px; border: 1px solid #dce0e6; border-radius: 8px; background: #fff; box-shadow: 0 4px 20px rgb(30 40 55 / 6%); }
-.page-content .auth-login-panel { max-width: 440px; }
-.auth-login-panel .auth-email-form { padding-top: 0; }
-.auth-login-panel .auth-email-form label { margin: 16px 0 6px; }
-.auth-login-panel .auth-email-form label:first-of-type { margin-top: 0; }
-.auth-login-panel .auth-email-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 20px; }
-.auth-login-panel .auth-email-actions button { margin: 0; }
-.auth-login-panel .auth-email-actions a { color: var(--muted); }
+.page-content :is(.auth-provider, .auth-login-panel, .auth-form-panel) { max-width: 400px; padding: 28px; background: #fff; }
+.page-content :is(.auth-login-panel, .auth-form-panel) { max-width: 440px; }
+:is(.auth-login-panel, .auth-form-panel) .auth-email-form { padding-top: 0; }
+:is(.auth-login-panel, .auth-form-panel) .auth-email-form label { margin: 16px 0 6px; }
+:is(.auth-login-panel, .auth-form-panel) .auth-email-form label:first-of-type { margin-top: 0; }
+:is(.auth-login-panel, .auth-form-panel) .auth-email-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 20px; }
+:is(.auth-login-panel, .auth-form-panel) .auth-email-actions button { margin: 0; }
+:is(.auth-login-panel, .auth-form-panel) .auth-email-actions a { color: var(--muted); }
+.auth-form-panel .auth-introduction p { color: var(--muted); }
+.auth-form-panel .form-hint { margin: 8px 0 0; }
 .auth-login-panel .auth-alternatives { max-width: none; margin: 24px 0 0; padding: 0; border: 0; }
 .auth-login-panel .auth-alternatives > p { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; color: var(--muted); font-size: 14px; }
 .auth-login-panel .auth-alternatives > p::before, .auth-login-panel .auth-alternatives > p::after { content: ''; flex: 1; border-top: 1px solid #e1e3e8; }
@@ -563,11 +583,11 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
 .verification-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
 
 @media (min-width: 768px) and (max-width: 1679px) {
-  .auth-email-form, .auth-form-footer, .auth-alternatives, .auth-provider, .auth-login-panel, .auth-account, .auth-options { margin-inline: auto; }
+  .auth-email-form, .auth-form-footer, .auth-alternatives, .auth-provider, .auth-login-panel, .auth-form-panel, .auth-account, .auth-options { margin-inline: auto; }
 }
 @media (max-width: 767px) {
-  .page-content :is(.auth-provider, .auth-login-panel) { margin-inline: auto; }
-  .page-content .auth-login-panel { padding: 20px; }
+  .page-content :is(.auth-provider, .auth-login-panel, .auth-form-panel) { margin-inline: auto; }
+  .page-content :is(.auth-login-panel, .auth-form-panel) { padding: 20px; }
 }
 @media (max-width: 767px) { .verification-panel { padding: 20px; } }
 
@@ -603,7 +623,7 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 #notifications { position: fixed; bottom: 20px; right: 20px; max-width: min(420px, 90vw); display: grid; gap: 10px; z-index: 2; }
 .notification:not(.notification--error) { margin: 0; padding: 12px 20px; background: var(--button-bg); color: white; border-radius: 5px; }
 #notifications > :is(.notification--error, [data-request-error]) { margin: 0; }
-.notification { display: flex; align-items: start; gap: 16px; overflow-wrap: anywhere; }
+.notification { display: flex; align-items: center; gap: 16px; overflow-wrap: anywhere; }
 .notification p { margin: 0; }
 .notification-dismiss { display: none; flex-shrink: 0; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 3px; font-size: 1.3em; line-height: 1; text-decoration: none; }
 .notification-dismiss:hover { background: rgb(128 128 128 / 15%); }

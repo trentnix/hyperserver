@@ -67,12 +67,12 @@
       const draft = JSON.parse(localStorage.getItem(key));
       assert(draft.fields.content === 'Unsaved **writing**.' && draft.fields.summary === 'Recovered summary', 'Recovery omitted Markdown or metadata.');
 
-      // Reject ordinary navigation, HTMX navigation, logout, and browser unload.
+      // Reject ordinary navigation, HTMX navigation, Account, and browser unload.
       document.querySelector('.account-nav a[href="/pages"]').click();
       await Promise.resolve();
       document.querySelector('.profile-links a[href="/about"]').click();
       await Promise.resolve();
-      document.querySelector('.account-nav form').requestSubmit();
+      document.querySelector('.site-header a[href="/auth/account"]').click();
       await Promise.resolve();
       assert(prompts.length === 3 && location.pathname === '/post/create', 'Unsaved navigation did not ask for consent.');
       const unload = new Event('beforeunload', {cancelable: true});

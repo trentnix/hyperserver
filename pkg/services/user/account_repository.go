@@ -10,7 +10,20 @@ const (
 	ResetTokenPurpose = "auth-reset"
 	// VerificationTokenPurpose identifies an email-verification token in account storage.
 	VerificationTokenPurpose = "auth-verification"
+	// PasswordSetupTokenPurpose authorizes authenticated password enrollment, not recovery.
+	PasswordSetupTokenPurpose = "auth-password-setup"
 )
+
+// PasswordSetupRepository optionally supports authenticated password enrollment.
+// SetupPassword must atomically consume an unexpired setup token bound to u's ID
+// and current email, require a verified account with no password and the same
+// SessionVersion, store the supplied hash, and increment SessionVersion.
+// Recheck stored and supplied expiry after acquiring the write lock. Reject other
+// token purposes. Failure preserves both account and token. Success refreshes u.
+// The caller must authenticate u and validate and hash the new password.
+type PasswordSetupRepository interface {
+	SetupPassword(ctx context.Context, u *User, token TokenMetadata, passwordHash string) error
+}
 
 // TokenMaintenance is an optional account-provider capability, separate from
 // AccountRepository. A batch deletes at most limit expired tokens. Implementations
@@ -97,10 +110,11 @@ type AccountRepository interface {
 }
 
 // TokenMetadata contains only the fields needed to store an issued account token.
-// AccountID, TokenHash, and ExpiresAt must be set. Purpose must be "auth-reset" or
-// "auth-verification". TokenHash is the lowercase hexadecimal SHA-256 hash of the
-// opaque token. The raw token must not be passed to storage. Email is required for
-// verification tokens and must contain the recipient address at issuance.
+// AccountID, TokenHash, and ExpiresAt must be set. Purpose must be ResetTokenPurpose,
+// VerificationTokenPurpose, or PasswordSetupTokenPurpose when storage supports setup.
+// TokenHash is the lowercase hexadecimal SHA-256 hash of the opaque token.
+// The raw token must not be passed to storage. Email is required for
+// verification and password-setup tokens and must contain the recipient at issuance.
 type TokenMetadata struct {
 	AccountID string
 	TokenHash string

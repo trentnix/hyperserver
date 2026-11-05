@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/trentnix/hyperserver/auth/identity"
+	"github.com/trentnix/hyperserver/auth/password"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
@@ -34,6 +36,7 @@ type ResetPasswordRequestForm struct {
 type ResetPasswordForm struct {
 	Password      string
 	PasswordMatch string
+	Setup         bool
 
 	form.Form
 }
@@ -133,6 +136,10 @@ func (a *EmailAuthService) ResetRequest(w http.ResponseWriter, r *http.Request, 
 
 // GetReset serves the password reset page with the resetPasswordForm form
 func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, token string) {
+	a.getReset(w, r, token, false)
+}
+
+func (a *EmailAuthService) getReset(w http.ResponseWriter, r *http.Request, token string, setup bool) {
 	resetErrMsg := "Unable to display the email authorization service password reset form"
 
 	if token == "" {
@@ -140,8 +147,7 @@ func (a *EmailAuthService) GetReset(w http.ResponseWriter, r *http.Request, toke
 		return
 	}
 
-	resetForm := &ResetPasswordForm{}
-	resetForm.ActionUrl = emailResetPath + "?" + url.Values{"token": {token}}.Encode()
+	resetForm := passwordResetForm(token, setup)
 
 	reset := a.views[emailResetPasswordFormPartial].Content(r, resetForm)
 
@@ -167,7 +173,27 @@ func (a *EmailAuthService) Reset(
 	token string,
 	requireNewCredentials bool,
 ) {
-	resetForm := &ResetPasswordForm{}
+	// Recovery can replace a password, but cannot enroll a passwordless account.
+	// Enrollment requires the authenticated setup route, even with a valid token.
+	if u != nil && u.Password == "" {
+		a.contentManager.HandleError(w, r, "Sign in and use Add password in Account to set up email sign-in.", nil, http.StatusForbidden)
+		return
+	}
+	a.reset(w, r, u, token, requireNewCredentials, false)
+}
+
+func passwordResetForm(token string, setup bool) *ResetPasswordForm {
+	f := &ResetPasswordForm{Setup: setup}
+	path := emailResetPath
+	if setup {
+		path = emailSetupCompletePath
+	}
+	f.ActionUrl = path + "?" + url.Values{"token": {token}}.Encode()
+	return f
+}
+
+func (a *EmailAuthService) reset(w http.ResponseWriter, r *http.Request, u *user.User, token string, requireNewCredentials, setup bool) {
+	resetForm := passwordResetForm(token, setup)
 	reset := a.views[emailResetPasswordFormPartial].Content(r, resetForm)
 
 	if u == nil {
@@ -176,15 +202,21 @@ func (a *EmailAuthService) Reset(
 		return
 	}
 
-	resetForm.ActionUrl = emailResetPath + "?" + url.Values{"token": {token}}.Encode()
-
 	err := form.ParseAndValidate(r, resetForm)
 	if err != nil {
 		form.HandleFormError(w, r, reset, resetForm, "Unable to process form data", err)
 		return
 	}
 
-	err = a.resetPassword(r.Context(), u, token, resetForm.Password, requireNewCredentials)
+	if setup {
+		var hash string
+		hash, err = password.HashPassword(resetForm.Password)
+		if err == nil {
+			err = u.SetupPassword(r.Context(), a.accounts, token, hash)
+		}
+	} else {
+		err = a.resetPassword(r.Context(), u, token, resetForm.Password, requireNewCredentials)
+	}
 	if err != nil {
 		logger.Audit(r.Context(), "password_reset", "failed")
 	} else {
@@ -207,7 +239,12 @@ func (a *EmailAuthService) Reset(
 	}
 
 	*r = *r.WithContext(user.ClearUserFromContext(r.Context()))
-	if err := flash.AddSuccessNotification(w, r, "Your password has been updated. Login to access the site."); err != nil {
+	identity.ClearAuthenticationCookie(w, r)
+	message := "Your password has been updated. Sign in to access the site."
+	if setup {
+		message = "You can now sign in with your email and password. Your other sign-in options are unchanged."
+	}
+	if err := flash.AddSuccessNotification(w, r, message); err != nil {
 		logger.LogRequestError(r, errors.New("password reset succeeded but its notification could not be saved"))
 	}
 	util.RedirectToURL(w, r, a.contentManager.AuthURL)

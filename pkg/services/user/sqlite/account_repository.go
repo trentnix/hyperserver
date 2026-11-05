@@ -126,7 +126,7 @@ func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*acco
 
 // GetToken reads stored metadata without consuming or checking the expiry of the token.
 func (s *AccountRepository) GetToken(ctx context.Context, tokenHash, purpose string) (accounts.TokenMetadata, error) {
-	if purpose != accounts.ResetTokenPurpose && purpose != accounts.VerificationTokenPurpose {
+	if purpose != accounts.ResetTokenPurpose && purpose != accounts.VerificationTokenPurpose && purpose != accounts.PasswordSetupTokenPurpose {
 		return accounts.TokenMetadata{}, hs_errors.WithCause(accounts.ErrToken, errors.New("invalid token purpose"))
 	}
 	if tokenHash == "" {
@@ -204,7 +204,7 @@ func (s *AccountRepository) InsertToken(ctx context.Context, metadata accounts.T
 	if metadata.ExpiresAt.IsZero() {
 		return hs_errors.WithCause(accounts.ErrTokenExpirationNotSpecified, errInsertToken)
 	}
-	if metadata.Purpose != accounts.ResetTokenPurpose && metadata.Purpose != accounts.VerificationTokenPurpose {
+	if metadata.Purpose != accounts.ResetTokenPurpose && metadata.Purpose != accounts.VerificationTokenPurpose && metadata.Purpose != accounts.PasswordSetupTokenPurpose {
 		return hs_errors.WithCause(accounts.ErrToken, errors.New("invalid token purpose"))
 	}
 
@@ -363,6 +363,25 @@ func (s *AccountRepository) ChangePassword(ctx context.Context, u *accounts.User
 // ResetPassword consumes a validated reset token and updates the password in one
 // transaction. The caller must read authorization metadata by token hash.
 func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User, authorization accounts.ResetAuthorization, passwordHash string) error {
+	return s.replacePassword(ctx, u, accounts.TokenMetadata{AccountID: authorization.AccountID, TokenHash: authorization.TokenHash, ExpiresAt: authorization.ExpiresAt, Purpose: accounts.ResetTokenPurpose}, passwordHash)
+}
+
+// SetupPassword enrolls a password only while the authenticated account snapshot
+// is current. Setup tokens cannot be consumed by ResetPassword.
+func (s *AccountRepository) SetupPassword(ctx context.Context, u *accounts.User, token accounts.TokenMetadata, passwordHash string) error {
+	if token.Purpose != accounts.PasswordSetupTokenPurpose || accounts.EmailKey(token.Email) == "" {
+		return accounts.ErrToken
+	}
+	if u == nil || u.Password != "" || u.NeedsVerification() {
+		return accounts.ErrUserChanged
+	}
+	if accounts.EmailKey(token.Email) != accounts.EmailKey(u.Email) {
+		return accounts.ErrToken
+	}
+	return s.replacePassword(ctx, u, token, passwordHash)
+}
+
+func (s *AccountRepository) replacePassword(ctx context.Context, u *accounts.User, authorization accounts.TokenMetadata, passwordHash string) error {
 	if u == nil || u.ID == "" {
 		return accounts.ErrUserNotSpecified
 	}
@@ -382,7 +401,8 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 	}
 	defer tx.Rollback()
 
-	if err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, accounts.ResetTokenPurpose, "", authorization.ExpiresAt); err != nil {
+	recipient, err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, authorization.Purpose, u.Email, authorization.ExpiresAt)
+	if err != nil {
 		return err
 	}
 	now := time.Now()
@@ -390,9 +410,10 @@ func (s *AccountRepository) ResetPassword(ctx context.Context, u *accounts.User,
 	// Only update the password. Do not overwrite unrelated account changes with
 	// the snapshot used for form validation or the previous-password check.
 	updated, err := scanAccount(tx.QueryRowContext(ctx, `UPDATE `+userTableName+` SET password = ?, updated_at = ?, session_version = session_version + 1
-		WHERE id = ? AND password = ? AND registration_auth_type = ?
+		WHERE id = ? AND password = ? AND registration_auth_type = ? AND (? = '' OR email_key = ?)
+		AND (? = 0 OR (password = '' AND session_version = ? AND (verified = 1 OR verification_required = 0)))
 		RETURNING `+accountColumns,
-		passwordHash, now, u.ID, u.Password, u.RegistrationAuthType))
+		passwordHash, now, u.ID, u.Password, u.RegistrationAuthType, recipient, accounts.EmailKey(recipient), authorization.Purpose == accounts.PasswordSetupTokenPurpose, u.SessionVersion))
 	if errors.Is(err, sql.ErrNoRows) {
 		return hs_errors.WithCause(accounts.ErrToken, errors.New("account changed or no longer exists"))
 	}
@@ -424,7 +445,7 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 	}
 	defer tx.Rollback()
 
-	if err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, accounts.VerificationTokenPurpose, authorization.Email, authorization.ExpiresAt); err != nil {
+	if _, err := deleteTokenAndCheckExpiry(ctx, tx, authorization.AccountID, authorization.TokenHash, accounts.VerificationTokenPurpose, authorization.Email, authorization.ExpiresAt); err != nil {
 		return nil, err
 	}
 
@@ -450,7 +471,7 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 // deleteTokenAndCheckExpiry deletes the matching token, then checks its stored
 // and supplied expiry after acquiring the write lock. The caller must roll back on
 // any error to restore the token.
-func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, tokenHash, purpose, email string, suppliedExpiry time.Time) error {
+func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, tokenHash, purpose, email string, suppliedExpiry time.Time) (string, error) {
 	var expiresAt time.Time
 	var storedEmail string
 	err := tx.QueryRowContext(ctx, `DELETE FROM `+userTokenTableName+`
@@ -458,18 +479,21 @@ func deleteTokenAndCheckExpiry(ctx context.Context, tx *sql.Tx, accountID, token
 		RETURNING expires_at, email`, accountID, tokenHash, purpose).
 		Scan(&expiresAt, &storedEmail)
 	if errors.Is(err, sql.ErrNoRows) {
-		return hs_errors.WithCause(accounts.ErrTokenNotFound, err)
+		return "", hs_errors.WithCause(accounts.ErrTokenNotFound, err)
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	now := time.Now()
 	if !now.Before(expiresAt) || !now.Before(suppliedExpiry) {
-		return accounts.ErrTokenExpired
+		return "", accounts.ErrTokenExpired
 	}
-	if purpose == accounts.VerificationTokenPurpose && (accounts.EmailKey(storedEmail) == "" || accounts.EmailKey(storedEmail) != accounts.EmailKey(email)) {
-		return accounts.ErrToken
+	if purpose != accounts.ResetTokenPurpose && (accounts.EmailKey(storedEmail) == "" || accounts.EmailKey(storedEmail) != accounts.EmailKey(email)) {
+		return "", accounts.ErrToken
 	}
-	return nil
+	if purpose == accounts.ResetTokenPurpose {
+		return "", nil
+	}
+	return storedEmail, nil
 }

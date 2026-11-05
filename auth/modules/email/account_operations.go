@@ -63,7 +63,7 @@ func (a *EmailAuthService) changePassword(ctx context.Context, u *user.User, cur
 	if u == nil {
 		return user.ErrUserNotSpecified
 	}
-	if u.Password != "" && !password.CheckPasswordHash(current, u.Password) {
+	if u.Password == "" || !password.CheckPasswordHash(current, u.Password) {
 		return errInvalidCredentials
 	}
 
@@ -110,7 +110,7 @@ func (a *EmailAuthService) requestPasswordReset(ctx context.Context, email strin
 	if err != nil {
 		return err
 	}
-	if u == nil || u.RegistrationAuthType != AuthTypeEmail {
+	if u == nil || u.Password == "" {
 		return nil
 	}
 	return a.sendResetEmail(ctx, u, expiration, link)
@@ -171,11 +171,27 @@ func (a *EmailAuthService) renderAccountEmail(t *template.Template, link string)
 }
 
 func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, expiration time.Duration, link url.URL) error {
+	return a.sendPasswordEmail(ctx, u, expiration, link, false)
+}
+
+func (a *EmailAuthService) sendPasswordEmail(ctx context.Context, u *user.User, expiration time.Duration, link url.URL, setup bool) error {
 	if a.mailClient == nil {
 		return messaging.ErrMailUnavailable
 	}
 
-	token, err := user.NewAuthResetToken(u, expiration)
+	var token *user.AuthToken
+	var err error
+	mailTemplate, subject := a.resetEmail, "Reset your password"
+	if setup {
+		token, err = user.NewPasswordSetupToken(u, expiration)
+		mailTemplate, subject = a.setupEmail, "Set up your password"
+	} else {
+		var reset *user.AuthResetToken
+		reset, err = user.NewAuthResetToken(u, expiration)
+		if err == nil {
+			token = &reset.AuthToken
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -183,7 +199,7 @@ func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, exp
 	query.Set("token", token.Token)
 	link.RawQuery = query.Encode()
 
-	body, err := a.renderAccountEmail(a.resetEmail, link.String())
+	body, err := a.renderAccountEmail(mailTemplate, link.String())
 	if err != nil {
 		return err
 	}
@@ -193,7 +209,7 @@ func (a *EmailAuthService) sendResetEmail(ctx context.Context, u *user.User, exp
 	}
 	return a.mailClient.Compose().
 		To(u.Email).
-		Subject("Reset your password").
+		Subject(subject).
 		Body(body).
 		Send(ctx)
 }

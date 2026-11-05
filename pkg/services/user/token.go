@@ -9,7 +9,7 @@ import (
 )
 
 // AuthToken holds a bearer token and its storage metadata.
-// Persist Metadata, never Token. Email binds verification to its recipient.
+// Persist Metadata, never Token. Email binds verification and setup to their recipient.
 type AuthToken struct {
 	UserId    string
 	TokenHash string
@@ -34,17 +34,17 @@ func newAuthToken(u *User, expiration time.Duration, purpose string) (*AuthToken
 	if expiration <= 0 {
 		return nil, ErrTokenExpirationNotSpecified
 	}
-	if purpose != ResetTokenPurpose && purpose != VerificationTokenPurpose {
+	if purpose != ResetTokenPurpose && purpose != VerificationTokenPurpose && purpose != PasswordSetupTokenPurpose {
 		return nil, ErrToken
 	}
-	if purpose == VerificationTokenPurpose && EmailKey(u.Email) == "" {
+	if purpose != ResetTokenPurpose && EmailKey(u.Email) == "" {
 		return nil, ErrToken
 	}
 
 	raw := opaquetoken.New()
 	token := &AuthToken{UserId: u.ID, Token: raw, TokenHash: opaquetoken.Hash(raw),
 		ExpiresAt: time.Now().Add(expiration), Type: purpose}
-	if purpose == VerificationTokenPurpose {
+	if purpose != ResetTokenPurpose {
 		token.Email = u.Email
 	}
 	return token, nil
@@ -68,7 +68,7 @@ func loadToken(ctx context.Context, accounts AccountRepository, raw, purpose str
 		return TokenMetadata{}, err
 	}
 	if stored.AccountID == "" || stored.TokenHash != hash || stored.Purpose != purpose ||
-		(purpose == VerificationTokenPurpose && EmailKey(stored.Email) == "") {
+		(purpose != ResetTokenPurpose && EmailKey(stored.Email) == "") {
 		return TokenMetadata{}, ErrToken
 	}
 	if !time.Now().Before(stored.ExpiresAt) {
@@ -89,7 +89,7 @@ func validateToken(ctx context.Context, accounts AccountRepository, raw, purpose
 	if account == nil || account.ID != stored.AccountID {
 		return nil, errors.New("account repository returned an unexpected account")
 	}
-	if purpose == VerificationTokenPurpose && EmailKey(account.Email) != EmailKey(stored.Email) {
+	if purpose != ResetTokenPurpose && EmailKey(account.Email) != EmailKey(stored.Email) {
 		return nil, ErrToken
 	}
 	if !time.Now().Before(stored.ExpiresAt) {
