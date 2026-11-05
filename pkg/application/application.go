@@ -55,6 +55,8 @@ type Options struct {
 	// dependencies through descriptor factories. A nil callback loads no modules.
 	// Use handlers.Registered explicitly to select the import catalog. Register
 	// callback-owned resources with app.OnShutdown before returning.
+	// A selected auth descriptor is replaced using Services, AuthPolicy, and
+	// AuthProviders. Do not configure its factory separately in this callback.
 	Modules func(context.Context, *Application) ([]handlers.Descriptor, error)
 	// ProviderSelections resolves ambiguous module capabilities by provider name.
 	ProviderSelections map[string]string

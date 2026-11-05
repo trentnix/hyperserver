@@ -51,7 +51,9 @@ if err != nil {
 
 Services, module selection, and module initialization share one `app.initializationTimeout`, defaulting to ten seconds. Set shared rendering overrides in the callback before module setup prepares templates. Register any resources opened by the callback with `app.OnShutdown`. Modules close before those resources and shared services, including on startup failure.
 
-If the selected catalog includes `auth` and `auth.enabled` is true, the constructor supplies its accounts, sessions, mail, and application policy. The default catalog comes from `auth.Registered()`. The framework imports email/password and Google. Enable each with `auth.services.<provider>.enabled`. Disabled providers do not initialize. Imports alone do not select the auth module. See [Google authentication](google-authentication.md) for credentials, account linking, and setup.
+If the selected catalog includes `auth` and `auth.enabled` is true, the constructor replaces that descriptor with one wired from the application's services, `Options.AuthPolicy`, and `Options.AuthProviders`. Select `auth.Module(auth.Dependencies{}, nil)` in the module callback. Arguments supplied to that descriptor are replaced, not merged. When using `handlers.Setup` directly, supply initialized dependencies and the provider catalog to `auth.Module` yourself.
+
+The default provider catalog comes from `auth.Registered()`. The framework imports email/password and Google. Enable each with `auth.services.<provider>.enabled`. Disabled providers do not initialize. Imports alone do not select the auth module. See [Google authentication](google-authentication.md) for credentials, account linking, and setup.
 
 To add an authentication provider, register an `auth.Descriptor` in the provider package's `init()`. Its `New(auth.Dependencies)` factory receives the application's accounts, sessions, mail, and policy. Import that package and enable its name in configuration. Package initialization must register metadata only. The factory must return a fresh instance without I/O.
 
@@ -193,6 +195,15 @@ Auth providers configure request handling, not resource lifecycles. Their `Init`
 
 Give each dependency one source. Use typed constructor parameters for application-owned services. Use declared capabilities only when one module supplies a service to another.
 
+| Dependency source | Wiring | Cleanup owner |
+| --- | --- | --- |
+| `Options.Services` | Pass the initialized service into the module factory. | The caller retains ownership. HyperServer never closes supplied services. |
+| Configuration-selected shared services | `application.New` opens services before `Options.Modules` runs. Pass them into module factories. | The application closes owned account and session storage after modules stop. The SMTP client holds no persistent connection. |
+| A module capability | Declare `Requires` and receive the service in `BindDependencies`. | The providing module owns its resources. Consumers borrow them. |
+| A module's internal resources | Open resources in `Init`. | The module releases partial resources on failure and implements `Shutdown` for successful startup. |
+
+The blog borrows account storage through `Site.Configure` and the auth manager through `auth.ManagerCapability`. It owns content storage, uploads, and local asset handles. The auth module borrows accounts, sessions, and mail. Those shared services are not module capabilities.
+
 Descriptors declare `Provides: []string{"post-storage"}` and `Requires: []handlers.Requirement{{Capability: "post-storage"}}`. Names are case-sensitive. Resolution rejects missing requirements, ambiguity, duplicate names, and cycles before invoking factories. Providers initialize before consumers. `handlers.Resolve` checks metadata without creating instances.
 
 If several modules provide a capability, the selections argument to `Setup` or `Initialize` maps that capability to a module name:
@@ -219,7 +230,7 @@ Use `GetDependencies` for multiple providers. Missing optional services return a
 
 Resource-owning modules can implement `Shutdown(context.Context) error`. `Initialize` rolls back completed modules on failure and returns no instances. A failing `Init` must release its own partial resources. Modules must not close application-owned services.
 
-`Setup` registers reverse-order cleanup automatically. If using `Initialize` directly, register `handlers.Close` yourself. Repeated cleanup does not rerun module hooks.
+`Setup` registers reverse-order cleanup automatically. During normal shutdown, requests drain first, then consuming modules close before their providers, followed by callback-owned resources and application-owned services. If using `Initialize` directly, register `handlers.Close` yourself. Repeated cleanup does not rerun module hooks.
 
 | Budget | Control | Scope |
 | --- | --- | --- |

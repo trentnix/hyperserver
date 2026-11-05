@@ -24,6 +24,8 @@ const ManagerCapability = "auth.manager"
 // Required account, session, mail, and rendering services must be ready before Init.
 // Providers only configure themselves. Application setup owns service cleanup
 // after failed startup or after HTTP requests drain, not the auth module.
+// With application.New, select Module(Dependencies{}, nil) and configure its
+// dependencies, policy, and providers through application.Options instead.
 func Module(dependencies Dependencies, providers []Descriptor) handlers.Descriptor {
 	providers = slices.Clone(providers)
 	return handlers.Descriptor{Name: ModuleName, Provides: []string{ManagerCapability}, New: func() handlers.Handler {

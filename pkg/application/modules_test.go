@@ -97,11 +97,15 @@ func TestModuleCatalogMustBeSelectedExplicitly(t *testing.T) {
 }
 
 func TestModulesUseSharedServicesAndExistingLifecycle(t *testing.T) {
-	for _, stage := range []string{"success", "selection", "templates", "dependency", "init", "routes", "conflict", "canceled selection", "canceled init", "canceled routes"} {
+	for _, stage := range []string{"success", "selection", "templates", "dependency", "bind", "init", "routes", "conflict", "middleware", "canceled selection", "canceled init", "canceled routes"} {
 		t.Run(stage, func(t *testing.T) {
 			cfg := storageConfig(t)
 			cfg.HTTP.Session.Types, cfg.HTTP.Session.Stores = nil, nil
 			cfg.HTTP.DefaultRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Hour, MaxClients: 10}
+			if stage == "middleware" {
+				// Valid configuration, but additional form origins require a CSP.
+				cfg.HTTP.FormActionOrigins = []string{"https://login.example"}
+			}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			cause, closeErr := errors.New("startup failed"), errors.New("cleanup failed")
@@ -127,6 +131,9 @@ func TestModulesUseSharedServicesAndExistingLifecycle(t *testing.T) {
 								got, err := handlers.GetDependency[user.AccountRepository](deps, "storage")
 								if err != nil || got != accounts {
 									t.Fatalf("dependency = %v, err=%v", got, err)
+								}
+								if stage == "bind" {
+									return cause
 								}
 							}
 							return nil
@@ -202,8 +209,10 @@ func TestModulesUseSharedServicesAndExistingLifecycle(t *testing.T) {
 				want = append(want, "templates")
 			}
 			switch stage {
-			case "success", "routes", "conflict", "canceled routes":
+			case "success", "routes", "conflict", "middleware", "canceled routes":
 				want = append(want, "init provider", "init consumer", "routes provider", "routes consumer", "close consumer", "close provider")
+			case "bind":
+				want = append(want, "init provider", "close provider")
 			case "init":
 				want = append(want, "init provider", "init consumer", "close provider")
 			case "canceled init":
@@ -228,10 +237,13 @@ func TestModulesUseSharedServicesAndExistingLifecycle(t *testing.T) {
 			if !errors.Is(err, closeErr) {
 				t.Fatal("lost cleanup error", err)
 			}
-			if stage == "selection" || stage == "templates" || stage == "init" || stage == "routes" {
+			if stage == "selection" || stage == "templates" || stage == "bind" || stage == "init" || stage == "routes" {
 				if !errors.Is(err, cause) {
 					t.Fatal("lost startup error", err)
 				}
+			}
+			if stage == "middleware" && !strings.Contains(err.Error(), "prepare HTTP middleware") {
+				t.Fatal("startup did not reach middleware assembly", err)
 			}
 			if strings.HasPrefix(stage, "canceled") && !errors.Is(err, context.Canceled) {
 				t.Fatal("lost cancellation", err)
