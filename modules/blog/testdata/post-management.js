@@ -60,7 +60,7 @@
     assert(accountNav, 'Administration links must have a named navigation landmark.');
     const navBounds = accountNav.getBoundingClientRect();
     const controls = [...accountNav.querySelectorAll('a, button')];
-    assert(controls.map(control => control.textContent).join(',') === 'Posts,Pages,Site Profile,Media', 'Content controls changed: ' + controls.map(control => control.textContent).join(','));
+    assert(controls.map(control => control.textContent).join(',') === 'Posts,Pages,Site Profile,Media,Users', 'Administration controls changed: ' + controls.map(control => control.textContent).join(','));
     assert(accountNav.querySelector('a[href="/media"]')?.textContent === 'Media', 'Media must open the library.');
     assert(document.querySelector('.site-header a[href="/auth/account"]')?.textContent === 'Account', 'Account must be in the site header.');
     const accountMenu = accountNav.querySelector('.account-menu');
