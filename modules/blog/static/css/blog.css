@@ -206,7 +206,7 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
   .post-body > p img { max-width: calc(100% + 2 * var(--content-padding)); margin-inline: 0; position: relative; left: 50%; transform: translateX(-50%); }
 }
 @media (max-width: 767px) {
-  .page-content { --content-padding: 20px; padding: 10px var(--content-padding) 30px; }
+  .page-content { --content-padding: 20px; }
   h1 { font-size: 1.4em; }
   .content-actions a, .content-actions .text-button, .action-menu summary { min-height: 44px; }
   .account-menu { position: static; }

@@ -144,6 +144,7 @@ document.removeEventListener = function(type, callback, options) {
       const articleStyle = getComputedStyle(document.querySelector('article'));
       const contentPadding = innerWidth < 768 ? '20px' : '60px';
       assert(articleStyle.paddingLeft === contentPadding && articleStyle.paddingRight === contentPadding, 'Article has incorrect horizontal padding.');
+      assert(articleStyle.paddingTop === '30px', 'Page content needs consistent space above its heading, including on mobile.');
       const textSize = innerWidth >= 1680 ? 19.2 : 17.6;
       const lineHeight = innerWidth >= 1680 ? 28.8 : 24.64;
       // Allow subpixel rounding across browsers without hiding a breakpoint change.
