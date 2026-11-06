@@ -100,6 +100,59 @@ func TestScheduleSelection(t *testing.T) {
 	}
 }
 
+func TestScheduleSavedDraft(t *testing.T) {
+	for _, wasPublished := range []bool{false, true} {
+		for _, hx := range []bool{false, true} {
+			t.Run("published="+strconv.FormatBool(wasPublished)+"/htmx="+strconv.FormatBool(hx), func(t *testing.T) {
+				h := newHarness(t)
+				now := time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)
+				advance := publicationClock(h, now)
+				h.register(t)
+				h.verify(t)
+				h.login(t)
+				values := url.Values{"title": {"Saved draft"}, "content": {"Body"}}
+				if wasPublished {
+					values.Set("published", "on")
+				}
+				requireStatus(t, h.request("POST", "/post", values, false), http.StatusSeeOther)
+				post, err := h.blog.posts.GetBySlug(t.Context(), "saved-draft", true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if wasPublished {
+					values.Set("published", "")
+					requireStatus(t, h.submitEditor(t, "/post/"+post.ID, values, false), http.StatusSeeOther)
+				}
+				editor := h.request("GET", "/post/update/"+post.ID, nil, hx)
+				requireStatus(t, editor, http.StatusOK)
+				if !strings.Contains(editor.Body.String(), `name="published" value="scheduled"`) || !strings.Contains(editor.Body.String(), `name="publishDate"`) {
+					t.Fatal("saved draft must offer scheduling controls")
+				}
+				values.Set("published", "scheduled")
+				values.Set("publishDate", "2030-01-02")
+				values.Set("publishTime", "9:30 AM")
+				response := h.submitEditor(t, "/post/"+post.ID, values, hx)
+				status := http.StatusSeeOther
+				if hx {
+					status = http.StatusOK
+				}
+				requireStatus(t, response, status)
+				stored, err := h.blog.posts.GetByID(t.Context(), post.ID, true)
+				date := time.Date(2030, 1, 2, 9, 30, 0, 0, time.UTC)
+				if err != nil || !stored.Scheduled(now) || !stored.Published.Equal(date) || stored.Markdown != post.Markdown || stored.AuthorID != post.AuthorID {
+					t.Fatal("scheduling must store the new date without changing content or ownership", stored, err)
+				}
+				h.cookies = nil
+				for _, path := range []string{"/post/s/" + post.Slug, "/post/id/" + post.ID} {
+					requireStatus(t, h.request("GET", path, nil, false), http.StatusNotFound)
+				}
+				advance(date)
+				requireStatus(t, h.request("GET", "/post/s/"+post.Slug, nil, false), http.StatusOK)
+			})
+		}
+	}
+}
+
 // TestScheduledPublication checks every public surface immediately before and at
 // publication, including already-warm caches and conditional image/feed requests.
 func TestScheduledPublication(t *testing.T) {
@@ -279,7 +332,7 @@ func TestScheduleValidation(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		response := h.submitEditor(t, "/post/"+post.ID, values, hx)
 		requireStatus(t, response, http.StatusUnprocessableEntity)
-		if !strings.Contains(response.Body.String(), "already been published") {
+		if !strings.Contains(response.Body.String(), "Save it as a draft before scheduling it.") {
 			t.Fatal("published post schedule did not explain the restriction")
 		}
 	}

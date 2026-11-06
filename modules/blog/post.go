@@ -11,12 +11,12 @@ import (
 var (
 	errNotFound         = errors.New("blog content not found")
 	errSlugTaken        = errors.New("that slug is already used by another post")
-	errAlreadyPublished = errors.New("only posts that have never been published can be scheduled")
+	errAlreadyPublished = errors.New("save the published post as a draft before scheduling it")
 )
 
-// Post stores the original Markdown and publication state. Published is the first
-// publication time, or the planned time for a scheduled post. Once reached, that
-// date stays unchanged when a post is edited or republished.
+// Post stores the original Markdown and publication state. Published is the
+// publication time or the planned time for a scheduled post. Edits and immediate
+// republication preserve a past date. Scheduling a saved draft replaces it.
 // PreviewImage is an optional upload ID used for sharing, not the article body.
 type Post struct {
 	ID, Slug, Title, Summary, Markdown, PreviewImage string
@@ -27,7 +27,7 @@ type Post struct {
 	Version                                          int64 // Save requires the current version when updating.
 }
 
-// Scheduled reports whether the post is awaiting its first publication.
+// Scheduled reports whether the post is awaiting publication.
 func (p Post) Scheduled(now time.Time) bool { return !p.Draft && p.Published.After(now) }
 
 // WasPublished distinguishes past publication from a future schedule.
@@ -78,8 +78,9 @@ type repository interface {
 	GetBySlug(context.Context, string, bool) (Post, error)
 	// Save writes content and Draft together, creating a post when ID is empty.
 	// The caller must supply a valid slug.
-	// A future Published schedules first publication. Once reached, that date stays
-	// unchanged. Rescheduling published content returns errAlreadyPublished.
+	// A future Published schedules publication. A saved draft can replace a past
+	// date with a new schedule. Scheduling currently published content returns
+	// errAlreadyPublished. Other edits preserve past publication dates.
 	// Conflicting slugs return errSlugTaken.
 	// Updates require the current Version or return errEditConflict. Content changes
 	// append a revision in the same transaction as the save and image references.

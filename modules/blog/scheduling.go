@@ -17,7 +17,7 @@ func (m *module) currentTime() time.Time {
 // postEditorData describes publication choices without changing saved content.
 func (m *module) postEditorData(p Post) editorPage {
 	now := m.currentTime()
-	data := editorPage{Post: p, CanSchedule: !p.WasPublished(now)}
+	data := editorPage{Post: p, CanSchedule: p.Draft || !p.WasPublished(now)}
 	data.SaveActions = editorActions("post", !p.Draft && !p.Scheduled(now), p.Scheduled(now))
 	if !p.Draft {
 		data.Publication = "on"
@@ -35,7 +35,7 @@ func (m *module) postEditorData(p Post) editorPage {
 }
 
 // readPublication interprets the editor's explicit UTC schedule. Storage separately
-// prevents rescheduling content whose first publication time has already passed.
+// prevents scheduling currently published content until it is saved as a draft.
 func (m *module) readPublication(r *http.Request, p *Post) string {
 	switch r.PostForm.Get("published") {
 	case "":

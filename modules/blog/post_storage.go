@@ -175,7 +175,8 @@ func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDr
 }
 
 // Save atomically writes content and publication state, generating IDs for new posts.
-// A future Published schedules first publication. Once reached, that date stays unchanged.
+// A future Published schedules publication. A saved draft can replace a past
+// publication date with a new schedule. Other edits preserve past publication dates.
 // Updates require the current Version and fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Post, error) {
@@ -199,7 +200,7 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 		p.AuthorID = current.AuthorID
 		candidate := p
 		candidate.Published = time.Time{}
-		if current.WasPublished(now) {
+		if current.WasPublished(now) && !(current.Draft && publication > now.Unix()) {
 			if publication > now.Unix() {
 				return p, errAlreadyPublished
 			}
@@ -230,8 +231,8 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 	} else {
 		var published int64
 		err = tx.QueryRowContext(ctx, `UPDATE blog_current_posts SET slug=?, draft=?, version=version+1,
- published=CASE WHEN published>0 AND published<=? THEN published ELSE ? END WHERE id=? AND version=? RETURNING published,version`,
-			p.Slug, p.Draft, now.Unix(), publication, p.ID, p.Version).Scan(&published, &p.Version)
+ published=CASE WHEN published>0 AND published<=? AND NOT (draft=1 AND ?>?) THEN published ELSE ? END WHERE id=? AND version=? RETURNING published,version`,
+			p.Slug, p.Draft, now.Unix(), publication, now.Unix(), publication, p.ID, p.Version).Scan(&published, &p.Version)
 		if errors.Is(err, sql.ErrNoRows) {
 			err = editError(ctx, tx, "post", p.ID, errNotFound)
 		}

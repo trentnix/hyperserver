@@ -204,7 +204,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, errAlreadyPublished) {
-		m.editorError(w, r, p, "This post has already been published. Choose Draft or Publish.", http.StatusUnprocessableEntity, "published")
+		m.editorError(w, r, p, "This post is published. Save it as a draft before scheduling it.", http.StatusUnprocessableEntity, "published")
 		return
 	}
 	if err != nil {
