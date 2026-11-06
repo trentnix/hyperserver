@@ -77,7 +77,7 @@ func TestProfileHistoryStorage(t *testing.T) {
 	}
 
 	current, _ := s.GetProfile(t.Context())
-	if _, err := s.db.ExecContext(t.Context(), `CREATE TRIGGER fail_profile_history BEFORE INSERT ON blog_profile_revisions BEGIN SELECT RAISE(ABORT, 'history failed'); END`); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), `CREATE TRIGGER fail_profile_history BEFORE INSERT ON blog_profile BEGIN SELECT RAISE(ABORT, 'history failed'); END`); err != nil {
 		t.Fatal(err)
 	}
 	p = current

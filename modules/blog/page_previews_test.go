@@ -274,7 +274,7 @@ func TestPagePreviewSortOrder(t *testing.T) {
 		if p.Updated.IsZero() {
 			t.Fatal("creation did not record update time")
 		}
-		if _, err := store.db.ExecContext(t.Context(), "UPDATE blog_pages SET updated=? WHERE id=?", base.Add(item.age).UnixNano(), p.ID); err != nil {
+		if _, err := store.db.ExecContext(t.Context(), "UPDATE blog_current_pages SET updated=? WHERE id=?", base.Add(item.age).UnixNano(), p.ID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -318,7 +318,7 @@ func TestPagePreviewSortOrder(t *testing.T) {
 	}
 	assertOrder("zero,ordered-new,ordered-old,unordered-new,unordered-old")
 	// Equal timestamps use ID, not title or unstable row ordering.
-	if _, err := store.db.ExecContext(t.Context(), "UPDATE blog_pages SET updated=? WHERE display_order IS NULL", base.UnixNano()); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), "UPDATE blog_current_pages SET updated=? WHERE display_order IS NULL", base.UnixNano()); err != nil {
 		t.Fatal(err)
 	}
 	pages, err := store.ListPages(t.Context(), true)

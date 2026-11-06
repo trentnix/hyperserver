@@ -3,6 +3,7 @@ package blog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -11,6 +12,48 @@ import (
 	"testing"
 	"time"
 )
+
+func TestMediaHistoryDeduplicatesEachVersion(t *testing.T) {
+	db, _ := schemaTestDB(t)
+	if err := prepareBlogSchema(t.Context(), db); err != nil {
+		t.Fatal(err)
+	}
+	s := &sqliteRepository{db: db, now: time.Now}
+	first, second := strings.Repeat("a", 64)+".png", strings.Repeat("b", 64)+".png"
+	body := "![First](/images/" + first + ") [Download](https://old.example/images/" + first + ") ![Second](/images/" + second + ")"
+	const count = 40
+	for _, kind := range []string{"post", "page"} {
+		var id string
+		var version int64
+		for n := range count {
+			var err error
+			id, version, err = saveRevisionContent(t.Context(), s, kind, id, version, Revision{Title: fmt.Sprintf("Version %d", n), Markdown: body})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// Timestamps and numeric version IDs can coincide across content types.
+	if _, err := db.Exec("UPDATE blog_posts SET recorded=42; UPDATE blog_pages SET recorded=42"); err != nil {
+		t.Fatal(err)
+	}
+	usage, err := s.ReferencedImages(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, image := range []string{first, second} {
+		if len(usage[image].History) != 2*count {
+			t.Fatalf("%s has %d history entries, want %d", image, len(usage[image].History), 2*count)
+		}
+		seen := make(map[string]bool)
+		for _, revision := range usage[image].History {
+			if seen[revision.URL] {
+				t.Fatalf("duplicate history entry: %s", revision.URL)
+			}
+			seen[revision.URL] = true
+		}
+	}
+}
 
 // TestMediaHistoryDeletion exercises explicit deletion and restoration through both editors.
 func TestMediaHistoryDeletion(t *testing.T) {

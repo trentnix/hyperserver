@@ -17,7 +17,7 @@ func saveRevisionContent(ctx context.Context, store *sqliteRepository, kind, id 
 	return p.ID, p.Version, err
 }
 
-// TestRevisionStorage covers immutable snapshots, no-op saves, settings-only
+// TestRevisionStorage covers immutable snapshots, no-op saves, non-URL settings
 // changes, restoring old writing, owner isolation, and deletion.
 func TestRevisionStorage(t *testing.T) {
 	for _, kind := range []string{"post", "page"} {
@@ -25,6 +25,10 @@ func TestRevisionStorage(t *testing.T) {
 			h := newHarness(t)
 			store := h.blog.posts.(*sqliteRepository)
 			original := Revision{Title: "Original", Summary: "Summary", Markdown: "First body", PreviewImage: "original.png"}
+			original.ContentPath = "/post/s/history"
+			if kind == "page" {
+				original.ContentPath = "/page/history"
+			}
 			id, version, err := saveRevisionContent(t.Context(), store, kind, "", 0, original)
 			if err != nil || version != 1 {
 				t.Fatal("create", version, err)
@@ -62,7 +66,7 @@ func TestRevisionStorage(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				p.Slug, p.Draft = "new-url", true
+				p.Draft = true
 				p, err = savePostFixture(store, t.Context(), p)
 				if err != nil {
 					t.Fatal(err)
@@ -73,7 +77,7 @@ func TestRevisionStorage(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				p.Slug, p.Published, p.ParentID, p.ChildrenDisplay, p.DisplayOrder = "new-url", false, h.projectsID, "blocks", new(7)
+				p.Published, p.ParentID, p.ChildrenDisplay, p.DisplayOrder = false, h.projectsID, "blocks", new(7)
 				p, err = savePageFixture(store, t.Context(), p)
 				if err != nil {
 					t.Fatal(err)

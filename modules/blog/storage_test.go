@@ -93,16 +93,25 @@ func TestNavigationQueries(t *testing.T) {
 	// Dates and ties are explicit so the ordering check never depends on timing.
 	date := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	db := store.db
+	tx, err := db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
 	for index, post := range []Post{
 		{ID: "first", Slug: "first", Title: "First", Published: date.AddDate(0, -1, 0)},
 		{ID: "second", Slug: "second", Title: "Second", Published: date},
 		{ID: "third", Slug: "third", Title: "Third", Published: date},
 		{ID: "draft", Slug: "draft", Title: "Draft", Published: date.AddDate(0, 1, 0), Draft: true},
 	} {
-		_, err := db.ExecContext(t.Context(), "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", post.ID, post.Slug, post.Title, "Summary", "Body", post.Published.Unix(), post.Draft, "", 1, "")
+		post.Summary, post.Markdown = "Summary", "Body"
+		err := seedCurrentPost(t.Context(), tx, post)
 		if err != nil {
 			t.Fatalf("insert %d: %v", index, err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
 	}
 	posts, err := store.List(t.Context())
 	if err != nil || len(posts) != 3 || posts[0].ID != "third" || posts[1].ID != "second" || posts[2].ID != "first" {

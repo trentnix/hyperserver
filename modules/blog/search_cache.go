@@ -89,9 +89,9 @@ func (s *sqliteRepository) matchBody(ctx context.Context, tx *sql.Tx, match *con
 	key := searchBodyKey{kind, id}
 	text, ok := s.searchBodies.get(key, version)
 	if !ok {
-		query := "SELECT markdown FROM blog_posts WHERE id=?"
+		query := "SELECT markdown FROM blog_post_current WHERE id=?"
 		if kind == "page" {
-			query = "SELECT markdown FROM blog_pages WHERE id=?"
+			query = "SELECT markdown FROM blog_page_current WHERE id=?"
 		}
 		if err := tx.QueryRowContext(ctx, query, id).Scan(&text); err != nil {
 			return false, err

@@ -25,6 +25,7 @@ type Revision struct {
 	Title, Summary, Markdown, PreviewImage string
 	Tags                                   string
 	RecordedAt                             time.Time
+	ContentPath                            string // Base URL for rendering this version's relative links.
 }
 
 // sameContent compares the fields restored by history, excluding snapshot metadata.
@@ -170,12 +171,16 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 		}
 	}
 	data.Selected, err = m.history.GetRevision(r.Context(), kind, id, selected)
+	previewPath := data.Selected.ContentPath
+	if previewPath == "" {
+		previewPath = contentPath
+	}
 	if err == nil {
-		data.HTML, err = markdownAt(data.Selected.Markdown, &url.URL{Path: contentPath})
+		data.HTML, err = markdownAt(data.Selected.Markdown, &url.URL{Path: previewPath})
 	}
 	if err == nil {
 		var missing map[string]bool
-		missing, err = m.revisionMissingImages(r.Context(), data.Selected, contentPath)
+		missing, err = m.revisionMissingImages(r.Context(), data.Selected, previewPath)
 		if err == nil {
 			data.MissingImages = len(missing) > 0
 			data.MissingPreview = missing["/images/"+data.Selected.PreviewImage]

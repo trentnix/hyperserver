@@ -46,15 +46,14 @@ func referencedImageID(reference string) string {
 	return id
 }
 
-// ReferencedImages reads current content, profile URLs, and every saved version.
-// Historical relative URLs resolve against their owner's current URL, as in the editor.
+// ReferencedImages reads indexed references, never historical Markdown bodies.
 func (s *sqliteRepository) ReferencedImages(ctx context.Context) (map[string]mediaUsage, error) {
 	used := make(map[string]mediaUsage)
-	rows, err := s.db.QueryContext(ctx, `SELECT i.url, '/post/update/' || p.id AS location, p.title FROM blog_post_images i JOIN blog_posts p ON p.id=i.owner_id
-UNION SELECT i.url, '/pages/update/' || p.id, p.title FROM blog_page_images i JOIN blog_pages p ON p.id=i.owner_id
-UNION SELECT image_url, '/profile', 'Site portrait' FROM blog_profile
-UNION SELECT favicon_url, '/profile', 'Site favicon' FROM blog_profile
-UNION SELECT background_url, '/profile', 'Site background' FROM blog_profile
+	rows, err := s.db.QueryContext(ctx, `SELECT i.url, '/post/update/' || p.id AS location, p.title FROM blog_post_images i JOIN blog_post_current p ON p.version_id=i.version_id
+UNION SELECT i.url, '/pages/update/' || p.id, p.title FROM blog_page_images i JOIN blog_page_current p ON p.version_id=i.version_id
+UNION SELECT image_url, '/profile', 'Site portrait' FROM blog_profile_current
+UNION SELECT favicon_url, '/profile', 'Site favicon' FROM blog_profile_current
+UNION SELECT background_url, '/profile', 'Site background' FROM blog_profile_current
 ORDER BY location, title, url`)
 	if err != nil {
 		return nil, err
@@ -81,36 +80,32 @@ ORDER BY location, title, url`)
 		return nil, err
 	}
 
-	rows, err = s.db.QueryContext(ctx, `SELECT r.markdown, r.preview_image, '/post/s/' || p.slug, 'post' AS kind, r.owner_id, r.id AS revision_id, r.title, r.recorded
-FROM blog_post_revisions r JOIN blog_posts p ON p.id=r.owner_id
+	// Keep each version's references together so equivalent URLs can be
+	// deduplicated against the last entry, not the entire accumulated history.
+	rows, err = s.db.QueryContext(ctx, `SELECT i.url, 'post' AS kind, r.owner_id, r.id AS revision_id, r.title, r.recorded
+FROM blog_posts r JOIN blog_post_images i ON i.version_id=r.id
 UNION ALL
-SELECT r.markdown, r.preview_image, CASE p.slug WHEN 'about' THEN '/about' WHEN 'projects' THEN '/projects' ELSE '/page/' || p.slug END, 'page', r.owner_id, r.id, r.title, r.recorded
-FROM blog_page_revisions r JOIN blog_pages p ON p.id=r.owner_id
+SELECT i.url, 'page', r.owner_id, r.id, r.title, r.recorded
+FROM blog_pages r JOIN blog_page_images i ON i.version_id=r.id
 ORDER BY recorded DESC, kind, owner_id, revision_id DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var source, preview, contentPath, kind, owner string
+		var reference, kind, owner string
 		var revision mediaRevision
 		var number, recorded int64
-		if err := rows.Scan(&source, &preview, &contentPath, &kind, &owner, &number, &revision.Title, &recorded); err != nil {
-			return nil, err
-		}
-		refs, err := imageReferences(source, contentPath, preview)
-		if err != nil {
+		if err := rows.Scan(&reference, &kind, &owner, &number, &revision.Title, &recorded); err != nil {
 			return nil, err
 		}
 		revision.URL = "/history/" + kind + "/" + url.PathEscape(owner) + "?revision=" + strconv.FormatInt(number, 10)
 		revision.RecordedAt = time.Unix(0, recorded).UTC()
-		seen := make(map[string]bool)
-		for _, ref := range refs {
-			if id := referencedImageID(ref); id != "" && !seen[id] {
-				usage := used[id]
+		if id := referencedImageID(reference); id != "" {
+			usage := used[id]
+			if len(usage.History) == 0 || usage.History[len(usage.History)-1] != revision {
 				usage.History = append(usage.History, revision)
 				used[id] = usage
-				seen[id] = true
 			}
 		}
 	}
@@ -120,7 +115,7 @@ ORDER BY recorded DESC, kind, owner_id, revision_id DESC`)
 		return nil, err
 	}
 
-	rows, err = s.db.QueryContext(ctx, "SELECT id, name, image_url, favicon_url, background_url, recorded FROM blog_profile_revisions ORDER BY id DESC")
+	rows, err = s.db.QueryContext(ctx, "SELECT id, name, image_url, favicon_url, background_url, recorded FROM blog_profile ORDER BY id DESC")
 	if err != nil {
 		return nil, err
 	}

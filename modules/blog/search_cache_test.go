@@ -229,7 +229,7 @@ func TestSearchCacheSnapshot(t *testing.T) {
 			t.Fatal(err)
 		}
 		var version int64
-		if err := tx.QueryRowContext(t.Context(), `SELECT version FROM blog_posts WHERE id=?`, post.ID).Scan(&version); err != nil {
+		if err := tx.QueryRowContext(t.Context(), `SELECT version FROM blog_current_posts WHERE id=?`, post.ID).Scan(&version); err != nil {
 			t.Fatal(err)
 		}
 		old := post.Markdown

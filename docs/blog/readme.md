@@ -50,23 +50,15 @@ Runtime configuration, databases, uploads, and local assets are ignored by Git. 
 
 [modules/blog](../../modules/blog) owns content rules, templates, handlers, SQLite content storage, and image files. Module configuration loads from `modules/blog/config.yaml`. Relative storage paths use the application configuration directory. Templates, scripts, styles, and default assets are embedded, so rebuild after changing them.
 
-Fresh startup creates blog schema version 1 from the embedded [SQL migration](../../modules/blog/migrations/000001_blog.up.sql). Existing databases must have a clean version 1 in `blog_schema_version`. Startup checks the schema and rejects missing, dirty, or unsupported versions without repairing tables. Accounts and sessions keep their own [migration histories](../storage.md).
+Fresh startup creates blog schema version 1 from the embedded [schema](../../modules/blog/migrations/000001_blog.up.sql). Current rows hold identity, publication settings, and a pointer to the selected content version. Posts, pages, and site profiles each store their current and historical content together. Image references belong to individual post or page versions. Read-only views join current pointers to content for rendering and search.
 
-## Database upgrades
+Existing databases must have a clean version 1 in `blog_schema_version`. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
 
-Before upgrading an existing installation, stop the server and all other writers. Create and verify a [backup](backup.md). Keep the compatible application binary with the backup.
+## Database migrations
 
-For an unversioned database matching the supported blog schema, run this from the application configuration directory:
+The application supports one current schema, defined by the bootstrap migration. Earlier development layouts and backups are unsupported. Use fresh storage, not a changed version marker.
 
-```sh
-/path/to/blog-maintenance adopt-schema
-```
-
-Build `blog-maintenance` from this checkout with `go build -o /path/to/blog-maintenance ./cmd/blog-maintenance`. Adoption validates required columns, keys, foreign keys, named indexes, and the page-cycle trigger, then records version 1 in one transaction. Extra indexes are allowed. Validation errors identify the incompatible schema element. Adoption does not change content, history, or image files. Repeating it is safe.
-
-Incompatible schemas are rejected. Preserve the original database and use a compatible application or an explicit migration. Do not add version metadata by hand.
-
-Later upgrades use the same pinned `golang-migrate` CLI as the framework. From the repository root:
+For later migrations, stop the server and all other writers. Create and verify a [backup](backup.md) with a compatible binary. From the repository root:
 
 ```sh
 go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
@@ -74,11 +66,11 @@ migrate -path modules/blog/migrations \
   -database 'sqlite3://file:///absolute/path/blog.db?x-migrations-table=blog_schema_version&_foreign_keys=on' up
 ```
 
-Keep `x-migrations-table=blog_schema_version` in every command. Run one migration process at a time. The CLI does not acquire the blog's maintenance lock. Migrate accounts and sessions separately if they require an upgrade, even when they share the file. Do not run version 1's `up` on an unversioned database. Adopt it first.
+Keep `x-migrations-table=blog_schema_version` and `_foreign_keys=on` in every command. The CLI does not acquire the blog's maintenance lock. Run only one migration process, with all other writers stopped. Accounts and sessions have separate migrations even when they share the database file.
 
-A failed migration rolls back its SQL but leaves a dirty version marker. Inspect the failure before repairing the marker. `force` changes metadata, not tables. Do not use it to bypass an incompatible schema. Version 1's `down` deletes all blog tables. For production rollback, restore a verified backup into a separate directory and use the compatible binary.
+The baseline's `down 1` deletes all blog content. It does not convert content to the obsolete layout. Back up before running it. Failed migrations roll back their SQL but leave a dirty version marker. Inspect and repair the failure before correcting that marker. `force` changes metadata, not tables or data.
 
-Migration files are immutable after release. Add numbered migrations for later changes, update the application's supported schema and validation, and test both fresh installation and upgrades. Set `HS_TEST_MIGRATE` to the pinned CLI executable to run migration integration tests. CI already enables them.
+Keep deployed migration files immutable. For a later schema change, add a numbered up/down pair and update the required version, current bootstrap and validation, repositories, and backup compatibility together. Runtime code must support only the resulting schema. Test populated upgrades, downgrades, failed migrations, and fresh startup. Set `HS_TEST_MIGRATE` to the pinned CLI executable to run migration integration tests.
 
 ## Deployment limits
 

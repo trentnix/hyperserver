@@ -319,10 +319,14 @@ func TestRevisionHTTP(t *testing.T) {
 			}
 			values.Set("title", original.Title)
 			values.Set("version", strconv.FormatInt(version, 10))
+			beforeRestore, err := store.ListRevisions(t.Context(), kind, id)
+			if err != nil || len(beforeRestore) != 3 {
+				t.Fatal("URL change must preserve a separate rendering base", beforeRestore, err)
+			}
 			// Only this explicit save appends the restored content. Drafts stay private.
 			requireStatus(t, h.request("POST", action, values, false), http.StatusSeeOther)
 			list, err = store.ListRevisions(t.Context(), kind, id)
-			if err != nil || len(list) != 3 || list[0].Title != original.Title || list[1].Title != current.Title {
+			if err != nil || len(list) != len(beforeRestore)+1 || list[0].Title != original.Title || !reflect.DeepEqual(list[1:], beforeRestore) {
 				t.Fatal("restoration discarded history", list, err)
 			}
 			response = h.request("GET", historyURL+"?revision="+first, nil, false)

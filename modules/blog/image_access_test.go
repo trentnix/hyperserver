@@ -356,7 +356,7 @@ func TestImageReferenceTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 			var source string
-			if err := store.db.QueryRow("SELECT markdown FROM blog_"+kind+"s WHERE id=?", id).Scan(&source); err != nil || source != "![Original](/images/original.png)" {
+			if err := store.db.QueryRow("SELECT markdown FROM blog_"+kind+"_current WHERE id=?", id).Scan(&source); err != nil || source != "![Original](/images/original.png)" {
 				t.Fatal("failed index update changed content", source, err)
 			}
 			for _, ref := range []string{"original", "replacement"} {
@@ -375,7 +375,7 @@ func TestImageReferenceTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 			var count int
-			if err := store.db.QueryRow("SELECT count(*) FROM "+table+" WHERE owner_id=?", id).Scan(&count); err != nil || count != 0 {
+			if err := store.db.QueryRow("SELECT count(*) FROM " + table).Scan(&count); err != nil || count != 0 {
 				t.Fatal("delete left reference rows", count, err)
 			}
 		})

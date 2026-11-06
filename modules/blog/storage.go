@@ -17,7 +17,9 @@ import (
 const blogVersionSchema = `CREATE TABLE blog_schema_version (version uint64, dirty bool)`
 
 //go:embed migrations/000001_blog.up.sql
-var blogSchemaV1 string
+var blogSchema string
+
+const requiredBlogSchemaVersion = 1
 
 // sqliteRepository stores blog content and the site profile.
 type sqliteRepository struct {
@@ -44,7 +46,7 @@ func openRepository(ctx context.Context, settings Settings, directory string) (*
 }
 
 // prepareBlogSchema bootstraps empty storage. Existing storage must already have
-// a clean, supported version. Upgrades and adoption are explicit offline actions.
+// the current schema. Upgrades run separately, never during startup.
 func prepareBlogSchema(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -56,7 +58,7 @@ func prepareBlogSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if count == 0 {
-		if _, err := tx.ExecContext(ctx, blogSchemaV1); err != nil {
+		if _, err := tx.ExecContext(ctx, blogSchema); err != nil {
 			return fmt.Errorf("create blog schema: %w", err)
 		}
 		if err := recordBlogVersion(ctx, tx); err != nil {
@@ -72,9 +74,9 @@ func prepareBlogSchema(ctx context.Context, db *sql.DB) error {
 	return tx.Commit()
 }
 
-// recordBlogVersion marks an already prepared or validated baseline atomically.
+// recordBlogVersion marks a newly created baseline in its setup transaction.
 func recordBlogVersion(ctx context.Context, tx *sql.Tx) error {
-	if _, err := tx.ExecContext(ctx, blogVersionSchema+`; INSERT INTO blog_schema_version VALUES (1, false)`); err != nil {
+	if _, err := tx.ExecContext(ctx, blogVersionSchema+`; INSERT INTO blog_schema_version VALUES (?, false)`, requiredBlogSchemaVersion); err != nil {
 		return fmt.Errorf("record blog schema version: %w", err)
 	}
 	return nil
@@ -87,7 +89,7 @@ func checkBlogVersion(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("unversioned blog database: stop the server, back up, then run blog-maintenance adopt-schema with the existing configuration")
+		return fmt.Errorf("unversioned blog database: initialize empty storage with the current migration or use a compatible database")
 	}
 	var count int
 	var version sql.NullInt64
@@ -101,8 +103,8 @@ func checkBlogVersion(ctx context.Context, tx *sql.Tx) error {
 	if dirty.Bool {
 		return fmt.Errorf("blog schema version %d is dirty: repair the failed migration or restore a compatible backup before starting", version.Int64)
 	}
-	if version.Int64 != 1 {
-		return fmt.Errorf("unsupported blog schema version %d: this application requires version 1; use compatible migrations or a compatible binary", version.Int64)
+	if version.Int64 != requiredBlogSchemaVersion {
+		return fmt.Errorf("unsupported blog schema version %d: this application requires version %d; apply compatible migrations before starting", version.Int64, requiredBlogSchemaVersion)
 	}
 	return nil
 }

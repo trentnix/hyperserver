@@ -309,7 +309,7 @@ func TestProfileApplicationIsolation(t *testing.T) {
 func TestFreshProfile(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.profileStore.(*sqliteRepository)
-	if _, err := store.db.ExecContext(t.Context(), "DELETE FROM blog_profile"); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), "DELETE FROM blog_current_profile"); err != nil {
 		t.Fatal(err)
 	}
 	cfg := *h.app.Config

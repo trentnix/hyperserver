@@ -11,27 +11,53 @@ import (
 func revisionTable(kind string) (string, string, error) {
 	switch kind {
 	case "post":
-		return "blog_posts", "blog_post_revisions", nil
+		return "blog_current_posts", "blog_posts", nil
 	case "page":
-		return "blog_pages", "blog_page_revisions", nil
+		return "blog_current_pages", "blog_pages", nil
 	default:
 		return "", "", errNotFound
 	}
 }
 
-// recordRevision appends content only when it differs from the latest snapshot.
-// It shares the content save transaction, including image-reference updates.
-func recordRevision(ctx context.Context, tx *sql.Tx, kind, id string) error {
+// saveContentVersion reuses unchanged writing or inserts a new immutable version
+// and its image references. The caller locks the current row before calling it.
+func saveContentVersion(ctx context.Context, tx *sql.Tx, kind, id string, content Revision, refs []string) (int64, error) {
 	owners, revisions, err := revisionTable(kind)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO "+revisions+` (owner_id, title, summary, markdown, preview_image, tags, recorded)
-SELECT id, title, summary, markdown, preview_image, tags, ? FROM `+owners+` o WHERE id=? AND NOT EXISTS (
- SELECT 1 FROM `+revisions+` r WHERE r.id=(SELECT MAX(id) FROM `+revisions+` WHERE owner_id=o.id)
- AND r.title=o.title AND r.summary=o.summary AND r.markdown=o.markdown AND r.preview_image=o.preview_image AND r.tags=o.tags
-)`, time.Now().UTC().UnixNano(), id)
-	return err
+	var slug string
+	if err := tx.QueryRowContext(ctx, "SELECT slug FROM "+owners+" WHERE id=?", id).Scan(&slug); err != nil {
+		return 0, err
+	}
+	path := "/post/s/" + slug
+	images := "blog_post_images"
+	if kind == "page" {
+		path = (Page{Slug: slug}).URL()
+		images = "blog_page_images"
+	}
+	// Relative links and images depend on the URL base as well as the writing.
+	// Both must match before reusing a version and its derived references.
+	var number int64
+	err = tx.QueryRowContext(ctx, "SELECT r.id FROM "+revisions+" r JOIN "+owners+` c ON c.version_id=r.id
+WHERE c.id=? AND r.title=? AND r.summary=? AND r.markdown=? AND r.preview_image=? AND r.tags=? AND r.content_path=?`,
+		id, content.Title, content.Summary, content.Markdown, content.PreviewImage, content.Tags, path).Scan(&number)
+	if err == nil {
+		return number, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	result, err := tx.ExecContext(ctx, "INSERT INTO "+revisions+` (owner_id,title,summary,markdown,preview_image,tags,recorded,content_path) VALUES(?,?,?,?,?,?,?,?)`,
+		id, content.Title, content.Summary, content.Markdown, content.PreviewImage, content.Tags, time.Now().UTC().UnixNano(), path)
+	if err != nil {
+		return 0, err
+	}
+	number, err = result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return number, insertImageReferences(ctx, tx, images, number, refs)
 }
 
 // editError distinguishes deleted content from a stale editor after a conditional update.
@@ -116,11 +142,11 @@ func (s *sqliteRepository) ListRevisions(ctx context.Context, kind, id string) (
 // The latest-version guard is part of the delete so concurrent saves and deletes
 // cannot remove the current snapshot.
 func (s *sqliteRepository) DeleteRevision(ctx context.Context, kind, id string, number int64) error {
-	_, table, err := revisionTable(kind)
+	owners, table, err := revisionTable(kind)
 	if err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, "DELETE FROM "+table+" WHERE owner_id=? AND id=? AND id < (SELECT MAX(id) FROM "+table+" WHERE owner_id=?)", id, number, id)
+	result, err := s.db.ExecContext(ctx, "DELETE FROM "+table+" WHERE owner_id=? AND id=? AND id <> (SELECT version_id FROM "+owners+" WHERE id=?)", id, number, id)
 	if err != nil {
 		return err
 	}
@@ -142,8 +168,8 @@ func (s *sqliteRepository) GetRevision(ctx context.Context, kind, id string, num
 	}
 	var r Revision
 	var recorded int64
-	err = s.db.QueryRowContext(ctx, "SELECT id, title, summary, markdown, preview_image, tags, recorded FROM "+table+" WHERE owner_id=? AND id=?", id, number).
-		Scan(&r.ID, &r.Title, &r.Summary, &r.Markdown, &r.PreviewImage, &r.Tags, &recorded)
+	err = s.db.QueryRowContext(ctx, "SELECT id, title, summary, markdown, preview_image, tags, recorded, content_path FROM "+table+" WHERE owner_id=? AND id=?", id, number).
+		Scan(&r.ID, &r.Title, &r.Summary, &r.Markdown, &r.PreviewImage, &r.Tags, &recorded, &r.ContentPath)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}

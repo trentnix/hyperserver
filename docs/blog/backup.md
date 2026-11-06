@@ -43,7 +43,6 @@ The lock is the persistent `.blog-maintenance.lock` file under `app.workingDirec
 | --- | --- |
 | `cmd/web` | Holds the lock from before application initialization until shutdown finishes. |
 | `blog-maintenance backup` | Holds the lock through snapshots, file copying, verification, and archive publication. |
-| `blog-maintenance adopt-schema` | Holds the lock while validating and adopting the existing schema. |
 | `optimize-images` | Holds the lock for the entire optimization run. |
 | `blog-maintenance verify` | Reads only the archive. No application lock is needed. |
 | `cmd/cleanup` | Does not acquire the blog lock. Can run alongside the server, but must be stopped before offline maintenance. |

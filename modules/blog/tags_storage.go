@@ -8,7 +8,7 @@ import (
 
 // ListTags returns unique labels from current posts and pages in alphabetical order.
 func (s *sqliteRepository) ListTags(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT tags FROM blog_posts WHERE tags<>'' UNION SELECT tags FROM blog_pages WHERE tags<>''")
+	rows, err := s.db.QueryContext(ctx, "SELECT tags FROM blog_post_current WHERE tags<>'' UNION SELECT tags FROM blog_page_current WHERE tags<>''")
 	if err != nil {
 		return nil, err
 	}

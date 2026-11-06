@@ -14,8 +14,8 @@ const pageColumns = "id, slug, title, markdown, published, COALESCE(parent_id, '
 
 // publishedPages includes only pages reachable through published ancestors.
 const publishedPages = `WITH RECURSIVE visible(id) AS (
- SELECT id FROM blog_pages WHERE parent_id IS NULL AND published=1
- UNION ALL SELECT p.id FROM blog_pages p JOIN visible v ON p.parent_id=v.id WHERE p.published=1
+ SELECT id FROM blog_page_current WHERE parent_id IS NULL AND published=1
+ UNION ALL SELECT p.id FROM blog_page_current p JOIN visible v ON p.parent_id=v.id WHERE p.published=1
 ) `
 
 // scanPage decodes pageColumns and maps absent records to errNotFound.
@@ -34,7 +34,7 @@ func scanPage(row interface{ Scan(...any) error }) (Page, error) {
 // Markdown bodies are omitted. includeDrafts allows administrator access.
 func (s *sqliteRepository) ListPages(ctx context.Context, includeDrafts bool) ([]Page, error) {
 	rows, err := s.db.QueryContext(ctx, publishedPages+`SELECT id, slug, title, '', published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published, version, ''
-FROM blog_pages WHERE ? OR id IN (SELECT id FROM visible)
+FROM blog_page_current WHERE ? OR id IN (SELECT id FROM visible)
 ORDER BY display_order IS NULL, display_order, updated DESC, id`, includeDrafts)
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func (s *sqliteRepository) SearchPages(ctx context.Context, query string) ([]Pag
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT id, slug, title, '', published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published, version, tags FROM blog_pages ORDER BY display_order IS NULL, display_order, updated DESC, id")
+	rows, err := tx.QueryContext(ctx, "SELECT id, slug, title, '', published, COALESCE(parent_id, ''), summary, preview_image, children_display, display_order, updated, ever_published, version, tags FROM blog_page_current ORDER BY display_order IS NULL, display_order, updated DESC, id")
 	if err != nil {
 		return nil, err
 	}
@@ -95,12 +95,12 @@ func (s *sqliteRepository) SearchPages(ctx context.Context, query string) ([]Pag
 
 // GetPageBySlug hides drafts and descendants of drafts from public readers.
 func (s *sqliteRepository) GetPageBySlug(ctx context.Context, slug string, includeDrafts bool) (Page, error) {
-	return scanPage(s.db.QueryRowContext(ctx, publishedPages+"SELECT "+pageColumns+" FROM blog_pages WHERE slug=? AND (? OR id IN (SELECT id FROM visible))", slug, includeDrafts))
+	return scanPage(s.db.QueryRowContext(ctx, publishedPages+"SELECT "+pageColumns+" FROM blog_page_current WHERE slug=? AND (? OR id IN (SELECT id FROM visible))", slug, includeDrafts))
 }
 
 // GetPageByID hides drafts and descendants of drafts from public readers.
 func (s *sqliteRepository) GetPageByID(ctx context.Context, id string, includeDrafts bool) (Page, error) {
-	return scanPage(s.db.QueryRowContext(ctx, publishedPages+"SELECT "+pageColumns+" FROM blog_pages WHERE id=? AND (? OR id IN (SELECT id FROM visible))", id, includeDrafts))
+	return scanPage(s.db.QueryRowContext(ctx, publishedPages+"SELECT "+pageColumns+" FROM blog_page_current WHERE id=? AND (? OR id IN (SELECT id FROM visible))", id, includeDrafts))
 }
 
 // SavePage creates a page when ID is empty, or updates an existing page atomically.
@@ -136,14 +136,15 @@ func (s *sqliteRepository) SavePage(ctx context.Context, p Page, refs []string) 
 		p.ID = rand.Text()
 		p.Version = 1
 		p.EverPublished = p.Published
-		_, err = tx.ExecContext(ctx, `INSERT INTO blog_pages
-(id, slug, title, markdown, published, parent_id, summary, preview_image, children_display, display_order, updated, ever_published, tags)
-VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.EverPublished, p.Tags)
+		_, err = tx.ExecContext(ctx, `INSERT INTO blog_current_pages
+(id, version_id, slug, published, parent_id, children_display, display_order, updated, ever_published)
+VALUES (?,0,?,?,NULLIF(?, ''),?,?,?,?)`, p.ID, p.Slug, p.Published, p.ParentID, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.EverPublished)
 	} else {
-		id := p.ID
-		p, err = scanPage(tx.QueryRowContext(ctx, "UPDATE blog_pages SET slug=?, title=?, markdown=?, published=?, parent_id=NULLIF(?, ''), summary=?, preview_image=?, tags=?, children_display=?, display_order=?, updated=?, ever_published=(ever_published OR ?), version=version+1 WHERE id=? AND version=? RETURNING "+pageColumns,
-			p.Slug, p.Title, p.Markdown, p.Published, p.ParentID, p.Summary, p.PreviewImage, p.Tags, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.Published, p.ID, p.Version))
-		err = editError(ctx, tx, "page", id, err)
+		err = tx.QueryRowContext(ctx, `UPDATE blog_current_pages SET slug=?,published=?,parent_id=NULLIF(?, ''),children_display=?,display_order=?,updated=?,ever_published=(ever_published OR ?),version=version+1
+WHERE id=? AND version=? RETURNING ever_published,version`, p.Slug, p.Published, p.ParentID, p.ChildrenDisplay, p.DisplayOrder, p.Updated.UnixNano(), p.Published, p.ID, p.Version).Scan(&p.EverPublished, &p.Version)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = editError(ctx, tx, "page", p.ID, errNotFound)
+		}
 	}
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -153,10 +154,11 @@ VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Tit
 		err = errPageParent
 	}
 	if err == nil {
-		err = replaceImageReferences(ctx, tx, "blog_page_images", p.ID, refs)
-	}
-	if err == nil {
-		err = recordRevision(ctx, tx, "page", p.ID)
+		var number int64
+		number, err = saveContentVersion(ctx, tx, "page", p.ID, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags}, refs)
+		if err == nil {
+			_, err = tx.ExecContext(ctx, "UPDATE blog_current_pages SET version_id=? WHERE id=?", number, p.ID)
+		}
 	}
 	if err == nil {
 		err = tx.Commit()
@@ -166,7 +168,7 @@ VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?)`, p.ID, p.Slug, p.Tit
 
 // DeletePage removes a page without deleting images shared by other content.
 func (s *sqliteRepository) DeletePage(ctx context.Context, id string) error {
-	result, err := s.db.ExecContext(ctx, "DELETE FROM blog_pages WHERE id=?", id)
+	result, err := s.db.ExecContext(ctx, "DELETE FROM blog_current_pages WHERE id=?", id)
 	var constraint sqlite3.Error
 	if errors.As(err, &constraint) && constraint.Code == sqlite3.ErrConstraint {
 		return errPageHasChildren

@@ -20,10 +20,10 @@ func (s *sqliteRepository) SearchPublic(ctx context.Context, query string) (sear
 	defer tx.Rollback()
 	rows, err := tx.QueryContext(ctx, publishedPages+`
 SELECT 'post' AS kind, slug, title, tags, summary, published AS sort_time, id, version
-FROM blog_posts WHERE draft=0 AND published<=?
+FROM blog_post_current WHERE draft=0 AND published<=?
 UNION ALL
 SELECT 'page', slug, title, tags, summary, updated / 1000000000, id, version
-FROM blog_pages WHERE id IN (SELECT id FROM visible)
+FROM blog_page_current WHERE id IN (SELECT id FROM visible)
 ORDER BY sort_time DESC, kind, id`, s.now().Unix())
 	if err != nil {
 		return searchResults{}, err

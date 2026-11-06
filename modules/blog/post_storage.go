@@ -28,12 +28,12 @@ func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 
 // List returns complete posts newest first, using insertion order to break ties.
 func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
-	return s.listPosts(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC", s.now().Unix())
+	return s.listPosts(ctx, "SELECT "+postColumns+" FROM blog_post_current WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC", s.now().Unix())
 }
 
 // ListMetadata returns drafts newest-created first, then posts newest-published first.
 func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
-	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '', version, '' FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '', version, '' FROM blog_post_current ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
 }
 
 // SearchPosts scans current content with Unicode case folding. Only matching
@@ -44,7 +44,7 @@ func (s *sqliteRepository) SearchPosts(ctx context.Context, query string) ([]Pos
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT id, slug, title, summary, '', published, draft, '', version, tags FROM blog_posts ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	rows, err := tx.QueryContext(ctx, "SELECT id, slug, title, summary, '', published, draft, '', version, tags FROM blog_post_current ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -98,13 +98,13 @@ func (s *sqliteRepository) listPosts(ctx context.Context, query string, args ...
 
 // Latest fetches only the newest post, or returns errNotFound for an empty blog.
 func (s *sqliteRepository) Latest(ctx context.Context) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC LIMIT 1", s.now().Unix()))
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_post_current WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC LIMIT 1", s.now().Unix()))
 }
 
 // NextPublication bounds the lifetime of public caches without a background timer.
 func (s *sqliteRepository) NextPublication(ctx context.Context) (time.Time, error) {
 	var next sql.NullInt64
-	err := s.db.QueryRowContext(ctx, "SELECT MIN(published) FROM blog_posts WHERE draft=0 AND published>?", s.now().Unix()).Scan(&next)
+	err := s.db.QueryRowContext(ctx, "SELECT MIN(published) FROM blog_post_current WHERE draft=0 AND published>?", s.now().Unix()).Scan(&next)
 	if err != nil || !next.Valid {
 		return time.Time{}, err
 	}
@@ -134,7 +134,7 @@ func (s *sqliteRepository) ListRecent(ctx context.Context, limit int) ([]Archive
 
 // listArchive reads link metadata. A zero limit selects the complete archive.
 func (s *sqliteRepository) listArchive(ctx context.Context, limit, offset int) ([]ArchiveEntry, error) {
-	query := "SELECT slug, title, published FROM blog_posts WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC"
+	query := "SELECT slug, title, published FROM blog_post_current WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC"
 	args := []any{s.now().Unix()}
 	if limit > 0 {
 		query += " LIMIT ? OFFSET ?"
@@ -160,12 +160,12 @@ func (s *sqliteRepository) listArchive(ctx context.Context, limit, offset int) (
 
 // GetByID hides drafts and scheduled posts unless includeDrafts is true.
 func (s *sqliteRepository) GetByID(ctx context.Context, id string, includeDrafts bool) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE id=? AND (? OR (draft=0 AND published<=?))", id, includeDrafts, s.now().Unix()))
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_post_current WHERE id=? AND (? OR (draft=0 AND published<=?))", id, includeDrafts, s.now().Unix()))
 }
 
 // GetBySlug hides drafts and scheduled posts unless includeDrafts is true.
 func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDrafts bool) (Post, error) {
-	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_posts WHERE slug=? AND (? OR (draft=0 AND published<=?))", slug, includeDrafts, s.now().Unix()))
+	return scanPost(s.db.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_post_current WHERE slug=? AND (? OR (draft=0 AND published<=?))", slug, includeDrafts, s.now().Unix()))
 }
 
 // Save atomically writes content and publication state, generating IDs for new posts.
@@ -218,14 +218,19 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 			published = p.Published.Unix()
 		}
 		p.Version = 1
-		_, err = tx.ExecContext(ctx, "INSERT INTO blog_posts ("+postColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", p.ID, p.Slug, p.Title, p.Summary, p.Markdown, published, p.Draft, p.PreviewImage, p.Version, p.Tags)
+		_, err = tx.ExecContext(ctx, "INSERT INTO blog_current_posts (id,version_id,slug,published,draft,version) VALUES (?,0,?,?,?,?)", p.ID, p.Slug, published, p.Draft, p.Version)
 	} else {
-		// RETURNING avoids a second lookup racing with another edit or deletion.
-		id := p.ID
-		p, err = scanPost(tx.QueryRowContext(ctx, `UPDATE blog_posts SET slug=?, title=?, summary=?, markdown=?, draft=?, preview_image=?, tags=?, version=version+1,
- published=CASE WHEN published>0 AND published<=? THEN published ELSE ? END WHERE id=? AND version=? RETURNING `+postColumns,
-			p.Slug, p.Title, p.Summary, p.Markdown, p.Draft, p.PreviewImage, p.Tags, now.Unix(), publication, p.ID, p.Version))
-		err = editError(ctx, tx, "post", id, err)
+		var published int64
+		err = tx.QueryRowContext(ctx, `UPDATE blog_current_posts SET slug=?, draft=?, version=version+1,
+ published=CASE WHEN published>0 AND published<=? THEN published ELSE ? END WHERE id=? AND version=? RETURNING published,version`,
+			p.Slug, p.Draft, now.Unix(), publication, p.ID, p.Version).Scan(&published, &p.Version)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = editError(ctx, tx, "post", p.ID, errNotFound)
+		}
+		p.Published = time.Time{}
+		if published != 0 {
+			p.Published = time.Unix(published, 0).UTC()
+		}
 		if err == nil && publication > now.Unix() && p.WasPublished(now) {
 			return p, errAlreadyPublished
 		}
@@ -235,10 +240,11 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 		err = errSlugTaken
 	}
 	if err == nil {
-		err = replaceImageReferences(ctx, tx, "blog_post_images", p.ID, refs)
-	}
-	if err == nil {
-		err = recordRevision(ctx, tx, "post", p.ID)
+		var number int64
+		number, err = saveContentVersion(ctx, tx, "post", p.ID, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags}, refs)
+		if err == nil {
+			_, err = tx.ExecContext(ctx, "UPDATE blog_current_posts SET version_id=? WHERE id=?", number, p.ID)
+		}
 	}
 	if err == nil {
 		err = tx.Commit()
@@ -249,7 +255,7 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 // Delete removes one post or returns errNotFound. Images are retained because
 // other posts can reference them.
 func (s *sqliteRepository) Delete(ctx context.Context, id string) error {
-	result, err := s.db.ExecContext(ctx, "DELETE FROM blog_posts WHERE id=?", id)
+	result, err := s.db.ExecContext(ctx, "DELETE FROM blog_current_posts WHERE id=?", id)
 	if err != nil {
 		return err
 	}

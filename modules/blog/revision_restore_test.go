@@ -61,6 +61,10 @@ func TestRestoreRevisionHTTP(t *testing.T) {
 					}
 					token = beforePage.Version
 				}
+				beforeRestore, err := store.ListRevisions(t.Context(), kind, id)
+				if err != nil || len(beforeRestore) != len(versions)+1 {
+					t.Fatal("URL change must preserve a separate rendering base", beforeRestore, err)
+				}
 				values := url.Values{"version": {strconv.FormatInt(token, 10)}, "title": {"Injected"}, "slug": {"injected"}, "published": {"on"}}
 				requireStatus(t, h.request("GET", path, nil, hx), http.StatusNotFound)
 				for _, invalid := range []string{"", "0", "invalid"} {
@@ -103,7 +107,7 @@ func TestRestoreRevisionHTTP(t *testing.T) {
 					}
 				}
 				list, err := store.ListRevisions(t.Context(), kind, id)
-				if err != nil || len(list) != 5 || list[0].Title != "Second" {
+				if err != nil || len(list) != len(beforeRestore)+1 || list[0].Title != "Second" || !reflect.DeepEqual(list[1:], beforeRestore) {
 					t.Fatal(list, err)
 				}
 				values.Set("version", strconv.FormatInt(token+1, 10))

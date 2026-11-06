@@ -271,9 +271,9 @@ func TestPublicSearchBoundedOrderingMatchesSQL(t *testing.T) {
 		fields[i%4] = fmt.Sprintf("Needle %d %s", i%4, id)
 		seconds := int64(10000 + i%7)
 		if i/4%2 == 0 {
-			_, err = tx.ExecContext(t.Context(), `INSERT INTO blog_posts(id,slug,title,tags,summary,markdown,published) VALUES(?,?,?,?,?,?,?)`, id, id, fields[0], fields[1], fields[2], fields[3], seconds)
+			err = seedCurrentPost(t.Context(), tx, Post{ID: id, Slug: id, Title: fields[0], Tags: fields[1], Summary: fields[2], Markdown: fields[3], Published: time.Unix(seconds, 0)})
 		} else {
-			_, err = tx.ExecContext(t.Context(), `INSERT INTO blog_pages(id,slug,title,tags,summary,markdown,published,preview_image,children_display,updated) VALUES(?,?,?,?,?,?,1,'','hidden',?)`, id, id, fields[0], fields[1], fields[2], fields[3], seconds*1e9+int64(i))
+			err = seedCurrentPage(t.Context(), tx, Page{ID: id, Slug: id, Title: fields[0], Tags: fields[1], Summary: fields[2], Markdown: fields[3], Published: true, Updated: time.Unix(0, seconds*1e9+int64(i))})
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -286,10 +286,10 @@ func TestPublicSearchBoundedOrderingMatchesSQL(t *testing.T) {
 	// more than 50 matches in each rank, with timestamp, kind, and ID ties.
 	rows, err := store.db.QueryContext(t.Context(), publishedPages+`
 SELECT 'post' AS kind, slug, title, tags, summary, markdown, published AS sort_time, id
-FROM blog_posts WHERE draft=0 AND published<=?
+FROM blog_post_current WHERE draft=0 AND published<=?
 UNION ALL
 SELECT 'page', slug, title, tags, summary, markdown, updated / 1000000000, id
-FROM blog_pages WHERE id IN (SELECT id FROM visible)
+FROM blog_page_current WHERE id IN (SELECT id FROM visible)
 ORDER BY sort_time DESC, kind, id`, store.now().Unix())
 	if err != nil {
 		t.Fatal(err)

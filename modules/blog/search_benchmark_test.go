@@ -149,17 +149,7 @@ func searchBenchmarkStore(b *testing.B, posts int) *sqliteRepository {
 		b.Fatal(err)
 	}
 	defer tx.Rollback()
-	post, err := tx.PrepareContext(b.Context(), `INSERT INTO blog_posts(id,slug,title,summary,markdown,published,draft,tags) VALUES(?,?,?,?,?,?,?,?)`)
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer post.Close()
-	page, err := tx.PrepareContext(b.Context(), `INSERT INTO blog_pages(id,slug,title,summary,markdown,published,parent_id,preview_image,children_display,updated,tags) VALUES(?,?,?,?,?,?,?,'','hidden',?,?)`)
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer page.Close()
-	revision, err := tx.PrepareContext(b.Context(), `INSERT INTO blog_post_revisions(owner_id,title,summary,markdown,preview_image,recorded) VALUES(?,?,?,?,'',?)`)
+	revision, err := tx.PrepareContext(b.Context(), `INSERT INTO blog_posts(owner_id,title,summary,markdown,preview_image,recorded,content_path) VALUES(?,?,?,?,'',?,'/post/s/fixture')`)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -176,7 +166,7 @@ func searchBenchmarkStore(b *testing.B, posts int) *sqliteRepository {
 		if i%20 == 2 {
 			published = now.Add(time.Hour)
 		}
-		if _, err := post.ExecContext(b.Context(), id, id, title, summary, body, published.Unix(), i%10 == 0, "journal, software"); err != nil {
+		if err := seedCurrentPost(b.Context(), tx, Post{ID: id, Slug: id, Title: title, Summary: summary, Markdown: body, Published: published, Draft: i%10 == 0, Tags: "journal, software"}); err != nil {
 			b.Fatal(err)
 		}
 		for version := range 2 {
@@ -186,11 +176,11 @@ func searchBenchmarkStore(b *testing.B, posts int) *sqliteRepository {
 		}
 		if i < posts/10 {
 			pageID := fmt.Sprintf("page-%06d", i)
-			var parent any
+			var parent string
 			if i%5 != 0 {
 				parent = fmt.Sprintf("page-%06d", i-i%5)
 			}
-			if _, err := page.ExecContext(b.Context(), pageID, pageID, title, summary, body, i%10 != 0, parent, now.UnixNano(), "journal, software"); err != nil {
+			if err := seedCurrentPage(b.Context(), tx, Page{ID: pageID, Slug: pageID, Title: title, Summary: summary, Markdown: body, Published: i%10 != 0, ParentID: parent, Updated: now, Tags: "journal, software"}); err != nil {
 				b.Fatal(err)
 			}
 		}

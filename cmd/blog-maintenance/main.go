@@ -1,4 +1,4 @@
-// Command blog-maintenance creates and verifies archives and adopts blog schemas offline.
+// Command blog-maintenance creates and verifies archives offline.
 package main
 
 import (
@@ -11,7 +11,6 @@ import (
 
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/internal/backup"
-	"github.com/trentnix/hyperserver/modules/blog"
 )
 
 func main() {
@@ -23,22 +22,13 @@ func main() {
 	}
 }
 
-// run loads live configuration for backup and adoption. Verification uses only the archive.
+// run loads live configuration for backup. Verification uses only the archive.
 func run(ctx context.Context, args []string) error {
-	const usage = "usage: blog-maintenance backup ARCHIVE | verify ARCHIVE | adopt-schema"
+	const usage = "usage: blog-maintenance backup ARCHIVE | verify ARCHIVE"
 	if len(args) == 0 {
 		return errors.New(usage)
 	}
 	switch {
-	case args[0] == "adopt-schema" && len(args) == 1:
-		cfg, err := config.GetConfig()
-		if err != nil {
-			return err
-		}
-		if err := blog.AdoptSchema(ctx, cfg.App.WorkingDirectory); err != nil {
-			return err
-		}
-		fmt.Println("Blog schema version 1 verified. Content and images are unchanged.")
 	case args[0] == "backup" && len(args) == 2:
 		cfg, err := config.GetConfig()
 		if err != nil {

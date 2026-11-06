@@ -588,7 +588,7 @@ func TestPostPublicationDateAndEdits(t *testing.T) {
 		t.Fatal(err)
 	}
 	firstPublished := time.Unix(1700000000, 0).UTC()
-	if _, err := store.db.ExecContext(t.Context(), "UPDATE blog_posts SET draft=0, published=? WHERE id=?", firstPublished.Unix(), post.ID); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), "UPDATE blog_current_posts SET draft=0, published=? WHERE id=?", firstPublished.Unix(), post.ID); err != nil {
 		t.Fatal(err)
 	}
 	for _, published := range []bool{true, false, false, true} {

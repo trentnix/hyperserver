@@ -33,7 +33,7 @@ func blogMigrationCommand(t *testing.T, filename, directory string) func(...stri
 }
 
 func TestBlogMigrationCompatibility(t *testing.T) {
-	for _, source := range []string{"startup", "cli", "adoption"} {
+	for _, source := range []string{"startup", "cli"} {
 		t.Run(source, func(t *testing.T) {
 			db, filename := schemaTestDB(t)
 			run := blogMigrationCommand(t, filename, "migrations")
@@ -45,13 +45,7 @@ func TestBlogMigrationCompatibility(t *testing.T) {
 				if err := prepareBlogSchema(t.Context(), db); err != nil {
 					t.Fatal(err)
 				}
-			case "adoption":
-				if _, err := db.Exec(unversionedBlogSchema); err != nil {
-					t.Fatal(err)
-				}
-				if err := adoptBlogSchema(t.Context(), db); err != nil {
-					t.Fatal(err)
-				}
+
 			}
 			for range 2 {
 				if output, err := run("up"); err != nil {
@@ -62,8 +56,17 @@ func TestBlogMigrationCompatibility(t *testing.T) {
 				}
 			}
 			// Exercise the self-referencing page table during the destructive down.
-			if _, err := db.Exec(`INSERT INTO blog_pages(id,slug,title,markdown,published,parent_id,summary,preview_image,children_display,updated)
-VALUES('parent','parent','Parent','',1,NULL,'','','hidden',1),('child','child','Child','',1,'parent','','','hidden',1)`); err != nil {
+			tx, err := db.BeginTx(t.Context(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			for _, p := range []Page{{ID: "parent", Slug: "parent", Title: "Parent"}, {ID: "child", Slug: "child", Title: "Child", ParentID: "parent"}} {
+				if err := seedCurrentPage(t.Context(), tx, p); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := tx.Commit(); err != nil {
 				t.Fatal(err)
 			}
 			before := schemaSnapshot(t, db)
@@ -144,7 +147,7 @@ func TestBlogMigrationFailureAndFutureVersion(t *testing.T) {
 }
 
 // TestBlogMigrationPopulatedRoundTrip exercises reversible schema changes on
-// populated storage. Version 1's destructive down is tested separately.
+// populated storage. The baseline's destructive down is tested separately.
 func TestBlogMigrationPopulatedRoundTrip(t *testing.T) {
 	for _, scenario := range []struct {
 		name     string
@@ -203,7 +206,7 @@ CREATE INDEX blog_pages_test_title ON blog_pages(title);`
 				// Fail after changing rows, cascading child deletion, and dropping
 				// indexes. All those changes must roll back, not just the last statement.
 				failure := `UPDATE blog_posts SET title='Must roll back';
-DELETE FROM blog_pages WHERE id='child';
+DELETE FROM blog_current_pages WHERE id='child';
 UPDATE blog_profile SET bio='Must roll back';
 DELETE FROM blog_media;` + down + ` INSERT INTO missing_table VALUES(1);`
 				if err := os.WriteFile(downFile, []byte(failure), 0600); err != nil {
@@ -255,7 +258,45 @@ DELETE FROM blog_media;` + down + ` INSERT INTO missing_table VALUES(1);`
 	}
 }
 
-// blogMigrationDirectory copies the released SQL so tests can add synthetic
+// SQLite can rewrite DDL formatting during migrations without changing its
+// meaning. A clean rollback must be accepted without rewriting the database.
+func TestBlogMigrationColumnRoundTrip(t *testing.T) {
+	db, filename := schemaTestDB(t)
+	directory := blogMigrationDirectory(t)
+	run := blogMigrationCommand(t, filename, directory)
+	if output, err := run("up"); err != nil {
+		t.Fatal(output, err)
+	}
+	if _, err := db.Exec(`INSERT INTO blog_media(id,filename,label,version,tags) VALUES('image','image.png','Example',1,'kept')`); err != nil {
+		t.Fatal(err)
+	}
+	before := blogMigrationSnapshot(t, db, "schema")
+	// Recreate a column while preserving its data. Both directions deliberately
+	// use ALTER TABLE rather than copying the bootstrap's CREATE TABLE text.
+	change := `ALTER TABLE blog_media RENAME COLUMN tags TO previous_tags;
+ALTER TABLE blog_media ADD COLUMN tags TEXT NOT NULL DEFAULT '';
+UPDATE blog_media SET tags=previous_tags;
+ALTER TABLE blog_media DROP COLUMN previous_tags;`
+	for _, name := range []string{"000002_column.up.sql", "000002_column.down.sql"} {
+		if err := os.WriteFile(filepath.Join(directory, name), []byte(change), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if output, err := run("up"); err != nil {
+		t.Fatal(output, err)
+	}
+	if output, err := run("down", "1"); err != nil {
+		t.Fatal(output, err)
+	}
+	if blogMigrationSnapshot(t, db, "schema") != before {
+		t.Fatal("column round trip changed content")
+	}
+	if err := prepareBlogSchema(t.Context(), db); err != nil {
+		t.Fatal("startup rejected the restored schema", err)
+	}
+}
+
+// blogMigrationDirectory copies the baseline SQL so tests can add synthetic
 // migrations without changing the application's migration history.
 func blogMigrationDirectory(t *testing.T) string {
 	t.Helper()
