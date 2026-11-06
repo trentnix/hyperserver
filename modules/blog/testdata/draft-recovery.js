@@ -170,11 +170,16 @@
       assert(form.elements.title.value === '', 'Recovery must not silently overwrite editor fields.');
       assert(!form.querySelector('[data-draft-recovery]').hidden, 'Reload did not offer recovery.');
       assert(copies(form).length === 1, 'Expired or malformed copies remain available.');
+      // Recovery must use the editor boundary, not the vendor's DOM back-reference.
+      const wrapper = form.querySelector('.CodeMirror');
+      const editor = wrapper.CodeMirror;
+      delete wrapper.CodeMirror;
       form.querySelector('[data-draft-restore]').click();
       await Promise.resolve();
       assert(form.elements.title.value === 'Recovered post' && form.elements.summary.value === 'Recovered summary', 'Restoring lost title or summary, or used another account\'s copy.');
       assert(form.elements.slug.placeholder === 'recovered-post', 'Restoring a title did not refresh the slug suggestion.');
-      assert(form.querySelector('.CodeMirror').CodeMirror.getValue() === 'Unsaved **writing**.', 'Restoring did not update EasyMDE.');
+      assert(editor.getValue() === 'Unsaved **writing**.', 'Restoring did not update the visible editor.');
+      wrapper.CodeMirror = editor;
       assert(form.elements.published.value === '', 'Older recovery changed the current publication setting.');
       assert(form.elements.previewImage.value === '', 'Older recovery changed the current preview selection.');
       change(form, 'slug', 'recovered-post');

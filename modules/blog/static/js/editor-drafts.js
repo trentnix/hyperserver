@@ -1,3 +1,5 @@
+import {getMarkdownEditor} from './markdown-editor.js';
+
 // Recovery copies belong to this browser, not the published content. Each editor
 // instance owns a key so separate tabs never overwrite one another's writing.
 (() => {
@@ -8,7 +10,7 @@
 
   function snapshot(state) {
     return Object.fromEntries(state.fields.filter(field => field.type !== 'radio' || field.checked)
-      .map(field => [field.name, field.type === 'checkbox' ? field.checked : field.value]));
+      .map(field => [field.name, field.type === 'checkbox' ? field.checked : getMarkdownEditor(field)?.getMarkdown() ?? field.value]));
   }
   const encoded = state => JSON.stringify(snapshot(state));
   const dirty = state => encoded(state) !== state.baseline;
@@ -147,8 +149,7 @@
           else if (field.type === 'radio') field.checked = field.value === copy.data.fields[field.name];
           else field.value = copy.data.fields[field.name];
         }
-        const editor = form.querySelector('.CodeMirror')?.CodeMirror;
-        if (editor) editor.setValue(form.elements.content.value);
+        getMarkdownEditor(form.elements.content)?.setMarkdown(form.elements.content.value);
         form.querySelectorAll('[data-image-value]').forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));
         state.sources.push(copy);
         form.dispatchEvent(new Event('input', {bubbles: true}));

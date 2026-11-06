@@ -1,18 +1,8 @@
 import {openMediaLibrary, uploadImage, showUploadFailure, setMediaStatus} from './media.js';
 import {markField} from './forms.js';
+import {createMarkdownEditor, getMarkdownEditor} from './markdown-editor.js';
 
-const editors = new WeakMap();
-
-// Mirror validation onto the rich editor's actual keyboard input.
-function syncMarkdownErrors(textarea) {
-  const input = editors.get(textarea)?.editor.codemirror.getInputField();
-  if (!input) return;
-  for (const attribute of ['aria-invalid', 'aria-describedby']) {
-    if (textarea.hasAttribute(attribute)) input.setAttribute(attribute, textarea.getAttribute(attribute));
-    else input.removeAttribute(attribute);
-  }
-}
-document.addEventListener('blog:field-validation', event => syncMarkdownErrors(event.target));
+document.addEventListener('blog:field-validation', event => getMarkdownEditor(event.target)?.syncValidation());
 
 // Native suggestions replace the last comma-separated tag, keeping earlier tags.
 // Without JavaScript, the same field still accepts ordinary comma-separated input.
@@ -97,23 +87,10 @@ function initialize(root) {
   root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
   root.querySelectorAll('input[name="tags"]').forEach(updateTagSuggestions);
   const textarea = root.querySelector('#post-content');
-  if (textarea && window.EasyMDE && !editors.has(textarea)) {
-    // EasyMDE replaces native textarea validation. The server remains authoritative.
-    const required = textarea.required;
-    textarea.required = false;
+  if (textarea && !getMarkdownEditor(textarea)) {
     let previewRequest;
-    const editor = new EasyMDE({
-      element: textarea,
-      autoDownloadFontAwesome: false,
-      spellChecker: false,
-      forceSync: true,
-      status: false,
-      uploadImage: true,
-      imageUploadEndpoint: '/post/images/upload',
-      imageUploadFunction(file, onSuccess) {
-        const status = document.createElement('p');
-        status.setAttribute('role', 'status');
-        editor.codemirror.getWrapperElement().after(status);
+    createMarkdownEditor(textarea, {
+      upload(file, onSuccess, status) {
         const attempt = async () => {
           if (!textarea.isConnected) return;
           setMediaStatus(status, 'Uploading ' + file.name + '…');
@@ -123,56 +100,30 @@ function initialize(root) {
             onSuccess(path);
             status.remove();
           } catch (error) {
-            showUploadFailure(status, error, attempt);
+            if (textarea.isConnected) showUploadFailure(status, error, attempt);
           }
         };
         attempt();
       },
-      imagePathAbsolute: true,
-      imageMaxSize: 8 * 1024 * 1024,
-      imageAccept: 'image/png,image/jpeg,image/gif',
-      toolbar: [
-        {name: 'bold', action: EasyMDE.toggleBold, className: 'tool-bold', title: 'Bold'},
-        {name: 'italic', action: EasyMDE.toggleItalic, className: 'tool-italic', title: 'Italic'},
-        {name: 'heading', action: EasyMDE.toggleHeadingSmaller, className: 'tool-heading', title: 'Heading'},
-        '|',
-        {name: 'quote', action: EasyMDE.toggleBlockquote, className: 'tool-quote', title: 'Quote'},
-        {name: 'unordered-list', action: EasyMDE.toggleUnorderedList, className: 'tool-list', title: 'List'},
-        {name: 'link', action: EasyMDE.drawLink, className: 'tool-link', title: 'Link'},
-        {name: 'upload-image', action: EasyMDE.drawUploadedImage, className: 'tool-image', title: 'Upload image'},
-        {name: 'media-library', action: () => openMediaLibrary(path => {
-          if (textarea.isConnected) editor.codemirror.replaceSelection(`![](${path})`);
-        }), className: 'tool-library', title: 'Choose existing image'},
-        '|',
-        {name: 'preview', action: EasyMDE.togglePreview, className: 'tool-preview', title: 'Preview'}
-      ].filter(item => textarea.form.dataset.mediaLibrary !== 'false' || item.name !== 'media-library'),
-      previewRender(markdown, preview) {
+      chooseImage: openMediaLibrary,
+      preview(markdown, preview) {
         previewRequest?.abort();
         previewRequest = new AbortController();
+        const request = previewRequest;
         fetch('/post/preview', {
-          method: 'POST', body: new URLSearchParams({content: markdown}), signal: previewRequest.signal
+          method: 'POST', body: new URLSearchParams({content: markdown}), signal: request.signal
         }).then(async response => {
           const html = await response.text();
           if (!response.ok) throw new Error('Unable to preview this content.');
           // The server uses the same safe Markdown renderer as published posts.
-          preview.innerHTML = html;
+          if (!request.signal.aborted && textarea.isConnected) preview.innerHTML = html;
         }).catch(error => {
-          if (error.name !== 'AbortError') preview.textContent = 'Unable to preview this content.';
+          if (!request.signal.aborted && textarea.isConnected && error.name !== 'AbortError') preview.textContent = 'Unable to preview this content.';
         });
         return 'Loading preview…';
-      }
+      },
+      onDestroy: () => previewRequest?.abort()
     });
-    // Preserve the textarea's label/help and let Tab leave the rich editor.
-    const input = editor.codemirror.getInputField();
-    input.id = 'markdown-input';
-    input.setAttribute('aria-labelledby', 'markdown-label');
-    input.setAttribute('aria-describedby', textarea.getAttribute('aria-describedby'));
-    if (required) input.setAttribute('aria-required', 'true');
-    root.querySelector('#markdown-label').htmlFor = input.id;
-    editor.codemirror.setOption('extraKeys', {...editor.codemirror.getOption('extraKeys'), Tab: false, 'Shift-Tab': false});
-    editors.set(textarea, {editor, cancelPreview: () => previewRequest?.abort()});
-    syncMarkdownErrors(textarea);
-    editor.codemirror.on('change', () => textarea.dispatchEvent(new Event('input', {bubbles: true})));
   }
 }
 
@@ -200,13 +151,7 @@ document.addEventListener('submit', event => {
 }, true);
 document.addEventListener('htmx:before:cleanup', event => {
   const textarea = event.target.querySelector('#post-content');
-  const state = editors.get(textarea);
-  if (state) {
-    state.cancelPreview();
-    state.editor.cleanup();
-    state.editor.toTextArea();
-    editors.delete(textarea);
-  }
+  getMarkdownEditor(textarea)?.destroy();
 });
 
 document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));

@@ -1,4 +1,5 @@
 import './editor.js';
+import './editor-drafts.js';
 
 // Browser Back can restore a whole document without contacting the server.
 // HTMX history already fetches fresh content. Refresh native restored lists too.

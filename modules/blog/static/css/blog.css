@@ -616,9 +616,9 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .editor-toolbar .tool-heading::before { content: 'H'; }
 .editor-toolbar .tool-quote::before { content: '❞'; }
 .editor-toolbar .tool-list::before { content: '≡'; }
-.editor-toolbar .tool-link::before { content: '↗'; }
 /* Lucide SVGs, unchanged from https://github.com/lucide-icons/lucide/tree/5aae256c6479aef74c609b536d10675c97c714e3/icons. License accompanies the files. */
-.editor-toolbar :is(.tool-image, .tool-library)::before { content: ''; display: inline-block; width: 16px; height: 16px; vertical-align: middle; transform: translateY(-1px); background-color: currentColor; mask: var(--tool-icon) center / contain no-repeat; }
+.editor-toolbar :is(.tool-link, .tool-image, .tool-library)::before { content: ''; display: inline-block; width: 16px; height: 16px; vertical-align: middle; transform: translateY(-1px); background-color: currentColor; mask: var(--tool-icon) center / contain no-repeat; }
+.editor-toolbar .tool-link { --tool-icon: url('../lib/lucide/link.svg'); }
 .editor-toolbar .tool-image { --tool-icon: url('../lib/lucide/image-up.svg'); }
 .editor-toolbar .tool-library { --tool-icon: url('../lib/lucide/images.svg'); }
 .editor-toolbar .tool-preview::before { content: '◉'; }
