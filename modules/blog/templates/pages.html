@@ -4,7 +4,7 @@
 {{ if not .Data.Published }}<p class="page-status">Draft — visible only to you</p>{{ end }}
 <h1>{{ .Data.Title }}</h1>
 {{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Page actions">
-  <a class="action-edit" href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">Edit</a>
+  <a class="action-edit" href="{{ .Data.EditURL }}" hx-get="{{ .Data.EditURL }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">Edit</a>
   <details class="action-menu"><summary>More</summary><div class="action-menu-items">
     <a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">New subpage</a>
     {{ if .Data.HasHistory }}<a href="/history/page/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}

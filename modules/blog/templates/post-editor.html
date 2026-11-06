@@ -2,6 +2,7 @@
 <section class="info-page editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
 <form id="post-form" data-media-library="{{ if .Data.NoLibrary }}false{{ else }}true{{ end }}" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   <input type="hidden" name="version" value="{{ .Data.Version }}">
+  <input type="hidden" name="returnTo" value="{{ .Data.ReturnURL }}">
   {{ template "blog.revisionNotice" . }}
   {{ template "blog.draftRecovery" . }}
   <label for="post-title">Title</label><input id="post-title" name="title" value="{{ .Data.Title }}" maxlength="240" required>
@@ -86,7 +87,7 @@
   </div>{{ end }}
   <p class="form-hint">Changes take effect when you save.</p>
   <div id="editor-errors" class="form-error" role="alert">{{ if .Data.Error }}{{ template "blog.formError" . }}{{ end }}</div>
-  <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/post/manage{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top showTarget:window"{{ end }}>Cancel</a></div>
+  <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}{{ .Data.ReturnURL }}{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top showTarget:window"{{ end }}>Cancel</a></div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
   </div>
 </form></section>

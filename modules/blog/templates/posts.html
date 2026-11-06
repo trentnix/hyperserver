@@ -5,7 +5,7 @@
     <input type="hidden" name="version" value="{{ .Data.Version }}">
     <button type="submit" class="text-button action-publish">Publish</button>
   </form>{{ end }}
-  <a class="action-edit{{ if .Data.Draft }} button-secondary{{ end }}" href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">Edit</a>
+  <a class="action-edit{{ if .Data.Draft }} button-secondary{{ end }}" href="{{ .Data.EditURL }}" hx-get="{{ .Data.EditURL }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">Edit</a>
   <details class="action-menu"><summary>More</summary><div class="action-menu-items">
     {{ if .Data.HasHistory }}<a href="/history/post/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}
     <a class="action-delete" href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>

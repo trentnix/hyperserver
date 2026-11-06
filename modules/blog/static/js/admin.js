@@ -1,5 +1,11 @@
 import './editor.js';
 
+// Browser Back can restore a whole document without contacting the server.
+// HTMX history already fetches fresh content. Refresh native restored lists too.
+window.addEventListener('pageshow', event => {
+  if (event.persisted && ['/post/manage', '/pages'].includes(location.pathname)) location.reload();
+});
+
 const mobileLayout = matchMedia('(max-width: 767px)');
 
 // Keep one set of admin links: expanded on desktop, a disclosure on mobile.

@@ -21,6 +21,7 @@ type postPage struct {
 	HasHistory bool
 	Scheduled  bool
 	CanEdit    bool
+	EditURL    string
 }
 
 // editorPage retains a draft and any user-facing error for the editing form.
@@ -38,6 +39,7 @@ type editorPage struct {
 	CanSchedule                bool
 	SaveActions                publicationActions
 	TagSuggestions             []string
+	ReturnURL                  string
 }
 
 // PreviewField configures the shared image picker for post sharing.
@@ -99,6 +101,7 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 	}
 	data := postPage{Post: p, HTML: html, Scheduled: p.Scheduled(m.currentTime()), CanEdit: m.canEditPost(r.Context(), p)}
 	if data.CanEdit {
+		data.EditURL = editorURL("/post/update/"+p.ID, r)
 		data.HasHistory, err = m.history.HasHistory(r.Context(), "post", p.ID)
 		if err != nil {
 			m.storageError(w, r, err)
@@ -130,6 +133,7 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := m.postEditorData(p)
+	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.TagSuggestions = m.tagSuggestions(r)
 	selection, err := m.selectRevision(r, "post", p.ID, "/post/s/"+p.Slug, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags})
@@ -226,6 +230,7 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
 	data := editorPage{Post: p, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
+	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.ErrorFields = strings.Join(fields, " ")
 	data.SaveActions = editorActions("post", false, false)

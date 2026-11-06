@@ -92,12 +92,27 @@
         assert(article.textContent.includes('Other result'), 'Clearing search must restore the full list.');
         assert(Math.abs(article.querySelector('.management-search-results').getBoundingClientRect().height - summaryHeight) < 1, 'Clearing search must preserve the result summary height.');
         unchanged();
+
+        // A separate request changes storage while the displayed list stays old.
+        // Back and Forward must fetch that change rather than reuse the old HTML.
+        const oldRow = [...article.querySelectorAll('[data-content-id]')].find(row => row.querySelector('.page-manager-title > a')?.textContent === 'Body result');
+        const editResponse = await fetch(oldRow.querySelector('.page-manager-actions a').getAttribute('href'));
+        assert(editResponse.ok, 'Unable to load an editor for the background update.');
+        const editDocument = new DOMParser().parseFromString(await editResponse.text(), 'text/html');
+        const editForm = editDocument.querySelector('#post-form, #page-form');
+        const fields = new URLSearchParams(new FormData(editForm));
+        fields.set('title', 'Fresh needle result');
+        const saved = await fetch(editForm.getAttribute('action'), {method: 'POST', body: fields});
+        assert(saved.ok, 'Unable to save the background update.');
+        assert(oldRow.querySelector('.page-manager-title > a').textContent === 'Body result', 'The displayed list must still be stale before history traversal.');
         history.back();
         await wait(resultsReady);
         assert(article.querySelector('.management-search').elements.q.value === 'needle', 'Back must restore the search query.');
+        assert(article.textContent.includes('Fresh needle result') && !article.textContent.includes('Body result'), 'Back must show the latest saved content.');
         unchanged();
         history.forward();
         await wait(() => location.search === '' && !article.querySelector('.management-search-clear') && !article.classList.contains('htmx-settling'));
+        assert(article.textContent.includes('Fresh needle result') && !article.textContent.includes('Body result'), 'Forward must show the latest saved content.');
         unchanged();
       }
       if (path === '/profile') assert(!article.querySelector('.image-upload-controls').hidden, 'Profile image controls were not initialized after navigation.');

@@ -28,6 +28,24 @@
     assert(stage === 'editor', 'History navigation unexpectedly reloaded the document.');
     sessionStorage.setItem('editor-history-stage', 'restoring');
     const article = document.querySelector('#article-content');
+
+    // Editing viewed content must return to that content, rather than its list.
+    await wait(() => document.querySelector('#post-archive a[href="/post/s/cancel-source"]') && !document.querySelector('#post-archive').classList.contains('htmx-settling'));
+    for (const path of ['/post/s/cancel-source', '/about']) {
+      const link = document.querySelector(path === '/about' ? '.profile-links a[href="/about"]' : '#post-archive a[href="/post/s/cancel-source"]');
+      link.click();
+      await wait(() => location.pathname === path && article.querySelector('.action-edit') && !article.classList.contains('htmx-settling'));
+      article.querySelector('.action-edit').click();
+      await wait(() => article.querySelector('.CodeMirror') && !article.classList.contains('htmx-settling'));
+      const cancel = article.querySelector('.form-actions a.button-secondary');
+      assert(cancel.getAttribute('href') === path, 'Cancel must return to the viewed content.');
+      cancel.click();
+      await wait(() => location.pathname === path && article.querySelector('.action-edit') && !article.classList.contains('htmx-settling'));
+      assert(document.querySelector('#article-content') === article, 'Cancel replaced the page shell.');
+    }
+    document.querySelector('.account-menu a[href="/post/manage"]').click();
+    await wait(() => location.pathname === '/post/manage' && article.querySelector('.page-manager') && !article.classList.contains('htmx-settling'));
+
     document.querySelector('a[href="/post/create"]').click();
     await wait(() => location.pathname === '/post/create' && article.querySelector('.CodeMirror') && !article.classList.contains('htmx-settling'));
     assert(document.querySelector('#article-content') === article && !document.querySelector('dialog[open]'), 'New post must replace only the main content with an editor page.');

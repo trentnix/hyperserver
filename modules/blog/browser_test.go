@@ -130,6 +130,15 @@ func TestBrowserEditorHistory(t *testing.T) {
 	testBrowser(t, browser, "1100", "editor-history")
 }
 
+// TestBrowserManagementRefresh checks lists restored from the browser's page cache.
+func TestBrowserManagementRefresh(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check restored management lists")
+	}
+	testBrowser(t, browser, "1100", "management-refresh")
+}
+
 // TestBrowserRevisions follows full-page history, loading, recovery, and explicit
 // saving with the real editor. History must never open inside an editor dialog.
 func TestBrowserRevisions(t *testing.T) {
@@ -397,6 +406,12 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			t.Fatal(err)
 		}
 	}
+	if mode == "editor-history" {
+		if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "cancel-source", Title: "Cancel source", Markdown: "Body", Published: time.Now().Add(-time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+		h.blog.invalidatePosts()
+	}
 	if mode == "poster-upload" {
 		account, err := h.app.Accounts.GetByEmail(t.Context(), "trentnix@gmail.com")
 		if err != nil {
@@ -545,6 +560,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/refresh.js"
 	case "admin-navigation":
 		scriptFile = "testdata/admin-navigation.js"
+	case "management-refresh":
+		scriptFile = "testdata/management-refresh.js"
 	case "account":
 		scriptFile = "testdata/account.js"
 	case "media-library":

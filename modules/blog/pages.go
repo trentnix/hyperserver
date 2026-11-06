@@ -31,6 +31,8 @@ type pageContent struct {
 	PublishedSlug    string
 	TagSuggestions   []string
 	SaveActions      publicationActions
+	EditURL          string
+	ReturnURL        string
 }
 
 // Publication supplies the page editor's selected radio value.
@@ -149,6 +151,7 @@ func (m *module) page(w http.ResponseWriter, r *http.Request) {
 	}
 	data := pageContent{Page: p, HTML: html}
 	if admin {
+		data.EditURL = editorURL("/pages/update/"+p.ID, r)
 		data.HasHistory, err = m.history.HasHistory(r.Context(), "page", p.ID)
 		if err != nil {
 			m.storageError(w, r, err)
@@ -277,6 +280,7 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 // redisplay submitted values, including the publication setting.
 func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page, message string, status int, fields ...string) {
 	data := pageContent{Page: p, Error: message, revisionSelection: editorRevision(r, "page", p.ID)}
+	data.ReturnURL = editorReturnURL(r, "/pages")
 	data.ErrorFields = strings.Join(fields, " ")
 	if r.Method == http.MethodGet && status == http.StatusOK {
 		selection, err := m.selectRevision(r, "page", p.ID, p.URL(), Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags})

@@ -1,5 +1,26 @@
 package blog
 
+import (
+	"net/http"
+	"net/url"
+
+	"github.com/trentnix/hyperserver/pkg/util"
+)
+
+// editorURL carries the viewed page through ordinary and HTMX editor navigation.
+func editorURL(path string, r *http.Request) string {
+	return path + "?" + url.Values{"returnTo": {r.URL.RequestURI()}}.Encode()
+}
+
+// editorReturnURL preserves the local destination after validation errors.
+func editorReturnURL(r *http.Request, fallback string) string {
+	destination := r.URL.Query().Get("returnTo")
+	if r.Method == http.MethodPost {
+		destination = r.PostForm.Get("returnTo")
+	}
+	return util.SafeRedirectURL(destination, fallback)
+}
+
 // formErrorMessage describes an operation failure and any fields to correct.
 type formErrorMessage struct {
 	Error, ErrorFields string
