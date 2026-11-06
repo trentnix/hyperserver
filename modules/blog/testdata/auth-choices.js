@@ -5,13 +5,24 @@
   try {
     await document.fonts.ready;
     const root = document.documentElement;
-    assert(getComputedStyle(root).scrollbarGutter === (innerWidth < 768 ? 'auto' : 'stable'), 'Only desktop layouts should reserve scrollbar space.');
+    assert(getComputedStyle(root).scrollbarGutter === (innerWidth < 768 ? 'auto' : 'stable'), 'Mobile backgrounds must not be constrained by a viewport gutter.');
     if (innerWidth < 768) {
       // Exercise both states even when the browser uses overlay scrollbars.
       root.style.overflowY = 'hidden';
-      assert(document.body.getBoundingClientRect().width === innerWidth, 'Mobile pages without a scrollbar must fill the viewport.');
+      const elements = ['.menu-toggle', '.profile', '#article-content', '.auth-login-panel', '.auth-provider', '.setup-panel']
+        .map(selector => document.querySelector(selector)).filter(Boolean);
+      const before = elements.map(element => element.getBoundingClientRect());
+      for (const selector of ['.site-sidebar', '.header-menu']) {
+        const element = document.querySelector(selector);
+        if (!element) continue;
+        assert(element.getBoundingClientRect().right >= innerWidth, 'Header backgrounds must extend to the viewport edge without a scrollbar.');
+        assert(element.contains(document.elementFromPoint(innerWidth - 1, element.getBoundingClientRect().top + 2)), 'The viewport edge must belong to the header, not an empty scrollbar gutter.');
+      }
       root.style.overflowY = 'scroll';
-      assert(document.body.getBoundingClientRect().width === Math.max(320, root.clientWidth), 'Mobile pages must use the available width, subject to the 320px layout minimum.');
+      elements.forEach((element, index) => {
+        const after = element.getBoundingClientRect();
+        assert(Math.abs(after.left - before[index].left) < 1 && Math.abs(after.right - before[index].right) < 1, 'Showing a scrollbar must not move or resize mobile content.');
+      });
       root.style.removeProperty('overflow-y');
     }
     const email = new URLSearchParams(location.search).get('email') === 'true';

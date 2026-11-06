@@ -59,7 +59,6 @@
     const sidebarWidth = sidebar.getBoundingClientRect().width;
     const contentLeft = main.getBoundingClientRect().left;
     const contentWidth = article.getBoundingClientRect().width;
-    const bodyWidth = body.getBoundingClientRect().width;
     const bioWidth = document.querySelector('.profile-details').getBoundingClientRect().width;
     const menuRight = document.querySelector('.menu-toggle').getBoundingClientRect().right;
     const titleTop = document.querySelector('.post-heading').getBoundingClientRect().top;
@@ -78,11 +77,9 @@
         assert(Math.abs(sidebar.getBoundingClientRect().width - sidebarWidth) < 1, 'Post length changed the sidebar width: ' + sidebarWidth + ' to ' + sidebar.getBoundingClientRect().width);
         assert(Math.abs(main.getBoundingClientRect().left - contentLeft) < 1, 'Post length shifted the content column.');
       } else {
-        // Narrow layouts reserve space only when a classic scrollbar is present.
-        const scrollbarChange = innerWidth < 768 ? body.getBoundingClientRect().width - bodyWidth : 0;
-        assert(Math.abs(article.getBoundingClientRect().width - contentWidth - scrollbarChange) < 1, 'Navigation changed content width beyond the scrollbar space.');
-        assert(Math.abs(document.querySelector('.profile-details').getBoundingClientRect().width - bioWidth - scrollbarChange) < 1, 'Navigation changed bio width beyond the scrollbar space.');
-        if (innerWidth < 768) assert(Math.abs(document.querySelector('.menu-toggle').getBoundingClientRect().right - menuRight - scrollbarChange) < 1, 'Navigation moved the mobile menu beyond the scrollbar space.');
+        assert(Math.abs(article.getBoundingClientRect().width - contentWidth) < 1, 'Navigation changed content width.');
+        assert(Math.abs(document.querySelector('.profile-details').getBoundingClientRect().width - bioWidth) < 1, 'Navigation changed bio width.');
+        if (innerWidth < 768) assert(Math.abs(document.querySelector('.menu-toggle').getBoundingClientRect().right - menuRight) < 1, 'Navigation moved the mobile menu.');
       }
     };
     const postVisible = slug => location.pathname === '/post/s/' + slug &&

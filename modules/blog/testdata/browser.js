@@ -133,8 +133,11 @@ document.removeEventListener = function(type, callback, options) {
       }
       if (innerWidth < 768) menuToggle.click();
       assert(document.querySelectorAll('#post-archive').length === 1, 'Recent Posts must have one persistent container.');
-      // clientWidth includes a reserved scrollbar gutter in some engines.
-      const pageWidth = Math.max(320, document.documentElement.getBoundingClientRect().width);
+      // Mobile reserves scrollbar space in inner content, not the viewport background.
+      const pageWidth = innerWidth < 768
+        ? Math.max(320, innerWidth - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scrollbar-width')))
+        : document.body.getBoundingClientRect().width;
+      const paintedWidth = document.body.getBoundingClientRect().width;
       assert(portrait.right <= bio.left, 'Profile photo must sit beside the bio.');
       assert(Math.abs(portrait.top - bio.top) <= 5, 'Profile photo and bio are not top-aligned.');
       assert(getComputedStyle(document.body).fontSize === '16px', 'Base typography changed.');
@@ -147,7 +150,11 @@ document.removeEventListener = function(type, callback, options) {
       const typographyTolerance = .1;
       assert(Math.abs(parseFloat(articleStyle.fontSize) - textSize) <= typographyTolerance, `Article font size at ${innerWidth}px: got ${articleStyle.fontSize}, expected ${textSize}px ± ${typographyTolerance}px.`);
       assert(Math.abs(parseFloat(articleStyle.lineHeight) - lineHeight) <= typographyTolerance, `Article line height at ${innerWidth}px: got ${articleStyle.lineHeight}, expected ${lineHeight}px ± ${typographyTolerance}px.`);
-      assert(document.documentElement.scrollWidth <= pageWidth, 'Page exceeds its minimum width or viewport.');
+      assert(document.documentElement.scrollWidth <= paintedWidth, 'Page exceeds its full-width background.');
+      if (document.documentElement.clientWidth >= 320) {
+        window.scrollTo(100, window.scrollY);
+        assert(window.scrollX === 0, 'Full-width backgrounds must not introduce horizontal scrolling.');
+      }
       assert(Math.abs(article.width - Math.min(pageWidth, 960)) < 1, 'Article does not respect its maximum width.');
       assert(Math.abs((article.left + article.right) / 2 - pageWidth / 2) < 1, 'Article is not centered on the screen.');
       assert(getComputedStyle(document.querySelector('article')).textAlign === 'left', 'Article text must be left-aligned.');
@@ -163,7 +170,7 @@ document.removeEventListener = function(type, callback, options) {
         assert(archive.top >= document.querySelector('#main-content').getBoundingClientRect().bottom - 1, 'Recent Posts must follow the content.');
         assert(footer.contains(document.querySelector('#post-archive')), 'Recent Posts must be inside the footer.');
         const footerBounds = footer.getBoundingClientRect();
-        assert(Math.abs(footerBounds.left) < 1 && Math.abs(footerBounds.width - pageWidth) < 1, 'Footer background must span the viewport.');
+        assert(Math.abs(footerBounds.left) < 1 && Math.abs(footerBounds.width - paintedWidth) < 1, 'Footer background must span the viewport.');
         assert(footerBounds.bottom >= innerHeight, 'Footer background must reach the bottom of the viewport.');
         assert(getComputedStyle(sidebar).position === 'static', 'Stacked navigation must scroll with the page.');
       } else {
@@ -206,7 +213,7 @@ document.removeEventListener = function(type, callback, options) {
             const textBounds = range.getBoundingClientRect();
             assert(textBounds.left >= articleBounds.left + parseFloat(contentPadding) - 1 && textBounds.right <= articleBounds.right - parseFloat(contentPadding) + 1, 'Image styling moved text into the gutters.');
           }
-          assert(document.documentElement.scrollWidth <= Math.max(320, document.documentElement.clientWidth), `${size} image caused horizontal overflow at ${innerWidth}px.`);
+          assert(document.documentElement.scrollWidth <= paintedWidth, `${size} image caused horizontal overflow at ${innerWidth}px.`);
         }
         imagePost.remove();
         if (innerWidth === 768) {
@@ -229,7 +236,7 @@ document.removeEventListener = function(type, callback, options) {
         const code = document.createElement('pre');
         code.textContent = longText.textContent;
         content.append(longText, code);
-        assert(document.documentElement.scrollWidth <= pageWidth, 'Long post content widens the page.');
+        assert(document.documentElement.scrollWidth <= paintedWidth, 'Long post content widens the page.');
         assert(code.scrollWidth > code.clientWidth, 'Wide code must scroll inside its own block.');
         assert(document.body.getBoundingClientRect().width >= 320, 'Page shrank below the mobile minimum.');
         if (innerWidth < 1680) {

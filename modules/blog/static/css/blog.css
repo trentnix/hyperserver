@@ -21,7 +21,7 @@ button:enabled { cursor: pointer; }
 
 /* Page layout and navigation. */
 body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-background, none) no-repeat fixed right max(0px, calc((100vw - 960px) / 2)) bottom / min(480px, 70vw) auto; }
-/* Keep desktop text wrapping stable. Mobile uses the full width without an empty scrollbar strip. */
+/* Reserve the desktop gutter. Mobile reserves only inner content width below. */
 @media (min-width: 768px) { :root { scrollbar-gutter: stable; } }
 /* Reserve the first 200px of the footer without constraining its full height. */
 .page-top { min-height: calc(100vh - 200px); }
@@ -135,6 +135,11 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
   .site-footer { display: none; }
 }
 @media (max-width: 767px) {
+  body { --mobile-content-width: max(320px, calc(100vw - var(--scrollbar-width, 0px))); }
+  /* Size only the inner content. Its background containers use the available width. */
+  .article-column, .site-footer > .archive-nav { width: var(--mobile-content-width); margin-inline: 0; }
+  body > .setup-panel { width: min(calc(var(--mobile-content-width) - 32px), 500px); margin-left: max(16px, calc((var(--mobile-content-width) - 500px) / 2)); }
+  .site-menu-disclosure { width: calc(var(--mobile-content-width) - 40px); }
   .js .menu-toggle[hidden] { display: inline-flex; align-items: center; gap: 6px; }
   .js #site-menu:not([data-ready]), .js .account-menu:not([data-ready]) .action-menu-items { display: none; }
   /* Match the collapsed control while its no-JavaScript markup is still open. */
@@ -148,7 +153,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
   .site-links a { min-height: 44px; padding-block: 10px; }
   .site-links > .site-sign-in { display: list-item; margin-top: 16px; padding-top: 12px; border-top: 1px solid #cbd3dd; }
   .site-links li:has(> .page-branch) > a { padding-right: 56px; }
-  .profile { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
+  .profile { width: calc(var(--mobile-content-width) - 40px); grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
   .profile-name { font-size: 1.1em; }
   .site-footer > .archive-nav { padding: 20px; }
   .account-panel { margin-inline: 20px; margin-bottom: 16px; }
