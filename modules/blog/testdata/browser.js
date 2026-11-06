@@ -448,7 +448,7 @@ document.removeEventListener = function(type, callback, options) {
       await wait(() => document.querySelector('.editor-panel .CodeMirror') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       document.querySelector('#post-form .form-actions a').click();
       await wait(() => !document.querySelector('#post-form') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
-      assert(location.pathname === '/post/manage', 'Cancel must return to Posts.');
+      assert(location.pathname === '/post/s/browser-post', 'Cancel must return to the viewed post.');
       await htmx.ajax('GET', '/posts/recent', '.archive-nav');
       assert(!document.querySelector('dialog[open]'), 'An unrelated swap reopened the dialog.');
       document.querySelector('a[href^="/post/update/"]').click();
