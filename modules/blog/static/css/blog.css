@@ -27,9 +27,9 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
 .page-top { min-height: calc(100vh - 200px); }
 .site-sidebar { background: var(--surface); }
 .site-header, .article-column, .site-footer > .archive-nav { max-width: 960px; margin: 0 auto; }
-.site-header { position: relative; padding: 25px 40px 24px; }
+.site-header { position: relative; padding: 16px 40px 24px; }
 /* Use the existing top gutter without moving the profile or navigation. */
-.site-header > .header-sign-in { position: absolute; top: 0; right: 40px; padding-block: 2px; font-size: 14px; line-height: 20px; }
+.site-header > .header-sign-in { position: absolute; top: 0; right: 40px; padding-block: 0; font-size: 14px; line-height: 20px; }
 .header-menu { display: none; }
 .article-column { min-width: 0; width: 100%; }
 .site-footer { min-height: 200px; }
@@ -126,7 +126,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
   .header-menu .child-links a { font-weight: 400; }
   .child-links { margin: 2px 0 4px 6px; padding-left: 12px; font-size: inherit; }
   .profile-links { display: none; }
-  .profile { grid-template-columns: 120px minmax(0, 1fr); }
+  .profile { grid-template-columns: 120px minmax(0, 1fr); padding-right: 40px; }
   .site-sidebar .archive-nav { padding: 50px 20px 24px; }
   .article-column { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-height: 100vh; }
   .article-column:has(.page-blocks) { grid-column: 2 / -1; max-width: none; }

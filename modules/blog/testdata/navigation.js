@@ -32,9 +32,14 @@
         const header = document.querySelector('.site-header');
         const right = header.getBoundingClientRect().right - parseFloat(getComputedStyle(header).paddingRight);
         assert(visible[0].parentElement === header && Math.abs(bounds.right - right) < 1, 'Desktop sign-in must align with the upper-right header gutter.');
-        assert(bounds.bottom <= header.querySelector('.profile').getBoundingClientRect().top, 'Sign in must sit above the profile without overlapping it.');
         const profile = header.querySelector('.profile');
+        const profileText = profile.querySelector('.profile-details').getBoundingClientRect();
+        const portrait = profile.querySelector('.portrait').getBoundingClientRect();
+        assert(bounds.bottom <= profileText.top, 'Sign in must remain above the profile text.');
+        assert(bounds.bottom <= portrait.top || bounds.left >= portrait.right, 'Sign in must not overlap the portrait.');
         const profileTop = profile.getBoundingClientRect().top;
+        assert(profileTop - header.getBoundingClientRect().top === 16, 'Desktop profile must use a compact top inset.');
+        assert(getComputedStyle(visible[0]).fontSize === '14px', 'Compact spacing must not shrink the sign-in text.');
         const headerHeight = header.getBoundingClientRect().height;
         visible[0].style.display = 'none';
         assert(profile.getBoundingClientRect().top === profileTop && header.getBoundingClientRect().height === headerHeight, 'Sign in must not shift the profile or increase header height.');

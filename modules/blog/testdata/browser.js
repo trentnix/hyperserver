@@ -180,6 +180,7 @@ document.removeEventListener = function(type, callback, options) {
         assert(sidebar.contains(archiveNav), 'Desktop archive must remain inside the sidebar.');
         assert(Math.abs(sidebarBounds.left) < 1 && Math.abs(sidebarBounds.right - article.left) < 1, 'Sidebar must fill the entire left section.');
         assert(Math.abs(header.getBoundingClientRect().width - sidebar.clientWidth) < 1, 'Header must use the available sidebar width.');
+        assert(header.getBoundingClientRect().right - bio.right >= 59, 'Ultrawide profile text needs a 60px right gutter separating it from the main content.');
         assert(Math.abs(archive.width - sidebar.clientWidth) < 1, 'Navigation must use the available sidebar width.');
       }
       if (new URLSearchParams(location.search).has('test-layout')) {

@@ -29,7 +29,7 @@
 
 {{ define "blog.searchForm" }}
 <form class="management-search reader-search-form" role="search" method="get" action="/search" hx-get="/search" hx-target="#article-content" hx-sync="#article-content:replace" hx-push-url="true">
-  <div><label><span>Search Site</span><input type="search" name="q" value="{{ . }}" maxlength="240" placeholder="Search"></label></div>
+  <div><label><span>Search Site</span><input type="search" name="q" autocomplete="off" value="{{ . }}" maxlength="240" placeholder="Search"></label></div>
   <button type="submit" class="button-secondary">Search</button>
 </form>
 {{ end }}

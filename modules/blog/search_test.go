@@ -370,6 +370,9 @@ func TestPublicSearchHTTP(t *testing.T) {
 			if strings.Contains(body, "<!DOCTYPE") == hx {
 				t.Fatal("wrong full-page/fragment response")
 			}
+			if !strings.Contains(body, `type="search" name="q" autocomplete="off"`) {
+				t.Fatal("site search must disable browser form-history suggestions")
+			}
 			for _, query := range []string{strings.Repeat("é", 241), string([]byte{0xff})} {
 				requireStatus(t, h.request("GET", "/search?q="+url.QueryEscape(query), nil, hx), http.StatusBadRequest)
 			}
