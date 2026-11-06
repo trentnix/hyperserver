@@ -72,7 +72,17 @@ func (a *Access) AllowAccount(ctx context.Context, address string) (bool, error)
 		return false, nil
 	}
 	users, err := a.administration.ListUsers(ctx)
-	return len(users) == 0, err
+	if err != nil {
+		return false, err
+	}
+	// Another request may have assigned the initial role after GetByEmail.
+	// Use the newer snapshot before denying the configured administrator.
+	for _, current := range users {
+		if user.EmailKey(current.Email) == a.emailKey && role(current.Role).valid() {
+			return a.multiUser || current.RegistrationAuthType != "", nil
+		}
+	}
+	return len(users) == 0, nil
 }
 
 // module owns one application's views, content repositories, and images.

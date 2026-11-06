@@ -29,6 +29,9 @@ func accountHarness(t *testing.T, emailEnabled bool) (*harness, *user.User) {
 	if err := h.app.Accounts.(user.ExternalIdentityRepository).CreateExternalAccount(t.Context(), u, user.ExternalIdentity{Issuer: "https://accounts.google.com", Subject: "owner"}); err != nil {
 		t.Fatal(err)
 	}
+	if permission, err := h.blog.access.Role(t.Context(), u); err != nil || permission != roleAdmin {
+		t.Fatalf("initialize account fixture administrator: role=%q, err=%v", permission, err)
+	}
 	h.blog.access.setup.complete.Store(true)
 	signInAccount(t, h, u)
 	return h, u
