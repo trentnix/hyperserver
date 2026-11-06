@@ -94,6 +94,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("GET /post/delete/{id}", m.requirePostOwner(m.confirmDelete))
 	routes.HandleWithBodyLimit("POST /post", m.requirePostOwner(m.save), routing.MiB)
 	routes.HandleWithBodyLimit("POST /post/{id}", m.requirePostOwner(m.save), routing.MiB)
+	routes.Handle("POST /post/publish/{id}", m.requirePostOwner(m.publishPost))
 	routes.Handle("POST /post/delete/{id}", m.requirePostOwner(m.delete))
 	routes.HandleWithBodyLimit("POST /post/preview", m.requireWriter(m.preview), routing.MiB)
 	routes.HandleWithBodyLimit("POST /post/images/upload", http.HandlerFunc(m.upload), 10*routing.MiB)

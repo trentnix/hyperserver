@@ -17,6 +17,16 @@
     return document.querySelector('#post-form');
   };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
+  document.addEventListener('htmx:after:request', event => {
+    const {ctx} = event.detail;
+    if (ctx.response.headers.get('HX-Trigger') !== 'blog:content-saved') return;
+    const unload = new Event('beforeunload', {cancelable: true});
+    window.dispatchEvent(unload);
+    if (unload.defaultPrevented) {
+      event.preventDefault();
+      report('Successful publication must clear the unsaved-edit warning before HTMX redirects.');
+    }
+  });
   try {
     const stage = sessionStorage.getItem('publication-stage');
     if (!stage) {
@@ -127,19 +137,31 @@
       return;
     }
     if (stage === 'draft') {
+      const previewURL = location.pathname;
       assert((await fetch(location.pathname, {credentials: 'omit'})).status === 404, 'Unchecked save left the post public.');
       assert(document.querySelector('.post-body').textContent.includes('Private edited content.'), 'Unpublishing failed to save the content edit.');
       const form = await editor(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
       assert(form.elements.published.value === '', 'Draft opened with the wrong publication setting.');
       assert(form.elements.previewImage.value === '', 'Removed preview was not saved.');
-      form.elements.published.value = 'on';
+      await htmx.ajax('GET', previewURL, '#article-content');
+      const publish = document.querySelector('.content-actions .action-publish');
+      assert(publish && publish.textContent === 'Publish', 'Draft preview must offer a direct Publish action.');
+      const actions = publish.closest('.content-actions');
+      assert(actions.firstElementChild === publish.form, 'Publish must be the first draft action.');
+      assert(actions.scrollWidth <= actions.clientWidth && publish.getBoundingClientRect().height >= 36, 'Draft actions must fit at this viewport width.');
+      const menu = actions.querySelector('.action-menu');
+      menu.querySelector('summary').click();
+      const menuBounds = menu.querySelector('.action-menu-items').getBoundingClientRect();
+      assert(menuBounds.left >= 0 && menuBounds.right <= innerWidth, 'Draft More menu must remain inside the viewport.');
+      menu.querySelector('summary').click();
       sessionStorage.setItem('publication-stage', 'republished');
-      form.requestSubmit();
+      publish.click();
       return;
     }
     if (stage === 'republished') {
+      assert(!document.querySelector('.action-publish'), 'Published posts must not offer Publish.');
       const response = await fetch(location.pathname, {credentials: 'omit'});
-      assert(response.ok && (await response.text()).includes('Private edited content.'), 'Checking Publish post did not republish the saved content.');
+      assert(response.ok && (await response.text()).includes('Private edited content.'), 'The preview Publish action did not publish the stored content.');
       await report('PASS');
     }
   } catch (error) { await report(error.message + '\n' + error.stack); }

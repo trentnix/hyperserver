@@ -169,8 +169,8 @@ func TestSavePostPublication(t *testing.T) {
 				}
 				view := h.request("GET", "/post/s/"+post.Slug, nil, hx)
 				requireStatus(t, view, http.StatusOK)
-				if strings.Contains(view.Body.String(), `action="/post/publish/`) || strings.Contains(view.Body.String(), `action="/post/unpublish/`) {
-					t.Fatal("post view must not offer publication shortcuts")
+				if strings.Contains(view.Body.String(), `action="/post/publish/`) != post.Draft || strings.Contains(view.Body.String(), `action="/post/unpublish/`) {
+					t.Fatal("only draft previews should offer a publication shortcut")
 				}
 				cookies := h.cookies
 				h.cookies = nil

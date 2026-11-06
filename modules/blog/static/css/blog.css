@@ -23,8 +23,9 @@ button:enabled { cursor: pointer; }
 body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-background, none) no-repeat fixed right max(0px, calc((100vw - 960px) / 2)) bottom / min(480px, 70vw) auto; }
 /* Reserve the desktop gutter. Mobile reserves only inner content width below. */
 @media (min-width: 768px) { :root { scrollbar-gutter: stable; } }
-/* Reserve the first 200px of the footer without constraining its full height. */
-.page-top { min-height: calc(100vh - 200px); }
+/* Fill short pages while allowing the entire footer to determine its own height. */
+.site-layout { display: flex; flex-direction: column; min-height: 100vh; }
+.page-top { flex: 1 0 auto; }
 .site-sidebar { background: var(--surface); }
 .site-header, .article-column, .site-footer > .archive-nav { max-width: 960px; margin: 0 auto; }
 .site-header { position: relative; padding: 16px 40px 24px; }
@@ -32,7 +33,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
 .site-header > .header-sign-in { position: absolute; top: 0; right: 40px; padding-block: 0; font-size: 14px; line-height: 20px; }
 .header-menu { display: none; }
 .article-column { min-width: 0; width: 100%; }
-.site-footer { min-height: 200px; }
+.site-footer { flex: none; }
 /* Only one archive placement participates in layout and keyboard navigation. */
 #sidebar-archive { display: none; }
 .site-footer > .archive-nav { padding: 24px 40px; }
@@ -106,7 +107,7 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
 .archive-page-number { grid-area: 1 / 2; color: var(--muted); font-size: .9em; white-space: nowrap; }
 
 @media (max-width: 1679px) {
-  .article-column { padding-bottom: 80px; }
+  .article-column { padding-bottom: 36px; }
   .page-top:has(.info-page) { min-height: 100vh; }
   .site-layout:has(.info-page) .site-footer { display: none; }
   body:has(.page-content .post-archive) { background-image: none; }
@@ -176,14 +177,15 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 .content-actions a, .content-actions .text-button, .action-menu summary { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 8px 12px; border: 1px solid #dce1e7; border-radius: 6px; background: transparent; color: #505969; font-weight: 600; text-decoration: none; transition: background-color .15s, color .15s; }
 .content-actions a:hover, .content-actions .text-button:hover, .action-menu summary:hover { background: #e5e9ef; color: #212529; }
 .content-actions .action-delete:hover { background: #f5e5e5; color: #962d32; }
-.content-actions .action-edit { border-color: var(--button-bg); background: var(--button-bg); color: #fff; }
-.content-actions .action-edit:hover { background: var(--button-hover); color: #fff; }
+.content-actions .action-edit:not(.button-secondary), .content-actions .action-publish { border-color: var(--button-bg); background: var(--button-bg); color: #fff; }
+.content-actions .action-edit:not(.button-secondary):hover, .content-actions .action-publish:hover { background: var(--button-hover); color: #fff; }
 .action-menu { position: relative; }
 .action-menu summary { gap: 10px; cursor: pointer; list-style: none; }
 .action-menu summary::-webkit-details-marker { display: none; }
 .action-menu summary::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); }
 .action-menu[open] summary::after { transform: rotate(225deg) translate(-1px, -1px); }
 .action-menu-items { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: 180px; padding: 6px; border: 1px solid #dce1e7; border-radius: 8px; background: #fff; box-shadow: 0 6px 18px #20293820; }
+.content-actions:has(.action-publish) .action-menu-items { left: auto; right: 0; }
 .action-menu:not([open]) .action-menu-items { display: none; }
 .action-menu-items a, .action-menu-items .text-button { width: 100%; justify-content: flex-start; border: 0; border-radius: 4px; font-weight: 400; }
 .action-menu-items .action-delete { color: #962d32; }

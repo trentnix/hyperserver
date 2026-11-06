@@ -270,9 +270,12 @@
       persist(state);
     }
   });
-  // This signal is sent only after storage commits, before HTMX follows its redirect.
-  document.addEventListener('blog:content-saved', event => {
-    const state = states.get(event.target);
+  // HTMX 4 delivers HX-Trigger events after starting redirects. Read the commit
+  // confirmation from the response first so a successful save can leave safely.
+  document.addEventListener('htmx:before:response', event => {
+    const {ctx} = event.detail;
+    if (!ctx.response.raw.ok || ctx.response.headers.get('HX-Trigger') !== 'blog:content-saved') return;
+    const state = states.get(ctx.sourceElement);
     if (!state || !state.submitted) return;
     state.baseline = state.submitted;
     try {

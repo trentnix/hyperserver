@@ -83,7 +83,7 @@ document.removeEventListener = function(type, callback, options) {
       if (innerWidth >= 1680) assert(archiveStyle.paddingTop === '50px', 'Sidebar Recent Posts needs 50px of separation from site navigation.');
       const sidebar = document.querySelector('.site-sidebar');
       const footer = document.querySelector('.site-footer');
-      assert(getComputedStyle(document.querySelector('.article-column')).paddingBottom === (innerWidth < 1680 ? '80px' : '0px'), 'Extra spacing after the article must apply only below the ultrawide breakpoint.');
+      assert(getComputedStyle(document.querySelector('.article-column')).paddingBottom === (innerWidth < 1680 ? '36px' : '0px'), 'Compact spacing after the article must apply only below the ultrawide breakpoint.');
       const links = document.querySelector('.site-links');
       const header = document.querySelector('.site-header');
       const main = document.querySelector('#main-content');
@@ -244,8 +244,13 @@ document.removeEventListener = function(type, callback, options) {
         if (innerWidth < 1680) {
           assert(document.querySelector('#post-archive').getBoundingClientRect().top >= content.getBoundingClientRect().bottom - 1, 'Long content overlaps Recent Posts.');
           content.textContent = 'Short page';
-          assert(footer.getBoundingClientRect().bottom >= innerHeight - 1, 'Short pages must fill the viewport without a white gap below the footer.');
-          assert(Math.abs(footer.getBoundingClientRect().top - (innerHeight - 200)) < 1, 'Short pages must initially show 200px of the footer.');
+          // Include the reader search, which is absent from the initial login page.
+          const publicPage = new DOMParser().parseFromString(await (await fetch('/about')).text(), 'text/html');
+          const search = publicPage.querySelector('.footer-search .reader-search-form');
+          assert(search, 'The public footer must include site search.');
+          footer.querySelector('.footer-search').append(search);
+          assert(Math.abs(footer.getBoundingClientRect().bottom - innerHeight) < 1, 'The complete footer must fit at the bottom of a short page.');
+          assert(document.scrollingElement.scrollHeight <= innerHeight + 1, 'Short content, Recent Posts, and search must not create unnecessary scrolling.');
 
           // A long archive extends the document, not its own scroll container.
           const entries = document.createElement('ul');
@@ -258,7 +263,7 @@ document.removeEventListener = function(type, callback, options) {
             entries.append(item);
           }
           archiveNav.querySelector('.post-archive').append(entries);
-          assert(Math.abs(footer.getBoundingClientRect().top - (innerHeight - 200)) < 1, 'A long archive must not pull the footer upward.');
+          assert(Math.abs(footer.getBoundingClientRect().top - content.getBoundingClientRect().bottom - 36) < 1, 'A growing archive must use spare space before extending the page.');
           assert(footer.getBoundingClientRect().height > 200, 'Footer clipped the long archive.');
           assert(getComputedStyle(footer).overflowY === 'visible', 'Footer must not have an internal scrollbar.');
           entries.lastElementChild.scrollIntoView({block: 'end'});
@@ -270,6 +275,9 @@ document.removeEventListener = function(type, callback, options) {
           await wait(() => scrollY === 0);
           assert(footer.getBoundingClientRect().top >= innerHeight, 'Long content must push the footer below the viewport.');
           assert(footer.getBoundingClientRect().top >= content.getBoundingClientRect().bottom - 1, 'Footer overlaps long content: ' + footer.getBoundingClientRect().top + ' < ' + content.getBoundingClientRect().bottom);
+          const archiveGap = archiveNav.querySelector('.archive-heading').getBoundingClientRect().top - content.getBoundingClientRect().bottom;
+          const expectedGap = 36 + parseFloat(archiveStyle.paddingTop);
+          assert(Math.abs(archiveGap - expectedGap) < 1, 'Recent Posts must follow long content with a compact gap: ' + archiveGap);
           entries.lastElementChild.scrollIntoView({block: 'end'});
           await wait(() => entries.lastElementChild.getBoundingClientRect().bottom <= innerHeight + 1);
           assert(scrollY > 0 && footer.scrollTop === 0, 'Long content and archive must share normal page scrolling.');

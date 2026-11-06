@@ -38,6 +38,29 @@
   let consent = false;
   window.blogConfirm = (options, proceed) => { prompts.push(options.message); if (consent) queueMicrotask(proceed); };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
+  document.addEventListener('htmx:after:request', event => {
+    const {ctx} = event.detail;
+    if (ctx.response.headers.get('HX-Trigger') !== 'blog:content-saved') return;
+    const unload = new Event('beforeunload', {cancelable: true});
+    window.dispatchEvent(unload);
+    if (unload.defaultPrevented) {
+      event.preventDefault();
+      report('Successful post/page save must clear the unsaved-edit warning before HTMX redirects.');
+      return;
+    }
+    // A confirmed save covers only the submitted snapshot, not later edits.
+    const title = ctx.sourceElement.elements.title;
+    const savedTitle = title.value;
+    title.value += ' — edited while saving';
+    const changedUnload = new Event('beforeunload', {cancelable: true});
+    window.dispatchEvent(changedUnload);
+    title.value = savedTitle;
+    window.dispatchEvent(new Event('beforeunload', {cancelable: true}));
+    if (!changedUnload.defaultPrevented) {
+      event.preventDefault();
+      report('Edits outside the saved snapshot must retain the unsaved-edit warning.');
+    }
+  });
   try {
     const stage = sessionStorage.getItem('recovery-stage');
     if (!stage) {

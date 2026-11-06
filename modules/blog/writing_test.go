@@ -99,8 +99,8 @@ func TestPostOversizedDraft(t *testing.T) {
 	}
 }
 
-// TestRetiredPublicationRoutes prevents a second, unversioned publication path.
-func TestRetiredPublicationRoutes(t *testing.T) {
+// TestPublicationShortcutsRejectUnversionedRequests protects stored writing.
+func TestPublicationShortcutsRejectUnversionedRequests(t *testing.T) {
 	h := newHarness(t)
 	h.register(t)
 	h.verify(t)
@@ -109,12 +109,12 @@ func TestRetiredPublicationRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []string{"publish", "unpublish"} {
-		requireStatus(t, h.request(http.MethodPost, "/post/"+action+"/"+p.ID, nil, false), http.StatusNotFound)
-	}
+	requireStatus(t, h.request(http.MethodPost, "/post/publish/"+p.ID, nil, false), http.StatusBadRequest)
+	requireStatus(t, h.request(http.MethodGet, "/post/publish/"+p.ID, nil, false), http.StatusNotFound)
+	requireStatus(t, h.request(http.MethodPost, "/post/unpublish/"+p.ID, nil, false), http.StatusNotFound)
 	stored, err := h.blog.posts.GetByID(t.Context(), p.ID, true)
 	if err != nil || stored != p {
-		t.Fatal("retired endpoint changed publication", err)
+		t.Fatal("invalid publication request changed stored writing", err)
 	}
 }
 
