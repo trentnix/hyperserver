@@ -17,7 +17,7 @@ const (
 	userTableName        = "user"
 	userTokenTableName   = "usertoken"
 	accountVersionTable  = "hyperserver_account_version"
-	accountSchemaVersion = 2
+	accountSchemaVersion = 1
 )
 
 // accountVersionSchema matches golang-migrate's SQLite version/dirty format.

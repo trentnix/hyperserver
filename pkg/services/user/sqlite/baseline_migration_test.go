@@ -23,6 +23,15 @@ func TestAccountBaselineUpDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTokenLookupIndex(t, db)
+	var role string
+	var invited bool
+	if err := db.QueryRow(`SELECT role, invited FROM user WHERE id='account'`).Scan(&role, &invited); err != nil || role != "" || invited {
+		t.Fatalf("access defaults: %q %t %v", role, invited, err)
+	}
+	if _, err := db.Exec(`UPDATE user SET role='poster', invited=1;
+INSERT INTO usertoken(user_id,token_hash,expires_at,token_type,email) VALUES('account','invitation','2030-02-01','auth-invitation','person@example.invalid');`); err != nil {
+		t.Fatal(err)
+	}
 	// Leave dependent data in place to exercise foreign-key-safe drop ordering.
 	down, err := os.ReadFile("migrations/000001_accounts.down.sql")
 	if err != nil {

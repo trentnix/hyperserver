@@ -275,7 +275,7 @@ func TestBlogSchemaRejection(t *testing.T) {
 		`DROP TABLE blog_schema_version`,
 		`DELETE FROM blog_schema_version`,
 		`UPDATE blog_schema_version SET version=0`,
-		`UPDATE blog_schema_version SET version=1`,
+		`UPDATE blog_schema_version SET version=2`,
 		`UPDATE blog_schema_version SET version=3`,
 		`UPDATE blog_schema_version SET version=-1`,
 		`UPDATE blog_schema_version SET dirty=1`,

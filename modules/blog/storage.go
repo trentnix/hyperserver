@@ -16,18 +16,13 @@ import (
 // blog content. Accounts and sessions can share the file without sharing versions.
 const blogVersionSchema = `CREATE TABLE blog_schema_version (version uint64, dirty bool)`
 
-// Fresh storage and validation use the complete migration chain. Runtime queries
-// support only the resulting schema. Existing storage must migrate offline.
+// Fresh storage and validation use the baseline schema. Runtime queries support
+// only this schema. Existing storage must migrate offline.
 //
 //go:embed migrations/000001_blog.up.sql
-var blogBaseline string
+var blogSchema string
 
-//go:embed migrations/000002_ownership.up.sql
-var blogOwnership string
-
-var blogSchema = blogBaseline + "\n" + blogOwnership
-
-const requiredBlogSchemaVersion = 2
+const requiredBlogSchemaVersion = 1
 
 // sqliteRepository stores blog content and the site profile.
 type sqliteRepository struct {

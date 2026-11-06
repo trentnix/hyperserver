@@ -97,7 +97,7 @@ func accountMigrationResultSnapshot(t *testing.T, db *sql.DB) string {
 func accountBaselineDataSnapshot(t *testing.T, db *sql.DB) string {
 	t.Helper()
 	return accountStorageSnapshot(t, db,
-		`SELECT id, email, email_key, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version FROM user ORDER BY id`,
+		`SELECT id, email, email_key, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version, role, invited FROM user ORDER BY id`,
 		`SELECT issuer, subject, user_id FROM external_identity ORDER BY issuer, subject`,
 		`SELECT user_id, token_hash, expires_at, token_type, email FROM usertoken ORDER BY user_id, token_hash`,
 	)

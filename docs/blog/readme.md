@@ -60,13 +60,13 @@ Changing a role or removing access invalidates existing sessions. Removing acces
 
 [modules/blog](../../modules/blog) owns content rules, templates, handlers, SQLite content storage, and image files. Module configuration loads from `modules/blog/config.yaml`. Relative storage paths use the application configuration directory. Templates, scripts, styles, and default assets are embedded, so rebuild after changing them.
 
-Fresh startup creates blog schema version 2 from the embedded [migrations](../../modules/blog/migrations). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Image references belong to individual post or page versions. Read-only views join current pointers to content for rendering and search.
+Fresh startup creates blog schema version 1 from the embedded [migration](../../modules/blog/migrations). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Image references belong to individual post or page versions. Read-only views join current pointers to content for rendering and search.
 
-Existing databases must have a clean version 2 in `blog_schema_version`. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
+Existing databases must have a clean version 1 in `blog_schema_version`. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
 
 ## Database migrations
 
-The application supports one current schema, defined by its numbered migrations. Version 1 databases can upgrade with the ownership migration. On the next startup, existing unowned posts and images belong to the first administrator. Earlier development layouts and backups are unsupported. Use fresh storage, not a changed version marker.
+The application supports one current schema, defined by its baseline migration. Earlier development layouts and backups are unsupported. Use fresh storage, not a changed version marker.
 
 For later migrations, stop the server and all other writers. Create and verify a [backup](backup.md) with a compatible binary. From the repository root:
 

@@ -56,7 +56,7 @@ Request logs include method, path, request ID, response status, duration in nano
 
 ## Migrations, backup, and restore
 
-The operator owns schema upgrades. Stop the app and any cleanup jobs, take a backup, run one migration process, verify the result, then start a compatible binary. Never run competing migrators or use `force` to conceal a failed migration. Fresh empty stores bootstrap their current schema during startup. Accounts currently require version 2. Existing stores are validated, not automatically upgraded. See [provider migration commands](storage.md#account-schema-migrations).
+The operator owns schema upgrades. Stop the app and any cleanup jobs, take a backup, run one migration process, verify the result, then start a compatible binary. Never run competing migrators or use `force` to conceal a failed migration. Fresh empty stores bootstrap their current schema during startup. Accounts currently require version 1. Existing stores are validated, not automatically upgraded. See [provider migration commands](storage.md#account-schema-migrations).
 
 Accounts and sessions share `/data/hyperserver.db`. Blog content uses `/data/blog.db`, and images use `/data/uploads`. Each schema has its own version table. The maintenance image carries the pinned `golang-migrate` CLI and account/blog SQL. Custom session table names require the provider's rendered migration files described in the [session guide](../pkg/services/session/readme.md).
 

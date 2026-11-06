@@ -4,8 +4,10 @@ CREATE TABLE blog_current_posts (
  slug TEXT NOT NULL UNIQUE, published INTEGER NOT NULL,
  draft INTEGER NOT NULL DEFAULT 0 CHECK (draft IN (0, 1)),
  version INTEGER NOT NULL DEFAULT 1,
+ author_id TEXT NOT NULL DEFAULT '',
  FOREIGN KEY (id, version_id) REFERENCES blog_posts(owner_id, id) DEFERRABLE INITIALLY DEFERRED
 );
+CREATE INDEX blog_posts_author ON blog_current_posts(author_id);
 CREATE TABLE blog_posts (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  owner_id TEXT NOT NULL REFERENCES blog_current_posts(id) ON DELETE CASCADE,
@@ -67,13 +69,14 @@ CREATE TABLE blog_setup (
 );
 CREATE TABLE blog_media (
  id TEXT PRIMARY KEY, filename TEXT NOT NULL, label TEXT NOT NULL,
- version INTEGER NOT NULL CHECK (version>0), tags TEXT NOT NULL DEFAULT ''
+ version INTEGER NOT NULL CHECK (version>0), tags TEXT NOT NULL DEFAULT '',
+ uploaded_by TEXT NOT NULL DEFAULT ''
 );
 
 -- Read-only joins keep current-content queries independent of history.
 CREATE VIEW blog_post_current AS
  SELECT c.rowid AS rowid, c.id, c.version_id, c.slug, p.title, p.summary, p.markdown,
- c.published, c.draft, p.preview_image, c.version, p.tags
+ c.published, c.draft, p.preview_image, c.version, p.tags, c.author_id
  FROM blog_current_posts c JOIN blog_posts p ON p.id=c.version_id AND p.owner_id=c.id;
 CREATE VIEW blog_page_current AS
  SELECT c.id, c.version_id, c.slug, p.title, p.markdown, c.published, c.parent_id,

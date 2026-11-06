@@ -8,7 +8,9 @@ CREATE TABLE user (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     registration_auth_type VARCHAR(50),
     password VARCHAR(255),
-    session_version INTEGER NOT NULL DEFAULT 1
+    session_version INTEGER NOT NULL DEFAULT 1,
+    role TEXT NOT NULL DEFAULT '',
+    invited BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE usertoken (
