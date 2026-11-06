@@ -206,7 +206,7 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 	data.ContentURL = contentPath
 	request := htmx.GetRequest(r)
 	view := "history"
-	if request.Enabled && !request.HistoryRestore && request.Target == "revision-preview" {
+	if request.Enabled && !request.HistoryRestore && !request.FullPage && request.Target == "revision-preview" {
 		view = "revisionPreview"
 	}
 	page := m.views[view].Content(r, data)

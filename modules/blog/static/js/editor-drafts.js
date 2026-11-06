@@ -185,16 +185,16 @@
     });
   }
 
-  function allowLeave(candidates, proceed) {
+  function allowLeave(candidates, proceed, decline) {
     const changed = [...candidates].filter(state => active(state) && dirty(state) && state.approved !== encoded(state));
     changed.forEach(persist);
     if (!changed.length) return true;
     const snapshots = changed.map(state => encoded(state));
     window.blogConfirm({title: 'Leave without saving?', message: 'Your edits have not been saved to the server. Any available recovery copy will stay in this browser.', action: 'Leave without saving', cancel: 'Keep editing'}, () => {
-      if (changed.some((state, index) => !active(state) || encoded(state) !== snapshots[index])) return;
+      if (changed.some((state, index) => !active(state) || encoded(state) !== snapshots[index])) { decline?.(); return; }
       changed.forEach((state, index) => { state.approved = snapshots[index]; });
       proceed();
-    });
+    }, decline);
     return false;
   }
 
@@ -225,9 +225,24 @@
     const state = states.get(event.target);
     if (state && !event.defaultPrevented) state.approved = encoded(state);
   });
+  const departures = new WeakMap();
+  document.addEventListener('htmx:config:request', event => {
+    const {ctx} = event.detail;
+    // Browser traversal has already changed the URL. Preserve recovery copies
+    // during cleanup, without stopping the history restoration midway.
+    if (ctx.request.headers['HX-History-Restore-Request'] === 'true') return;
+    const candidates = [...states.values()].filter(state => ctx.target?.contains(state.form) && active(state) && dirty(state));
+    if (candidates.length) {
+      departures.set(ctx, candidates);
+      ctx.confirm = true;
+    }
+  });
   document.addEventListener('htmx:confirm', event => {
-    const target = event.detail.target;
-    if (target && !allowLeave([...states.values()].filter(state => target.contains(state.form)), () => event.detail.issueRequest(true))) event.preventDefault();
+    const {ctx, issueRequest, dropRequest} = event.detail;
+    const candidates = departures.get(ctx);
+    if (!candidates) return;
+    event.preventDefault();
+    if (allowLeave(candidates, issueRequest, dropRequest)) issueRequest();
   });
   window.addEventListener('beforeunload', event => {
     const changed = [...states.values()].filter(state => active(state) && dirty(state));
@@ -240,16 +255,16 @@
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) states.forEach(persist);
   });
-  document.addEventListener('htmx:beforeHistorySave', () => states.forEach(persist));
-  document.addEventListener('htmx:beforeCleanupElement', event => {
-    const state = states.get(event.detail.elt);
+  document.addEventListener('htmx:before:history:update', () => states.forEach(persist));
+  document.addEventListener('htmx:before:cleanup', event => {
+    const state = states.get(event.target);
     if (state) {
       persist(state);
       states.delete(state.form);
     }
   });
-  document.addEventListener('htmx:beforeRequest', event => {
-    const state = states.get(event.detail.elt);
+  document.addEventListener('htmx:before:request', event => {
+    const state = states.get(event.detail.ctx.sourceElement);
     if (state) {
       state.submitted = encoded(state);
       persist(state);
@@ -266,7 +281,7 @@
     } catch { storageFailure(state); }
     persist(state);
   });
-  document.addEventListener('htmx:afterRequest', () => states.forEach(state => { state.approved = null; }));
+  document.addEventListener('htmx:finally:request', () => states.forEach(state => { state.approved = null; }));
   document.addEventListener('DOMContentLoaded', initialize);
-  document.addEventListener('htmx:load', initialize);
+  document.addEventListener('htmx:after:process', initialize);
 })();

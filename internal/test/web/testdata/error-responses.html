@@ -1,6 +1,7 @@
 {{ define "test.browser.errors" }}
 <div id="browser-target">Original content</div>
 <div id="untouched">Outside the target</div>
+<div id="browser-oob"></div>
 <button id="browser-request" hx-get="/test/browser/success" hx-target="#browser-target" hx-swap="innerHTML settle:0">Request</button>
 <form id="htmx-form" method="post" action="/test/browser/htmx-form" hx-post="/test/browser/htmx-form" hx-target="#form-target" hx-swap="innerHTML settle:0">
   <input name="message" value="A&amp;B + café">

@@ -13,7 +13,7 @@
 {{ end }}
 
 {{ define "blog.history" }}
-<section class="info-page history-page" hx-boost="false">
+<section class="info-page history-page" hx-boost:inherited="false">
   <header class="page-manager-heading"><div><h1>History</h1><p>{{ .Data.Title }}</p><p class="page-status">{{ if eq .Data.Kind "post" }}Post{{ else }}Page{{ end }} status: {{ .Data.PublicationStatus }}</p></div><a href="{{ .Data.ContentURL }}">Back to {{ .Data.Kind }}</a></header>
   <p>Edit a saved version before saving, or restore it directly. Restoring replaces the title, summary, tags, Markdown, and preview image. The current URL, publication setting, and page placement stay unchanged.</p>
   <div class="revision-layout">
@@ -24,7 +24,7 @@
 {{ end }}
 
 {{ define "blog.versionList" }}
-    <nav aria-label="Saved versions" hx-target="#revision-preview" hx-swap="innerHTML show:none" hx-sync="#revision-preview:replace"><ol id="version-list" class="revision-list">{{ template "blog.versionLinks" . }}</ol></nav>
+    <nav aria-label="Saved versions" hx-target:inherited="#revision-preview" hx-swap:inherited="innerHTML show:none" hx-sync:inherited="#revision-preview:replace"><ol id="version-list" class="revision-list">{{ template "blog.versionLinks" . }}</ol></nav>
 {{ end }}
 
 {{ define "blog.versionListUpdate" }}<ol hx-swap-oob="innerHTML:#version-list">{{ template "blog.versionLinks" . }}</ol>{{ end }}

@@ -87,7 +87,7 @@ func renderStandardResponse(w http.ResponseWriter, r *http.Request, view *View, 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Del("Content-Length")
-	util.AddVary(w.Header(), htmx.HeaderRequest, htmx.HeaderHistoryRestoreRequest)
+	util.AddVary(w.Header(), htmx.HeaderRequest, htmx.HeaderHistoryRestoreRequest, htmx.HeaderRequestType)
 
 	var err error
 	if view == nil {

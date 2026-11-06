@@ -89,7 +89,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 		})
 		h.app.Web.HandleFunc("GET /test/browser/success", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			io.WriteString(w, `<p id="success">Saved</p><script src="/test/browser/injected.js"></script>`)
+			io.WriteString(w, `<p id="success">Saved</p><script src="/test/browser/injected.js"></script><div id="browser-oob" hx-swap-oob="innerHTML"><p>Updated</p><script src="/test/browser/injected.js"></script></div>`)
 		})
 		h.app.Web.HandleFunc("GET /test/browser/injected.js", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/javascript")

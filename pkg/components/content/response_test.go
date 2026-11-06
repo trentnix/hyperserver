@@ -25,8 +25,6 @@ func TestResponseHTMXMetadata(t *testing.T) {
 		{"replace", htmx.Response{ReplaceURL: "/next"}, "HX-Replace-Url", "/next"},
 		{"refresh", htmx.Response{Refresh: true}, "HX-Refresh", "true"},
 		{"trigger", htmx.Response{Trigger: `{"saved":{"id":42}}`}, "HX-Trigger", `{"saved":{"id":42}}`},
-		{"after swap", htmx.Response{TriggerAfterSwap: "saved"}, "HX-Trigger-After-Swap", "saved"},
-		{"after settle", htmx.Response{TriggerAfterSettle: "saved"}, "HX-Trigger-After-Settle", "saved"},
 		{"retarget", htmx.Response{Retarget: "#editor"}, "HX-Retarget", "#editor"},
 		{"reswap", htmx.Response{Reswap: "outerHTML"}, "HX-Reswap", "outerHTML"},
 	} {

@@ -2,7 +2,7 @@
 
 {{ define "blog.recentUpdates" }}
 <div hx-swap-oob="innerHTML:#sidebar-archive">{{ template "blog.layoutRecent" .LayoutData }}</div>
-<div hx-swap-oob="innerHTML:#post-archive">{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap="innerHTML show:window:top">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div></div>
+<div hx-swap-oob="innerHTML:#post-archive">{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap:inherited="innerHTML show:top showTarget:window">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div></div>
 {{ end }}
 
 {{ define "blog.layoutRecent" }}
@@ -10,7 +10,7 @@
 {{ end }}
 
 {{ define "blog.recentLinks" }}
-<div class="post-archive" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<div class="post-archive" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">
 <div class="archive-heading"><h2>Recent Posts</h2><a href="/rss" hx-boost="false" title="RSS feed"><img src="/assets/img/icons/rss.png" width="16" height="16" alt="RSS feed"></a></div>
 {{ if . }}{{ template "blog.postLinks" . }}{{ else }}<p>No posts yet.</p>{{ end }}
 {{ template "blog.archiveLinks" }}
@@ -18,7 +18,7 @@
 {{ end }}
 
 {{ define "blog.archiveLinks" }}
-<div class="archive-links" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<div class="archive-links" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">
   <a href="/posts">All posts &rarr;</a>
 </div>
 {{ end }}
@@ -39,7 +39,7 @@
 {{ end }}
 
 {{ define "blog.archive" }}
-<section class="post-archive info-page" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<section class="post-archive info-page" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">
 <header><h1>All Posts</h1>{{ template "blog.searchForm" "" }}</header>
 {{ range .Data.Months }}<h2 class="archive-month">{{ .Name }}</h2>{{ template "blog.postLinks" .Posts }}{{ else }}<p>No posts yet.</p>{{ end }}
 {{ if or .Data.Previous .Data.Next }}

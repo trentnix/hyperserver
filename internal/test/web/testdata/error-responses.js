@@ -20,15 +20,19 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   async function request(path, status, source = button) {
+    let failed = false;
+    const onError = event => { if (event.detail.ctx.sourceElement === source) failed = true; };
+    document.addEventListener('htmx:response:error', onError);
     source.setAttribute("hx-get", "/test/browser/" + path);
     htmx.process(source);
     const response = new Promise((resolve) => {
-      document.body.addEventListener("htmx:afterRequest", resolve, { once: true });
+      document.body.addEventListener("htmx:finally:request", resolve, { once: true });
     });
     source.click();
     const event = await response;
-    check(event.detail.xhr.status === status, `${path}: wrong status`);
-    if (status !== 0) check(event.detail.failed === (status >= 400), `${path}: wrong error classification`);
+    document.removeEventListener('htmx:response:error', onError);
+    check((event.detail.ctx.response?.status || 0) === status, `${path}: wrong status`);
+    check(failed === (status >= 400), `${path}: wrong error classification`);
     check(document.getElementById("untouched").textContent === "Outside the target", `${path}: changed the wrong target`);
     check(!document.getElementById("error-injection") && !window.errorInjected, `${path}: injected HTML`);
   }
@@ -37,7 +41,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     const ready = await fetch("/test/browser/ready", { method: "POST" });
     check(ready.ok, "Could not report browser readiness");
     check(typeof htmx !== "undefined", "HTMX did not load");
-    check(!htmx.config.allowEval && !htmx.config.allowScriptTags && !htmx.config.includeIndicatorStyles && htmx.config.historyCacheSize === 0, "HTMX security settings are missing");
+    check(htmx.version === '4.0.1' && htmx.config.includeIndicatorCSS === false, "HTMX configuration is missing");
     check(consoleMessages.includes("</script><script>window.systemMessageInjected=true</script>"), "console message was not logged as text");
     check(!window.systemMessageInjected, "console message executed as JavaScript");
     for (const [path, status] of [["bad-request", 400], ["forbidden", 403], ["unavailable", 503]]) {
@@ -93,7 +97,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     other.remove();
 
     const retained = errorForm.querySelector('[data-request-error]');
-    button.addEventListener('htmx:beforeRequest', event => event.preventDefault(), {once: true});
+    button.addEventListener('htmx:before:request', event => event.preventDefault(), {once: true});
     button.click();
     check(retained.isConnected, 'canceled request cleared an error');
 
@@ -127,11 +131,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     second.remove();
 
     // Each network failure starts clean and must emit its own expected event.
-    for (const [path, name] of [['disconnect', 'htmx:sendError'], ['timeout', 'htmx:timeout']]) {
+    for (const path of ['disconnect', 'timeout']) {
+      const name = 'htmx:error';
       errorForm.querySelector('[data-request-error]')?.remove();
-      button.setAttribute('hx-request', JSON.stringify({timeout: path === 'timeout' ? 100 : 0}));
+      button.setAttribute('hx-config', JSON.stringify({timeout: path === 'timeout' ? 100 : 0}));
       let observed = false;
-      const observe = event => { if (event.detail.elt === button) observed = true; };
+      const observe = event => { if (event.detail.ctx?.sourceElement === button) observed = true; };
       document.addEventListener(name, observe);
       await request(path, 0);
       document.removeEventListener(name, observe);
@@ -139,7 +144,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       check(errorForm.querySelector('[data-request-error]')?.textContent.includes('check whether it went through'), `${path}: missing uncertain-outcome warning`);
       check(input.value === 'Unsaved writing', `${path}: lost input`);
     }
-    button.removeAttribute('hx-request');
+    button.removeAttribute('hx-config');
 
     // A modal-local failure must remain visible above the modal backdrop.
     const dialog = document.createElement('dialog');
@@ -167,14 +172,15 @@ document.addEventListener("DOMContentLoaded", async function () {
     await request("success", 200);
     check(target.querySelector("#success")?.textContent === "Saved", "successful response did not swap");
     check(!target.querySelector("script") && !window.fragmentScriptExecuted, "HTMX accepted a fragment script");
+    check(document.querySelector('#browser-oob').textContent === 'Updated' && !document.querySelector('#browser-oob script'), 'HTMX accepted an out-of-band script');
 
     const form = document.getElementById("htmx-form");
     const submitted = new Promise((resolve) => {
-      form.addEventListener("htmx:afterRequest", resolve, { once: true });
+      form.addEventListener("htmx:finally:request", resolve, { once: true });
     });
     form.requestSubmit();
     const submission = await submitted;
-    check(submission.detail.xhr.status === 200 && !submission.detail.failed, "HTMX form POST failed");
+    check(submission.detail.ctx.response?.status === 200, "HTMX form POST failed");
     check(document.querySelector("#form-target #form-success")?.textContent === "Form saved", "HTMX form response did not swap");
     check(policyViolations.length === 0, "unexpected CSP violations: " + policyViolations.join(", "));
 

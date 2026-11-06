@@ -1,6 +1,6 @@
 # Bundled browser libraries
 
-- HTMX 2.0.11: copied from HyperServer's bundled distribution. License in `htmx/LICENSE`.
+- HTMX 4.0.1: https://cdn.jsdelivr.net/npm/htmx.org@4.0.1/dist/htmx.min.js. License in `htmx/LICENSE`.
 - EasyMDE 2.21.0: `dist/easymde.min.js` and `dist/easymde.min.css` from the published npm package. License in `easymde/LICENSE`.
 - Lucide image-upload and image-library icons: SVGs in `lucide/`, with their license. The source revision is recorded in [blog.css](../css/blog.css).
 

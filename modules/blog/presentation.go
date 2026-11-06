@@ -91,7 +91,7 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 				}
 			}
 			hx := htmx.GetRequest(r)
-			if s.populateNavigation != nil && (!hx.Enabled || hx.HistoryRestore) {
+			if s.populateNavigation != nil && (!hx.Enabled || hx.HistoryRestore || hx.FullPage) {
 				data = s.populateNavigation(r, data)
 			}
 			return data

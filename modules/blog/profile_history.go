@@ -75,7 +75,7 @@ func (m *module) profileHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	view := "profileHistory"
 	request := htmx.GetRequest(r)
-	if request.Enabled && !request.HistoryRestore && request.Target == "revision-preview" {
+	if request.Enabled && !request.HistoryRestore && !request.FullPage && request.Target == "revision-preview" {
 		view = "profileRevisionPreview"
 	}
 	page := m.views[view].Content(r, data)

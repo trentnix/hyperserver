@@ -86,7 +86,7 @@
   </div>{{ end }}
   <p class="form-hint">Changes take effect when you save.</p>
   <div id="editor-errors" class="form-error" role="alert">{{ if .Data.Error }}{{ template "blog.formError" . }}{{ end }}</div>
-  <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/post/manage{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top"{{ end }}>Cancel</a></div>
+  <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}/post/manage{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top showTarget:window"{{ end }}>Cancel</a></div>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
   </div>
 </form></section>

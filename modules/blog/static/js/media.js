@@ -9,21 +9,25 @@ export function openMediaLibrary(select) {
   const selection = new AbortController();
   let choosing = false;
   let browsing;
-  dialog.addEventListener('htmx:beforeRequest', event => {
+  let filtering = false;
+  dialog.addEventListener('htmx:before:request', event => {
     if (choosing) { event.preventDefault(); return; }
-    browsing = event.detail.xhr;
+    browsing = event.detail.ctx;
+    filtering = browsing.sourceElement.matches('[data-media-filters]');
     results.setAttribute('aria-busy', 'true');
     setMediaStatus(status, 'Loading images…');
   });
-  dialog.addEventListener('htmx:afterRequest', event => {
-    if (event.detail.xhr !== browsing) return;
+  // A search replaces its source form, so completion may dispatch on document.
+  document.addEventListener('htmx:finally:request', event => {
+    if (event.detail.ctx !== browsing) return;
     results.removeAttribute('aria-busy');
-    const failed = event.detail.xhr.status < 200 || event.detail.xhr.status >= 300;
+    const statusCode = browsing.response?.status || 0;
+    const failed = statusCode < 200 || statusCode >= 300;
     setMediaStatus(status, failed ? 'Unable to load images. Close the library and try again.' : '', failed);
-  });
-  dialog.addEventListener('htmx:afterSwap', event => {
+  }, {signal: selection.signal});
+  dialog.addEventListener('htmx:after:swap', event => {
     results.scrollTop = 0;
-    if (event.detail.requestConfig.elt.matches('[data-media-filters]')) {
+    if (filtering) {
       results.querySelector('[data-media-filters] button')?.focus({preventScroll: true});
     }
   });
@@ -55,7 +59,7 @@ export function openMediaLibrary(select) {
   dialog.addEventListener('close', () => {
     selection.abort();
     htmx.trigger(results, 'htmx:abort');
-    htmx.remove(dialog);
+    dialog.remove();
     if (opener?.isConnected) opener.focus({preventScroll: true});
   }, {once: true});
   document.body.append(dialog);
@@ -211,5 +215,5 @@ document.addEventListener('submit', event => {
 function initialize(root) {
   root.querySelectorAll('.image-upload-controls').forEach(controls => { controls.hidden = false; });
 }
-document.addEventListener('htmx:afterSwap', event => initialize(event.target));
+document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
 initialize(document);

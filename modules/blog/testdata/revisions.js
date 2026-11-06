@@ -257,6 +257,11 @@
         cancel.click();
         await wait(() => !document.querySelector('#dialog-host dialog[open]'));
         assert(document.querySelectorAll('.revision-list li').length === remaining, 'Cancel removed history.');
+        const unrelated = document.createElement('div');
+        document.body.append(unrelated);
+        await htmx.ajax('GET', '/posts/recent', {target: unrelated});
+        assert(!dialog.open, 'An unrelated swap reopened the canceled confirmation.');
+        unrelated.remove();
         remove.click();
         await wait(() => document.querySelector('#dialog-host dialog[open]') && !document.querySelector('#dialog-host').classList.contains('htmx-settling'));
         dialog = document.querySelector('#dialog-host dialog');

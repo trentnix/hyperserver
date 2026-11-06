@@ -198,8 +198,8 @@ document.addEventListener('submit', event => {
     });
   }
 }, true);
-document.addEventListener('htmx:beforeCleanupElement', event => {
-  const textarea = event.detail.elt;
+document.addEventListener('htmx:before:cleanup', event => {
+  const textarea = event.target.querySelector('#post-content');
   const state = editors.get(textarea);
   if (state) {
     state.cancelPreview();
@@ -209,5 +209,5 @@ document.addEventListener('htmx:beforeCleanupElement', event => {
   }
 });
 
-document.addEventListener('htmx:afterSwap', event => initialize(event.target));
+document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
 initialize(document);

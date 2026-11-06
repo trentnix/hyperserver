@@ -1,7 +1,7 @@
 {{ define "blog.post" }}
 <header class="post-heading"><h1>{{ .Data.Title }}</h1>{{ if .Data.Draft }}<p class="page-status">Draft preview — visible to you and site editors.</p>{{ else if .Data.Scheduled }}<p class="page-status">Scheduled for {{ .Data.Published.Format "Jan 2, 2006 at 3:04 PM UTC" }} — visible to you and site editors until then.</p>{{ else }}<time datetime="{{ .Data.Published.Format "2006-01-02" }}">{{ .Data.Published.Format "January 2, 2006" }}</time>{{ end }}</header>
 {{ if .Data.CanEdit }}<div class="content-actions" role="group" aria-label="Post actions">
-  <a class="action-edit" href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">Edit</a>
+  <a class="action-edit" href="/post/update/{{ .Data.ID }}" hx-get="/post/update/{{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">Edit</a>
   <details class="action-menu"><summary>More</summary><div class="action-menu-items">
     {{ if .Data.HasHistory }}<a href="/history/post/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}
     <a class="action-delete" href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
@@ -14,7 +14,7 @@
 <section class="info-page page-manager" data-content-list="post" data-searching="{{ if .Data.Query }}true{{ else }}false{{ end }}">
 <header class="page-manager-heading">
   <div><h1>Posts</h1><p>Manage your drafts, scheduled posts, and published posts.</p></div>
-  <a class="button-primary page-create" href="/post/create" hx-get="/post/create" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">New post</a>
+  <a class="button-primary page-create" href="/post/create" hx-get="/post/create" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">New post</a>
 </header>
 <div id="management-results">{{ template "blog.postResults" . }}</div>
 </section>
@@ -57,7 +57,7 @@
 {{ range . }}<li class="page-manager-row" data-content-id="{{ .ID }}">
   <div class="page-manager-title"><a href="/post/s/{{ .Slug }}">{{ .Title }}</a>{{ if .Scheduled }}<small>Scheduled {{ .Published.Format "Jan 2, 2006 at 3:04 PM UTC" }}</small>{{ else if .Draft }}<span class="page-manager-draft">Draft</span>{{ else }}<small>Published {{ .Published.Format "January 2, 2006" }}</small>{{ end }}</div>
   {{ if .CanEdit }}<div class="page-manager-actions">
-    <a href="/post/update/{{ .ID }}" hx-get="/post/update/{{ .ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top" aria-label="Edit {{ .Title }}">Edit</a>
+    <a href="/post/update/{{ .ID }}" hx-get="/post/update/{{ .ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window" aria-label="Edit {{ .Title }}">Edit</a>
     {{ if .HasHistory }}<a href="/history/post/{{ .ID }}" hx-boost="false" aria-label="History for {{ .Title }}">History</a>{{ end }}
     <a href="/post/delete/{{ .ID }}" hx-get="/post/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
   </div>{{ end }}

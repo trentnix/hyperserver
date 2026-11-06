@@ -16,7 +16,7 @@ import (
 func (m *module) finishContentDelete(w http.ResponseWriter, r *http.Request, kind, listPath string) {
 	request := htmx.GetRequest(r)
 	current, err := url.Parse(r.Header.Get("HX-Current-URL"))
-	if request.Enabled && !request.HistoryRestore && err == nil && current.Path == listPath {
+	if request.Enabled && !request.HistoryRestore && !request.FullPage && err == nil && current.Path == listPath {
 		query := strings.TrimSpace(current.Query().Get("q"))
 		if !utf8.ValidString(query) || utf8.RuneCountInString(query) > 240 {
 			util.RedirectToURL(w, r, listPath)

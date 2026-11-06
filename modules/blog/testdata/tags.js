@@ -44,13 +44,11 @@
       await wait(() => form.elements.tags.value === 'GO, sqlite');
       assert(form.querySelector('[data-draft-recovery]').hidden, 'Restoring tags must dismiss the recovery prompt.');
 
-      // HTML history snapshots contain enhanced option values. Preserve their source labels.
-      const clone = form.cloneNode(true);
-      form.replaceWith(clone);
-      htmx.trigger(clone.parentElement, 'htmx:afterSwap');
-      clone.elements.tags.value = 'go, ';
-      clone.elements.tags.dispatchEvent(new Event('input', {bubbles: true}));
-      assert([...clone.elements.tags.list.options].some(option => option.value === 'go, sqlite'), 'History-restored suggestions accumulated tag prefixes.');
+      // Reprocessing enhanced controls must preserve the original suggestion labels.
+      htmx.process(form);
+      form.elements.tags.value = 'go, ';
+      form.elements.tags.dispatchEvent(new Event('input', {bubbles: true}));
+      assert([...form.elements.tags.list.options].some(option => option.value === 'go, sqlite'), 'Reprocessed suggestions accumulated tag prefixes.');
 
       // Copies written before tags existed must remain recoverable.
       const prefix = 'hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':' + path + ':';
@@ -58,6 +56,10 @@
       const copy = JSON.parse(localStorage.getItem(key));
       delete copy.fields.tags;
       copy.fields.title = 'Older browser copy';
+      // Finish the active editor's autosave before installing the older fixture.
+      // Otherwise navigation correctly writes a newer copy that takes priority.
+      await htmx.ajax('GET', '/post/manage', {target: '#article-content'});
+      await wait(() => !form.isConnected);
       for (const key of Object.keys(localStorage)) if (key.startsWith(prefix)) localStorage.removeItem(key);
       localStorage.setItem(prefix + 'legacy', JSON.stringify(copy));
       form = await open();

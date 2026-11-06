@@ -33,7 +33,7 @@ func articleMetadata(t *testing.T, source string) string {
 func requestArticle(h *harness, path string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest("GET", "https://blog.example"+path, nil)
 	r.Header.Set("HX-Request", "true")
-	r.Header.Set("HX-Target", "article-content")
+	r.Header.Set("HX-Target", "div#article-content")
 	for _, cookie := range h.cookies {
 		r.AddCookie(cookie)
 	}

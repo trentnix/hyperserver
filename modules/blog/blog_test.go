@@ -246,7 +246,7 @@ func TestManagementResponses(t *testing.T) {
 				}
 				if mode != "direct" {
 					r.Header.Set("HX-Request", "true")
-					r.Header.Set("HX-Target", "article-content")
+					r.Header.Set("HX-Target", "div#article-content")
 				}
 				if mode == "history" {
 					r.Header.Set("HX-History-Restore-Request", "true")
@@ -297,7 +297,7 @@ func TestReadingResponses(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "https://blog.example"+tt.path, nil)
-			r.Header.Set("HX-Target", tt.target)
+			r.Header.Set("HX-Target", "div#"+tt.target)
 			if tt.hx {
 				r.Header.Set("HX-Request", "true")
 			}

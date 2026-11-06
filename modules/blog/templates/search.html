@@ -1,5 +1,5 @@
 {{ define "blog.search" }}
-<section class="reader-search info-page" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<section class="reader-search info-page" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">
   <h1>Search</h1>
   {{ template "blog.searchForm" .Data.Query }}
   <div class="management-search-results">

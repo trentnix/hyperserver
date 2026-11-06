@@ -129,7 +129,7 @@ func TestReaderSearchSwaps(t *testing.T) {
 		for _, restore := range []bool{false, true} {
 			r := httptest.NewRequest("GET", path, nil)
 			r.Header.Set("HX-Request", "true")
-			r.Header.Set("HX-Target", "article-content")
+			r.Header.Set("HX-Target", "div#article-content")
 			if restore {
 				r.Header.Set("HX-History-Restore-Request", "true")
 			}
@@ -167,7 +167,7 @@ func TestAuthenticationPagesOmitReaderSearch(t *testing.T) {
 				r := httptest.NewRequest(http.MethodGet, path, nil)
 				if mode != "page" {
 					r.Header.Set("HX-Request", "true")
-					r.Header.Set("HX-Target", "article-content")
+					r.Header.Set("HX-Target", "div#article-content")
 				}
 				if mode == "history" {
 					r.Header.Set("HX-History-Restore-Request", "true")

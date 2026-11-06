@@ -30,15 +30,15 @@ document.addEventListener("DOMContentLoaded", async function () {
       form.elements.status.value = status;
       const oldEditor = document.getElementById("response-editor");
       const oldNotice = document.getElementById("response-notice");
-      // afterSettle observes the completed swap, not just a received response.
+      // after:swap observes all completed swaps, including out-of-band updates.
       const settled = new Promise((resolve) => {
-        document.body.addEventListener("htmx:afterSettle", resolve, { once: true });
+        document.body.addEventListener("htmx:after:swap", resolve, { once: true });
       });
       form.requestSubmit();
       const event = await settled;
-      check(event.detail.xhr.status === status, "update returned the wrong status");
-      check(event.detail.xhr.getResponseHeader("HX-Retarget") === "#response-editor", "missing retarget instruction");
-      check(event.detail.xhr.getResponseHeader("HX-Reswap") === "outerHTML settle:0", "missing reswap instruction");
+      check(event.detail.ctx.response.status === status, "update returned the wrong status");
+      check(event.detail.ctx.response.headers.get("HX-Retarget") === "#response-editor", "missing retarget instruction");
+      check(event.detail.ctx.response.headers.get("HX-Reswap") === "outerHTML settle:0", "missing reswap instruction");
 
       const editor = document.getElementById("response-editor");
       check(editor && editor !== oldEditor && !oldEditor.isConnected, "outerHTML did not replace the selected editor");

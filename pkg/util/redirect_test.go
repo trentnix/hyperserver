@@ -105,7 +105,7 @@ func TestRedirectHistoryRestoration(t *testing.T) {
 			if w.Code != status || w.Header().Get(header) != "/login" || w.Header().Get(absent) != "" || w.Body.Len() != 0 {
 				t.Fatalf("HX-Request=%q restore=%q: %d %v %q", hx, restore, w.Code, w.Header(), w.Body.String())
 			}
-			if got := strings.Join(w.Header().Values("Vary"), ", "); got != "HX-Request, HX-History-Restore-Request" {
+			if got := strings.Join(w.Header().Values("Vary"), ", "); got != "HX-Request, HX-History-Restore-Request, HX-Request-Type" {
 				t.Fatalf("Vary = %q", got)
 			}
 		}

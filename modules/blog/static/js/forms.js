@@ -78,5 +78,5 @@ for (const name of ['input', 'change']) {
     if (event.target.form && event.target.name) markField(event.target, false);
   });
 }
-document.addEventListener('htmx:afterSwap', event => initialize(event.target));
+document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
 initialize(document);

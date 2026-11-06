@@ -147,7 +147,7 @@ func TestProfileHistoryHTTP(t *testing.T) {
 		for _, restore := range []bool{false, true} {
 			r := httptest.NewRequest("GET", historyURL, nil)
 			r.Header.Set("HX-Request", "true")
-			r.Header.Set("HX-Target", "revision-preview")
+			r.Header.Set("HX-Target", "div#revision-preview")
 			r.Header.Set("HX-History-Restore-Request", strconv.FormatBool(restore))
 			for _, cookie := range h.cookies {
 				r.AddCookie(cookie)

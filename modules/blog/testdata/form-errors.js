@@ -141,7 +141,7 @@
     await wait(() => document.querySelector('#newPassword-error') && settled());
     assertField(document.querySelector('#newPassword'));
     const requestSource = document.querySelector('#change-password-form');
-    htmx.trigger(requestSource, 'htmx:sendError', {elt: requestSource, target: requestSource});
+    htmx.trigger(requestSource, 'htmx:error', {ctx: {sourceElement: requestSource, target: requestSource}});
     assertPanel(document.querySelector('[data-request-error]'));
     await report('PASS');
   } catch (error) { await report(error.message + '\n' + error.stack); }

@@ -93,7 +93,7 @@ func TestRevisionPreview(t *testing.T) {
 			path := "/history/" + kind + "/" + id + "?revision=" + strconv.FormatInt(versions[1].ID, 10)
 			request := func(path string, hx, restore bool) *httptest.ResponseRecorder {
 				r := httptest.NewRequest("GET", "https://blog.example"+path, nil)
-				r.Header.Set("HX-Target", "revision-preview")
+				r.Header.Set("HX-Target", "div#revision-preview")
 				r.Header.Set("HX-Request", strconv.FormatBool(hx))
 				r.Header.Set("HX-History-Restore-Request", strconv.FormatBool(restore))
 				for _, cookie := range h.cookies {

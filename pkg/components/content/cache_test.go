@@ -47,7 +47,7 @@ func TestRenderCacheHeaders(t *testing.T) {
 				if got := header.Values("Cache-Control"); !reflect.DeepEqual(got, tc.wantCache) {
 					t.Errorf("Cache-Control = %q, want %q", got, tc.wantCache)
 				}
-				if got, want := header.Values("Vary"), []string{"Accept-Encoding", "Origin", "HX-Request", "HX-History-Restore-Request"}; !reflect.DeepEqual(got, want) {
+				if got, want := header.Values("Vary"), []string{"Accept-Encoding", "Origin", "HX-Request", "HX-History-Restore-Request", "HX-Request-Type"}; !reflect.DeepEqual(got, want) {
 					t.Errorf("Vary = %q, want %q", got, want)
 				}
 			}
@@ -75,22 +75,25 @@ func TestRenderCacheableRepresentations(t *testing.T) {
 	cm.AddPageLayout(renderTemplateFile(t, "page.html", "<html><body>Public page</body></html>"))
 	cm.AddHtmxLayout(renderTemplateFile(t, "fragment.html", "<p>Public fragment</p>"))
 	for _, tc := range []struct {
-		name     string
-		request  string
-		restore  string
-		fragment bool
+		name        string
+		request     string
+		restore     string
+		requestType string
+		fragment    bool
 	}{
-		{"page", "", "", false},
-		{"fragment", "true", "", true},
-		{"history with HX-Request", "true", "true", false},
-		{"history without HX-Request", "", "true", false},
-		{"false history header", "true", "false", true},
-		{"noncanonical history header", "true", "TRUE", true},
+		{"page", "", "", "", false},
+		{"fragment", "true", "", "partial", true},
+		{"full document", "true", "", "full", false},
+		{"history with HX-Request", "true", "true", "full", false},
+		{"history without HX-Request", "", "true", "full", false},
+		{"false history header", "true", "false", "partial", true},
+		{"noncanonical history header", "true", "TRUE", "partial", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/same-url", nil)
 			r.Header.Set("HX-Request", tc.request)
 			r.Header.Set("HX-History-Restore-Request", tc.restore)
+			r.Header.Set("HX-Request-Type", tc.requestType)
 			want := "<html><body>Public page</body></html>"
 			if tc.fragment {
 				want = "<p>Public fragment</p>"
@@ -108,7 +111,7 @@ func TestRenderCacheableRepresentations(t *testing.T) {
 			if w.Body.String() != want || w.Result().Header.Get("Vary") != "HX-Request" || w.Result().Header.Get("Cache-Control") != "public, max-age=60" {
 				t.Fatalf("incorrect cacheable representation: %v %q", w.Result().Header, w.Body.String())
 			}
-			if got, want := w.Result().Header.Values("Vary"), []string{"HX-Request", "HX-History-Restore-Request"}; !reflect.DeepEqual(got, want) {
+			if got, want := w.Result().Header.Values("Vary"), []string{"HX-Request", "HX-History-Restore-Request", "HX-Request-Type"}; !reflect.DeepEqual(got, want) {
 				t.Fatalf("Vary = %q, want %q", got, want)
 			}
 			if (w.Header().Get("HX-Push-Url") != "") != tc.fragment {

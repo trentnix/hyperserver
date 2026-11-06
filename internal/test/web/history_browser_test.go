@@ -83,7 +83,7 @@ func TestBrowserHistory(t *testing.T) {
 				report("could not render history response: " + err.Error())
 			}
 			isPage := strings.Contains(strings.ToLower(response.Body.String()), "<!doctype html>")
-			if response.Code == http.StatusOK && isPage != (r.Header.Get(htmx.HeaderHistoryRestoreRequest) == "true") {
+			if response.Code == http.StatusOK && isPage != (r.Header.Get(htmx.HeaderHistoryRestoreRequest) == "true" || r.Header.Get(htmx.HeaderRequestType) == "full") {
 				report("history response used the wrong page/fragment templates")
 			}
 			for key, values := range response.Header() {

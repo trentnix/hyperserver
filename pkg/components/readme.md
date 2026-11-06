@@ -71,6 +71,8 @@ These responses use `no-store`, set the HTML content type, and discard any preex
 
 ## HTMX responses
 
+The bundled browser integration uses HTMX 4. Parent attributes must opt into inheritance, for example `hx-target:inherited="#content"` and `hx-boost:inherited="true"`. Request events expose `event.detail.ctx`. Use `htmx:after:swap` for completed DOM updates and `htmx:finally:request` for request cleanup. Requests with `HX-Request-Type: full`, including `hx-select` requests, receive the full-page layout.
+
 Set response instructions on the request's content:
 
 ```go
@@ -94,7 +96,7 @@ For additional fragments, define named templates containing their own `hx-swap-o
 
 Redirects take precedence and skip templates and notification retrieval. Use `RedirectURL`, not a 3xx `ResponseStatusCode`. Store destination notifications explicitly. If an application chooses 422 for validation, it must enable error swaps, for example with the script below.
 
-Rendered responses default to `Cache-Control: no-store` and add both HTMX request headers to `Vary`. An existing response `Cache-Control` header takes precedence over `page.Headers`. Keep sensitive responses uncacheable. Direct `http.Handler` and `http.ResponseWriter` remain available for streaming and downloads.
+Rendered responses default to `Cache-Control: no-store` and add `HX-Request`, `HX-History-Restore-Request`, and `HX-Request-Type` to `Vary`. An existing response `Cache-Control` header takes precedence over `page.Headers`. Keep sensitive responses uncacheable. Direct `http.Handler` and `http.ResponseWriter` remain available for streaming and downloads.
 
 ### Browser errors
 
@@ -113,7 +115,7 @@ Load it once after HTMX in the page layout:
 
 HTML 4xx/5xx responses swap into the selected target, including validation fragments. Plain-text errors appear as text without replacing inputs. Other response types receive a generic status message. Connection failures warn that a submitted change may have completed. The script does not retry requests or turn HTTP failures into successful HTMX events.
 
-Alerts appear in the submitting form or dialog, then the target's form or dialog. Otherwise, they use the optional `[data-request-errors]` container or the document body. Style `[data-request-error]` in the application stylesheet. Application handlers still own public error messages and validation markup. Only send HTML errors intended for the selected target. Keep `allowScriptTags` disabled when fragments must not execute scripts.
+Alerts appear in the submitting form or dialog, then the target's form or dialog. Otherwise, they use the optional `[data-request-errors]` container or the document body. Style `[data-request-error]` in the application stylesheet. Application handlers still own public error messages and validation markup. Only send HTML errors intended for the selected target. The script supports HTMX 4 and removes script elements from swapped fragments. Keep scripts in the page layout and enforce a Content Security Policy.
 
 Sending a new request clears that source's previous alert. A failed retry displays a new alert. Canceled requests and requests from other controls leave existing alerts alone. Programmatic requests without a source use their target to distinguish alerts.
 

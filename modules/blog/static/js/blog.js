@@ -25,8 +25,8 @@
     }
   });
   mobileLayout.addEventListener('change', closeMenu);
-  document.addEventListener('htmx:oobAfterSwap', event => {
-    if (event.detail.target.id === 'site-menu') closeMenu();
+  document.addEventListener('htmx:after:settle', event => {
+    if (event.detail.task.target.id === 'site-menu') closeMenu();
   });
   closeMenu();
   if (menu) menu.dataset.ready = '';
@@ -46,6 +46,7 @@
 
   // Apply article metadata on navigation and history restores, never on dialog swaps.
   function updatePagePresentation(root) {
+    if (!root) return;
     const article = root.id === 'article-content' ? root : root.querySelector('#article-content');
     const metadata = article?.querySelector(':scope > template[data-page-metadata]');
     if (metadata) {
@@ -58,24 +59,26 @@
   // Article navigation moves focus to the new heading. Search submissions keep
   // editing focus. In-place updates and dialogs manage their own focus.
   const navigationFocus = new WeakMap();
-  document.addEventListener('htmx:beforeRequest', event => {
-    const source = event.detail.elt;
+  document.addEventListener('htmx:before:request', event => {
+    const {ctx} = event.detail;
+    const source = ctx.sourceElement;
     const field = source.closest('.reader-search-form')?.querySelector('input[name=q]');
     if (field) {
-      navigationFocus.set(event.detail.xhr, {start: field.selectionStart, end: field.selectionEnd});
-    } else if (source.closest('a[href]') && event.detail.target.id === 'article-content') {
-      navigationFocus.set(event.detail.xhr, {heading: true});
+      navigationFocus.set(ctx, {start: field.selectionStart, end: field.selectionEnd});
+    } else if (source.closest('a[href]') && ctx.target.id === 'article-content') {
+      navigationFocus.set(ctx, {heading: true});
     }
   });
 
-  // History swaps omit detail.target but still dispatch on the swapped element.
-  document.addEventListener('htmx:afterSwap', event => {
-    updatePagePresentation(event.target);
-    if (event.target.id === 'article-content') {
-      const intent = navigationFocus.get(event.detail.xhr);
+  document.addEventListener('htmx:after:swap', event => {
+    const {ctx} = event.detail;
+    const root = typeof ctx.target === 'string' ? document.querySelector(ctx.target) : ctx.target;
+    updatePagePresentation(root);
+    if (root?.id === 'article-content') {
+      const intent = navigationFocus.get(ctx);
       if (intent) {
-        navigationFocus.delete(event.detail.xhr);
-        const target = intent.heading ? event.target.querySelector('h1') || event.target : event.target.querySelector('.reader-search-form input[name=q]');
+        navigationFocus.delete(ctx);
+        const target = intent.heading ? root.querySelector('h1') || root : root.querySelector('.reader-search-form input[name=q]');
         if (target) {
           if (intent.heading) target.tabIndex = -1;
           target.focus({preventScroll: true});

@@ -25,7 +25,7 @@ import (
 // Use HandleRenderError for failures. Call Render before committing the response.
 // Use http.ResponseWriter directly for streaming and other specialized responses.
 // History restoration renders a full page without fragment response metadata.
-// Responses vary on HX-Request and HX-History-Restore-Request and default to no-store.
+// Responses vary on HTMX request, request-type, and history headers and default to no-store.
 // An existing cache policy takes precedence over Content.Headers.
 // ResponseStatusCode defaults to 200.
 func (c *Content) Render(w http.ResponseWriter, r *http.Request) error {
@@ -123,7 +123,7 @@ func (c *Content) applyHeaders(w http.ResponseWriter) {
 			w.Header().Set(k, v)
 		}
 	}
-	util.AddVary(w.Header(), htmx.HeaderRequest, htmx.HeaderHistoryRestoreRequest)
+	util.AddVary(w.Header(), htmx.HeaderRequest, htmx.HeaderHistoryRestoreRequest, htmx.HeaderRequestType)
 	if w.Header().Get("Cache-Control") == "" {
 		w.Header().Set("Cache-Control", "no-store")
 	}

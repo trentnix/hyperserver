@@ -131,9 +131,9 @@ func NewManagedContent(r *http.Request, cm *content_services.ContentManagerServi
 }
 
 // IsHtmx reports whether the response uses HTMX fragments.
-// History restoration needs a full page, even when HX-Request is true.
+// History restoration and full-document requests need the layout, even when HX-Request is true.
 func (c *Content) IsHtmx() bool {
-	return c.HTMX.Request.Enabled && !c.HTMX.Request.HistoryRestore
+	return c.HTMX.Request.Enabled && !c.HTMX.Request.HistoryRestore && !c.HTMX.Request.FullPage
 }
 
 // AddLayout appends layout paths relative to files, in order.

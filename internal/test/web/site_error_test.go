@@ -1,16 +1,13 @@
 package web_test
 
 import (
-	"encoding/json"
 	"errors"
-	"html"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -286,48 +283,8 @@ func TestHTTPSiteErrorWriteFailure(t *testing.T) {
 func TestHTTPErrorResponseHandling(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
 		w := h.request(http.MethodGet, "/", nil, false)
-		match := regexp.MustCompile(`(?s)<meta name="htmx-config" content='([^']+)'`).FindStringSubmatch(w.Body.String())
-		if w.Code != http.StatusOK || len(match) != 2 {
-			t.Fatal("page is missing HTMX response handling configuration")
-		}
-		if !strings.Contains(w.Body.String(), `<script src="/js/site.js" defer></script>`) {
-			t.Fatal("page is missing the HTML error response handler")
-		}
-		var cfg struct {
-			ResponseHandling []struct {
-				Code  string
-				Swap  bool
-				Error bool
-			}
-		}
-		if err := json.Unmarshal([]byte(html.UnescapeString(match[1])), &cfg); err != nil {
-			t.Fatal(err)
-		}
-		for _, tc := range []struct {
-			status string
-			swap   bool
-			error  bool
-		}{
-			{"200", true, false},
-			{"204", false, false},
-			{"403", false, true},
-			{"404", false, true},
-			{"422", false, true},
-			{"500", false, true},
-		} {
-			matched := false
-			for _, rule := range cfg.ResponseHandling {
-				if regexp.MustCompile(rule.Code).MatchString(tc.status) {
-					matched = true
-					if rule.Swap != tc.swap || rule.Error != tc.error {
-						t.Errorf("status %s: swap=%v error=%v, want swap=%v error=%v", tc.status, rule.Swap, rule.Error, tc.swap, tc.error)
-					}
-					break
-				}
-			}
-			if !matched {
-				t.Errorf("no response handling rule for status %s", tc.status)
-			}
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `<script src="/js/htmx-errors.js" defer></script>`) {
+			t.Fatal("page is missing the framework error response handler")
 		}
 	})
 }

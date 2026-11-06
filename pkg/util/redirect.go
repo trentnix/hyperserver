@@ -42,8 +42,8 @@ func SafeRedirectURL(destination, fallback string) string {
 func RedirectToURL(w http.ResponseWriter, r *http.Request, redirectURL string) {
 	redirectURL = SafeRedirectURL(redirectURL, "/")
 	w.Header().Set("Cache-Control", "no-store")
-	AddVary(w.Header(), htmx.HeaderRequest, htmx.HeaderHistoryRestoreRequest)
-	// HTMX's history loader follows HTTP redirects but does not process HX-Redirect.
+	AddVary(w.Header(), htmx.HeaderRequest, htmx.HeaderHistoryRestoreRequest, htmx.HeaderRequestType)
+	// History restoration follows ordinary redirects to fetch the destination's full page.
 	if htmx.IsHtmxRequest(r) && r.Header.Get(htmx.HeaderHistoryRestoreRequest) != "true" {
 		w.Header().Set(htmx.HeaderRedirect, redirectURL)
 		w.WriteHeader(http.StatusOK)

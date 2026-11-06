@@ -227,34 +227,26 @@
       await open(browse);
       // HTMX must abort an older search before starting its replacement.
       if (stage === 'post') {
-        const send = XMLHttpRequest.prototype.send;
-        const abort = XMLHttpRequest.prototype.abort;
         let pending, wasAborted = false;
         const hold = event => {
-          if (event.target.matches('[data-media-filters]') && event.target.elements.q.value === 'stale-search') pending = event.detail.xhr;
+          const {ctx} = event.detail;
+          if (!ctx.sourceElement.matches('[data-media-filters]') || ctx.sourceElement.elements.q.value !== 'stale-search') return;
+          pending = ctx;
+          ctx.fetch = () => new Promise((resolve, reject) => {
+            ctx.request.signal.addEventListener('abort', () => {
+              wasAborted = true;
+              reject(new DOMException('Aborted', 'AbortError'));
+            }, {once: true});
+          });
         };
-        document.addEventListener('htmx:beforeSend', hold);
-        XMLHttpRequest.prototype.send = function(body) {
-          if (this === pending) return;
-          return send.call(this, body);
-        };
-        // An unsent test request needs the abort event a real in-flight request emits.
-        XMLHttpRequest.prototype.abort = function() {
-          abort.call(this);
-          if (this === pending) {
-            wasAborted = true;
-            this.dispatchEvent(new ProgressEvent('abort'));
-          }
-        };
+        document.addEventListener('htmx:before:request', hold);
         const search = library().querySelector('[data-media-filters]');
         search.elements.q.value = 'stale-search';
         search.requestSubmit();
         await wait(() => pending);
         await filter({q: '.png'});
         assert(wasAborted && library().querySelector('[name=q]').value === '.png', 'An older search was not canceled or replaced the current search.');
-        XMLHttpRequest.prototype.send = send;
-        XMLHttpRequest.prototype.abort = abort;
-        document.removeEventListener('htmx:beforeSend', hold);
+        document.removeEventListener('htmx:before:request', hold);
       }
       await filter({q: 'not-an-existing-image'});
       assert(!library().querySelector('[data-media-select]') && library().textContent.includes('No images match'), 'Empty search did not explain the result.');
@@ -296,7 +288,11 @@
       assert(form.elements.content.value === editor.getValue(), 'Markdown textarea was not synchronized.');
       if (stage === 'post') {
         // A picker overlays the editor page without replacing its form.
-        await htmx.ajax('GET', '/pages/create', {target: '#article-content'});
+        const navigation = htmx.ajax('GET', '/pages/create', {target: '#article-content'});
+        await wait(() => document.querySelector('.editor-confirmation[open]'));
+        document.querySelector('[data-confirm-accept]').click();
+        await navigation;
+        await wait(() => document.querySelector('#page-form .CodeMirror'));
         const parent = document.querySelector('.editor-panel');
         assert(parent && !parent.closest('dialog'), 'Editor must open in the page.');
         await choose(parent.querySelector('[data-media-browse]'));
@@ -443,15 +439,16 @@
     const previous = form.elements.imageURL.value;
     const originalFetch = window.fetch;
     const failLibrary = event => {
-      if (event.detail.path.startsWith('/media')) event.detail.parameters.usage = 'invalid';
+      const {ctx} = event.detail;
+      if (ctx.request.action.startsWith('/media')) ctx.request.body.set('usage', 'invalid');
     };
-    document.addEventListener('htmx:configRequest', failLibrary);
+    document.addEventListener('htmx:config:request', failLibrary);
     picker.querySelector('[data-media-browse]').click();
     await wait(() => library()?.querySelector('[data-media-status]').textContent.includes('Unable to load'));
     assert(form.elements.imageURL.value === previous, 'Failed library load changed the selection.');
     library().querySelector('[data-close-dialog]').click();
     await wait(() => !document.querySelector('.media-browser'));
-    document.removeEventListener('htmx:configRequest', failLibrary);
+    document.removeEventListener('htmx:config:request', failLibrary);
 
     await open(picker.querySelector('[data-media-browse]'));
     window.fetch = (path, options) => options?.method === 'HEAD' ? Promise.resolve(new Response('', {status: 500})) : originalFetch(path, options);

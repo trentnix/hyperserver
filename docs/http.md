@@ -29,7 +29,7 @@ Verified proxy information controls client-IP limits and cookie security. `publi
 
 Prepared templates reuse parsed HTML, not request data. Rebuild the application to change embedded templates or assets. See [rendering and forms](../pkg/components/readme.md).
 
-Rendered pages and fragments default to `Cache-Control: no-store` and vary by `HX-Request` and `HX-History-Restore-Request`. Keep that policy for personalized content. Public responses can opt in through `page.Headers`. The framework does not cache rendered responses.
+Rendered pages and fragments default to `Cache-Control: no-store` and vary by `HX-Request`, `HX-History-Restore-Request`, and `HX-Request-Type`. Keep that policy for personalized content. Public responses can opt in through `page.Headers`. The framework does not cache rendered responses.
 
 Redirect destinations must begin with a single `/`. Ordinary requests receive 303. HTMX requests receive 200 with `HX-Redirect`. History restoration uses full-page responses and ordinary redirects.
 

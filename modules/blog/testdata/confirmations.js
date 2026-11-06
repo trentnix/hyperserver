@@ -66,6 +66,14 @@
     const unload = new Event('beforeunload', {cancelable: true});
     window.dispatchEvent(unload);
     assert(unload.defaultPrevented, 'Cancel must not suppress the browser unload warning.');
+    // Programmatic requests use HTMX's confirmation lifecycle. Cancel must
+    // resolve the request and release its queue so the next attempt can run.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const navigation = htmx.ajax('GET', '/post/manage', {target: '#article-content'});
+      answer(prompt('Leave without saving?'), false);
+      await navigation;
+      assert(form.isConnected && form.elements.content.value === 'Recover this writing.', 'Canceled request discarded writing.');
+    }
     close.click();
     answer(prompt('Leave without saving?'), true);
     await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));

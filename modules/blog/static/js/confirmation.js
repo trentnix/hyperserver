@@ -3,8 +3,8 @@
 (() => {
   let pending = false;
 
-  window.blogConfirm = ({title, message, action, cancel = 'Cancel'}, proceed) => {
-    if (pending) return;
+  window.blogConfirm = ({title, message, action, cancel = 'Cancel'}, proceed, decline = () => {}) => {
+    if (pending) { decline(); return; }
     pending = true;
     const previousFocus = document.activeElement;
     const dialog = document.createElement('dialog');
@@ -26,6 +26,7 @@
       pending = false;
       if (previousFocus?.isConnected) previousFocus.focus({preventScroll: true});
       if (accepted) proceed();
+      else decline();
     }
     dialog.querySelector('[data-confirm-cancel]').addEventListener('click', () => finish(false));
     dialog.querySelector('[data-confirm-accept]').addEventListener('click', () => finish(true));

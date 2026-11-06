@@ -418,7 +418,7 @@ func TestReaderSearchOmission(t *testing.T) {
 	request := func(path string, hx, restore bool) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("GET", "https://blog.example"+path, nil)
 		r.Header.Set("HX-Request", fmt.Sprint(hx))
-		r.Header.Set("HX-Target", "article-content")
+		r.Header.Set("HX-Target", "div#article-content")
 		r.Header.Set("HX-History-Restore-Request", fmt.Sprint(restore))
 		for _, cookie := range h.cookies {
 			r.AddCookie(cookie)

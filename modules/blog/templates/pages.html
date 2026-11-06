@@ -1,19 +1,19 @@
 {{ define "blog.page" }}
 <section class="info-page{{ if eq .Data.ChildrenDisplay "blocks" }} page-blocks{{ end }}">
-{{ with .Data.Parent }}<a class="page-back" href="{{ .URL }}" hx-get="{{ .URL }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">&larr; {{ .Title }}</a>{{ end }}
+{{ with .Data.Parent }}<a class="page-back" href="{{ .URL }}" hx-get="{{ .URL }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">&larr; {{ .Title }}</a>{{ end }}
 {{ if not .Data.Published }}<p class="page-status">Draft — visible only to you</p>{{ end }}
 <h1>{{ .Data.Title }}</h1>
 {{ if .LayoutData.Admin }}<div class="content-actions" role="group" aria-label="Page actions">
-  <a class="action-edit" href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">Edit</a>
+  <a class="action-edit" href="/pages/update/{{ .Data.ID }}" hx-get="/pages/update/{{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">Edit</a>
   <details class="action-menu"><summary>More</summary><div class="action-menu-items">
-    <a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">New subpage</a>
+    <a href="/pages/create?parent={{ .Data.ID }}" hx-get="/pages/create?parent={{ .Data.ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">New subpage</a>
     {{ if .Data.HasHistory }}<a href="/history/page/{{ .Data.ID }}" hx-boost="false">History</a>{{ end }}
     <a class="action-delete" href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
   </div></details>
 </div>{{ end }}
 <div class="post-body">{{ .Data.HTML }}</div>
 {{ if ne .Data.ChildrenDisplay "hidden" }}
-<div class="{{ if eq .Data.ChildrenDisplay "blocks" }}page-grid{{ else }}page-preview-list{{ end }}" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace">
+<div class="{{ if eq .Data.ChildrenDisplay "blocks" }}page-grid{{ else }}page-preview-list{{ end }}" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">
 {{ range .Data.Children }}<a class="page-card" href="{{ .URL }}">
   <img src="{{ .PreviewURL }}" alt="" width="800" height="500" loading="lazy">
   <div class="page-card-copy">{{ if not .Published }}<span class="page-status">Draft</span>{{ end }}<h2>{{ .Title }}</h2>{{ if .Summary }}<p>{{ .Summary }}</p>{{ end }}<span class="page-read">Explore &rarr;</span></div>
@@ -27,7 +27,7 @@
 <section class="info-page page-manager" data-content-list="page" data-searching="{{ if .Data.Query }}true{{ else }}false{{ end }}">
 <header class="page-manager-heading">
   <div><h1>Pages</h1><p>Manage your pages and subpages.</p></div>
-  <a class="button-primary page-create" href="/pages/create" hx-get="/pages/create" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top">New page</a>
+  <a class="button-primary page-create" href="/pages/create" hx-get="/pages/create" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window">New page</a>
 </header>
 <div id="management-results">{{ template "blog.pageResults" . }}</div>
 </section>
@@ -53,7 +53,7 @@
   <div class="page-manager-row">
     <div class="page-manager-title"><a href="{{ .URL }}">{{ .Title }}</a><small>{{ .URL }}</small>{{ if not .Published }}<span class="page-manager-draft">Draft</span>{{ end }}</div>
     <div class="page-manager-actions">
-      <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:window:top" aria-label="Edit {{ .Title }}">Edit</a>
+      <a href="/pages/update/{{ .ID }}" hx-get="/pages/update/{{ .ID }}" hx-target="#article-content" hx-push-url="true" hx-swap="innerHTML show:top showTarget:window" aria-label="Edit {{ .Title }}">Edit</a>
       {{ if .HasHistory }}<a href="/history/page/{{ .ID }}" hx-boost="false" aria-label="History for {{ .Title }}">History</a>{{ end }}
       <a href="/pages/delete/{{ .ID }}" hx-get="/pages/delete/{{ .ID }}" hx-target="#dialog-host" aria-label="Delete {{ .Title }}">Delete</a>
     </div>

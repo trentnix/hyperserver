@@ -1,8 +1,8 @@
 {{ define "blog.mediaLibrary" }}
-<section class="page-manager media-library" data-media-library hx-boost="false"{{ if .Data.Picking }} hx-target="#media-results" hx-swap="innerHTML show:none settle:0" hx-sync="#media-results:replace"{{ end }}>
+<section class="page-manager media-library" data-media-library hx-boost:inherited="false"{{ if .Data.Picking }} hx-target:inherited="#media-results" hx-swap:inherited="innerHTML show:none settle:0" hx-sync:inherited="#media-results:replace"{{ end }}>
   {{ if not .Data.Picking }}
   <header class="page-manager-heading"><h1>Media</h1><a class="button-primary page-create media-cleanup-link" href="/media/unused">Clean up uploads</a></header>
-  <form class="media-upload" data-media-upload method="post" action="/media/upload" enctype="multipart/form-data" hx-post="/media/upload" hx-encoding="multipart/form-data" hx-target="#library-upload-status" hx-swap="innerHTML" hx-disabled-elt="find input, find button" hx-sync="this:drop">
+  <form class="media-upload" data-media-upload method="post" action="/media/upload" enctype="multipart/form-data" hx-post="/media/upload" hx-encoding="multipart/form-data" hx-target="#library-upload-status" hx-swap="innerHTML" hx-disable="findAll input, findAll button" hx-sync="this:drop">
     <details>
       <summary>Upload image</summary>
       <div class="media-upload-fields">
@@ -47,7 +47,7 @@
 {{ end }}
 
 {{ define "blog.mediaDetail" }}
-<section class="page-manager" hx-boost="false">
+<section class="page-manager" hx-boost:inherited="false">
   <header class="page-manager-heading"><h1>Image details</h1><a href="/media">Back to Media</a></header>
   <div class="media-detail-layout">
   <figure class="media-detail-preview">
@@ -87,7 +87,7 @@
 {{ end }}
 
 {{ define "blog.media" }}
-<section class="page-manager" hx-boost="false">
+<section class="page-manager" hx-boost:inherited="false">
   <header class="page-manager-heading"><h1>Media cleanup</h1>{{ if .Data.Files }}<a class="button-primary page-create" href="/media/delete-unused">Delete all unused</a>{{ end }}</header>
   <p><a href="/media">Browse uploads</a></p>
   <p>Save any open editors before cleanup. Unsaved edits and browser recovery copies cannot be checked. Deleting an image is permanent.</p>
@@ -114,7 +114,7 @@
 {{ end }}
 
 {{ define "blog.mediaDelete" }}
-<section class="confirmation-panel" hx-boost="false">
+<section class="confirmation-panel" hx-boost:inherited="false">
   <h1>Delete image?</h1>
   <div class="revision-image"><img src="/images/{{ .Data.ID }}" alt="Image selected for deletion"></div>
   <p>This permanently deletes the uploaded file. Unsaved editors and browser recovery copies may still use it. Save those changes first.</p>
@@ -131,7 +131,7 @@
 {{ end }}
 
 {{ define "blog.mediaDeleteAll" }}
-<section class="confirmation-panel" hx-boost="false">
+<section class="confirmation-panel" hx-boost:inherited="false">
   <h1>Delete unused images?</h1>
   {{ if .Data.Files }}
   <p>This permanently deletes up to <strong>{{ len .Data.Files }} {{ if eq (len .Data.Files) 1 }}image{{ else }}images{{ end }}</strong> totaling <strong>{{ .Data.Bytes }} bytes</strong>.</p>
@@ -147,7 +147,7 @@
 {{ end }}
 
 {{ define "blog.mediaDeleteResult" }}
-<section class="confirmation-panel" hx-boost="false">
+<section class="confirmation-panel" hx-boost:inherited="false">
   <h1>{{ if .Data.Failed }}Cleanup stopped{{ else }}Cleanup complete{{ end }}</h1>
   <p role="status">Deleted: {{ .Data.Deleted }}. Skipped: {{ .Data.Skipped }}. Not processed: {{ .Data.Remaining }}.</p>
   {{ if .Data.Skipped }}<p>Skipped images were in use, uploaded again, or already removed.</p>{{ end }}

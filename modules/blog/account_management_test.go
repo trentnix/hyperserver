@@ -71,7 +71,7 @@ func TestAccountInlineForms(t *testing.T) {
 					r := httptest.NewRequest(method, "https://blog.example"+path, strings.NewReader("password=wrong"))
 					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 					r.Header.Set("HX-Request", "true")
-					r.Header.Set("HX-Target", target)
+					r.Header.Set("HX-Target", "div#"+target)
 					for _, cookie := range h.cookies {
 						r.AddCookie(cookie)
 					}

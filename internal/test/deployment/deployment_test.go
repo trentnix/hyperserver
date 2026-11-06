@@ -195,7 +195,7 @@ func checkCache(t *testing.T, c *http.Client, email string) {
 			if full := strings.Contains(strings.ToLower(body), "<!doctype html>"); full != (!variant.hx || variant.history) {
 				t.Fatal("cache mixed page and fragment")
 			}
-			for _, header := range []string{"HX-Request", "HX-History-Restore-Request"} {
+			for _, header := range []string{"HX-Request", "HX-History-Restore-Request", "HX-Request-Type"} {
 				if !slices.ContainsFunc(strings.Split(strings.Join(r.Header.Values("Vary"), ","), ","), func(value string) bool { return strings.EqualFold(strings.TrimSpace(value), header) }) {
 					t.Fatal("missing cache variance")
 				}

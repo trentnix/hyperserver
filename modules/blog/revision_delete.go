@@ -105,13 +105,13 @@ func (m *module) deleteRevision(w http.ResponseWriter, r *http.Request) {
 // Ordinary navigation and history restoration use the caller's redirect instead.
 func (m *module) revisionDeleted(w http.ResponseWriter, r *http.Request, next string) bool {
 	request := htmx.GetRequest(r)
-	if !request.Enabled || request.HistoryRestore {
+	if !request.Enabled || request.HistoryRestore || request.FullPage {
 		return false
 	}
 	// next is constructed by the caller, never taken from request headers.
 	r = r.Clone(r.Context())
 	r.URL, _ = url.Parse(next)
-	r.Header.Set(htmx.HeaderTarget, "revision-preview")
+	r.Header.Set(htmx.HeaderTarget, "section#revision-preview")
 	if r.URL.Path == "/profile/history" {
 		m.profileHistory(w, r)
 	} else {

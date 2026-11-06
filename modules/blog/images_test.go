@@ -86,7 +86,7 @@ func TestMediaUploadForms(t *testing.T) {
 		r.Header.Set("Content-Type", writer.FormDataContentType())
 		if hx {
 			r.Header.Set("HX-Request", "true")
-			r.Header.Set("HX-Target", "library-upload-status")
+			r.Header.Set("HX-Target", "div#library-upload-status")
 		}
 		for _, cookie := range h.cookies {
 			r.AddCookie(cookie)

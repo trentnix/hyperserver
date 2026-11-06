@@ -14,13 +14,12 @@ func TestGetRequest(t *testing.T) {
 			for _, header := range []string{"hx-request", "hx-boosted", "hx-history-restore-request"} {
 				r.Header.Set(header, value)
 			}
-			r.Header.Set("HX-Trigger", "save-button")
-			r.Header.Set("HX-Trigger-Name", "save")
-			r.Header.Set("HX-Target", "editor")
-			r.Header.Set("HX-Prompt", "A&B + café")
+			r.Header.Set("HX-Source", "button#save-button")
+			r.Header.Set("HX-Target", "div#editor")
+			r.Header.Set("HX-Request-Type", "full")
 			want := Request{
 				Enabled: value == "true", Boosted: value == "true", HistoryRestore: value == "true",
-				Trigger: "save-button", TriggerName: "save", Target: "editor", Prompt: "A&B + café",
+				Source: "button#save-button", Target: "editor", FullPage: true,
 			}
 			if got := GetRequest(r); got != want {
 				t.Fatalf("GetRequest = %+v, want %+v", got, want)
@@ -46,6 +45,19 @@ func TestGetRequest(t *testing.T) {
 	}
 }
 
+func TestRequestTarget(t *testing.T) {
+	for _, tc := range []struct{ header, id string }{
+		{"", ""}, {"body", ""}, {"article#article-content", "article-content"}, {"div#revision-preview", "revision-preview"},
+		{"div#caf%C3%A9", "café"}, {"div#invalid%", ""},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set(HeaderTarget, tc.header)
+		if got := GetRequest(r).Target; got != tc.id {
+			t.Errorf("target %q: got %q, want %q", tc.header, got, tc.id)
+		}
+	}
+}
+
 type recordingWriter struct {
 	*httptest.ResponseRecorder
 	statuses []int
@@ -66,7 +78,7 @@ func TestResponseApply(t *testing.T) {
 			response := Response{
 				PushURL: "/next?q=1", ReplaceURL: "/current", Refresh: true,
 				Retarget: "#editor", Reswap: "outerHTML settle:0",
-				Trigger: `{"saved":{"id":42}}`, TriggerAfterSwap: "updated", TriggerAfterSettle: "ready",
+				Trigger:   `{"saved":{"id":42}}`,
 				NoContent: noContent,
 			}
 			original := response
@@ -79,7 +91,7 @@ func TestResponseApply(t *testing.T) {
 			for key, value := range map[string]string{
 				"HX-Push-Url": "/next?q=1", "HX-Replace-Url": "/current", "HX-Refresh": "true",
 				"HX-Retarget": "#editor", "HX-Reswap": "outerHTML settle:0",
-				"HX-Trigger": `{"saved":{"id":42}}`, "HX-Trigger-After-Swap": "updated", "HX-Trigger-After-Settle": "ready",
+				"HX-Trigger":  `{"saved":{"id":42}}`,
 				"X-Unrelated": "preserved",
 			} {
 				want.Set(key, value)
@@ -104,7 +116,7 @@ func TestResponseApply(t *testing.T) {
 
 func TestEmptyResponsePreservesHeaders(t *testing.T) {
 	w := &recordingWriter{ResponseRecorder: httptest.NewRecorder()}
-	for _, header := range []string{HeaderPushURL, HeaderReplaceURL, HeaderRefresh, HeaderRetarget, HeaderReswap, HeaderTrigger, HeaderTriggerAfterSwap, HeaderTriggerAfterSettle, "X-Unrelated"} {
+	for _, header := range []string{HeaderPushURL, HeaderReplaceURL, HeaderRefresh, HeaderRetarget, HeaderReswap, HeaderTrigger, "X-Unrelated"} {
 		w.Header().Set(header, "existing")
 	}
 	want := w.Header().Clone()

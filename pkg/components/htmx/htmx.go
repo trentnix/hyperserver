@@ -3,23 +3,27 @@
 // a response body.
 package htmx
 
-import "net/http"
+import (
+	"net/http"
+	"net/url"
+	"strings"
+)
 
 const (
 	// HeaderBoosted names the request header indicating an hx-boost request.
 	HeaderBoosted = "HX-Boosted"
-	// HeaderHistoryRestoreRequest names the request header for an HTMX history-cache miss.
+	// HeaderHistoryRestoreRequest names the request header for HTMX history restoration.
 	HeaderHistoryRestoreRequest = "HX-History-Restore-Request"
-	// HeaderPrompt names the request header containing an hx-prompt answer.
-	HeaderPrompt = "HX-Prompt"
 	// HeaderRequest names the header whose value is true for HTMX requests.
 	HeaderRequest = "HX-Request"
-	// HeaderTarget names the request header containing the target element ID.
+	// HeaderRequestType indicates whether HTMX needs a full document or a partial.
+	HeaderRequestType = "HX-Request-Type"
+	// HeaderTarget names the request header containing the target's tag and ID.
 	HeaderTarget = "HX-Target"
-	// HeaderTrigger names the request header for the triggering element and the response header for client events.
+	// HeaderTrigger names the response header for client events.
 	HeaderTrigger = "HX-Trigger"
-	// HeaderTriggerName names the request header containing the triggering element's name.
-	HeaderTriggerName = "HX-Trigger-Name"
+	// HeaderSource names the request header containing the source's tag and ID.
+	HeaderSource = "HX-Source"
 )
 
 const (
@@ -35,10 +39,6 @@ const (
 	HeaderRetarget = "HX-Retarget"
 	// HeaderReswap names the response header overriding the swap method.
 	HeaderReswap = "HX-Reswap"
-	// HeaderTriggerAfterSettle names the response header for events after HTMX settles.
-	HeaderTriggerAfterSettle = "HX-Trigger-After-Settle"
-	// HeaderTriggerAfterSwap names the response header for events after an HTMX swap.
-	HeaderTriggerAfterSwap = "HX-Trigger-After-Swap"
 )
 
 type (
@@ -47,22 +47,21 @@ type (
 		Enabled        bool
 		Boosted        bool
 		HistoryRestore bool
-		Trigger        string
-		TriggerName    string
-		Target         string
-		Prompt         string
+		FullPage       bool
+		// Source contains the source element's tag and optional URI-encoded ID.
+		Source string
+		// Target is the target element's ID, without its tag or # prefix.
+		Target string
 	}
 
 	// Response contains server-selected HTMX response metadata.
 	Response struct {
-		PushURL            string
-		Refresh            bool
-		ReplaceURL         string
-		Retarget           string
-		Reswap             string
-		Trigger            string
-		TriggerAfterSwap   string
-		TriggerAfterSettle string
+		PushURL    string
+		Refresh    bool
+		ReplaceURL string
+		Retarget   string
+		Reswap     string
+		Trigger    string
 
 		// NoContent makes Apply commit HTTP 204 after setting the headers.
 		NoContent bool
@@ -76,13 +75,14 @@ func NewResponse() *Response {
 
 // GetRequest reads HTMX request headers. Boolean headers must equal "true".
 func GetRequest(r *http.Request) Request {
+	_, target, _ := strings.Cut(r.Header.Get(HeaderTarget), "#")
+	target, _ = url.PathUnescape(target)
 	return Request{
 		Enabled:        IsHtmxRequest(r),
 		Boosted:        r.Header.Get(HeaderBoosted) == "true",
-		Trigger:        r.Header.Get(HeaderTrigger),
-		TriggerName:    r.Header.Get(HeaderTriggerName),
-		Target:         r.Header.Get(HeaderTarget),
-		Prompt:         r.Header.Get(HeaderPrompt),
+		FullPage:       r.Header.Get(HeaderRequestType) == "full",
+		Source:         r.Header.Get(HeaderSource),
+		Target:         target,
 		HistoryRestore: r.Header.Get(HeaderHistoryRestoreRequest) == "true",
 	}
 }
@@ -99,12 +99,6 @@ func (r Response) Apply(w http.ResponseWriter) {
 	}
 	if r.Trigger != "" {
 		w.Header().Set(HeaderTrigger, r.Trigger)
-	}
-	if r.TriggerAfterSwap != "" {
-		w.Header().Set(HeaderTriggerAfterSwap, r.TriggerAfterSwap)
-	}
-	if r.TriggerAfterSettle != "" {
-		w.Header().Set(HeaderTriggerAfterSettle, r.TriggerAfterSettle)
 	}
 	if r.ReplaceURL != "" {
 		w.Header().Set(HeaderReplaceURL, r.ReplaceURL)

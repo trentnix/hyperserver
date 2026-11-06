@@ -469,7 +469,7 @@ document.removeEventListener = function(type, callback, options) {
       const button = document.createElement('button');
       button.type = 'button';
       button.setAttribute('hx-post', '/test/timeout');
-      button.setAttribute('hx-request', '{"timeout":30}');
+      button.setAttribute('hx-config', '{"timeout":30}');
       button.setAttribute('hx-target', '#editor-errors');
       form.append(button);
       htmx.process(button);
