@@ -302,7 +302,50 @@ func TestProfileImageIPv6DefaultPort(t *testing.T) {
 	}
 }
 
-type failedImageAccess struct{}
+func TestAuthorImageHistoryBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name, source, preview string
+		allowed               bool
+	}{
+		{"preview", "Body", "saved.png", true},
+		{"image", "![Saved](/images/saved.png)", "", true},
+		{"download", "[Download](/images/saved.png)", "", true},
+		{"encoded URL", "![Saved](/images/%73aved.png)", "", true},
+		{"code", "`![Not an image](/images/saved.png)`", "", false},
+		{"foreign host", "![Foreign](https://other.example/images/saved.png)", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			store := h.blog.posts.(*sqliteRepository)
+			p, err := savePostFixture(store, t.Context(), Post{Title: "Historical image", Slug: "history", AuthorID: "owner", Draft: true, Markdown: tc.source, PreviewImage: tc.preview})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.Markdown, p.PreviewImage = "Removed", ""
+			if _, err := savePostFixture(store, t.Context(), p); err != nil {
+				t.Fatal(err)
+			}
+			for _, author := range []string{"owner", "other", ""} {
+				got, err := store.ImageInAuthorsPosts(t.Context(), author, "/images/saved.png")
+				if err != nil || got != (tc.allowed && author == "owner") {
+					t.Fatalf("author %q: allowed=%t, error=%v", author, got, err)
+				}
+			}
+			revisions, err := store.ListRevisions(t.Context(), "post", p.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.DeleteRevision(t.Context(), "post", p.ID, revisions[len(revisions)-1].ID); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := store.ImageInAuthorsPosts(t.Context(), "owner", "/images/saved.png"); err != nil || got {
+				t.Fatalf("deleted revision still grants access: %t %v", got, err)
+			}
+		})
+	}
+}
+
+type failedImageAccess struct{ imageAccessRepository }
 
 func (failedImageAccess) ImageIsPublic(context.Context, ...string) (bool, error) {
 	return false, errors.New("private visibility lookup failure")

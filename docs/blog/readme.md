@@ -1,6 +1,6 @@
 # Blog
 
-A Markdown blog with posts, nested pages, images, search, RSS, and administrator-only publishing. It uses HyperServer's configured services, prepared templates, and HTMX responses. Authentication pages share the blog's styling.
+A Markdown blog with posts, nested pages, images, search, RSS, and Admin and Poster roles. It uses HyperServer's configured services, prepared templates, and HTMX responses. Authentication pages share the blog's styling.
 
 This is an experimental application, not a production-readiness guarantee. Run one instance per content database and uploads directory. The current process lock requires Linux, macOS, or BSD. Windows is not supported.
 
@@ -13,7 +13,7 @@ cp config-template.yaml config.yaml
 cp modules/blog/config-template.yaml modules/blog/config.yaml
 ```
 
-Set `adminEmail` in `modules/blog/config.yaml` before starting. Only that address can register or log in. The supplied configuration requires email verification before administrative access.
+Set `adminEmail` in `modules/blog/config.yaml` before starting. That address must register first and becomes the first Admin. The supplied configuration requires email verification before administrative access.
 
 You can enable [Google authentication](../google-authentication.md) alongside email or on its own. The login page shows only enabled providers. Existing administrators must log in and connect Google before disabling their original login method.
 
@@ -33,9 +33,19 @@ Open <http://127.0.0.1:8080/> and register the configured administrator address.
 
 Public content opens after registration and any required verification. After saving Site Profile, you can view the site or write a post. Setup progress survives restarts, and verified administrators skip registration. If no administrator exists, enable `auth.registrationEnabled` to register.
 
-A fresh installation shows “My Blog,” neutral portrait/favicon assets, no background, and no posts or pages. Use **Site Profile** for the name, bio, and images. Create About or Projects through **Pages**. Content belongs in the database. Operational settings and the administrator allowlist belong in configuration.
+A fresh installation shows “My Blog,” neutral portrait/favicon assets, no background, and no posts or pages. Use **Site Profile** for the name, bio, and images. Create About or Projects through **Pages**. Content and user access belong in the database. Operational settings and the first administrator address belong in configuration.
 
 Runtime configuration, databases, uploads, and local assets are ignored by Git. Stop the server with Ctrl+C. Restart after changing configuration. After registering, you can disable registration with `auth.registrationEnabled: false`.
+
+## Users and invitations
+
+Set `multiUser: true` in `modules/blog/config.yaml` and restart to enable invitations. The default is `false`. When disabled, Invite user, Resend invitation, and invitation endpoints are unavailable. Users stays visible to Admins while multiple users or pending invitations remain. Admins can still change roles and remove other users. Invited users cannot register. Already registered users keep their access and can complete email verification. Accounts, roles, content, and invitation tokens are preserved, so unexpired invitations work again after re-enabling the setting. First-time administrator setup remains available.
+
+Admins can open **Users** in the administration bar to invite users, change roles, or remove access. Admins manage all content and users. Posters create, publish, schedule, edit, and delete their own posts. Posters can upload images in the editor but cannot manage pages, the site profile, the shared media library, or other users' posts. Editing or restoring a post keeps its original owner.
+
+Invitations require mail delivery and `auth.registrationEnabled: true`. Set `inviteExpiration` in the blog configuration to control link lifetime. The default is `168h` (seven days). Resending replaces the previous link. Canceling removes the invitation and its access. Link expiry does not remove the invited account. Without a valid link, the recipient can still register at the invited address and must complete configured email verification. A valid link proves that address during registration. Google registration uses Google's verified address.
+
+Changing a role or removing access invalidates existing sessions. Removing access keeps the account, credentials, posts, and images so an Admin can invite that address again. Admins cannot remove themselves, but can remove other Admins. The last active Admin cannot be demoted. Changing `adminEmail` after setup does not transfer ownership or grant access to another address.
 
 ## Guides
 
@@ -50,13 +60,13 @@ Runtime configuration, databases, uploads, and local assets are ignored by Git. 
 
 [modules/blog](../../modules/blog) owns content rules, templates, handlers, SQLite content storage, and image files. Module configuration loads from `modules/blog/config.yaml`. Relative storage paths use the application configuration directory. Templates, scripts, styles, and default assets are embedded, so rebuild after changing them.
 
-Fresh startup creates blog schema version 1 from the embedded [schema](../../modules/blog/migrations/000001_blog.up.sql). Current rows hold identity, publication settings, and a pointer to the selected content version. Posts, pages, and site profiles each store their current and historical content together. Image references belong to individual post or page versions. Read-only views join current pointers to content for rendering and search.
+Fresh startup creates blog schema version 2 from the embedded [migrations](../../modules/blog/migrations). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Image references belong to individual post or page versions. Read-only views join current pointers to content for rendering and search.
 
-Existing databases must have a clean version 1 in `blog_schema_version`. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
+Existing databases must have a clean version 2 in `blog_schema_version`. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
 
 ## Database migrations
 
-The application supports one current schema, defined by the bootstrap migration. Earlier development layouts and backups are unsupported. Use fresh storage, not a changed version marker.
+The application supports one current schema, defined by its numbered migrations. Version 1 databases can upgrade with the ownership migration. On the next startup, existing unowned posts and images belong to the first administrator. Earlier development layouts and backups are unsupported. Use fresh storage, not a changed version marker.
 
 For later migrations, stop the server and all other writers. Create and verify a [backup](backup.md) with a compatible binary. From the repository root:
 
@@ -68,7 +78,7 @@ migrate -path modules/blog/migrations \
 
 Keep `x-migrations-table=blog_schema_version` and `_foreign_keys=on` in every command. The CLI does not acquire the blog's maintenance lock. Run only one migration process, with all other writers stopped. Accounts and sessions have separate migrations even when they share the database file.
 
-The baseline's `down 1` deletes all blog content. It does not convert content to the obsolete layout. Back up before running it. Failed migrations roll back their SQL but leave a dirty version marker. Inspect and repair the failure before correcting that marker. `force` changes metadata, not tables or data.
+Reversing the ownership migration removes ownership metadata but preserves content. Reversing the baseline deletes all blog content. It does not convert content to the obsolete layout. Back up before downgrading. Failed migrations roll back their SQL but leave a dirty version marker. Inspect and repair the failure before correcting that marker. `force` changes metadata, not tables or data.
 
 Keep deployed migration files immutable. For a later schema change, add a numbered up/down pair and update the required version, current bootstrap and validation, repositories, and backup compatibility together. Runtime code must support only the resulting schema. Test populated upgrades, downgrades, failed migrations, and fresh startup. Set `HS_TEST_MIGRATE` to the pinned CLI executable to run migration integration tests.
 

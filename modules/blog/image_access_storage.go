@@ -51,3 +51,22 @@ func (s *sqliteRepository) ImageIsPublic(ctx context.Context, references ...stri
 	err := s.db.QueryRowContext(ctx, fmt.Sprintf(publicImageQuery, placeholders), args...).Scan(&public)
 	return public, err
 }
+
+// ImageInAuthorsPosts grants a writer access to images already attached to any
+// version of their own posts, including images added by an administrator.
+func (s *sqliteRepository) ImageInAuthorsPosts(ctx context.Context, author string, references ...string) (bool, error) {
+	if author == "" || len(references) == 0 {
+		return false, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(references)), ",")
+	args := make([]any, 0, len(references)+1)
+	for _, ref := range references {
+		args = append(args, ref)
+	}
+	args = append(args, author)
+	var found bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM blog_post_images i
+ JOIN blog_posts v ON v.id=i.version_id JOIN blog_current_posts p ON p.id=v.owner_id
+ WHERE i.url IN (`+placeholders+`) AND p.author_id=?)`, args...).Scan(&found)
+	return found, err
+}

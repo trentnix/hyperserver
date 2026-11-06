@@ -3,6 +3,9 @@ package blog
 import (
 	"context"
 	"errors"
+	"slices"
+
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // contentError describes a writing error the author can correct.
@@ -30,7 +33,26 @@ func validationFields(err error) []string {
 // writePost applies the same validation, media checks, and invalidation to editor
 // saves and history restores. The repository saves content, references, and history atomically.
 func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
-	var err error
+	account := user.GetUserFromContext(ctx)
+	permission, err := m.access.Role(ctx, account)
+	if err != nil {
+		return p, err
+	}
+	if account != nil && !permission.valid() {
+		return p, errAccessDenied
+	}
+	if permission == rolePoster {
+		p.AuthorID = account.ID
+		if p.ID != "" {
+			current, err := m.posts.GetByID(ctx, p.ID, true)
+			if err != nil {
+				return p, err
+			}
+			if current.AuthorID != account.ID {
+				return p, errAccessDenied
+			}
+		}
+	}
 	p.Tags, err = normalizeTags(p.Tags)
 	if err != nil {
 		return p, writingFieldError{err, "tags"}
@@ -122,6 +144,33 @@ func (m *module) writingImages(ctx context.Context, source, path, preview string
 	}
 	if err := m.checkMediaReferences(ctx, refs); err != nil {
 		return nil, writingFieldError{err, "content"}
+	}
+	if account := user.GetUserFromContext(ctx); account != nil {
+		permission, err := m.access.Role(ctx, account)
+		if err != nil {
+			return nil, err
+		}
+		if permission == rolePoster {
+			for _, ref := range refs {
+				id := referencedImageID(ref)
+				if id == "" || !slices.Contains(m.imageLookupReferences(id), ref) {
+					continue
+				}
+				allowed, err := m.publicImage(ctx, id)
+				if err != nil {
+					return nil, err
+				}
+				if !allowed {
+					allowed, err = m.privateImageForWriter(ctx, id, account.ID)
+				}
+				if err != nil {
+					return nil, err
+				}
+				if !allowed {
+					return nil, writingFieldError{contentError("Choose an image you uploaded, already used in your posts, or in public content."), "content"}
+				}
+			}
+		}
 	}
 	return refs, nil
 }

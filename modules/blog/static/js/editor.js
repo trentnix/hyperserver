@@ -145,7 +145,7 @@ function initialize(root) {
         }), className: 'tool-library', title: 'Choose existing image'},
         '|',
         {name: 'preview', action: EasyMDE.togglePreview, className: 'tool-preview', title: 'Preview'}
-      ],
+      ].filter(item => textarea.form.dataset.mediaLibrary !== 'false' || item.name !== 'media-library'),
       previewRender(markdown, preview) {
         previewRequest?.abort();
         previewRequest = new AbortController();

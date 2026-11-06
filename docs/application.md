@@ -2,7 +2,7 @@
 
 Use `application.New` to configure services, modules, middleware, and cleanup. The [blog application](../cmd/web/application.go) demonstrates the setup. [HTTP fixtures](../internal/test/web) test provider replacement and ordinary forms.
 
-Create one [`blog.Site`](../modules/blog/site.go) per application startup. `Configure(app)` sets shared rendering and returns the blog descriptor. `AuthenticationPolicy()` supplies the administrator restriction and onboarding behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider settings and credentials belong in `config.yaml`.
+Create one [`blog.Site`](../modules/blog/site.go) per application startup. `Configure(app)` sets shared rendering and returns the blog descriptor. `AuthenticationPolicy()` supplies account admission and onboarding behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider settings and credentials belong in `config.yaml`.
 
 ## Adding or replacing a feature
 
@@ -195,7 +195,7 @@ Registration uses `GET /register` and `POST /register`. Providers implement `Reg
 
 After account creation or an OAuth redirect, write the response and return an empty result. Providers retain ownership of verification delivery and post-creation recovery guidance. The shared page preserves alternative registration methods.
 
-An application can set `Policy.LoginAccount` to tailor login choices to a known account, or return nil to show all configured methods. Providers can implement `LoginAvailability` to report whether that account has credentials. Providers without this capability remain visible. The blog uses this policy when account storage implements `user.SingleAccountReader` and contains exactly one account. This policy controls presentation, not authorization or route availability.
+An application can set `Policy.LoginAccount` to tailor login choices to a known account, or return nil to show all configured methods. Providers can implement `LoginAvailability` to report whether that account has credentials. Providers without this capability remain visible. The blog uses this policy for its sole user with site access. Pending invitations keep all configured choices available. This policy controls presentation, not authorization or route availability.
 
 Unsupported routes return 404. Registration without a supporting provider is reported as unavailable.
 

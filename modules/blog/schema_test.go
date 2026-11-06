@@ -122,8 +122,8 @@ func TestBlogSchemaEquivalentDeclarations(t *testing.T) {
 		{"column round trip", `ALTER TABLE blog_media DROP COLUMN tags;
 ALTER TABLE blog_media ADD COLUMN tags TEXT NOT NULL DEFAULT ''`},
 		{"column order and quoting", `ALTER TABLE blog_media RENAME TO previous_media;
-CREATE TABLE "blog_media" (tags TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL CHECK(version>0), label TEXT NOT NULL, filename TEXT NOT NULL, id TEXT PRIMARY KEY);
-INSERT INTO blog_media(id,filename,label,version,tags) SELECT id,filename,label,version,tags FROM previous_media;
+CREATE TABLE "blog_media" (uploaded_by TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL CHECK(version>0), label TEXT NOT NULL, filename TEXT NOT NULL, id TEXT PRIMARY KEY);
+INSERT INTO blog_media(id,filename,label,version,tags,uploaded_by) SELECT id,filename,label,version,tags,uploaded_by FROM previous_media;
 DROP TABLE previous_media`},
 	} {
 		t.Run(change.name, func(t *testing.T) {
@@ -218,7 +218,7 @@ func schemaSnapshot(t *testing.T, db *sql.DB) string {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var records [][]any
+		var records []map[string]any
 		for rows.Next() {
 			values, targets := make([]any, len(columns)), make([]any, len(columns))
 			for i := range values {
@@ -227,7 +227,11 @@ func schemaSnapshot(t *testing.T, db *sql.DB) string {
 			if err := rows.Scan(targets...); err != nil {
 				t.Fatal(err)
 			}
-			records = append(records, values)
+			record := make(map[string]any, len(columns))
+			for i, column := range columns {
+				record[column] = values[i]
+			}
+			records = append(records, record)
 		}
 		if err := rows.Err(); err != nil {
 			t.Fatal(err)
@@ -271,7 +275,7 @@ func TestBlogSchemaRejection(t *testing.T) {
 		`DROP TABLE blog_schema_version`,
 		`DELETE FROM blog_schema_version`,
 		`UPDATE blog_schema_version SET version=0`,
-		`UPDATE blog_schema_version SET version=2`,
+		`UPDATE blog_schema_version SET version=1`,
 		`UPDATE blog_schema_version SET version=3`,
 		`UPDATE blog_schema_version SET version=-1`,
 		`UPDATE blog_schema_version SET dirty=1`,

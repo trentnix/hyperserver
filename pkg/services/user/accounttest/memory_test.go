@@ -114,7 +114,7 @@ func (m *memoryRepository) InsertToken(ctx context.Context, token user.TokenMeta
 		return err
 	}
 	if token.AccountID == "" || token.TokenHash == "" || token.ExpiresAt.IsZero() ||
-		(token.Purpose != user.ResetTokenPurpose && token.Purpose != user.VerificationTokenPurpose) {
+		(token.Purpose != user.ResetTokenPurpose && token.Purpose != user.VerificationTokenPurpose && token.Purpose != user.InvitationTokenPurpose) {
 		return errors.New("invalid token metadata")
 	}
 	if _, ok := m.accounts[token.AccountID]; !ok {
@@ -153,12 +153,13 @@ func (m *memoryRepository) Update(ctx context.Context, u *user.User) error {
 	updated.UpdatedAt = m.now()
 	emailChanged := user.EmailKey(stored.Email) != user.EmailKey(u.Email)
 	if emailChanged || stored.Password != u.Password || stored.RegistrationAuthType != u.RegistrationAuthType ||
-		stored.Verified != u.Verified || stored.VerificationRequired != u.VerificationRequired {
+		stored.Verified != u.Verified || stored.VerificationRequired != u.VerificationRequired ||
+		stored.Role != u.Role || stored.Invited != u.Invited {
 		updated.SessionVersion++
 	}
 	if emailChanged {
 		for key, token := range m.tokens {
-			if token.AccountID == u.ID && token.Purpose == user.VerificationTokenPurpose {
+			if token.AccountID == u.ID && (token.Purpose == user.VerificationTokenPurpose || token.Purpose == user.InvitationTokenPurpose) {
 				delete(m.tokens, key)
 			}
 		}
@@ -229,12 +230,22 @@ func (m *memoryRepository) Verify(ctx context.Context, auth user.VerificationAut
 		return nil, hs_errors.WithCause(user.ErrToken, errors.New("verification address changed"))
 	}
 
-	if !stored.Verified {
+	if !stored.Verified || stored.Invited {
 		stored.SessionVersion++
+	}
+	if stored.RegistrationAuthType != "" {
+		stored.Invited = false
 	}
 	stored.Verified, stored.UpdatedAt = true, m.now()
 	m.accounts[stored.ID] = stored
 	delete(m.tokens, tokenKey{auth.AccountID, auth.TokenHash})
+	if !stored.Invited {
+		for key, token := range m.tokens {
+			if token.AccountID == stored.ID && token.Purpose == user.InvitationTokenPurpose {
+				delete(m.tokens, key)
+			}
+		}
+	}
 	return &stored, nil
 }
 

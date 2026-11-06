@@ -69,10 +69,10 @@ type AccountRepository interface {
 	// stale SessionVersion values return ErrUserChanged, and duplicate emails return
 	// an error matching ErrEmailAlreadyExists. The caller must preserve the version from its
 	// account read and validate and hash any new password before calling.
-	// Changes to Password, EmailKey(Email), RegistrationAuthType, Verified, or VerificationRequired
+	// Changes to Password, EmailKey(Email), RegistrationAuthType, Verified, VerificationRequired, Role, or Invited
 	// must increment SessionVersion. Otherwise, the version must stay unchanged.
 	// ID and CreatedAt must stay unchanged. An email key change must also revoke the account's
-	// verification tokens. These changes must commit together and preserve other tokens.
+	// verification and invitation tokens. These changes must commit together and preserve other tokens.
 	// Success updates u's UpdatedAt and SessionVersion. Failure must leave u and storage unchanged.
 	// SessionVersion guards security changes, not every edit. Concurrent edits that
 	// leave the version unchanged can overwrite each other.
@@ -104,17 +104,20 @@ type AccountRepository interface {
 	// A missing account or changed email returns ErrToken or ErrUserNotFound.
 	// Storage failures must remain separate from token rejections.
 	// Success updates UpdatedAt and increments SessionVersion only if the account
-	// was not already verified. It returns the committed account. Other fields and
-	// tokens must stay unchanged. Failure must return nil and leave storage unchanged.
+	// was not already verified or was invited. For a registered invited account,
+	// success also clears Invited and revokes invitation tokens. It returns the
+	// committed account. Other fields and tokens must stay unchanged.
+	// Failure must return nil and leave storage unchanged.
 	Verify(context.Context, VerificationAuthorization) (*User, error)
 }
 
 // TokenMetadata contains only the fields needed to store an issued account token.
 // AccountID, TokenHash, and ExpiresAt must be set. Purpose must be ResetTokenPurpose,
-// VerificationTokenPurpose, or PasswordSetupTokenPurpose when storage supports setup.
+// VerificationTokenPurpose, PasswordSetupTokenPurpose, or InvitationTokenPurpose
+// when storage supports those operations.
 // TokenHash is the lowercase hexadecimal SHA-256 hash of the opaque token.
 // The raw token must not be passed to storage. Email is required for
-// verification and password-setup tokens and must contain the recipient at issuance.
+// verification, password-setup, and invitation tokens and must contain the recipient at issuance.
 type TokenMetadata struct {
 	AccountID string
 	TokenHash string

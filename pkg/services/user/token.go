@@ -34,7 +34,7 @@ func newAuthToken(u *User, expiration time.Duration, purpose string) (*AuthToken
 	if expiration <= 0 {
 		return nil, ErrTokenExpirationNotSpecified
 	}
-	if purpose != ResetTokenPurpose && purpose != VerificationTokenPurpose && purpose != PasswordSetupTokenPurpose {
+	if purpose != ResetTokenPurpose && purpose != VerificationTokenPurpose && purpose != PasswordSetupTokenPurpose && purpose != InvitationTokenPurpose {
 		return nil, ErrToken
 	}
 	if purpose != ResetTokenPurpose && EmailKey(u.Email) == "" {

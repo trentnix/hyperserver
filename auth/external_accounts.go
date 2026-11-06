@@ -87,7 +87,13 @@ func (a ExternalAccounts) Resolve(w http.ResponseWriter, r *http.Request, reques
 		return nil, false
 	}
 	account = &user.User{Email: request.VerifiedEmail, Verified: true, VerificationRequired: true, RegistrationAuthType: a.Provider}
-	if err := a.Identities.CreateExternalAccount(r.Context(), account, request.Identity); err != nil {
+	err = a.Identities.CreateExternalAccount(r.Context(), account, request.Identity)
+	if errors.Is(err, user.ErrEmailAlreadyExists) {
+		if invitations, ok := a.Identities.(user.InvitationRepository); ok {
+			err = invitations.RegisterInvited(r.Context(), account, nil, &request.Identity)
+		}
+	}
+	if err != nil {
 		if errors.Is(err, user.ErrEmailAlreadyExists) || errors.Is(err, user.ErrIdentityConflict) {
 			return fail("An account already exists. Sign in with your existing method to connect this login method.", nil, http.StatusConflict)
 		}

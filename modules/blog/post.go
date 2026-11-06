@@ -20,6 +20,7 @@ var (
 // PreviewImage is an optional upload ID used for sharing, not the article body.
 type Post struct {
 	ID, Slug, Title, Summary, Markdown, PreviewImage string
+	AuthorID                                         string // Stable account ID, preserved on later edits.
 	Tags                                             string // Canonical comma-separated search labels.
 	Published                                        time.Time
 	Draft                                            bool
@@ -58,7 +59,8 @@ type repository interface {
 	ListMetadata(context.Context) ([]Post, error)
 	// SearchPosts searches all publication states, returning metadata only.
 	// Literal case-insensitive matches rank title, tags, summary, then Markdown.
-	SearchPosts(context.Context, string) ([]Post, error)
+	// A nonempty authorID restricts the scan before loading or matching content.
+	SearchPosts(ctx context.Context, query, authorID string) ([]Post, error)
 	// Latest returns errNotFound when no posts have been published.
 	Latest(context.Context) (Post, error)
 	// ListArchive returns link metadata newest first, without post bodies.

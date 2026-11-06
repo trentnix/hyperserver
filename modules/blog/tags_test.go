@@ -72,7 +72,7 @@ func TestTagSearch(t *testing.T) {
 			}
 		}
 	}
-	posts, err := store.SearchPosts(t.Context(), "NEEDLE")
+	posts, err := store.SearchPosts(t.Context(), "NEEDLE", "")
 	if err != nil {
 		t.Fatal(err)
 	}

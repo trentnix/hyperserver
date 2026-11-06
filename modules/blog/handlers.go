@@ -20,12 +20,14 @@ type postPage struct {
 	HTML       template.HTML
 	HasHistory bool
 	Scheduled  bool
+	CanEdit    bool
 }
 
 // editorPage retains a draft and any user-facing error for the editing form.
 type editorPage struct {
 	Post
 	revisionSelection
+	NoLibrary                  bool
 	Error                      string
 	ErrorFields                string
 	PublishedSlug              string
@@ -41,7 +43,7 @@ type editorPage struct {
 // PreviewField configures the shared image picker for post sharing.
 func (p editorPage) PreviewField() previewImageField {
 	return previewImageField{
-		InputID: "post-image", Value: p.PreviewImage, URL: p.PreviewURL(), Optional: true,
+		InputID: "post-image", Value: p.PreviewImage, URL: p.PreviewURL(), Optional: true, NoLibrary: p.NoLibrary,
 		Description: "For sharing links, not the post body.",
 		Help:        "By default, the preview uses the first suitable image in the post, or the site portrait if none is available.",
 	}
@@ -67,9 +69,9 @@ func (m *module) index(w http.ResponseWriter, r *http.Request) {
 
 // post resolves either a readable slug or the stable post ID used in feed links.
 func (m *module) post(w http.ResponseWriter, r *http.Request) {
-	// A saved draft uses the normal post view, but only its administrator can read it.
+	// Private posts remain visible only to their writer and site editors.
 	w.Header().Set("Cache-Control", "no-store")
-	includeDrafts := m.access.IsAdmin(user.GetUserFromContext(r.Context()))
+	includeDrafts := m.requestRole(r).valid()
 	var p Post
 	var err error
 	if slug := r.PathValue("slug"); slug != "" {
@@ -79,6 +81,10 @@ func (m *module) post(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		m.storageError(w, r, err)
+		return
+	}
+	if (p.Draft || p.Scheduled(m.currentTime())) && !m.canEditPost(r.Context(), p) {
+		m.storageError(w, r, errNotFound)
 		return
 	}
 	m.renderPost(w, r, p)
@@ -91,8 +97,8 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 		m.app.ContentManager.HandleError(w, r, "Unable to display this post.", err, http.StatusInternalServerError)
 		return
 	}
-	data := postPage{Post: p, HTML: html, Scheduled: p.Scheduled(m.currentTime())}
-	if m.access.IsAdmin(user.GetUserFromContext(r.Context())) {
+	data := postPage{Post: p, HTML: html, Scheduled: p.Scheduled(m.currentTime()), CanEdit: m.canEditPost(r.Context(), p)}
+	if data.CanEdit {
 		data.HasHistory, err = m.history.HasHistory(r.Context(), "post", p.ID)
 		if err != nil {
 			m.storageError(w, r, err)
@@ -124,6 +130,7 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := m.postEditorData(p)
+	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.TagSuggestions = m.tagSuggestions(r)
 	selection, err := m.selectRevision(r, "post", p.ID, "/post/s/"+p.Slug, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags})
 	if err != nil {
@@ -166,6 +173,9 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	if version, valid := editorVersion(r); valid {
 		p.Version = version
 	}
+	if account := user.GetUserFromContext(r.Context()); account != nil {
+		p.AuthorID = account.ID
+	}
 	publicationError := m.readPublication(r, &p)
 	if publicationError != "" {
 		fields := []string{"published"}
@@ -176,6 +186,10 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	saved, err := m.writePost(r.Context(), p)
+	if errors.Is(err, errAccessDenied) {
+		m.app.ContentManager.HandleError(w, r, err.Error(), nil, http.StatusForbidden)
+		return
+	}
 	var invalid contentError
 	if errors.As(err, &invalid) || errors.Is(err, errMissingMedia) {
 		m.editorError(w, r, p, err.Error(), http.StatusUnprocessableEntity, validationFields(err)...)
@@ -212,6 +226,7 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
 	data := editorPage{Post: p, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
+	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.ErrorFields = strings.Join(fields, " ")
 	data.SaveActions = editorActions("post", false, false)
 	data.Publication = r.PostForm.Get("published")

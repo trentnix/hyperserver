@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -73,7 +74,7 @@ func TestBlogMigrationCompatibility(t *testing.T) {
 			if output, err := run("up"); err != nil || schemaSnapshot(t, db) != before {
 				t.Fatal("repeated migration changed content", output, err)
 			}
-			if output, err := run("down", "1"); err != nil {
+			if output, err := run("down", strconv.Itoa(requiredBlogSchemaVersion)); err != nil {
 				t.Fatal(output, err)
 			}
 			if err := prepareBlogSchema(t.Context(), db); err == nil {
@@ -90,6 +91,43 @@ func TestBlogMigrationCompatibility(t *testing.T) {
 				t.Fatal("migration changed another module's version", other, err)
 			}
 		})
+	}
+}
+
+func TestBlogOwnershipMigrationPreservesContent(t *testing.T) {
+	db, filename := schemaTestDB(t)
+	run := blogMigrationCommand(t, filename, "migrations")
+	if output, err := run("up", "1"); err != nil {
+		t.Fatal(output, err)
+	}
+	seed, err := os.ReadFile("testdata/migration-content.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(t.Context(), string(seed)); err != nil {
+		t.Fatal(err)
+	}
+	before := blogMigrationSnapshot(t, db, "schema")
+	for range 2 {
+		if output, err := run("up"); err != nil {
+			t.Fatal(output, err)
+		}
+		if err := prepareBlogSchema(t.Context(), db); err != nil {
+			t.Fatal(err)
+		}
+		var owned int
+		if err := db.QueryRow(`SELECT count(*) FROM blog_current_posts WHERE author_id<>''`).Scan(&owned); err != nil || owned != 0 {
+			t.Fatal("upgrade invented ownership", owned, err)
+		}
+		if _, err := db.Exec(`UPDATE blog_current_posts SET author_id='account'; UPDATE blog_media SET uploaded_by='account'`); err != nil {
+			t.Fatal(err)
+		}
+		if output, err := run("down", "1"); err != nil {
+			t.Fatal(output, err)
+		}
+		if got := blogMigrationSnapshot(t, db, "schema"); got != before {
+			t.Fatal("ownership migration changed content, versions, references, or another module")
+		}
 	}
 }
 
@@ -111,8 +149,8 @@ func TestBlogMigrationFailureAndFutureVersion(t *testing.T) {
 		t.Fatal(output, err)
 	}
 	before := schemaSnapshot(t, db)
-	write("000002_failure.up.sql", `ALTER TABLE blog_posts ADD COLUMN failed_change TEXT; INSERT INTO missing_table VALUES (1);`)
-	write("000002_failure.down.sql", `ALTER TABLE blog_posts DROP COLUMN failed_change;`)
+	write("000003_failure.up.sql", `ALTER TABLE blog_posts ADD COLUMN failed_change TEXT; INSERT INTO missing_table VALUES (1);`)
+	write("000003_failure.down.sql", `ALTER TABLE blog_posts DROP COLUMN failed_change;`)
 	if output, err := run("up"); err == nil {
 		t.Fatal("invalid migration reported success", output)
 	}
@@ -124,15 +162,15 @@ func TestBlogMigrationFailureAndFutureVersion(t *testing.T) {
 		t.Fatal("failed migration did not roll back", columns, err)
 	}
 	// Only repair the marker after proving the failed SQL rolled back.
-	if output, err := run("force", "1"); err != nil || schemaSnapshot(t, db) != before {
+	if output, err := run("force", strconv.Itoa(requiredBlogSchemaVersion)); err != nil || schemaSnapshot(t, db) != before {
 		t.Fatal("rollback and explicit repair did not preserve the baseline", output, err)
 	}
-	write("000002_failure.up.sql", `ALTER TABLE blog_posts ADD COLUMN failed_change TEXT;`)
+	write("000003_failure.up.sql", `ALTER TABLE blog_posts ADD COLUMN failed_change TEXT;`)
 	if output, err := run("up"); err != nil {
 		t.Fatal(output, err)
 	}
 	future := schemaSnapshot(t, db)
-	if err := prepareBlogSchema(t.Context(), db); err == nil || !strings.Contains(err.Error(), "version 2") {
+	if err := prepareBlogSchema(t.Context(), db); err == nil || !strings.Contains(err.Error(), "version 3") {
 		t.Fatal("old binary accepted a newer database", err)
 	}
 	if schemaSnapshot(t, db) != future {
@@ -178,10 +216,10 @@ func TestBlogMigrationPopulatedRoundTrip(t *testing.T) {
 			up := `CREATE INDEX blog_posts_test_title ON blog_posts(title);
 CREATE INDEX blog_pages_test_title ON blog_pages(title);`
 			down := `DROP INDEX blog_posts_test_title; DROP INDEX blog_pages_test_title;`
-			if err := os.WriteFile(filepath.Join(directory, "000002_indexes.up.sql"), []byte(up), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(directory, "000003_indexes.up.sql"), []byte(up), 0600); err != nil {
 				t.Fatal(err)
 			}
-			downFile := filepath.Join(directory, "000002_indexes.down.sql")
+			downFile := filepath.Join(directory, "000003_indexes.down.sql")
 			if err := os.WriteFile(downFile, []byte(down), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -190,8 +228,8 @@ CREATE INDEX blog_pages_test_title ON blog_pages(title);`
 			}
 			var version int
 			var dirty bool
-			if err := db.QueryRow(`SELECT version, dirty FROM blog_schema_version`).Scan(&version, &dirty); err != nil || version != 2 || dirty {
-				t.Fatal("upgrade did not record clean version 2", version, dirty, err)
+			if err := db.QueryRow(`SELECT version, dirty FROM blog_schema_version`).Scan(&version, &dirty); err != nil || version != requiredBlogSchemaVersion+1 || dirty {
+				t.Fatal("upgrade did not record clean next version", version, dirty, err)
 			}
 			if blogMigrationSnapshot(t, db, "schema") != content {
 				t.Fatal("upgrade changed stored content")
@@ -215,7 +253,7 @@ DELETE FROM blog_media;` + down + ` INSERT INTO missing_table VALUES(1);`
 				if output, err := run("down", "1"); err == nil || !strings.Contains(output, "no such table: missing_table") {
 					t.Fatal("down must fail at the injected final statement", output, err)
 				}
-				if err := db.QueryRow(`SELECT version, dirty FROM blog_schema_version`).Scan(&version, &dirty); err != nil || version != 1 || !dirty {
+				if err := db.QueryRow(`SELECT version, dirty FROM blog_schema_version`).Scan(&version, &dirty); err != nil || version != requiredBlogSchemaVersion || !dirty {
 					t.Fatal("failed down must leave the target version dirty", version, dirty, err)
 				}
 				if blogMigrationSnapshot(t, db) != beforeFailure {
@@ -231,12 +269,12 @@ DELETE FROM blog_media;` + down + ` INSERT INTO missing_table VALUES(1);`
 				if schemaSnapshot(t, db) != dirtySnapshot {
 					t.Fatal("startup or retry altered dirty storage")
 				}
-				// Only restore version 2's marker after proving its schema and data
+				// Only restore the next version's marker after proving its schema and data
 				// survived. Force does not repair schema or recover content.
 				if err := os.WriteFile(downFile, []byte(down), 0600); err != nil {
 					t.Fatal(err)
 				}
-				if output, err := run("force", "2"); err != nil {
+				if output, err := run("force", strconv.Itoa(requiredBlogSchemaVersion+1)); err != nil {
 					t.Fatal(output, err)
 				}
 			}
@@ -245,7 +283,7 @@ DELETE FROM blog_media;` + down + ` INSERT INTO missing_table VALUES(1);`
 				t.Fatal(output, err)
 			}
 			if schemaSnapshot(t, db) != baseline {
-				t.Fatal("upgrade/downgrade did not preserve the complete version 1 database")
+				t.Fatal("upgrade/downgrade did not preserve the complete current database")
 			}
 			if err := prepareBlogSchema(t.Context(), db); err != nil {
 				t.Fatal("downgraded database cannot start", err)
@@ -277,7 +315,7 @@ func TestBlogMigrationColumnRoundTrip(t *testing.T) {
 ALTER TABLE blog_media ADD COLUMN tags TEXT NOT NULL DEFAULT '';
 UPDATE blog_media SET tags=previous_tags;
 ALTER TABLE blog_media DROP COLUMN previous_tags;`
-	for _, name := range []string{"000002_column.up.sql", "000002_column.down.sql"} {
+	for _, name := range []string{"000003_column.up.sql", "000003_column.down.sql"} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(change), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -301,7 +339,12 @@ ALTER TABLE blog_media DROP COLUMN previous_tags;`
 func blogMigrationDirectory(t *testing.T) string {
 	t.Helper()
 	directory := t.TempDir()
-	for _, name := range []string{"000001_blog.up.sql", "000001_blog.down.sql"} {
+	files, err := filepath.Glob("migrations/*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		name := filepath.Base(file)
 		data, err := os.ReadFile(filepath.Join("migrations", name))
 		if err != nil {
 			t.Fatal(err)

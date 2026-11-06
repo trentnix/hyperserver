@@ -13,7 +13,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -136,7 +135,7 @@ func (m *module) page(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/about" || r.URL.Path == "/projects" {
 		slug = strings.TrimPrefix(r.URL.Path, "/")
 	}
-	admin := m.access.IsAdmin(user.GetUserFromContext(r.Context()))
+	admin := m.requestRole(r) == roleAdmin
 	p, err := m.pageStore.GetPageBySlug(r.Context(), slug, admin)
 	if err != nil {
 		m.storageError(w, r, err)

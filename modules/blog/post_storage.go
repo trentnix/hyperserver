@@ -10,13 +10,13 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-const postColumns = "id, slug, title, summary, markdown, published, draft, preview_image, version, tags"
+const postColumns = "id, slug, title, summary, markdown, published, draft, preview_image, version, tags, author_id"
 
 // scanPost decodes a row in postColumns order and maps missing rows to errNotFound.
 func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
 	var published int64
-	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft, &p.PreviewImage, &p.Version, &p.Tags)
+	err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Summary, &p.Markdown, &published, &p.Draft, &p.PreviewImage, &p.Version, &p.Tags, &p.AuthorID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}
@@ -33,18 +33,24 @@ func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
 
 // ListMetadata returns drafts newest-created first, then posts newest-published first.
 func (s *sqliteRepository) ListMetadata(ctx context.Context) ([]Post, error) {
-	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '', version, '' FROM blog_post_current ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	return s.listPosts(ctx, "SELECT id, slug, title, '', '', published, draft, '', version, '', author_id FROM blog_post_current ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
 }
 
 // SearchPosts scans current content with Unicode case folding. Only matching
 // metadata is returned. Equal ranks preserve the management list's order.
-func (s *sqliteRepository) SearchPosts(ctx context.Context, query string) ([]Post, error) {
+func (s *sqliteRepository) SearchPosts(ctx context.Context, query, authorID string) ([]Post, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT id, slug, title, summary, '', published, draft, '', version, tags FROM blog_post_current ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC")
+	statement := "SELECT id, slug, title, summary, '', published, draft, '', version, tags, author_id FROM blog_post_current"
+	var args []any
+	if authorID != "" {
+		statement += " WHERE author_id=?"
+		args = append(args, authorID)
+	}
+	rows, err := tx.QueryContext(ctx, statement+" ORDER BY draft DESC, CASE WHEN draft=0 THEN published END DESC, rowid DESC", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +195,8 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 		if p.Version != current.Version {
 			return p, errEditConflict
 		}
+		// Editing content, including restoring a version, never transfers ownership.
+		p.AuthorID = current.AuthorID
 		candidate := p
 		candidate.Published = time.Time{}
 		if current.WasPublished(now) {
@@ -218,7 +226,7 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 			published = p.Published.Unix()
 		}
 		p.Version = 1
-		_, err = tx.ExecContext(ctx, "INSERT INTO blog_current_posts (id,version_id,slug,published,draft,version) VALUES (?,0,?,?,?,?)", p.ID, p.Slug, published, p.Draft, p.Version)
+		_, err = tx.ExecContext(ctx, "INSERT INTO blog_current_posts (id,version_id,slug,published,draft,version,author_id) VALUES (?,0,?,?,?,?,?)", p.ID, p.Slug, published, p.Draft, p.Version, p.AuthorID)
 	} else {
 		var published int64
 		err = tx.QueryRowContext(ctx, `UPDATE blog_current_posts SET slug=?, draft=?, version=version+1,

@@ -1,6 +1,12 @@
-# Copy to config.yaml in this directory. Only this address can register and log in.
+# Copy to config.yaml in this directory. This address becomes the first Admin.
+# Enable multiUser to invite additional users through Users after setup.
 # The application config controls whether email verification is required.
 adminEmail: admin@example.com
+# Enable invitations. When disabled, Users stays visible while multiple users remain.
+# Existing users keep access. Restart after changing this setting.
+multiUser: false
+# Lifetime of invitation links. Resending replaces the previous link.
+inviteExpiration: 168h
 # Optional public files at /local-assets/{filename}. Create the directory before enabling.
 # Paths are relative to the application configuration directory. Keep private files elsewhere.
 assetsDirectory: ""

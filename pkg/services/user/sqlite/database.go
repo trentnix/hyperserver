@@ -17,7 +17,7 @@ const (
 	userTableName        = "user"
 	userTokenTableName   = "usertoken"
 	accountVersionTable  = "hyperserver_account_version"
-	accountSchemaVersion = 1
+	accountSchemaVersion = 2
 )
 
 // accountVersionSchema matches golang-migrate's SQLite version/dirty format.
@@ -193,6 +193,8 @@ func validateAccountColumns(ctx context.Context, tx *sql.Tx) error {
 		{"user", "registration_auth_type", "text", false},
 		{"user", "password", "text", false},
 		{"user", "session_version", "integer", true},
+		{"user", "role", "text", true},
+		{"user", "invited", "boolean", true},
 		{"usertoken", "user_id", "text", false},
 		{"usertoken", "token_hash", "text", true},
 		{"usertoken", "expires_at", "timestamp", true},

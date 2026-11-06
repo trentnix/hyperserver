@@ -576,7 +576,7 @@ func TestRegisterUsesAccountRepository(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, emailRegisterPath, strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	calls := 0
-	accounts := emailAccountRepository{create: func(ctx context.Context, u *user.User) error {
+	accounts := emailAccountRepository{lookup: func(ctx context.Context, email string) (*user.User, error) { return &user.User{Email: email}, nil }, create: func(ctx context.Context, u *user.User) error {
 		calls++
 		if ctx != r.Context() || u.Email != form.Get("email") || !password.CheckPasswordHash(form.Get("password"), u.Password) {
 			t.Fatal("registration did not pass its context and hashed credentials to storage")

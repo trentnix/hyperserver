@@ -173,7 +173,7 @@ func TestInitializeRejectsMissingAccountColumns(t *testing.T) {
 	}{
 		{"user", []string{
 			"id", "email", "email_key", "verified", "verification_required",
-			"created_at", "updated_at", "registration_auth_type", "password", "session_version",
+			"created_at", "updated_at", "registration_auth_type", "password", "session_version", "role", "invited",
 		}},
 		{"usertoken", []string{"user_id", "token_hash", "expires_at", "token_type"}},
 	} {

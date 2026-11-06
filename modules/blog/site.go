@@ -3,6 +3,7 @@ package blog
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/application"
@@ -10,7 +11,7 @@ import (
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
-// Site assembles one application's blog module, rendering, and administrator-only
+// Site assembles one application's blog module, rendering, and role-based
 // authentication policy. Its zero value is ready to configure. Create one Site per
 // application and do not copy it. Assembly methods run during startup, before
 // requests are accepted. The application still selects services and modules.
@@ -42,6 +43,6 @@ func (s *Site) Configure(app *application.Application) (handlers.Descriptor, err
 	s.content = app.ContentManager
 	accounts := app.Accounts
 	return handlers.Descriptor{Name: "blog", Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}, New: func() handlers.Handler {
-		return &module{settings: &Settings{}, access: &s.access, profile: &s.profile, accounts: accounts, site: s}
+		return &module{settings: &Settings{InviteExpiration: 7 * 24 * time.Hour}, access: &s.access, profile: &s.profile, accounts: accounts, mail: app.Mail, site: s}
 	}}, nil
 }

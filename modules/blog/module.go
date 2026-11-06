@@ -1,4 +1,4 @@
-// Package blog provides a personal Markdown blog with administrator-only publishing.
+// Package blog provides a Markdown blog with role-based publishing.
 // The module owns its configuration, authorization rules, templates, and content storage.
 package blog
 
@@ -17,6 +17,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -25,7 +26,9 @@ var blogModuleFS embed.FS
 
 // Settings is loaded from modules/blog/config.yaml during module initialization.
 type Settings struct {
-	AdminEmail string `yaml:"adminEmail"`
+	AdminEmail       string        `yaml:"adminEmail"`
+	MultiUser        bool          `yaml:"multiUser"`
+	InviteExpiration time.Duration `yaml:"inviteExpiration"`
 
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
@@ -43,28 +46,33 @@ type Settings struct {
 	} `yaml:"storage"`
 }
 
-// Access shares the blog's administrator rule with authentication and rendering.
+// Access shares blog access with authentication and rendering.
 // Module initialization sets the identity once, before requests are accepted.
 type Access struct {
-	emailKey string
-	setup    *setupState
+	emailKey       string
+	multiUser      bool
+	accounts       user.AccountRepository
+	administration user.AdministrationRepository
+	setup          *setupState
 }
 
-// AllowAccount permits only the configured administrator to register or log in.
-// Password checking and email verification remain the authentication service's job.
+// AllowAccount admits assigned accounts and the initial administrator during setup.
 func (a *Access) AllowAccount(ctx context.Context, address string) (bool, error) {
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	if a == nil || a.emailKey == "" {
+	if a == nil || a.accounts == nil {
 		return false, errors.New("blog access is not initialized")
 	}
-	return user.EmailKey(address) == a.emailKey, nil
-}
-
-// IsAdmin requires the configured account to have completed any required verification.
-func (a *Access) IsAdmin(account *user.User) bool {
-	return a != nil && a.emailKey != "" && account != nil && !account.NeedsVerification() && user.EmailKey(account.Email) == a.emailKey
+	account, err := a.accounts.GetByEmail(ctx, address)
+	if err == nil && role(account.Role).valid() {
+		return a.multiUser || account.RegistrationAuthType != "", nil
+	}
+	if err != nil && !errors.Is(err, user.ErrUserNotFound) {
+		return false, err
+	}
+	if user.EmailKey(address) != a.emailKey {
+		return false, nil
+	}
+	users, err := a.administration.ListUsers(ctx)
+	return len(users) == 0, err
 }
 
 // module owns one application's views, content repositories, and images.
@@ -73,6 +81,8 @@ type module struct {
 	settings        *Settings
 	access          *Access
 	accounts        user.AccountRepository
+	administration  user.AdministrationRepository
+	mail            *messaging.MailClient
 	app             *server.ApplicationServer
 	auth            *auth.AuthManager
 	posts           repository
@@ -104,7 +114,7 @@ type module struct {
 // init registers the factory without opening storage or creating runtime state.
 func init() {
 	handlers.Register(handlers.Descriptor{Name: "blog", Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}, New: func() handlers.Handler {
-		return &module{settings: &Settings{}}
+		return &module{settings: &Settings{InviteExpiration: 7 * 24 * time.Hour}}
 	}})
 }
 
@@ -135,6 +145,17 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if !app.Config.Auth.Enabled || m.accounts == nil {
 		return errors.New("blog requires authentication and account storage")
 	}
+	if m.settings.MultiUser && m.settings.InviteExpiration <= 0 {
+		return errors.New("blog.inviteExpiration must be greater than zero")
+	}
+	var ok bool
+	m.administration, ok = m.accounts.(user.AdministrationRepository)
+	if !ok {
+		return errors.New("blog requires account storage with user administration")
+	}
+	if _, ok := m.accounts.(user.InvitationRepository); !ok {
+		return errors.New("blog requires account storage with invitation support")
+	}
 	m.app = app
 	templates, err := prepareTemplates(app.ContentManager)
 	if err != nil {
@@ -142,6 +163,10 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	}
 	m.views = make(map[string]*content.View)
 	for _, name := range []string{
+		"users",
+		"userEditor",
+		"userRemove",
+		"invitation",
 		"post",
 		"posts",
 		"archive",
@@ -180,7 +205,26 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if err != nil {
 		return fmt.Errorf("open blog storage: %w", err)
 	}
-	setup, err := newSetupState(ctx, store, m.accounts, user.EmailKey(m.settings.AdminEmail))
+	setupEmail, err := store.initialSetupEmail(ctx, m.settings.AdminEmail)
+	if err != nil {
+		return errors.Join(err, closeStore())
+	}
+	if err := m.administration.InitializeRole(ctx, setupEmail, string(roleAdmin)); err != nil {
+		return errors.Join(err, closeStore())
+	}
+	account, err := m.accounts.GetByEmail(ctx, setupEmail)
+	if err != nil && !errors.Is(err, user.ErrUserNotFound) {
+		return errors.Join(fmt.Errorf("load blog setup: %w", err), closeStore())
+	}
+	if account != nil {
+		if _, err := store.db.ExecContext(ctx, "UPDATE blog_current_posts SET author_id=? WHERE author_id=''", account.ID); err != nil {
+			return errors.Join(err, closeStore())
+		}
+		if _, err := store.db.ExecContext(ctx, "UPDATE blog_media SET uploaded_by=? WHERE uploaded_by=''", account.ID); err != nil {
+			return errors.Join(err, closeStore())
+		}
+	}
+	setup, err := newSetupState(ctx, store, m.accounts, user.EmailKey(setupEmail))
 	if err != nil {
 		return errors.Join(fmt.Errorf("load blog setup: %w", err), closeStore())
 	}
@@ -229,8 +273,10 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		}
 		return errors.Join(assetError, images.Close(), closeStore())
 	}
-	m.access.emailKey = user.EmailKey(m.settings.AdminEmail)
+	m.access.emailKey = user.EmailKey(setupEmail)
+	m.access.multiUser = m.settings.MultiUser
 	m.access.setup = setup
+	m.access.accounts, m.access.administration = m.accounts, m.administration
 	if m.site != nil {
 		m.site.populateNavigation = m.populateNavigation
 	}
@@ -247,13 +293,5 @@ type adminPageKey struct{}
 // requireAdmin rejects accounts that do not satisfy the administrator rule, marks management
 // responses for rendering, and prevents caching, including access denials.
 func (m *module) requireAdmin(next http.HandlerFunc) http.Handler {
-	return m.requireSetup(func(w http.ResponseWriter, r *http.Request) {
-		r = r.WithContext(context.WithValue(r.Context(), adminPageKey{}, true))
-		w.Header().Set("Cache-Control", "no-store")
-		if !m.access.IsAdmin(user.GetUserFromContext(r.Context())) {
-			m.app.ContentManager.HandleError(w, r, "Sign in as the administrator and complete any required email verification.", nil, http.StatusForbidden)
-			return
-		}
-		next(w, r)
-	})
+	return m.requireRole(next, func(r role) bool { return r == roleAdmin })
 }

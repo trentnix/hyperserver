@@ -9,8 +9,8 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-// ProcessRegistration hashes credentials and inserts a new account.
-// It does not update an existing account or send verification mail. The returned
+// ProcessRegistration hashes credentials and creates or completes an invited account.
+// It never replaces registered credentials or sends verification mail. The returned
 // message is suitable for the registration form when an error occurs.
 func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, uname string, pw string, authType string, verificationRequired bool) (string, error) {
 	if err := ctx.Err(); err != nil {
@@ -36,7 +36,24 @@ func ProcessRegistration(ctx context.Context, accounts user.AccountRepository, u
 	}
 
 	// Storage decides which competing registration succeeds.
-	err = accounts.Create(ctx, u)
+	token, err := user.RegistrationInvitation(ctx, accounts, uname)
+	if err != nil {
+		return "This invitation is invalid, expired, or belongs to another email address.", err
+	}
+	if token != nil {
+		invitations, ok := accounts.(user.InvitationRepository)
+		if !ok {
+			return "Invitations are not supported by account storage.", user.ErrToken
+		}
+		err = invitations.RegisterInvited(ctx, u, token, nil)
+	} else {
+		err = accounts.Create(ctx, u)
+	}
+	if token == nil && errors.Is(err, user.ErrEmailAlreadyExists) {
+		if invitations, ok := accounts.(user.InvitationRepository); ok {
+			err = invitations.RegisterInvited(ctx, u, token, nil)
+		}
+	}
 	if err != nil {
 		registrationErr := NewErrUserRegistration(uname, err)
 		if errors.Is(err, user.ErrEmailAlreadyExists) {

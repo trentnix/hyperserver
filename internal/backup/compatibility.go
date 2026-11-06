@@ -13,11 +13,11 @@ func checkCompatibility(ctx context.Context, db *sql.DB, roles []string) error {
 	for _, role := range roles {
 		switch role {
 		case "blog":
-			if err := checkSchemaVersion(ctx, db, "blog_schema_version", role, 1); err != nil {
+			if err := checkSchemaVersion(ctx, db, "blog_schema_version", role, 2); err != nil {
 				return err
 			}
 		case "accounts":
-			if err := checkSchemaVersion(ctx, db, "hyperserver_account_version", role, 1); err != nil {
+			if err := checkSchemaVersion(ctx, db, "hyperserver_account_version", role, 2); err != nil {
 				return err
 			}
 		case "sessions":

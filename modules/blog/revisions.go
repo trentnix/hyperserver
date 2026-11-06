@@ -30,7 +30,17 @@ type Revision struct {
 
 // sameContent compares the fields restored by history, excluding snapshot metadata.
 func (r Revision) sameContent(other Revision) bool {
-	return r.Title == other.Title && r.Summary == other.Summary && r.Markdown == other.Markdown && r.PreviewImage == other.PreviewImage && r.Tags == other.Tags
+	if r.Title != other.Title || r.Summary != other.Summary || r.Markdown != other.Markdown || r.PreviewImage != other.PreviewImage {
+		return false
+	}
+	if r.Tags == other.Tags {
+		return true
+	}
+	// Imported versions may contain unnormalized tags. Compare the tags as
+	// saving would, so History never offers a restore that cannot change them.
+	tags, err := normalizeTags(r.Tags)
+	otherTags, otherErr := normalizeTags(other.Tags)
+	return err == nil && otherErr == nil && tags == otherTags
 }
 
 // revisionRepository reads and removes saved versions. Content repositories record them atomically on save.

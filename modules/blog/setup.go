@@ -2,6 +2,7 @@ package blog
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"sync/atomic"
@@ -88,7 +89,12 @@ func (m *module) requireSetup(next http.HandlerFunc) http.HandlerFunc {
 			util.RedirectToURL(w, r, target)
 			return
 		}
-		if m.access.IsAdmin(user.GetUserFromContext(r.Context())) {
+		permission, err := m.access.Role(r.Context(), user.GetUserFromContext(r.Context()))
+		if err != nil {
+			m.setupError(w, r, "Unable to check your site access. Please try again.", err)
+			return
+		}
+		if permission == roleAdmin {
 			if err := s.finish(r.Context()); err != nil {
 				m.setupError(w, r, "Setup could not be completed. Please try again.", err)
 				return
@@ -118,4 +124,13 @@ type setupPageKey struct{}
 func (m *module) setupError(w http.ResponseWriter, r *http.Request, message string, err error) {
 	r = r.WithContext(context.WithValue(r.Context(), setupPageKey{}, true))
 	m.app.ContentManager.HandleError(w, r, message, err, http.StatusServiceUnavailable)
+}
+
+func (s *sqliteRepository) initialSetupEmail(ctx context.Context, fallback string) (string, error) {
+	var email string
+	err := s.db.QueryRowContext(ctx, "SELECT email FROM blog_setup ORDER BY rowid LIMIT 1").Scan(&email)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fallback, nil
+	}
+	return email, err
 }

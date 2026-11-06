@@ -38,7 +38,7 @@ func BenchmarkSearch(b *testing.B) {
 			}
 			b.Run("admin/posts/body", func(b *testing.B) {
 				searchBenchmark(b, store, 1, false, func(ctx context.Context) error {
-					_, err := store.SearchPosts(ctx, "observatory")
+					_, err := store.SearchPosts(ctx, "observatory", "")
 					return err
 				})
 			})

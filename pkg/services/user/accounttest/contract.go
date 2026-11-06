@@ -28,6 +28,7 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 		}
 
 		original := newAccount("O'Neil.Σ@example.invalid")
+		original.Role, original.Invited = "poster", true
 		want := original
 		must(t, repo.Create(t.Context(), &original))
 		if original.ID == "" || original.SessionVersion != 1 || original.CreatedAt.IsZero() || original.UpdatedAt.IsZero() {
@@ -97,10 +98,12 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 		assertAccount(t, load(t, repo, original.ID), original)
 	})
 
-	for _, field := range []string{"no change", "email case", "email key", "password", "provider", "verified", "verification required", "creation time"} {
+	for _, field := range []string{"no change", "email case", "email key", "password", "provider", "verified", "verification required", "role", "invited", "creation time"} {
 		t.Run("update/"+field, func(t *testing.T) {
 			repo := open(t)
-			original := create(t, repo, "Mixed@example.invalid")
+			original := newAccount("Mixed@example.invalid")
+			original.Role, original.Invited = "admin", true
+			must(t, repo.Create(t.Context(), &original))
 			verification := insertToken(t, repo, original.ID, user.VerificationTokenPurpose)
 			secondVerification := verification
 			secondVerification.TokenHash = tokenHash("second verification")
@@ -126,6 +129,10 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				changed.Verified = true
 			case "verification required":
 				changed.VerificationRequired = false
+			case "role":
+				changed.Role = "poster"
+			case "invited":
+				changed.Invited = false
 			case "creation time":
 				changed.CreatedAt = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 				increment = false

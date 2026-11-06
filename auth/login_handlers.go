@@ -142,6 +142,30 @@ func (a *AuthManager) completeLogin(w http.ResponseWriter, r *http.Request, u *u
 		return
 	}
 
+	if u.Invited {
+		token, err := user.RegistrationInvitation(r.Context(), a.accounts, "")
+		// A stale link or another recipient's invitation is not proof for this
+		// account. Valid credentials still allow the normal verification flow.
+		if user.IsTokenRejection(err) || token != nil && (token.AccountID != u.ID || user.EmailKey(token.Email) != user.EmailKey(u.Email)) {
+			token, err = nil, nil
+		}
+		if err != nil {
+			a.contentManager.HandleError(w, r, "Unable to check your invitation. Please try again.", err, http.StatusServiceUnavailable)
+			return
+		}
+		if !u.NeedsVerification() || token != nil {
+			invitations, ok := a.accounts.(user.InvitationRepository)
+			if !ok {
+				a.contentManager.HandleError(w, r, "Account invitations are unavailable.", nil, http.StatusServiceUnavailable)
+				return
+			}
+			if err := invitations.AcceptInvitation(r.Context(), u, token); err != nil {
+				a.contentManager.HandleError(w, r, "Unable to accept this invitation. Try signing in again.", err, http.StatusConflict)
+				return
+			}
+		}
+	}
+
 	// Load the redirect session before issuing an authenticated session.
 	s, err := session.Get(r, session.AuthSession)
 	if err != nil {

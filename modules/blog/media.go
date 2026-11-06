@@ -2,7 +2,6 @@ package blog
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"net/http"
 	"slices"
@@ -168,19 +167,13 @@ func (m *module) checkMediaReferences(ctx context.Context, references []string) 
 // Storage failures are errors, not evidence that an image was deleted.
 func (m *module) missingMedia(ctx context.Context, references []string) (map[string]bool, error) {
 	missing := make(map[string]bool)
-	// Match the configured listener when publicOrigin is absent, including its
-	// default HTTPS port. Profile saves need no incoming request to establish it.
-	request := &http.Request{}
-	if m.app.Config.HTTP.TLS.Enabled {
-		request.TLS = &tls.ConnectionState{}
-	}
 	for _, reference := range references {
 		id := referencedImageID(reference)
 		if id == "" {
 			continue
 		}
 		normalized := imageReference(reference, "/")
-		local := m.imageLookupReferences(request, id)
+		local := m.imageLookupReferences(id)
 		if !slices.Contains(local, normalized) {
 			continue
 		}

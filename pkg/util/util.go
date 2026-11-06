@@ -33,6 +33,7 @@ func LoadHTML(files fs.FS, filePath string) (template.HTML, error) {
 
 // BuildPublicURL builds an absolute link using the application's public origin.
 // Without one, it uses the listener settings and the connection's TLS state.
+// Without a request, it uses the configured TLS setting instead.
 // Request host and forwarded headers are ignored.
 func BuildPublicURL(r *http.Request, cfg config.HTTPConfig, path string, params map[string]string) (*url.URL, error) {
 	origin, err := config.ParsePublicOrigin(cfg.PublicOrigin)
@@ -43,10 +44,6 @@ func BuildPublicURL(r *http.Request, cfg config.HTTPConfig, path string, params 
 		if cfg.Port == 0 {
 			return nil, errors.New("http.port must be nonzero to build a link without http.publicOrigin")
 		}
-		if r == nil {
-			return nil, errors.New("request cannot be nil")
-		}
-
 		host := strings.TrimSpace(cfg.ListenHost)
 		if host == "" {
 			host = "127.0.0.1"
@@ -55,7 +52,11 @@ func BuildPublicURL(r *http.Request, cfg config.HTTPConfig, path string, params 
 			return nil, errors.New("http.publicOrigin is required to build a link when http.listenHost is a wildcard address")
 		}
 		scheme := "http"
-		if r.TLS != nil {
+		secure := cfg.TLS.Enabled
+		if r != nil {
+			secure = r.TLS != nil
+		}
+		if secure {
 			scheme = "https"
 		}
 

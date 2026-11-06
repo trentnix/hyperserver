@@ -233,7 +233,7 @@ func TestPublicSearchPublication(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Warm private bodies through administrator search before checking public visibility.
-	if _, err := store.SearchPosts(t.Context(), "needle"); err != nil {
+	if _, err := store.SearchPosts(t.Context(), "needle", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.SearchPages(t.Context(), "needle"); err != nil {

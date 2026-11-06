@@ -13,6 +13,74 @@ import (
 )
 
 func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
+	for _, verified := range []bool{false, true} {
+		t.Run(fmt.Sprintf("verification accepts invited account/%t", verified), func(t *testing.T) {
+			repo := open(t)
+			u := newAccount("invited@example.invalid")
+			u.Role, u.Invited, u.Verified = "poster", true, verified
+			must(t, repo.Create(t.Context(), &u))
+			token := insertToken(t, repo, u.ID, user.VerificationTokenPurpose)
+			reset := insertToken(t, repo, u.ID, user.ResetTokenPurpose)
+			got, err := redeem(t.Context(), repo, &u, token)
+			must(t, err)
+			if got == nil {
+				t.Fatal("verification returned nil")
+			}
+			want := u
+			want.Invited, want.Verified = false, true
+			want.SessionVersion++
+			want.UpdatedAt = got.UpdatedAt
+			assertAccount(t, *got, want)
+			assertAccount(t, load(t, repo, u.ID), want)
+			assertTokenMissing(t, repo, token)
+			assertToken(t, repo, reset)
+		})
+	}
+	for _, operation := range []string{"email change", "verification", "failed email change", "failed verification"} {
+		t.Run("invitation token revocation/"+operation, func(t *testing.T) {
+			repo := open(t)
+			if _, ok := repo.(user.InvitationRepository); !ok {
+				t.Skip("provider does not support invitations")
+			}
+			u := newAccount("invited@example.invalid")
+			u.Role, u.Invited = "poster", true
+			must(t, repo.Create(t.Context(), &u))
+			invitation := insertToken(t, repo, u.ID, user.InvitationTokenPurpose)
+			verification := insertToken(t, repo, u.ID, user.VerificationTokenPurpose)
+			reset := insertToken(t, repo, u.ID, user.ResetTokenPurpose)
+			other := create(t, repo, "other@example.invalid")
+			otherInvite := insertToken(t, repo, other.ID, user.InvitationTokenPurpose)
+			changed := u
+			var err error
+			switch operation {
+			case "email change", "failed email change":
+				changed.Email = "changed@example.invalid"
+				if operation == "failed email change" {
+					changed.SessionVersion--
+				}
+				err = repo.Update(t.Context(), &changed)
+			default:
+				if operation == "failed verification" {
+					changed.Email = "wrong@example.invalid"
+				}
+				_, err = redeem(t.Context(), repo, &changed, verification)
+			}
+			if strings.HasPrefix(operation, "failed") {
+				if err == nil {
+					t.Fatal("invalid account change succeeded")
+				}
+				assertAccount(t, load(t, repo, u.ID), u)
+				assertToken(t, repo, invitation)
+				assertToken(t, repo, verification)
+			} else {
+				must(t, err)
+				assertTokenMissing(t, repo, invitation)
+				assertTokenMissing(t, repo, verification)
+			}
+			assertToken(t, repo, reset)
+			assertToken(t, repo, otherInvite)
+		})
+	}
 	t.Run("verification recipient binding", func(t *testing.T) {
 		repo := open(t)
 		u := create(t, repo, "current@example.invalid")

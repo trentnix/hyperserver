@@ -410,7 +410,7 @@ func TestSetupInitializationFailure(t *testing.T) {
 	h := newHarness(t)
 	settings := *h.blog.settings
 	settings.AdminEmail = "another@example.test"
-	m := &module{settings: &settings, access: &Access{}, accounts: unavailableAccounts{}}
+	m := &module{settings: &settings, access: &Access{}, accounts: unavailableAdminAccounts{unavailableAccounts{}, h.blog.administration, h.blog.accounts.(user.InvitationRepository)}}
 	if err := m.Init(t.Context(), h.blog.app); err == nil || !strings.Contains(err.Error(), "load blog setup") {
 		t.Fatalf("failed account lookup did not abort setup: %v", err)
 	}
@@ -420,6 +420,12 @@ func TestSetupInitializationFailure(t *testing.T) {
 	if _, err := h.blog.pageStore.ListPages(t.Context(), true); err != nil {
 		t.Fatal("failed setup closed another instance's storage", err)
 	}
+}
+
+type unavailableAdminAccounts struct {
+	unavailableAccounts
+	user.AdministrationRepository
+	user.InvitationRepository
 }
 
 // TestSetupUpgrade preserves established installations without a setup record.

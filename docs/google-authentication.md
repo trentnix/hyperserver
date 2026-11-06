@@ -1,6 +1,6 @@
 # Google authentication
 
-Google authentication is a provider beside email/password, not a separate account system. Both use the framework's local accounts and revocable browser sessions. The blog keeps its configured administrator restriction.
+Google authentication is a provider beside email/password, not a separate account system. Both use the framework's local accounts and revocable browser sessions. The blog admits its first configured administrator and users invited by an Admin.
 
 ## Configure
 
@@ -28,7 +28,7 @@ Set `http.formActionOrigins` to permit Google's form redirect destination. The f
 
 `/login` normally shows all configured login methods. With exactly one registered account, the blog shows only methods available to that account: email for a stored password, Google for a connected Google identity, or both. If a provider's availability check fails, its control remains visible. Submitted login methods still work if presentation lookups fail. Credential validation and admission remain mandatory.
 
-Registration still offers all configured registration methods. Multiple-account sites and account storage without `user.SingleAccountReader` keep all configured login choices. The forms work without JavaScript. A disabled provider has no usable login or callback. Google-only authentication does not require a mail service. Existing global authentication and session settings still apply.
+Registration still offers all configured registration methods. The blog keeps all configured login choices when multiple users have site access or invitations are pending. Removed users and canceled invitations do not affect those choices. The forms work without JavaScript. A disabled provider has no usable login or callback. Google-only authentication does not require a mail service. Existing global authentication and session settings still apply.
 
 Existing SQLite account databases must use the current schema before starting the application. See [account migrations](storage.md#account-schema-migrations) for the required version and upgrade commands. Fresh databases initialize automatically.
 
@@ -50,7 +50,7 @@ Matching email addresses never link accounts automatically. A Google identity ca
 
 ## First-time setup
 
-The wizard offers the enabled registration providers. Google registration requires `auth.registrationEnabled`. The blog accepts only its configured `adminEmail`. Google registration creates a verified local account and signs the administrator in through the normal login flow. First-time setup continues directly to Site Profile without a verification page or second Google sign-in. Email registration still requires a separate login and email verification when configured.
+The wizard offers the enabled registration providers. Google registration requires `auth.registrationEnabled`. Initial setup accepts only the configured `adminEmail`. Later, invited addresses can register. Google registration creates a verified local account and signs the user in through the normal login flow. First-time setup continues directly to Site Profile without a verification page or second Google sign-in. Email registration still requires a separate login and configured email verification unless a valid invitation already proves the address.
 
 Google registration accepts Gmail addresses and Google Workspace addresses identified by Google's verified hosted-domain claim. For other addresses attached to Google accounts, register and verify through email first, then connect Google. Google's `email_verified` claim alone does not establish current ownership of those third-party addresses.
 

@@ -100,7 +100,7 @@ func TestContentSearchStorage(t *testing.T) {
 	h := newHarness(t)
 	seedContentSearch(t, h)
 	want := []string{"Needle title", "Summary result", "Body result"}
-	posts, err := h.blog.posts.SearchPosts(t.Context(), "nEeDlE")
+	posts, err := h.blog.posts.SearchPosts(t.Context(), "nEeDlE", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,14 +146,14 @@ func TestContentSearchStorage(t *testing.T) {
 	if _, err := savePageFixture(h.blog.pageStore, t.Context(), page); err != nil {
 		t.Fatal(err)
 	}
-	if matches, err := h.blog.posts.SearchPosts(t.Context(), "needle"); err != nil || len(matches) != 2 {
+	if matches, err := h.blog.posts.SearchPosts(t.Context(), "needle", ""); err != nil || len(matches) != 2 {
 		t.Fatal("post search retained historical content", matches, err)
 	}
 	if matches, err := h.blog.pageStore.SearchPages(t.Context(), "needle"); err != nil || len(matches) != 2 {
 		t.Fatal("page search retained historical content", matches, err)
 	}
 	for _, query := range []string{"absent", "%_", "' OR 1=1 --"} {
-		if matches, err := h.blog.posts.SearchPosts(t.Context(), query); err != nil || len(matches) != 0 {
+		if matches, err := h.blog.posts.SearchPosts(t.Context(), query, ""); err != nil || len(matches) != 0 {
 			t.Fatal("unexpected post match", query, matches, err)
 		}
 		if matches, err := h.blog.pageStore.SearchPages(t.Context(), query); err != nil || len(matches) != 0 {
@@ -162,7 +162,7 @@ func TestContentSearchStorage(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := h.blog.posts.SearchPosts(ctx, "needle"); !errors.Is(err, context.Canceled) {
+	if _, err := h.blog.posts.SearchPosts(ctx, "needle", ""); !errors.Is(err, context.Canceled) {
 		t.Fatal("post search ignored cancellation", err)
 	}
 	if _, err := h.blog.pageStore.SearchPages(ctx, "needle"); !errors.Is(err, context.Canceled) {
@@ -172,7 +172,7 @@ func TestContentSearchStorage(t *testing.T) {
 	if err := store.db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.SearchPosts(t.Context(), "needle"); err == nil {
+	if _, err := store.SearchPosts(t.Context(), "needle", ""); err == nil {
 		t.Fatal("post search hid storage failure")
 	}
 	if _, err := store.SearchPages(t.Context(), "needle"); err == nil {
@@ -383,6 +383,6 @@ func TestPostSearchGroups(t *testing.T) {
 // failedContentSearch keeps the normal repository available for layout rendering.
 type failedContentSearch struct{ repository }
 
-func (failedContentSearch) SearchPosts(context.Context, string) ([]Post, error) {
+func (failedContentSearch) SearchPosts(context.Context, string, string) ([]Post, error) {
 	return nil, errors.New("private storage failure")
 }

@@ -2,17 +2,61 @@ package blog
 
 import (
 	"context"
+	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-type basicAccountRepository struct{ user.AccountRepository }
+func TestLoginChoicesAfterRemovingAccess(t *testing.T) {
+	for _, registered := range []bool{false, true} {
+		t.Run(strconv.FormatBool(registered), func(t *testing.T) {
+			cfg := harnessConfig(t, 10)
+			cfg.Auth.Services["google"] = map[string]string{"enabled": "true", "clientID": "test-client", "clientSecret": "test-secret"}
+			h := startHarness(t, cfg)
+			if err := h.blog.access.setup.finish(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			h.register(t)
+			h.verify(t)
+			h.login(t)
+			adminCookies := h.cookies
+			link := inviteUserForTest(t, h, "writer@example.test", "poster")
+			if sole, err := h.blog.site.loginAccount(t.Context()); err != nil || sole != nil {
+				t.Fatal("pending invitation must keep all sign-in methods", err)
+			}
+			if registered {
+				h.cookies = make(map[string]*http.Cookie)
+				requireStatus(t, h.request("GET", link, nil, false), http.StatusSeeOther)
+				requireStatus(t, h.request("POST", "/register", credentials("writer@example.test"), false), http.StatusSeeOther)
+				h.cookies = adminCookies
+			}
+			writer, err := h.app.Accounts.GetByEmail(t.Context(), "writer@example.test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			requireStatus(t, h.request("POST", "/users/"+writer.ID+"/remove", url.Values{"version": {strconv.FormatInt(writer.SessionVersion, 10)}}, false), http.StatusSeeOther)
+			sole, err := h.blog.site.loginAccount(t.Context())
+			if err != nil || sole == nil || user.EmailKey(sole.Email) != user.EmailKey("trentnix@gmail.com") {
+				t.Fatal("retained account prevented sole-user login choices", err)
+			}
+			h.cookies = make(map[string]*http.Cookie)
+			for _, hx := range []bool{false, true} {
+				response := h.request("GET", "/login", nil, hx)
+				requireStatus(t, response, http.StatusOK)
+				if !strings.Contains(response.Body.String(), `name="password"`) || strings.Contains(response.Body.String(), "Sign in with Google") {
+					t.Fatal("login offered an unused sign-in method")
+				}
+			}
+		})
+	}
+}
 
 func TestBlogSingleAccountLoginChoices(t *testing.T) {
-	for _, kind := range []string{"none", "email", "google", "linked", "multiple", "unverified", "unlinked Google registration", "unsupported storage"} {
+	for _, kind := range []string{"none", "email", "google", "linked", "multiple", "unverified", "unlinked Google registration"} {
 		t.Run(kind, func(t *testing.T) {
 			cfg := harnessConfig(t, 10)
 			cfg.Auth.Services["google"] = map[string]string{"enabled": "true", "clientID": "test-client", "clientSecret": "test-secret"}
@@ -41,12 +85,12 @@ func TestBlogSingleAccountLoginChoices(t *testing.T) {
 				}
 			}
 			if kind == "multiple" {
-				if err := accounts.Create(t.Context(), &user.User{Email: "other@example.com"}); err != nil {
+				if err := h.blog.administration.InitializeRole(t.Context(), owner.Email, "admin"); err != nil {
 					t.Fatal(err)
 				}
-			}
-			if kind == "unsupported storage" {
-				h.blog.access.setup.accounts = basicAccountRepository{accounts}
+				if err := accounts.Create(t.Context(), &user.User{Email: "other@example.com", Role: "poster"}); err != nil {
+					t.Fatal(err)
+				}
 			}
 			for _, hx := range []bool{false, true} {
 				w := h.request("GET", "/login", nil, hx)

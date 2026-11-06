@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/assets/css/blog.css">
   <link rel="preload" href="/assets/fonts/source-sans-3.woff2" as="font" type="font/woff2" crossorigin>
   <script src="/assets/js/startup.js"></script>
-  {{ if .LayoutData.Admin }}<link rel="stylesheet" href="/assets/lib/easymde/easymde.min.css">
+  {{ if .LayoutData.Writer }}<link rel="stylesheet" href="/assets/lib/easymde/easymde.min.css">
   <script src="/assets/lib/easymde/easymde.min.js" defer></script>
   <script src="/assets/js/confirmation.js" defer></script>
   <script src="/assets/js/editor-drafts.js" defer></script>{{ end }}
@@ -19,7 +19,7 @@
   <script src="/assets/js/htmx-errors.js" defer></script>
   <script src="/assets/js/blog.js" defer></script>
   <script type="module" src="/assets/js/forms.js"></script>
-  {{ if .LayoutData.Admin }}<script type="module" src="/assets/js/admin.js"></script>{{ end }}
+  {{ if .LayoutData.Writer }}<script type="module" src="/assets/js/admin.js"></script>{{ end }}
 </head>
 <body{{ if .LayoutData.Profile.BackgroundURL }} style="--site-background: url('{{ .LayoutData.Profile.BackgroundURL }}')"{{ end }}>
   <a class="skip-link" href="#article-content">Skip to content</a>
@@ -52,14 +52,14 @@
       </aside>
       <main id="main-content" class="article-column">
         <div class="account-panel">
-          {{ if .LayoutData.Admin }}<span class="account-label">Administration</span>{{ end }}
+          {{ if .LayoutData.Writer }}<span class="account-label">Administration</span>{{ end }}
           <nav class="account-nav" aria-label="Administration">
-            {{ if .LayoutData.Admin }}<details class="account-menu action-menu" open>
+            {{ if .LayoutData.Writer }}<details class="account-menu action-menu" open>
               <summary>Manage</summary>
-              <div class="action-menu-items" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace"><a href="/post/manage">Posts</a><a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media">Media</a></div>
+              <div class="action-menu-items" hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:window:top" hx-sync="#article-content:replace"><a href="/post/manage">Posts</a>{{ if .LayoutData.Admin }}<a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media">Media</a>{{ end }}{{ if .LayoutData.UserManagement }}<a href="/users">Users</a>{{ end }}</div>
             </details>{{ end }}
             {{ if .LayoutData.SignedIn }}
-            {{ if not .LayoutData.Admin }}<a href="/auth/request/verify">Verify email</a>{{ end }}
+            {{ if .LayoutData.NeedsVerification }}<a href="/auth/request/verify">Verify email</a>{{ end }}
             {{ else }}
             {{ if .LayoutData.Registration }}<a href="/register">Register</a>{{ end }}
             {{ end }}

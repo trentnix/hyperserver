@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
 // postManagement separates drafts, scheduled posts, and published posts.
@@ -14,7 +16,7 @@ type postManagement struct {
 	Total                        int
 }
 
-// managePosts lists all publication states for the administrator.
+// managePosts lists all publication states for the current writer.
 func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if !utf8.ValidString(query) || utf8.RuneCountInString(query) > 240 {
@@ -35,12 +37,23 @@ func (m *module) managePosts(w http.ResponseWriter, r *http.Request) {
 
 // postManagement loads the same grouped results for navigation and deletion updates.
 func (m *module) postManagement(ctx context.Context, query string) (postManagement, error) {
+	account := user.GetUserFromContext(ctx)
+	permission, err := m.access.Role(ctx, account)
+	if err != nil {
+		return postManagement{}, err
+	}
+	if !permission.valid() {
+		return postManagement{}, errAccessDenied
+	}
 	var posts []Post
-	var err error
 	if query == "" {
 		posts, err = m.posts.ListMetadata(ctx)
 	} else {
-		posts, err = m.posts.SearchPosts(ctx, query)
+		authorID := ""
+		if permission == rolePoster {
+			authorID = account.ID
+		}
+		posts, err = m.posts.SearchPosts(ctx, query, authorID)
 	}
 	if err != nil {
 		return postManagement{}, err
@@ -49,10 +62,14 @@ func (m *module) postManagement(ctx context.Context, query string) (postManageme
 	if err != nil {
 		return postManagement{}, err
 	}
-	data := postManagement{Query: query, Total: len(posts)}
+	data := postManagement{Query: query}
 	now := m.currentTime()
 	for _, post := range posts {
-		entry := postPage{Post: post, HasHistory: history[post.ID], Scheduled: post.Scheduled(now)}
+		if permission != roleAdmin && post.AuthorID != account.ID {
+			continue
+		}
+		data.Total++
+		entry := postPage{Post: post, HasHistory: history[post.ID], Scheduled: post.Scheduled(now), CanEdit: true}
 		if post.Draft {
 			data.Drafts = append(data.Drafts, entry)
 		} else if entry.Scheduled {

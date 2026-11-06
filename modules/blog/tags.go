@@ -21,6 +21,9 @@ type tagRepository interface {
 
 // tagSuggestions keeps optional suggestions from blocking writing or hiding a save error.
 func (m *module) tagSuggestions(r *http.Request) []string {
+	if m.requestRole(r) == rolePoster {
+		return nil
+	}
 	tags, err := m.tags.ListTags(r.Context())
 	if err != nil {
 		logger.LogRequestError(r, err)

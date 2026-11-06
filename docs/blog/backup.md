@@ -25,7 +25,7 @@ Verification checks the inventory, file checksums, SQLite integrity, foreign key
 
 ## Compatibility
 
-This maintenance binary supports ZIP archive format **1** with blog schema **1**, account schema **1**, and SQLite session schema **1**. Each database role must be present exactly once, including when roles share a snapshot. Custom session table names are supported. Every session version table in a session snapshot must have a supported version.
+This maintenance binary supports ZIP archive format **1** with blog schema **2**, account schema **2**, and SQLite session schema **1**. Each database role must be present exactly once, including when roles share a snapshot. Custom session table names are supported. Every session version table in a session snapshot must have a supported version.
 
 Missing, malformed, duplicate, dirty, older, or newer schema version markers fail verification. A valid checksum or SQLite integrity check alone does not establish recovery compatibility.
 

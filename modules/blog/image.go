@@ -22,6 +22,7 @@ type previewImageField struct {
 	InputID, Value, URL, DefaultURL string
 	Description, Help               string
 	Optional                        bool
+	NoLibrary                       bool
 }
 
 // imageUpload groups the original and generated copies stored as one upload.
@@ -61,15 +62,21 @@ func (m *module) upload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, http.StatusUnauthorized, map[string]string{"code": "authentication_required", "error": "You're signed out. Sign in again to upload this image."})
 		return
 	}
-	if !m.access.IsAdmin(account) {
-		code, message := "access_denied", "This account cannot upload images. Sign in with the administrator account."
+	permission, err := m.access.Role(r.Context(), account)
+	if err != nil {
+		logger.LogRequestError(r, err)
+		writeJSON(w, r, http.StatusServiceUnavailable, map[string]string{"error": "Unable to check your site access. Try again shortly."})
+		return
+	}
+	if !permission.valid() {
+		code, message := "access_denied", "This account cannot upload images. Ask an admin to check your site access."
 		if account.NeedsVerification() {
 			code, message = "verification_required", "Verify your email before uploading images."
 		}
 		writeJSON(w, r, http.StatusForbidden, map[string]string{"code": code, "error": message})
 		return
 	}
-	id, status, err := m.storeUpload(w, r)
+	id, status, err := m.storeUpload(w, r, permission)
 	if err != nil {
 		writeJSON(w, r, status, map[string]string{"error": err.Error()})
 		return
@@ -80,7 +87,7 @@ func (m *module) upload(w http.ResponseWriter, r *http.Request) {
 
 // uploadMedia supports ordinary and HTMX forms without exposing the editor's JSON API.
 func (m *module) uploadMedia(w http.ResponseWriter, r *http.Request) {
-	id, status, err := m.storeUpload(w, r)
+	id, status, err := m.storeUpload(w, r, roleAdmin)
 	if err == nil {
 		util.RedirectToURL(w, r, "/media/"+id)
 		return
@@ -98,7 +105,11 @@ func (m *module) uploadMedia(w http.ResponseWriter, r *http.Request) {
 
 // storeUpload bounds processing and stores the image and its browsing metadata.
 // Returned errors are safe to display. Storage details are logged here.
-func (m *module) storeUpload(w http.ResponseWriter, r *http.Request) (string, int, error) {
+func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission role) (string, int, error) {
+	account := user.GetUserFromContext(r.Context())
+	if account == nil || !permission.valid() {
+		return "", http.StatusForbidden, errors.New("You don't have permission to upload images.")
+	}
 	select {
 	case m.imageProcessing <- struct{}{}:
 		defer func() { <-m.imageProcessing }()
@@ -138,41 +149,85 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request) (string, in
 	}
 	m.mediaMu.RLock()
 	defer m.mediaMu.RUnlock()
-	id, err := m.images.Put(r.Context(), upload)
+	id := imageUploadID(upload)
+	if permission == rolePoster {
+		metadata, err := m.mediaMetadata.GetMediaMetadata(r.Context(), id)
+		allowed := err == nil && metadata.UploadedBy == account.ID
+		if err == nil && metadata.Version == 0 {
+			// Missing metadata alone does not prove a legacy image is new.
+			var existing storedImage
+			existing, err = m.images.Open(r.Context(), id)
+			if errors.Is(err, errNotFound) {
+				allowed, err = true, nil
+			} else if err == nil {
+				existing.Content.Close()
+			}
+		}
+		if err == nil && !allowed {
+			allowed, err = m.publicImage(r.Context(), id)
+		}
+		if err == nil && !allowed {
+			allowed, err = m.privateImageForWriter(r.Context(), id, account.ID)
+		}
+		if err != nil {
+			logger.LogRequestError(r, err)
+			return "", http.StatusInternalServerError, errors.New("Unable to check image access. Retry the upload.")
+		}
+		if !allowed {
+			return "", http.StatusConflict, errors.New("This image is already stored privately under another account. Ask an admin to make it available in your post.")
+		}
+	}
+	// Record ownership first so a failed file write can be retried by its uploader.
+	if err := m.mediaMetadata.RememberMedia(r.Context(), id, uploadFilename(files[0].Filename), account.ID); err != nil {
+		logger.LogRequestError(r, err)
+		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
+	}
+	id, err = m.images.Put(r.Context(), upload)
 	if err != nil {
 		logger.LogRequestError(r, err)
 		return "", http.StatusInternalServerError, errors.New("Unable to save the image.")
-	}
-	if err := m.mediaMetadata.RememberMedia(r.Context(), id, uploadFilename(files[0].Filename)); err != nil {
-		logger.LogRequestError(r, err)
-		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
 	}
 	return id, http.StatusOK, nil
 }
 
 // image checks visibility before serving bytes or conditional responses. Private
-// uploads are administrator-only. Public responses must revalidate their access.
+// uploads require an administrator or their post owner. Public responses must revalidate their access.
 func (m *module) image(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	admin := m.access.IsAdmin(user.GetUserFromContext(r.Context()))
 	variant := imageVariant(r.URL.Query().Get("variant"))
 	if variant == "" {
 		variant = displayImage
 	}
-	if (variant != displayImage && variant != thumbnailImage && variant != originalImage) || (variant == originalImage && !admin) {
+	if variant != displayImage && variant != thumbnailImage && variant != originalImage {
 		m.storageError(w, r, errNotFound)
 		return
 	}
-	if !admin {
-		public, err := m.publicImage(r, r.PathValue("id"))
+	permission := m.requestRole(r)
+	privateAccess := permission == roleAdmin
+	public := false
+	var err error
+	if !privateAccess && variant != originalImage {
+		public, err = m.publicImage(r.Context(), r.PathValue("id"))
 		if err != nil {
 			m.storageError(w, r, err)
 			return
 		}
-		if !public {
-			m.storageError(w, r, errNotFound)
+	}
+	if !public && permission == rolePoster {
+		accountID := user.GetUserFromContext(r.Context()).ID
+		if variant == originalImage {
+			privateAccess, err = m.ownsImage(r.Context(), r.PathValue("id"), accountID)
+		} else {
+			privateAccess, err = m.privateImageForWriter(r.Context(), r.PathValue("id"), accountID)
+		}
+		if err != nil {
+			m.storageError(w, r, err)
 			return
 		}
+	}
+	if !public && !privateAccess {
+		m.storageError(w, r, errNotFound)
+		return
 	}
 	stored, err := m.images.OpenVariant(r.Context(), r.PathValue("id"), variant)
 	if err != nil {
@@ -188,7 +243,7 @@ func (m *module) image(w http.ResponseWriter, r *http.Request) {
 	if variant == originalImage {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+r.PathValue("id")+`"`)
 	}
-	if !admin {
+	if !privateAccess {
 		w.Header().Set("Cache-Control", "public, no-cache")
 	}
 	w.Header().Set("ETag", strconv.Quote(stored.Digest))

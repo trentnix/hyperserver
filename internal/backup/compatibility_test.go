@@ -42,6 +42,9 @@ func TestIncompatibleBackupsLeaveOriginalsUntouched(t *testing.T) {
 			"INSERT INTO %s VALUES (2, false)", "UPDATE %s SET version=NULL",
 			"UPDATE %s SET dirty=NULL", "ALTER TABLE %s RENAME COLUMN version TO missing",
 		} {
+			if role.name != "sessions" && change == "UPDATE %s SET version=2" {
+				change = "UPDATE %s SET version=1"
+			}
 			t.Run(role.name+"/"+change, func(t *testing.T) {
 				extracted, _ := unpack(t, archive)
 				filename := filepath.Join(extracted, filepath.FromSlash(role.file))
@@ -135,7 +138,7 @@ func TestIncompatibleSourceDoesNotPublishBackup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.ExecContext(t.Context(), `UPDATE blog_schema_version SET version=2`)
+	_, err = db.ExecContext(t.Context(), `UPDATE blog_schema_version SET version=3`)
 	closeErr := db.Close()
 	if err != nil || closeErr != nil {
 		t.Fatal(err, closeErr)

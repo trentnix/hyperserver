@@ -479,7 +479,7 @@ func harnessConfig(t *testing.T, count int) config.Config {
 	if err := os.MkdirAll(moduleDirectory, 0700); err != nil {
 		t.Fatal(err)
 	}
-	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nrecentPostCount: %d\nuploadsDirectory: uploads\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
+	settings := fmt.Sprintf("adminEmail: trentnix@gmail.com\nmultiUser: true\nrecentPostCount: %d\nuploadsDirectory: uploads\nstorage:\n  provider: sqlite\n  connection: posts.db?_journal=WAL\n", count)
 	if err := os.WriteFile(filepath.Join(moduleDirectory, "config.yaml"), []byte(settings), 0600); err != nil {
 		t.Fatal(err)
 	}

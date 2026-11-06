@@ -25,6 +25,8 @@ func TestAccountColumnDeclarations(t *testing.T) {
 		{"user", "registration_auth_type", "VARCHAR(50)", false},
 		{"user", "password", "VARCHAR(255)", false},
 		{"user", "session_version", "INTEGER", true},
+		{"user", "role", "TEXT", true},
+		{"user", "invited", "BOOLEAN", true},
 		{"usertoken", "user_id", "VARCHAR(36)", false},
 		{"usertoken", "token_hash", "VARCHAR(255)", true},
 		{"usertoken", "expires_at", "TIMESTAMP", true},

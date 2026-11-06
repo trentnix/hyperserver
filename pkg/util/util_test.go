@@ -88,10 +88,18 @@ func TestBuildPublicURLFallbackAddresses(t *testing.T) {
 	}
 }
 
-func TestBuildPublicURLFallbackRequiresRequest(t *testing.T) {
-	cfg := config.HTTPConfig{ListenHost: "localhost", Port: 80}
-	if _, err := BuildPublicURL(nil, cfg, "/reset", nil); err == nil {
-		t.Error("accepted a missing request")
+func TestBuildPublicURLConfiguredFallback(t *testing.T) {
+	for _, secure := range []bool{false, true} {
+		cfg := config.HTTPConfig{ListenHost: "::1", Port: 8080}
+		cfg.TLS.Enabled = secure
+		want := "http://[::1]:8080/reset?token=a%2Bb"
+		if secure {
+			want = "https://[::1]:8080/reset?token=a%2Bb"
+		}
+		link, err := BuildPublicURL(nil, cfg, "/reset", map[string]string{"token": "a+b"})
+		if err != nil || link.String() != want {
+			t.Fatalf("configured fallback: %v %v, want %s", link, err, want)
+		}
 	}
 }
 

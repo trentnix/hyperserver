@@ -6,6 +6,7 @@
   {{ if and (eq .Data.Workflow "login") (not .LayoutData.Setup) }}
   {{ template "blog.authWelcome" . }}
   {{ else if not .LayoutData.SetupTitle }}<h1>{{ .Data.Title }}</h1>{{ end }}
+  {{ if .LayoutData.Invitation }}<form method="post" action="/invite/dismiss"><button class="button-secondary" type="submit">Continue without this invitation</button></form>{{ end }}
 {{ end }}
 
 {{ define "blog.authWelcome" }}

@@ -4,6 +4,8 @@
 
 Use **Media** to upload images and browse existing files. Use **Browse library** beside a preview/profile image or **Choose existing image** in the Markdown toolbar to reuse one. Clicking a chooser card selects it and returns to the editor. Selection takes effect when you save.
 
+Media management and the library chooser require Admin access. Posters can upload images directly in their post editor and reuse public images or images already in their own saved posts.
+
 Uploads accept PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. The blog keeps the original and generates display and thumbnail copies with maximum edges of 2,048 and 480 pixels. Small images are not enlarged. JPEG copies use quality 85. PNG keeps transparency. JPEG/PNG copies apply EXIF orientation and remove metadata, including location data. GIF retains its original bytes, animation, and metadata. Animated PNG is rejected.
 
 Only one upload is processed at a time. A concurrent upload receives a retry message. Image processing uses the framework's optional [imaging package](../../pkg/imaging/image.go). The blog owns limits, storage, access rules, and editor behavior.
@@ -18,9 +20,9 @@ Labels and comma-separated tags help search. They do not change URLs, alt text, 
 
 ## Privacy and storage
 
-New uploads and images used only by drafts or future posts are administrator-only. Published content and saved profile images make their uploads public. Shared images stay public while any public content uses them. Unpublishing a page also hides image references from its descendants.
+New uploads are private to Admins and their uploader. Posters can also view images referenced by any saved version of their own posts. Published content and saved profile images make their uploads public. Shared images stay public while any public content uses them. Unpublishing a page also hides image references from its descendants.
 
-The handler checks visibility before serving bytes or a conditional response. **Download original** remains administrator-only. Copies already downloaded or cached elsewhere cannot be recalled.
+The handler checks visibility before serving bytes or a conditional response. Original files remain private to Admins and their uploader. Uploading duplicate bytes never transfers ownership. Copies already downloaded or cached elsewhere cannot be recalled.
 
 Each upload is a ZIP bundle containing its original, display copy, and thumbnail. The original's hash determines its stable filename and URL. Do not edit bundles in place. Back up the content database and uploads together. Deleting content does not delete its images.
 

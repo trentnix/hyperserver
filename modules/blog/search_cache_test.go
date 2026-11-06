@@ -150,7 +150,7 @@ func TestSearchCacheEditsRestoresAndDeletes(t *testing.T) {
 					t.Fatalf("public %q: %+v, %v", query, got, err)
 				}
 				if kind == "post" {
-					got, err := store.SearchPosts(t.Context(), query)
+					got, err := store.SearchPosts(t.Context(), query, "")
 					if err != nil || len(got) != count {
 						t.Fatalf("posts %q: %+v, %v", query, got, err)
 					}

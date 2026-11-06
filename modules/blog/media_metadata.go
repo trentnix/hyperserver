@@ -13,6 +13,7 @@ import (
 // mediaMetadata describes an upload without changing its immutable image ID or URL.
 type mediaMetadata struct {
 	Filename, Label, Tags string
+	UploadedBy            string
 	Version               int64
 }
 
@@ -21,14 +22,14 @@ type mediaMetadata struct {
 type mediaMetadataRepository interface {
 	ListMediaMetadata(context.Context) (map[string]mediaMetadata, error)
 	GetMediaMetadata(context.Context, string) (mediaMetadata, error)
-	RememberMedia(context.Context, string, string) error
+	RememberMedia(ctx context.Context, id, filename, uploadedBy string) error
 	SaveMediaMetadata(context.Context, string, mediaMetadata) error
 }
 
 // ListMediaMetadata supplies search metadata for the filesystem-backed library.
 // Callers ignore deleted files. Re-uploading the same bytes recovers their metadata.
 func (s *sqliteRepository) ListMediaMetadata(ctx context.Context) (map[string]mediaMetadata, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, filename, label, tags, version FROM blog_media")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, filename, label, tags, version, uploaded_by FROM blog_media")
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +38,7 @@ func (s *sqliteRepository) ListMediaMetadata(ctx context.Context) (map[string]me
 	for rows.Next() {
 		var id string
 		var value mediaMetadata
-		if err := rows.Scan(&id, &value.Filename, &value.Label, &value.Tags, &value.Version); err != nil {
+		if err := rows.Scan(&id, &value.Filename, &value.Label, &value.Tags, &value.Version, &value.UploadedBy); err != nil {
 			return nil, err
 		}
 		metadata[id] = value
@@ -48,18 +49,19 @@ func (s *sqliteRepository) ListMediaMetadata(ctx context.Context) (map[string]me
 // GetMediaMetadata returns an empty value for uploads created before naming was available.
 func (s *sqliteRepository) GetMediaMetadata(ctx context.Context, id string) (mediaMetadata, error) {
 	var value mediaMetadata
-	err := s.db.QueryRowContext(ctx, "SELECT filename, label, tags, version FROM blog_media WHERE id=?", id).Scan(&value.Filename, &value.Label, &value.Tags, &value.Version)
+	err := s.db.QueryRowContext(ctx, "SELECT filename, label, tags, version, uploaded_by FROM blog_media WHERE id=?", id).Scan(&value.Filename, &value.Label, &value.Tags, &value.Version, &value.UploadedBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}
 	return value, err
 }
 
-// RememberMedia retains the first filename and never overwrites a label or tags.
-func (s *sqliteRepository) RememberMedia(ctx context.Context, id, filename string) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO blog_media(id, filename, label, version) VALUES (?, ?, '', 1)
+// RememberMedia records the first uploader. Duplicate bytes never transfer ownership.
+// It retains the first filename and never overwrites a label or tags.
+func (s *sqliteRepository) RememberMedia(ctx context.Context, id, filename, uploadedBy string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO blog_media(id, filename, label, version, uploaded_by) VALUES (?, ?, '', 1, ?)
 ON CONFLICT(id) DO UPDATE SET filename=excluded.filename, version=blog_media.version+1
-WHERE blog_media.filename='' AND excluded.filename<>''`, id, filename)
+WHERE blog_media.filename='' AND excluded.filename<>'' AND blog_media.uploaded_by=excluded.uploaded_by`, id, filename, uploadedBy)
 	return err
 }
 

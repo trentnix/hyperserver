@@ -1,0 +1,60 @@
+{{ define "blog.invitation" }}
+<section class="info-page confirmation-panel"><h1>Accept invitation</h1><p>Join this site as {{ .Data.Email }}.</p><form method="post" action="/invite/accept"><button type="submit">Accept invitation</button></form></section>
+{{ end }}
+
+{{ define "blog.users" }}
+<section class="info-page page-manager">
+  <header class="page-manager-heading"><div><h1>Users</h1><p>Choose who can write and manage your site.</p></div>{{ if .Data.AllowInvitations }}<a class="button-primary" href="/users/add" hx-get="/users/add" hx-target="#article-content" hx-push-url="true">Invite user</a>{{ end }}</header>
+  <p class="form-hint">{{ .Data.Active }} active {{ if eq .Data.Active 1 }}user{{ else }}users{{ end }} · {{ .Data.Pending }} {{ if eq .Data.Pending 1 }}invitation{{ else }}invitations{{ end }}</p>
+  <div class="users-table">
+    <div class="users-heading" aria-hidden="true"><span>Email</span><span>Role</span><span>Status</span>{{ if gt (len .Data.Users) 1 }}<span>Actions</span>{{ end }}</div>
+    <ul class="users-list">
+    {{ range .Data.Users }}
+      <li class="user-row">
+        <div><strong>{{ .Email }}</strong>{{ if eq .ID $.Data.CurrentID }} <span class="user-self">You</span>{{ end }}</div>
+        <span class="user-role">{{ if eq .Role "admin" }}Admin{{ else }}Poster{{ end }}</span>
+        <span class="user-status">{{ if .Invited }}Invited{{ else }}Active{{ end }}</span>
+        {{ if gt (len $.Data.Users) 1 }}<a href="/users/{{ .ID }}" hx-get="/users/{{ .ID }}" hx-target="#article-content" hx-push-url="true" aria-label="Edit access for {{ .Email }}">Edit access</a>{{ end }}
+      </li>
+    {{ end }}
+    </ul>
+  </div>
+  <div class="user-role-guide"><div><strong>Admin</strong><p>Manages users and all site content.</p></div><div><strong>Poster</strong><p>Creates, publishes, edits, and deletes their own posts.</p></div></div>
+</section>
+{{ end }}
+
+{{ define "blog.userRoles" }}
+<fieldset class="user-role-options"><legend>Role</legend>
+  <label><input type="radio" name="role" id="user-role-poster" value="poster"{{ if eq .Role "poster" }} checked{{ end }}{{ if .LastAdmin }} disabled aria-describedby="last-admin-help"{{ end }} required><span><strong>Poster</strong><small>Creates, publishes, edits, and deletes their own posts.</small></span></label>
+  <label><input type="radio" name="role" id="user-role-admin" value="admin"{{ if eq .Role "admin" }} checked{{ end }}><span><strong>Admin</strong><small>Manages users, posts, pages, media, and the site profile.</small></span></label>
+  {{ if .LastAdmin }}<p class="form-hint" id="last-admin-help">This is the last active Admin. Another user must have active Admin access before you can change this role.</p>{{ end }}
+</fieldset>
+{{ end }}
+
+{{ define "blog.userEditor" }}
+<section class="info-page user-editor">
+  <a href="/users" hx-get="/users" hx-target="#article-content" hx-push-url="true">Back to Users</a>
+  <h1>{{ if .Data.ID }}Edit access{{ else }}Invite user{{ end }}</h1>
+  {{ if .Data.ID }}<p class="form-hint">{{ .Data.Email }}</p>{{ else }}<p class="form-hint">Send an invitation to write on your site.</p>{{ end }}
+  <form method="post" action="/users{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}">
+    {{ if .Data.Error }}<p class="form-error" role="alert" data-error-fields="{{ .Data.ErrorFields }}">{{ .Data.Error }}</p>{{ end }}
+    <input type="hidden" name="version" value="{{ .Data.SessionVersion }}">
+    {{ if not .Data.ID }}<label for="user-email">Email</label><input id="user-email" name="email" type="email" value="{{ .Data.Email }}" required{{ if eq .Data.ErrorFields "email" }} aria-invalid="true"{{ end }}>{{ end }}
+    {{ template "blog.userRoles" .Data }}
+    {{ if not .Data.ID }}<p class="form-hint">The invitation link expires after {{ .Data.InvitationLifetime }}. You can resend or cancel it from Users.</p>{{ end }}
+    <div class="form-actions"><button type="submit"{{ if .Data.LastAdmin }} disabled aria-describedby="last-admin-help"{{ end }}>{{ if .Data.ID }}Save changes{{ else }}Send invitation{{ end }}</button><a class="button-secondary" href="/users">Cancel</a></div>
+  </form>
+  {{ if and .Data.ID (ne .Data.ID .Data.CurrentID) (not .Data.LastAdmin) }}<div class="user-access-actions">
+    {{ if and .Data.Invited .Data.AllowInvitations }}<form method="post" action="/users/{{ .Data.ID }}/invite"><input type="hidden" name="version" value="{{ .Data.SessionVersion }}"><button class="button-secondary">Resend invitation</button></form>{{ end }}
+    <a class="user-remove-link" href="/users/{{ .Data.ID }}/remove">{{ if .Data.Invited }}Cancel invitation{{ else }}Remove user{{ end }}</a><p class="form-hint">Removing access keeps their posts on the site.</p>
+  </div>{{ end }}
+</section>
+{{ end }}
+
+{{ define "blog.userRemove" }}
+<section class="info-page confirmation-panel">
+  <h1>{{ if .Data.Invited }}Cancel invitation?{{ else }}Remove user?{{ end }}</h1><p>{{ .Data.Email }} will no longer have site access. Their posts will stay on the site.</p>
+  {{ if .Data.Error }}<p class="form-error" role="alert">{{ .Data.Error }}</p>{{ end }}
+  <form method="post" action="/users/{{ .Data.ID }}/remove" class="form-actions"><input type="hidden" name="version" value="{{ .Data.SessionVersion }}"><button class="button-danger">{{ if .Data.Invited }}Cancel invitation{{ else }}Remove user{{ end }}</button><a class="button-secondary" href="/users/{{ .Data.ID }}">Keep access</a></form>
+</section>
+{{ end }}

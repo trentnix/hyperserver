@@ -22,6 +22,9 @@ type (
 		UpdatedAt            time.Time
 		RegistrationAuthType string
 		Password             string
+		// Role is application-defined. Invited accounts have not accepted access.
+		Role    string
+		Invited bool
 		// SessionVersion changes when credentials or account access changes.
 		// Callers must preserve the version supplied by account reads and writes.
 		SessionVersion int64

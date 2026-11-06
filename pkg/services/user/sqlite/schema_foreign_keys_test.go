@@ -45,7 +45,7 @@ func TestTokenForeignKeyDeclarations(t *testing.T) {
 		},
 		{
 			name: "implicit composite primary key", declaration: "FOREIGN KEY (user_id) REFERENCES user ON DELETE CASCADE",
-			accountSchema: strings.Replace(accountWithUniqueID, "session_version INTEGER NOT NULL DEFAULT 1", "session_version INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (id, email_key)", 1), wantError: true,
+			accountSchema: strings.Replace(accountWithUniqueID, "invited BOOLEAN NOT NULL DEFAULT FALSE", "invited BOOLEAN NOT NULL DEFAULT FALSE, PRIMARY KEY (id, email_key)", 1), wantError: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -57,9 +57,9 @@ func (s *AccountRepository) CreateExternalAccount(ctx context.Context, account *
 	}
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `INSERT INTO user
-		(id, email, email_key, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, created.ID, created.Email, user.EmailKey(created.Email), created.Verified,
-		created.VerificationRequired, created.CreatedAt, created.UpdatedAt, created.RegistrationAuthType, created.Password, created.SessionVersion)
+		(id, email, email_key, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version, role, invited)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, created.ID, created.Email, user.EmailKey(created.Email), created.Verified,
+		created.VerificationRequired, created.CreatedAt, created.UpdatedAt, created.RegistrationAuthType, created.Password, created.SessionVersion, created.Role, created.Invited)
 	if err != nil {
 		return accountWriteError(err)
 	}

@@ -28,13 +28,13 @@ func TestMediaMetadata(t *testing.T) {
 	if err != nil || missing != (mediaMetadata{}) {
 		t.Fatal(missing, err)
 	}
-	if err := store.RememberMedia(t.Context(), id, "First.png"); err != nil {
+	if err := store.RememberMedia(t.Context(), id, "First.png", "first-user"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveMediaMetadata(t.Context(), id, mediaMetadata{Label: "Custom label", Tags: "forest, landscape", Version: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RememberMedia(t.Context(), id, "Second.png"); err != nil {
+	if err := store.RememberMedia(t.Context(), id, "Second.png", "second-user"); err != nil {
 		t.Fatal(err)
 	}
 	if err := closeStore(); err != nil {
@@ -46,7 +46,7 @@ func TestMediaMetadata(t *testing.T) {
 	}
 	defer closeStore()
 	got, err := store.GetMediaMetadata(t.Context(), id)
-	if err != nil || got != (mediaMetadata{Filename: "First.png", Label: "Custom label", Tags: "forest, landscape", Version: 2}) {
+	if err != nil || got != (mediaMetadata{Filename: "First.png", UploadedBy: "first-user", Label: "Custom label", Tags: "forest, landscape", Version: 2}) {
 		t.Fatal(got, err)
 	}
 	for _, version := range []int64{0, 1} {
@@ -58,7 +58,7 @@ func TestMediaMetadata(t *testing.T) {
 	if err := store.SaveMediaMetadata(t.Context(), legacy, mediaMetadata{Label: "Legacy label", Tags: "legacy"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RememberMedia(t.Context(), legacy, "Recovered.png"); err != nil {
+	if err := store.RememberMedia(t.Context(), legacy, "Recovered.png", ""); err != nil {
 		t.Fatal(err)
 	}
 	got, err = store.GetMediaMetadata(t.Context(), legacy)
@@ -94,7 +94,7 @@ func TestMediaMetadata(t *testing.T) {
 	if _, err := store.GetMediaMetadata(ctx, id); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	if err := store.RememberMedia(ctx, id, "canceled"); !errors.Is(err, context.Canceled) {
+	if err := store.RememberMedia(ctx, id, "canceled", ""); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if err := store.SaveMediaMetadata(ctx, id, mediaMetadata{Label: "canceled", Version: 3}); !errors.Is(err, context.Canceled) {
@@ -140,7 +140,7 @@ func TestMediaSearchHTTP(t *testing.T) {
 	current := mediaUpload(t, h.blog, "current")
 	historical := mediaUpload(t, h.blog, "historical")
 	unused := mediaUpload(t, h.blog, "unused")
-	if err := h.blog.mediaMetadata.RememberMedia(t.Context(), unused.ID, "100%_Été.png"); err != nil {
+	if err := h.blog.mediaMetadata.RememberMedia(t.Context(), unused.ID, "100%_Été.png", ""); err != nil {
 		t.Fatal(err)
 	}
 	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "references", Title: "Old forest", Draft: true, PreviewImage: historical.ID})
@@ -181,7 +181,7 @@ func TestMediaSearchHTTP(t *testing.T) {
 		if i < 25 {
 			name = "Needle & thread"
 		}
-		if err := h.blog.mediaMetadata.RememberMedia(t.Context(), id, name); err != nil {
+		if err := h.blog.mediaMetadata.RememberMedia(t.Context(), id, name, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -257,7 +257,7 @@ func (failedMediaMetadata) ListMediaMetadata(context.Context) (map[string]mediaM
 func (failedMediaMetadata) GetMediaMetadata(context.Context, string) (mediaMetadata, error) {
 	return mediaMetadata{}, errors.New("private metadata failure")
 }
-func (failedMediaMetadata) RememberMedia(context.Context, string, string) error {
+func (failedMediaMetadata) RememberMedia(context.Context, string, string, string) error {
 	return errors.New("private metadata failure")
 }
 func (failedMediaMetadata) SaveMediaMetadata(context.Context, string, mediaMetadata) error {

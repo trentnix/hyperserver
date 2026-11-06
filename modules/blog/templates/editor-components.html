@@ -51,7 +51,7 @@
       </div>
       <div class="preview-image-controls">
         <div class="image-upload-controls" hidden>
-          <div class="preview-image-actions"><button type="button" class="button-secondary" data-image-upload aria-describedby="{{ .InputID }}-help">Upload image</button><button type="button" class="button-secondary" data-media-browse>Browse library</button></div>
+          <div class="preview-image-actions"><button type="button" class="button-secondary" data-image-upload aria-describedby="{{ .InputID }}-help">Upload image</button>{{ if not .NoLibrary }}<button type="button" class="button-secondary" data-media-browse>Browse library</button>{{ end }}</div>
           <input id="{{ .InputID }}" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" hidden>
         </div>
         <p class="form-hint">{{ .Help }}</p>

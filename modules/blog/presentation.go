@@ -38,7 +38,20 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", authReturnURL, loginURL
 		cm.BuildLayoutData = func(r *http.Request) any {
 			account := user.GetUserFromContext(r.Context())
-			data := navigation{Profile: profile.Current(), SignedIn: account != nil, Admin: access.IsAdmin(account)}
+			permission, roleErr := access.Role(r.Context(), account)
+			if roleErr != nil {
+				logger.LogRequestError(r, roleErr)
+			}
+			data := navigation{Profile: profile.Current(), SignedIn: account != nil, NeedsVerification: account != nil && account.NeedsVerification(), Admin: permission == roleAdmin, Writer: permission.valid()}
+			data.Invitation = r.Context().Value(invitationPageKey{}) != nil
+			data.UserManagement = data.Admin && access.multiUser
+			if data.Admin && !access.multiUser {
+				users, err := access.administration.ListUsers(r.Context())
+				if err != nil {
+					logger.LogRequestError(r, err)
+				}
+				data.UserManagement = len(users) > 1
+			}
 			loginPage := r.URL.Path == loginURL
 			registerPage := r.URL.Path == "/register"
 			if r.Context().Value(setupPageKey{}) != nil || access.setup != nil && !access.setup.complete.Load() && (loginPage || registerPage || strings.HasPrefix(r.URL.Path, "/auth/")) {
@@ -62,7 +75,7 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 			}
 			data.ReaderSearch = r.Context().Value(adminPageKey{}) == nil && !loginPage && !registerPage && !strings.HasPrefix(r.URL.Path, "/auth/")
 			data.Description = data.Profile.Bio
-			if data.Admin {
+			if data.Writer {
 				data.EditorOwner = account.ID
 			}
 			cookie, err := r.Cookie(returningUserCookie)
@@ -96,6 +109,7 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templates, error) {
 	return content.PrepareTemplates(cm,
 		content.TemplatePath{FS: blogModuleFS, Path: responsesFile},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/users.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/posts.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/post-editor.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/page-editor.html"},
@@ -122,6 +136,10 @@ type navigation struct {
 	ReaderSearch                             bool
 	EditorOwner, Description                 string
 	SignedIn, Admin, Registration, ShowLogin bool
+	Writer                                   bool
+	NeedsVerification                        bool
+	Invitation                               bool
+	UserManagement                           bool
 	AccountControls                          bool
 }
 

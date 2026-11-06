@@ -3,7 +3,6 @@ package blog
 import (
 	"context"
 	"net"
-	"net/http"
 	"net/url"
 	"path"
 	"slices"
@@ -17,28 +16,29 @@ import (
 // References identify equivalent local URLs, including the configured public host.
 type imageAccessRepository interface {
 	ImageIsPublic(ctx context.Context, references ...string) (bool, error)
+	ImageInAuthorsPosts(ctx context.Context, author string, references ...string) (bool, error)
 }
 
 // publicImage allows only references from public content or the saved site profile.
 // The request host never decides whether an absolute reference belongs to this site.
-func (m *module) publicImage(r *http.Request, id string) (bool, error) {
-	references := m.imageLookupReferences(r, id)
+func (m *module) publicImage(ctx context.Context, id string) (bool, error) {
+	references := m.imageLookupReferences(id)
 	profile := m.profile.Current()
 	for _, raw := range []string{profile.ImageURL, profile.FaviconURL, profile.BackgroundURL} {
 		if ref := imageReference(raw, "/"); ref != "" && slices.Contains(references, ref) {
 			return true, nil
 		}
 	}
-	return m.imageAccess.ImageIsPublic(r.Context(), references...)
+	return m.imageAccess.ImageIsPublic(ctx, references...)
 }
 
 // imageLookupReferences identifies local uploads without trusting request host headers.
-func (m *module) imageLookupReferences(r *http.Request, id string) []string {
+func (m *module) imageLookupReferences(id string) []string {
 	local := "/images/" + id
 	references := []string{local}
 	// Root-relative references do not require a public origin. If no trusted
 	// absolute address can be built, absolute references cannot grant access.
-	if public, err := util.BuildPublicURL(r, m.app.Config.HTTP, local, nil); err == nil {
+	if public, err := util.BuildPublicURL(nil, m.app.Config.HTTP, local, nil); err == nil {
 		references = append(references, imageReference(public.String(), "/"))
 		defaultPort := "443"
 		if public.Scheme == "http" {
@@ -113,4 +113,20 @@ func imageReferences(source, contentPath, preview string) ([]string, error) {
 			}
 		}
 	}
+}
+
+func (m *module) ownsImage(ctx context.Context, id, accountID string) (bool, error) {
+	metadata, err := m.mediaMetadata.GetMediaMetadata(ctx, id)
+	return accountID != "" && metadata.UploadedBy == accountID, err
+}
+
+func (m *module) privateImageForWriter(ctx context.Context, id, accountID string) (bool, error) {
+	owned, err := m.ownsImage(ctx, id, accountID)
+	if err != nil {
+		return false, err
+	}
+	if owned {
+		return true, nil
+	}
+	return m.imageAccess.ImageInAuthorsPosts(ctx, accountID, m.imageLookupReferences(id)...)
 }

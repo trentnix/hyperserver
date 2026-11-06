@@ -73,6 +73,12 @@ func (s *fileImageStore) Put(ctx context.Context, upload imageUpload) (string, e
 	return s.put(ctx, upload, time.Time{})
 }
 
+// imageUploadID lets upload authorization and storage use the same content key.
+func imageUploadID(upload imageUpload) string {
+	digest := sha256.Sum256(upload.Original)
+	return hex.EncodeToString(digest[:]) + "." + strings.TrimPrefix(upload.MediaType, "image/")
+}
+
 // put lets offline regeneration preserve upload dates while ordinary uploads get a new version.
 func (s *fileImageStore) put(ctx context.Context, upload imageUpload, modified time.Time) (string, error) {
 	if err := ctx.Err(); err != nil {
@@ -85,8 +91,7 @@ func (s *fileImageStore) put(ctx context.Context, upload imageUpload, modified t
 	if len(upload.Original) == 0 || len(upload.Display) == 0 || len(upload.Thumbnail) == 0 {
 		return "", errors.New("incomplete image upload")
 	}
-	digest := sha256.Sum256(upload.Original)
-	id := hex.EncodeToString(digest[:]) + "." + strings.TrimPrefix(media, "image/")
+	id := imageUploadID(upload)
 	temporary := ".upload-" + rand.Text()
 	file, err := s.root.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {

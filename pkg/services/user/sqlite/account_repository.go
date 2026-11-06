@@ -26,13 +26,13 @@ func NewAccountRepository(db *sql.DB) *AccountRepository {
 }
 
 // accountColumns and scanAccount must use the same field order.
-const accountColumns = "id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version"
+const accountColumns = "id, email, verified, verification_required, created_at, updated_at, registration_auth_type, password, session_version, role, invited"
 
-func scanAccount(row *sql.Row) (*accounts.User, error) {
+func scanAccount(row interface{ Scan(...any) error }) (*accounts.User, error) {
 	var u accounts.User
 	if err := row.Scan(
 		&u.ID, &u.Email, &u.Verified, &u.VerificationRequired,
-		&u.CreatedAt, &u.UpdatedAt, &u.RegistrationAuthType, &u.Password, &u.SessionVersion,
+		&u.CreatedAt, &u.UpdatedAt, &u.RegistrationAuthType, &u.Password, &u.SessionVersion, &u.Role, &u.Invited,
 	); err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (s *AccountRepository) GetByEmail(ctx context.Context, email string) (*acco
 
 // GetToken reads stored metadata without consuming or checking the expiry of the token.
 func (s *AccountRepository) GetToken(ctx context.Context, tokenHash, purpose string) (accounts.TokenMetadata, error) {
-	if purpose != accounts.ResetTokenPurpose && purpose != accounts.VerificationTokenPurpose && purpose != accounts.PasswordSetupTokenPurpose {
+	if purpose != accounts.ResetTokenPurpose && purpose != accounts.VerificationTokenPurpose && purpose != accounts.PasswordSetupTokenPurpose && purpose != accounts.InvitationTokenPurpose {
 		return accounts.TokenMetadata{}, hs_errors.WithCause(accounts.ErrToken, errors.New("invalid token purpose"))
 	}
 	if tokenHash == "" {
@@ -175,13 +175,13 @@ func (s *AccountRepository) Create(ctx context.Context, user *accounts.User) err
 	created.SessionVersion = 1
 
 	query := fmt.Sprintf(`
-        INSERT INTO %s (id, email, email_key, verified, verification_required, created_at, updated_at, registration_auth_type, password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO %s (id, email, email_key, verified, verification_required, created_at, updated_at, registration_auth_type, password, role, invited)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, userTableName)
 
 	if _, err := s.db.ExecContext(ctx, query,
 		created.ID, created.Email, accounts.EmailKey(created.Email), created.Verified, created.VerificationRequired,
-		created.CreatedAt, created.UpdatedAt, created.RegistrationAuthType, created.Password); err != nil {
+		created.CreatedAt, created.UpdatedAt, created.RegistrationAuthType, created.Password, created.Role, created.Invited); err != nil {
 		return accountWriteError(err)
 	}
 	*user = created
@@ -204,7 +204,7 @@ func (s *AccountRepository) InsertToken(ctx context.Context, metadata accounts.T
 	if metadata.ExpiresAt.IsZero() {
 		return hs_errors.WithCause(accounts.ErrTokenExpirationNotSpecified, errInsertToken)
 	}
-	if metadata.Purpose != accounts.ResetTokenPurpose && metadata.Purpose != accounts.VerificationTokenPurpose && metadata.Purpose != accounts.PasswordSetupTokenPurpose {
+	if metadata.Purpose != accounts.ResetTokenPurpose && metadata.Purpose != accounts.VerificationTokenPurpose && metadata.Purpose != accounts.PasswordSetupTokenPurpose && metadata.Purpose != accounts.InvitationTokenPurpose {
 		return hs_errors.WithCause(accounts.ErrToken, errors.New("invalid token purpose"))
 	}
 
@@ -252,9 +252,9 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 	// Revoke before updating so the comparison uses the stored email address.
 	// Starting with a write also avoids upgrading a SQLite read transaction.
 	_, err = tx.ExecContext(ctx, `DELETE FROM `+userTokenTableName+`
-		WHERE user_id = ? AND token_type = ?
+		WHERE user_id = ? AND token_type IN (?, ?)
 		AND EXISTS (SELECT 1 FROM `+userTableName+` WHERE id = ? AND email_key <> ?)`,
-		user.ID, accounts.VerificationTokenPurpose, user.ID, accounts.EmailKey(user.Email))
+		user.ID, accounts.VerificationTokenPurpose, accounts.InvitationTokenPurpose, user.ID, accounts.EmailKey(user.Email))
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,9 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
             session_version = session_version + CASE WHEN password IS NOT :password
                 OR email_key IS NOT :email_key OR verified IS NOT :verified
                 OR verification_required IS NOT :verification_required
-                OR registration_auth_type IS NOT :registration_auth_type THEN 1 ELSE 0 END,
+                OR registration_auth_type IS NOT :registration_auth_type
+                OR role IS NOT :role OR invited IS NOT :invited THEN 1 ELSE 0 END,
+            role = :role, invited = :invited,
             password = :password
         WHERE id = :id AND session_version = :session_version
     `, userTableName)
@@ -283,6 +285,8 @@ func (s *AccountRepository) Update(ctx context.Context, user *accounts.User) err
 		sql.Named("updated_at", updated.UpdatedAt),
 		sql.Named("registration_auth_type", updated.RegistrationAuthType),
 		sql.Named("password", updated.Password),
+		sql.Named("role", updated.Role),
+		sql.Named("invited", updated.Invited),
 		sql.Named("id", updated.ID),
 		sql.Named("session_version", updated.SessionVersion))
 	if err != nil {
@@ -450,7 +454,8 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 	}
 
 	account, err := scanAccount(tx.QueryRowContext(ctx, `UPDATE `+userTableName+`
-		SET session_version = session_version + CASE WHEN verified THEN 0 ELSE 1 END,
+		SET session_version = session_version + CASE WHEN verified AND NOT invited THEN 0 ELSE 1 END,
+		invited = CASE WHEN registration_auth_type<>'' THEN FALSE ELSE invited END,
 		verified = TRUE, updated_at = ? WHERE id = ? AND email_key = ?
 		RETURNING `+accountColumns,
 		time.Now(), authorization.AccountID, accounts.EmailKey(authorization.Email)))
@@ -461,6 +466,11 @@ func (s *AccountRepository) Verify(ctx context.Context, authorization accounts.V
 		return nil, err
 	}
 
+	if !account.Invited {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM usertoken WHERE user_id=? AND token_type=?", account.ID, accounts.InvitationTokenPurpose); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}

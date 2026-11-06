@@ -9,6 +9,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
+	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -54,7 +55,15 @@ func (a *EmailAuthService) GetRegisterButton() template.HTML {
 
 // RegistrationForm returns escaped controls for the shared registration page.
 func (a *EmailAuthService) RegistrationForm(r *http.Request) (template.HTML, error) {
-	return a.renderRegistrationForm(r, &RegisterForm{})
+	f := &RegisterForm{}
+	token, err := user.RegistrationInvitation(r.Context(), a.accounts, "")
+	if err != nil {
+		return "", err
+	}
+	if token != nil {
+		f.Email = token.Email
+	}
+	return a.renderRegistrationForm(r, f)
 }
 
 func (a *EmailAuthService) renderRegistrationForm(r *http.Request, f *RegisterForm) (template.HTML, error) {
@@ -89,8 +98,13 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) (res
 		return a.registrationFormError(w, r, registerForm, userMessage, registrationErr)
 	}
 
+	account, err := a.accounts.GetByEmail(r.Context(), registerForm.Email)
+	if err != nil {
+		a.contentManager.HandleError(w, r, "Your account was created, but its status could not be loaded. Try signing in.", err, http.StatusServiceUnavailable)
+		return
+	}
 	logger.Audit(r.Context(), "registration", "succeeded")
-	if a.config.Auth.RegisterRequiresVerification {
+	if account.NeedsVerification() {
 		// The account already exists. Offer sign-in instead of another registration.
 		registerForm.Password, registerForm.PasswordMatch = "", ""
 		register := a.views["auth.partial.email.registration.pending"].Content(r, registerForm)
@@ -106,7 +120,7 @@ func (a *EmailAuthService) Register(w http.ResponseWriter, r *http.Request) (res
 	}
 
 	successMessage := "You have been successfully registered"
-	if a.config.Auth.RegisterRequiresVerification {
+	if account.NeedsVerification() {
 		successMessage = "You have been successfully registered. Check your email for verification instructions."
 	}
 	if err := flash.AddSuccessNotification(w, r, successMessage); err != nil {

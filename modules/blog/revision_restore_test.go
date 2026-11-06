@@ -12,6 +12,76 @@ import (
 	"time"
 )
 
+func TestRevisionEquivalentTags(t *testing.T) {
+	for _, tc := range []struct {
+		name, tags, other string
+		equal             bool
+	}{
+		{"order", "ux-testing, tiny-icon", "tiny-icon, ux-testing", true},
+		{"case and spacing", "Go,  WEB, go", "go, web", true},
+		{"different tags", "go", "web", false},
+		{"invalid tags", "\n", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, b := Revision{Tags: tc.tags}, Revision{Tags: tc.other}
+			if a.sameContent(b) != tc.equal || b.sameContent(a) != tc.equal {
+				t.Fatal("incorrect tag comparison")
+			}
+			b.Markdown = "Changed writing"
+			if a.sameContent(b) {
+				t.Fatal("equivalent tags hid a writing change")
+			}
+		})
+	}
+}
+
+// Imported tag ordering must not offer a restore that normalization would undo.
+func TestRestoreRevisionEquivalentTags(t *testing.T) {
+	for _, kind := range []string{"post", "page"} {
+		t.Run(kind, func(t *testing.T) {
+			h := newHarness(t)
+			h.register(t)
+			h.verify(t)
+			h.login(t)
+			store := h.blog.posts.(*sqliteRepository)
+			content := Revision{Title: "Imported writing", Markdown: "Body", Tags: "ux-testing, tiny-icon"}
+			id, version, err := saveRevisionContent(t.Context(), store, kind, "", 0, content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			content.Tags = "tiny-icon, ux-testing"
+			_, version, err = saveRevisionContent(t.Context(), store, kind, id, version, content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			versions, err := store.ListRevisions(t.Context(), kind, id)
+			if err != nil || len(versions) != 2 {
+				t.Fatal(versions, err)
+			}
+			base := "/history/" + kind + "/" + id
+			query := "?revision=" + strconv.FormatInt(versions[1].ID, 10)
+			before := revisionOwner(t, h, kind, id)
+			for _, hx := range []bool{false, true} {
+				preview := h.request("GET", base+query, nil, hx)
+				requireStatus(t, preview, http.StatusOK)
+				if strings.Contains(preview.Body.String(), "Restore this version</button>") || !strings.Contains(preview.Body.String(), "This version matches the current content.") {
+					t.Fatal("equivalent tags offered a misleading restore")
+				}
+				response := h.request("POST", base+"/restore"+query, url.Values{"version": {strconv.FormatInt(version, 10)}}, hx)
+				status := http.StatusSeeOther
+				if hx {
+					status = http.StatusOK
+				}
+				requireStatus(t, response, status)
+				after, err := store.ListRevisions(t.Context(), kind, id)
+				if err != nil || !reflect.DeepEqual(versions, after) || !reflect.DeepEqual(before, revisionOwner(t, h, kind, id)) {
+					t.Fatal("equivalent restore changed content or history", err)
+				}
+			}
+		})
+	}
+}
+
 // TestRestoreRevisionHTTP exercises direct restoration without trusting submitted writing or settings.
 func TestRestoreRevisionHTTP(t *testing.T) {
 	for _, kind := range []string{"post", "page"} {

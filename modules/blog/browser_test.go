@@ -397,6 +397,16 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			t.Fatal(err)
 		}
 	}
+	if mode == "poster-upload" {
+		account, err := h.app.Accounts.GetByEmail(t.Context(), "trentnix@gmail.com")
+		if err != nil {
+			t.Fatal(err)
+		}
+		account.Role = string(rolePoster)
+		if err := h.app.Accounts.Update(t.Context(), account); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if mode == "profile-history" {
 		image := mediaUpload(t, h.blog, "historical profile image")
 		for i := range 12 {
@@ -539,6 +549,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/account.js"
 	case "media-library":
 		scriptFile = "testdata/media-library.js"
+	case "poster-upload":
+		scriptFile = "testdata/poster-upload.js"
 	case "media-cleanup":
 		scriptFile = "testdata/media-cleanup.js"
 	case "navigation":
@@ -575,6 +587,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/post-management.js"
 	case "slug-warnings":
 		scriptFile = "testdata/slug-warnings.js"
+	}
+	if mode == "users" {
+		scriptFile = "testdata/users.js"
 	}
 	script, err := os.ReadFile(scriptFile)
 	if err != nil {
