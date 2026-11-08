@@ -8,6 +8,9 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/util"
 	"golang.org/x/net/html"
 )
 
@@ -17,7 +20,11 @@ const maxMarkdownBytes = 256 * 1024
 // HTML and unsafe URL schemes. Previews and published pages use the same renderer.
 func markdown(source string) (template.HTML, error) {
 	var out bytes.Buffer
-	if err := goldmark.New().Convert([]byte(source), &out); err != nil {
+	engine := goldmark.New(
+		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(albumTransformer{}, 100))),
+		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100))),
+	)
+	if err := engine.Convert([]byte(source), &out); err != nil {
 		return "", err
 	}
 	return template.HTML(out.String()), nil

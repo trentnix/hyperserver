@@ -96,10 +96,14 @@ func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, c
 		return revisionSelection{}, err
 	}
 	selection.MissingImages = len(missing) > 0
-	baseline, err := json.Marshal(map[string]string{
+	fields := map[string]string{
 		"title": current.Title, "summary": current.Summary,
 		"content": current.Markdown, "previewImage": current.PreviewImage, "tags": current.Tags,
-	})
+	}
+	if kind == "post" {
+		fields["content"], fields["album"] = splitPostAlbum(current.Markdown)
+	}
+	baseline, err := json.Marshal(fields)
 	selection.LoadedRevision, selection.CurrentContent = &selected, string(baseline)
 	return selection, err
 }

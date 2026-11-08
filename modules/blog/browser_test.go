@@ -373,6 +373,27 @@ func TestBrowserTags(t *testing.T) {
 	}
 }
 
+// TestBrowserAlbum checks editing and anonymous viewing at each layout size.
+func TestBrowserAlbum(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check photo albums")
+	}
+	for _, width := range []string{"320", "768", "1100", "3440"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "album") })
+	}
+}
+
+func TestBrowserMediaLandscape(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check landscape image selection")
+	}
+	for _, width := range []string{"600", "740", "1024"} {
+		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "media-landscape") })
+	}
+}
+
 // testBrowser serves the real blog with isolated data and browser checks.
 func testBrowser(t *testing.T, browser, width, mode string) {
 	t.Helper()
@@ -446,9 +467,14 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	if mode == "archive" {
 		seedArchive(t, h, 2*archivePageSize+1)
 	}
-	if mode == "media-library" {
+	if mode == "media-library" || mode == "media-landscape" {
 		for i := range mediaPageSize + 1 {
 			mediaUpload(t, h.blog, fmt.Sprintf("library image %d", i))
+		}
+	}
+	if mode == "album" {
+		for index := range maxAlbumPhotos {
+			mediaUpload(t, h.blog, fmt.Sprintf("album photo %d", index))
 		}
 	}
 	if mode == "form-errors" {
@@ -544,6 +570,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 	}
 	scriptFile := "testdata/browser.js"
 	switch mode {
+	case "album":
+		scriptFile = "testdata/album.js"
 	case "auth-choices-both", "auth-choices-google", "auth-choices-register-both", "auth-choices-register-google":
 		scriptFile = "testdata/auth-choices.js"
 	case "accessibility":
@@ -566,6 +594,8 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		scriptFile = "testdata/account.js"
 	case "media-library":
 		scriptFile = "testdata/media-library.js"
+	case "media-landscape":
+		scriptFile = "testdata/media-landscape.js"
 	case "poster-upload":
 		scriptFile = "testdata/poster-upload.js"
 	case "media-cleanup":
@@ -766,6 +796,9 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			// flow an exact viewport, including narrow mobile sizes.
 			w.Header().Set("Content-Type", "text/html")
 			height := 1000
+			if mode == "media-landscape" {
+				height = map[string]int{"600": 320, "740": 360, "1024": 500}[width]
+			}
 			if mode == "scheduling" {
 				height = 600 // A short viewport exposes clipped time options at the editor's scroll limit.
 			}

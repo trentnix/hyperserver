@@ -150,6 +150,7 @@ import {getMarkdownEditor} from './markdown-editor.js';
           else field.value = copy.data.fields[field.name];
         }
         getMarkdownEditor(form.elements.content)?.setMarkdown(form.elements.content.value);
+        form.elements.album?.dispatchEvent(new Event('change', {bubbles: true}));
         form.querySelectorAll('[data-image-value]').forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));
         state.sources.push(copy);
         form.dispatchEvent(new Event('input', {bubbles: true}));
@@ -204,6 +205,8 @@ import {getMarkdownEditor} from './markdown-editor.js';
     // Chooser pagination and filtering replace only the image results, not an editor.
     if (link?.matches('.media-browser [data-media-page]')) return;
     if (!link || link.hasAttribute('download') || link.target === '_blank' || event.ctrlKey || event.metaKey || event.shiftKey || link.getAttribute('href').startsWith('#')) return;
+    // The album viewer opens over the editor and preserves its unsaved fields.
+    if (link.matches('[data-album-editor] [data-album-photo]') && typeof HTMLDialogElement !== 'undefined' && event.button === 0 && !event.altKey) return;
     if (!allowLeave(states.values(), () => { if (link.isConnected) link.click(); })) {
       event.preventDefault();
       event.stopImmediatePropagation();

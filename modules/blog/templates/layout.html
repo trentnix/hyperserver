@@ -17,6 +17,7 @@
   <script src="/assets/lib/htmx/htmx.min.js" defer></script>
   <script src="/assets/js/htmx-errors.js" defer></script>
   <script src="/assets/js/blog.js" defer></script>
+  <script type="module" src="/assets/js/album.js"></script>
   <script type="module" src="/assets/js/forms.js"></script>
   {{ if .LayoutData.Writer }}<script type="module" src="/assets/js/admin.js"></script>{{ end }}
 </head>
@@ -75,6 +76,7 @@
   {{ end }}
   <div id="notifications" data-request-errors>{{ template "blog.notifications" . }}</div>
   <div id="dialog-host"></div>
+  {{ template "blog.albumTemplates" . }}
   {{ if .LayoutData.Admin }}<template id="media-browser-template">
     <dialog class="media-browser" aria-labelledby="media-browser-title">
       <header class="page-manager-heading"><h2 id="media-browser-title">Choose an image</h2><button type="button" data-close-dialog autofocus>Cancel</button></header>

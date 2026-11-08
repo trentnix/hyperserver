@@ -1,0 +1,61 @@
+{{ define "blog.albumTemplates" }}
+<template id="album-viewer-template">
+  <dialog class="album-viewer" aria-label="Photo album">
+    <header>
+      <p aria-live="polite"></p>
+      <div class="album-viewer-tools">
+        <button type="button" data-album-zoom aria-label="Zoom in" title="Zoom in" aria-pressed="false" disabled><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 7v6M7 10h6M15 15l6 6M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0"/></svg></button>
+        <button type="button" data-album-captions aria-label="Hide captions" title="Hide captions" aria-controls="album-viewer-caption" aria-pressed="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4zM7 9h10M7 13h7"/></svg></button>
+        <button type="button" data-album-thumbnails aria-label="Hide thumbnails" title="Hide thumbnails" aria-controls="album-viewer-thumbnails"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3zM3 14h18M9 14v5M15 14v5"/></svg></button>
+        <button type="button" data-album-close aria-label="Close album" title="Close album" autofocus><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
+      </div>
+    </header>
+    <figure>
+      <div class="album-viewer-image-frame" tabindex="0" role="group" aria-label="Photo. Use plus and minus to zoom. When zoomed, use arrow keys to pan.">
+        <img data-album-image draggable="false" hidden>
+        <p class="album-viewer-status" role="status"></p>
+      </div>
+      <figcaption id="album-viewer-caption" tabindex="0"><span class="album-viewer-caption-text" id="album-viewer-caption-text"></span><button type="button" class="album-caption-more" data-album-caption-more aria-expanded="false" aria-controls="album-viewer-caption-text">Read full caption</button></figcaption>
+      <button type="button" data-album-prev aria-label="Previous photo" title="Previous photo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button type="button" data-album-next aria-label="Next photo" title="Next photo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
+    </figure>
+    <nav class="album-viewer-thumbnails" id="album-viewer-thumbnails" aria-label="Choose a photo"></nav>
+  </dialog>
+</template>
+{{ if .LayoutData.Writer }}
+<template id="album-order-template">
+  <dialog class="album-order-dialog" aria-labelledby="album-order-title" aria-describedby="album-order-instructions">
+    <h2 id="album-order-title">Reorder photos</h2>
+    <p id="album-order-instructions" class="form-hint">Drag photos or use the buttons to move them.</p>
+    <ol class="album-order-list"></ol>
+    <p class="album-order-status" role="status"></p>
+    <div class="album-order-actions"><button type="button" class="button-secondary" data-album-order-cancel>Cancel</button><button type="button" data-album-order-done>Done</button></div>
+  </dialog>
+</template>
+<template id="album-order-photo-template">
+  <li>
+    <button type="button" class="album-order-handle" data-album-drag aria-describedby="album-order-instructions" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End" title="Drag photo to reorder, or use arrow keys when focused">
+      <img alt="" draggable="false">
+      <span class="album-order-grip" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01"/></svg></span>
+    </button>
+    <p class="album-order-caption"></p>
+    <div class="album-order-controls">
+      <button type="button" data-album-move="up"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 16l7-8 7 8"/></svg></button>
+      <button type="button" data-album-move="down"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l7 8 7-8"/></svg></button>
+    </div>
+  </li>
+</template>
+<template id="album-order-caption-template">
+  <div id="album-order-caption-detail" class="album-caption-detail" aria-label="Full photo caption"><p tabindex="0"></p><button type="button">Show less</button></div>
+</template>
+{{ end }}
+{{ if .LayoutData.Admin }}
+<template id="media-selection-template">
+  <section id="media-selected-photos" class="media-selection-review" aria-label="Selected photos" hidden><h3 tabindex="-1">Selected photos</h3><ul class="media-grid"></ul></section>
+  <footer class="media-browser-selection">
+    <div class="media-selection-summary"><p role="status" data-media-selection-count></p><p id="media-selection-limit" class="media-selection-limit" role="status"></p></div>
+    <div class="media-selection-actions"><button type="button" class="text-button" data-media-show-selected aria-controls="media-selected-photos" aria-expanded="false"></button><button type="button" class="text-button" data-media-clear-selection>Clear selection</button><button type="button" data-media-add-selected></button></div>
+  </footer>
+</template>
+{{ end }}
+{{ end }}

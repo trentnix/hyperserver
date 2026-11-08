@@ -28,6 +28,7 @@ type postPage struct {
 type editorPage struct {
 	Post
 	revisionSelection
+	AlbumInput                 *string
 	NoLibrary                  bool
 	Error                      string
 	ErrorFields                string
@@ -180,6 +181,16 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	if account := user.GetUserFromContext(r.Context()); account != nil {
 		p.AuthorID = account.ID
 	}
+	var albumError error
+	p.Markdown, albumError = joinPostAlbum(p.Markdown, r.PostForm.Get("album"))
+	if albumError != nil {
+		fields := validationFields(albumError)
+		if len(fields) == 0 {
+			fields = []string{"album"}
+		}
+		m.editorError(w, r, p, albumError.Error(), http.StatusUnprocessableEntity, fields...)
+		return
+	}
 	publicationError := m.readPublication(r, &p)
 	if publicationError != "" {
 		fields := []string{"published"}
@@ -230,6 +241,10 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
 	data := editorPage{Post: p, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
+	if r.PostForm.Has("album") {
+		album := r.PostForm.Get("album")
+		data.AlbumInput = &album
+	}
 	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.ErrorFields = strings.Join(fields, " ")

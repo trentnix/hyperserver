@@ -12,6 +12,7 @@
   };
   window.addEventListener('error', event => report(event.message));
   const library = () => document.querySelector('.media-browser[open]');
+  let checkInitialRetry = true;
   function assertFilterHeights(form) {
     const search = form.elements.q.getBoundingClientRect();
     for (const control of [form.elements.usage, form.querySelector('button')]) {
@@ -19,8 +20,45 @@
     }
   }
   async function open(button) {
+    const fetchImageLibrary = window.fetch;
+    const failInitial = checkInitialRetry;
+    let failedURL;
+    let retriedURL;
+    let requestAttempts = 0;
+    if (failInitial) {
+      checkInitialRetry = false;
+      window.fetch = (input, options) => {
+        const url = new URL(input.url || input, location.href);
+        if (url.pathname === '/media') {
+          requestAttempts++;
+          if (requestAttempts <= 2) {
+            failedURL = url.href;
+            return Promise.resolve(new Response('Temporary service failure', {status: 503, headers: {'Content-Type': 'text/plain'}}));
+          }
+          retriedURL = url.href;
+        }
+        return fetchImageLibrary(input, options);
+      };
+    }
     button.focus();
     button.click();
+    if (failInitial) {
+      await wait(() => library()?.querySelector('[data-media-retry]'));
+      const retry = library().querySelector('[data-media-retry]');
+      assert(retry.getBoundingClientRect().height >= 44 && !library().querySelector('[data-media-select]'), 'An initial library failure must offer a touch-sized Retry action without closing the chooser.');
+      assert(!library().querySelector('[data-request-error]'), 'The chooser must show one owned error with Retry rather than a second generic alert.');
+      retry.focus();
+      retry.click();
+      await wait(() => library()?.querySelector('[data-media-retry]') && library().querySelector('[data-media-retry]') !== retry);
+      assert(!library().querySelector('[data-request-error]') && !library().querySelector('[data-media-select]'), 'Repeated request failures must retain one Retry message and keep error responses out of the gallery.');
+      library().querySelector('[data-media-retry]').click();
+      await wait(() => library()?.querySelector('[data-media-select]') && !library().querySelector('[data-media-results]').hasAttribute('aria-busy'));
+      assert(retriedURL === failedURL, 'Retry must repeat the initial URL: ' + failedURL + ' -> ' + retriedURL);
+      assert(!library().querySelector('[data-media-retry]'), 'Successful Retry must remove its action.');
+      assert(!library().querySelector('[data-request-error]') && !library().querySelector('[data-media-status]').textContent, 'Successful Retry must clear all library error feedback.');
+      assert(library().querySelector('[data-media-results]').contains(document.activeElement), 'Retry must leave focus in loaded results, got ' + document.activeElement.tagName + '#' + document.activeElement.id + '.' + document.activeElement.className);
+      window.fetch = fetchImageLibrary;
+    }
     await wait(() => library()?.querySelector('[data-media-select]'));
     const cards = [...library().querySelectorAll('.media-card')];
     assert(cards.every(card => card.tagName === 'BUTTON' && card.type === 'button' && card.dataset.mediaSelect && card.getAttribute('aria-label').startsWith('Select ')), 'Chooser cards must be accessible selection buttons.');
