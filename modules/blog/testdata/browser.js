@@ -116,9 +116,15 @@ document.removeEventListener = function(type, callback, options) {
         assert(!menu.open && document.activeElement === menuToggle, 'Escape must close the menu and return focus.');
         menuToggle.click();
       } else if (innerWidth < 1680) {
-        assert(getComputedStyle(profileLinks).marginTop === '16px', 'Flat navigation must retain its spacing below the bio.');
         assert(document.querySelector('.header-menu').getClientRects().length === 0, 'Desktop must hide the separate menu.');
-        assert(profileLinks.getClientRects().length > 0 && profileLinks.getBoundingClientRect().top >= profile.querySelector('p').getBoundingClientRect().bottom, 'Desktop links must appear below the bio.');
+        const navigation = profileLinks.getBoundingClientRect();
+        const identity = profile.getBoundingClientRect();
+        assert(profileLinks.parentElement === header && navigation.left >= identity.right + 31, 'Desktop links must sit beside the profile on the right.');
+        assert(Math.abs((navigation.top + navigation.bottom) / 2 - (identity.top + identity.bottom) / 2) < 1, 'Desktop links must be vertically centered beside the profile.');
+        const rootLinks = [...profileLinks.querySelectorAll(':scope > ul > li > a')];
+        assert(rootLinks.every(link => Math.abs(link.getBoundingClientRect().right - navigation.right) < 1), 'Desktop links must share a right edge.');
+        const account = document.querySelector('.footer-account .header-sign-in');
+        if (account) assert(account.getClientRects().length > 0, 'Desktop account controls must appear in the footer.');
       } else {
         assert(profileLinks.getClientRects().length === 0 && menuToggle.hidden, 'Ultrawide must hide compact links and the hamburger.');
         assert(menu.open && links.getBoundingClientRect().top >= profile.getBoundingClientRect().bottom, 'Ultrawide navigation must sit below the bio.');
@@ -127,7 +133,7 @@ document.removeEventListener = function(type, callback, options) {
       if (innerWidth < 768) {
         assert(siteLinks[1].getBoundingClientRect().top >= siteLinks[0].getBoundingClientRect().bottom, 'Mobile links must form a vertical list.');
         const nav = document.querySelector('.header-menu');
-        assert(getComputedStyle(nav).backgroundColor !== getComputedStyle(sidebar).backgroundColor, 'Mobile navigation needs a distinct background.');
+        assert(getComputedStyle(nav).backgroundColor === 'rgb(255, 255, 255)' && getComputedStyle(sidebar).backgroundColor === 'rgb(255, 255, 255)', 'Mobile navigation must share the white header background.');
         assert(parseFloat(getComputedStyle(menuToggle).borderTopWidth) > 0 && menuToggle.getBoundingClientRect().height >= 44, 'Mobile menu needs a bordered, touch-sized control.');
         assert(siteLinks[0].getBoundingClientRect().height >= 44, 'Mobile menu links need touch-sized targets.');
       }
@@ -139,7 +145,7 @@ document.removeEventListener = function(type, callback, options) {
         : document.body.getBoundingClientRect().width;
       const paintedWidth = document.body.getBoundingClientRect().width;
       assert(portrait.right <= bio.left, 'Profile photo must sit beside the bio.');
-      assert(Math.abs(portrait.top - bio.top) <= 5, 'Profile photo and bio are not top-aligned.');
+      assert(Math.abs((portrait.top + portrait.bottom) / 2 - (bio.top + bio.bottom) / 2) <= 1, 'Profile photo and text must be vertically centered beside each other.');
       assert(getComputedStyle(document.body).fontSize === '16px', 'Base typography changed.');
       const articleStyle = getComputedStyle(document.querySelector('article'));
       const contentPadding = innerWidth < 768 ? '20px' : '60px';

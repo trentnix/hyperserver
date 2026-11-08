@@ -3,7 +3,6 @@
 <div class="profile-details">
   <a class="profile-name" href="/">{{ .LayoutData.Profile.Name }}</a>
   {{ if .LayoutData.Profile.Bio }}<p>{{ .LayoutData.Profile.Bio }}</p>{{ end }}
-  <nav class="profile-links" aria-label="Site links"><ul>{{ template "blog.compactSiteLinks" . }}</ul></nav>
 </div>
 {{ end }}
 

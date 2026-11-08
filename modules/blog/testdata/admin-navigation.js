@@ -43,7 +43,8 @@
       if (path === '/auth/account') {
         const menu = document.querySelector('.site-menu-disclosure');
         if (innerWidth < 768) menu.querySelector('summary').click();
-        document.querySelector(innerWidth < 768 ? '.header-menu a[href="/auth/account"]' : '.site-header > a[href="/auth/account"]').click();
+        const selector = innerWidth < 768 ? '.header-menu a[href="/auth/account"]' : innerWidth < 1680 ? '.footer-account a[href="/auth/account"]' : '.site-header > a[href="/auth/account"]';
+        document.querySelector(selector).click();
       } else {
         if (innerWidth < 768) account.querySelector('summary').click();
         account.querySelector(`a[href="${path}"]`).click();
@@ -51,7 +52,7 @@
       await ready(path, title);
       if (innerWidth < 768 && path !== '/auth/account') assert(!account.open, 'Management navigation left the mobile menu open.');
       if (path === '/auth/account') {
-        assert(!account.querySelector('a[href="/auth/account"]'), 'Account belongs in the site header, not content navigation.');
+        assert(!account.querySelector('a[href="/auth/account"]'), 'Account must stay separate from content management navigation.');
         assert(article.querySelector('.account-methods h3')?.textContent === 'Email and password', 'Account must name its sign-in methods.');
         assert(article.querySelector('a[href="/auth/change/email"]'), 'Password account must offer Change password.');
         assert(getComputedStyle(article.querySelector('.account-methods')).listStyleType === 'none', 'Account styles must apply after partial navigation.');

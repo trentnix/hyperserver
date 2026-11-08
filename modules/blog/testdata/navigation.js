@@ -19,7 +19,7 @@
       !document.querySelector('#post-archive').classList.contains('htmx-settling'));
     const body = document.body;
     const signInLinks = [...document.querySelectorAll('.header-sign-in')];
-    assert(signInLinks.length === 2 && signInLinks.every(link => link.closest('.site-header')), 'Sign-in links belong in the responsive header, not the content area.');
+    assert(signInLinks.length === 3 && signInLinks.every(link => link.closest('.site-header, .footer-account')), 'Sign-in controls must belong to the responsive header or footer.');
     assert(signInLinks.every(link => link.getAttribute('hx-boost') === 'false'), 'Sign-in navigation must refresh the account shell.');
     assert(!document.querySelector('.account-panel a[href="/login"]'), 'Sign in remains in the content area.');
     const checkSignIn = () => {
@@ -28,7 +28,14 @@
       const bounds = visible[0].getBoundingClientRect();
       assert(bounds.left >= 0 && bounds.right <= document.documentElement.clientWidth, 'Sign in overflows the header.');
       if (innerWidth < 768) assert(bounds.height >= 44, 'Mobile sign-in needs a touch-sized target.');
-      else {
+      else if (innerWidth < 1680) {
+        const footer = document.querySelector('.site-footer').getBoundingClientRect();
+        const archive = document.querySelector('#post-archive');
+        assert(visible[0].closest('.footer-account') && bounds.height >= 44, 'Middle widths must put a touch-sized account control in the footer.');
+        assert(Math.abs((bounds.left + bounds.right) / 2 - (footer.left + footer.right) / 2) < 1, 'Footer account control must be horizontally centered.');
+        if (archive.getClientRects().length) assert(bounds.top >= archive.getBoundingClientRect().bottom, 'Footer account control must follow Recent Posts.');
+        assert(bounds.top >= document.querySelector('#article-content').getBoundingClientRect().bottom, 'Footer account control must follow the page content.');
+      } else {
         const header = document.querySelector('.site-header');
         const right = header.getBoundingClientRect().right - parseFloat(getComputedStyle(header).paddingRight);
         assert(visible[0].parentElement === header && Math.abs(bounds.right - right) < 1, 'Desktop sign-in must align with the upper-right header gutter.');
@@ -38,7 +45,7 @@
         assert(bounds.bottom <= profileText.top, 'Sign in must remain above the profile text.');
         assert(bounds.bottom <= portrait.top || bounds.left >= portrait.right, 'Sign in must not overlap the portrait.');
         const profileTop = profile.getBoundingClientRect().top;
-        assert(profileTop - header.getBoundingClientRect().top === 16, 'Desktop profile must use a compact top inset.');
+        assert(profileTop - header.getBoundingClientRect().top === 24, 'Desktop profile must leave room for the sign-in utility.');
         assert(getComputedStyle(visible[0]).fontSize === '14px', 'Compact spacing must not shrink the sign-in text.');
         const headerHeight = header.getBoundingClientRect().height;
         visible[0].style.display = 'none';
@@ -186,27 +193,19 @@
       assert(menu.getClientRects().length === 0, 'Middle widths must hide the separate menu.');
       checkSubpageTitles(pageLinks);
       const children = pageLinks.querySelector('.child-links');
-      assert(getComputedStyle(pageLinks).marginTop === '10px', 'Navigation with subpages must sit closer to the bio.');
-      assert(getComputedStyle(children).marginBottom === '0px', 'Subpages must not add space above the header bottom padding.');
       assert(children.getClientRects().length > 0 && children.querySelectorAll('a').length === 6, 'Middle navigation must show immediate children beneath Projects.');
       assert(children.getBoundingClientRect().top >= pageLinks.querySelector('a[href="/projects"]').getBoundingClientRect().bottom, 'Child links must sit below their parent link.');
-      const listStyle = getComputedStyle(pageLinks.querySelector('ul'));
-      assert(listStyle.display === 'grid' && listStyle.columnGap === '20px', 'Middle navigation must use evenly spaced columns.');
-      const groups = [...pageLinks.querySelectorAll(':scope > ul > li')];
-      assert(groups.length >= 3 && groups.some(group => !group.querySelector('ul')), 'Navigation fixture needs standalone pages alongside a parent page.');
-      const groupWidth = groups[0].getBoundingClientRect().width;
-      assert(Math.abs(groupWidth - 110) < 1, 'Middle navigation columns must stay compact.');
-      for (const group of groups) {
-        assert(Math.abs(group.getBoundingClientRect().width - groupWidth) < 1, 'Subpages must not change their parent navigation column width.');
-      }
-      assert(document.documentElement.scrollWidth <= document.documentElement.clientWidth, 'Navigation columns overflow the viewport.');
+      const profile = document.querySelector('.profile').getBoundingClientRect();
+      const navigation = pageLinks.getBoundingClientRect();
+      assert(navigation.left >= profile.right + 31, 'Middle navigation must sit to the right of the profile with a clear gap.');
+      assert(getComputedStyle(pageLinks).textAlign === 'right', 'Middle navigation must align its text to the right.');
+      assert(Math.abs((navigation.top + navigation.bottom) / 2 - (profile.top + profile.bottom) / 2) < 1, 'Middle navigation must be vertically centered beside the profile.');
+      assert(document.documentElement.scrollWidth <= document.documentElement.clientWidth, 'Header navigation must fit the viewport.');
       for (const link of pageLinks.querySelectorAll(':scope > ul > li > a')) {
         assert(getComputedStyle(link).fontWeight === '600', 'Top-level navigation links must stay bold.');
       }
-      const parentLeft = pageLinks.querySelector('a[href="/projects"]').getBoundingClientRect().left;
       for (const link of children.querySelectorAll('a')) {
         assert(getComputedStyle(link).fontWeight === '400', 'Middle subpage links must use lighter text than their parent.');
-        assert(Math.abs(link.getBoundingClientRect().left - parentLeft) < 1, 'Middle subpage links must align with their parent without a tree indent.');
       }
       children.querySelector('a[href="/page/project-0"]').click();
       await wait(() => location.pathname === '/page/project-0');
@@ -220,6 +219,7 @@
     assert(article.querySelector('h1')?.textContent === 'About Me', 'About navigation missed the article.');
     assertHeading();
     archiveVisible(innerWidth >= 1680);
+    if (innerWidth >= 768 && innerWidth < 1680) checkSignIn();
     const aboutProfileLeft = document.querySelector('.profile-name').getBoundingClientRect().left;
     const aboutTitleLeft = article.querySelector('h1').getBoundingClientRect().left;
     if (innerWidth < 768) {

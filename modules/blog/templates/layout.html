@@ -47,6 +47,7 @@
             </details>
           </nav>
           <div class="profile">{{ template "blog.profile" . }}</div>
+          <nav class="profile-links" aria-label="Site links"><ul>{{ template "blog.compactSiteLinks" . }}</ul></nav>
         </header>
         <nav id="sidebar-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}</nav>
       </aside>
@@ -71,6 +72,7 @@
     </div>
     <footer class="site-footer">
       <nav id="post-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap:inherited="innerHTML show:top showTarget:window">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div></nav>
+      {{ if or .LayoutData.ShowLogin .LayoutData.SignedIn }}<div class="footer-account" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">{{ template "blog.signInLink" . }}</div>{{ end }}
     </footer>
   </div>
   {{ end }}

@@ -29,7 +29,7 @@ func TestHomeNavigation(t *testing.T) {
 			name  string
 			count int
 		}{
-			{"blog.profile", 1},
+			{"blog.profile", 0},
 			{"blog.siteLinks", 1},
 			{"blog.pageLinkUpdates", 2},
 		} {

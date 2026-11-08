@@ -81,8 +81,8 @@ func TestReturningUserNavigation(t *testing.T) {
 					t.Fatal("missing site header")
 				}
 				end := strings.Index(body[start:], "</header>")
-				if end < 0 || strings.Count(body, link) != 2 || strings.Count(body[start:start+end], link) != 2 {
-					t.Fatal("both responsive sign-in links must belong to the site header")
+				if end < 0 || strings.Count(body, link) != 3 || strings.Count(body[start:start+end], link) != 2 {
+					t.Fatal("responsive sign-in links must appear in the header and footer")
 				}
 			}
 			if path == loginURL && !strings.Contains(w.Body.String(), `name="password"`) {
