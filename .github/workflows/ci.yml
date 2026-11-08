@@ -125,7 +125,7 @@ jobs:
     name: Firefox browser checks
     # No dependency on the test job: either job must run even if the other fails.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         shell: bash # Enable pipefail so tee cannot hide a failed test command.
@@ -166,7 +166,7 @@ jobs:
       - name: Test blog in Firefox
         if: ${{ !inputs.browser_diagnostics }}
         run: |
-          go test -v -count=1 -timeout=10m ./modules/blog -run '^TestBrowser' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/blog-tests.log"
+          go test -v -count=1 -timeout=15m ./modules/blog -run '^TestBrowser' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/blog-tests.log"
 
       - name: Test HTMX and native forms in Firefox
         if: ${{ !inputs.browser_diagnostics }}

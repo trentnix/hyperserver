@@ -59,9 +59,12 @@
     const archive = archiveNav.querySelector('.post-archive');
     for (const link of archive.querySelectorAll('li a')) {
       const style = getComputedStyle(link);
-      assert(style.display === 'block' && link.getBoundingClientRect().height >= 24, 'Post links need full-row click targets.');
-      assert(style.paddingTop === '2px' && style.paddingBottom === '2px' && style.fontWeight === '400', 'Post links must use compact spacing and regular-weight text.');
-      assert(style.textDecorationLine.includes('underline'), 'Post links must remain visibly identifiable as links.');
+      assert(style.display === 'block' && link.getBoundingClientRect().height >= 24, 'Recent post links need full-row targets at every width.');
+      assert(style.fontSize === '16px' && style.fontWeight === '400' && Math.abs(parseFloat(style.lineHeight) - 25.6) < .1, 'Recent post links must use regular text with a consistent line height.');
+      assert(style.paddingTop === '0px' && style.paddingBottom === '0px', 'Recent post links must use the same compact spacing at every width.');
+      assert(style.textDecorationLine.includes('underline') && style.textDecorationColor === style.color, 'Recent post links must have clear, persistent underlines.');
+      const previous = link.parentElement.previousElementSibling;
+      if (previous) assert(Math.abs(link.parentElement.getBoundingClientRect().top - previous.getBoundingClientRect().bottom) < 1, 'Recent post links must flow without extra gaps between rows.');
       assert(link.getBoundingClientRect().width <= archive.getBoundingClientRect().width, 'Post links must stay within the reading list.');
     }
     const article = document.querySelector('#article-content');
@@ -132,6 +135,16 @@
     const menu = document.querySelector('#site-menu');
     const menuToggle = document.querySelector('.menu-toggle');
     const pageLinks = innerWidth < 768 || innerWidth >= 1680 ? menu : document.querySelector('.profile-links');
+    if (innerWidth >= 768) {
+      const list = pageLinks.matches('ul') ? pageLinks : pageLinks.querySelector('ul');
+      const rows = [...list.children];
+      assert(Math.abs(rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().bottom) < 1, 'Non-mobile page links must have the same compact row spacing.');
+      for (const link of pageLinks.querySelectorAll('a')) {
+        if (!link.getClientRects().length) continue;
+        const style = getComputedStyle(link);
+        assert(style.fontSize === '14.4px' && Math.abs(parseFloat(style.lineHeight) - 20.16) < .1 && style.paddingTop === '2px' && style.paddingBottom === '2px', 'Page links and subpages must share ultrawide sizing and spacing at every non-mobile width.');
+      }
+    }
     const projectLinks = document.querySelector('#site-menu .child-links');
     const projectToggle = document.querySelector('.child-toggle');
     const checkSubpageTitles = nav => {

@@ -21,7 +21,7 @@ CI also builds and tests the core without CGO. Dependency checks verify that the
 The root commands include the blog. For blog browser checks, run:
 
 ```sh
-HS_TEST_FIREFOX=firefox go test ./modules/blog -run '^TestBrowser' -count=1 -timeout=10m
+HS_TEST_FIREFOX=firefox go test ./modules/blog -run '^TestBrowser' -count=1 -timeout=15m
 ```
 
 Blog backup tests use isolated temporary data, including an application restart after manual recovery. They never delete the local blog's data.

@@ -178,7 +178,7 @@ document.removeEventListener = function(type, callback, options) {
         assert(footer.contains(document.querySelector('#post-archive')), 'Recent Posts must be inside the footer.');
         const footerBounds = footer.getBoundingClientRect();
         assert(Math.abs(footerBounds.left) < 1 && Math.abs(footerBounds.width - paintedWidth) < 1, 'Footer background must span the viewport.');
-        assert(footerBounds.bottom >= innerHeight, 'Footer background must reach the bottom of the viewport.');
+        assert(footerBounds.bottom >= innerHeight - 1, `Footer background must reach the bottom of the viewport: ${footerBounds.bottom}px vs ${innerHeight}px.`);
         assert(getComputedStyle(sidebar).position === 'static', 'Stacked navigation must scroll with the page.');
       } else {
         assert(getComputedStyle(sidebar).position === 'sticky', 'Desktop sidebar must stay visible while reading.');

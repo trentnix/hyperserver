@@ -48,12 +48,12 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
 .portrait { display: block; width: 100%; aspect-ratio: 1; height: auto; object-fit: cover; border-radius: 50%; }
 .profile-name { font-size: 1.3em; font-weight: 700; }
 .profile-details p { font-size: .9em; margin: 0 0 5px; }
-.profile-links { font-size: .9em; text-align: right; }
+.profile-links { font-size: .9em; line-height: 1.4; text-align: right; }
 .profile-links > ul { list-style: none; margin: 0; padding: 0; }
-.profile-links > ul > li + li { margin-top: 4px; }
-.profile-links .child-links { margin: 2px 0 0; padding: 0; border: 0; }
+.profile-links > ul > li + li { margin-top: 0; }
+.profile-links .child-links { margin: 2px 0 4px; padding: 0; border: 0; font-size: inherit; }
 .profile-links li { min-width: 0; overflow-wrap: anywhere; }
-.profile-links a { display: block; padding-block: 4px; font-weight: 600; }
+.profile-links a { display: block; padding-block: 2px; font-weight: 600; }
 .profile-links .child-links a { font-weight: 400; }
 .site-links { line-height: 1.4; overflow-wrap: anywhere; text-align: left; }
 .site-links > li + li { margin-top: 6px; }
@@ -92,6 +92,10 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
 .post-archive li a, .archive-links a { color: #30343b; text-decoration: underline; text-decoration-color: #c5c9cf; text-decoration-thickness: 1px; text-underline-offset: .2em; }
 .post-archive li a:visited, .archive-links a:visited { color: #776477; }
 .post-archive li a:hover, .archive-links a:hover { color: #15191e; text-decoration-color: currentColor; }
+.archive-nav .archive-heading { color: #212529; }
+.archive-nav .archive-heading h2 { font-size: 1.125rem; font-weight: 700; }
+.archive-nav .post-archive li a { padding-block: 0; font-size: 1rem; line-height: 1.6; font-weight: 400; color: #212529; text-decoration-color: currentColor; text-underline-offset: .12em; }
+.archive-nav .post-archive li a:hover { color: #245b85; }
 .archive-links { margin-top: 16px; }
 .archive-links > a { font-size: .9em; }
 .footer-search .management-search { margin: 28px 0 0; }
