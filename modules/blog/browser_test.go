@@ -379,7 +379,7 @@ func TestBrowserAlbum(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check photo albums")
 	}
-	for _, width := range []string{"320", "768", "1100", "3440"} {
+	for _, width := range []string{"320", "390", "600", "768", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "album") })
 	}
 }

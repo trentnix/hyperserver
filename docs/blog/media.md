@@ -12,9 +12,11 @@ Only one upload is processed at a time. A concurrent upload receives a retry mes
 
 ## Post albums
 
-Use **Photo album** below the post editor. **Upload** selects files from your device. **Library** selects existing photos. Device uploads accept several files and start automatically. Progress appears beside the controls, and uploads keep the active caption and cursor in place. File requirements appear below the photo cards.
+Use **Add component → Photo album** below the Markdown editor. Posts without an album show only the Add component control. Existing albums appear automatically when you edit a post. **Remove album** removes the component from the unsaved post, and **Undo** restores it. Adding Photo album again starts an empty album. Removing a component does not delete its uploaded files.
 
-Select a photo to preview the full image without saving or leaving the editor. The viewer includes your unsaved captions and photo order. Caption fields expand over the content below them, leaving photo rows in place. Pasted line breaks become spaces. Use the button in the upper right to remove a photo.
+In an album, **Upload** selects files from your device. **Library** selects existing photos. Device uploads accept several files and start automatically. Progress appears beside the controls, and uploads keep the active caption and cursor in place. File requirements appear below the photo cards.
+
+Select a photo to preview the full image without saving or leaving the editor. The viewer includes your unsaved captions and photo order. Caption fields expand over the content below them, leaving photo rows in place. Press Enter or click outside a caption to finish editing. Enter keeps the text without submitting the post. Pasted line breaks become spaces. Use the button in the upper right to remove a photo.
 
 Confirm library selections with **Add photos**. The count shows your pending selection, such as **3 photos selected**, and the button reads **Add 3 photos**. A note states the 50-photo album limit. When the selection fills the album, unselected photos show a lock in their selection control. Their previews stay visible. Deselect a photo to choose another.
 
@@ -40,7 +42,9 @@ Save the post to apply changes. Each album accepts up to 50 photos with captions
 
 Failed uploads show the filename and reason. Valid files still upload if another image is rejected. Authentication or service failures pause the remaining batch. Retrying keeps photos already added and attempts only failed or unprocessed files.
 
-Readers see photo cards below the post, with captions attached to their images. Selecting a card opens a viewer that fills the available viewport, with the caption below the photo and aligned to its left edge. Previous/Next arrows, left/right arrow keys, Home, End, and touch swipes change photos. The toolbar can hide captions or the numbered thumbnail strip. On phones, the thumbnail strip starts collapsed. Closing returns focus and scroll position to the selected photo.
+Readers see photo cards below the post, with captions attached to their images. Mobile albums use two columns when each card can be at least 140 pixels wide. Narrower galleries and single-photo albums use one column. Mobile grid captions show up to two lines. The viewer keeps the full caption.
+
+Selecting a card opens a viewer that fills the available viewport, with the caption below the photo and aligned to its left edge. Previous/Next arrows, left/right arrow keys, Home, End, and touch swipes change photos. The toolbar can hide captions or the numbered thumbnail strip. On phones, the thumbnail strip starts collapsed. Closing returns focus and scroll position to the selected photo.
 
 If a viewer caption does not fit, **Read full caption** expands it below the photo. If space is limited, the caption overlaps the photo's lower edge. The photo keeps its size. Use **Show less** or Escape to collapse the caption. Long text scrolls within the expanded caption.
 

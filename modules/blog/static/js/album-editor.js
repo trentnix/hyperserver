@@ -14,9 +14,54 @@ function initialize(root) {
     const status = section.querySelector('[data-album-status]');
     const progress = section.querySelector('[data-album-upload-progress]');
     const recovery = section.querySelector('[data-album-recovery]');
+    const components = section.closest('[data-post-components]');
+    const picker = components.querySelector('[data-component-picker]');
+    const componentRecovery = components.querySelector('[data-component-recovery="photo-album"]');
+    let componentAdded = false;
+    let removedComponent;
     let photos = [];
     let removed = [];
     const cards = new Map();
+
+    function showComponent(visible) {
+      componentAdded = visible;
+      section.hidden = !visible;
+      picker.querySelector('[data-component-add="photo-album"]').hidden = visible;
+      picker.hidden = !picker.querySelector('[data-component-add]:not([hidden])');
+      picker.open = false;
+      componentRecovery.hidden = visible || !removedComponent;
+    }
+
+    function addComponent(snapshot) {
+      removedComponent = null;
+      if (snapshot) {
+        source.value = snapshot.source;
+        read();
+        removed = snapshot.removed;
+        updateRecovery();
+        source.dispatchEvent(new Event('input', {bubbles: true}));
+      }
+      showComponent(true);
+      (source.hidden ? section.querySelector('[data-album-upload]:not(:disabled), [data-album-reorder]:not(:disabled)') : source).focus();
+    }
+
+    components.addEventListener('click', event => {
+      if (form.dataset.uploading) return;
+      const add = event.target.closest('[data-component-add="photo-album"]');
+      const undo = event.target.closest('[data-component-undo="photo-album"]');
+      if (!componentAdded && (add || undo)) {
+        addComponent(undo ? removedComponent : null);
+      }
+      if (componentAdded && event.target.closest('[data-component-remove="photo-album"]')) {
+        const snapshot = {source: source.value, removed: [...removed]};
+        source.value = '';
+        read();
+        removedComponent = snapshot;
+        showComponent(false);
+        source.dispatchEvent(new Event('input', {bubbles: true}));
+        picker.querySelector('summary').focus();
+      }
+    });
 
     function icon(line) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -61,6 +106,7 @@ function initialize(root) {
     }
 
     function render() {
+      section.querySelector('[data-component-remove]').disabled = Boolean(form.dataset.uploading);
       const remaining = 50 - photos.length;
       for (const control of section.querySelectorAll('[data-album-upload], [data-album-browse], [data-album-files]')) control.disabled = Boolean(form.dataset.uploading) || remaining === 0;
       const capacity = section.querySelector('[data-album-capacity]');
@@ -130,6 +176,8 @@ function initialize(root) {
     }
 
     function read() {
+      removedComponent = null;
+      showComponent(Boolean(source.value.trim()));
       removed = [];
       updateRecovery();
       const next = [];
@@ -241,6 +289,11 @@ function initialize(root) {
       }
     }
 
+    section.addEventListener('keydown', event => {
+      if (!event.target.matches('[data-album-caption]') || event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      event.target.blur();
+    });
     section.addEventListener('focusout', event => {
       if (!event.target.matches('[data-album-caption]')) return;
       event.target.scrollTop = event.target.scrollLeft = 0;
@@ -315,6 +368,7 @@ function initialize(root) {
       if (files.length) upload(files);
     });
     source.addEventListener('change', read);
+    section.querySelector('[data-component-remove]').hidden = false;
     editors.set(section, true);
     read();
   });
@@ -322,3 +376,18 @@ function initialize(root) {
 
 document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
 initialize(document);
+
+function dismissComponentPickers(event) {
+  for (const picker of document.querySelectorAll('[data-component-picker][open]')) {
+    if (!picker.contains(event.target)) picker.open = false;
+  }
+}
+document.addEventListener('click', dismissComponentPickers);
+document.addEventListener('focusin', dismissComponentPickers);
+document.addEventListener('keydown', event => {
+  const picker = event.target.closest('[data-component-picker][open]');
+  if (event.key !== 'Escape' || !picker) return;
+  event.preventDefault();
+  picker.open = false;
+  picker.querySelector('summary').focus();
+});

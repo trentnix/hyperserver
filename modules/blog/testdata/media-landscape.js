@@ -23,6 +23,8 @@
     await wait(() => document.querySelector('[data-album-browse]') && !document.querySelector('.album-editor-controls').hidden);
     await document.fonts.ready;
     const form = document.querySelector('#post-form');
+    form.querySelector('[data-component-picker] summary').click();
+    form.querySelector('[data-component-add="photo-album"]').click();
     form.elements.title.value = 'Unsaved landscape post';
     const browserFetch = window.fetch;
     let failBrowse = false;

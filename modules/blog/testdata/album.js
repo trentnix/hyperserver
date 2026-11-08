@@ -22,12 +22,34 @@
     }
     window.blogConfirm = (_, proceed) => proceed();
     if (stage === 'edit') {
-      const openEditor = async () => {
+      const openEditor = async (addAlbum = true) => {
         await htmx.ajax('GET', '/post/create', {target: '#article-content', swap: 'innerHTML'});
         await wait(() => document.querySelector('#post-form .CodeMirror') && document.querySelector('[data-album-upload]') && !document.querySelector('.album-editor-controls').hidden);
+        if (addAlbum && document.querySelector('[data-album-editor]').hidden) {
+          document.querySelector('[data-component-picker] summary').click();
+          document.querySelector('[data-component-add="photo-album"]').click();
+        }
         return document.querySelector('#post-form');
       };
-      let form = await openEditor();
+      let form = await openEditor(false);
+      const componentPicker = form.querySelector('[data-component-picker]');
+      const addComponent = componentPicker.querySelector('summary');
+      assert(form.querySelector('[data-album-editor]').hidden && addComponent.getBoundingClientRect().height >= 44 && !form.elements.album.value, 'Posts without an album must show only a touch-sized Add component control.');
+      addComponent.click();
+      assert(componentPicker.open && componentPicker.querySelector('[data-component-add]').getBoundingClientRect().height >= 44, 'The component picker must expose Photo album as a touch-sized choice.');
+      componentPicker.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
+      assert(!componentPicker.open && document.activeElement === addComponent, 'Escape must close the component picker and return focus.');
+      addComponent.click();
+      componentPicker.querySelector('[data-component-add]').focus();
+      assert(componentPicker.open, 'Moving focus within the component picker must leave its choices open.');
+      const publication = form.querySelector('[name=published]');
+      publication.focus();
+      assert(!componentPicker.open && document.activeElement === publication, 'Leaving the picker by keyboard must close its choices without moving focus.');
+      publication.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
+      assert(!componentPicker.open && document.activeElement === publication, 'Escape after leaving the picker must not reopen it or move focus.');
+      addComponent.click();
+      componentPicker.querySelector('[data-component-add="photo-album"]').click();
+      assert(!form.querySelector('[data-album-editor]').hidden && componentPicker.hidden && !form.elements.album.value && document.activeElement === form.querySelector('[data-album-upload]'), 'Adding an album must reveal its controls and focus Upload without changing post content.');
       const choosePhotoAction = selector => {
         const action = form.querySelector(selector);
         assert(!action.closest('details') && action.getBoundingClientRect().height >= 44, 'Upload and Library must remain visible as touch-sized buttons.');
@@ -173,6 +195,23 @@
       assert(form.querySelectorAll('[data-album-index]').length === 3, 'Library selections were lost.');
       assert(document.activeElement === form.querySelector('[data-album-browse]'), 'Closing the library must return focus to the Library button.');
       assert(form.querySelector('[data-album-count]').textContent === '3 photos', 'The heading must show the album size.');
+      const beforeComponentRemoval = form.elements.album.value;
+      form.querySelector('[data-component-remove]').click();
+      assert(form.querySelector('[data-album-editor]').hidden && !form.elements.album.value && !form.querySelector('[data-component-picker]').hidden && !form.querySelector('[data-component-recovery]').hidden, 'Removing an album must clear its submitted content and offer Undo beside the component picker.');
+      assert(document.activeElement === form.querySelector('[data-component-picker] summary'), 'Removing a component must return focus to Add component.');
+      form.querySelector('[data-component-undo]').click();
+      assert(!form.querySelector('[data-album-editor]').hidden && form.elements.album.value === beforeComponentRemoval && form.querySelectorAll('[data-album-index]').length === 3 && form.querySelector('[data-component-recovery]').hidden, 'Undo must restore the full album, including photo order and captions.');
+      form.querySelector('[data-component-add="photo-album"]').click();
+      assert(form.elements.album.value === beforeComponentRemoval, 'Adding an already-present component must not replace its contents.');
+      form.querySelector('[data-component-remove]').click();
+      componentPicker.querySelector('summary').click();
+      componentPicker.querySelector('[data-component-add="photo-album"]').click();
+      assert(!form.querySelector('[data-album-editor]').hidden && !form.elements.album.value && !form.querySelectorAll('[data-album-index]').length && form.querySelector('[data-component-recovery]').hidden, 'Adding a component after removal must create an empty album and clear the previous removal recovery.');
+      form.querySelector('[data-component-remove]').click();
+      form.querySelector('[data-component-undo]').click();
+      assert(!form.elements.album.value && !form.querySelectorAll('[data-album-index]').length, 'Undo for a new empty album must not resurrect the earlier album.');
+      form.elements.album.value = beforeComponentRemoval;
+      form.elements.album.dispatchEvent(new Event('change', {bubbles: true}));
       const validAlbum = form.elements.album.value;
       form.elements.album.value = validAlbum + '\n' + validAlbum.split('\n')[0];
       form.elements.album.dispatchEvent(new Event('change', {bubbles: true}));
@@ -289,6 +328,10 @@
       await wait(() => !limitFixture.isConnected);
       loadCapacity(50);
       assert(capacity.textContent === 'Album full (50 photos)' && form.querySelector('[data-album-upload]').disabled && form.querySelector('[data-album-browse]').disabled && !form.querySelector('[data-album-reorder]').disabled, 'Full albums must disable adding photos while keeping reordering available.');
+      const fullAlbum = form.elements.album.value;
+      form.querySelector('[data-component-remove]').click();
+      form.querySelector('[data-component-undo]').click();
+      assert(form.elements.album.value === fullAlbum && document.activeElement === form.querySelector('[data-album-reorder]'), 'Restoring a full album must preserve its photos and focus an enabled action.');
       form.querySelector('[data-album-remove]').click();
       assert(!form.querySelector('[data-album-upload]').disabled && !form.querySelector('[data-album-browse]').disabled && capacity.textContent === '1 space left', 'Removing a photo must immediately reopen album capacity.');
       form.querySelector('[data-album-undo]').click();
@@ -307,6 +350,25 @@
       caption.value = 'A pasted caption\nwith a second line';
       caption.dispatchEvent(new Event('input', {bubbles: true}));
       assert(caption.value === 'A pasted caption with a second line' && form.elements.album.value.includes('![A pasted caption with a second line]'), 'Pasted line breaks must preserve the one-photo-per-line album format.');
+      const beforeCaptionEnter = form.elements.album.value;
+      const compositionEnter = new KeyboardEvent('keydown', {key: 'Enter', isComposing: true, bubbles: true, cancelable: true});
+      caption.dispatchEvent(compositionEnter);
+      assert(!compositionEnter.defaultPrevented && document.activeElement === caption, 'Enter used to compose text must not finish caption editing.');
+      const captionTab = new KeyboardEvent('keydown', {key: 'Tab', bubbles: true, cancelable: true});
+      caption.dispatchEvent(captionTab);
+      assert(!captionTab.defaultPrevented, 'Caption editing must preserve normal Tab navigation.');
+      let captionSubmissions = 0;
+      const trackCaptionSubmit = event => { event.preventDefault(); captionSubmissions++; };
+      form.addEventListener('submit', trackCaptionSubmit);
+      const captionEnter = new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true});
+      caption.dispatchEvent(captionEnter);
+      form.removeEventListener('submit', trackCaptionSubmit);
+      assert(captionEnter.defaultPrevented && document.activeElement !== caption && caption.getBoundingClientRect().height === collapsedCaptionHeight, 'Enter must finish caption editing and collapse its field.');
+      assert(form.elements.album.value === beforeCaptionEnter && captionSubmissions === 0, 'Finishing a caption must retain its unsaved text without adding a line break or submitting the post.');
+      const emptyCaption = form.querySelectorAll('[data-album-caption]')[1];
+      emptyCaption.focus({preventScroll: true});
+      emptyCaption.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true}));
+      assert(document.activeElement !== emptyCaption && !emptyCaption.value && form.elements.album.value === beforeCaptionEnter, 'Enter must also finish an empty caption without changing album content.');
       caption.value = 'A [photo] & <script>caption</script> \\ "quoted"';
       caption.dispatchEvent(new Event('input', {bubbles: true}));
       const wrappingCaption = 'A <script>caption</script> & "quotation": ' + 'A winding path through the mountains, where the afternoon light settles over the lake and every turn reveals another view. '.repeat(3).trim();
@@ -742,10 +804,34 @@
       return;
     }
     await wait(() => document.querySelectorAll('[data-album-photo]').length === 3);
+    if (!sessionStorage.getItem('album-component-saved-check')) {
+      const savedPostURL = location.pathname;
+      const editSavedPost = document.querySelector('a[href^="/post/update/"]');
+      assert(editSavedPost, 'A saved post must offer its editor.');
+      await htmx.ajax('GET', editSavedPost.getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
+      await wait(() => document.querySelector('[data-album-list]')?.children.length === 3);
+      assert(!document.querySelector('[data-album-editor]').hidden && document.querySelector('[data-component-picker]').hidden, 'Editing a saved album must show its component automatically and exclude a duplicate choice.');
+      await htmx.ajax('GET', savedPostURL, {target: '#article-content', swap: 'innerHTML'});
+      await wait(() => document.querySelector('.photo-album-grid'));
+      sessionStorage.setItem('album-component-saved-check', '1');
+    }
     const links = [...document.querySelectorAll('[data-album-photo]')];
     const grid = document.querySelector('.photo-album-grid');
     assert(grid.scrollWidth <= grid.clientWidth + 1, 'Album grid overflows the viewport.');
     assert(links[1].querySelector('figure > figcaption')?.textContent === links[1].dataset.caption, 'The caption must belong to the same clickable card as its photo.');
+    if (innerWidth < 768) {
+      const columns = grid.clientWidth >= 292 ? 2 : 1;
+      const cards = links.map(link => link.getBoundingClientRect());
+      assert(columns === 2 ? cards[0].top === cards[1].top && cards[2].top > cards[0].top : cards[1].top > cards[0].top, 'Mobile albums must use two columns when each card can be at least 140px wide, and one column otherwise.');
+      assert(Math.abs(cards[0].width - cards[1].width) < 1 && cards[0].width >= 140, 'Mobile photos must have consistent, usable widths.');
+      const preview = links[1].querySelector('figcaption');
+      const originalCaption = preview.textContent;
+      preview.textContent = 'A long caption that wraps across many lines. '.repeat(12);
+      const style = getComputedStyle(preview);
+      const textHeight = preview.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      assert(textHeight <= parseFloat(style.lineHeight) * 2 + 1 && preview.scrollHeight > preview.clientHeight, 'Mobile grid captions must stop after two lines without removing their full text.');
+      preview.textContent = originalCaption;
+    }
     assert(!document.querySelector('.album-viewer'), 'Viewer opened before selecting a photo.');
     links[1].focus();
     const viewerScroll = scrollY;
@@ -1025,6 +1111,10 @@
       const single = await fetch('/post', {method: 'POST', redirect: 'manual', body: new URLSearchParams({title: 'One photo', slug: 'one-photo', content: 'One photo body', album: '![](' + links[0].getAttribute('href') + ')', published: 'on'})});
       assert(single.type === 'opaqueredirect', 'Single-photo post did not save.');
       await htmx.ajax('GET', '/post/s/one-photo', {target: '#article-content', swap: 'innerHTML'});
+      if (innerWidth < 768) {
+        const singleGrid = document.querySelector('.photo-album-grid');
+        assert(Math.abs(singleGrid.firstElementChild.getBoundingClientRect().width - singleGrid.clientWidth) < 1, 'A single-photo mobile album must use the full gallery width.');
+      }
       document.querySelector('[data-album-photo]').click();
       const singleViewer = document.querySelector('.album-viewer');
       assert(singleViewer.open && singleViewer.querySelector('nav').hidden && singleViewer.querySelector('[data-album-prev]').hidden && singleViewer.querySelector('[data-album-next]').hidden, 'Single-photo albums must hide unnecessary navigation.');
