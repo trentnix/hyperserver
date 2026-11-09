@@ -63,7 +63,7 @@ func TestFormDeliveryFailureDoesNotWriteErrorResponse(t *testing.T) {
 					if policy == "no manager" {
 						page = content.NewContent(r)
 					}
-					page.AddContent(fstest.MapFS{"form.html": {Data: []byte("<p>form contents</p>")}}, "form.html")
+					prepareContent(t, page, content.TemplatePath{FS: fstest.MapFS{"form.html": {Data: []byte("<p>form contents</p>")}}, Path: "form.html"})
 					page.ResponseStatusCode = http.StatusUnprocessableEntity
 					w := &failedFormResponse{ResponseRecorder: httptest.NewRecorder(), err: cause}
 					HandleFormError(w, r, page, &Form{}, "", nil)
@@ -133,7 +133,7 @@ func TestFormRenderingFailurePresentation(t *testing.T) {
 							return nil, nil, cause
 						}
 					}
-					page.AddContent(fstest.MapFS{"form.html": {Data: []byte(template)}}, "form.html")
+					prepareContent(t, page, content.TemplatePath{FS: fstest.MapFS{"form.html": {Data: []byte(template)}}, Path: "form.html"})
 					page.ResponseStatusCode = http.StatusUnprocessableEntity
 					page.Headers = map[string]string{"HX-Retarget": "#form", "Content-Length": "999"}
 					HandleFormError(w, r, page, &failingErrorForm{err: cause}, message, formErr)

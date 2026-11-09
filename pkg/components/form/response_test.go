@@ -35,7 +35,7 @@ func TestFormErrorResponseDispatch(t *testing.T) {
 				cm.AddPageLayout(files, "page.html")
 				cm.AddHtmxLayout(files, "fragment.html")
 				c := content.NewManagedContent(r, cm)
-				c.AddContent(files, "form.html")
+				prepareContent(t, c, content.TemplatePath{FS: files, Path: "form.html"})
 				c.ResponseStatusCode = status
 				c.HTMX.Response = &htmx.Response{Retarget: "#form", Reswap: "outerHTML"}
 				f := &responseForm{Name: "<input>"}
@@ -56,4 +56,13 @@ func TestFormErrorResponseDispatch(t *testing.T) {
 			})
 		}
 	}
+}
+
+func prepareContent(t testing.TB, page *content.Content, files ...content.TemplatePath) {
+	t.Helper()
+	templates, err := content.PrepareTemplates(page.ContentManager, files...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Templates = templates
 }

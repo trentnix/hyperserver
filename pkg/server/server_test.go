@@ -29,14 +29,18 @@ func TestStatelessApplication(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{{.Title}}: {{.Data}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
+	templates, err := content.PrepareTemplates(app.ContentManager, content.TemplatePath{FS: os.DirFS(filepath.Dir(path)), Path: filepath.Base(path)})
+	if err != nil {
+		t.Fatal(err)
+	}
 	app.Web.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		page := content.NewManagedContent(r, app.ContentManager)
+		page.Templates = templates
 		page.Title = "page"
 		if page.IsHtmx() {
 			page.Title = "fragment"
 		}
 		page.Data = "<safe>"
-		page.AddContent(os.DirFS(filepath.Dir(path)), filepath.Base(path))
 		if err := page.Render(w, r); err != nil {
 			t.Error(err)
 		}

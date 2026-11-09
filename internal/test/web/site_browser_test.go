@@ -39,7 +39,7 @@ func TestBrowserSiteErrors(t *testing.T) {
 		page.PartialName = "test.browser.errors"
 		page.SystemMessages = []messages.SystemMessage{messages.NewSystemMessage(`</script><script>window.systemMessageInjected=true</script>`, messages.SystemMessageTypeDebug)}
 		file := testTemplateFile(t, "internal/test/web/testdata/error-responses.html")
-		page.AddContent(file.FS, file.Path)
+		page.Templates = prepareFixtureTemplates(t, h.app.ContentManager, file)
 		w := httptest.NewRecorder()
 		if err := page.Render(w, r); err != nil {
 			t.Fatal(err)

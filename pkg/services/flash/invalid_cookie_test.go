@@ -36,7 +36,7 @@ func TestRenderingDiscardsInvalidMessageCookies(t *testing.T) {
 						cm := contentservice.NewContentManager()
 						cm.LoadNotifications = LoadNotifications
 						page := content.NewManagedContent(r, cm)
-						page.AddContent(fstest.MapFS{"page.html": {Data: []byte(`ready{{range .Notifications}}{{.Message}}{{end}}`)}}, "page.html")
+						prepareContent(t, page, content.TemplatePath{FS: fstest.MapFS{"page.html": {Data: []byte(`ready{{range .Notifications}}{{.Message}}{{end}}`)}}, Path: "page.html"})
 						w := httptest.NewRecorder()
 						if err := page.Render(w, r); err != nil || w.Code != http.StatusOK || w.Body.String() != "ready" {
 							t.Fatalf("render failed: status=%d, body=%q, error=%v", w.Code, w.Body.String(), err)
@@ -94,7 +94,7 @@ func TestInvalidMessageCookieWaitsForSuccessfulRender(t *testing.T) {
 	cm.LoadNotifications = LoadNotifications
 	page := content.NewManagedContent(r, cm)
 	page.Data = []string{}
-	page.AddContent(fstest.MapFS{"page.html": {Data: []byte(`{{index .Data 0}}`)}}, "page.html")
+	prepareContent(t, page, content.TemplatePath{FS: fstest.MapFS{"page.html": {Data: []byte(`{{index .Data 0}}`)}}, Path: "page.html"})
 	w := httptest.NewRecorder()
 	if err := page.Render(w, r); err == nil || len(w.Header()) != 0 || w.Body.Len() != 0 {
 		t.Fatalf("failed rendering changed response: %v, %v", err, w.Header())

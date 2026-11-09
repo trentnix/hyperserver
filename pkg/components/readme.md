@@ -4,7 +4,7 @@ The test-only [contact handler](../../internal/test/web/contact_fixture_test.go)
 
 ## Prepare views once
 
-Application setup configures shared layouts and response handlers before initializing modules. Each module prepares its own pages during initialization:
+Application setup configures shared layouts and response handlers before initializing modules. Modules prepare the templates they render during initialization. A composing module can first collect contributions from other modules:
 
 ```go
 view, err := content.PrepareView(cm, "home",
@@ -19,7 +19,7 @@ Store the result on the module. Each request gets separate content and data:
 ```go
 page := view.Content(r, data)
 if err := page.Render(w, r); err != nil {
-    page.HandleRenderError(w, r, "Unable to render the page")
+    page.HandleRenderError(w, r, "Unable to render the page", err)
 }
 ```
 
@@ -38,11 +38,66 @@ if err != nil {
 
 Use the same manager that prepared the templates. Nested `{{template "name" .}}` calls do not need view objects. Views share parsed templates, not rendered HTML or request data. `view.Content` returns a request-local `*content.Content` for titles, redirects, and HTMX instructions. Direct `NewManagedContent` construction also accepts prepared templates.
 
-Do not combine `Templates` with request-specific `AddLayout`, `AddContent`, or `AddComponent` calls. Those methods provide a per-render parsing path when no prepared set is supplied. Restart and prepare new sets to apply template changes. There is no file watcher.
+`Content` renders only prepared templates. File composition and parsing happen during preparation. Restart and prepare new sets to apply template changes. There is no file watcher.
 
 Return preparation errors from `Init` to stop startup. Execution errors still occur per request. Rendering buffers all templates before writing content. Use `page.HandleRenderError` to report failures. It avoids writing another response after a delivery failure. Rendering failures do not undo application changes.
 
-Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem` to compare prepared and per-render parsing. The benchmark excludes HTTP delivery and notification storage.
+Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem` to measure prepared rendering. The benchmark excludes HTTP delivery and notification storage.
+
+## Compose pages from loaded modules
+
+A module can contribute components instead of owning a page. The application defines the contribution contract, such as a component name and template paths. Declare that contract as a module capability. A composing module uses `Multiple: true` to receive all selected providers and `Optional: true` if an empty page is valid. Providers initialize before the composing module. See the working [module composition fixture](../../internal/test/web/composition_test.go).
+
+The composing module collects contributions before calling `PrepareTemplates` in `Init`. Each contribution can use its own filesystem. Use qualified names, such as `news.summary`, to avoid accidental overrides between modules. Prepared sets capture the supplied files. Later registrations do not change them. Shared message and error templates prepare before module initialization and do not automatically acquire module contributions.
+
+For each request, the application selects components, loads their data, and chooses their order. The application can put an ordered slice in `Content.Data`:
+
+```go
+type Component struct {
+    Name string
+    Data any
+}
+```
+
+A shared composition template renders that slice:
+
+```gotemplate
+{{define "dashboard"}}
+    {{range .Data}}{{renderPartial .Name .}}{{end}}
+{{end}}
+```
+
+Each component receives its own `Component` value and reads `.Data`. A component rendered directly through `Content.PartialName` also reads `.Data`. The request chooses from loaded, permitted components. Module availability does not grant access. Ordinary requests render the composition inside the page layout. HTMX requests can render the composition or one selected component inside the fragment layout. No distinct template file is required for every page combination.
+
+Modules can also publish prepared views and use `View.RenderPartial` to contribute escaped markup when their templates must remain in separate sets. The application owns component selection and data loading in either approach.
+
+### Select layouts
+
+Prepare alternative layouts from independent files alongside the component templates. Select their named roots without parsing again:
+
+```go
+compact, err := templates.WithLayouts("site.compact", "")
+if err != nil {
+    return err
+}
+```
+
+The first name selects the page layout. The second selects the HTMX layout. An empty name keeps the current root. Missing names return an error without a partial result. The selected set shares immutable templates with the original and leaves it unchanged. Create alternatives during initialization. Requests can select a set through `Content.Templates` or a view created from that set. History restoration uses the selected page layout.
+
+## Rendering API upgrade
+
+Request-time file registration and parsing are removed. Update applications that use these `Content` fields or methods:
+
+| Removed API | Replacement |
+| --- | --- |
+| `Layouts`, `AddLayout` | Load layouts during preparation. Use `WithLayouts` to select their named roots. |
+| `Contents`, `AddContent` | Pass `TemplatePath` values to `PrepareView` or `PrepareTemplates` during initialization. |
+| `Components`, `AddComponent` | Collect module contributions or configure manager components before preparation. Select and order named components in request data. |
+| `LogMessages`, `AddLogMessage`, `AddLogMessages` | Use the request logger for diagnostics. These values never emitted output. |
+
+Create responses with `view.Content(r, data)`. Direct construction with `NewContent` or `NewManagedContent` must assign a prepared set to `Templates` before rendering a body. Redirects and 204 responses do not require templates. The manager's template registration methods remain available for startup configuration. No stored-data migration is needed.
+
+`Refresh: true` still renders a body and requires prepared templates. To request an HTMX refresh without rendering, also set `NoContent: true`. Ordinary and history-restoration requests ignore both HTMX settings and still require templates.
 
 ## Shared rendering policy
 

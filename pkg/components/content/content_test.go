@@ -25,6 +25,20 @@ func renderTemplateFile(t *testing.T, name, text string) (fs.FS, string) {
 	return os.DirFS(filepath.Dir(path)), filepath.Base(path)
 }
 
+func renderTemplatePath(t *testing.T, name, text string) TemplatePath {
+	files, path := renderTemplateFile(t, name, text)
+	return TemplatePath{FS: files, Path: path}
+}
+
+func prepareContent(t testing.TB, page *Content, files ...TemplatePath) {
+	t.Helper()
+	templates, err := PrepareTemplates(page.ContentManager, files...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Templates = templates
+}
+
 type failingTemplateData struct{ err error }
 
 func TestTemplateRenderingDoesNotLoadNotifications(t *testing.T) {
@@ -35,7 +49,7 @@ func TestTemplateRenderingDoesNotLoadNotifications(t *testing.T) {
 	}
 	c := NewManagedContent(httptest.NewRequest(http.MethodGet, "/", nil), cm)
 	c.Notifications = []messages.Notification{messages.NewNotification("<provided>", messages.NotificationTypeSuccess)}
-	c.AddContent(renderTemplateFile(t, "notifications.html", `{{range .Notifications}}{{.Message}}{{end}}`))
+	prepareContent(t, c, renderTemplatePath(t, "notifications.html", `{{range .Notifications}}{{.Message}}{{end}}`))
 	body, err := c.render()
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +71,7 @@ func TestManagedContentLayoutData(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/"+name, nil)
 			c := NewManagedContent(r, cm)
 			c.Data = "<page data>"
-			c.AddLayout(files, layoutName)
+			prepareContent(t, c, TemplatePath{FS: files, Path: layoutName})
 			w := httptest.NewRecorder()
 			if err := c.Render(w, r); err != nil {
 				t.Fatal(err)
@@ -95,7 +109,7 @@ func (w *recordingResponse) Write(body []byte) (int, error) {
 
 func TestRenderFailureDoesNotCommitResponse(t *testing.T) {
 	for _, htmx := range []bool{false, true} {
-		for _, failure := range []string{"no templates", "missing file", "parse", "execution", "partial execution", "missing partial"} {
+		for _, failure := range []string{"no templates", "execution", "partial execution", "missing partial"} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", failure, htmx), func(t *testing.T) {
 				r := httptest.NewRequest(http.MethodGet, "/", nil)
 				if htmx {
@@ -108,8 +122,6 @@ func TestRenderFailureDoesNotCommitResponse(t *testing.T) {
 				c.Data = failingTemplateData{err: privateErr}
 				text := "<p>partial output</p>{{.Data.Fail}}"
 				switch failure {
-				case "parse":
-					text = "<p>partial output</p>{{"
 				case "partial execution":
 					text = `<p>outer prefix</p>{{renderPartial "part" .}}{{define "part"}}<p>inner prefix</p>{{.Data.Fail}}{{end}}`
 				case "missing partial":
@@ -117,10 +129,8 @@ func TestRenderFailureDoesNotCommitResponse(t *testing.T) {
 				}
 				switch failure {
 				case "no templates":
-				case "missing file":
-					c.AddContent(os.DirFS(t.TempDir()), "missing.html")
 				default:
-					c.AddContent(renderTemplateFile(t, "content.html", text))
+					prepareContent(t, c, renderTemplatePath(t, "content.html", text))
 				}
 
 				w := &recordingResponse{ResponseRecorder: httptest.NewRecorder()}
@@ -159,7 +169,7 @@ func TestRenderBufferedPageAndFragment(t *testing.T) {
 				r.Header.Set("HX-Request", "true")
 			}
 			c := NewManagedContent(r, cm)
-			c.AddContent(files, name)
+			prepareContent(t, c, TemplatePath{FS: files, Path: name})
 			c.PartialName, c.Data = "part", "<script>unsafe</script>"
 			c.ResponseStatusCode = status
 			c.Headers = map[string]string{"Content-Type": "text/html; charset=utf-8", "X-Rendered": "yes"}
@@ -195,7 +205,7 @@ func TestRenderReportsDeliveryFailure(t *testing.T) {
 	for _, err := range []error{writeErr, nil} {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		c := NewContent(r)
-		c.AddContent(renderTemplateFile(t, "content.html", "<p>complete page</p>"))
+		prepareContent(t, c, renderTemplatePath(t, "content.html", "<p>complete page</p>"))
 		w := failingResponse{ResponseRecorder: httptest.NewRecorder(), err: err}
 		want := err
 		if want == nil {
@@ -256,7 +266,7 @@ func TestRenderLoadsNotificationsWithoutSessionServices(t *testing.T) {
 				}
 				page := NewManagedContent(r, cm)
 				page.Notifications = []messages.Notification{messages.NewNotification("local", messages.NotificationTypeError)}
-				page.AddContent(renderTemplateFile(t, "notifications.html", `{{range .Notifications}}{{.Message}}:{{.IsSuccess}}|{{end}}`))
+				prepareContent(t, page, renderTemplatePath(t, "notifications.html", `{{range .Notifications}}{{.Message}}:{{.IsSuccess}}|{{end}}`))
 				if err := page.Render(w, r); err != nil {
 					t.Fatal(err)
 				}

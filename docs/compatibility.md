@@ -10,4 +10,6 @@ Documented extension points are supported at the pinned revision, not frozen int
 
 Account adapters must follow the [account capability upgrade instructions](storage.md#account-capabilities-and-adapter-upgrades). Password changes, tokens, password resets, and email verification are separate from `AccountRepository`. SQLite retains every capability and needs no migration for this interface change.
 
+Rendering requires templates prepared during initialization. The request-time file fields, registration methods, and unused `LogMessages` helpers on `Content` are removed. Follow the [rendering API upgrade instructions](../pkg/components/readme.md#rendering-api-upgrade). Modules can still contribute components for request-time composition. `Templates.WithLayouts` selects prepared layouts without rereading files. Manager-level template configuration remains available, and no database change is required.
+
 Packages under `internal` and blog implementation details are not reusable framework contracts. A future stable release must identify its supported public interfaces and compatibility guarantees. Validate a separately pinned application before promising external framework stability.

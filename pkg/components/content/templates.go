@@ -31,17 +31,56 @@ type parsedTemplates struct {
 // and do not reread files or track later manager changes. To reload, prepare new
 // sets and replace them only after draining requests, such as on server restart.
 func PrepareTemplates(cm *contentservice.ContentManagerService, contents ...TemplatePath) (*Templates, error) {
-	c := &Content{ContentManager: cm, Contents: contents}
-	page, err := parseTemplates(c.templatePaths())
+	prepare := func(kind string) (*parsedTemplates, error) {
+		var files []TemplatePath
+		if cm != nil {
+			files = append(files, cm.Layouts[kind]...)
+			files = append(files, cm.Contents[kind]...)
+		}
+		files = append(files, contents...)
+		if cm != nil {
+			files = append(files, cm.Components[kind]...)
+		}
+		return parseTemplates(files)
+	}
+	page, err := prepare(contentservice.PageType)
 	if err != nil {
 		return nil, fmt.Errorf("prepare page templates: %w", err)
 	}
-	c.HTMX.Request.Enabled = true
-	fragment, err := parseTemplates(c.templatePaths())
+	fragment, err := prepare(contentservice.HtmxType)
 	if err != nil {
 		return nil, fmt.Errorf("prepare fragment templates: %w", err)
 	}
 	return &Templates{page: page, fragment: fragment}, nil
+}
+
+// WithLayouts selects page and HTMX root templates from an already prepared set.
+// Empty names keep the current roots. The returned set shares immutable templates
+// without changing the original or reading files. Prepare layout alternatives
+// during initialization, then choose a set for each request. This does not restrict
+// which named components a layout can render.
+func (t *Templates) WithLayouts(page, fragment string) (*Templates, error) {
+	if t == nil || t.page == nil || t.fragment == nil {
+		return nil, fmt.Errorf("layout selection requires prepared templates")
+	}
+	selectLayout := func(kind, name string, source *parsedTemplates) (*parsedTemplates, error) {
+		if name == "" {
+			return source, nil
+		}
+		if source.template.Lookup(name) == nil {
+			return nil, fmt.Errorf("%s layout template not found: %s", kind, name)
+		}
+		return &parsedTemplates{template: source.template, root: name}, nil
+	}
+	selectedPage, err := selectLayout("page", page, t.page)
+	if err != nil {
+		return nil, err
+	}
+	selectedFragment, err := selectLayout("fragment", fragment, t.fragment)
+	if err != nil {
+		return nil, err
+	}
+	return &Templates{page: selectedPage, fragment: selectedFragment}, nil
 }
 
 func parseTemplates(files []TemplatePath) (*parsedTemplates, error) {

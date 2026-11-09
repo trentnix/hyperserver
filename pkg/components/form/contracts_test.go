@@ -179,7 +179,7 @@ func TestFormErrorDoesNotRequireBindingOrValidation(t *testing.T) {
 			r.Header.Set("HX-Request", "true")
 		}
 		c := content.NewContent(r)
-		c.AddContent(fstest.MapFS{"error.html": {Data: []byte(`<p>{{.Data.Message}}</p>`)}}, "error.html")
+		prepareContent(t, c, content.TemplatePath{FS: fstest.MapFS{"error.html": {Data: []byte(`<p>{{.Data.Message}}</p>`)}}, Path: "error.html"})
 		f := &renderingOnlyForm{}
 		w := httptest.NewRecorder()
 		HandleFormError(w, r, c, f, "<invalid>", nil)

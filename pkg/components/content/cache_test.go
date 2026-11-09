@@ -32,7 +32,7 @@ func TestRenderCacheHeaders(t *testing.T) {
 					r.Header.Set("HX-Request", "true")
 				}
 				c := NewContent(r)
-				c.AddContent(files, name)
+				prepareContent(t, c, TemplatePath{FS: files, Path: name})
 				c.Headers = map[string]string{"vary": "Origin, HX-Request", "cache-control": tc.contentCache}
 				w := httptest.NewRecorder()
 				w.Header().Add("Vary", "Accept-Encoding")
@@ -58,7 +58,7 @@ func TestRenderCacheHeaders(t *testing.T) {
 func TestRenderPreservesVaryWildcard(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	c := NewContent(r)
-	c.AddContent(renderTemplateFile(t, "page.html", "rendered"))
+	prepareContent(t, c, renderTemplatePath(t, "page.html", "rendered"))
 	c.Headers = map[string]string{"Vary": "*"}
 	w := httptest.NewRecorder()
 	w.Header().Add("Vary", "Accept-Encoding")
@@ -74,6 +74,10 @@ func TestRenderCacheableRepresentations(t *testing.T) {
 	cm := contentservice.NewContentManager()
 	cm.AddPageLayout(renderTemplateFile(t, "page.html", "<html><body>Public page</body></html>"))
 	cm.AddHtmxLayout(renderTemplateFile(t, "fragment.html", "<p>Public fragment</p>"))
+	prepared, err := PrepareTemplates(cm)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name        string
 		request     string
@@ -99,6 +103,7 @@ func TestRenderCacheableRepresentations(t *testing.T) {
 				want = "<p>Public fragment</p>"
 			}
 			c := NewManagedContent(r, cm)
+			c.Templates = prepared
 			if c.IsHtmx() != tc.fragment {
 				t.Fatal("incorrect response classification")
 			}
@@ -127,7 +132,7 @@ func TestHistoryRestoreIgnoresFragmentDirectives(t *testing.T) {
 	r.Header.Set("HX-History-Restore-Request", "true")
 	// Render must use the actual request, not the classification at construction.
 	c := NewContent(nil)
-	c.AddContent(renderTemplateFile(t, "page.html", "<html>Restored</html>"))
+	prepareContent(t, c, renderTemplatePath(t, "page.html", "<html>Restored</html>"))
 	c.HTMX.Response = &htmx.Response{NoContent: true, Trigger: "ignored", Retarget: "#ignored"}
 	c.OutOfBand = []string{"missing-fragment"}
 	w := httptest.NewRecorder()

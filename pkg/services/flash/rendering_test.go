@@ -52,7 +52,7 @@ func TestRenderingAcknowledgesNotifications(t *testing.T) {
 					case "204":
 						page.ResponseStatusCode = http.StatusNoContent
 					}
-					page.AddContent(fstest.MapFS{"page.html": {Data: []byte(source)}}, "page.html")
+					prepareContent(t, page, content.TemplatePath{FS: fstest.MapFS{"page.html": {Data: []byte(source)}}, Path: "page.html"})
 					w := httptest.NewRecorder()
 					err := page.Render(w, r)
 					failed := outcome == "template failure" || outcome == "out-of-band failure" && hx
@@ -295,7 +295,7 @@ func TestRenderingReportsNotificationAcknowledgmentFailure(t *testing.T) {
 				cm := contentservice.NewContentManager()
 				cm.LoadNotifications = LoadNotifications
 				page := content.NewManagedContent(r, cm)
-				page.AddContent(fstest.MapFS{"page.html": {Data: []byte(`{{range .Notifications}}{{.Message}}{{end}}`)}}, "page.html")
+				prepareContent(t, page, content.TemplatePath{FS: fstest.MapFS{"page.html": {Data: []byte(`{{range .Notifications}}{{.Message}}{{end}}`)}}, Path: "page.html"})
 				w := httptest.NewRecorder()
 				if err := page.Render(w, r); !errors.Is(err, failure) {
 					t.Fatalf("acknowledgment failure = %v", err)
@@ -324,4 +324,13 @@ func TestRenderingReportsNotificationAcknowledgmentFailure(t *testing.T) {
 			})
 		}
 	}
+}
+
+func prepareContent(t testing.TB, page *content.Content, files ...content.TemplatePath) {
+	t.Helper()
+	templates, err := content.PrepareTemplates(page.ContentManager, files...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Templates = templates
 }

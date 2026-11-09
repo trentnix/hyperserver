@@ -24,12 +24,13 @@ func TestHTTPRefreshPreservesNotifications(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+		cm := contentservice.NewContentManager()
+		cm.LoadNotifications = flash.LoadNotifications
+		templates := prepareFixtureTemplates(t, cm, content.TemplatePath{FS: fstest.MapFS{"page.html": {Data: []byte(`{{range .Notifications}}{{.Message}}{{end}}`)}}, Path: "page.html"})
 		h.app.Web.HandleFunc("GET /test/refresh", func(w http.ResponseWriter, r *http.Request) {
-			cm := contentservice.NewContentManager()
-			cm.LoadNotifications = flash.LoadNotifications
 			page := content.NewManagedContent(r, cm)
 			page.HTMX.Response = &htmx.Response{Refresh: true}
-			page.AddContent(fstest.MapFS{"page.html": {Data: []byte(`{{range .Notifications}}{{.Message}}{{end}}`)}}, "page.html")
+			page.Templates = templates
 			if err := page.Render(w, r); err != nil {
 				t.Fatal(err)
 			}
@@ -169,4 +170,13 @@ func TestHTTPTemplatesPreparedBeforeRequests(t *testing.T) {
 			}
 		}
 	})
+}
+
+func prepareFixtureTemplates(t testing.TB, cm *contentservice.ContentManagerService, files ...content.TemplatePath) *content.Templates {
+	t.Helper()
+	templates, err := content.PrepareTemplates(cm, files...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return templates
 }

@@ -112,6 +112,7 @@ func TestHTTPFormMessageEscaping(t *testing.T) {
 				func() messageForm { return &ContactForm{} },
 			},
 		} {
+			templates := prepareFixtureTemplates(t, h.app.ContentManager, testTemplateFile(t, tc.path))
 			h.app.Web.HandleFunc("GET /test/form-messages/"+tc.name, func(w http.ResponseWriter, r *http.Request) {
 				f := tc.newForm()
 				message := r.URL.Query().Get("message")
@@ -120,8 +121,7 @@ func TestHTTPFormMessageEscaping(t *testing.T) {
 				f.AddMessage("info: " + message)
 				c := content.NewManagedContent(r, h.app.ContentManager)
 				c.PartialName, c.Data = tc.partial, f
-				file := testTemplateFile(t, tc.path)
-				c.AddContent(file.FS, file.Path)
+				c.Templates = templates
 				if err := c.Render(w, r); err != nil {
 					util.HttpError(w, r, "Unable to display test form", err, http.StatusInternalServerError)
 				}

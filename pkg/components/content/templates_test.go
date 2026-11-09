@@ -11,6 +11,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/trentnix/hyperserver/pkg/components/htmx"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 )
 
@@ -92,6 +93,8 @@ func TestPrepareTemplatesFailures(t *testing.T) {
 		{name: "no templates"},
 		{name: "nil filesystem", paths: []TemplatePath{{Path: "valid.html"}}},
 		{name: "invalid path", paths: []TemplatePath{{FS: files, Path: "../valid.html"}}},
+		{name: "absolute path", paths: []TemplatePath{{FS: files, Path: "/valid.html"}}},
+		{name: "empty path", paths: []TemplatePath{{FS: files}}},
 		{name: "missing file", paths: []TemplatePath{{FS: files, Path: "missing.html"}}, cause: fs.ErrNotExist},
 		{name: "syntax", paths: []TemplatePath{{FS: files, Path: "broken.html"}}},
 		{name: "fragment syntax", cm: &contentservice.ContentManagerService{Layouts: map[string][]TemplatePath{
@@ -123,9 +126,38 @@ func TestPrepareTemplatesFailures(t *testing.T) {
 	}
 }
 
+func TestRenderRequiresPreparedTemplates(t *testing.T) {
+	files := &countingTemplateFS{FS: fstest.MapFS{"page.html": {Data: []byte("must not parse during a request")}}}
+	cm := contentservice.NewContentManager()
+	cm.AddPageLayout(files, "page.html")
+	cm.AddHtmxLayout(files, "page.html")
+	for _, mode := range []string{"page", "fragment", "history", "refresh"} {
+		t.Run(mode, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			if mode != "page" {
+				r.Header.Set("HX-Request", "true")
+			}
+			if mode == "history" {
+				r.Header.Set("HX-History-Restore-Request", "true")
+			}
+			page := NewManagedContent(r, cm)
+			if mode == "refresh" {
+				page.HTMX.Response = &htmx.Response{Refresh: true}
+			}
+			w := &recordingResponse{ResponseRecorder: httptest.NewRecorder()}
+			if err := page.Render(w, r); !errors.Is(err, ErrNoTemplates) || w.committed || w.Body.Len() != 0 || len(w.Header()) != 0 {
+				t.Fatalf("unprepared render: error=%v, committed=%t, body=%q, headers=%v", err, w.committed, w.Body.String(), w.Header())
+			}
+			if reads := files.reads.Load(); reads != 0 {
+				t.Fatalf("unprepared request read templates: %d", reads)
+			}
+		})
+	}
+}
+
 func TestPreparedTemplatesFailureDoesNotCommit(t *testing.T) {
 	failure := errors.New("private execution failure")
-	for _, kind := range []string{"execution", "partial", "missing partial", "out of band", "mixed files", "zero value"} {
+	for _, kind := range []string{"execution", "partial", "missing partial", "out of band", "zero value"} {
 		t.Run(kind, func(t *testing.T) {
 			text := `<p>prefix</p>{{.Data.Fail}}`
 			if kind == "partial" {
@@ -149,9 +181,6 @@ func TestPreparedTemplatesFailureDoesNotCommit(t *testing.T) {
 			c.Headers = map[string]string{"HX-Redirect": "/success"}
 			if kind == "out of band" {
 				c.OutOfBand = []string{"notice"}
-			}
-			if kind == "mixed files" {
-				c.AddContent(files, "body.html")
 			}
 			if kind == "zero value" {
 				c.Templates = &Templates{}
@@ -187,7 +216,7 @@ func TestPreparedTemplatesAreApplicationOwned(t *testing.T) {
 	}
 }
 
-func TestPreparedTemplatesMatchPerRender(t *testing.T) {
+func TestPreparedTemplatesCompositionAndEscaping(t *testing.T) {
 	files := fstest.MapFS{
 		"layout.html": {Data: []byte(`<main title="{{.Title}}">{{renderPartial .PartialName .}}</main>`)},
 		"shared.html": {Data: []byte(`{{define "shared"}}original{{end}}`)},
@@ -213,19 +242,97 @@ func TestPreparedTemplatesMatchPerRender(t *testing.T) {
 		c := NewManagedContent(r, cm)
 		c.Title, c.PartialName, c.Data = `"<title>`, "body", "<script>unsafe</script>"
 		c.URL = "javascript:alert(1)"
-		c.AddContent(files, "body.html")
-		original, err := c.render()
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.Contents, c.Templates = nil, prepared
+		c.Templates = prepared
 		body, err := c.render()
 		if err != nil {
 			t.Fatal(err)
 		}
 		want := `<main title="&#34;&lt;title&gt;">component<a href="#ZgotmplZ">&lt;script&gt;unsafe&lt;/script&gt;</a></main>`
-		if body.String() != want || body.String() != original.String() {
-			t.Fatalf("fragment=%t: prepared=%q original=%q", fragment, body.String(), original.String())
+		if body.String() != want {
+			t.Fatalf("fragment=%t: prepared=%q, want %q", fragment, body.String(), want)
+		}
+	}
+}
+
+func TestPreparedLayoutSelection(t *testing.T) {
+	files := &countingTemplateFS{FS: fstest.MapFS{
+		"page.html":     {Data: []byte(`<main>{{renderPartial .PartialName .}}</main>{{define "compact"}}<article>{{renderPartial .PartialName .}}</article>{{end}}`)},
+		"fragment.html": {Data: []byte(`{{renderPartial .PartialName .}}{{define "panel"}}<section>{{renderPartial .PartialName .}}</section>{{end}}`)},
+		"body.html":     {Data: []byte(`{{define "body"}}{{.Data}}{{end}}`)},
+	}}
+	cm := contentservice.NewContentManager()
+	cm.AddPageLayout(files, "page.html")
+	cm.AddHtmxLayout(files, "fragment.html")
+	prepared, err := PrepareTemplates(cm, TemplatePath{FS: files, Path: "body.html"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := files.reads.Load()
+	t.Cleanup(func() {
+		if got := files.reads.Load(); got != reads {
+			t.Fatalf("layout selection or rendering reread files: %d, want %d", got, reads)
+		}
+	})
+	for _, tc := range []struct{ name, page, fragment, pageWant, fragmentWant string }{
+		{"defaults", "", "", "<main>&lt;value&gt;</main>", "&lt;value&gt;"},
+		{"page", "compact", "", "<article>&lt;value&gt;</article>", "&lt;value&gt;"},
+		{"fragment", "", "panel", "<main>&lt;value&gt;</main>", "<section>&lt;value&gt;</section>"},
+		{"both", "compact", "panel", "<article>&lt;value&gt;</article>", "<section>&lt;value&gt;</section>"},
+	} {
+		selected, err := prepared.WithLayouts(tc.page, tc.fragment)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if selected.page.template != prepared.page.template || selected.fragment.template != prepared.fragment.template {
+			t.Fatal("layout selection did not share prepared templates")
+		}
+		view, err := selected.View(cm, "body")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, mode := range []string{"page", "fragment", "history"} {
+			t.Run(tc.name+"/"+mode, func(t *testing.T) {
+				t.Parallel()
+				r := httptest.NewRequest(http.MethodGet, "/", nil)
+				if mode != "page" {
+					r.Header.Set(htmx.HeaderRequest, "true")
+				}
+				if mode == "history" {
+					r.Header.Set(htmx.HeaderHistoryRestoreRequest, "true")
+				}
+				w := httptest.NewRecorder()
+				want := tc.pageWant
+				if mode == "fragment" {
+					want = tc.fragmentWant
+				}
+				if err := view.Content(r, "<value>").Render(w, r); err != nil || w.Body.String() != want {
+					t.Fatalf("selected layout: body=%q, error=%v, want %q", w.Body.String(), err, want)
+				}
+				// Selecting another layout must not change the default set.
+				page := NewContent(r)
+				page.Templates, page.PartialName, page.Data = prepared, "body", "<value>"
+				want = "<main>&lt;value&gt;</main>"
+				if mode == "fragment" {
+					want = "&lt;value&gt;"
+				}
+				w = httptest.NewRecorder()
+				if err := page.Render(w, r); err != nil || w.Body.String() != want {
+					t.Fatalf("original layout: body=%q, error=%v, want %q", w.Body.String(), err, want)
+				}
+			})
+		}
+	}
+	for _, tc := range []struct{ page, fragment, detail string }{
+		{"missing", "", "page layout template not found: missing"},
+		{"compact", "missing", "fragment layout template not found: missing"},
+	} {
+		if selected, err := prepared.WithLayouts(tc.page, tc.fragment); selected != nil || err == nil || !strings.Contains(err.Error(), tc.detail) {
+			t.Fatalf("invalid layout selection: %v, %v", selected, err)
+		}
+	}
+	for _, unprepared := range []*Templates{nil, {}} {
+		if selected, err := unprepared.WithLayouts("", ""); selected != nil || err == nil {
+			t.Fatalf("unprepared layouts accepted: %v, %v", selected, err)
 		}
 	}
 }

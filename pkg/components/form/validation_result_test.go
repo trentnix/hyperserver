@@ -46,7 +46,7 @@ func TestValidationErrorsBlockOperationsAndRenderSafely(t *testing.T) {
 					}
 				}
 				page := content.NewContent(r)
-				page.AddContent(fstest.MapFS{"form.html": {Data: []byte(`{{template "form" .}}{{define "form"}}{{range .Data.GetAllFieldErrors}}<p>{{.}}</p>{{end}}{{range .Data.GetErrorMessages}}<p>{{.Message}}</p>{{end}}{{end}}`)}}, "form.html")
+				prepareContent(t, page, content.TemplatePath{FS: fstest.MapFS{"form.html": {Data: []byte(`{{template "form" .}}{{define "form"}}{{range .Data.GetAllFieldErrors}}<p>{{.}}</p>{{end}}{{range .Data.GetErrorMessages}}<p>{{.Message}}</p>{{end}}{{end}}`)}}, Path: "form.html"})
 				page.PartialName = "form"
 				persisted, mailed := 0, 0
 				w := httptest.NewRecorder()

@@ -33,7 +33,7 @@ func TestResponseHTMXMetadata(t *testing.T) {
 				r := httptest.NewRequest(http.MethodGet, "/", nil)
 				r.Header.Set(htmx.HeaderRequest, fmt.Sprint(hx))
 				c := NewContent(nil) // Dispatch must classify the actual request.
-				c.AddContent(fstest.MapFS{"view.html": {Data: []byte("<p>body</p>")}}, "view.html")
+				prepareContent(t, c, TemplatePath{FS: fstest.MapFS{"view.html": {Data: []byte("<p>body</p>")}}, Path: "view.html"})
 				c.HTMX.Response = &tc.metadata
 				w := httptest.NewRecorder()
 				if err := c.Render(w, r); err != nil {
@@ -73,7 +73,7 @@ func TestResponseOutOfBandAndNotifications(t *testing.T) {
 				return []messages.Notification{messages.NewNotification("<loaded>", messages.NotificationTypeSuccess)}, nil, nil
 			}
 			c := NewManagedContent(nil, cm)
-			c.AddContent(files, "parts.html")
+			prepareContent(t, c, TemplatePath{FS: files, Path: "parts.html"})
 			c.Data = "<invalid input>"
 			c.Notifications = []messages.Notification{messages.NewNotification("<local>", messages.NotificationTypeError)}
 			c.OutOfBand = []string{"notice", "count"}
@@ -105,7 +105,7 @@ func TestResponseOutOfBandFailureDoesNotCommit(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			r.Header.Set(htmx.HeaderRequest, "true")
 			c := NewContent(r)
-			c.AddContent(fstest.MapFS{"view.html": {Data: []byte(`<p>main</p>{{define "failure"}}<p>prefix</p>{{.Data.Fail}}{{end}}`)}}, "view.html")
+			prepareContent(t, c, TemplatePath{FS: fstest.MapFS{"view.html": {Data: []byte(`<p>main</p>{{define "failure"}}<p>prefix</p>{{.Data.Fail}}{{end}}`)}}, Path: "view.html"})
 			c.Data = failingTemplateData{err: errors.New("template failure")}
 			c.OutOfBand = []string{name}
 			c.Headers = map[string]string{"X-Success": "yes"}
@@ -158,7 +158,8 @@ func TestResponseRedirect(t *testing.T) {
 }
 
 func TestResponseNoContent(t *testing.T) {
-	for _, hx := range []bool{false, true} {
+	for _, tc := range []struct{ hx, refresh bool }{{false, false}, {false, true}, {true, false}, {true, true}} {
+		hx := tc.hx
 		r := httptest.NewRequest(http.MethodPost, "/", nil)
 		r.Header.Set(htmx.HeaderRequest, fmt.Sprint(hx))
 		cm := contentservice.NewContentManager()
@@ -168,17 +169,23 @@ func TestResponseNoContent(t *testing.T) {
 			return nil, nil, nil
 		}
 		c := NewManagedContent(r, cm)
-		c.AddContent(fstest.MapFS{"view.html": {Data: []byte("ordinary page")}}, "view.html")
-		c.HTMX.Response = &htmx.Response{NoContent: true, Trigger: "saved"}
+		if !hx {
+			prepareContent(t, c, TemplatePath{FS: fstest.MapFS{"view.html": {Data: []byte("ordinary page")}}, Path: "view.html"})
+		}
+		c.HTMX.Response = &htmx.Response{NoContent: true, Refresh: tc.refresh, Trigger: "saved"}
 		w := httptest.NewRecorder()
 		if err := c.Render(w, r); err != nil {
 			t.Fatal(err)
 		}
 		if hx {
-			if w.Code != http.StatusNoContent || w.Body.Len() != 0 || calls != 0 || w.Result().Header.Get("HX-Trigger") != "saved" {
+			wantRefresh := ""
+			if tc.refresh {
+				wantRefresh = "true"
+			}
+			if w.Code != http.StatusNoContent || w.Body.Len() != 0 || calls != 0 || w.Result().Header.Get("HX-Trigger") != "saved" || w.Result().Header.Get("HX-Refresh") != wantRefresh {
 				t.Fatalf("bodyless response = %d %v %q, loader calls = %d", w.Code, w.Result().Header, w.Body.String(), calls)
 			}
-		} else if w.Code != http.StatusOK || w.Body.String() != "ordinary page" || calls != 1 || w.Result().Header.Get("HX-Trigger") != "" {
+		} else if w.Code != http.StatusOK || w.Body.String() != "ordinary page" || calls != 1 || w.Result().Header.Get("HX-Trigger") != "" || w.Result().Header.Get("HX-Refresh") != "" {
 			t.Fatalf("ordinary response = %d %v %q, loader calls = %d", w.Code, w.Result().Header, w.Body.String(), calls)
 		}
 	}
@@ -206,7 +213,7 @@ func TestResponseHead(t *testing.T) {
 		return nil, nil, nil
 	}
 	c := NewManagedContent(r, cm)
-	c.AddContent(fstest.MapFS{"view.html": {Data: []byte("<p>body</p>")}}, "view.html")
+	prepareContent(t, c, TemplatePath{FS: fstest.MapFS{"view.html": {Data: []byte("<p>body</p>")}}, Path: "view.html"})
 	w := httptest.NewRecorder()
 	if err := c.Render(w, r); err != nil {
 		t.Fatal(err)
@@ -234,7 +241,7 @@ func TestResponseRefreshSkipsNotificationLoading(t *testing.T) {
 			}
 			page := NewManagedContent(r, cm)
 			page.HTMX.Response = &htmx.Response{Refresh: true}
-			page.AddContent(fstest.MapFS{"page.html": {Data: []byte("rendered")}}, "page.html")
+			prepareContent(t, page, TemplatePath{FS: fstest.MapFS{"page.html": {Data: []byte("rendered")}}, Path: "page.html"})
 			w := httptest.NewRecorder()
 			if err := page.Render(w, r); err != nil {
 				t.Fatal(err)
@@ -268,7 +275,7 @@ func TestNotificationAcknowledgmentPrecedesDelivery(t *testing.T) {
 				}, nil
 			}
 			page := NewManagedContent(r, cm)
-			page.AddContent(fstest.MapFS{"page.html": {Data: []byte("rendered")}}, "page.html")
+			prepareContent(t, page, TemplatePath{FS: fstest.MapFS{"page.html": {Data: []byte("rendered")}}, Path: "page.html"})
 			var writer http.ResponseWriter = w
 			failure := errors.New("connection lost")
 			if deliveryFailure {

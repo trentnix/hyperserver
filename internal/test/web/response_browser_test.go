@@ -42,10 +42,11 @@ func TestBrowserResponseDispatch(t *testing.T) {
 	}
 	runSiteScenario(t, func(h *httpHarness) {
 		file := testTemplateFile(t, "internal/test/web/testdata/response-dispatch.html")
+		templates := prepareFixtureTemplates(t, h.app.ContentManager, file)
 		r := session.AddSessionManagerToRequestContext(httptest.NewRequest(http.MethodGet, "/", nil), h.sessions)
 		page := content.NewManagedContent(r, h.app.ContentManager)
 		page.PartialName = "test.browser.dispatch"
-		page.AddContent(file.FS, file.Path)
+		page.Templates = templates
 		w := httptest.NewRecorder()
 		if err := page.Render(w, r); err != nil {
 			t.Fatal(err)
@@ -95,7 +96,7 @@ func TestBrowserResponseDispatch(t *testing.T) {
 				return
 			}
 			c := content.NewManagedContent(r, h.app.ContentManager)
-			c.AddContent(file.FS, file.Path)
+			c.Templates = templates
 			c.PartialName = "test.browser.editor"
 			c.Data = f
 			c.HTMX.Response = &htmx.Response{Retarget: "#response-editor", Reswap: "outerHTML settle:0"}

@@ -25,27 +25,19 @@ func BenchmarkRenderTemplates(b *testing.B) {
 		b.Fatal(err)
 	}
 	for _, variant := range []string{"page", "fragment"} {
-		for _, mode := range []string{"per-render", "prepared"} {
-			b.Run(variant+"/"+mode, func(b *testing.B) {
-				r := httptest.NewRequest(http.MethodGet, "/", nil)
-				if variant == "fragment" {
-					r.Header.Set("HX-Request", "true")
+		b.Run(variant+"/prepared", func(b *testing.B) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			if variant == "fragment" {
+				r.Header.Set("HX-Request", "true")
+			}
+			c := NewManagedContent(r, cm)
+			c.Templates, c.Title, c.PartialName, c.Data = prepared, "Greeting", "greeting", "<visitor>"
+			b.ReportAllocs()
+			for b.Loop() {
+				if _, err := c.render(); err != nil {
+					b.Fatal(err)
 				}
-				c := NewManagedContent(r, cm)
-				c.Title, c.PartialName, c.Data = "Greeting", "greeting", "<visitor>"
-				if mode == "prepared" {
-					c.Templates = prepared
-				} else {
-					c.AddContent(files, "greeting.html")
-				}
-				b.ReportAllocs()
-				b.ResetTimer()
-				for b.Loop() {
-					if _, err := c.render(); err != nil {
-						b.Fatal(err)
-					}
-				}
-			})
-		}
+			}
+		})
 	}
 }

@@ -244,6 +244,8 @@ func (m *PostsModule) BindDependencies(d handlers.Dependencies) error {
 
 Use `GetDependencies` for multiple providers. Optional dependencies can return zero values or empty slices. Consumers must handle absence. Wrong types, nil services, missing hooks, and provider failures stop startup. Capability and binding hooks must not perform I/O. See the [example](../pkg/handlers/example_test.go).
 
+Modules can contribute named templates or prepared views through an application-defined capability. A composing module receives the loaded providers, prepares their templates during initialization, and selects components and layouts for each request. See [module-driven page composition](../pkg/components/readme.md#compose-pages-from-loaded-modules). Modules do not need to own distinct pages.
+
 ## Module cleanup
 
 Resource-owning modules can implement `Shutdown(context.Context) error`. `Initialize` rolls back completed modules on failure and returns no instances. A failing `Init` must release its own partial resources. Modules must not close application-owned services.

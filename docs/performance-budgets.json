@@ -7,20 +7,10 @@
   "minimum_samples": 5,
   "max_binary_bytes": 18000000,
   "benchmarks": {
-    "BenchmarkRenderTemplates/page/per-render": {
-      "ns/op": 19343,
-      "B/op": 24182,
-      "allocs/op": 244
-    },
     "BenchmarkRenderTemplates/page/prepared": {
       "ns/op": 2690,
       "B/op": 1400,
       "allocs/op": 39
-    },
-    "BenchmarkRenderTemplates/fragment/per-render": {
-      "ns/op": 16497,
-      "B/op": 22692,
-      "allocs/op": 209
     },
     "BenchmarkRenderTemplates/fragment/prepared": {
       "ns/op": 1896,
