@@ -31,7 +31,7 @@ func TestHomeNavigation(t *testing.T) {
 		}{
 			{"blog.profile", 0},
 			{"blog.siteLinks", 1},
-			{"blog.pageLinkUpdates", 2},
+			{"blog.pageLinkUpdates", 1},
 		} {
 			var body strings.Builder
 			data := struct{ LayoutData navigation }{navigation{Pages: pages}}
@@ -93,6 +93,13 @@ func TestNavigationOnlyForShell(t *testing.T) {
 			requireStatus(t, w, http.StatusOK)
 			if store.calls != tc.reads {
 				t.Fatalf("navigation queries = %d, want %d", store.calls, tc.reads)
+			}
+			wantTrees := 0
+			if tc.reads != 0 {
+				wantTrees = 1
+			}
+			if got := strings.Count(w.Body.String(), `aria-label="Site links"`); got != wantTrees {
+				t.Fatalf("navigation trees = %d, want %d", got, wantTrees)
 			}
 			if tc.reads != 0 && !strings.Contains(w.Body.String(), `href="/about"`) {
 				t.Fatal("full shell lost page navigation")

@@ -6,15 +6,6 @@
 </div>
 {{ end }}
 
-{{ define "blog.compactSiteLinks" }}
-<li><a href="/">Home</a></li>
-{{ template "blog.compactPageLinks" .LayoutData.Pages }}
-{{ end }}
-
-{{ define "blog.compactPageLinks" }}
-{{ range . }}<li><a href="{{ .URL }}"{{ if .ParentID }} title="{{ .Title }}"{{ end }}>{{ .Title }}</a>{{ if .Children }}<ul class="child-links">{{ template "blog.compactPageLinks" .Children }}</ul>{{ end }}</li>{{ end }}
-{{ end }}
-
 {{ define "blog.siteLinks" }}
 <li><a href="/">Home</a></li>
 {{ template "blog.pageLinks" .LayoutData.Pages }}
@@ -30,7 +21,6 @@
 
 {{ define "blog.pageLinkUpdates" }}
 <ul hx-swap-oob="innerHTML:#site-menu">{{ template "blog.siteLinks" . }}</ul>
-<ul hx-swap-oob="innerHTML:.profile-links > ul">{{ template "blog.compactSiteLinks" . }}</ul>
 {{ end }}
 
 {{ define "blog.pageLinks" }}

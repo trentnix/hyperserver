@@ -39,7 +39,7 @@
     // Editing viewed content must return to that content, rather than its list.
     await wait(() => document.querySelector('#post-archive a[href="/post/s/cancel-source"]') && !document.querySelector('#post-archive').classList.contains('htmx-settling'));
     for (const path of ['/post/s/cancel-source', '/about']) {
-      const link = document.querySelector(path === '/about' ? '.profile-links a[href="/about"]' : '#post-archive a[href="/post/s/cancel-source"]');
+      const link = document.querySelector(path === '/about' ? '#site-menu a[href="/about"]' : '#post-archive a[href="/post/s/cancel-source"]');
       link.click();
       await wait(() => location.pathname === path && article.querySelector('.action-edit') && !article.classList.contains('htmx-settling'));
       article.querySelector('.action-edit').click();
@@ -61,7 +61,7 @@
     assert(panelStyle.fontSize === '16px' && panelStyle.lineHeight === '24px', 'Editor typography is inconsistent.');
     const cancel = article.querySelector('.form-actions a.button-secondary');
     assert(cancel && getComputedStyle(cancel).textDecorationLine === 'none', 'Full-page Cancel must retain its secondary button style.');
-    document.querySelector('.profile-links a[href="/about"]').click();
+    document.querySelector('#site-menu a[href="/about"]').click();
     await wait(() => location.pathname === '/about' && article.querySelector('h1')?.textContent === 'About Me');
 
     // Repeated restoration must create one working editor, not duplicate instances.

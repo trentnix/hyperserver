@@ -22,7 +22,7 @@
     assert(!sessionStorage.getItem('admin-navigation-started'), 'Management navigation reloaded the document.');
     sessionStorage.setItem('admin-navigation-started', 'true');
     await wait(() => document.querySelector('#post-archive .post-archive') && !document.querySelector('#post-archive').classList.contains('htmx-settling'));
-    const shell = ['body', '.site-sidebar', '.account-panel', '#article-content', '#post-archive', '#post-archive .post-archive'].map(selector => [selector, document.querySelector(selector)]);
+    const shell = ['body', '.site-sidebar', '.account-panel', '#article-content', '#site-menu', '#post-archive', '#post-archive .post-archive'].map(selector => [selector, document.querySelector(selector)]);
     const article = document.querySelector('#article-content');
     const account = document.querySelector('.account-menu');
     const archiveRequests = () => performance.getEntriesByType('resource').filter(entry => new URL(entry.name).pathname === '/posts/recent').length;
@@ -146,8 +146,11 @@
       const focus = focusHref ? [...list.querySelectorAll('.page-manager-actions a')].find(link => link.getAttribute('href') === focusHref) :
         list.querySelector('input[type=search]') || list.querySelector('.page-create');
       assert(article.querySelector('[data-content-list]') === list && focus && document.activeElement === focus, 'Page deletion replaced the list or lost adjacent focus.');
-      assert(![...document.querySelectorAll('#site-menu a, .profile-links a')].some(link => link.getAttribute('href') === url), 'Deleted page remains in navigation.');
+      assert(![...document.querySelectorAll('#site-menu a')].some(link => link.getAttribute('href') === url), 'Deleted page remains in navigation.');
       assert((await fetch(url)).status === 404, 'Deleted page remains readable.');
+      for (const toggle of document.querySelectorAll('#site-menu .child-toggle')) {
+        assert(toggle.hidden === (innerWidth >= 768) && toggle.parentElement.open === (innerWidth >= 768), 'Navigation updates must preserve the responsive branch controls.');
+      }
       const count = list.querySelector('[data-result-count]');
       if (count) assert(Number(count.dataset.resultCount) === list.querySelectorAll('[data-content-id]').length, 'Page deletion left a stale result count.');
       unchanged();
@@ -165,7 +168,7 @@
       await removePage(leaf);
     }
     assert(article.querySelector('.page-manager-empty').textContent === 'No pages yet. Create a page to get started.', 'Deleting the last page must show the normal empty state.');
-    assert(!document.querySelector('.child-toggle, .profile-links .child-links'), 'Deleting final subpages must remove empty navigation branches.');
+    assert(!document.querySelector('#site-menu .child-toggle, #site-menu .child-links'), 'Deleting final subpages must remove empty navigation branches.');
     const width = window.frameElement.style.width;
     window.frameElement.style.width = innerWidth < 768 ? '1100px' : '320px';
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));

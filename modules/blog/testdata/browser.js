@@ -99,13 +99,13 @@ document.removeEventListener = function(type, callback, options) {
       }
       const menuToggle = document.querySelector('.menu-toggle');
       const menu = menuToggle.closest('details');
-      const profileLinks = document.querySelector('.profile-links');
-      assert([...profileLinks.querySelectorAll('a')].map(link => link.textContent).join(' ') === 'Home About Me Projects' && !profileLinks.querySelector('img'), 'Profile navigation must put Home before stored page titles.');
-      assert(profileLinks.querySelector('a').getAttribute('href') === '/', 'Home must link to the site root.');
+      const siteNavigation = document.querySelector('.header-menu');
+      assert(document.querySelectorAll('nav[aria-label="Site links"]').length === 1, 'The header must contain one page-navigation tree.');
+      assert([...links.querySelectorAll(':scope > li:not(.site-sign-in) > a')].map(link => link.textContent).join(' ') === 'Home About Me Projects' && !links.querySelector('img'), 'Profile navigation must put Home before stored page titles.');
+      assert(links.querySelector('a').getAttribute('href') === '/', 'Home must link to the site root.');
       assert(header.contains(links), 'Site links must belong to the header.');
       assert(getComputedStyle(footer).backgroundColor === 'rgba(0, 0, 0, 0)', 'Footer must have no background color.');
       if (innerWidth < 768) {
-        assert(profileLinks.getClientRects().length === 0, 'Mobile must hide duplicate profile navigation.');
         assert(!menuToggle.hidden && !menu.open, 'Mobile menu must start collapsed.');
         assert(document.querySelector('.header-menu').getBoundingClientRect().top === 0, 'Mobile navigation bar must sit at the top of the page.');
         assert(menuToggle.getBoundingClientRect().bottom <= profile.getBoundingClientRect().top, 'Mobile menu must precede the profile.');
@@ -116,17 +116,17 @@ document.removeEventListener = function(type, callback, options) {
         assert(!menu.open && document.activeElement === menuToggle, 'Escape must close the menu and return focus.');
         menuToggle.click();
       } else if (innerWidth < 1680) {
-        assert(document.querySelector('.header-menu').getClientRects().length === 0, 'Desktop must hide the separate menu.');
-        const navigation = profileLinks.getBoundingClientRect();
+        assert(siteNavigation.getClientRects().length > 0 && menuToggle.hidden && menu.open, 'Desktop must show the shared links without a menu toggle.');
+        const navigation = siteNavigation.getBoundingClientRect();
         const identity = profile.getBoundingClientRect();
-        assert(profileLinks.parentElement === header && navigation.left >= identity.right + 31, 'Desktop links must sit beside the profile on the right.');
+        assert(siteNavigation.parentElement === header && navigation.left >= identity.right + 31, 'Desktop links must sit beside the profile on the right.');
         assert(Math.abs((navigation.top + navigation.bottom) / 2 - (identity.top + identity.bottom) / 2) < 1, 'Desktop links must be vertically centered beside the profile.');
-        const rootLinks = [...profileLinks.querySelectorAll(':scope > ul > li > a')];
+        const rootLinks = [...links.querySelectorAll(':scope > li:not(.site-sign-in) > a')];
         assert(rootLinks.every(link => Math.abs(link.getBoundingClientRect().right - navigation.right) < 1), 'Desktop links must share a right edge.');
         const account = document.querySelector('.footer-account .header-sign-in');
         if (account) assert(account.getClientRects().length > 0, 'Desktop account controls must appear in the footer.');
       } else {
-        assert(profileLinks.getClientRects().length === 0 && menuToggle.hidden, 'Ultrawide must hide compact links and the hamburger.');
+        assert(menuToggle.hidden, 'Ultrawide must hide the hamburger.');
         assert(menu.open && links.getBoundingClientRect().top >= profile.getBoundingClientRect().bottom, 'Ultrawide navigation must sit below the bio.');
       }
       const siteLinks = links.querySelectorAll('a');
@@ -228,12 +228,12 @@ document.removeEventListener = function(type, callback, options) {
         if (innerWidth === 768) {
           frameElement.style.width = '767px';
           await wait(() => !menuToggle.hidden && !menu.open);
-          assert(profileLinks.getClientRects().length === 0, 'Resizing to mobile must hide profile links.');
+          assert(document.querySelector('#site-menu') === links, 'Resizing to mobile must preserve the navigation tree.');
           menuToggle.click();
           assert(menu.open, 'Resized mobile menu must open.');
           frameElement.style.width = '768px';
           await wait(() => menuToggle.hidden && menu.open);
-          assert(profileLinks.getClientRects().length > 0 && document.querySelector('.header-menu').getClientRects().length === 0, 'Resizing to desktop must restore only profile links.');
+          assert(links.getClientRects().length > 0 && document.querySelector('#site-menu') === links, 'Resizing to desktop must expand the same navigation tree.');
           frameElement.style.width = '767px';
           await wait(() => !menuToggle.hidden && !menu.open);
           frameElement.style.width = '768px';

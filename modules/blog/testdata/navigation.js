@@ -134,12 +134,11 @@
 
     const menu = document.querySelector('#site-menu');
     const menuToggle = document.querySelector('.menu-toggle');
-    const pageLinks = innerWidth < 768 || innerWidth >= 1680 ? menu : document.querySelector('.profile-links');
+    assert(document.querySelectorAll('nav[aria-label="Site links"]').length === 1, 'Every viewport must share one page-navigation tree.');
     if (innerWidth >= 768) {
-      const list = pageLinks.matches('ul') ? pageLinks : pageLinks.querySelector('ul');
-      const rows = [...list.children];
+      const rows = [...menu.children];
       assert(Math.abs(rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().bottom) < 1, 'Non-mobile page links must have the same compact row spacing.');
-      for (const link of pageLinks.querySelectorAll('a')) {
+      for (const link of menu.querySelectorAll('a')) {
         if (!link.getClientRects().length) continue;
         const style = getComputedStyle(link);
         assert(style.fontSize === '14.4px' && Math.abs(parseFloat(style.lineHeight) - 20.16) < .1 && style.paddingTop === '2px' && style.paddingBottom === '2px', 'Page links and subpages must share ultrawide sizing and spacing at every non-mobile width.');
@@ -162,9 +161,7 @@
       assert(document.documentElement.scrollWidth <= Math.max(320, document.documentElement.clientWidth), 'Subpage titles must not widen the layout.');
     };
     assert(projectLinks.querySelectorAll('a').length === 6, 'Navigation must include immediate children only.');
-    for (const nav of [menu, document.querySelector('.profile-links')]) {
-      assert(!nav.querySelector('a[href="/page/project-guide"]') && !nav.querySelector('.child-links .child-links'), 'Navigation must stop at two levels.');
-    }
+    assert(!menu.querySelector('a[href="/page/project-guide"]') && !menu.querySelector('.child-links .child-links'), 'Navigation must stop at two levels.');
     if (innerWidth < 768) {
       const toggleBox = menuToggle.getBoundingClientRect();
       assert(toggleBox.height >= 44 && toggleBox.width < 150, 'Native menu disclosure must remain a compact, touch-sized control.');
@@ -199,22 +196,23 @@
         window.frameElement.style.width = width + 'px';
         await wait(() => innerWidth === width && menu.parentElement.open === (width >= 768) && projectLinks.parentElement.open === (width >= 768));
         assert(projectToggle.hidden === (width >= 768), 'Resizing left the project toggle in the wrong state.');
-        assert((document.querySelector('.profile-links').getClientRects().length > 0) === (width >= 768 && width < 1680), 'Resizing left duplicate or missing compact navigation.');
+        assert(document.querySelector('#site-menu') === menu && document.querySelectorAll('nav[aria-label="Site links"]').length === 1, 'Resizing must preserve the single navigation tree.');
+        assert(menuToggle.hidden === (width >= 768), 'Resizing left the menu toggle in the wrong state.');
       }
     } else {
       checkSignIn();
-      assert(menu.getClientRects().length === 0, 'Middle widths must hide the separate menu.');
-      checkSubpageTitles(pageLinks);
-      const children = pageLinks.querySelector('.child-links');
+      assert(menu.getClientRects().length > 0 && menuToggle.hidden, 'Middle widths must show the shared links without a menu toggle.');
+      checkSubpageTitles(menu);
+      const children = menu.querySelector('.child-links');
       assert(children.getClientRects().length > 0 && children.querySelectorAll('a').length === 6, 'Middle navigation must show immediate children beneath Projects.');
-      assert(children.getBoundingClientRect().top >= pageLinks.querySelector('a[href="/projects"]').getBoundingClientRect().bottom, 'Child links must sit below their parent link.');
+      assert(children.getBoundingClientRect().top >= menu.querySelector('a[href="/projects"]').getBoundingClientRect().bottom, 'Child links must sit below their parent link.');
       const profile = document.querySelector('.profile').getBoundingClientRect();
-      const navigation = pageLinks.getBoundingClientRect();
+      const navigation = menu.getBoundingClientRect();
       assert(navigation.left >= profile.right + 31, 'Middle navigation must sit to the right of the profile with a clear gap.');
-      assert(getComputedStyle(pageLinks).textAlign === 'right', 'Middle navigation must align its text to the right.');
+      assert(getComputedStyle(menu).textAlign === 'right', 'Middle navigation must align its text to the right.');
       assert(Math.abs((navigation.top + navigation.bottom) / 2 - (profile.top + profile.bottom) / 2) < 1, 'Middle navigation must be vertically centered beside the profile.');
       assert(document.documentElement.scrollWidth <= document.documentElement.clientWidth, 'Header navigation must fit the viewport.');
-      for (const link of pageLinks.querySelectorAll(':scope > ul > li > a')) {
+      for (const link of menu.querySelectorAll(':scope > li:not(.site-sign-in) > a')) {
         assert(getComputedStyle(link).fontWeight === '600', 'Top-level navigation links must stay bold.');
       }
       for (const link of children.querySelectorAll('a')) {
@@ -226,7 +224,7 @@
       unchanged();
     }
     if (innerWidth < 768) menuToggle.click();
-    pageLinks.querySelector('a[href="/about"]').click();
+    menu.querySelector('a[href="/about"]').click();
     await wait(() => location.pathname === '/about' && document.title === 'Trent Nix | About Me');
     await headerVisible();
     assert(article.querySelector('h1')?.textContent === 'About Me', 'About navigation missed the article.');
@@ -240,7 +238,7 @@
     }
     unchanged();
     if (innerWidth < 768) menuToggle.click();
-    pageLinks.querySelector('a[href="/projects"]').click();
+    menu.querySelector('a[href="/projects"]').click();
     await wait(() => location.pathname === '/projects' && document.title === 'Trent Nix | Projects');
     await headerVisible();
     assert(document.documentElement.scrollHeight > innerHeight, 'Projects fixture must require scrolling.');

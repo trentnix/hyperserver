@@ -165,9 +165,7 @@
     }
     assert(stage === 'about-saved' && location.pathname === '/about', 'About lost its short URL.');
     assert(document.title === 'Trent Nix | About this site', 'Page title did not update.');
-    for (const menu of ['#site-menu', '.profile-links']) {
-      assert(document.querySelector(menu + ' a[href="/about"]').textContent === 'About this site', 'Navigation title did not update.');
-    }
+    assert(document.querySelector('#site-menu a[href="/about"]').textContent === 'About this site', 'Navigation title did not update.');
     assert(document.querySelector('.post-body strong')?.textContent === 'biography', 'About content did not update.');
     const editURL = document.querySelector('#article-content a[href^="/pages/update/"]').getAttribute('href');
     const saveURL = editURL.replace('/pages/update/', '/pages/');

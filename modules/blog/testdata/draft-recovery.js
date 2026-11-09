@@ -93,7 +93,7 @@
       // Reject ordinary navigation, HTMX navigation, Account, and browser unload.
       document.querySelector('.account-nav a[href="/pages"]').click();
       await Promise.resolve();
-      document.querySelector('.profile-links a[href="/about"]').click();
+      document.querySelector('#site-menu a[href="/about"]').click();
       await Promise.resolve();
       document.querySelector('.site-header a[href="/auth/account"]').click();
       await Promise.resolve();

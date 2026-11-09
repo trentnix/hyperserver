@@ -49,7 +49,7 @@ func TestPageManagement(t *testing.T) {
 	}
 }
 
-// TestPageNavigationTitles keeps both menus tied to editable, escaped content.
+// TestPageNavigationTitles keeps navigation tied to editable, escaped content.
 func TestPageNavigationTitles(t *testing.T) {
 	h := newHarness(t)
 	page, err := h.blog.pageStore.GetPageBySlug(t.Context(), "about", true)
@@ -62,7 +62,7 @@ func TestPageNavigationTitles(t *testing.T) {
 			t.Fatal(err)
 		}
 		body := h.request("GET", "/", nil, false).Body.String()
-		if strings.Count(body, `href="/about">`+html.EscapeString(title)+`</a>`) != 2 {
+		if strings.Count(body, `href="/about">`+html.EscapeString(title)+`</a>`) != 1 {
 			t.Fatal("navigation did not use the stored title", title)
 		}
 	}
@@ -128,7 +128,7 @@ func pageFields(slug string, published bool) url.Values {
 	return values
 }
 
-// TestAboutNavigation keeps both menus in step with the published About page.
+// TestAboutNavigation keeps navigation in step with the published About page.
 func TestAboutNavigation(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		h := newHarness(t)
@@ -147,7 +147,7 @@ func TestAboutNavigation(t *testing.T) {
 			t.Helper()
 			want := 0
 			if visible {
-				want = 2 // The desktop profile and mobile menu.
+				want = 1 // One tree serves every viewport.
 			}
 			for _, signedIn := range []bool{false, true} {
 				h.cookies = nil
@@ -218,7 +218,7 @@ func TestSiteNavigation(t *testing.T) {
 			h.login(t)
 		}
 		body := h.request("GET", "/", nil, false).Body.String()
-		if strings.Count(body, `href="/page/contact"`) != 2 || strings.Count(body, `href="/page/first"`) != 2 {
+		if strings.Count(body, `href="/page/contact"`) != 1 || strings.Count(body, `href="/page/first"`) != 1 {
 			t.Fatal("navigation is missing page or project links")
 		}
 		if !strings.Contains(body, "Contact &lt;us&gt;") || !strings.Contains(body, "First &lt;project&gt;") {
@@ -322,7 +322,7 @@ func TestPagesHTTP(t *testing.T) {
 					t.Fatal("page leaked into post collections", path)
 				}
 			}
-			if strings.Count(h.request("GET", "/projects", nil, false).Body.String(), `href="/page/published"`) != 2 {
+			if strings.Count(h.request("GET", "/projects", nil, false).Body.String(), `href="/page/published"`) != 1 {
 				t.Fatal("published page missing from navigation")
 			}
 			h.cookies = cookies

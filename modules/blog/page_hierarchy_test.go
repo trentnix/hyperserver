@@ -28,7 +28,7 @@ func TestPageNavigationDepth(t *testing.T) {
 			h.login(t)
 		}
 		body := h.request("GET", "/", nil, false).Body.String()
-		if strings.Count(body, `href="`+child.URL()+`"`) != 2 || strings.Contains(body, grandchild.URL()) {
+		if strings.Count(body, `href="`+child.URL()+`"`) != 1 || strings.Contains(body, grandchild.URL()) {
 			t.Fatal("site navigation must include exactly two levels")
 		}
 		requireStatus(t, h.request("GET", grandchild.URL(), nil, false), http.StatusOK)
