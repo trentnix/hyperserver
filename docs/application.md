@@ -1,12 +1,12 @@
 # Application setup and modules
 
-Use `application.New` to configure services, modules, middleware, and cleanup. The [blog application](../cmd/web/application.go) demonstrates the setup. [HTTP fixtures](../internal/test/web) test provider replacement and ordinary forms.
+Use `application.New` to configure services, modules, middleware, and cleanup. Start with the [blog application](../cmd/web/application.go). The [HTTP fixtures](../internal/test/web) exercise public APIs, provider replacement, and ordinary forms.
 
 Create one [`blog.Site`](../modules/blog/site.go) per application startup. `Configure(app)` sets shared rendering and returns the blog descriptor. `AuthenticationPolicy()` supplies account admission and onboarding behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider settings and credentials belong in `config.yaml`.
 
 ## Adding or replacing a feature
 
-A module descriptor's factory creates a fresh instance with its dependencies. Select descriptors in `application.Options.Modules`. Use `handlers.Replace` when replacing a descriptor in an existing catalog. Importing a module alone does not supply its dependencies or select it.
+Select module descriptors in `Options.Modules`. Each factory creates a fresh instance with its dependencies and performs no I/O. Imports register available descriptors. Use `handlers.Replace` to replace a descriptor in a catalog.
 
 The module's `Init` validates settings and dependencies, opens module-owned resources, and prepares embedded templates. `Routes` binds ordinary Go handlers and returns registration errors. Keep storage selection out of request handlers. Use feature-owned repositories where they help, or native clients when direct backend access is appropriate.
 
@@ -18,7 +18,7 @@ The module's `Init` validates settings and dependencies, opens module-owned reso
 | Mail delivery | [`messaging.MailSender`](../pkg/services/messaging/mail.go) through `NewMailClientWithSender`. Honor cancellation, validate headers, and report unavailable delivery as an error. The client does not close the sender. |
 | Authentication workflow | [`auth.AuthService`](../auth/auth_service.go) plus the supported workflow interfaces. Select descriptors through `Options.AuthProviders`. Changing account storage alone does not require a new auth provider. |
 
-Selected services handle concurrent requests. Keep mutable request data separate and give each resource one cleanup owner. The contracts linked above define failure and concurrency guarantees. Matching method signatures is not enough.
+Services must support concurrent requests and preserve their contracts' failure guarantees. Keep request data separate and give each resource one cleanup owner.
 
 These extension points remain experimental. See the [compatibility policy](compatibility.md) before publishing an adapter.
 
@@ -32,9 +32,9 @@ If you enable cookie-backed sessions, generate `http.session.jwtKey` with `opens
 
 ### Services and serving
 
-[`application.New(ctx, cfg, application.Options{})`](../pkg/application/application.go) creates the core and opens configuration-selected accounts, sessions, and mail. It resolves paths on a configuration copy and closes acquired resources if startup fails. `Options.Services` accepts initialized services without taking ownership. `AccountProviders` and `SessionProviders` override built-in factories.
+[`application.New`](../pkg/application/application.go) copies configuration, resolves paths, and opens configured accounts, sessions, and mail. Failed startup closes acquired resources. `Options.Services` supplies initialized, caller-owned services. `AccountProviders` and `SessionProviders` add or replace built-in factories.
 
-Select modules through `Options.Modules`, which runs after shared services are ready. Return descriptors that supply feature dependencies through their factories. Return `handlers.Registered()` to select the import catalog explicitly. A nil callback loads no modules. `Options.ProviderSelections` resolves ambiguous capabilities. The constructor uses `handlers.Setup` to load optional module configuration, initialize modules, and bind routes. Do not initialize the same modules again.
+`Options.Modules` runs after shared services are ready. Return the desired descriptors, or `handlers.Registered()` for the import catalog. A nil callback selects nothing. `Options.ProviderSelections` resolves ambiguous capabilities. The constructor calls `handlers.Setup` to load settings, initialize modules, and bind routes. Do not repeat setup.
 
 ```go
 app, err := application.New(ctx, cfg, application.Options{
@@ -47,19 +47,21 @@ if err != nil {
 }
 ```
 
-Services, module selection, and module initialization share one `app.initializationTimeout`, defaulting to ten seconds. Set shared rendering overrides in the callback before module setup prepares templates. Register any resources opened by the callback with `app.OnShutdown`. Modules close before those resources and shared services, including on startup failure.
+Startup shares `app.initializationTimeout`, defaulting to ten seconds. Configure shared rendering before modules prepare templates. Register callback-owned resources with `app.OnShutdown`. Cleanup closes modules before those resources and shared services.
 
 ### Authentication providers
 
-If the selected catalog includes `auth` and `auth.enabled` is true, the constructor replaces that descriptor with one wired from the application's services, `Options.AuthPolicy`, and `Options.AuthProviders`. Select `auth.Module(auth.Dependencies{}, nil)` in the module callback. Arguments supplied to that descriptor are replaced, not merged. When using `handlers.Setup` directly, supply initialized dependencies and the provider catalog to `auth.Module` yourself.
+Select `auth.Module(auth.Dependencies{}, nil)` in `Options.Modules` and set `auth.enabled: true`. The constructor replaces that descriptor's dependencies and catalog with application services, `Options.AuthPolicy`, and `Options.AuthProviders`. It does not merge descriptor arguments. With direct `handlers.Setup`, supply dependencies and the provider catalog yourself.
 
 The default provider catalog comes from `auth.Registered()`. The framework imports email/password and Google. Enable each with `auth.services.<provider>.enabled`. Disabled providers do not initialize. Imports alone do not select the auth module. See [Google authentication](google-authentication.md) for credentials, account linking, and setup.
 
-To add an authentication provider, register an `auth.Descriptor` in the provider package's `init()`. Its `New(auth.Dependencies)` factory receives the application's accounts, sessions, mail, and policy. Import that package and enable its name in configuration. Package initialization must register metadata only. The factory must return a fresh instance without I/O.
+To add a provider, register an `auth.Descriptor` in its package's `init()`, import the package, and enable its name in configuration. `New(auth.Dependencies)` receives accounts, sessions, mail, and policy. Package initialization registers metadata only. Factories return fresh instances without I/O.
 
-External providers can use `auth.PrepareProviderView` and `auth.ProviderPage` for a shared page around their branded controls. Applications can override `auth.provider.introduction` without copying provider templates. Implement `LoginAvailability` to check whether an account has credentials for the provider. Availability checks affect presentation only. A failed check must not prevent another provider from authenticating.
+External providers can use `auth.PrepareProviderView` and `auth.ProviderPage` around their controls. Applications can override `auth.provider.introduction`. `LoginAvailability` reports whether an account has credentials. Availability affects presentation only. A failed check must not prevent another provider from authenticating.
 
-After validating the protocol response and consuming one-use browser-bound state, call `auth.ExternalAccounts.Resolve` with the validated identity and the intent captured at flow start. The helper applies local account admission, registration availability, explicit linking, and account-version checks. It never links by matching email. Return the account to the manager to establish the session, including after registration when the provider has already authenticated the new account. For registration, supply `VerifiedEmail` only when current ownership is established. Linked identities can authenticate without an email claim. OIDC issuer/subject pairs and other providers' stable identity namespaces use the same storage contract.
+After validating the protocol response and consuming one-use browser-bound state, call `auth.ExternalAccounts.Resolve` with the validated identity and the intent captured at flow start. The helper applies local account admission, registration availability, explicit linking, and account-version checks. It never links by matching email. Return the account to the manager to establish the session, including after registration when the provider has already authenticated the new account.
+
+For registration, supply `VerifiedEmail` only when current ownership is established. Linked identities can authenticate without an email claim. OIDC issuer/subject pairs and other providers' stable identity namespaces use the same storage contract.
 
 Configure external form redirect destinations with `http.formActionOrigins`, for example `[https://accounts.google.com]`. This explicit allowlist extends the application's CSP without provider-specific blog edits. Values must be exact HTTP or HTTPS origins, not wildcards or CSP directives. The setting requires a CSP and cannot override `form-action 'none'`. It does not permit incoming cross-origin requests.
 
@@ -69,9 +71,9 @@ The authentication module owns `/auth/account`, which requires login and any con
 
 External providers can implement `ExternalIdentityProvider` to let the auth manager disconnect their local link. The manager requires an alternative enabled `PasswordLoginProvider` and confirms the password before removal. Account storage must implement `user.ExternalIdentityUnlinker` to remove the link against the same account version. Providers do not inspect each other's configuration. Password enrollment uses optional `user.PasswordSetupRepository` support and a separate, recipient-bound token purpose. Setup tokens cannot authorize password recovery.
 
-For an explicit local catalog, set `Options.AuthProviders` to a callback returning `([]auth.Descriptor, error)`. It runs after module selection, before initialization, with shared services ready. It shares the startup deadline and runs only when auth is selected and enabled. Register callback-owned resources with `app.OnShutdown`. An empty result selects no providers, not the defaults. A custom catalog does not replace `Options.AuthPolicy`.
+`Options.AuthProviders` can return an explicit `([]auth.Descriptor, error)` catalog. It runs after module selection and before initialization, under the startup deadline, only when auth is selected and enabled. Register acquired resources with `app.OnShutdown`. An empty result selects no providers. `Options.AuthPolicy` still applies.
 
-With `auth.enabled: false`, the constructor removes auth from the selected catalog before dependency resolution. It does not initialize auth, prepare its templates, or bind its routes. Sessions remain available independently.
+With `auth.enabled: false`, the constructor removes auth before dependency resolution. No auth templates, providers, or routes initialize. Sessions remain independently available.
 
 ### Login and registration routes
 
@@ -89,7 +91,7 @@ pages.Submissions.Handle("POST /register", pages.RegistrationSubmit)
 return routes.Err()
 ```
 
-Prepare these handlers once during startup. They preserve anonymous-user checks and no-store headers. Register POST handlers through `Submissions` to retain the auth rate limits and startup diagnostics. `routing.Routes` supplies body limits and rejects route conflicts. Registration handlers return an unavailable response when registration is disabled.
+Prepare these handlers once during startup. They preserve anonymous-user checks and no-store headers. POST handlers must use `Submissions` for auth rate limits and diagnostics. Routes retain body limits and conflict checks. Disabled registration returns an unavailable response.
 
 A site that can run without auth can declare an optional dependency and skip registration when the manager is absent or disabled. The blog requires authentication. The [HTTP fixture](../internal/test/web/module_fixture_test.go) demonstrates optional authentication. Provider forms and links still use `/login` and `/register`. Custom paths are not supported by this API. Auth registers only its `/auth/...` operations and legacy redirects.
 
@@ -99,11 +101,11 @@ Serve `app.Handler`, not `app.Web`. The handler includes the standard web middle
 
 `app.renderNotifications` enables session-backed page notifications, independently of authentication. The constructor validates the required session store before module initialization. A custom `ContentManager.LoadNotifications` supplied in the callback takes precedence over the flag and owns its dependency requirements. Authentication forms still use their own flash messages when page notifications are disabled.
 
-The constructor installs `middleware.Web` once, outside session and identity loading. It provides security headers and cross-origin protection and applies the configured trusted proxies, HSTS, and shared rate limit. Set `Options.ContentSecurityPolicy` to match the application's assets. An empty value omits CSP. Do not wrap `app.Handler` with `middleware.Web` again. For a different stack, use the lower-level `server` and middleware APIs.
+The constructor installs `middleware.Web` outside session and identity loading. It applies security headers, cross-origin protection, proxy verification, HSTS, and the shared rate limit. Set `Options.ContentSecurityPolicy` for the application's assets. Empty omits CSP. Do not install the stack again. Use lower-level APIs for another stack.
 
 Attach a `*slog.Logger` with `logger.Set(ctx, log)` before calling `application.New` to enable startup and request logging. Without a logger, requests still receive IDs.
 
-Use the returned application's `Run` method to drain requests and close owned resources, or call `Shutdown` after consumers stop. SMTP construction makes no network requests. Consumers that require delivery must validate the mail client. With no mail settings, `Mail` is nil.
+Use `app.Run` for HTTP draining and resource cleanup, or call `Shutdown` after consumers stop. SMTP construction performs no I/O. Consumers that require mail must validate delivery settings. With no mail settings, `Mail` is nil.
 
 ### Health endpoints
 
@@ -125,7 +127,9 @@ Pass initialized services through module factories. Use `handlers.Setup(ctx, app
 
 Consumers that require delivery must call the client's `ValidateConfig`. Internationalized domains are converted to IDNA ASCII form for delivery. Non-ASCII mailbox names require the SMTP server's `SMTPUTF8` and `8BITMIME` extensions. Successful sending means server acceptance, not inbox delivery.
 
-For authentication, supply [`auth.Module`](../auth/module.go) with `auth.Dependencies{Accounts: accounts, Sessions: sessions, Mail: mailClient}` and provider descriptors, such as [`email.Provider()`](../auth/modules/email/email_auth.go). Each provider factory uses the dependencies supplied to the module. Set `ContentManager.AuthURL` and `HomeURL`, then initialize the catalog through `handlers.Setup`. Wrap the mux with `authmiddleware.LoadSessionManagement(accounts, sessions)` and protect routes with `authmiddleware.RequireAuthentication(accounts, contentManager)`. For sessions without accounts, use `session.WithSessionManager(sessions)`. Install `flash.LoadNotifications` separately if pages need session-backed notifications. The application owns validation and cleanup in this lower-level path.
+For authentication, supply [`auth.Module`](../auth/module.go) with `auth.Dependencies{Accounts: accounts, Sessions: sessions, Mail: mailClient}` and provider descriptors, such as [`email.Provider()`](../auth/modules/email/email_auth.go). Each provider factory uses the dependencies supplied to the module. Set `ContentManager.AuthURL` and `HomeURL`, then initialize the catalog through `handlers.Setup`. Wrap the mux with `authmiddleware.LoadSessionManagement(accounts, sessions)` and protect routes with `authmiddleware.RequireAuthentication(accounts, contentManager)`. For sessions without accounts, use `session.WithSessionManager(sessions)`.
+
+Install `flash.LoadNotifications` separately if pages need session-backed notifications. The application owns validation and cleanup in this lower-level path.
 
 [`middleware.Web`](../pkg/services/middleware/web.go) installs logging, security headers, proxy verification, HSTS, the shared rate limit, and cross-origin protection in that order. Supply the application's CSP and logger. Pass `app.Web` for a stateless application or the session-aware handler returned by auth setup. Rejected requests receive security headers and are logged. For a different cross-origin policy or middleware order, compose the individual middleware explicitly.
 
@@ -133,7 +137,9 @@ For authentication, supply [`auth.Module`](../auth/module.go) with `auth.Depende
 
 Logging uses `*slog.Logger` and application-selected handlers. `LoggerMiddleware` attaches request fields to the logger returned by `logger.Get(r.Context())`. Use context-aware logging methods to pass cancellation and tracing values to the handler. Check for nil when no request logger is installed.
 
-[`server.NewHTTPServer(app.Config.HTTP, handler)`](../pkg/server/http.go) creates a standard `*http.Server` with the configured address, timeouts, and optional TLS certificate. Resolve configuration paths first. It does not wrap the handler or open a listener. Timeout values pass through unchanged, including zero. Omitted read, write, and idle timeouts remain zero. The [configuration template](../config-template.yaml) supplies example values. Applications can still construct `http.Server` directly.
+[`server.NewHTTPServer(app.Config.HTTP, handler)`](../pkg/server/http.go) creates a standard `*http.Server` with the configured address, timeouts, and optional TLS certificate. Resolve configuration paths first. It does not wrap the handler or open a listener. Timeout values pass through unchanged, including zero.
+
+Omitted read, write, and idle timeouts remain zero. The [configuration template](../config-template.yaml) supplies example values. Applications can still construct `http.Server` directly.
 
 The HTTP write timeout includes handler work. For synchronous mail, allow time for `mail.timeout`, storage, and rendering. For example, allow a 40-second HTTP response budget for a 30-second SMTP timeout. The write timeout does not cancel handler work or replace the password-reset minimum response time.
 
@@ -147,7 +153,7 @@ Modules can implement `handlers.Configurable` to load settings before dependency
 
 ```go
 type Settings struct {
-    Title string `yaml:"title"`
+    PageSize int `yaml:"pageSize"`
 }
 
 type Module struct {
@@ -155,7 +161,7 @@ type Module struct {
 }
 
 func New() *Module {
-    return &Module{settings: Settings{Title: "My application"}}
+    return &Module{settings: Settings{PageSize: 20}}
 }
 
 func (m *Module) Configuration() any {
@@ -168,24 +174,26 @@ The module also implements the usual `Init` and `Routes` methods. Its factory mu
 For a module registered as `news`, the framework reads `modules/news/config.yaml` under `app.workingDirectory`. If the application uses `cmd/example/config.yaml` and leaves `app.workingDirectory` unset, the module file is `cmd/example/modules/news/config.yaml`:
 
 ```yaml
-title: My news
+pageSize: 20
 ```
 
 Applications own runtime files. Module packages own defaults, validation, and configuration templates. Installed Go package paths do not affect file lookup. Configurable module names must be single local directory names, not `.` or `..`.
 
-Missing or empty files keep defaults. Invalid or unreadable files stop startup. Required settings still must pass module validation. Modules without `Configurable` do not read configuration files. Loading happens once during initialization, with no directory search or module-specific environment overrides. Keep runtime `config.yaml` files out of source control.
+Missing or empty files preserve defaults. Invalid or unreadable files stop startup. Modules validate required settings in `Init`. Modules without `Configurable` read no settings file. Loading occurs once, without directory search or module-specific environment overrides. Keep runtime files out of source control.
 
 For custom initialization outside `handlers.Setup` or `handlers.Initialize`, use [`config.LoadModuleFile`](../config/module.go) directly.
 
 ### Catalog selection
 
-Imports register descriptors, not live modules. Use `handlers.Registered()` for a catalog copy or supply a local catalog. Factories must return fresh instances without I/O. `handlers.Replace` replaces the entire descriptor, including its dependency declarations. To replace only its factory, copy the original descriptor and change `New`.
+`handlers.Registered()` returns a copy of the import catalog. Applications can supply a local catalog instead. `handlers.Replace` replaces the entire descriptor, including dependencies. To replace only a factory, copy the descriptor and change `New`.
 
 `handlers.Setup` resolves dependencies, initializes modules, binds routes, and registers cleanup. Pass nil routes to use `http.defaultRateLimit`, or supply routes with explicit defaults. A nil catalog selects no modules. If setup fails, discard the application because its mux may still contain routes. Use `handlers.Initialize` only when managing route binding and cleanup yourself.
 
 Auth has a separate descriptor catalog. Only configured, enabled providers initialize. An explicit empty catalog does not fall back to imports. Providers implement `AuthService` (`AuthType` and `Init`) and their supported workflow interfaces, such as `LoginHandler` or `ResetHandler`. If `Init` fails, startup stops before routes are bound.
 
-The auth manager composes the login page registered by the site module. Providers supply controls with `GetLoginButton` or an inline form with `LoginFormHandler.LoginForm`. Login forms must submit a hidden `provider` field containing their `AuthType` to `/login`. Inline providers must link their alternative control to `/login?provider=<AuthType>` so users can switch forms. Prepare templates during initialization and return escaped markup without a page layout. Use `content.View.RenderPartial` to preserve application template overrides and request-local layout data. The shared page displays the inline form and other available provider controls, including after validation failures.
+The auth manager composes the login page registered by the site module. Providers supply controls with `GetLoginButton` or an inline form with `LoginFormHandler.LoginForm`. Login forms must submit a hidden `provider` field containing their `AuthType` to `/login`. Inline providers must link their alternative control to `/login?provider=<AuthType>` so users can switch forms.
+
+Prepare templates during initialization and return escaped markup without a page layout. Use `content.View.RenderPartial` to preserve application template overrides and request-local layout data. The shared page displays the inline form and other available provider controls, including after validation failures.
 
 `Login` returns a `LoginResult` with either an authenticated `Account` or a rendered `Form` containing errors and non-secret submitted values. It must not write an HTTP response when returning either field. A zero result means the provider wrote its own response, such as an OAuth redirect. External providers implement `LoginCallbackHandler` to return a validated local account through the same session-completion path. The provider must validate its own browser-bound callback state.
 
@@ -197,13 +205,13 @@ After account creation or an OAuth redirect, write the response and return an em
 
 An application can set `Policy.LoginAccount` to tailor login choices to a known account, or return nil to show all configured methods. Providers can implement `LoginAvailability` to report whether that account has credentials. Providers without this capability remain visible. The blog uses this policy for its sole user with site access. Pending invitations keep all configured choices available. This policy controls presentation, not authorization or route availability.
 
-Unsupported routes return 404. Registration without a supporting provider is reported as unavailable.
+Unsupported routes return 404. Registration without a supporting provider is unavailable.
 
-Auth providers configure request handling, not resource lifecycles. Their `Init` can validate settings and prepare templates. It must not open connections, query storage, send mail, or start background work. Application setup supplies those services and owns cleanup. The auth module does not call provider close hooks. Provider `Init` has no context, so custom template filesystems must return promptly.
+Auth provider `Init` validates settings and prepares templates. It must not open connections, query storage, send mail, or start background work. Application setup supplies services and owns cleanup. Auth calls no provider close hooks. Because `Init` has no context, custom template filesystems must return promptly.
 
 ## Module dependencies
 
-Give each dependency one source. Use typed constructor parameters for application-owned services. Use declared capabilities only when one module supplies a service to another.
+Pass application-owned services through typed constructor parameters. Use declared capabilities for services supplied by another module. Give each dependency one source.
 
 | Dependency source | Wiring | Cleanup owner |
 | --- | --- | --- |
@@ -224,7 +232,7 @@ selections := map[string]string{"post-storage": "postgres-posts"}
 
 `Optional: true` permits no provider. `Multiple: true` accepts all matching providers. Explicit selection narrows either form to one provider. Unselected alternatives still initialize if they remain in the catalog. Remove their descriptors to exclude them.
 
-Providers return exactly their declared services from `Capabilities() map[string]any` after initialization. Consumers receive only declared dependencies through `BindDependencies`, before their own initialization:
+After initialization, `Capabilities() map[string]any` must return exactly the declared services. Consumers receive declared dependencies through `BindDependencies` before their own `Init`:
 
 ```go
 func (m *PostsModule) BindDependencies(d handlers.Dependencies) error {
@@ -234,7 +242,7 @@ func (m *PostsModule) BindDependencies(d handlers.Dependencies) error {
 }
 ```
 
-Use `GetDependencies` for multiple providers. Missing optional services return a zero value or empty slice. Consumers must handle that absence. Wrong types, nil services, missing hooks, and provider failures stop startup. Capability and binding hooks must not perform I/O. See the [executable example](../pkg/handlers/example_test.go).
+Use `GetDependencies` for multiple providers. Optional dependencies can return zero values or empty slices. Consumers must handle absence. Wrong types, nil services, missing hooks, and provider failures stop startup. Capability and binding hooks must not perform I/O. See the [example](../pkg/handlers/example_test.go).
 
 ## Module cleanup
 

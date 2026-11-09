@@ -1,8 +1,10 @@
 # HyperServer
 
-HyperServer is an experimental Go framework for server-rendered applications with HTMX. It keeps ordinary Go handlers and HTML templates visible while handling service startup, middleware, rendering, and shutdown.
+HyperServer is an experimental Go framework for server-rendered applications with HTMX. It uses standard `net/http` handlers and `html/template`, with shared startup, middleware, rendering, and shutdown.
 
-The core provides rendering and HTMX responses. Authentication, sessions, persistence, serialization, and mail use replaceable services. Public APIs can change during `v0.x`. HyperServer is **not production-ready**. See the [compatibility policy](docs/compatibility.md).
+Inspired by [Pagoda](https://github.com/mikestefanello/pagoda), HyperServer is a reusable library rather than a starter repository. It requires no ORM. Authentication, sessions, storage, and mail are optional, replaceable services.
+
+Public APIs can change during `v0.x`. HyperServer is **not production-ready**. See the [compatibility policy](docs/compatibility.md).
 
 ![Hyper Gopher](hypergo.png)
 
@@ -10,7 +12,7 @@ The core provides rendering and HTMX responses. Authentication, sessions, persis
 
 Use the Go version in [go.mod](go.mod). SQLite and race tests require CGO and a C compiler.
 
-The default application is the [blog](docs/blog/readme.md), with posts, pages, images, search, and Admin and Poster roles. Follow its [setup instructions](docs/blog/readme.md#run-locally) to configure mail and the first administrator address. Then run from the repository root:
+The included [blog](docs/blog/readme.md) supports posts, pages, photo albums, search, and Admin and Poster roles. Follow its [setup instructions](docs/blog/readme.md#run-locally), then run from the repository root:
 
 ```sh
 go run ./cmd/web
@@ -18,9 +20,7 @@ go run ./cmd/web
 
 ## Build an application
 
-Use `application.New` to open configured services and initialize the modules selected by `application.Options.Modules`. Configure shared rendering in that callback, before modules prepare their templates. Serve `app.Handler` through `app.Run` so shutdown drains requests before closing resources.
-
-Imports make module factories available. They do not select or initialize modules. Factories must return fresh instances without I/O. Modules own their settings, routes, templates, and feature-specific storage.
+Use `application.New` to open configured services and initialize the modules selected by `application.Options.Modules`. Configure shared rendering in that callback. Serve `app.Handler` through `app.Run` to drain requests before closing resources. Imports register available module factories. The application selects which modules run.
 
 Start with [application setup](docs/application.md) and the blog's [application.go](cmd/web/application.go). [AGENTS.md](AGENTS.md#building-an-application-with-hyperserver) gives coding agents the same starting points and constraints.
 

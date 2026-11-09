@@ -17,13 +17,13 @@ Set `adminEmail` in `modules/blog/config.yaml` before starting. That address mus
 
 You can enable [Google authentication](../google-authentication.md) alongside email or on its own. The login page shows only enabled providers. Existing administrators must log in and connect Google before disabling their original login method.
 
-If a local SMTP inbox is not already running, start Mailpit:
+If using email authentication without a local SMTP inbox, start Mailpit. Google-only authentication skips this step:
 
 ```sh
 docker run --rm --name blog-mailpit -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 -e MP_SMTP_AUTH_ACCEPT_ANY=1 -e MP_SMTP_AUTH_ALLOW_INSECURE=1 axllent/mailpit@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
 ```
 
-Mailpit captures mail locally rather than delivering it. In another terminal, start the blog from the repository root:
+Mailpit captures mail locally. Start the blog from the repository root:
 
 ```sh
 go run ./cmd/web
@@ -39,13 +39,24 @@ Runtime configuration, databases, uploads, and local assets are ignored by Git. 
 
 ## Users and invitations
 
-Set `multiUser: true` in `modules/blog/config.yaml` and restart to enable invitations. The default is `false`. When disabled, Invite user, Resend invitation, and invitation endpoints are unavailable. Users stays visible to Admins while multiple users or pending invitations remain. Admins can still change roles and remove other users. Invited users cannot register. Already registered users keep their access and can complete email verification. Accounts, roles, content, and invitation tokens are preserved, so unexpired invitations work again after re-enabling the setting. First-time administrator setup remains available.
+Set `multiUser: true` in `modules/blog/config.yaml` and restart to enable invitations. Admins manage access through **Users**.
 
-Admins can open **Users** in the administration bar to invite users, change roles, or remove access. Admins manage all content and users. Posters create, publish, schedule, edit, and delete their own posts. Posters can upload images in the editor but cannot manage pages, the site profile, the shared media library, or other users' posts. Editing or restoring a post keeps its original owner.
+| Role | Access |
+| --- | --- |
+| Admin | All posts, pages, site settings, media, and users. |
+| Poster | Create, publish, schedule, edit, and delete their own posts. Upload images in the post editor. |
 
-Invitations require mail delivery and `auth.registrationEnabled: true`. Set `inviteExpiration` in the blog configuration to control link lifetime. The default is `168h` (seven days). Resending replaces the previous link. Canceling removes the invitation and its access. Link expiry does not remove the invited account. Without a valid link, the recipient can still register at the invited address and must complete configured email verification. A valid link proves that address during registration. Google registration uses Google's verified address.
+Editing or restoring a post preserves its owner. Posters cannot manage other users' posts, pages, the site profile, the shared media library, or users.
+
+Invitations require mail delivery and `auth.registrationEnabled: true`. Set `inviteExpiration` in the blog configuration to control link lifetime. The default is `168h` (seven days). Resending replaces the previous link. Canceling removes the invitation and its access. Link expiry does not remove the invited account.
+
+Without a valid link, the recipient can still register at the invited address and must complete configured email verification. A valid link proves that address during registration. Google registration uses Google's verified address.
 
 Changing a role or removing access invalidates existing sessions. Removing access keeps the account, credentials, posts, and images so an Admin can invite that address again. Admins cannot remove themselves, but can remove other Admins. The last active Admin cannot be demoted. Changing `adminEmail` after setup does not transfer ownership or grant access to another address.
+
+With `multiUser: false` (the default), invitations and invited registration are disabled. Registered users keep access and can finish email verification. Admins can still manage existing users. **Users** remains visible while multiple users or pending invitations exist.
+
+Accounts, roles, content, and tokens are preserved. Unexpired invitations work again after re-enabling the setting. First-time administrator setup is always available.
 
 ## Guides
 
@@ -78,13 +89,13 @@ migrate -path modules/blog/migrations \
 
 Keep `x-migrations-table=blog_schema_version` and `_foreign_keys=on` in every command. The CLI does not acquire the blog's maintenance lock. Run only one migration process, with all other writers stopped. Accounts and sessions have separate migrations even when they share the database file.
 
-Reversing the ownership migration removes ownership metadata but preserves content. Reversing the baseline deletes all blog content. It does not convert content to the obsolete layout. Back up before downgrading. Failed migrations roll back their SQL but leave a dirty version marker. Inspect and repair the failure before correcting that marker. `force` changes metadata, not tables or data.
+Reversing the baseline deletes all blog content and ownership metadata. Back up before downgrading. Failed migrations roll back their SQL but leave a dirty version marker. Inspect and repair the failure before correcting that marker. `force` changes metadata, not tables or data.
 
 Keep deployed migration files immutable. For a later schema change, add a numbered up/down pair and update the required version, current bootstrap and validation, repositories, and backup compatibility together. Runtime code must support only the resulting schema. Test populated upgrades, downgrades, failed migrations, and fresh startup. Set `HS_TEST_MIGRATE` to the pinned CLI executable to run migration integration tests.
 
 ## Deployment limits
 
-Configure real SMTP delivery, HTTPS, and `http.publicOrigin` before public use. The default Mailpit credentials are local-only. Review [proxy settings](../http.md#addresses-tls-and-proxies) and the project's [security status](../../SECURITY.md).
+Configure HTTPS and `http.publicOrigin` before public use. Configure SMTP if enabled features need email. Google-only login needs no mail service. Mailpit is for local testing. Review [proxy settings](../http.md#addresses-tls-and-proxies) and the project's [security status](../../SECURITY.md).
 
 Edit content through the application. Direct database writes bypass reference tracking and cache invalidation. Use persistent storage for databases and uploads, protect configuration files, and keep verified backups off the serving machine. The [container rehearsal](../deployment.md) runs the blog with disposable data.
 
@@ -96,7 +107,7 @@ The blog shares the framework's Go module. From the repository root:
 go test ./...
 go vet ./...
 go test -race ./...
-HS_TEST_FIREFOX=firefox go test ./modules/blog -run '^TestBrowser' -count=1
+HS_TEST_FIREFOX=firefox go test ./modules/blog -run '^TestBrowser' -count=1 -timeout=15m
 ```
 
 Ordinary test runs skip Firefox checks. Recovery tests use isolated data and verify accounts, sessions, content history, and image access after manual extraction of a backup.

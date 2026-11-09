@@ -22,8 +22,7 @@ Trust only the direct proxy peer and restrict backend access to it. Trusting loo
 
 Verified proxy information controls client-IP limits and cookie security. `publicOrigin` alone does not enable TLS or secure cookies. For a custom HTTP stack, install [proxy verification](../pkg/requestinfo/request.go) before rate limits and session loading.
 
-`application.New` installs the standard HTTP stack, including security headers and Go's `http.CrossOriginProtection`. Serve `app.Handler`. For explicit setup, use `middleware.Web(handler, cfg.HTTP, contentSecurityPolicy, log)` with session loading inside `handler`. Keep Host and origin headers intact through proxies. For HTTPS-only deployments, `http.hstsMaxAge` enables HSTS for direct or verified proxy HTTPS. The default `0` omits it but does not clear a browser's existing policy.
-
+The standard stack includes security headers and Go's `http.CrossOriginProtection`. For explicit setup, use `middleware.Web(handler, cfg.HTTP, contentSecurityPolicy, log)` with session loading inside `handler`. For HTTPS-only deployments, `http.hstsMaxAge` enables HSTS for direct or verified proxy HTTPS. The default `0` omits it but does not clear a browser's existing policy.
 
 ## Responses and body limits
 

@@ -19,7 +19,7 @@ Store the result on the module. Each request gets separate content and data:
 ```go
 page := view.Content(r, data)
 if err := page.Render(w, r); err != nil {
-    cm.HandleError(w, r, "Unable to render the page", err, http.StatusInternalServerError)
+    page.HandleRenderError(w, r, "Unable to render the page")
 }
 ```
 
@@ -36,11 +36,11 @@ if err != nil {
 }
 ```
 
-Use the same manager that prepared the templates. Nested `{{template "name" .}}` calls do not need view objects. Views share parsed templates, not rendered HTML or request data. `view.Content` returns the existing `*content.Content`, with response fields available for titles, redirects, and HTMX instructions. Direct `NewManagedContent` construction remains available when a handler chooses templates or partials per request.
+Use the same manager that prepared the templates. Nested `{{template "name" .}}` calls do not need view objects. Views share parsed templates, not rendered HTML or request data. `view.Content` returns a request-local `*content.Content` for titles, redirects, and HTMX instructions. Direct `NewManagedContent` construction also accepts prepared templates.
 
 Do not combine `Templates` with request-specific `AddLayout`, `AddContent`, or `AddComponent` calls. Those methods provide a per-render parsing path when no prepared set is supplied. Restart and prepare new sets to apply template changes. There is no file watcher.
 
-Parsing errors and missing view partials stop initialization when returned by the module. Execution errors still occur per request. Rendering buffers all selected templates before writing response content. It does not undo application changes if rendering fails, and network writes can fail after partial delivery.
+Return preparation errors from `Init` to stop startup. Execution errors still occur per request. Rendering buffers all templates before writing content. Use `page.HandleRenderError` to report failures. It avoids writing another response after a delivery failure. Rendering failures do not undo application changes.
 
 Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem` to compare prepared and per-render parsing. The benchmark excludes HTTP delivery and notification storage.
 
@@ -115,7 +115,9 @@ Load it once after HTMX in the page layout:
 
 HTML 4xx/5xx responses swap into the selected target, including validation fragments. Plain-text errors appear as text without replacing inputs. Other response types receive a generic status message. Connection failures warn that a submitted change may have completed. The script does not retry requests or turn HTTP failures into successful HTMX events.
 
-Alerts appear in the submitting form or dialog, then the target's form or dialog. Otherwise, they use the optional `[data-request-errors]` container or the document body. Style `[data-request-error]` in the application stylesheet. Application handlers still own public error messages and validation markup. Only send HTML errors intended for the selected target. The script supports HTMX 4 and removes script elements from swapped fragments. Keep scripts in the page layout and enforce a Content Security Policy.
+Alerts appear in the submitting form or dialog, then the target's form or dialog. Otherwise, they use the optional `[data-request-errors]` container or the document body. Style `[data-request-error]` in the application stylesheet. Application handlers still own public error messages and validation markup. Only send HTML errors intended for the selected target.
+
+The script supports HTMX 4 and removes script elements from swapped fragments. Keep scripts in the page layout and enforce a Content Security Policy.
 
 Sending a new request clears that source's previous alert. A failed retry displays a new alert. Canceled requests and requests from other controls leave existing alerts alone. Programmatic requests without a source use their target to distinguish alerts.
 
@@ -132,7 +134,7 @@ contentManager.LoadNotifications = flash.LoadNotifications
 // Before redirecting after a successful operation:
 if err := flash.AddSuccessNotification(w, r, "Your settings were saved."); err != nil {
     // The operation succeeded, but its notification could not be stored.
-    return err
+    logger.LogRequestError(r, err)
 }
 ```
 

@@ -15,7 +15,7 @@ HyperServer aims to provide common web infrastructure through Go handlers, HTML 
 
 ### Validate deployment and recovery
 
-Run the [local rehearsal](docs/deployment.md), then validate the actual deployment's configuration, HTTPS, secrets, mail, persistent storage, restart behavior, and recovery. Measure mixed read, write, and search workloads on that host using the [performance checks](docs/performance.md). Include cold caches and content that exceeds cache capacity.
+Use the [local rehearsal](docs/deployment.md) for isolated deployment tests. On the target host, validate HTTPS, secrets, persistent storage, restart behavior, and recovery. Validate mail only when enabled features need it. Measure mixed read, write, and search workloads using the [performance checks](docs/performance.md), including cold caches and content that exceeds cache capacity.
 
 Choose backup retention and off-host storage. Verify recovered accounts, sessions, content, and images before switching traffic. Obtain an independent security review before relying on public account and recovery flows. External scheduling is sufficient for backups and expired-record cleanup.
 
@@ -27,7 +27,7 @@ Use that application to test provider and serializer replacement. Add another st
 
 ### Extend the blog deliberately
 
-Before adding multi-user support, define account admission, roles, content ownership, and administrative permissions. Revisit authentication-method visibility when multiple accounts exist. Keep business authorization in the application rather than the core.
+The blog supports Admin and Poster roles, invitations, post ownership, and account-aware login choices. Keep those business rules in the application. Before adding new content sources or components, reuse the writing, revision, and image-access rules instead of creating separate save paths.
 
 ## Scope limits
 

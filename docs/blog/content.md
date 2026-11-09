@@ -8,7 +8,7 @@ Republishing keeps the original publication date. Canceling before a scheduled t
 
 The Posts list groups Drafts, Scheduled, and Published content. Search matches current titles, tags, summaries, and Markdown, ranked in that order within each group. Empty Drafts and Scheduled groups are hidden. Searching hides every empty group.
 
-Cancel returns to the management list, or History when editing a saved version. The server validates input and renders Markdown with raw HTML disabled.
+Cancel returns to the page that opened the editor, such as the post or management list. When editing a saved version, it returns to History. Posts and Pages refresh when revisited. The server validates input and renders Markdown with raw HTML disabled.
 
 ## Slugs and tags
 
@@ -50,7 +50,7 @@ Historical images do not become public merely because history references them. I
 
 With JavaScript enabled, post/page editors save browser recovery copies after a half-second pause and when leaving. Reopen the editor to restore or discard a copy. Recovery does not change server content until you save. Failed saves retain the copy. Successful saves remove the relevant copies.
 
-Copies are separate by administrator, editor, and tab. They remain after logout, expire after seven days, and are cleaned up when an editor next opens. They are not encrypted, synced, or backups. Use a private browser profile on shared devices. Profile and authentication forms do not have recovery copies.
+Copies are separate by account, editor, and tab. They remain after logout, expire after seven days, and are cleaned up when an editor next opens. They are not encrypted, synced, or included in backups. Use a private browser profile on shared devices. Profile and authentication forms do not have recovery copies.
 
 Editors warn about unsaved changes before navigation. Browsers may suppress reload/close warnings. Save to the server before clearing browser data.
 
@@ -58,7 +58,9 @@ Editors warn about unsaved changes before navigation. Browsers may suppress relo
 
 All Posts lists 30 published posts per page, grouped by month. `recentPostCount` controls Recent Posts and must be positive. Restart after changing it. RSS includes the full published feed. Post changes invalidate the feed and list caches, and scheduled publication expires them on time.
 
-Search at `/search` matches literal phrases in public titles, tags, summaries, and Markdown, in that rank order. It excludes drafts, future posts, hidden descendants, and history. It returns up to 50 matches with a total count. Search is limited to 30 requests/minute per IP and two seconds of database work. Search responses are not cached. A bounded cache reuses normalized bodies, but search still scans content rather than using a full-text index. See [search limits and benchmarks](../performance.md#blog-search).
+Search at `/search` matches literal phrases in public titles, tags, summaries, and Markdown, in that rank order. It excludes drafts, future posts, hidden descendants, and history. It returns up to 50 matches with a total count.
+
+Search is limited to 30 requests/minute per IP and two seconds of database work. Search responses are not cached. A bounded cache reuses normalized bodies, but search still scans content rather than using a full-text index. See [search limits and benchmarks](../performance.md#blog-search).
 
 Public pages include canonical URLs, descriptions, and Open Graph metadata. Summaries fall back to the site bio. Sharing images use the selected preview, then the first suitable content image, then the site portrait. SVGs are skipped. With no suitable image, sharing is text-only. Page preview blocks use a bundled placeholder when no preview image is selected.
 

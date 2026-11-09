@@ -46,7 +46,7 @@ HTMX tests use the vendored asset and the layout's integrity check. Ordinary Go 
 
 ### Blog accessibility
 
-`TestBrowserAccessibility` checks skip-link focus, focus after HTMX navigation, form control names and help references, Markdown Tab handling, and image chooser focus at 320, 1100, and 3440 pixels. The wider browser suite checks responsive layouts, search focus, revision navigation, confirmations, scheduling, and reduced-motion notifications. These tests use isolated data and never reset the running blog.
+`TestBrowserAccessibility` checks skip-link focus, focus after HTMX navigation, form control names and help references, Markdown Tab handling, and image chooser focus at 320, 768, 1100, and 3440 pixels. The wider browser suite checks responsive layouts, search focus, revision navigation, confirmations, scheduling, and reduced-motion notifications. These tests use isolated data and never reset the running blog.
 
 Run the focused checks from the repository root:
 
@@ -69,4 +69,4 @@ To investigate startup failures, manually run CI with `browser_diagnostics` enab
 
 If Firefox sends no request and the independent server probe succeeds, investigate browser startup before changing application code.
 
-Any failed attempt keeps the run failed. Firefox has 60 seconds to report JavaScript readiness, followed by a separate 15-second deadline for checks. Diagnostic runs do not replace application browser checks on pushes and pull requests.
+Any failed attempt keeps the run failed. Both suites allow 60 seconds for JavaScript startup. Framework checks then have 15 seconds. Blog checks have 60 seconds. Diagnostic runs do not replace application browser checks on pushes and pull requests.

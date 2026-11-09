@@ -1,10 +1,12 @@
 # Storage providers and maintenance
 
-Use [application.New](application.md#services-and-serving) for configured account and session setup. This guide covers provider contracts, explicit setup, SQLite migrations, and cleanup. For session APIs, see the [session guide](../pkg/services/session/readme.md).
+Use [application.New](application.md#services-and-serving) for configured account and session setup. This guide covers custom providers, explicit setup, migrations, and cleanup. See the [session guide](../pkg/services/session/readme.md) for session APIs.
 
 ## Account storage
 
-[`configured.OpenAccounts`](../pkg/services/configured/accounts.go) opens `auth.accountStorage` when authentication is enabled. An empty provider name selects SQLite, which requires `auth.accountStorage.options.connection`. The returned cleanup function closes owned storage. [`configured.NewSessionManager`](../pkg/services/configured/sessions.go) opens the stores selected by `http.session.types` and returns a manager the caller must close. Both accept additional provider factories that can replace built-in names. Resolve configuration paths before calling these helpers. Neither helper installs modules, middleware, or shutdown hooks.
+For explicit setup, [`configured.OpenAccounts`](../pkg/services/configured/accounts.go) opens `auth.accountStorage` when auth is enabled. An empty provider selects SQLite and requires `auth.accountStorage.options.connection`. Call the returned cleanup function after consumers stop. [`configured.NewSessionManager`](../pkg/services/configured/sessions.go) opens the stores selected by `http.session.types`. The caller owns and closes that manager.
+
+Both helpers accept provider overrides. Resolve paths first. Neither installs modules, middleware, or shutdown hooks.
 
 For accounts that share an existing SQLite pool, supply `user/sqlite.ConfiguredProvider(cfg, pool)` as the `"sqlite"` factory. The pool keeps its existing owner. Runtime setup needs no connection option in that case. If using maintenance, set the option to the same database. Without an override, account setup opens and owns its pool.
 
@@ -56,13 +58,13 @@ These suites check shared behavior, not every provider capability. Keep tests fo
 
 ## Account schema migrations
 
-Accounts use the separately installed [golang-migrate v4.20.1 CLI](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1). The [version 1 baseline](../pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates accounts with application-defined roles and invitation flags, external identity links, recipient-bound tokens, and token indexes. Invitations reuse recipient-bound tokens. On first startup, the application creates the SQLite file if needed. If no account storage objects exist, initialization discovers the embedded numbered `.up.sql` files, applies them in order, and records the required version in one transaction. Fresh databases need no migration executable or manual setup.
+The [version 1 baseline](../pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates accounts, roles, invitation flags, external identity links, and recipient-bound tokens. Empty storage bootstraps from embedded numbered `.up.sql` files in one transaction. Fresh databases need no migration tool. Existing storage must use the required schema.
 
 Each binary supports exactly one account schema version, declared by `accountSchemaVersion`. To change the schema, add the next zero-padded, sequential migration pair and update the required version and repository code together. Startup does not select between schema implementations or upgrade existing storage. The bootstrap runner requires the embedded migrations to end at the declared version.
 
 Existing account storage must match the current schema and record version 1 with `dirty = false` in `hyperserver_account_version`. Missing, malformed, dirty, or unsupported versions stop startup without changes. Startup never deletes storage or migrates an existing database. Back up before an offline migration. Do not change version metadata merely to bypass startup checks.
 
-Install the pinned CLI with its SQLite driver, outside the application's dependency graph. The executable goes in `GOBIN`, or `$(go env GOPATH)/bin` if `GOBIN` is unset. With that directory on `PATH`, run from the repository root against an empty or supported versioned account database:
+Install [golang-migrate v4.20.1](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1) with its SQLite driver. The executable goes in `GOBIN`, or `$(go env GOPATH)/bin` when unset. Put that directory on `PATH`. From the repository root:
 
 ```sh
 go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
@@ -70,9 +72,11 @@ migrate -path pkg/services/user/sqlite/migrations \
   -database 'sqlite3://file:///absolute/path/database.db?x-migrations-table=hyperserver_account_version&_foreign_keys=on' up
 ```
 
-Before deployment migrations, stop affected writers, including cleanup jobs, and back up the data. Run one migration process per database at a time because the SQLite driver does not coordinate migration-process locks. Keep the account-specific version-table setting in every command. Validate the result before restarting consumers.
+Before migrating, stop all writers, including cleanup jobs, and back up the data. Run one migration process per database. The SQLite driver does not coordinate migration-process locks. Keep `x-migrations-table=hyperserver_account_version` and `_foreign_keys=on` in every command. Validate the result before restarting.
 
-Reversing the baseline deletes all accounts, external identity links, tokens, and their indexes. Back up before downgrading. Session and blog schemas have separate version tables and remain unchanged. After the baseline is reversed, startup rejects the empty version table until an explicit `up` recreates the schema. Failed transactional migrations must roll back. Inspect and repair the database before using `force` to correct its version marker. `force` does not run or undo SQL.
+Reversing the baseline deletes all accounts, external identity links, tokens, and their indexes. Back up before downgrading. Session and blog schemas have separate version tables and remain unchanged. After the baseline is reversed, startup rejects the empty version table until an explicit `up` recreates the schema.
+
+Failed transactional migrations must roll back. Inspect and repair the database before using `force` to correct its version marker. `force` does not run or undo SQL.
 
 After a committed change, use forward repair or restore a compatible backup. Restart an older application only if it supports the resulting format.
 
@@ -90,7 +94,7 @@ See [session migrations](../pkg/services/session/readme.md#sqlite-schema-migrati
 
 ## SQLite connections
 
-The blog and built-in session and maintenance providers use the [SQLite pool opener](../pkg/database/sqlite/pool.go). Each pool allows one open connection and retains it while idle. Every new or replacement connection enables foreign keys and waits up to 5000 milliseconds for locks. Set `_timeout` or `_busy_timeout` in the connection string to change that wait. Zero disables waiting. Disabling foreign keys is rejected.
+The built-in account, session, blog, and maintenance providers use the [SQLite pool opener](../pkg/database/sqlite/pool.go). Each pool retains one connection, enables foreign keys, and waits up to 5000 milliseconds for locks. `_timeout` or `_busy_timeout` changes the wait. Zero disables waiting. Disabling foreign keys is rejected.
 
 Cancellation stops a wait for a free pool connection. During a SQLite lock wait, cancellation can be delayed until the lock timeout and return a lock error instead of a context error. Caller-supplied pools retain their owner's settings.
 
@@ -151,7 +155,13 @@ Provider names are case-sensitive. `application.Options.AccountProviders` adds o
 
 ## Expired-record cleanup
 
-Run `go run ./cmd/cleanup -batch-size 100 -timeout 10s` with the same configuration as `cmd/web`. Both commands resolve storage paths from that configuration. Each run deletes at most 100 expired rows from each selected server-side session store and, when authentication is enabled, account-token storage. Live records and accounts are unchanged.
+With the same configuration as `cmd/web`, run:
+
+```sh
+go run ./cmd/cleanup -batch-size 100 -timeout 10s
+```
+
+Each run deletes at most 100 expired rows per selected server-side session store and, when auth is enabled, account-token storage. Live records and accounts are unchanged.
 
 Providers own maintenance setup and pool handling. SQLite files and tables must already exist. Cleanup does not create missing files or support in-memory databases.
 

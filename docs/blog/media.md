@@ -1,86 +1,88 @@
-# Images
+# Images and photo albums
 
 ## Upload and reuse
 
-Use **Media** to upload images and browse existing files. Use **Browse library** beside a preview/profile image or **Choose existing image** in the Markdown toolbar to reuse one. For these single-image controls, clicking a chooser card selects it and returns to the editor. Selection takes effect when you save.
+Use **Media** to upload images and browse files. **Browse library** beside a preview/profile image and **Choose existing image** in the Markdown toolbar reuse an upload. Single-image choosers return to the editor when you select a card. Save to apply the selection.
 
-Media management and the library chooser require Admin access. Posters can upload images directly in their post editor and reuse public images or images already in their own saved posts.
+Media management and library browsing require Admin access. Posters can upload in their post editor and reuse public images or images in their own saved posts.
 
-Uploads accept PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels. The blog keeps the original and generates display and thumbnail copies with maximum edges of 2,048 and 480 pixels. Small images are not enlarged. JPEG copies use quality 85. PNG keeps transparency. JPEG/PNG copies apply EXIF orientation and remove metadata, including location data. GIF retains its original bytes, animation, and metadata. Animated PNG is rejected.
+Uploads accept PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels per file. The blog keeps the original and creates display and thumbnail copies with maximum edges of 2,048 and 480 pixels. Small images are not enlarged.
 
-Only one upload is processed at a time. A concurrent upload receives a retry message. Image processing uses the framework's optional [imaging package](../../pkg/imaging/image.go). The blog owns limits, storage, access rules, and editor behavior.
+JPEG copies use quality 85. PNG keeps transparency. JPEG/PNG copies apply EXIF orientation and remove metadata, including location data. GIF keeps its original bytes, animation, and metadata. Animated PNG is rejected.
 
-## Post albums
+The server processes one upload at a time. Concurrent uploads receive a retry response. The optional [imaging package](../../pkg/imaging/image.go) handles processing. The blog owns upload limits, storage, and access rules.
 
-Use **Add component → Photo album** below the Markdown editor. Posts without an album show only the Add component control. Existing albums appear automatically when you edit a post. **Remove album** removes the component from the unsaved post, and **Undo** restores it. Adding Photo album again starts an empty album. Removing a component does not delete its uploaded files.
+## Add an album
 
-In an album, **Upload** selects files from your device. **Library** selects existing photos. Device uploads accept several files and start automatically. Progress appears beside the controls, and uploads keep the active caption and cursor in place. File requirements appear below the photo cards.
+Use **Add component → Photo album** below a post's Markdown editor. Existing albums appear automatically. **Remove album** removes the component from the unsaved post. **Undo** restores it. Adding Photo album again starts an empty album. Removing an album or photo does not delete uploaded files.
 
-Select a photo to preview the full image without saving or leaving the editor. The viewer includes your unsaved captions and photo order. Caption fields expand over the content below them, leaving photo rows in place. Press Enter or click outside a caption to finish editing. Enter keeps the text without submitting the post. Pasted line breaks become spaces. Use the button in the upper right to remove a photo.
+**Upload** selects one or more device files and starts uploading. **Library** selects existing photos. Failed uploads identify the file and reason. Invalid images do not block later files. Authentication or service failures pause the batch. Retry keeps successful uploads and attempts only failed or unprocessed files.
 
-Confirm library selections with **Add photos**. The count shows your pending selection, such as **3 photos selected**, and the button reads **Add 3 photos**. A note states the 50-photo album limit. When the selection fills the album, unselected photos show a lock in their selection control. Their previews stay visible. Deselect a photo to choose another.
+Select a photo to preview its unsaved caption and position. Caption fields expand over the next row. Press Enter or click outside to finish editing without submitting the post. Pasted line breaks become spaces.
 
-Selections stay selected while you search or change pages. **Show selected** displays your pending photos from every page. Click a photo to deselect it. Deselecting the last photo returns to the library automatically. **Clear selection** clears all selections and returns to the library. **Back to library** restores your previous browsing position. Photos already included show **Added to album** over the preview and cannot be selected again.
+Use a photo's upper-right remove button to remove it. **Undo** restores removals one at a time, including after adding or reordering photos. Undo retains up to 50 removals during the current editor session. Adding a removed photo again clears its undo entry.
 
-If browsing fails, **Retry** repeats the failed request and keeps pending selections. Changing or clearing selections leaves the browsing error and Retry action visible. A successful reload clears the browsing error.
+Save the post to apply album changes. Albums hold up to 50 photos with captions of at most 500 characters. Near capacity, controls show the remaining spaces. A full album disables Upload, Library, and Undo until you remove a photo.
 
-In short landscape windows, the chooser uses nearly the full height and tighter spacing. The photo list scrolls while Cancel, selection controls, and Retry remain visible.
+### Select library photos
 
-Cancel closes the chooser without adding photos. Navigating away from the editor also closes the chooser and discards pending selections. Near the 50-photo limit, the controls show the remaining capacity. Upload and Library are disabled when the album is full. Removing a photo enables them again.
+Select cards, then choose **Add photos**. The selection count and button show the number selected. Selections remain while searching or changing pages. **Added to album** marks photos that cannot be selected again. When the selection fills the album, other cards show a lock. Deselect a photo to choose another.
 
-Use **Reorder** to drag photos or move them with the arrow buttons. On touch screens, drag from the grip in the upper left. Swipe elsewhere on a photo to scroll. A marker shows where the photo will go when released. The dialog fits short albums and scrolls for larger ones. On wide screens, the grid runs left to right, then down.
+**Show selected** displays pending selections across pages. Click a card to deselect it. Removing the last selection or choosing **Clear selection** returns to browsing. **Back to library** restores the previous browsing position. Cancel or navigation away discards pending selections.
 
-With a keyboard, focus a photo and use Left/Right to move one position or Up/Down to move one row. Home and End move it to the start or end. Moved photos briefly highlight so you can follow them.
+If browsing fails, **Retry** repeats the request without losing selections. The error remains until browsing succeeds. Short landscape windows keep the chooser's actions visible while the list scrolls.
 
-Caption previews show up to two lines. Short captions stay plain text. If a caption is cut off, tap it or focus it and press Enter to expand the text within its photo card. Long text scrolls without moving neighboring cards. Use **Show less**, Escape, or a tap outside the caption to collapse it. Reorder controls reference their photo's caption for screen readers. Reordering preserves the full caption.
+### Reorder photos
 
-**Done** applies a changed order to the unsaved post. If the order is unchanged, **Done** closes without changing the post. **Cancel** or Escape discards the provisional order.
+Use **Reorder**, then drag photos or use the arrow buttons. On touch screens, drag from the upper-left grip. Swipe elsewhere to scroll. A marker shows the drop location. Wide layouts use a grid. Narrow layouts use a list.
 
-Use the remove icon beside a photo to remove it. Focus moves to another remove button so caption fields stay collapsed. **Undo** restores recent removals one at a time, including after adding photos or reordering. Recovery lasts for the current editor session and retains up to 50 removals. Adding a removed photo again clears its recovery entry. If the album is full, remove a photo before using **Undo**.
+With a photo focused, Left/Right move one position, Up/Down move one row, and Home/End move to the start/end. Moved photos briefly highlight.
 
-Save the post to apply changes. Each album accepts up to 50 photos with captions of at most 500 characters. Removing a photo from an album does not delete its upload.
+Caption previews show two lines. Select a truncated caption to expand it within its card. Long text scrolls without moving neighboring cards. **Show less**, Escape, or a tap outside collapses it. Reordering keeps the full caption.
 
-Failed uploads show the filename and reason. Valid files still upload if another image is rejected. Authentication or service failures pause the remaining batch. Retrying keeps photos already added and attempts only failed or unprocessed files.
+**Done** applies the order to the unsaved post. **Cancel** or Escape discards the provisional order.
 
-Readers see photo cards below the post, with captions attached to their images. Mobile albums use two columns when each card can be at least 140 pixels wide. Narrower galleries and single-photo albums use one column. Mobile grid captions show up to two lines. The viewer keeps the full caption.
+## View an album
 
-Selecting a card opens a viewer that fills the available viewport, with the caption below the photo and aligned to its left edge. Previous/Next arrows, left/right arrow keys, Home, End, and touch swipes change photos. The toolbar can hide captions or the numbered thumbnail strip. On phones, the thumbnail strip starts collapsed. Closing returns focus and scroll position to the selected photo.
+Readers see photo cards below the post. Mobile galleries use two columns when each card can be at least 140 pixels wide. Narrower galleries and single-photo albums use one column. Mobile captions show two lines. The viewer keeps the full caption.
 
-If a viewer caption does not fit, **Read full caption** expands it below the photo. If space is limited, the caption overlaps the photo's lower edge. The photo keeps its size. Use **Show less** or Escape to collapse the caption. Long text scrolls within the expanded caption.
+Select a card to open the viewer. Captions appear below the photo, aligned left. Previous/Next buttons, arrow keys, Home/End, and touch swipes change photos. The toolbar can hide captions or thumbnails. On phones, thumbnails start collapsed. Closing restores focus and scroll position to the selected card.
 
-While the next photo loads, the viewer keeps the previous photo and its caption together. Slow loads show a loading message. Failed loads hide the photo and caption and offer **Retry** for the same photo.
+**Read full caption** expands truncated text below the photo. In limited space, it overlaps the photo's lower edge without resizing the photo. Long text scrolls. **Show less** or Escape collapses the caption.
 
-Use the zoom button, double-click, double-tap, mouse wheel, or pinch gesture to zoom. Drag a zoomed photo to pan, or use the arrow keys. Panning and pinch gestures do not advance the album. The plus and minus keys adjust zoom, and `0` resets it. Escape resets zoom first, then closes the viewer when pressed again. Without JavaScript, the grid links open individual images.
+During navigation, the previous photo and caption stay together until the next photo loads. Slow loads show a loading message. Failed loads hide the photo and caption and offer **Retry**.
 
-Albums are stored as Markdown images in the final top-level fenced block named `photo-album`. Earlier blocks and quoted or nested examples stay as code. Editing and rendering use the same rule. The editor manages the album block separately from the body. Without JavaScript, the album field accepts one Markdown image per line, such as `![Caption](/images/UPLOAD_ID)`. Albums use the same image access checks, saved versions, cleanup protection, feeds, and backups as the rest of the post. No database migration is needed.
+Use the zoom button, double-click, double-tap, mouse wheel, or pinch gesture to zoom. Drag or use arrow keys to pan a zoomed photo. Panning and pinch gestures do not change photos. Plus/minus adjust zoom, and `0` resets it. Escape resets zoom before closing the viewer. Without JavaScript, cards link to individual images.
 
 ## Find images
 
-Media and the chooser show 24 images per page. Search matches filenames, labels, IDs, tags, and titles of current or historical content using an image. Matching is literal and case-insensitive. Names rank first, tags second, and content titles third. Newer uploads break ties.
+Media and the chooser show 24 images per page. Search is literal and case-insensitive. Filenames, labels, and IDs rank first, tags second, and titles of current or historical content using the image third. Newer uploads break ties.
 
-Usage filters distinguish current content, history-only references, and unused files. Current content includes drafts, scheduled posts, pages, and the site profile. Unsaved editors and browser recovery copies are not included.
+Usage filters distinguish current content, history-only references, and unused files. Current content includes drafts, scheduled posts, pages, and Site Profile. Unsaved editors and browser recovery copies are excluded.
 
-Labels and comma-separated tags help search. They do not change URLs, alt text, visibility, or cleanup rules. Tags allow 20 values of 50 characters each. Metadata is stored in SQLite. Files remain the media inventory, so missing files do not appear in search.
+Labels and comma-separated tags affect search, not URLs, alt text, visibility, or cleanup. Tags allow 20 values of 50 characters each. Metadata lives in SQLite. Files remain the inventory, so missing files do not appear in results.
 
 ## Privacy and storage
 
-New uploads are private to Admins and their uploader. Posters can also view images referenced by any saved version of their own posts. Published content and saved profile images make their uploads public. Shared images stay public while any public content uses them. Unpublishing a page also hides image references from its descendants.
+New uploads are private to Admins and their uploader. Posters can also view images in any saved version of their own posts. Published content and saved profile images make their uploads public. Shared images stay public while any public content uses them. Unpublishing a page also hides image references from its descendants.
 
-The handler checks visibility before serving bytes or a conditional response. Original files remain private to Admins and their uploader. Uploading duplicate bytes never transfers ownership. Copies already downloaded or cached elsewhere cannot be recalled.
+Access checks run before serving bytes or conditional responses. Originals remain private to Admins and their uploader. Duplicate uploads never transfer ownership. Previously downloaded copies cannot be recalled.
 
-Each upload is a ZIP bundle containing its original, display copy, and thumbnail. The original's hash determines its stable filename and URL. Do not edit bundles in place. Back up the content database and uploads together. Deleting content does not delete its images.
+Each upload is a ZIP bundle of its original, display copy, and thumbnail. The original's hash determines its filename and URL. Do not edit bundles in place.
 
-Keep `uploadsDirectory` on persistent storage, outside every publicly served filesystem directory. Startup rejects overlap with `assetsDirectory`. Run one blog instance against these resources.
+Keep `uploadsDirectory` on persistent storage outside publicly served directories. Startup rejects overlap with `assetsDirectory`. Run one blog instance per content database and uploads directory. Back up both together.
 
-For public files outside Media, create an `assets/` directory and set `assetsDirectory: assets` in module configuration. A file such as `portrait.jpg` becomes `/local-assets/portrait.jpg`. Only top-level, non-hidden files are served, without directory listings. These files are public and are not optimized or cleaned up. Keep private files elsewhere.
+Albums use Markdown images in the final top-level fenced block named `photo-album`. Earlier, quoted, and nested blocks remain code. The editor manages the album separately from the body. Without JavaScript, enter one Markdown image per line in the album field, such as `![Caption](/images/UPLOAD_ID)`. Albums share normal image access, history, cleanup, feed, and backup rules. They require no separate database tables.
 
-## Cleanup
+For public files outside Media, set `assetsDirectory: assets` and create that directory. `portrait.jpg` becomes `/local-assets/portrait.jpg`. Only top-level, non-hidden files are served, without directory listings. These files are public and are not optimized or cleaned up.
 
-**Media → Clean up uploads** lists unused images and history-only images. Current references protect files, including draft and scheduled content. Bulk deletion excludes history-only images. Individual deletion of a historical image requires confirmation showing the affected versions.
+## Clean up uploads
 
-Bulk confirmation identifies up to 5,000 files and their total size. Deletion checks references again and cannot overlap an upload or content save. New files are excluded. Files now referenced, uploaded again, or already removed are skipped. Partial failures report deleted, skipped, and unprocessed counts.
+**Media → Clean up uploads** lists unused and history-only images. Current references protect files, including draft and scheduled content. Bulk deletion excludes history-only images. Individual deletion of a historical image shows the affected versions before confirmation.
 
-Save open editors before cleanup. The server cannot see unsaved references. If an unsaved editor loses an image, upload it again or remove the reference before saving. URLs on an old domain are conservatively retained. Cleanup never deletes bundled assets, local assets, or backups.
+Bulk confirmation covers up to 5,000 files and their total size. Deletion rechecks references and excludes files added after confirmation. Files now referenced, uploaded again, or already removed are skipped. Partial failures report deleted, skipped, and unprocessed counts. Deletion cannot overlap an upload or content save.
+
+Save open editors before cleanup. Unsaved references are invisible to the server. If cleanup removes an image from an unsaved editor, upload it again or remove the reference before saving. URLs on an old domain are conservatively retained. Cleanup excludes bundled assets, local assets, and backups.
 
 ## Reprocess existing uploads
 
@@ -90,6 +92,6 @@ Build the optimizer from the repository root:
 go build -o /tmp/optimize-images ./cmd/optimize-images
 ```
 
-Back up uploads and stop the blog. Run `/tmp/optimize-images` from the application's configuration directory. The command preserves originals, URLs, and upload dates. Each bundle is replaced atomically. Failures report progress and leave the failed image unchanged. Rerunning is safe. Legacy uploads are not served publicly until processed.
+Back up uploads and stop the blog. Run `/tmp/optimize-images` from the application's configuration directory. It preserves originals, URLs, and upload dates, and replaces each bundle atomically. Failures leave the affected file unchanged. Rerunning is safe. Legacy uploads are not served publicly until processed.
 
-Use the [backup guide](backup.md) for complete recovery, not just image files.
+See [backup and recovery](backup.md) to preserve the complete application.
