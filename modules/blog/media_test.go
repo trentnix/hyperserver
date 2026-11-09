@@ -304,7 +304,7 @@ func TestMediaFileSafety(t *testing.T) {
 
 type failedMediaReferences struct{}
 
-func (failedMediaReferences) ReferencedImages(context.Context) (map[string]mediaUsage, error) {
+func (failedMediaReferences) ReferencedImages(context.Context, ...string) (map[string]mediaUsage, error) {
 	return nil, errors.New("private database failure")
 }
 

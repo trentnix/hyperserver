@@ -20,16 +20,25 @@ type mediaMetadata struct {
 // mediaMetadataRepository keeps names and tags separate from uploaded image bytes.
 // Missing metadata describes a legacy upload, not a missing image.
 type mediaMetadataRepository interface {
-	ListMediaMetadata(context.Context) (map[string]mediaMetadata, error)
+	ListMediaMetadata(context.Context, ...string) (map[string]mediaMetadata, error)
 	GetMediaMetadata(context.Context, string) (mediaMetadata, error)
 	RememberMedia(ctx context.Context, id, filename, uploadedBy string) error
 	SaveMediaMetadata(context.Context, string, mediaMetadata) error
 }
 
-// ListMediaMetadata supplies search metadata for the filesystem-backed library.
-// Callers ignore deleted files. Re-uploading the same bytes recovers their metadata.
-func (s *sqliteRepository) ListMediaMetadata(ctx context.Context) (map[string]mediaMetadata, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, filename, label, tags, version, uploaded_by FROM blog_media")
+// ListMediaMetadata returns metadata for the supplied IDs, or all metadata when
+// no IDs are supplied. Callers ignore deleted files. Re-uploading the same bytes
+// recovers their metadata.
+func (s *sqliteRepository) ListMediaMetadata(ctx context.Context, ids ...string) (map[string]mediaMetadata, error) {
+	query := "SELECT id, filename, label, tags, version, uploaded_by FROM blog_media"
+	var args []any
+	if len(ids) > 0 {
+		query += " WHERE id IN (" + strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

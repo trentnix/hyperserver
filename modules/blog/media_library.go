@@ -15,8 +15,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/util"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/unicode/norm"
 )
 
 const mediaPageSize = 24
@@ -65,7 +63,7 @@ func (m *module) renderMediaDetail(w http.ResponseWriter, r *http.Request, submi
 	if submitted != nil {
 		metadata.Label, metadata.Tags, metadata.Version = submitted.Label, submitted.Tags, submitted.Version
 	}
-	used, err := m.mediaReferences.ReferencedImages(r.Context())
+	used, err := m.mediaReferences.ReferencedImages(r.Context(), id)
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -171,10 +169,20 @@ type mediaQuery struct{ Search, Usage string }
 // Active distinguishes an empty library from filters that matched nothing.
 func (q mediaQuery) Active() bool { return q.Search != "" || q.Usage != "" }
 
+// mediaMatcher belongs to one request and reuses Unicode normalization buffers.
+type mediaMatcher struct {
+	query mediaQuery
+	text  *contentMatcher
+}
+
+func (q mediaQuery) matcher() mediaMatcher {
+	return mediaMatcher{query: q, text: newContentMatcher(q.Search)}
+}
+
 // rank prefers names, then tags, then current or saved-version titles.
 // A negative rank excludes images that do not match the text or usage filter.
-func (q mediaQuery) rank(file mediaFile, metadata mediaMetadata, usage mediaUsage) int {
-	switch q.Usage {
+func (m mediaMatcher) rank(file mediaFile, metadata mediaMetadata, usage mediaUsage) int {
+	switch m.query.Usage {
 	case "current":
 		if !usage.Current {
 			return -1
@@ -188,25 +196,22 @@ func (q mediaQuery) rank(file mediaFile, metadata mediaMetadata, usage mediaUsag
 			return -1
 		}
 	}
-	if q.Search == "" {
+	if m.query.Search == "" {
 		return 0
 	}
-	fold := cases.Fold()
-	query := norm.NFC.String(fold.String(q.Search))
-	contains := func(value string) bool { return strings.Contains(norm.NFC.String(fold.String(value)), query) }
-	if contains(file.ID) || contains(metadata.Label) || contains(metadata.Filename) {
+	if m.text.rank(file.ID, metadata.Label, metadata.Filename) >= 0 {
 		return 0
 	}
-	if contains(metadata.Tags) {
+	if m.text.rank(metadata.Tags) >= 0 {
 		return 1
 	}
 	for _, ref := range usage.Content {
-		if contains(ref.Title) {
+		if m.text.rank(ref.Title) >= 0 {
 			return 2
 		}
 	}
 	for _, ref := range usage.History {
-		if contains(ref.Title) {
+		if m.text.rank(ref.Title) >= 0 {
 			return 2
 		}
 	}
@@ -238,10 +243,13 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	metadata, err := m.mediaMetadata.ListMediaMetadata(r.Context())
-	if err != nil {
-		m.storageError(w, r, err)
-		return
+	var metadata map[string]mediaMetadata
+	if query.Search != "" {
+		metadata, err = m.mediaMetadata.ListMediaMetadata(r.Context())
+		if err != nil {
+			m.storageError(w, r, err)
+			return
+		}
 	}
 	var used map[string]mediaUsage
 	if query.Search != "" || query.Usage != "" {
@@ -257,25 +265,20 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 		}
 		return cmp.Compare(a.ID, b.ID)
 	})
-	var ranked [3][]mediaLibraryItem
-	for _, file := range files {
-		name := metadata[file.ID]
-		rank := query.rank(file, name, used[file.ID])
-		if rank < 0 {
-			continue
+	matches := files
+	if query.Active() {
+		match := query.matcher()
+		var ranked [3][]mediaFile
+		for _, file := range files {
+			rank := match.rank(file, metadata[file.ID], used[file.ID])
+			if rank >= 0 {
+				ranked[rank] = append(ranked[rank], file)
+			}
 		}
-		label := name.Label
-		if label == "" {
-			label = name.Filename
+		matches = nil
+		for _, group := range ranked {
+			matches = append(matches, group...)
 		}
-		if label == "" {
-			label = file.ID
-		}
-		ranked[rank] = append(ranked[rank], mediaLibraryItem{mediaFile: file, Name: label})
-	}
-	var matches []mediaLibraryItem
-	for _, group := range ranked {
-		matches = append(matches, group...)
 	}
 	data := mediaLibraryPage{Page: number, Pages: max(1, (len(matches)+mediaPageSize-1)/mediaPageSize), Picking: values.Get("pick") == "1", Query: query, Total: len(matches), ClearURL: "/media"}
 	if data.Picking {
@@ -286,7 +289,29 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	start := (number - 1) * mediaPageSize
-	data.Files = matches[start:min(start+mediaPageSize, len(matches))]
+	visible := matches[start:min(start+mediaPageSize, len(matches))]
+	if query.Search == "" && len(visible) > 0 {
+		ids := make([]string, 0, len(visible))
+		for _, file := range visible {
+			ids = append(ids, file.ID)
+		}
+		metadata, err = m.mediaMetadata.ListMediaMetadata(r.Context(), ids...)
+		if err != nil {
+			m.storageError(w, r, err)
+			return
+		}
+	}
+	for _, file := range visible {
+		name := metadata[file.ID]
+		label := name.Label
+		if label == "" {
+			label = name.Filename
+		}
+		if label == "" {
+			label = file.ID
+		}
+		data.Files = append(data.Files, mediaLibraryItem{mediaFile: file, Name: label})
+	}
 	pageURL := func(number int) string {
 		params := url.Values{"page": {strconv.Itoa(number)}}
 		if data.Picking {

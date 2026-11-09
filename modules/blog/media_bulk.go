@@ -101,7 +101,14 @@ func (m *module) removeUnusedMediaBatch(ctx context.Context, files []mediaFile) 
 	m.mediaMu.Lock()
 	defer m.mediaMu.Unlock()
 	result := mediaDeleteResult{Remaining: len(files)}
-	used, err := m.mediaReferences.ReferencedImages(ctx)
+	if len(files) == 0 {
+		return result, ctx.Err()
+	}
+	ids := make([]string, 0, len(files))
+	for _, file := range files {
+		ids = append(ids, file.ID)
+	}
+	used, err := m.mediaReferences.ReferencedImages(ctx, ids...)
 	if err != nil {
 		return result, err
 	}

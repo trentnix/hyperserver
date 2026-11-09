@@ -46,6 +46,20 @@ Public benchmarks apply the handler's two-second deadline but bypass HTTP render
 
 Before deployment, measure mixed reading, writing, and search with cold and warm caches on the target host. Include collections larger than the cache. Search still scans uncached content and shares database capacity with other operations.
 
+## Blog media library
+
+Ordinary library pages read metadata for their displayed images. Text search reads all metadata and usage to preserve ranking before pagination. Usage filters and cleanup listings still inspect all references. Image details and deletion checks limit usage results to the requested images, including references from old hosts and saved revisions. No media catalog or database migration is required.
+
+Scoped usage queries still scan URL indexes. They avoid loading unrelated titles and revision histories into Go. Profile history still needs URL normalization. File enumeration and sorting remain collection-wide because the filesystem owns the upload list.
+
+Run the repository benchmarks with the environment above:
+
+```sh
+go test ./modules/blog -run '^$' -bench '^BenchmarkMediaLookups$' -benchmem -benchtime=500ms -count=5
+```
+
+Fixtures use temporary SQLite files with 100, 1,000, and 10,000 images. Each image has metadata, three post revisions, and a current reference. Cases read all images, one image, or a 24-image page. Before timing, each case warms the lookup and checks the expected metadata and usage. Results measure repository lookups and Go allocations. They exclude image bytes, filesystem enumeration, authentication, and HTTP rendering. Keep machine-specific comparisons with local benchmark output.
+
 ## Profiling
 
 After creating `tmp/performance`, capture a profile of the workload you want to improve:

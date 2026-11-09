@@ -85,7 +85,7 @@ func TestMediaTags(t *testing.T) {
 
 type failedMediaTagSuggestions struct{ mediaMetadataRepository }
 
-func (failedMediaTagSuggestions) ListMediaMetadata(context.Context) (map[string]mediaMetadata, error) {
+func (failedMediaTagSuggestions) ListMediaMetadata(context.Context, ...string) (map[string]mediaMetadata, error) {
 	return nil, errors.New("private suggestion failure")
 }
 

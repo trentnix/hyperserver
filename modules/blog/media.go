@@ -84,7 +84,7 @@ func (m *module) confirmMediaDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	image.Content.Close()
-	used, err := m.mediaReferences.ReferencedImages(r.Context())
+	used, err := m.mediaReferences.ReferencedImages(r.Context(), id)
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -135,7 +135,7 @@ var errMediaHistory = errors.New("image is referenced by saved versions")
 func (m *module) removeMedia(ctx context.Context, id string, version int64, deleteHistory bool) error {
 	m.mediaMu.Lock()
 	defer m.mediaMu.Unlock()
-	used, err := m.mediaReferences.ReferencedImages(ctx)
+	used, err := m.mediaReferences.ReferencedImages(ctx, id)
 	if err != nil {
 		return err
 	}

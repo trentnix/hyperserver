@@ -107,11 +107,11 @@ func TestMediaQuery(t *testing.T) {
 	file := mediaFile{ID: strings.Repeat("a", 64) + ".png"}
 	metadata := mediaMetadata{Filename: "Straße.png", Label: "100%_ÉTÉ"}
 	for _, query := range []string{"", "strasse", "été", "%_", ".png"} {
-		if (mediaQuery{Search: query}).rank(file, metadata, mediaUsage{}) < 0 {
+		if (mediaQuery{Search: query}).matcher().rank(file, metadata, mediaUsage{}) < 0 {
 			t.Fatalf("did not match %q", query)
 		}
 	}
-	if (mediaQuery{Search: "x%_"}).rank(file, metadata, mediaUsage{}) >= 0 {
+	if (mediaQuery{Search: "x%_"}).matcher().rank(file, metadata, mediaUsage{}) >= 0 {
 		t.Fatal("wildcards were interpreted")
 	}
 	for _, tc := range []struct {
@@ -124,9 +124,28 @@ func TestMediaQuery(t *testing.T) {
 		{mediaUsage{Current: true, History: []mediaRevision{{Title: "Older title"}}}, "current"},
 	} {
 		for _, filter := range []string{"current", "history", "unused"} {
-			if got := (mediaQuery{Usage: filter}).rank(file, metadata, tc.usage) >= 0; got != (filter == tc.want) {
+			if got := (mediaQuery{Usage: filter}).matcher().rank(file, metadata, tc.usage) >= 0; got != (filter == tc.want) {
 				t.Fatalf("usage %s: %v", filter, tc)
 			}
+		}
+	}
+}
+
+func TestMediaMatcherReuse(t *testing.T) {
+	match := (mediaQuery{Search: "E\u0301COLE"}).matcher()
+	for _, tc := range []struct {
+		metadata mediaMetadata
+		usage    mediaUsage
+		want     int
+	}{
+		{metadata: mediaMetadata{Label: "École photo"}, want: 0},
+		{metadata: mediaMetadata{Tags: "école, forest"}, want: 1},
+		{usage: mediaUsage{Content: []mediaReference{{Title: "École post"}}}, want: 2},
+		{usage: mediaUsage{History: []mediaRevision{{Title: "Earlier école"}}}, want: 2},
+		{metadata: mediaMetadata{Label: "Unrelated"}, want: -1},
+	} {
+		if got := match.rank(mediaFile{ID: "image.png"}, tc.metadata, tc.usage); got != tc.want {
+			t.Fatalf("reused matcher rank = %d, want %d", got, tc.want)
 		}
 	}
 }
@@ -251,7 +270,7 @@ func TestUploadFilename(t *testing.T) {
 
 type failedMediaMetadata struct{}
 
-func (failedMediaMetadata) ListMediaMetadata(context.Context) (map[string]mediaMetadata, error) {
+func (failedMediaMetadata) ListMediaMetadata(context.Context, ...string) (map[string]mediaMetadata, error) {
 	return nil, errors.New("private metadata failure")
 }
 func (failedMediaMetadata) GetMediaMetadata(context.Context, string) (mediaMetadata, error) {
