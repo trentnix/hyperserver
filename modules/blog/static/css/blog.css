@@ -182,9 +182,16 @@ body { margin: 0; min-width: 320px; font-size: 16px; background: var(--site-back
   .site-header { padding-bottom: 56px; }
   .site-header::after { content: ""; position: absolute; bottom: 16px; left: 5%; width: 90%; border-bottom: 1px solid #dce1e7; }
 }
+@media (768px <= width < 1200px) {
+  .site-header { padding-bottom: 24px; }
+  .site-header::after { bottom: 0; }
+}
 
 /* Article content. */
 .page-content { --content-padding: 60px; padding: 30px var(--content-padding); font-size: 1.1em; line-height: 1.4; overflow-wrap: anywhere; text-align: left; }
+@media (768px <= width < 1680px) {
+  .page-content { padding-top: 48px; }
+}
 h1 { font-size: 1.8em; line-height: 1.2; margin: 0; }
 h2, h3 { line-height: 1.3; }
 .post-heading time { display: block; color: #696d74; font-size: .7em; }
