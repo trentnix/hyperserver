@@ -130,7 +130,7 @@ func TestProfileHistoryHTTP(t *testing.T) {
 		old := strconv.FormatInt(versions[0].ID, 10)
 		p := original
 		p.Name, p.Bio = "Current <name>", "Current <bio>"
-		if err := h.blog.writeProfile(t.Context(), p); err != nil {
+		if err := h.blog.persistProfile(t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 		current := h.blog.profile.Current()
@@ -219,7 +219,7 @@ func TestRestoreProfile(t *testing.T) {
 
 		p := original
 		p.Name, p.Bio, p.ImageURL, p.FaviconURL, p.BackgroundURL = "Changed", "Changed bio", "", "", ""
-		if err := h.blog.writeProfile(t.Context(), p); err != nil {
+		if err := h.blog.persistProfile(t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 		current := h.blog.profile.Current()
@@ -293,7 +293,7 @@ func TestProfileHistoryMedia(t *testing.T) {
 	f := mediaUpload(t, m, "historical profile")
 	p := m.profile.Current()
 	p.ImageURL, p.FaviconURL, p.BackgroundURL = "/images/"+f.ID, "/images/"+f.ID, "/images/"+f.ID
-	if err := m.writeProfile(t.Context(), p); err != nil {
+	if err := m.persistProfile(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.removeMedia(t.Context(), f.ID, f.Version(), true); !errors.Is(err, errMediaUsed) {
@@ -303,7 +303,7 @@ func TestProfileHistoryMedia(t *testing.T) {
 	old := strconv.FormatInt(versions[0].ID, 10)
 	p = m.profile.Current()
 	p.ImageURL, p.FaviconURL, p.BackgroundURL = "", "", ""
-	if err := m.writeProfile(t.Context(), p); err != nil {
+	if err := m.persistProfile(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	used, err := m.mediaReferences.ReferencedImages(t.Context())
@@ -419,12 +419,12 @@ func TestProfileHistoryMediaRoles(t *testing.T) {
 			case "background":
 				p.BackgroundURL = ref
 			}
-			if err := m.writeProfile(t.Context(), p); err != nil {
+			if err := m.persistProfile(t.Context(), p); err != nil {
 				t.Fatal(err)
 			}
 			p = m.profile.Current()
 			p.ImageURL, p.FaviconURL, p.BackgroundURL = "", "", ""
-			if err := m.writeProfile(t.Context(), p); err != nil {
+			if err := m.persistProfile(t.Context(), p); err != nil {
 				t.Fatal(err)
 			}
 			used, err := m.mediaReferences.ReferencedImages(t.Context())

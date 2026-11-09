@@ -282,7 +282,7 @@ func TestRestoreScheduledRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.blog.restoreRevisionContent(t.Context(), "post", p.ID, p.Version, selected); err != nil {
+	if err := h.blog.restoreRevisionContent(adminWritingContext(t.Context()), "post", p.ID, p.Version, selected); err != nil {
 		t.Fatal(err)
 	}
 	after, err := store.GetByID(t.Context(), p.ID, true)

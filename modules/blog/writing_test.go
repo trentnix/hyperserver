@@ -11,7 +11,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/trentnix/hyperserver/pkg/services/user"
 )
+
+// adminWritingContext supplies an authenticated account snapshot for operation tests.
+// Content fixtures use persistPost, persistPage, and persistProfile without an actor.
+func adminWritingContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, user.UserContextKey, &user.User{ID: "fixture-admin", Role: "admin"})
+}
 
 // savePostFixture lets storage tests supply rendered references without applying
 // HTTP validation to deliberately incomplete or invalid content fixtures.
@@ -57,7 +65,7 @@ func TestPostOversizedDraft(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	original, err := h.blog.writePost(t.Context(), Post{Title: "Original", Slug: "original", Markdown: "Body", Draft: true})
+	original, err := h.blog.persistPost(t.Context(), Post{Title: "Original", Slug: "original", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +113,7 @@ func TestPublicationShortcutsRejectUnversionedRequests(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	p, err := h.blog.writePost(t.Context(), Post{Title: "Draft", Slug: "draft", Markdown: "Body", Draft: true})
+	p, err := h.blog.persistPost(t.Context(), Post{Title: "Draft", Slug: "draft", Markdown: "Body", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +138,7 @@ func TestRestoreValidatesWriting(t *testing.T) {
 		} else {
 			version = before.(Page).Version
 		}
-		err := h.blog.restoreRevisionContent(t.Context(), kind, id, version, Revision{Title: "Invalid saved writing", Markdown: strings.Repeat("x", maxMarkdownBytes+1)})
+		err := h.blog.restoreRevisionContent(adminWritingContext(t.Context()), kind, id, version, Revision{Title: "Invalid saved writing", Markdown: strings.Repeat("x", maxMarkdownBytes+1)})
 		var invalid contentError
 		if !errors.As(err, &invalid) {
 			t.Fatalf("%s restore bypassed writing validation: %v", kind, err)

@@ -46,7 +46,7 @@ func TestMediaTags(t *testing.T) {
 		t.Fatal("invalid or stale submission changed metadata", unchanged, err)
 	}
 
-	if _, err := h.blog.writePost(t.Context(), Post{Title: "Writing", Markdown: "Body", Tags: "writing-only", Draft: true}); err != nil {
+	if _, err := h.blog.persistPost(t.Context(), Post{Title: "Writing", Markdown: "Body", Tags: "writing-only", Draft: true}); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.blog.mediaMetadata.SaveMediaMetadata(t.Context(), "deleted.png", mediaMetadata{Tags: "deleted-only"}); err != nil {
@@ -136,7 +136,7 @@ func TestMediaTagRanking(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := h.blog.writePost(t.Context(), Post{Title: "École post", Markdown: "Body", Draft: true, PreviewImage: title.ID}); err != nil {
+	if _, err := h.blog.persistPost(t.Context(), Post{Title: "École post", Markdown: "Body", Draft: true, PreviewImage: title.ID}); err != nil {
 		t.Fatal(err)
 	}
 	// Reverse relevance by age to ensure text rank wins over recency.

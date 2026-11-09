@@ -17,7 +17,7 @@ func profileDeleteFixture(t *testing.T, h *harness) []ProfileRevision {
 	for _, name := range []string{"First", "Second", "Current"} {
 		p := h.blog.profile.Current()
 		p.Name = name
-		if err := h.blog.writeProfile(t.Context(), p); err != nil {
+		if err := h.blog.persistProfile(t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -198,7 +198,7 @@ func TestDeleteProfileRevisionReleasesMedia(t *testing.T) {
 	file := mediaUpload(t, m, "historical portrait")
 	p := m.profile.Current()
 	p.ImageURL = "/images/" + file.ID
-	if err := m.writeProfile(t.Context(), p); err != nil {
+	if err := m.persistProfile(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	versions, err := m.profileStore.ListProfileRevisions(t.Context())
@@ -207,7 +207,7 @@ func TestDeleteProfileRevisionReleasesMedia(t *testing.T) {
 	}
 	p = m.profile.Current()
 	p.ImageURL = ""
-	if err := m.writeProfile(t.Context(), p); err != nil {
+	if err := m.persistProfile(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	before, err := m.mediaCandidates(t.Context())

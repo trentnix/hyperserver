@@ -457,7 +457,7 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	if err := h.blog.access.setup.finish(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.blog.writeProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software.", BackgroundURL: "/assets/img/site-bg.jpg"}); err != nil {
+	if err := h.blog.persistProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software.", BackgroundURL: "/assets/img/site-bg.jpg"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "about", Title: "About Me", DisplayOrder: new(0), Published: true}); err != nil {
@@ -872,7 +872,7 @@ func TestSaveFailurePreservesDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &module{app: h.app.ApplicationServer, posts: failingRepository{}, tags: h.blog.tags, views: make(map[string]*content.View)}
+	m := &module{app: h.app.ApplicationServer, access: h.blog.access, posts: failingRepository{}, tags: h.blog.tags, views: make(map[string]*content.View)}
 	for _, name := range []string{"editor", "formError"} {
 		m.views[name], err = templates.View(h.app.ContentManager, "blog."+name)
 		if err != nil {
@@ -881,6 +881,7 @@ func TestSaveFailurePreservesDraft(t *testing.T) {
 	}
 	for _, hx := range []bool{false, true} {
 		r := httptest.NewRequest("POST", "/post", strings.NewReader(url.Values{"title": {"Unsaved title"}, "content": {"Unsaved Markdown"}}.Encode()))
+		r = r.WithContext(adminWritingContext(r.Context()))
 		r = session.AddSessionManagerToRequestContext(r, h.app.Sessions)
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		if hx {

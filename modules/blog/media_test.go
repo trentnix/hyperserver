@@ -73,7 +73,7 @@ func TestMediaReferences(t *testing.T) {
 	}
 	profile := Profile{Name: "Profile", ImageURL: "/images/" + add("portrait"), FaviconURL: "https://blog.example/images/" + add("favicon"), BackgroundURL: "/images/" + add("background")}
 	profile.Version = m.profile.Current().Version
-	if err := m.writeProfile(t.Context(), profile); err != nil {
+	if err := m.persistProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
 	for _, kind := range []string{"post", "page"} {
@@ -490,7 +490,7 @@ func TestMediaCleanupConcurrentSave(t *testing.T) {
 				h.blog.media = blockedMediaRemove{h.blog.media, entered, release}
 			}
 			saved, removed := make(chan error, 1), make(chan error, 1)
-			save := func() { saved <- h.blog.writeProfile(ctx, p) }
+			save := func() { saved <- h.blog.persistProfile(ctx, p) }
 			remove := func() { removed <- h.blog.removeMedia(ctx, f.ID, f.Version(), true) }
 			if saveFirst {
 				go save()

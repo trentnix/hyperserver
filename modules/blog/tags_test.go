@@ -63,9 +63,9 @@ func TestTagSearch(t *testing.T) {
 			slug := fmt.Sprintf("%s-match-%d", kind, i)
 			var err error
 			if kind == "post" {
-				_, err = h.blog.writePost(t.Context(), Post{Slug: slug, Title: content.Title, Tags: content.Tags, Summary: content.Summary, Markdown: content.Markdown})
+				_, err = h.blog.persistPost(t.Context(), Post{Slug: slug, Title: content.Title, Tags: content.Tags, Summary: content.Summary, Markdown: content.Markdown})
 			} else {
-				_, err = h.blog.writePage(t.Context(), Page{Slug: slug, Title: content.Title, Tags: content.Tags, Summary: content.Summary, Markdown: content.Markdown, ChildrenDisplay: "hidden", Published: true})
+				_, err = h.blog.persistPage(t.Context(), Page{Slug: slug, Title: content.Title, Tags: content.Tags, Summary: content.Summary, Markdown: content.Markdown, ChildrenDisplay: "hidden", Published: true})
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -98,15 +98,15 @@ func TestTagSearch(t *testing.T) {
 		{Title: "Private", Markdown: "Body", Tags: "secret-tag", Draft: true},
 		{Title: "Scheduled", Markdown: "Body", Tags: "secret-tag", Published: time.Now().Add(time.Hour)},
 	} {
-		if _, err := h.blog.writePost(t.Context(), p); err != nil {
+		if _, err := h.blog.persistPost(t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
 	}
-	parent, err := h.blog.writePage(t.Context(), Page{Title: "Private page", Tags: "secret-tag", ChildrenDisplay: "hidden"})
+	parent, err := h.blog.persistPage(t.Context(), Page{Title: "Private page", Tags: "secret-tag", ChildrenDisplay: "hidden"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.blog.writePage(t.Context(), Page{Title: "Hidden child", Tags: "secret-tag", ParentID: parent.ID, Published: true, ChildrenDisplay: "hidden"}); err != nil {
+	if _, err := h.blog.persistPage(t.Context(), Page{Title: "Hidden child", Tags: "secret-tag", ParentID: parent.ID, Published: true, ChildrenDisplay: "hidden"}); err != nil {
 		t.Fatal(err)
 	}
 	public, err = store.SearchPublic(t.Context(), "secret-tag")
@@ -164,17 +164,17 @@ func TestTagHistory(t *testing.T) {
 			}
 			changed := older
 			changed.Tags = "sqlite"
-			if err := h.blog.restoreRevisionContent(t.Context(), kind, id, version, changed); err != nil {
+			if err := h.blog.restoreRevisionContent(adminWritingContext(t.Context()), kind, id, version, changed); err != nil {
 				t.Fatal(err)
 			}
-			if err := h.blog.restoreRevisionContent(t.Context(), kind, id, version, older); !errors.Is(err, errEditConflict) {
+			if err := h.blog.restoreRevisionContent(adminWritingContext(t.Context()), kind, id, version, older); !errors.Is(err, errEditConflict) {
 				t.Fatal("stale tag edit overwrote content", err)
 			}
-			if err := h.blog.restoreRevisionContent(t.Context(), kind, id, version+1, older); err != nil {
+			if err := h.blog.restoreRevisionContent(adminWritingContext(t.Context()), kind, id, version+1, older); err != nil {
 				t.Fatal(err)
 			}
 			older.Tags = "GO, go"
-			if err := h.blog.restoreRevisionContent(t.Context(), kind, id, version+2, older); err != nil {
+			if err := h.blog.restoreRevisionContent(adminWritingContext(t.Context()), kind, id, version+2, older); err != nil {
 				t.Fatal(err)
 			}
 			list, err := store.ListRevisions(t.Context(), kind, id)

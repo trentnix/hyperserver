@@ -420,10 +420,10 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 		h.verify(t)
 	}
 	if mode == "tags" {
-		if _, err := h.blog.writePost(t.Context(), Post{Title: "Tag source", Markdown: "Body", Tags: "Go, self-hosting", Draft: true}); err != nil {
+		if _, err := h.blog.persistPost(t.Context(), Post{Title: "Tag source", Markdown: "Body", Tags: "Go, self-hosting", Draft: true}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := h.blog.writePage(t.Context(), Page{Title: "Other tags", Tags: "Go, SQLite", ChildrenDisplay: "hidden"}); err != nil {
+		if _, err := h.blog.persistPage(t.Context(), Page{Title: "Other tags", Tags: "Go, SQLite", ChildrenDisplay: "hidden"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -452,7 +452,7 @@ func testBrowser(t *testing.T, browser, width, mode string) {
 			if i == 0 {
 				p.ImageURL, p.FaviconURL, p.BackgroundURL = "/images/"+image.ID, "/images/"+image.ID, "/images/"+image.ID
 			}
-			if err := h.blog.writeProfile(t.Context(), p); err != nil {
+			if err := h.blog.persistProfile(t.Context(), p); err != nil {
 				t.Fatal(err)
 			}
 		}

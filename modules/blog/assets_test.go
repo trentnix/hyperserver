@@ -109,7 +109,7 @@ func TestLocalAssets(t *testing.T) {
 	h = startHarness(t, cfg)
 	profile := h.blog.profile.Current()
 	profile.ImageURL, profile.FaviconURL = "/local-assets/icon.png", "/local-assets/icon.png"
-	if err := h.blog.writeProfile(t.Context(), profile); err != nil {
+	if err := h.blog.persistProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
 	page := h.request("GET", "/about", nil, false).Body.String()

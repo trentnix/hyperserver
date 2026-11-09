@@ -71,6 +71,8 @@ Accounts, roles, content, and tokens are preserved. Unexpired invitations work a
 
 [modules/blog](../../modules/blog) owns content rules, templates, handlers, SQLite content storage, and image files. Module configuration loads from `modules/blog/config.yaml`. Relative storage paths use the application configuration directory. Templates, scripts, styles, and default assets are embedded, so rebuild after changing them.
 
+Writing operations enforce roles and post ownership, including publishing and restores. They require the authenticated account in the context. HTTP route guards also protect editors and history. Private persistence helpers support authorized operations and trusted test fixtures. New posts belong to the actor. Edits preserve the stored owner.
+
 Fresh startup creates blog schema version 1 from the embedded [migration](../../modules/blog/migrations). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Image references belong to individual post or page versions. Read-only views join current pointers to content for rendering and search.
 
 Existing databases must have a clean version 1 in `blog_schema_version`. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).

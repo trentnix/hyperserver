@@ -36,6 +36,8 @@ func (m *module) restoreRevision(w http.ResponseWriter, r *http.Request) {
 	err = m.restoreRevisionContent(r.Context(), kind, id, version, selected)
 	var invalid contentError
 	switch {
+	case errors.Is(err, errAccessDenied):
+		m.app.ContentManager.HandleError(w, r, err.Error(), nil, http.StatusForbidden)
 	case errors.Is(err, errEditConflict):
 		m.renderRevisions(w, r, "The content changed since you opened History. Review the latest version before restoring.", http.StatusConflict)
 	case errors.Is(err, errMissingMedia):
@@ -64,14 +66,21 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 		if err != nil {
 			return err
 		}
+		p, err = m.authorizePostWrite(ctx, p)
+		if err != nil {
+			return err
+		}
 		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags}
 		currentVersion = p.Version
 		p.Title, p.Summary, p.Markdown, p.PreviewImage, p.Tags = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage, selected.Tags
 		save = func() error {
-			_, err := m.writePost(ctx, p)
+			_, err := m.persistPost(ctx, p)
 			return err
 		}
 	case "page":
+		if err := m.authorizeAdminWrite(ctx); err != nil {
+			return err
+		}
 		p, err := m.pageStore.GetPageByID(ctx, id, true)
 		if err != nil {
 			return err
@@ -80,7 +89,7 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 		currentVersion = p.Version
 		p.Title, p.Summary, p.Markdown, p.PreviewImage, p.Tags = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage, selected.Tags
 		save = func() error {
-			_, err := m.writePage(ctx, p)
+			_, err := m.persistPage(ctx, p)
 			return err
 		}
 	default:

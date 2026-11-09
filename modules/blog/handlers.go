@@ -10,7 +10,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
-	"github.com/trentnix/hyperserver/pkg/services/user"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
@@ -177,9 +176,6 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	}
 	if version, valid := editorVersion(r); valid {
 		p.Version = version
-	}
-	if account := user.GetUserFromContext(r.Context()); account != nil {
-		p.AuthorID = account.ID
 	}
 	var albumError error
 	p.Markdown, albumError = joinPostAlbum(p.Markdown, r.PostForm.Get("album"))

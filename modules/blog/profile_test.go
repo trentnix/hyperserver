@@ -172,7 +172,7 @@ func TestProfileConcurrentSaves(t *testing.T) {
 	var mu sync.Mutex
 	for _, name := range []string{"First", "Second", "Third", "Fourth"} {
 		wg.Go(func() {
-			if err := h.blog.writeProfile(t.Context(), Profile{Name: name, Bio: name, Version: version}); err == nil {
+			if err := h.blog.persistProfile(t.Context(), Profile{Name: name, Bio: name, Version: version}); err == nil {
 				mu.Lock()
 				successes++
 				mu.Unlock()
@@ -264,7 +264,7 @@ func TestProfileRefreshDuringFeedBuild(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	if err := h.blog.writeProfile(ctx, Profile{Name: "New identity", Version: h.blog.profile.Current().Version}); err != nil {
+	if err := h.blog.persistProfile(ctx, Profile{Name: "New identity", Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	release <- struct{}{}
@@ -297,7 +297,7 @@ func TestProfileInitialization(t *testing.T) {
 func TestProfileApplicationIsolation(t *testing.T) {
 	first, second := newHarness(t), newHarness(t)
 	before := second.blog.profile.Current()
-	if err := first.blog.writeProfile(t.Context(), Profile{Name: "Independent site", Version: first.blog.profile.Current().Version}); err != nil {
+	if err := first.blog.persistProfile(t.Context(), Profile{Name: "Independent site", Version: first.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	if second.blog.profile.Current() != before {
@@ -377,7 +377,7 @@ func TestProfileReadsDuringSave(t *testing.T) {
 			var saveError error
 			updated := Profile{Name: "Updated site", Bio: "Updated bio", Version: original.Version}
 			go func() {
-				saveError = h.blog.writeProfile(ctx, updated)
+				saveError = h.blog.persistProfile(ctx, updated)
 				close(done)
 			}()
 			t.Cleanup(func() { cancel(); <-done })

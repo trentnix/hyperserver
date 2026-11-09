@@ -366,7 +366,7 @@ func TestSetupFailures(t *testing.T) {
 	})
 	t.Run("account lookup", func(t *testing.T) {
 		h := startHarness(t, harnessConfig(t, 10))
-		if err := h.blog.writeProfile(t.Context(), Profile{Name: "Private identity"}); err != nil {
+		if err := h.blog.persistProfile(t.Context(), Profile{Name: "Private identity"}); err != nil {
 			t.Fatal(err)
 		}
 		h.blog.access.setup.accounts = unavailableAccounts{}

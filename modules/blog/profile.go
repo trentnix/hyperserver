@@ -200,6 +200,10 @@ func (m *module) saveProfileContent(w http.ResponseWriter, r *http.Request, p Pr
 		destination = "/profile/history"
 	}
 	if err := m.writeProfile(r.Context(), p); err != nil {
+		if errors.Is(err, errAccessDenied) {
+			m.app.ContentManager.HandleError(w, r, err.Error(), nil, http.StatusForbidden)
+			return
+		}
 		if errors.Is(err, errEditConflict) {
 			m.renderProfileEditor(w, r, p, editConflictMessage, http.StatusConflict)
 			return
@@ -222,6 +226,14 @@ func (m *module) saveProfileContent(w http.ResponseWriter, r *http.Request, p Pr
 // writeProfile serializes persistence and publication for both edits and restores.
 // Failed and unchanged writes leave the shared state and caches intact.
 func (m *module) writeProfile(ctx context.Context, p Profile) error {
+	if err := m.authorizeAdminWrite(ctx); err != nil {
+		return err
+	}
+	return m.persistProfile(ctx, p)
+}
+
+// persistProfile saves and publishes an authorized profile or a trusted test fixture.
+func (m *module) persistProfile(ctx context.Context, p Profile) error {
 	m.mediaMu.RLock()
 	defer m.mediaMu.RUnlock()
 

@@ -246,6 +246,10 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	saved, err := m.writePage(r.Context(), p)
+	if errors.Is(err, errAccessDenied) {
+		m.app.ContentManager.HandleError(w, r, err.Error(), nil, http.StatusForbidden)
+		return
+	}
 	var invalid contentError
 	if errors.As(err, &invalid) || errors.Is(err, errMissingMedia) {
 		m.renderPageEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity, validationFields(err)...)

@@ -57,7 +57,7 @@ func TestMediaBulkHTTP(t *testing.T) {
 		t.Fatal("missing snapshot", values)
 	}
 	newUpload := mediaUpload(t, h.blog, "new after confirmation")
-	if err := h.blog.writeProfile(t.Context(), Profile{Name: "Saved", ImageURL: "/images/" + used.ID, Version: h.blog.profile.Current().Version}); err != nil {
+	if err := h.blog.persistProfile(t.Context(), Profile{Name: "Saved", ImageURL: "/images/" + used.ID, Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	when := changed.Modified.Add(time.Second)
@@ -179,7 +179,7 @@ func TestMediaBulkConcurrentSave(t *testing.T) {
 	h.blog.profileStore = blockedProfileSave{h.blog.profileStore, entered, release}
 	saved := make(chan error, 1)
 	go func() {
-		saved <- h.blog.writeProfile(ctx, Profile{Name: "Saved", ImageURL: "/images/" + f.ID, Version: h.blog.profile.Current().Version})
+		saved <- h.blog.persistProfile(ctx, Profile{Name: "Saved", ImageURL: "/images/" + f.ID, Version: h.blog.profile.Current().Version})
 	}()
 	select {
 	case <-entered:

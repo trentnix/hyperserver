@@ -66,12 +66,12 @@ func TestPosterSearchDoesNotLoadOtherAuthors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := h.blog.writePost(t.Context(), Post{Title: "Private", Draft: true, AuthorID: admin.ID, Markdown: "Other author's private body"})
+	foreign, err := h.blog.persistPost(t.Context(), Post{Title: "Private", Draft: true, AuthorID: admin.ID, Markdown: "Other author's private body"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	poster := registeredPoster(t, h)
-	own, err := h.blog.writePost(t.Context(), Post{Title: "My writing", Draft: true, AuthorID: poster.ID, Markdown: "Find this unique phrase"})
+	own, err := h.blog.persistPost(t.Context(), Post{Title: "My writing", Draft: true, AuthorID: poster.ID, Markdown: "Find this unique phrase"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestPosterContentPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminPost, err := h.blog.writePost(t.Context(), Post{Title: "Admin private", Slug: "admin-private", Markdown: "secret", Draft: true, PreviewImage: imageID})
+	adminPost, err := h.blog.persistPost(t.Context(), Post{Title: "Admin private", Slug: "admin-private", Markdown: "secret", Draft: true, PreviewImage: imageID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +424,7 @@ func TestRevocationDuringPostList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = h.blog.writePost(t.Context(), Post{Title: "Private admin draft review marker", Slug: "private-admin-review", Markdown: "Private", Draft: true, AuthorID: admin.ID})
+	_, err = h.blog.persistPost(t.Context(), Post{Title: "Private admin draft review marker", Slug: "private-admin-review", Markdown: "Private", Draft: true, AuthorID: admin.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

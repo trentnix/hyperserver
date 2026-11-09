@@ -49,13 +49,13 @@ func TestPosterHistoricalImage(t *testing.T) {
 		t.Fatal(err)
 	}
 	poster := registeredPoster(t, h)
-	p, err := h.blog.writePost(t.Context(), Post{Title: "Poster draft", Slug: "poster-review", Markdown: "![Image](/images/" + imageID + ")", Draft: true, AuthorID: poster.ID})
+	p, err := h.blog.persistPost(t.Context(), Post{Title: "Poster draft", Slug: "poster-review", Markdown: "![Image](/images/" + imageID + ")", Draft: true, AuthorID: poster.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	requireStatus(t, h.request("GET", "/images/"+imageID, nil, false), http.StatusOK)
 	p.Markdown = "Image removed"
-	p, err = h.blog.writePost(t.Context(), p)
+	p, err = h.blog.persistPost(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestPublicReuseDoesNotGrantOriginal(t *testing.T) {
 	if err = h.blog.mediaMetadata.RememberMedia(t.Context(), id, "admin.png", admin.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = h.blog.writePost(t.Context(), Post{Title: "Public admin image", Slug: "public-admin-review", Markdown: "Body", AuthorID: admin.ID, PreviewImage: id}); err != nil {
+	if _, err = h.blog.persistPost(t.Context(), Post{Title: "Public admin image", Slug: "public-admin-review", Markdown: "Body", AuthorID: admin.ID, PreviewImage: id}); err != nil {
 		t.Fatal(err)
 	}
 	registeredPoster(t, h)
@@ -248,7 +248,7 @@ func TestPosterImageUploads(t *testing.T) {
 	upload(http.StatusUnauthorized)
 
 	// A public use makes duplicate bytes reusable without changing their uploader.
-	if _, err := h.blog.writePost(t.Context(), Post{Title: "Public image", Slug: "public-image", Markdown: "Photo", PreviewImage: id}); err != nil {
+	if _, err := h.blog.persistPost(t.Context(), Post{Title: "Public image", Slug: "public-image", Markdown: "Photo", PreviewImage: id}); err != nil {
 		t.Fatal(err)
 	}
 	h.cookies = secondCookies

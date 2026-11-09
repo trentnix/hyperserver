@@ -30,29 +30,43 @@ func validationFields(err error) []string {
 	return nil
 }
 
-// writePost applies the same validation, media checks, and invalidation to editor
-// saves and history restores. The repository saves content, references, and history atomically.
+// writePost authorizes the actor before validating and saving writing.
 func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
+	p, err := m.authorizePostWrite(ctx, p)
+	if err != nil {
+		return p, err
+	}
+	return m.persistPost(ctx, p)
+}
+
+func (m *module) authorizePostWrite(ctx context.Context, p Post) (Post, error) {
 	account := user.GetUserFromContext(ctx)
 	permission, err := m.access.Role(ctx, account)
 	if err != nil {
 		return p, err
 	}
-	if account != nil && !permission.valid() {
+	if !permission.valid() {
 		return p, errAccessDenied
 	}
-	if permission == rolePoster {
+	if p.ID == "" {
 		p.AuthorID = account.ID
-		if p.ID != "" {
-			current, err := m.posts.GetByID(ctx, p.ID, true)
-			if err != nil {
-				return p, err
-			}
-			if current.AuthorID != account.ID {
-				return p, errAccessDenied
-			}
+	} else {
+		current, err := m.posts.GetByID(ctx, p.ID, true)
+		if err != nil {
+			return p, err
 		}
+		if permission == rolePoster && current.AuthorID != account.ID {
+			return p, errAccessDenied
+		}
+		p.AuthorID = current.AuthorID
 	}
+	return p, nil
+}
+
+// persistPost validates and saves authorized writing or trusted test fixtures.
+// The repository saves content, references, and history atomically.
+func (m *module) persistPost(ctx context.Context, p Post) (Post, error) {
+	var err error
 	p.Tags, err = normalizeTags(p.Tags)
 	if err != nil {
 		return p, writingFieldError{err, "tags"}
@@ -90,6 +104,14 @@ func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
 // writePage validates writing and protects its media from concurrent cleanup.
 // The repository enforces page-tree constraints within the save transaction.
 func (m *module) writePage(ctx context.Context, p Page) (Page, error) {
+	if err := m.authorizeAdminWrite(ctx); err != nil {
+		return p, err
+	}
+	return m.persistPage(ctx, p)
+}
+
+// persistPage validates and saves authorized writing or trusted test fixtures.
+func (m *module) persistPage(ctx context.Context, p Page) (Page, error) {
 	var err error
 	p.Tags, err = normalizeTags(p.Tags)
 	if err != nil {

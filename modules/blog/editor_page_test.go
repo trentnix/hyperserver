@@ -20,7 +20,7 @@ func TestPageEditorErrorFields(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	page, err := h.blog.writePage(t.Context(), Page{Title: "Existing", Slug: "existing", ChildrenDisplay: "hidden"})
+	page, err := h.blog.persistPage(t.Context(), Page{Title: "Existing", Slug: "existing", ChildrenDisplay: "hidden"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestPostEditorErrorFields(t *testing.T) {
 	h.register(t)
 	h.verify(t)
 	h.login(t)
-	post, err := h.blog.writePost(t.Context(), Post{Title: "Existing", Slug: "existing", Markdown: "Content", Draft: true})
+	post, err := h.blog.persistPost(t.Context(), Post{Title: "Existing", Slug: "existing", Markdown: "Content", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,10 +138,10 @@ func TestEditorSaveActions(t *testing.T) {
 						if state == "scheduled" {
 							p.Published = now.Add(time.Hour)
 						}
-						p, err = h.blog.writePost(t.Context(), p)
+						p, err = h.blog.persistPost(t.Context(), p)
 						id, version = p.ID, p.Version
 					} else {
-						p, saveErr := h.blog.writePage(t.Context(), Page{Title: kind + " " + state, ChildrenDisplay: "hidden", Published: state == "published"})
+						p, saveErr := h.blog.persistPage(t.Context(), Page{Title: kind + " " + state, ChildrenDisplay: "hidden", Published: state == "published"})
 						id, version, err = p.ID, p.Version, saveErr
 					}
 					if err != nil {

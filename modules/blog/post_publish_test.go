@@ -13,7 +13,7 @@ func TestPublishDraftPreview(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		t.Run(strconv.FormatBool(hx), func(t *testing.T) {
 			h := usersHarness(t)
-			p, err := h.blog.writePost(t.Context(), Post{Title: "Preview draft", Summary: "Summary", Markdown: "Stored writing.", Tags: "example", Draft: true})
+			p, err := h.blog.persistPost(t.Context(), Post{Title: "Preview draft", Summary: "Summary", Markdown: "Stored writing.", Tags: "example", Draft: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -79,7 +79,7 @@ func TestPublishDraftFailures(t *testing.T) {
 			if test.name == "scheduled" {
 				p.Draft, p.Published = false, time.Now().Add(24*time.Hour)
 			}
-			p, err := h.blog.writePost(t.Context(), p)
+			p, err := h.blog.persistPost(t.Context(), p)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -88,7 +88,7 @@ func TestPublishDraftFailures(t *testing.T) {
 			}
 			if test.name == "stale version" {
 				p.Title = "Newer writing"
-				p, err = h.blog.writePost(t.Context(), p)
+				p, err = h.blog.persistPost(t.Context(), p)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -117,7 +117,7 @@ func TestPublishDraftFailures(t *testing.T) {
 func TestPosterPublishesOwnDraft(t *testing.T) {
 	h := usersHarness(t)
 	poster := registeredPoster(t, h)
-	p, err := h.blog.writePost(t.Context(), Post{Title: "My draft", Markdown: "My writing.", Draft: true, AuthorID: poster.ID})
+	p, err := h.blog.persistPost(t.Context(), Post{Title: "My draft", Markdown: "My writing.", Draft: true, AuthorID: poster.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

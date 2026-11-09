@@ -174,7 +174,7 @@ func TestAlbumAuthoringAndVisibility(t *testing.T) {
 				}
 			}
 			post.Markdown = "No album"
-			post, err = h.blog.writePost(t.Context(), post)
+			post, err = h.blog.persistPost(t.Context(), post)
 			if err != nil {
 				t.Fatal(err)
 			}

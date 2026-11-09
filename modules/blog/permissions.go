@@ -20,6 +20,17 @@ func (r role) valid() bool { return r == roleAdmin || r == rolePoster }
 
 var errAccessDenied = errors.New("You don't have permission to make this change.")
 
+func (m *module) authorizeAdminWrite(ctx context.Context) error {
+	permission, err := m.access.Role(ctx, user.GetUserFromContext(ctx))
+	if err != nil {
+		return err
+	}
+	if permission != roleAdmin {
+		return errAccessDenied
+	}
+	return nil
+}
+
 // Role uses the account loaded and version-checked by authentication for this
 // request. Access changes take effect on the next request. User-management
 // mutations also recheck authority inside their write transaction.

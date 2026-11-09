@@ -160,7 +160,7 @@ func TestSharingPublicContent(t *testing.T) {
 	h := newHarness(t)
 	profile := Profile{Name: `A "site" & friends`, Bio: "Site biography", ImageURL: "/local-assets/portrait.jpg"}
 	profile.Version = h.blog.profile.Current().Version
-	if err := h.blog.writeProfile(t.Context(), profile); err != nil {
+	if err := h.blog.persistProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
 	post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "shared", Title: `Title " /><script>alert(1)</script>`, Summary: `Summary " /><script>alert(1)</script> & details`, Markdown: "![Vector](/vector.svg)\n\n![Photo](/images/photo.png?size=large&crop=1)"})
@@ -232,7 +232,7 @@ func TestSharingPublicContent(t *testing.T) {
 	}
 	profile.Bio, profile.ImageURL = "Updated bio", "https://cdn.example/new.jpg"
 	profile.Version = h.blog.profile.Current().Version
-	if err := h.blog.writeProfile(t.Context(), profile); err != nil {
+	if err := h.blog.persistProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)
 	}
 	body := h.request("GET", "/post/s/shared", nil, false).Body.String()
@@ -368,7 +368,7 @@ func TestPageDescriptions(t *testing.T) {
 			}
 		}
 	}
-	if err := h.blog.writeProfile(t.Context(), Profile{Name: "My Blog", Version: h.blog.profile.Current().Version}); err != nil {
+	if err := h.blog.persistProfile(t.Context(), Profile{Name: "My Blog", Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	requireDescription(t, h.request("GET", "/", nil, false).Body.String(), "")
@@ -377,7 +377,7 @@ func TestPageDescriptions(t *testing.T) {
 // TestSharingOriginAndDefaults checks trusted URLs, neutral defaults, and failure isolation.
 func TestSharingOriginAndDefaults(t *testing.T) {
 	h := newHarness(t)
-	if err := h.blog.writeProfile(t.Context(), Profile{Name: "My Blog", Version: h.blog.profile.Current().Version}); err != nil {
+	if err := h.blog.persistProfile(t.Context(), Profile{Name: "My Blog", Version: h.blog.profile.Current().Version}); err != nil {
 		t.Fatal(err)
 	}
 	r := httptest.NewRequest("GET", "https://spoofed.example/?private=query", nil)
