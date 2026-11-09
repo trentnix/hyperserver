@@ -410,9 +410,54 @@ document.removeEventListener = function(type, callback, options) {
       const input = document.querySelector('.imageInput');
       const transfer = new DataTransfer();
       transfer.items.add(new File([blob], 'sample.png', {type: 'image/png'}));
+      transfer.items.add(new File([blob], 'second.png', {type: 'image/png'}));
+      const originalFetch = window.fetch;
+      const uploads = [];
+      window.fetch = (...args) => {
+        if (args[0] !== '/post/images/upload') return originalFetch(...args);
+        return new Promise((resolve, reject) => uploads.push({
+          complete: () => originalFetch(...args).then(resolve, reject),
+          fail: () => resolve(new Response('', {status: 401}))
+        }));
+      };
       input.files = transfer.files;
       input.dispatchEvent(new Event('change'));
-      await wait(() => cm.getValue().includes('/images/'));
+      const form = document.querySelector('#post-form');
+      const save = form.querySelector('[type=submit]');
+      await wait(() => uploads.length === 1);
+      assert(form.dataset.uploading && save.disabled, 'Inline uploads must block Save.');
+      let attemptedSubmit;
+      window.addEventListener('submit', event => { attemptedSubmit = event; }, {capture: true, once: true});
+      form.requestSubmit();
+      assert(attemptedSubmit?.defaultPrevented && form.isConnected, 'An early Save must not leave the editor.');
+      uploads[0].fail();
+      await wait(() => uploads.length === 2);
+      assert(form.dataset.uploading && save.disabled, 'One failed upload must not unblock Save while another is pending.');
+      const retry = document.querySelector('[data-upload-retry]');
+      assert(retry && cm.getValue() === '# Saved heading\n\n', 'A failed upload must preserve the writing and offer retry.');
+      retry.click();
+      assert(uploads.length === 2, 'Retry must queue behind the active upload.');
+      uploads[1].complete();
+      await wait(() => uploads.length === 3);
+      assert(form.dataset.uploading && save.disabled && cm.getValue().includes('/images/'), 'A completed upload must stay inserted while a queued retry blocks Save.');
+      uploads[2].complete();
+      await wait(() => !form.dataset.uploading);
+      window.fetch = originalFetch;
+      assert((cm.getValue().match(/\/images\//g) || []).length === 2 && !save.disabled, 'Every successful upload must be inserted before Save is restored.');
+      assert(form.querySelector('[data-album-reorder]').disabled, 'Uploads must preserve controls that were already disabled.');
+      // Navigating away must prevent queued work from starting for an old form.
+      const {runFormUpload} = await import('/assets/js/media.js');
+      const abandoned = document.createElement('form');
+      document.body.append(abandoned);
+      let finishAbandoned;
+      let staleUploadStarted = false;
+      const running = runFormUpload(abandoned, () => new Promise(resolve => { finishAbandoned = resolve; }));
+      const queued = runFormUpload(abandoned, () => { staleUploadStarted = true; });
+      await wait(() => finishAbandoned);
+      abandoned.remove();
+      finishAbandoned();
+      await Promise.all([running, queued]);
+      assert(!staleUploadStarted && !abandoned.dataset.uploading, 'An abandoned form must release its state without starting queued uploads.');
       assert(!cm.getValue().includes(location.origin + '//'), 'Image URL has a doubled slash.');
       sessionStorage.setItem('blog-test-stage', 'saved');
       document.querySelector('#post-form').requestSubmit();

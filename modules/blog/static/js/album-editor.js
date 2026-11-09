@@ -1,4 +1,4 @@
-import {openMediaLibrary, uploadImage, setMediaStatus, showUploadFailure} from './media.js';
+import {openMediaLibrary, uploadImage, runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 import {openAlbumOrder} from './album-order.js';
 
 const editors = new WeakMap();
@@ -218,41 +218,37 @@ function initialize(root) {
         setMediaStatus(status, remaining ? `You can add ${remaining} more ${remaining === 1 ? 'photo' : 'photos'}. Choose fewer files.` : 'The album is full. Remove a photo before adding more.', true);
         return;
       }
-      form.dataset.uploading = 'true';
-      const controls = [...form.querySelectorAll('button, input[type="file"], [data-image-value]')].filter(control => !control.disabled);
-      controls.forEach(control => { control.disabled = true; });
       setMediaStatus(status, '');
       progress.hidden = false;
       const failed = [];
       const before = photos.length;
       let interrupted;
       try {
-        for (let index = 0; index < files.length; index++) {
-          if (!section.isConnected) return;
-          const file = files[index];
-          progress.textContent = `Uploading ${index + 1} of ${files.length}…`;
-          progress.title = file.name;
-          try {
-            const path = await uploadImage(file);
+        await runFormUpload(form, async () => {
+          for (let index = 0; index < files.length; index++) {
             if (!section.isConnected) return;
-            add([path]);
-          } catch (error) {
-            failed.push({file, error});
-            // A rejected image must not prevent later valid files from being
-            // added. Authentication and service failures pause the remaining batch.
-            if (!error.status || error.status >= 500 || [401, 403, 429].includes(error.status)) {
-              interrupted = files.slice(index + 1);
-              break;
+            const file = files[index];
+            progress.textContent = `Uploading ${index + 1} of ${files.length}…`;
+            progress.title = file.name;
+            try {
+              const path = await uploadImage(file);
+              if (!section.isConnected) return;
+              add([path]);
+            } catch (error) {
+              failed.push({file, error});
+              // A rejected image must not prevent later valid files from being
+              // added. Authentication and service failures pause the remaining batch.
+              if (!error.status || error.status >= 500 || [401, 403, 429].includes(error.status)) {
+                interrupted = files.slice(index + 1);
+                break;
+              }
             }
           }
-        }
+        });
       } finally {
-        delete form.dataset.uploading;
         progress.hidden = true;
         progress.textContent = '';
         progress.removeAttribute('title');
-        controls.forEach(control => { control.disabled = false; });
-        render();
       }
       if (!section.isConnected) return;
       const added = photos.length - before;
@@ -367,6 +363,7 @@ function initialize(root) {
       event.target.value = '';
       if (files.length) upload(files);
     });
+    form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
     section.querySelector('[data-component-remove]').hidden = false;
     editors.set(section, true);

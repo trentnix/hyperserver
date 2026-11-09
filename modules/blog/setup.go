@@ -134,3 +134,20 @@ func (s *sqliteRepository) initialSetupEmail(ctx context.Context, fallback strin
 	}
 	return email, err
 }
+
+// assignUnownedContent adopts legacy posts and uploads without changing existing
+// owners. Both updates commit together and repeated startup leaves them unchanged.
+func (s *sqliteRepository) assignUnownedContent(ctx context.Context, owner string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "UPDATE blog_current_posts SET author_id=? WHERE author_id=''", owner); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE blog_media SET uploaded_by=? WHERE uploaded_by=''", owner); err != nil {
+		return err
+	}
+	return tx.Commit()
+}

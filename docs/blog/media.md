@@ -10,7 +10,7 @@ Uploads accept PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels per file. Th
 
 JPEG copies use quality 85. PNG keeps transparency. JPEG/PNG copies apply EXIF orientation and remove metadata, including location data. GIF keeps its original bytes, animation, and metadata. Animated PNG is rejected.
 
-The server processes one upload at a time. Concurrent uploads receive a retry response. The optional [imaging package](../../pkg/imaging/image.go) handles processing. The blog owns upload limits, storage, and access rules.
+The server processes one upload at a time. Each editor queues its uploads and blocks Save until all pending uploads finish. Failures restore controls and keep successful uploads. Concurrent requests from other editors can receive a retry response. The optional [imaging package](../../pkg/imaging/image.go) handles processing. The blog owns upload limits, storage, and access rules.
 
 ## Add an album
 

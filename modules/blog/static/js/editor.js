@@ -1,4 +1,4 @@
-import {openMediaLibrary, uploadImage, showUploadFailure, setMediaStatus} from './media.js';
+import {openMediaLibrary, uploadImage, runFormUpload, showUploadFailure, setMediaStatus} from './media.js';
 import {markField} from './forms.js';
 import {createMarkdownEditor, getMarkdownEditor} from './markdown-editor.js';
 
@@ -91,17 +91,20 @@ function initialize(root) {
     let previewRequest;
     createMarkdownEditor(textarea, {
       upload(file, onSuccess, status) {
-        const attempt = async () => {
+        const attempt = () => {
           if (!textarea.isConnected) return;
-          setMediaStatus(status, 'Uploading ' + file.name + '…');
-          try {
-            const path = await uploadImage(file);
-            if (!textarea.isConnected) return;
-            onSuccess(path);
-            status.remove();
-          } catch (error) {
-            if (textarea.isConnected) showUploadFailure(status, error, attempt);
-          }
+          setMediaStatus(status, 'Waiting to upload ' + file.name + '…');
+          return runFormUpload(textarea.form, async () => {
+            setMediaStatus(status, 'Uploading ' + file.name + '…');
+            try {
+              const path = await uploadImage(file);
+              if (!textarea.isConnected) return;
+              onSuccess(path);
+              status.remove();
+            } catch (error) {
+              if (textarea.isConnected) showUploadFailure(status, error, attempt);
+            }
+          });
         };
         attempt();
       },

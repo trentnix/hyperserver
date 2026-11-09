@@ -290,6 +290,31 @@ export function openMediaLibrary(select, {multiple = false, excluded = [], limit
   htmx.process(dialog);
 }
 
+const uploads = new WeakMap();
+
+// Keep Save blocked until every queued upload has finished. One request at a
+// time also respects the server's image-processing limit for this form.
+export function runFormUpload(form, action) {
+  let state = uploads.get(form);
+  if (!state) {
+    const controls = [...form.querySelectorAll('button, input[type="file"], [data-image-value]')].filter(control => !control.disabled);
+    state = {controls, pending: 0, tail: Promise.resolve()};
+    uploads.set(form, state);
+    form.dataset.uploading = 'true';
+    controls.forEach(control => { control.disabled = true; });
+  }
+  state.pending++;
+  const task = state.tail.then(() => form.isConnected ? action() : undefined);
+  state.tail = task.catch(() => {});
+  return task.finally(() => {
+    if (--state.pending) return;
+    uploads.delete(form);
+    delete form.dataset.uploading;
+    state.controls.forEach(control => { control.disabled = false; });
+    form.dispatchEvent(new Event('blog:uploads-finished'));
+  });
+}
+
 // The library and profile controls use the same validated upload endpoint as the editor.
 export async function uploadImage(file) {
   if (file.size > 8 * 1024 * 1024) throw Object.assign(new Error('Choose an image of at most 8 MiB.'), {status: 413});
@@ -408,23 +433,21 @@ async function uploadPickerImage(picker, file) {
     input.value = '';
     return;
   }
-  form.dataset.uploading = 'true';
-  const controls = [...form.querySelectorAll('[data-image-picker] input, [data-image-reset], [data-image-upload], [data-media-browse], [data-upload-retry], [type="submit"]')].filter(control => !control.disabled);
-  controls.forEach(control => { control.disabled = true; });
   setMediaStatus(status, 'Uploading image…');
-  try {
-    const path = await uploadImage(file);
-    picker.querySelector('[data-image-value]').value = path.slice((picker.dataset.imagePrefix || '').length);
-    picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
-    updateImagePreview(picker);
-    setMediaStatus(status, 'Image uploaded. Save to apply.');
-  } catch (error) {
-    showUploadFailure(status, error, () => uploadPickerImage(picker, file));
-  } finally {
-    delete form.dataset.uploading;
-    controls.forEach(control => { control.disabled = false; });
-    input.value = '';
-  }
+  await runFormUpload(form, async () => {
+    try {
+      const path = await uploadImage(file);
+      if (!picker.isConnected) return;
+      picker.querySelector('[data-image-value]').value = path.slice((picker.dataset.imagePrefix || '').length);
+      picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
+      updateImagePreview(picker);
+      setMediaStatus(status, 'Image uploaded. Save to apply.');
+    } catch (error) {
+      if (picker.isConnected) showUploadFailure(status, error, () => uploadPickerImage(picker, file));
+    } finally {
+      input.value = '';
+    }
+  });
 }
 
 document.addEventListener('submit', event => {

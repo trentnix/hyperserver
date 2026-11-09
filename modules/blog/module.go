@@ -139,7 +139,7 @@ func (m *module) Configuration() any { return m.settings }
 
 // Init validates settings, prepares views, and opens content storage before serving.
 // It initializes the shared administrator rule only after setup succeeds.
-func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error {
+func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err error) {
 	if m.access == nil {
 		return errors.New("configure the blog through Site.Configure")
 	}
@@ -215,28 +215,43 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	if err != nil {
 		return fmt.Errorf("open blog storage: %w", err)
 	}
+	var images *fileImageStore
+	var assets *os.Root
+	closeResources := func() error {
+		var assetError, imageError error
+		if assets != nil {
+			assetError = assets.Close()
+		}
+		if images != nil {
+			imageError = images.Close()
+		}
+		return errors.Join(assetError, imageError, closeStore())
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, closeResources())
+		}
+	}()
+
 	setupEmail, err := store.initialSetupEmail(ctx, m.settings.AdminEmail)
 	if err != nil {
-		return errors.Join(err, closeStore())
+		return err
 	}
 	if err := m.administration.InitializeRole(ctx, setupEmail, string(roleAdmin)); err != nil {
-		return errors.Join(err, closeStore())
+		return err
 	}
 	account, err := m.accounts.GetByEmail(ctx, setupEmail)
 	if err != nil && !errors.Is(err, user.ErrUserNotFound) {
-		return errors.Join(fmt.Errorf("load blog setup: %w", err), closeStore())
+		return fmt.Errorf("load blog setup: %w", err)
 	}
 	if account != nil {
-		if _, err := store.db.ExecContext(ctx, "UPDATE blog_current_posts SET author_id=? WHERE author_id=''", account.ID); err != nil {
-			return errors.Join(err, closeStore())
-		}
-		if _, err := store.db.ExecContext(ctx, "UPDATE blog_media SET uploaded_by=? WHERE uploaded_by=''", account.ID); err != nil {
-			return errors.Join(err, closeStore())
+		if err := store.assignUnownedContent(ctx, account.ID); err != nil {
+			return fmt.Errorf("assign blog ownership: %w", err)
 		}
 	}
 	setup, err := newSetupState(ctx, store, m.accounts, user.EmailKey(setupEmail))
 	if err != nil {
-		return errors.Join(fmt.Errorf("load blog setup: %w", err), closeStore())
+		return fmt.Errorf("load blog setup: %w", err)
 	}
 	profile, err := store.GetProfile(ctx)
 	if errors.Is(err, errNotFound) {
@@ -246,18 +261,18 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 		err = profile.validate()
 	}
 	if err != nil {
-		return errors.Join(fmt.Errorf("load blog profile: %w", err), closeStore())
+		return fmt.Errorf("load blog profile: %w", err)
 	}
-	images, err := openImageStore(m.settings.UploadsDirectory, app.Config.App.WorkingDirectory)
+	images, err = openImageStore(m.settings.UploadsDirectory, app.Config.App.WorkingDirectory)
 	if err != nil {
-		return errors.Join(fmt.Errorf("open blog uploads: %w", err), closeStore())
+		return fmt.Errorf("open blog uploads: %w", err)
 	}
-	assets, err := openLocalAssets(m.settings.AssetsDirectory, app.Config.App.WorkingDirectory)
+	assets, err = openLocalAssets(m.settings.AssetsDirectory, app.Config.App.WorkingDirectory)
 	if err != nil {
-		return errors.Join(fmt.Errorf("open blog assets: %w", err), images.Close(), closeStore())
+		return fmt.Errorf("open blog assets: %w", err)
 	}
 	if err := validateAssetSeparation(images.root, assets); err != nil {
-		return errors.Join(err, assets.Close(), images.Close(), closeStore())
+		return err
 	}
 	m.posts, m.images = store, images
 	m.imageProcessing = make(chan struct{}, 1)
@@ -276,13 +291,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) error 
 	m.profile.value = profile
 	m.profile.mu.Unlock()
 	m.localAssets = assets
-	m.close = func() error {
-		var assetError error
-		if assets != nil {
-			assetError = assets.Close()
-		}
-		return errors.Join(assetError, images.Close(), closeStore())
-	}
+	m.close = closeResources
 	m.access.emailKey = user.EmailKey(setupEmail)
 	m.access.multiUser = m.settings.MultiUser
 	m.access.setup = setup
