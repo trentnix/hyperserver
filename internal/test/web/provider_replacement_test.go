@@ -31,8 +31,15 @@ import (
 
 // These fixtures exercise provider wiring, not a new production storage adapter.
 // Unexpected account writes fail through the unimplemented embedded contract.
-type replacementAccountReads struct {
+type replacementAccountStorage interface {
 	user.AccountRepository
+	user.PasswordRepository
+	user.PasswordResetRepository
+	user.VerificationRepository
+}
+
+type replacementAccountReads struct {
+	replacementAccountStorage
 	account user.User
 	fail    error
 	reads   int

@@ -13,15 +13,38 @@ import (
 )
 
 func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
+	for _, pair := range [][2]string{
+		{"É@bücher.invalid", "é@xn--bcher-kva.invalid"},
+		{"用户@例え.invalid", "用户@xn--r8jz45g.invalid"},
+		{"Person@bu\u0308cher.invalid", "person@bücher.invalid"},
+	} {
+		t.Run("verification after equivalent email update/"+pair[0], func(t *testing.T) {
+			repo := open(t)
+			capability[user.VerificationRepository](t, repo)
+			original := create(t, repo, pair[0])
+			token := insertToken(t, repo, original.ID, user.VerificationTokenPurpose)
+			changed := original
+			changed.Email = pair[1]
+			must(t, repo.Update(t.Context(), &changed))
+			assertToken(t, repo, token)
+			// Authorization with the original spelling must still identify the account.
+			verified, err := redeem(t, t.Context(), repo, &original, token)
+			must(t, err)
+			if verified == nil || !verified.Verified || verified.Email != pair[1] {
+				t.Fatalf("verification after equivalent update = %+v", verified)
+			}
+		})
+	}
 	for _, verified := range []bool{false, true} {
 		t.Run(fmt.Sprintf("verification accepts invited account/%t", verified), func(t *testing.T) {
 			repo := open(t)
+			capability[user.VerificationRepository](t, repo)
 			u := newAccount("invited@example.invalid")
 			u.Role, u.Invited, u.Verified = "poster", true, verified
 			must(t, repo.Create(t.Context(), &u))
 			token := insertToken(t, repo, u.ID, user.VerificationTokenPurpose)
-			reset := insertToken(t, repo, u.ID, user.ResetTokenPurpose)
-			got, err := redeem(t.Context(), repo, &u, token)
+			reset := optionalToken(t, repo, u.ID, user.ResetTokenPurpose)
+			got, err := redeem(t, t.Context(), repo, &u, token)
 			must(t, err)
 			if got == nil {
 				t.Fatal("verification returned nil")
@@ -42,12 +65,15 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			if _, ok := repo.(user.InvitationRepository); !ok {
 				t.Skip("provider does not support invitations")
 			}
+			if strings.Contains(operation, "verification") {
+				capability[user.VerificationRepository](t, repo)
+			}
 			u := newAccount("invited@example.invalid")
 			u.Role, u.Invited = "poster", true
 			must(t, repo.Create(t.Context(), &u))
 			invitation := insertToken(t, repo, u.ID, user.InvitationTokenPurpose)
-			verification := insertToken(t, repo, u.ID, user.VerificationTokenPurpose)
-			reset := insertToken(t, repo, u.ID, user.ResetTokenPurpose)
+			verification := optionalToken(t, repo, u.ID, user.VerificationTokenPurpose)
+			reset := optionalToken(t, repo, u.ID, user.ResetTokenPurpose)
 			other := create(t, repo, "other@example.invalid")
 			otherInvite := insertToken(t, repo, other.ID, user.InvitationTokenPurpose)
 			changed := u
@@ -63,7 +89,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				if operation == "failed verification" {
 					changed.Email = "wrong@example.invalid"
 				}
-				_, err = redeem(t.Context(), repo, &changed, verification)
+				_, err = redeem(t, t.Context(), repo, &changed, verification)
 			}
 			if strings.HasPrefix(operation, "failed") {
 				if err == nil {
@@ -83,11 +109,12 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 	}
 	t.Run("verification recipient binding", func(t *testing.T) {
 		repo := open(t)
+		capability[user.VerificationRepository](t, repo)
 		u := create(t, repo, "current@example.invalid")
 		token := user.TokenMetadata{AccountID: u.ID, TokenHash: tokenHash("old recipient"), Purpose: user.VerificationTokenPurpose, ExpiresAt: tokenExpiry(time.Hour), Email: "old@example.invalid"}
-		must(t, repo.InsertToken(t.Context(), token))
+		must(t, capability[user.TokenRepository](t, repo).InsertToken(t.Context(), token))
 		for _, email := range []string{u.Email, token.Email} {
-			got, err := repo.Verify(t.Context(), user.VerificationAuthorization{AccountID: u.ID, TokenHash: token.TokenHash, ExpiresAt: token.ExpiresAt, Email: email})
+			got, err := capability[user.VerificationRepository](t, repo).Verify(t.Context(), user.VerificationAuthorization{AccountID: u.ID, TokenHash: token.TokenHash, ExpiresAt: token.ExpiresAt, Email: email})
 			if got != nil || !errors.Is(err, user.ErrToken) {
 				t.Fatalf("mismatched recipient accepted: %v, %v", got, err)
 			}
@@ -96,56 +123,20 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 		}
 	})
 
-	t.Run("token metadata and insert only", func(t *testing.T) {
-		repo := open(t)
-		u := create(t, repo, "token@example.invalid")
-		token := insertToken(t, repo, u.ID, user.ResetTokenPurpose)
-		other := insertToken(t, repo, u.ID, user.VerificationTokenPurpose)
-		assertToken(t, repo, token)
-		assertToken(t, repo, token) // Lookup must not consume the token.
-		duplicate := token
-		duplicate.Purpose = other.Purpose
-		duplicate.ExpiresAt = token.ExpiresAt.Add(time.Hour)
-		if err := repo.InsertToken(t.Context(), duplicate); err == nil {
-			t.Fatal("duplicate insert replaced token metadata")
-		}
-		assertToken(t, repo, token)
-		assertToken(t, repo, other)
-		wrongPurpose := token
-		wrongPurpose.Purpose = other.Purpose
-		assertTokenMissing(t, repo, wrongPurpose)
-		missing := token
-		missing.TokenHash = tokenHash("missing")
-		assertTokenMissing(t, repo, missing)
-		assertAccount(t, load(t, repo, u.ID), u)
-	})
-
-	t.Run("concurrent token insert", func(t *testing.T) {
-		repo := open(t)
-		u := create(t, repo, "token@example.invalid")
-		first := user.TokenMetadata{AccountID: u.ID, TokenHash: tokenHash("duplicate"), Purpose: user.ResetTokenPurpose, ExpiresAt: tokenExpiry(time.Hour)}
-		second := first
-		second.Purpose = user.VerificationTokenPurpose
-		tokens := [2]user.TokenMetadata{first, second}
-		winner := oneSuccess(t, concurrent(func(i int) error { return repo.InsertToken(t.Context(), tokens[i]) }))
-		assertToken(t, repo, tokens[winner])
-		assertTokenMissing(t, repo, tokens[1-winner])
-		assertAccount(t, load(t, repo, u.ID), u)
-	})
-
 	for _, purpose := range []string{user.ResetTokenPurpose, user.VerificationTokenPurpose} {
 		t.Run(purpose+"/redeem and replay", func(t *testing.T) {
 			repo := open(t)
+			requireRedemption(t, repo, purpose)
 			original := create(t, repo, "MixedΣ@example.invalid")
 			token := insertToken(t, repo, original.ID, purpose)
 			unrelated := token
 			unrelated.TokenHash = tokenHash("another token")
-			must(t, repo.InsertToken(t.Context(), unrelated))
+			must(t, capability[user.TokenRepository](t, repo).InsertToken(t.Context(), unrelated))
 			other := create(t, repo, "other@example.invalid")
 			otherToken := insertToken(t, repo, other.ID, purpose)
 			input := original
 			input.Email = "MIXEDς@EXAMPLE.INVALID"
-			got, err := redeem(t.Context(), repo, &input, token)
+			got, err := redeem(t, t.Context(), repo, &input, token)
 			must(t, err)
 			if got == nil {
 				t.Fatal("redemption returned nil account")
@@ -164,7 +155,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			assertTokenMissing(t, repo, token)
 
 			beforeReplay := input
-			got, err = redeem(t.Context(), repo, &input, token)
+			got, err = redeem(t, t.Context(), repo, &input, token)
 			if !errors.Is(err, user.ErrTokenNotFound) || got != nil {
 				t.Fatalf("replay = %v, %v", got, err)
 			}
@@ -178,6 +169,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 		for _, failure := range []string{"stored expiry", "supplied expiry", "wrong purpose", "wrong hash", "wrong account", "account mismatch"} {
 			t.Run(purpose+"/rollback/"+failure, func(t *testing.T) {
 				repo := open(t)
+				requireRedemption(t, repo, purpose)
 				original := create(t, repo, "rollback@example.invalid")
 				other := create(t, repo, "other@example.invalid")
 				token := user.TokenMetadata{AccountID: original.ID, TokenHash: tokenHash("rollback"), Purpose: purpose, ExpiresAt: tokenExpiry(time.Hour), Email: original.Email}
@@ -189,8 +181,9 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 					if purpose == user.ResetTokenPurpose {
 						token.Purpose = user.VerificationTokenPurpose
 					}
+					requireRedemption(t, repo, token.Purpose)
 				}
-				must(t, repo.InsertToken(t.Context(), token))
+				must(t, capability[user.TokenRepository](t, repo).InsertToken(t.Context(), token))
 				// Preliminary lookup must expose expired metadata without consuming it.
 				assertToken(t, repo, token)
 				auth := token
@@ -208,7 +201,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 					input.Password, input.Email = "stale password", "stale@example.invalid"
 				}
 				before := input
-				got, err := redeem(t.Context(), repo, &input, auth)
+				got, err := redeem(t, t.Context(), repo, &input, auth)
 				if err == nil || got != nil {
 					t.Fatalf("invalid redemption = %v, %v", got, err)
 				}
@@ -226,7 +219,7 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				assertAccount(t, load(t, repo, other.ID), other)
 				assertToken(t, repo, token)
 				if failure != "stored expiry" {
-					_, err := redeem(t.Context(), repo, &original, token)
+					_, err := redeem(t, t.Context(), repo, &original, token)
 					must(t, err)
 					assertTokenMissing(t, repo, token)
 				}
@@ -235,13 +228,14 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 
 		t.Run(purpose+"/concurrent redemption", func(t *testing.T) {
 			repo := open(t)
+			requireRedemption(t, repo, purpose)
 			original := create(t, repo, "concurrent@example.invalid")
 			token := insertToken(t, repo, original.ID, purpose)
 			inputs := [2]user.User{original, original}
 			var results [2]*user.User
 			errs := concurrent(func(i int) error {
 				var err error
-				results[i], err = redeem(t.Context(), repo, &inputs[i], token)
+				results[i], err = redeem(t, t.Context(), repo, &inputs[i], token)
 				return err
 			})
 			winner := oneSuccess(t, errs)
@@ -265,13 +259,14 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 
 	t.Run("reset rejects changed provider", func(t *testing.T) {
 		repo := open(t)
+		capability[user.PasswordResetRepository](t, repo)
 		input := create(t, repo, "provider@example.invalid")
 		before := input
 		token := insertToken(t, repo, input.ID, user.ResetTokenPurpose)
 		current := input
 		current.RegistrationAuthType = "another provider"
 		must(t, repo.Update(t.Context(), &current))
-		got, err := redeem(t.Context(), repo, &input, token)
+		got, err := redeem(t, t.Context(), repo, &input, token)
 		if err == nil || got != nil {
 			t.Fatalf("reset with stale provider = %v, %v", got, err)
 		}
@@ -282,12 +277,13 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 
 	t.Run("reset refreshes unrelated account changes", func(t *testing.T) {
 		repo := open(t)
+		capability[user.PasswordResetRepository](t, repo)
 		input := create(t, repo, "reset@example.invalid")
 		token := insertToken(t, repo, input.ID, user.ResetTokenPurpose)
 		current := input
 		current.Email, current.Verified, current.VerificationRequired = "updated@example.invalid", true, false
 		must(t, repo.Update(t.Context(), &current))
-		got, err := redeem(t.Context(), repo, &input, token)
+		got, err := redeem(t, t.Context(), repo, &input, token)
 		must(t, err)
 		if got == nil {
 			t.Fatal("reset returned nil")
@@ -301,11 +297,12 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 
 	t.Run("verified account keeps security version", func(t *testing.T) {
 		repo := open(t)
+		capability[user.VerificationRepository](t, repo)
 		u := create(t, repo, "verified@example.invalid")
 		u.Verified = true
 		must(t, repo.Update(t.Context(), &u))
 		token := insertToken(t, repo, u.ID, user.VerificationTokenPurpose)
-		got, err := redeem(t.Context(), repo, &u, token)
+		got, err := redeem(t, t.Context(), repo, &u, token)
 		must(t, err)
 		if got == nil {
 			t.Fatal("verification returned nil")
@@ -319,12 +316,19 @@ func tokenContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
 }
 
 func cancellationContract(t *testing.T, open func(*testing.T) user.AccountRepository) {
-	for _, operation := range []string{"lookup ID", "lookup email", "lookup token", "create", "update", "insert token", "change password", "reset", "verify"} {
+	for _, operation := range []string{"lookup ID", "lookup email", "create", "update", "change password", "reset", "verify"} {
 		t.Run("cancellation/"+operation, func(t *testing.T) {
 			repo := open(t)
 			original := create(t, repo, "cancel@example.invalid")
-			reset := insertToken(t, repo, original.ID, user.ResetTokenPurpose)
-			verification := insertToken(t, repo, original.ID, user.VerificationTokenPurpose)
+			var token user.TokenMetadata
+			if operation == "reset" || operation == "verify" {
+				purpose := user.ResetTokenPurpose
+				if operation == "verify" {
+					purpose = user.VerificationTokenPurpose
+				}
+				requireRedemption(t, repo, purpose)
+				token = insertToken(t, repo, original.ID, purpose)
+			}
 			input := original
 			if operation == "create" {
 				input = newAccount("new@example.invalid")
@@ -332,41 +336,30 @@ func cancellationContract(t *testing.T, open func(*testing.T) user.AccountReposi
 				input.Email = "updated@example.invalid"
 			}
 			before := input
-			newToken := reset
-			newToken.TokenHash = tokenHash("canceled insert")
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 			var result *user.User
-			var metadata user.TokenMetadata
 			var err error
 			switch operation {
 			case "lookup ID":
 				result, err = repo.GetByID(ctx, input.ID)
 			case "lookup email":
 				result, err = repo.GetByEmail(ctx, input.Email)
-			case "lookup token":
-				metadata, err = repo.GetToken(ctx, reset.TokenHash, reset.Purpose)
 			case "create":
 				err = repo.Create(ctx, &input)
 			case "update":
 				err = repo.Update(ctx, &input)
-			case "insert token":
-				err = repo.InsertToken(ctx, newToken)
 			case "change password":
-				err = repo.ChangePassword(ctx, &input, "new hash")
-			case "reset":
-				result, err = redeem(ctx, repo, &input, reset)
-			case "verify":
-				result, err = redeem(ctx, repo, &input, verification)
+				err = capability[user.PasswordRepository](t, repo).ChangePassword(ctx, &input, "new hash")
+			case "reset", "verify":
+				result, err = redeem(t, ctx, repo, &input, token)
 			}
-			if !errors.Is(err, context.Canceled) || result != nil || metadata != (user.TokenMetadata{}) {
-				t.Fatalf("canceled operation = %v, %v, %v", result, metadata, err)
+			if !errors.Is(err, context.Canceled) || result != nil {
+				t.Fatalf("canceled operation = %v, %v", result, err)
 			}
 			assertAccount(t, input, before)
 			assertAccount(t, load(t, repo, original.ID), original)
-			assertToken(t, repo, reset)
-			assertToken(t, repo, verification)
-			assertTokenMissing(t, repo, newToken)
+			assertToken(t, repo, token)
 			if operation == "create" || operation == "update" {
 				got, err := repo.GetByEmail(t.Context(), input.Email)
 				if got != nil || !errors.Is(err, user.ErrUserNotFound) {
@@ -389,13 +382,16 @@ func insertToken(t *testing.T, repo user.AccountRepository, id, purpose string) 
 	t.Helper()
 	token := user.TokenMetadata{AccountID: id, TokenHash: tokenHash(id + purpose), Purpose: purpose, ExpiresAt: tokenExpiry(time.Hour)}
 	token.Email = load(t, repo, id).Email
-	must(t, repo.InsertToken(t.Context(), token))
+	must(t, capability[user.TokenRepository](t, repo).InsertToken(t.Context(), token))
 	return token
 }
 
 func assertToken(t *testing.T, repo user.AccountRepository, want user.TokenMetadata) {
 	t.Helper()
-	got, err := repo.GetToken(t.Context(), want.TokenHash, want.Purpose)
+	if want.AccountID == "" {
+		return
+	}
+	got, err := capability[user.TokenRepository](t, repo).GetToken(t.Context(), want.TokenHash, want.Purpose)
 	must(t, err)
 	got.ExpiresAt, want.ExpiresAt = got.ExpiresAt.Round(0).UTC(), want.ExpiresAt.Round(0).UTC()
 	if got != want {
@@ -405,19 +401,22 @@ func assertToken(t *testing.T, repo user.AccountRepository, want user.TokenMetad
 
 func assertTokenMissing(t *testing.T, repo user.AccountRepository, token user.TokenMetadata) {
 	t.Helper()
-	got, err := repo.GetToken(t.Context(), token.TokenHash, token.Purpose)
+	if token.AccountID == "" {
+		return
+	}
+	got, err := capability[user.TokenRepository](t, repo).GetToken(t.Context(), token.TokenHash, token.Purpose)
 	if !errors.Is(err, user.ErrTokenNotFound) || got != (user.TokenMetadata{}) {
 		t.Fatalf("missing token = %+v, %v", got, err)
 	}
 }
 
-func redeem(ctx context.Context, repo user.AccountRepository, input *user.User, token user.TokenMetadata) (*user.User, error) {
+func redeem(t *testing.T, ctx context.Context, repo user.AccountRepository, input *user.User, token user.TokenMetadata) (*user.User, error) {
 	if token.Purpose == user.VerificationTokenPurpose {
-		return repo.Verify(ctx, user.VerificationAuthorization{
+		return capability[user.VerificationRepository](t, repo).Verify(ctx, user.VerificationAuthorization{
 			AccountID: token.AccountID, TokenHash: token.TokenHash, Email: input.Email, ExpiresAt: token.ExpiresAt,
 		})
 	}
-	if err := repo.ResetPassword(ctx, input, user.ResetAuthorization{
+	if err := capability[user.PasswordResetRepository](t, repo).ResetPassword(ctx, input, user.ResetAuthorization{
 		AccountID: token.AccountID, TokenHash: token.TokenHash, ExpiresAt: token.ExpiresAt,
 	}, "reset password hash"); err != nil {
 		return nil, err

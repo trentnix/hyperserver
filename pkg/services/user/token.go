@@ -63,7 +63,11 @@ func loadToken(ctx context.Context, accounts AccountRepository, raw, purpose str
 		return TokenMetadata{}, errors.New("the account repository is not configured")
 	}
 	hash := opaquetoken.Hash(raw)
-	stored, err := accounts.GetToken(ctx, hash, purpose)
+	tokens, ok := accounts.(TokenRepository)
+	if !ok {
+		return TokenMetadata{}, errors.New("account storage does not support tokens")
+	}
+	stored, err := tokens.GetToken(ctx, hash, purpose)
 	if err != nil {
 		return TokenMetadata{}, err
 	}

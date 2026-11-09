@@ -9,7 +9,12 @@ import (
 
 type verificationAccountRepository struct {
 	AccountRepository
+	TokenRepository
 	verify func(context.Context, VerificationAuthorization) (*User, error)
+}
+
+func (s verificationAccountRepository) GetToken(ctx context.Context, hash, purpose string) (TokenMetadata, error) {
+	return s.AccountRepository.(TokenRepository).GetToken(ctx, hash, purpose)
 }
 
 func (s verificationAccountRepository) Verify(ctx context.Context, authorization VerificationAuthorization) (*User, error) {

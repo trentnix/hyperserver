@@ -10,7 +10,7 @@ import (
 type AuthResetToken struct{ AuthToken }
 
 // NewAuthResetToken creates a reset token and its hash.
-// Store its Metadata with AccountRepository.InsertToken before sending the link.
+// Store its Metadata with TokenRepository.InsertToken before sending the link.
 func NewAuthResetToken(u *User, expiration time.Duration) (*AuthResetToken, error) {
 	token, err := newAuthToken(u, expiration, ResetTokenPurpose)
 	if err != nil {
@@ -34,6 +34,10 @@ func (u *User) ResetPassword(ctx context.Context, accounts AccountRepository, ra
 	if passwordHash == "" {
 		return errors.New("a password hash is required")
 	}
+	repository, ok := accounts.(PasswordResetRepository)
+	if !ok {
+		return errors.New("account storage does not support password reset")
+	}
 	token, err := loadToken(ctx, accounts, raw, ResetTokenPurpose)
 	if err != nil {
 		return err
@@ -41,7 +45,7 @@ func (u *User) ResetPassword(ctx context.Context, accounts AccountRepository, ra
 	if token.AccountID != u.ID {
 		return ErrToken
 	}
-	return accounts.ResetPassword(ctx, u, ResetAuthorization{
+	return repository.ResetPassword(ctx, u, ResetAuthorization{
 		AccountID: token.AccountID, TokenHash: token.TokenHash, ExpiresAt: token.ExpiresAt,
 	}, passwordHash)
 }

@@ -71,7 +71,11 @@ func (a *EmailAuthService) changePassword(ctx context.Context, u *user.User, cur
 	if err != nil {
 		return err
 	}
-	return a.accounts.ChangePassword(ctx, u, hash)
+	passwords, ok := a.accounts.(user.PasswordRepository)
+	if !ok {
+		return errors.New("account storage does not support password changes")
+	}
+	return passwords.ChangePassword(ctx, u, hash)
 }
 
 func (a *EmailAuthService) resetPassword(ctx context.Context, u *user.User, token, replacement string, requireNew bool) error {
@@ -118,6 +122,10 @@ func (a *EmailAuthService) requestPasswordReset(ctx context.Context, email strin
 
 // SendVerificationEmail serves both registration and authenticated resend requests.
 func (a *EmailAuthService) SendVerificationEmail(ctx context.Context, u *user.User, origin url.URL) error {
+	verification, ok := a.accounts.(user.VerificationRepository)
+	if !ok {
+		return errors.New("account storage does not support email verification")
+	}
 	if a.mailClient == nil {
 		return messaging.ErrMailUnavailable
 	}
@@ -149,7 +157,7 @@ func (a *EmailAuthService) SendVerificationEmail(ctx context.Context, u *user.Us
 		return err
 	}
 
-	if err := a.accounts.InsertToken(ctx, verificationToken.Metadata()); err != nil {
+	if err := verification.InsertToken(ctx, verificationToken.Metadata()); err != nil {
 		return err
 	}
 	return a.mailClient.Compose().
@@ -204,7 +212,11 @@ func (a *EmailAuthService) sendPasswordEmail(ctx context.Context, u *user.User, 
 		return err
 	}
 
-	if err := a.accounts.InsertToken(ctx, token.Metadata()); err != nil {
+	tokens, ok := a.accounts.(user.TokenRepository)
+	if !ok {
+		return errors.New("account storage does not support tokens")
+	}
+	if err := tokens.InsertToken(ctx, token.Metadata()); err != nil {
 		return err
 	}
 	return a.mailClient.Compose().

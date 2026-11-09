@@ -116,7 +116,7 @@ func TestConfiguredAccountsUseProviderConnection(t *testing.T) {
 			if err := repository.Create(t.Context(), account); err != nil {
 				t.Fatal(err)
 			}
-			if err := repository.InsertToken(t.Context(), user.TokenMetadata{
+			if err := repository.(user.TokenRepository).InsertToken(t.Context(), user.TokenMetadata{
 				AccountID: account.ID, TokenHash: strings.Repeat("a", 64), Purpose: user.ResetTokenPurpose, ExpiresAt: time.Now().Add(-time.Hour),
 			}); err != nil {
 				t.Fatal(err)

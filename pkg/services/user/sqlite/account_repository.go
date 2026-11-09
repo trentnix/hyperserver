@@ -40,6 +40,11 @@ func scanAccount(row interface{ Scan(...any) error }) (*accounts.User, error) {
 }
 
 var _ accounts.AccountRepository = (*AccountRepository)(nil)
+var _ accounts.PasswordRepository = (*AccountRepository)(nil)
+var _ accounts.TokenRepository = (*AccountRepository)(nil)
+var _ accounts.PasswordResetRepository = (*AccountRepository)(nil)
+var _ accounts.VerificationRepository = (*AccountRepository)(nil)
+var _ accounts.PasswordSetupRepository = (*AccountRepository)(nil)
 var _ accounts.TokenMaintenance = (*AccountRepository)(nil)
 var _ accounts.SingleAccountReader = (*AccountRepository)(nil)
 

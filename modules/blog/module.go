@@ -163,7 +163,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	if !ok {
 		return errors.New("blog requires account storage with user administration")
 	}
-	if _, ok := m.accounts.(user.InvitationRepository); !ok {
+	if _, ok := m.accounts.(user.InvitationRepository); m.settings.MultiUser && !ok {
 		return errors.New("blog requires account storage with invitation support")
 	}
 	m.app = app

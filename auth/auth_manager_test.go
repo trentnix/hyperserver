@@ -137,7 +137,10 @@ func TestAuthDoesNotRegisterRootPages(t *testing.T) {
 
 func TestAuthRouteMethods(t *testing.T) {
 	mux := http.NewServeMux()
-	manager := &AuthManager{Enabled: true, registrationEnabled: true}
+	manager := &AuthManager{Enabled: true, registrationEnabled: true, accounts: &struct {
+		user.AccountRepository
+		user.VerificationRepository
+	}{}}
 	if err := manager.Routes(routing.NewRoutes(mux)); err != nil {
 		t.Fatal(err)
 	}

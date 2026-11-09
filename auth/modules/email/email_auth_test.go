@@ -443,6 +443,7 @@ func TestInitRequiresAccountEmailTemplates(t *testing.T) {
 
 type emailAccountRepository struct {
 	user.AccountRepository
+	user.VerificationRepository
 	getToken       func(context.Context, string, string) (user.TokenMetadata, error)
 	lookup         func(context.Context, string) (*user.User, error)
 	create         func(context.Context, *user.User) error

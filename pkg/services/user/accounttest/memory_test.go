@@ -3,6 +3,7 @@ package accounttest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +24,60 @@ type memoryRepository struct {
 }
 
 type tokenKey struct{ account, hash string }
+
+func TestOptionalAccountContracts(t *testing.T) {
+	for _, name := range []string{"core", "password", "tokens", "reset", "verification"} {
+		t.Run(name, func(t *testing.T) {
+			open := func(*testing.T) user.AccountRepository {
+				repo := &restrictedTokenRepository{memoryRepository: &memoryRepository{accounts: make(map[string]user.User), tokens: make(map[tokenKey]user.TokenMetadata), now: time.Now}, purpose: user.VerificationTokenPurpose}
+				if name == "reset" {
+					repo.purpose = user.ResetTokenPurpose
+				}
+				switch name {
+				case "password":
+					return struct {
+						user.AccountRepository
+						user.PasswordRepository
+					}{repo, repo}
+				case "tokens":
+					return struct {
+						user.AccountRepository
+						user.TokenRepository
+					}{repo, repo}
+				case "reset":
+					return struct {
+						user.AccountRepository
+						user.PasswordResetRepository
+					}{repo, repo}
+				case "verification":
+					return struct {
+						user.AccountRepository
+						user.VerificationRepository
+					}{repo, repo}
+				default:
+					return struct{ user.AccountRepository }{repo}
+				}
+			}
+			Run(t, open)
+			if name == "tokens" {
+				RunTokens(t, open, user.VerificationTokenPurpose)
+			}
+		})
+	}
+}
+
+// Reject unsupported purposes rather than hiding methods on an unrestricted store.
+type restrictedTokenRepository struct {
+	*memoryRepository
+	purpose string
+}
+
+func (r *restrictedTokenRepository) InsertToken(ctx context.Context, token user.TokenMetadata) error {
+	if token.Purpose != r.purpose {
+		return fmt.Errorf("unsupported token purpose: %s", token.Purpose)
+	}
+	return r.memoryRepository.InsertToken(ctx, token)
+}
 
 func TestMemoryAccountContract(t *testing.T) {
 	for _, clock := range []string{"local", "coarse remote"} {

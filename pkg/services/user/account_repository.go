@@ -22,6 +22,7 @@ const (
 // token purposes. Failure preserves both account and token. Success refreshes u.
 // The caller must authenticate u and validate and hash the new password.
 type PasswordSetupRepository interface {
+	TokenRepository
 	SetupPassword(ctx context.Context, u *User, token TokenMetadata, passwordHash string) error
 }
 
@@ -46,25 +47,16 @@ type SingleAccountReader interface {
 // Callers must not share mutable User arguments between concurrent operations.
 // Successful writes must be committed and visible to subsequent reads. Providers
 // must document restart and crash durability for their storage configuration.
-// Accounts do not expire. Token redemption must enforce expiry without cleanup.
+// Accounts do not expire. Passwords, tokens, and email verification use optional capabilities.
 type AccountRepository interface {
 	GetByID(context.Context, string) (*User, error)
 	// GetByEmail matches by EmailKey. Create and Update must enforce uniqueness
 	// using the same key, while preserving the original address in User.Email.
 	GetByEmail(context.Context, string) (*User, error)
-	// GetToken reads metadata matching the token hash and purpose without consuming it.
-	// Missing tokens return ErrTokenNotFound. Expired tokens remain readable so the
-	// caller can distinguish expiry from absence. Other failures must remain errors.
-	GetToken(ctx context.Context, tokenHash, purpose string) (TokenMetadata, error)
 	// Create inserts only. Duplicate emails return an error matching ErrEmailAlreadyExists.
 	// Failure must leave stored accounts and u unchanged. Success fills in the ID,
 	// timestamps, and initial SessionVersion of 1. Password is already hashed.
 	Create(context.Context, *User) error
-	// InsertToken inserts only. The account ID and token hash identify the record.
-	// Duplicate records must return an error without replacing the stored token.
-	// Failure must leave storage unchanged. Success must not change other tokens or accounts.
-	// Token generation and delivery belong to the caller. Preserve the recipient Email.
-	InsertToken(context.Context, TokenMetadata) error
 	// Update changes an existing account by ID. Missing accounts return ErrUserNotFound,
 	// stale SessionVersion values return ErrUserChanged, and duplicate emails return
 	// an error matching ErrEmailAlreadyExists. The caller must preserve the version from its
@@ -77,12 +69,35 @@ type AccountRepository interface {
 	// SessionVersion guards security changes, not every edit. Concurrent edits that
 	// leave the version unchanged can overwrite each other.
 	Update(context.Context, *User) error
+}
+
+// PasswordRepository optionally supports authenticated password changes.
+type PasswordRepository interface {
 	// ChangePassword atomically replaces the password hash and increments SessionVersion
 	// only if the stored password, registration provider, and SessionVersion match u.
 	// A missing account or a mismatch must return an error. Failure must leave storage
 	// and u unchanged. Success updates u's Password, UpdatedAt, and SessionVersion.
 	// The caller must validate and hash the new password before calling.
 	ChangePassword(ctx context.Context, u *User, passwordHash string) error
+}
+
+// TokenRepository optionally stores recipient-bound account tokens.
+// Token redemption must enforce expiry without depending on cleanup.
+type TokenRepository interface {
+	// GetToken reads metadata matching the token hash and purpose without consuming it.
+	// Missing tokens return ErrTokenNotFound. Expired tokens remain readable so the
+	// caller can distinguish expiry from absence. Other failures must remain errors.
+	GetToken(ctx context.Context, tokenHash, purpose string) (TokenMetadata, error)
+	// InsertToken inserts only. The account ID and token hash identify the record.
+	// Duplicate records must return an error without replacing the stored token.
+	// Failure must leave storage unchanged. Success must not change other tokens or accounts.
+	// Token generation and delivery belong to the caller. Preserve the recipient Email.
+	InsertToken(context.Context, TokenMetadata) error
+}
+
+// PasswordResetRepository optionally supports atomic password recovery.
+type PasswordResetRepository interface {
+	TokenRepository
 	// ResetPassword atomically consumes the exact reset token, replaces the password,
 	// and increments SessionVersion. The caller must validate the token's stored hash,
 	// reset purpose, and account identity, and validate and hash the new password.
@@ -95,6 +110,11 @@ type AccountRepository interface {
 	// Success refreshes u from storage. Failure must leave u and storage unchanged.
 	// Other account fields and tokens must remain unchanged.
 	ResetPassword(ctx context.Context, u *User, authorization ResetAuthorization, passwordHash string) error
+}
+
+// VerificationRepository optionally supports atomic email verification.
+type VerificationRepository interface {
+	TokenRepository
 	// Verify atomically consumes the exact verification token and marks its account
 	// verified only if the current and stored recipient emails have the same EmailKey.
 	// The caller must validate the stored hash, verification purpose, account ID, and email.

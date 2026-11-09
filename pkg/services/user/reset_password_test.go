@@ -9,7 +9,12 @@ import (
 
 type resetAccountRepository struct {
 	AccountRepository
+	TokenRepository
 	reset func(context.Context, *User, ResetAuthorization, string) error
+}
+
+func (s resetAccountRepository) GetToken(ctx context.Context, hash, purpose string) (TokenMetadata, error) {
+	return s.AccountRepository.(TokenRepository).GetToken(ctx, hash, purpose)
 }
 
 func (s resetAccountRepository) ResetPassword(ctx context.Context, u *User, authorization ResetAuthorization, hash string) error {

@@ -62,7 +62,7 @@ func TestSetupExpiredVerification(t *testing.T) {
 	}
 	metadata := token.Metadata()
 	metadata.ExpiresAt = time.Now().Add(-time.Hour)
-	if err := h.app.Accounts.InsertToken(t.Context(), metadata); err != nil {
+	if err := h.app.Accounts.(user.TokenRepository).InsertToken(t.Context(), metadata); err != nil {
 		t.Fatal(err)
 	}
 	for _, hx := range []bool{false, true} {

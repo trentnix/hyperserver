@@ -97,6 +97,17 @@ func (a *EmailAuthService) Init(s *server.ApplicationServer) error {
 	if a.accounts == nil {
 		return hs_errors.WithCause(auth_services.ErrEmailAuthServiceInit, errors.New("the account repository is not configured"))
 	}
+	if _, ok := a.accounts.(user.PasswordRepository); !ok {
+		return errors.New("email authentication requires account storage with password changes")
+	}
+	if _, ok := a.accounts.(user.PasswordResetRepository); !ok {
+		return errors.New("email authentication requires account storage with password reset")
+	}
+	// Existing accounts can still need verification after registration is closed
+	// or verification is no longer required for new accounts.
+	if _, ok := a.accounts.(user.VerificationRepository); !ok {
+		return errors.New("email authentication requires account storage with email verification")
+	}
 	if err := flash.ValidateSessionManager(a.sessions); err != nil {
 		return fmt.Errorf("initialize email authentication: %w", err)
 	}

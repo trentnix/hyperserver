@@ -312,7 +312,7 @@ func TestPasswordEnrollmentFailures(t *testing.T) {
 			if scenario == "changed email" {
 				token.Email = "previous@example.com"
 			}
-			if err := h.app.Accounts.InsertToken(t.Context(), token.Metadata()); err != nil {
+			if err := h.app.Accounts.(user.TokenRepository).InsertToken(t.Context(), token.Metadata()); err != nil {
 				t.Fatal(err)
 			}
 			if scenario == "signed out" {
@@ -334,7 +334,7 @@ func TestPasswordEnrollmentFailures(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := h.app.Accounts.InsertToken(t.Context(), token.Metadata()); err != nil {
+				if err := h.app.Accounts.(user.TokenRepository).InsertToken(t.Context(), token.Metadata()); err != nil {
 					t.Fatal(err)
 				}
 			}

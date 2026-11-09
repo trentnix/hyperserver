@@ -52,6 +52,11 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessWithAccounts(t, nil)
+}
+
+func newHarnessWithAccounts(t *testing.T, wrap func(user.AccountRepository) user.AccountRepository) *harness {
+	t.Helper()
 	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "accounts.db")+"?_fk=true&_busy_timeout=5000")
 	if err != nil {
 		t.Fatal(err)
@@ -85,11 +90,15 @@ func newHarness(t *testing.T) *harness {
 	layouts := fstest.MapFS{"page.html": {Data: []byte(`{{renderPartial .PartialName .}}`)}}
 	app.ContentManager.AddPageLayout(layouts, "page.html")
 	app.ContentManager.AddHtmxLayout(layouts, "page.html")
-	provider := New(accounts, sessions)
-	if err := handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{auth.Module(auth.Dependencies{Accounts: accounts, Sessions: sessions}, []auth.Descriptor{{Name: AuthType, New: func(_ auth.Dependencies) auth.AuthService { return provider }}}), authpages.Module()}, nil); err != nil {
+	var storage user.AccountRepository = accounts
+	if wrap != nil {
+		storage = wrap(accounts)
+	}
+	provider := New(storage, sessions)
+	if err := handlers.Setup(t.Context(), app, nil, []handlers.Descriptor{auth.Module(auth.Dependencies{Accounts: storage, Sessions: sessions}, []auth.Descriptor{{Name: AuthType, New: func(_ auth.Dependencies) auth.AuthService { return provider }}}), authpages.Module()}, nil); err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{t: t, accounts: accounts, sessions: sessions, service: provider, handler: authmiddleware.LoadSessionManagement(accounts, sessions)(app.Web)}
+	h := &harness{t: t, accounts: accounts, sessions: sessions, service: provider, handler: authmiddleware.LoadSessionManagement(storage, sessions)(app.Web)}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -216,6 +225,33 @@ func TestGoogleLoginAndReplay(t *testing.T) {
 	}
 	if h.exchanges.Load() != 1 {
 		t.Fatal("replayed flow reached token endpoint")
+	}
+}
+
+func TestGoogleWithoutPasswordStorage(t *testing.T) {
+	for _, path := range []string{"/register", "/login"} {
+		t.Run(path, func(t *testing.T) {
+			h := newHarnessWithAccounts(t, func(accounts user.AccountRepository) user.AccountRepository {
+				return setupAccounts{AccountRepository: accounts, ExternalIdentityRepository: accounts.(user.ExternalIdentityRepository)}
+			})
+			if _, ok := h.service.accounts.(user.TokenRepository); ok {
+				t.Fatal("test exposed token storage")
+			}
+			if path == "/login" {
+				h.linkedAccount()
+			}
+			if w := h.request("GET", h.start(path)); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
+				t.Fatalf("Google flow without password storage: %d %s", w.Code, w.Body)
+			}
+			r := session.AddSessionManagerToRequestContext(httptest.NewRequest("GET", "http://localhost/", nil), h.sessions)
+			for _, cookie := range h.cookies {
+				r.AddCookie(cookie)
+			}
+			account, err := identity.GetAuthenticatedUser(r, h.service.accounts)
+			if err != nil || account == nil || account.Email != "admin@gmail.com" || account.Password != "" || account.NeedsVerification() {
+				t.Fatalf("authenticated Google account: %+v %v", account, err)
+			}
+		})
 	}
 }
 

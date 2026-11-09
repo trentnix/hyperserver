@@ -152,9 +152,11 @@ func (a *AuthManager) Routes(mux *routing.Routes) error {
 		}
 
 		// validate a registered user
-		mux.Handle("GET /auth/verify", noStore(http.HandlerFunc(a.GetVerify)))
+		if _, ok := a.accounts.(user.VerificationRepository); ok {
+			mux.Handle("GET /auth/verify", noStore(http.HandlerFunc(a.GetVerify)))
+			mutations.Handle("POST /auth/verify", noStore(http.HandlerFunc(a.Verify)))
+		}
 		mux.Handle("GET /auth/request/verify", noStore(http.HandlerFunc(a.GetVerificationRequest)))
-		mutations.Handle("POST /auth/verify", noStore(http.HandlerFunc(a.Verify)))
 		mutations.Handle("POST /auth/request/verify", noStore(http.HandlerFunc(a.SendVerificationRequest)))
 
 		// reset credentials

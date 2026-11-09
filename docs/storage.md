@@ -16,6 +16,25 @@ Account models and contracts live in [`user`](../pkg/services/user), with SQLite
 
 Initialization checks writable columns, supported types, required `NOT NULL` declarations, and unique keys for account IDs, normalized email keys, and account/token pairs. Keys must cover every row and use binary comparison. Tokens must reference `user(id)` through `user_id` with `ON DELETE CASCADE`. These checks do not validate every stored value. See [schema versions and migrations](#account-schema-migrations) for startup's version checks.
 
+### Account capabilities and adapter upgrades
+
+`user.AccountRepository` requires only `GetByID`, `GetByEmail`, `Create`, and `Update`. Additional interfaces describe optional features. SQLite implements all of them.
+
+| Interface | Methods moved from `AccountRepository` | Required by |
+| --- | --- | --- |
+| `PasswordRepository` | `ChangePassword` | Email authentication. |
+| `TokenRepository` | `GetToken`, `InsertToken` | Token-based features. |
+| `PasswordResetRepository` | `ResetPassword`, plus `TokenRepository` | Email authentication. |
+| `VerificationRepository` | `Verify`, plus `TokenRepository` | Email authentication, including verification for existing accounts. |
+
+Google authentication requires `ExternalIdentityRepository`. It does not require passwords, recovery tokens, or email-verification storage. The shared email-verification redemption routes are registered only when storage supplies `VerificationRepository`.
+
+Closing registration or removing the verification requirement for new accounts does not clear existing accounts' verification requirements. Email authentication therefore always requires verification storage. Mail configuration is still checked at startup only when new registration requires verification.
+
+`PasswordSetupRepository` and `InvitationRepository` now include `TokenRepository`. Password setup remains optional. The blog requires invitation storage only when `multiUser` is enabled. User administration remains required for blog roles and initial setup.
+
+To upgrade a custom adapter, keep its existing methods and advertise the capabilities its enabled features need. Consumers that previously called token or password methods through `AccountRepository` must use the corresponding interface. Wrappers must forward optional methods explicitly. Embedding only `AccountRepository` hides those capabilities. Required but missing capabilities stop startup. No SQLite schema or stored-format change is needed.
+
 ## Storage guarantees
 
 Replacement providers must preserve the [account](../pkg/services/user/account_repository.go) and [session](../pkg/services/session/store.go) guarantees, not just their method signatures. Account security changes use version checks and atomic writes. Sessions support [serializer replacement](../pkg/services/session/readme.md#replacing-serialization) independently of storage, with JSON as the default.
@@ -37,6 +56,7 @@ Import the shared suites from your provider's `_test.go` files. They work from a
 | Contract | Test package and entry point |
 | --- | --- |
 | Account storage | [`pkg/services/user/accounttest.Run`](../pkg/services/user/accounttest/contract.go) |
+| Token-only account storage | [`pkg/services/user/accounttest.RunTokens`](../pkg/services/user/accounttest/token_storage.go), with explicit supported purposes |
 | Common session behavior | [`pkg/services/session/sessiontest.RunCommon`](../pkg/services/session/sessiontest/contract.go) |
 | Server-side sessions with revocable rotation | [`pkg/services/session/sessiontest.Run`](../pkg/services/session/sessiontest/contract.go), which also runs the common suite |
 
@@ -54,7 +74,7 @@ func TestAccountContract(t *testing.T) {
 
 Your `openTestRepository` helper owns backend setup and cleanup. See the [SQLite account test](../pkg/services/user/sqlite/contract_test.go) and [session test](../pkg/services/session/sqlite/contract_test.go) for complete factories.
 
-These suites check shared behavior, not every provider capability. Keep tests for backend failures, schema migrations, exact expiration boundaries, timestamp precision, durability, and optional interfaces with the provider. Test external identity storage separately when supporting external authentication. Run the suites with `go test` and `go test -race` alongside application integration tests. The test APIs follow the framework's [experimental compatibility policy](compatibility.md).
+The account suite keeps core checks independent of token storage. It tests advertised password-change, password-reset, and verification capabilities, and checks token storage using only the purposes those features support. It also checks storage for password-setup and invitation tokens when advertised. Unsupported capability checks are skipped. If an adapter exposes only `TokenRepository`, call `RunTokens` with its supported purposes. Keep tests for backend failures, schema migrations, exact expiration boundaries, timestamp precision, durability, external identities, password setup, invitations, and maintenance with the provider. Run the suites with `go test` and `go test -race` alongside application integration tests. The test APIs follow the framework's [experimental compatibility policy](compatibility.md).
 
 ## Account schema migrations
 

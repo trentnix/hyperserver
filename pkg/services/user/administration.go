@@ -37,6 +37,7 @@ type AdministrationRepository interface {
 // credentials. Callers must validate/hash passwords and authenticate external
 // identities. All operations must be atomic and preserve inputs on failure.
 type InvitationRepository interface {
+	TokenRepository
 	// RegisterInvited accepts only credential-free invited accounts. A valid
 	// invitation token or verified external identity proves email ownership.
 	// Otherwise email registration follows u.VerificationRequired before accepting access.

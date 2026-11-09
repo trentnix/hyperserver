@@ -20,8 +20,15 @@ import (
 )
 
 // Unimplemented repository and session operations panic if setup attempts I/O.
-type providerSetupAccounts struct {
+type providerSetupRepository interface {
 	user.AccountRepository
+	user.PasswordRepository
+	user.PasswordResetRepository
+	user.VerificationRepository
+}
+
+type providerSetupAccounts struct {
+	providerSetupRepository
 	closes int
 }
 

@@ -9,8 +9,48 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 )
+
+func TestHTTPExistingAccountVerificationAfterRegistrationChanges(t *testing.T) {
+	for _, registrationClosed := range []bool{false, true} {
+		for _, htmx := range []bool{false, true} {
+			t.Run(fmt.Sprintf("registrationClosed=%t/htmx=%t", registrationClosed, htmx), func(t *testing.T) {
+				h := newHTTPHarness(t, func(cfg *config.Config) {
+					if registrationClosed {
+						cfg.Auth.RegistrationEnabled = false
+					} else {
+						cfg.Auth.RegisterRequiresVerification = false
+					}
+				})
+				u := h.seedUser(t, "pending@example.invalid")
+				u.Verified, u.VerificationRequired = false, true
+				if err := h.accounts.Update(t.Context(), u); err != nil {
+					t.Fatal(err)
+				}
+				w := h.request(http.MethodPost, "/login", url.Values{"provider": {"email"}, "email": {u.Email}, "password": {"TestPassword1!"}}, htmx)
+				assertRedirectResponse(t, w, "/auth/request/verify", htmx)
+				w = h.request(http.MethodPost, "/auth/request/verify", nil, htmx)
+				messages := h.mail.snapshot()
+				if w.Code != http.StatusOK || len(messages) != 1 {
+					t.Fatalf("verification resend: status=%d, messages=%d", w.Code, len(messages))
+				}
+				link := mailLink(t, messages[0], "/auth/verify")
+				w = h.request(http.MethodGet, link.RequestURI(), nil, htmx)
+				if w.Code != http.StatusOK {
+					t.Fatalf("verification confirmation: status=%d", w.Code)
+				}
+				w = h.request(http.MethodPost, "/auth/verify", link.Query(), htmx)
+				assertRedirectResponse(t, w, "/", htmx)
+				stored, err := h.accounts.GetByID(t.Context(), u.ID)
+				if err != nil || stored == nil || !stored.Verified {
+					t.Fatalf("existing account was not verified: %v", err)
+				}
+			})
+		}
+	}
+}
 
 func TestHTTPVerificationRecoveryNavigation(t *testing.T) {
 	for _, htmx := range []bool{false, true} {

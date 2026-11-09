@@ -183,7 +183,12 @@ func TestVerifyStopsBeforeRedemptionOnAccountLookupFailure(t *testing.T) {
 
 type verificationRepository struct {
 	user.AccountRepository
+	user.TokenRepository
 	verify func(context.Context, user.VerificationAuthorization) (*user.User, error)
+}
+
+func (s verificationRepository) GetToken(ctx context.Context, hash, purpose string) (user.TokenMetadata, error) {
+	return s.AccountRepository.(user.TokenRepository).GetToken(ctx, hash, purpose)
 }
 
 func (s verificationRepository) Verify(ctx context.Context, authorization user.VerificationAuthorization) (*user.User, error) {
@@ -278,6 +283,7 @@ func (s *lookupTestAuthService) Reset(w http.ResponseWriter, r *http.Request, u 
 
 type tokenLookupRepository struct {
 	user.AccountRepository
+	user.TokenRepository
 	token   func(context.Context, string, string) (user.TokenMetadata, error)
 	account func(context.Context, string) (*user.User, error)
 }

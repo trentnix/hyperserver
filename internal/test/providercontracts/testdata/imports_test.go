@@ -11,7 +11,8 @@ import (
 
 // Check every suite entry point from outside HyperServer's module namespace.
 var (
-	_ func(*testing.T, func(*testing.T) user.AccountRepository) = accounttest.Run
-	_ func(*testing.T, func(*testing.T) session.SessionStore)   = sessiontest.Run
-	_ func(*testing.T, func(*testing.T) session.SessionStore)   = sessiontest.RunCommon
+	_ func(*testing.T, func(*testing.T) user.AccountRepository)            = accounttest.Run
+	_ func(*testing.T, func(*testing.T) user.AccountRepository, ...string) = accounttest.RunTokens
+	_ func(*testing.T, func(*testing.T) session.SessionStore)              = sessiontest.Run
+	_ func(*testing.T, func(*testing.T) session.SessionStore)              = sessiontest.RunCommon
 )

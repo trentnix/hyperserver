@@ -61,6 +61,7 @@ func TestOpaqueTokenFormat(t *testing.T) {
 
 type tokenLookupRepository struct {
 	AccountRepository
+	TokenRepository
 	token   func(context.Context, string, string) (TokenMetadata, error)
 	account func(context.Context, string) (*User, error)
 }

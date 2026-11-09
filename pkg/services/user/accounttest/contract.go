@@ -12,7 +12,8 @@ import (
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
-// Run checks an initialized repository. Each factory call must provide isolated
+// Run checks core accounts and supported password, token, reset, and verification capabilities.
+// Unsupported capability checks are skipped. Each factory call must provide isolated
 // storage and register cleanup with t. Backend-specific I/O failures, locking,
 // schema mappings, clock boundaries, timestamp precision, and durability tests
 // remain with the provider. Returned timestamps must match committed values.
@@ -104,13 +105,7 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			original := newAccount("Mixed@example.invalid")
 			original.Role, original.Invited = "admin", true
 			must(t, repo.Create(t.Context(), &original))
-			verification := insertToken(t, repo, original.ID, user.VerificationTokenPurpose)
-			secondVerification := verification
-			secondVerification.TokenHash = tokenHash("second verification")
-			must(t, repo.InsertToken(t.Context(), secondVerification))
-			reset := insertToken(t, repo, original.ID, user.ResetTokenPurpose)
 			other := create(t, repo, "other@example.invalid")
-			otherToken := insertToken(t, repo, other.ID, user.VerificationTokenPurpose)
 			changed := original
 			increment := true
 			switch field {
@@ -150,15 +145,10 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			}
 			assertAccount(t, load(t, repo, original.ID), want)
 			if field == "email key" {
-				assertTokenMissing(t, repo, verification)
-				assertTokenMissing(t, repo, secondVerification)
 				got, err := repo.GetByEmail(t.Context(), original.Email)
 				if got != nil || !errors.Is(err, user.ErrUserNotFound) {
 					t.Fatalf("old email still resolves: %v, %v", got, err)
 				}
-			} else {
-				assertToken(t, repo, verification)
-				assertToken(t, repo, secondVerification)
 			}
 			got, err := repo.GetByEmail(t.Context(), strings.ToUpper(want.Email))
 			must(t, err)
@@ -166,8 +156,6 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 				t.Fatal("updated email lookup returned nil")
 			}
 			assertAccount(t, *got, want)
-			assertToken(t, repo, reset)
-			assertToken(t, repo, otherToken)
 			assertAccount(t, load(t, repo, other.ID), other)
 		})
 	}
@@ -177,7 +165,6 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			repo := open(t)
 			original := create(t, repo, "original@example.invalid")
 			other := create(t, repo, "other@example.invalid")
-			token := insertToken(t, repo, original.ID, user.VerificationTokenPurpose)
 			changed := original
 			changed.Email = "different@example.invalid"
 			switch failure {
@@ -198,13 +185,15 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 			assertAccount(t, changed, before)
 			assertAccount(t, load(t, repo, original.ID), original)
 			assertAccount(t, load(t, repo, other.ID), other)
-			assertToken(t, repo, token)
 		})
 	}
 
 	for _, operation := range []string{"create", "update", "change password"} {
 		t.Run("concurrent writes/"+operation, func(t *testing.T) {
 			repo := open(t)
+			if operation == "change password" {
+				capability[user.PasswordRepository](t, repo)
+			}
 			first := newAccount("Mixed@example.invalid")
 			if operation != "create" {
 				must(t, repo.Create(t.Context(), &first))
@@ -222,7 +211,7 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 					inputs[i].Password = "new hash"
 					return repo.Update(t.Context(), &inputs[i])
 				default:
-					return repo.ChangePassword(t.Context(), &inputs[i], "new hash")
+					return capability[user.PasswordRepository](t, repo).ChangePassword(t.Context(), &inputs[i], "new hash")
 				}
 			})
 			winner := oneSuccess(t, errs)
@@ -258,6 +247,7 @@ func Run(t *testing.T, open func(*testing.T) user.AccountRepository) {
 	passwordContract(t, open)
 	emailIdentityContract(t, open)
 	tokenContract(t, open)
+	RunTokens(t, open, tokenPurposes(open(t))...)
 	cancellationContract(t, open)
 }
 
@@ -294,20 +284,11 @@ func emailIdentityContract(t *testing.T, open func(*testing.T) user.AccountRepos
 				t.Fatal("failed update changed stored email")
 			}
 
-			verification := insertToken(t, repo, original.ID, user.VerificationTokenPurpose)
 			changed := original
 			changed.Email = pair[1]
 			must(t, repo.Update(t.Context(), &changed))
 			if changed.SessionVersion != original.SessionVersion {
 				t.Fatal("equivalent spelling revoked account sessions")
-			}
-			assertToken(t, repo, verification)
-			// An authorization containing the original spelling still identifies
-			// this account after the equivalent spelling update.
-			verified, err := redeem(t.Context(), repo, &original, verification)
-			must(t, err)
-			if verified == nil || !verified.Verified || verified.Email != pair[1] {
-				t.Fatalf("verification after equivalent update = %+v", verified)
 			}
 		})
 	}
@@ -340,8 +321,9 @@ func passwordContract(t *testing.T, open func(*testing.T) user.AccountRepository
 	for _, mismatch := range []string{"none", "password", "provider", "version", "missing account"} {
 		t.Run("password change/"+mismatch, func(t *testing.T) {
 			repo := open(t)
+			capability[user.PasswordRepository](t, repo)
 			original := create(t, repo, "password@example.invalid")
-			token := insertToken(t, repo, original.ID, user.ResetTokenPurpose)
+			token := optionalToken(t, repo, original.ID, user.ResetTokenPurpose)
 			changed := original
 			switch mismatch {
 			case "password":
@@ -354,7 +336,7 @@ func passwordContract(t *testing.T, open func(*testing.T) user.AccountRepository
 				changed.ID = "missing"
 			}
 			before, want := changed, original
-			err := repo.ChangePassword(t.Context(), &changed, "new hash")
+			err := capability[user.PasswordRepository](t, repo).ChangePassword(t.Context(), &changed, "new hash")
 			if mismatch == "none" {
 				must(t, err)
 				assertTimestamp(t, changed.UpdatedAt)
@@ -441,4 +423,14 @@ func oneSuccess(t *testing.T, errs [2]error) int {
 		return 0
 	}
 	return 1
+}
+
+// capability skips only the current capability-specific check.
+func capability[T any](t *testing.T, repo user.AccountRepository) T {
+	t.Helper()
+	value, ok := repo.(T)
+	if !ok {
+		t.Skipf("account storage does not implement %T", (*T)(nil))
+	}
+	return value
 }

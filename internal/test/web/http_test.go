@@ -42,7 +42,7 @@ type httpHarness struct {
 	baseURL    string
 	app        *server.ApplicationServer
 	db         *sql.DB
-	accounts   user.AccountRepository
+	accounts   *usersqlite.AccountRepository
 	sessions   *session.SessionManager
 	mailClient *messaging.MailClient
 	handler    http.Handler
@@ -237,7 +237,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &httpHarness{baseURL: "http://127.0.0.1:8080", app: app.ApplicationServer, db: db, accounts: app.Accounts, sessions: app.Sessions, mailClient: mail, handler: app.Handler, mail: sender, logs: logs, cookies: jar}
+	return &httpHarness{baseURL: "http://127.0.0.1:8080", app: app.ApplicationServer, db: db, accounts: app.Accounts.(*usersqlite.AccountRepository), sessions: app.Sessions, mailClient: mail, handler: app.Handler, mail: sender, logs: logs, cookies: jar}
 }
 
 type fakeMailSender struct {

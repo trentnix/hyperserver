@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -26,11 +27,15 @@ func ValidateVerificationToken(ctx context.Context, accounts AccountRepository, 
 // Verify consumes the token and verifies its recipient email atomically.
 // A changed email address rejects the token. Failures leave account and token unchanged.
 func Verify(ctx context.Context, accounts AccountRepository, raw string) (*User, error) {
+	repository, ok := accounts.(VerificationRepository)
+	if !ok {
+		return nil, errors.New("account storage does not support email verification")
+	}
 	token, err := loadToken(ctx, accounts, raw, VerificationTokenPurpose)
 	if err != nil {
 		return nil, err
 	}
-	return accounts.Verify(ctx, VerificationAuthorization{
+	return repository.Verify(ctx, VerificationAuthorization{
 		AccountID: token.AccountID, Email: token.Email,
 		TokenHash: token.TokenHash, ExpiresAt: token.ExpiresAt,
 	})
