@@ -118,7 +118,13 @@ func TestBrowserPosterUpload(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check Poster image controls")
 	}
 	for _, width := range []string{"320", "1100"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "poster-upload") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/poster-upload.js",
+				startPath:  "/login",
+				setup:      posterUploadBrowserHarness,
+			})
+		})
 	}
 }
 

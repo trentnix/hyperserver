@@ -36,6 +36,8 @@ Blog backup tests use isolated temporary data, including an application restart 
 
 ## Browser tests
 
+Blog browser tests declare scripts, starting URLs, and setup through `browserScenario` in [browser_test.go](../modules/blog/browser_test.go). [browser_scenarios_test.go](../modules/blog/browser_scenarios_test.go) seeds data and prepares scripts. [browser_fixture_test.go](../modules/blog/browser_fixture_test.go) shares Firefox startup, HTTP endpoints, reporting, and cleanup. Add scenario requirements explicitly. Keep scenario logic out of the shared runner.
+
 CI tests error responses, native forms, HTMX history, redirects, retargeting, reswapping, and out-of-band notifications in headless Firefox. To run them locally:
 
 ```sh

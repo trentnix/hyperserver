@@ -1,24 +1,9 @@
 package blog
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
-	"html"
-	"io"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"os"
-	"os/exec"
-	"regexp"
-	"strings"
-	"sync"
 	"testing"
-	"time"
-
-	"github.com/trentnix/hyperserver/pkg/components/messages"
 )
 
 // TestBrowserEditor exercises the real HTMX and EasyMDE bundles against isolated
@@ -29,7 +14,12 @@ func TestBrowserEditor(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to exercise the editor in a browser")
 	}
 	for _, width := range []string{"390", "900", "1100", "1440", "2560"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/browser.js",
+				startPath:  "/login",
+			})
+		})
 	}
 }
 
@@ -41,7 +31,12 @@ func TestBrowserAccessibility(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check keyboard accessibility")
 	}
 	for _, width := range []string{"320", "768", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "accessibility") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/accessibility.js",
+				startPath:  "/login",
+			})
+		})
 	}
 }
 
@@ -52,7 +47,14 @@ func TestBrowserSetup(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check first-time setup")
 	}
 	for _, width := range []string{"320", "1100", "2560"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "setup") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/setup.js",
+				startPath:  "/",
+				setup:      setupBrowserHarness,
+				routes:     setupBrowserRoutes,
+			})
+		})
 	}
 }
 
@@ -64,7 +66,12 @@ func TestBrowserLayout(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check responsive layout")
 	}
 	for _, width := range []string{"280", "320", "767", "768", "1679", "1680", "1920", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "layout") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/browser.js",
+				startPath:  "/login?test-layout=1&test-width=" + width,
+			})
+		})
 	}
 }
 
@@ -74,7 +81,11 @@ func TestBrowserFonts(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check delayed font loading")
 	}
-	testBrowser(t, browser, "1100", "fonts")
+	testBrowser(t, browser, "1100", browserScenario{
+		scriptFile: "testdata/browser.js",
+		startPath:  "/login?test-layout=1&test-width=1100",
+		delayAsset: browserFontAsset,
+	})
 }
 
 // TestBrowserRefresh checks first-paint stability while scripts and fonts load slowly.
@@ -84,7 +95,14 @@ func TestBrowserRefresh(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check first-paint stability")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "refresh") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:  "testdata/refresh.js",
+				startPath:   "/login",
+				delayAsset:  func(r *http.Request) bool { return r.URL.Path == "/assets/js/blog.js" || browserFontAsset(r) },
+				earlyScript: true,
+			})
+		})
 	}
 }
 
@@ -95,7 +113,13 @@ func TestBrowserSearch(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check reader search")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "search") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/search.js",
+				startPath:  "/posts",
+				setup:      searchBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -106,7 +130,14 @@ func TestBrowserArchivePagination(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check archive pagination")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "archive") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:    "testdata/archive-pagination.js",
+				startPath:     "/posts",
+				setup:         archiveBrowserHarness,
+				prepareScript: archiveBrowserScript,
+			})
+		})
 	}
 }
 
@@ -117,7 +148,14 @@ func TestBrowserNavigation(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check article navigation")
 	}
 	for _, width := range []string{"320", "390", "767", "768", "1100", "1679", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "navigation") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:    "testdata/navigation.js",
+				startPath:     "/post/s/first",
+				setup:         navigationBrowserHarness,
+				returningUser: true,
+			})
+		})
 	}
 }
 
@@ -127,7 +165,11 @@ func TestBrowserEditorHistory(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check editor history restoration")
 	}
-	testBrowser(t, browser, "1100", "editor-history")
+	testBrowser(t, browser, "1100", browserScenario{
+		scriptFile: "testdata/editor-history.js",
+		startPath:  "/login",
+		setup:      editorHistoryBrowserHarness,
+	})
 }
 
 // TestBrowserManagementRefresh checks lists restored from the browser's page cache.
@@ -136,7 +178,10 @@ func TestBrowserManagementRefresh(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check restored management lists")
 	}
-	testBrowser(t, browser, "1100", "management-refresh")
+	testBrowser(t, browser, "1100", browserScenario{
+		scriptFile: "testdata/management-refresh.js",
+		startPath:  "/login",
+	})
 }
 
 // TestBrowserRevisions follows full-page history, loading, recovery, and explicit
@@ -147,7 +192,13 @@ func TestBrowserRevisions(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check revision history")
 	}
 	for _, width := range []string{"390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "revisions") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:    "testdata/revisions.js",
+				startPath:     "/login",
+				prepareScript: revisionBrowserScript(2),
+			})
+		})
 	}
 }
 
@@ -158,7 +209,13 @@ func TestBrowserRevisionRestore(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check direct restoration")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "revision-restore") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:    "testdata/revision-restore.js",
+				startPath:     "/login",
+				prepareScript: revisionBrowserScript(2),
+			})
+		})
 	}
 }
 
@@ -169,7 +226,13 @@ func TestBrowserRevisionNavigation(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check in-place history selection")
 	}
 	for _, width := range []string{"390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "revision-navigation") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:    "testdata/revision-navigation.js",
+				startPath:     "/login",
+				prepareScript: revisionBrowserScript(40),
+			})
+		})
 	}
 }
 
@@ -180,7 +243,12 @@ func TestBrowserProjects(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check project editing")
 	}
 	for _, width := range []string{"390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "projects") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/projects.js",
+				startPath:  "/login",
+			})
+		})
 	}
 }
 
@@ -191,7 +259,13 @@ func TestBrowserPages(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check page editing")
 	}
 	for _, width := range []string{"320", "390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "pages") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/pages.js",
+				startPath:  "/login",
+				setup:      pagesBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -202,7 +276,13 @@ func TestBrowserPostManagement(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check post management layout")
 	}
 	for _, width := range []string{"320", "767", "768", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "post-management") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/post-management.js",
+				startPath:  "/login",
+				setup:      postManagementBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -213,7 +293,12 @@ func TestBrowserPostPublication(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check post publication")
 	}
 	for _, width := range []string{"320", "390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "post-publication") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/post-publication.js",
+				startPath:  "/login",
+			})
+		})
 	}
 }
 
@@ -224,7 +309,14 @@ func TestBrowserScheduling(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check scheduled publication")
 	}
 	for _, width := range []string{"320", "390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "scheduling") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/scheduling.js",
+				startPath:  "/login",
+				// Expose clipped time options at the editor's scroll limit.
+				height: 600,
+			})
+		})
 	}
 }
 
@@ -235,7 +327,12 @@ func TestBrowserSlugWarnings(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check slug warnings")
 	}
 	for _, width := range []string{"390", "1100"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "slug-warnings") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/slug-warnings.js",
+				startPath:  "/login",
+			})
+		})
 	}
 }
 
@@ -246,7 +343,12 @@ func TestBrowserConfirmations(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check editor confirmations")
 	}
 	for _, width := range []string{"320", "390", "1100"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "confirmations") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/confirmations.js",
+				startPath:  "/login",
+			})
+		})
 	}
 }
 
@@ -257,7 +359,13 @@ func TestBrowserDraftRecovery(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check draft recovery")
 	}
 	for _, width := range []string{"390", "1100"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "draft-recovery") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:  "testdata/draft-recovery.js",
+				startPath:   "/login",
+				allowFrames: true,
+			})
+		})
 	}
 }
 
@@ -268,7 +376,12 @@ func TestBrowserProfile(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check profile editing")
 	}
 	for _, width := range []string{"390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "profile") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/profile.js",
+				startPath:  "/login",
+			})
+		})
 	}
 }
 
@@ -279,7 +392,13 @@ func TestBrowserProfileHistory(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check profile history")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "profile-history") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/profile-history.js",
+				startPath:  "/login",
+				setup:      profileHistoryBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -290,7 +409,13 @@ func TestBrowserAuthStyles(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check authentication styles")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "auth-styles") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:    "testdata/auth-styles.js",
+				startPath:     "/login",
+				prepareScript: resetBrowserScript,
+			})
+		})
 	}
 }
 
@@ -301,7 +426,14 @@ func TestBrowserFormErrors(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check shared form errors")
 	}
 	for _, width := range []string{"390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "form-errors") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:    "testdata/form-errors.js",
+				startPath:     "/login",
+				setup:         formErrorsBrowserHarness,
+				prepareScript: resetBrowserScript,
+			})
+		})
 	}
 }
 
@@ -311,9 +443,23 @@ func TestBrowserAuthChoices(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check provider choices")
 	}
-	for _, mode := range []string{"auth-choices-both", "auth-choices-google", "auth-choices-register-both", "auth-choices-register-google"} {
+	for _, scenario := range []struct {
+		name, startPath      string
+		email, setupComplete bool
+	}{
+		{"auth-choices-both", "/login?email=true", true, true},
+		{"auth-choices-google", "/login?email=false", false, true},
+		{"auth-choices-register-both", "/register?email=true", true, false},
+		{"auth-choices-register-google", "/register?email=false", false, false},
+	} {
 		for _, width := range []string{"320", "390", "500", "767", "1100", "3440"} {
-			t.Run(mode+"/"+width, func(t *testing.T) { testBrowser(t, browser, width, mode) })
+			t.Run(scenario.name+"/"+width, func(t *testing.T) {
+				testBrowser(t, browser, width, browserScenario{
+					scriptFile: "testdata/auth-choices.js",
+					startPath:  scenario.startPath,
+					setup:      authChoicesBrowserHarness(scenario.email, scenario.setupComplete),
+				})
+			})
 		}
 	}
 }
@@ -325,7 +471,13 @@ func TestBrowserMediaCleanup(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check media cleanup")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "media-cleanup") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/media-cleanup.js",
+				startPath:  "/login",
+				setup:      mediaCleanupBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -336,7 +488,13 @@ func TestBrowserMediaLibrary(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check media reuse")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "media-library") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/media-library.js",
+				startPath:  "/login",
+				setup:      mediaLibraryBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -347,7 +505,13 @@ func TestBrowserAdminNavigation(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check management navigation")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "admin-navigation") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/admin-navigation.js",
+				startPath:  "/login",
+				setup:      adminNavigationBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -358,7 +522,15 @@ func TestBrowserAccount(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check Account")
 	}
 	for _, width := range []string{"320", "390", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "account") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile:    "testdata/account.js",
+				startPath:     "/auth/account",
+				setup:         accountBrowserHarness,
+				routes:        accountBrowserRoutes,
+				authenticated: true,
+			})
+		})
 	}
 }
 
@@ -369,7 +541,13 @@ func TestBrowserTags(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check tag editing")
 	}
 	for _, width := range []string{"320", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "tags") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/tags.js",
+				startPath:  "/login",
+				setup:      tagsBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -380,7 +558,13 @@ func TestBrowserAlbum(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check photo albums")
 	}
 	for _, width := range []string{"320", "390", "600", "768", "1100", "3440"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "album") })
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/album.js",
+				startPath:  "/login",
+				setup:      albumBrowserHarness,
+			})
+		})
 	}
 }
 
@@ -390,527 +574,13 @@ func TestBrowserMediaLandscape(t *testing.T) {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check landscape image selection")
 	}
 	for _, width := range []string{"600", "740", "1024"} {
-		t.Run(width, func(t *testing.T) { testBrowser(t, browser, width, "media-landscape") })
-	}
-}
-
-// testBrowser serves the real blog with isolated data and browser checks.
-func testBrowser(t *testing.T, browser, width, mode string) {
-	t.Helper()
-	var h *harness
-	if mode == "account" {
-		h, _ = accountHarness(t, true)
-	} else if mode == "setup" {
-		h = startHarness(t, harnessConfig(t, 10))
-	} else if strings.HasPrefix(mode, "auth-choices-") {
-		cfg := harnessConfig(t, 10)
-		cfg.Auth.Services["google"] = map[string]string{"enabled": "true", "clientID": "test-client", "clientSecret": "test-secret"}
-		if strings.HasSuffix(mode, "-google") {
-			cfg.Auth.Services["email"]["enabled"] = "false"
-		}
-		h = startHarness(t, cfg)
-		if !strings.Contains(mode, "-register-") {
-			if err := h.blog.access.setup.finish(t.Context()); err != nil {
-				t.Fatal(err)
-			}
-		}
-	} else {
-		h = newHarness(t)
-		h.register(t)
-		h.verify(t)
-	}
-	if mode == "tags" {
-		if _, err := h.blog.persistPost(t.Context(), Post{Title: "Tag source", Markdown: "Body", Tags: "Go, self-hosting", Draft: true}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := h.blog.persistPage(t.Context(), Page{Title: "Other tags", Tags: "Go, SQLite", ChildrenDisplay: "hidden"}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if mode == "editor-history" {
-		if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "cancel-source", Title: "Cancel source", Markdown: "Body", Published: time.Now().Add(-time.Hour)}); err != nil {
-			t.Fatal(err)
-		}
-		h.blog.invalidatePosts()
-	}
-	if mode == "poster-upload" {
-		account, err := h.app.Accounts.GetByEmail(t.Context(), "trentnix@gmail.com")
-		if err != nil {
-			t.Fatal(err)
-		}
-		account.Role = string(rolePoster)
-		if err := h.app.Accounts.Update(t.Context(), account); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if mode == "profile-history" {
-		image := mediaUpload(t, h.blog, "historical profile image")
-		for i := range 12 {
-			p := h.blog.profile.Current()
-			p.Name, p.Bio = fmt.Sprintf("Profile %02d", i), "A saved biography."
-			p.ImageURL, p.FaviconURL, p.BackgroundURL = "", "", ""
-			if i == 0 {
-				p.ImageURL, p.FaviconURL, p.BackgroundURL = "/images/"+image.ID, "/images/"+image.ID, "/images/"+image.ID
-			}
-			if err := h.blog.persistProfile(t.Context(), p); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if err := h.blog.removeMedia(t.Context(), image.ID, image.Version(), true); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if mode == "search" {
-		seedPublicSearch(t, h)
-		h.blog.recentPosts.invalidate()
-	}
-	if mode == "archive" {
-		seedArchive(t, h, 2*archivePageSize+1)
-	}
-	if mode == "media-library" || mode == "media-landscape" {
-		for i := range mediaPageSize + 1 {
-			mediaUpload(t, h.blog, fmt.Sprintf("library image %d", i))
-		}
-	}
-	if mode == "album" {
-		for index := range maxAlbumPhotos {
-			mediaUpload(t, h.blog, fmt.Sprintf("album photo %d", index))
-		}
-	}
-	if mode == "form-errors" {
-		mediaUpload(t, h.blog, "form errors image")
-	}
-	if mode == "media-cleanup" {
-		mediaUpload(t, h.blog, "unused browser image")
-		historical := mediaUpload(t, h.blog, "historical browser image")
-		post, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "historical-image", Title: "Historical image", Markdown: "![Old](/images/" + historical.ID + ")", PreviewImage: historical.ID, Draft: true})
-		if err != nil {
-			t.Fatal(err)
-		}
-		post.Markdown, post.PreviewImage = "No images", ""
-		if _, err := savePostFixture(h.blog.posts, t.Context(), post); err != nil {
-			t.Fatal(err)
-		}
-		used := mediaUpload(t, h.blog, "saved browser image")
-		if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: "image", Title: "Saved image", PreviewImage: used.ID, Draft: true}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if mode == "admin-navigation" {
-		seedContentSearch(t, h)
-		if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "visible-child", Title: "Visible child", ParentID: h.projectsID, Published: true}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if mode == "post-management" {
-		for _, draft := range []bool{true, false} {
-			for i, title := range []string{"Short title", strings.Repeat("A longer post title with several words ", 6), strings.Repeat("W", 240)} {
-				if _, err := savePostFixture(h.blog.posts, t.Context(), Post{Slug: fmt.Sprintf("layout-%t-%d", draft, i), Title: title, Markdown: "Body", Draft: draft}); err != nil {
-					t.Fatal(err)
-				}
-			}
-		}
-	}
-	if mode == "pages" {
-		child, err := savePageFixture(h.blog.pageStore, t.Context(), Page{ParentID: h.projectsID, Slug: "sample-project", Title: "A sample project with a longer title", Published: true})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{ParentID: child.ID, Slug: "sample-guide", Title: "A draft guide"}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if mode == "navigation" {
-		h.login(t)
-		if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "another-page", Title: "Another page with a longer title", Published: true}); err != nil {
-			t.Fatal(err)
-		}
-		for i := range 6 {
-			title := "Sample project"
-			if i == 0 {
-				title = strings.Repeat("A long project title ", 8) + `"notes" <guide>`
-			} else if i == 1 {
-				title = "Short"
-			}
-			_, err := savePageFixture(h.blog.pageStore, t.Context(), Page{ParentID: h.projectsID,
-				Slug: fmt.Sprintf("project-%d", i), Title: title, Summary: "A project card for navigation layout checks.", Published: true,
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/media-landscape.js",
+				startPath:  "/login",
+				setup:      mediaLibraryBrowserHarness,
+				height:     map[string]int{"600": 320, "740": 360, "1024": 500}[width],
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-		project, err := h.blog.pageStore.GetPageBySlug(t.Context(), "project-0", true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{ParentID: project.ID, Slug: "project-guide", Title: "Project guide", Published: true}); err != nil {
-			t.Fatal(err)
-		}
-		for _, slug := range []string{"first", "second"} {
-			body := "Body of " + slug
-			if slug == "first" {
-				body = strings.Repeat(body+"\n\n", 100)
-			}
-			response := h.request(http.MethodPost, "/post", url.Values{
-				"title": {slug + " <post>"}, "slug": {slug}, "content": {body},
-			}, false)
-			requireStatus(t, response, http.StatusSeeOther)
-			h.publish(t, slug)
-		}
-	}
-	loadNotifications := h.app.ContentManager.LoadNotifications
-	h.app.ContentManager.LoadNotifications = func(r *http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
-		if r.URL.Query().Get("test-notifications") == "1" {
-			return []messages.Notification{
-				messages.NewNotification("Saved successfully", messages.NotificationTypeSuccess),
-				messages.NewNotification("Please correct this error", messages.NotificationTypeError),
-			}, nil, nil
-		}
-		return loadNotifications(r)
-	}
-	scriptFile := "testdata/browser.js"
-	switch mode {
-	case "album":
-		scriptFile = "testdata/album.js"
-	case "auth-choices-both", "auth-choices-google", "auth-choices-register-both", "auth-choices-register-google":
-		scriptFile = "testdata/auth-choices.js"
-	case "accessibility":
-		scriptFile = "testdata/accessibility.js"
-	case "setup":
-		scriptFile = "testdata/setup.js"
-	case "tags":
-		scriptFile = "testdata/tags.js"
-	case "search":
-		scriptFile = "testdata/search.js"
-	case "archive":
-		scriptFile = "testdata/archive-pagination.js"
-	case "refresh":
-		scriptFile = "testdata/refresh.js"
-	case "admin-navigation":
-		scriptFile = "testdata/admin-navigation.js"
-	case "management-refresh":
-		scriptFile = "testdata/management-refresh.js"
-	case "account":
-		scriptFile = "testdata/account.js"
-	case "media-library":
-		scriptFile = "testdata/media-library.js"
-	case "media-landscape":
-		scriptFile = "testdata/media-landscape.js"
-	case "poster-upload":
-		scriptFile = "testdata/poster-upload.js"
-	case "media-cleanup":
-		scriptFile = "testdata/media-cleanup.js"
-	case "navigation":
-		scriptFile = "testdata/navigation.js"
-	case "editor-history":
-		scriptFile = "testdata/editor-history.js"
-	case "revisions":
-		scriptFile = "testdata/revisions.js"
-	case "revision-navigation":
-		scriptFile = "testdata/revision-navigation.js"
-	case "revision-restore":
-		scriptFile = "testdata/revision-restore.js"
-	case "projects":
-		scriptFile = "testdata/projects.js"
-	case "pages":
-		scriptFile = "testdata/pages.js"
-	case "profile":
-		scriptFile = "testdata/profile.js"
-	case "profile-history":
-		scriptFile = "testdata/profile-history.js"
-	case "auth-styles":
-		scriptFile = "testdata/auth-styles.js"
-	case "form-errors":
-		scriptFile = "testdata/form-errors.js"
-	case "draft-recovery":
-		scriptFile = "testdata/draft-recovery.js"
-	case "confirmations":
-		scriptFile = "testdata/confirmations.js"
-	case "post-publication":
-		scriptFile = "testdata/post-publication.js"
-	case "scheduling":
-		scriptFile = "testdata/scheduling.js"
-	case "post-management":
-		scriptFile = "testdata/post-management.js"
-	case "slug-warnings":
-		scriptFile = "testdata/slug-warnings.js"
-	}
-	if mode == "users" {
-		scriptFile = "testdata/users.js"
-	}
-	script, err := os.ReadFile(scriptFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if mode == "archive" {
-		script = bytes.ReplaceAll(script, []byte("__ARCHIVE_PAGE_SIZE__"), []byte(fmt.Sprint(archivePageSize)))
-	}
-	if mode == "revisions" || mode == "revision-navigation" || mode == "revision-restore" {
-		var targets []map[string]any
-		store := h.blog.posts.(*sqliteRepository)
-		for _, kind := range []string{"post", "page"} {
-			original := Revision{Title: "Original title", Summary: "Original summary", Markdown: "# Original body"}
-			id, version, err := saveRevisionContent(t.Context(), store, kind, "", 0, original)
-			if err != nil {
-				t.Fatal(err)
-			}
-			list, err := store.ListRevisions(t.Context(), kind, id)
-			if err != nil || len(list) != 1 {
-				t.Fatal(list, err)
-			}
-			_, version, err = saveRevisionContent(t.Context(), store, kind, id, version, Revision{Title: "Current title", Summary: "Current summary\r\nSecond line", Markdown: "Current body\r\nSecond line"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if mode == "revision-navigation" {
-				for i := 3; i <= 40; i++ {
-					_, version, err = saveRevisionContent(t.Context(), store, kind, id, version, Revision{Title: fmt.Sprintf("Version %d", i), Markdown: "Saved writing"})
-					if err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
-			prefix := "/post"
-			if kind == "page" {
-				prefix = "/pages"
-			}
-			view, manager := "/post/s/history", "/post/manage"
-			if kind == "page" {
-				view, manager = "/page/history", "/pages"
-			}
-			targets = append(targets, map[string]any{"editor": prefix + "/update/" + id, "history": "/history/" + kind + "/" + id, "revision": list[0].ID, "view": view, "manager": manager})
-		}
-		data, err := json.Marshal(targets)
-		if err != nil {
-			t.Fatal(err)
-		}
-		script = bytes.ReplaceAll(script, []byte("__REVISION_TARGETS__"), data)
-	}
-	if mode == "auth-styles" || mode == "form-errors" {
-		requireStatus(t, h.request("POST", "/auth/reset/request/email", url.Values{"email": {"trentnix@gmail.com"}}, false), http.StatusOK)
-		if len(h.mail.messages) != 2 {
-			t.Fatal("expected one reset email after registration")
-		}
-		link := regexp.MustCompile(`https://blog.example/auth/reset/email\?[^"< ]+`).FindString(h.mail.messages[1].Body)
-		resetURL, err := url.Parse(html.UnescapeString(link))
-		if err != nil || resetURL.Query().Get("token") == "" {
-			t.Fatal("missing reset link", err)
-		}
-		script = bytes.ReplaceAll(script, []byte("__RESET_URL__"), []byte(fmt.Sprintf("%q", resetURL.RequestURI())))
-	}
-	result := make(chan string, 1)
-	ready := make(chan struct{})
-	var readyOnce sync.Once
-	pagePath := "/login"
-	if mode == "account" {
-		pagePath = "/auth/account"
-	} else if strings.HasPrefix(mode, "auth-choices-") {
-		pagePath = "/login"
-		if strings.Contains(mode, "-register-") {
-			pagePath = "/register"
-		}
-		pagePath += "?email=" + fmt.Sprint(strings.HasSuffix(mode, "-both"))
-	} else if mode == "setup" {
-		pagePath = "/"
-	} else if mode == "layout" || mode == "fonts" {
-		pagePath += "?test-layout=1&amp;test-width=" + width
-	} else if mode == "navigation" {
-		pagePath = "/post/s/first"
-	} else if mode == "archive" || mode == "search" {
-		pagePath = "/posts"
-	}
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		delayScript := mode == "refresh" && r.URL.Path == "/assets/js/blog.js"
-		delayFont := (mode == "refresh" || mode == "fonts") && strings.HasSuffix(r.URL.Path, ".woff2")
-		if delayScript || delayFont {
-			// Leave time for the initial layout to paint before enhancement and fonts arrive.
-			select {
-			case <-r.Context().Done():
-				return
-			case <-time.After(500 * time.Millisecond):
-			}
-		}
-		switch r.URL.Path {
-		case "/test/password-setup-link":
-			if mode != "account" {
-				http.NotFound(w, r)
-				return
-			}
-			h.mail.mu.Lock()
-			defer h.mail.mu.Unlock()
-			if len(h.mail.messages) != 1 {
-				http.Error(w, "setup mail missing", http.StatusNotFound)
-				return
-			}
-			match := regexp.MustCompile(`href="([^"]+)"`).FindStringSubmatch(h.mail.messages[0].Body)
-			if len(match) != 2 {
-				http.Error(w, "setup link missing", http.StatusNotFound)
-				return
-			}
-			link, err := url.Parse(html.UnescapeString(match[1]))
-			if err != nil {
-				http.Error(w, "invalid setup link", http.StatusInternalServerError)
-				return
-			}
-			io.WriteString(w, link.RequestURI())
-			return
-		case "/test/verification-link":
-			if mode != "setup" {
-				http.NotFound(w, r)
-				return
-			}
-			h.mail.mu.Lock()
-			defer h.mail.mu.Unlock()
-			if len(h.mail.messages) != 1 {
-				http.Error(w, "verification mail missing", http.StatusNotFound)
-				return
-			}
-			link := regexp.MustCompile(`https://blog.example/auth/verify\?[^"< ]+`).FindString(h.mail.messages[0].Body)
-			u, err := url.Parse(html.UnescapeString(link))
-			if err != nil || u.Query().Get("token") == "" {
-				http.Error(w, "verification token missing", http.StatusNotFound)
-				return
-			}
-			io.WriteString(w, u.RequestURI())
-			return
-		case "/test/image.svg":
-			sizes := map[string][2]int{"large": {3200, 1800}, "small": {160, 100}, "tall": {360, 1800}, "wide": {2400, 320}, "square": {900, 900}, "tiny": {48, 48}}
-			size, ok := sizes[r.URL.Query().Get("size")]
-			if !ok {
-				http.NotFound(w, r)
-				return
-			}
-			w.Header().Set("Content-Type", "image/svg+xml")
-			fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><rect width="100%%" height="100%%" fill="#4477aa"/></svg>`, size[0], size[1])
-			return
-		case "/test/viewport":
-			if mode == "account" {
-				for _, cookie := range h.cookies {
-					http.SetCookie(w, cookie)
-				}
-			}
-			if mode == "navigation" {
-				http.SetCookie(w, &http.Cookie{Name: returningUserCookie, Value: "1", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
-			}
-			// Firefox limits ordinary windows to 500px. An iframe gives each
-			// flow an exact viewport, including narrow mobile sizes.
-			w.Header().Set("Content-Type", "text/html")
-			height := 1000
-			if mode == "media-landscape" {
-				height = map[string]int{"600": 320, "740": 360, "1024": 500}[width]
-			}
-			if mode == "scheduling" {
-				height = 600 // A short viewport exposes clipped time options at the editor's scroll limit.
-			}
-			fmt.Fprintf(w, `<!DOCTYPE html><iframe src="%s" style="border:0;width:%spx;height:%dpx"></iframe>`, pagePath, width, height)
-			return
-		case "/test/plain-error":
-			http.Error(w, `<img src=x onerror="window.errorInjected=true"> Please try again.`, http.StatusTooManyRequests)
-			return
-		case "/test/json-error":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			io.WriteString(w, `{"error":"private detail"}`)
-			return
-		case "/test/disconnect":
-			connection, _, err := w.(http.Hijacker).Hijack()
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			connection.Close()
-			return
-		case "/test/timeout":
-			select {
-			case <-r.Context().Done():
-			case <-time.After(time.Second):
-				w.WriteHeader(http.StatusNoContent)
-			}
-			return
-		case "/test/browser.js":
-			w.Header().Set("Content-Type", "text/javascript")
-			io.WriteString(w, `document.addEventListener('DOMContentLoaded', () => fetch('/test/ready', {method: 'POST'}), {once: true});`+"\n")
-			w.Write(script)
-			return
-		case "/test/ready":
-			readyOnce.Do(func() { close(ready) })
-			w.WriteHeader(http.StatusNoContent)
-			return
-		case "/test/result":
-			data, err := io.ReadAll(io.LimitReader(r.Body, 8192))
-			if err != nil {
-				t.Error(err)
-			}
-			select {
-			case result <- string(data):
-			default:
-			}
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		recorder := httptest.NewRecorder()
-		h.app.Handler.ServeHTTP(recorder, r)
-		if !strings.HasPrefix(r.URL.Path, "/assets/") {
-			t.Logf("%s %s: %d", r.Method, r.URL.Path, recorder.Code)
-		}
-		for name, values := range recorder.Header() {
-			for _, value := range values {
-				w.Header().Add(name, value)
-			}
-		}
-		body := recorder.Body.Bytes()
-		// Allow only this test server to frame the page at the requested size.
-		// Production responses still prohibit framing.
-		w.Header().Set("Content-Security-Policy", strings.ReplaceAll(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'", "frame-ancestors 'self'"))
-		if mode == "draft-recovery" {
-			// A second editor frame exercises separate-tab storage ownership.
-			w.Header().Set("Content-Security-Policy", w.Header().Get("Content-Security-Policy")+"; frame-src 'self'")
-		}
-		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-		if strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/html") {
-			scriptTag := `<script src="/test/browser.js" defer></script></head>`
-			if mode == "refresh" {
-				scriptTag = `<script src="/test/browser.js"></script></head>`
-			}
-			body = bytes.Replace(body, []byte("</head>"), []byte(scriptTag), 1)
-			w.Header().Del("Content-Length")
-		}
-		w.WriteHeader(recorder.Code)
-		w.Write(body)
-	}))
-	defer s.Close()
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	log, err := os.CreateTemp(t.TempDir(), "firefox-*.log")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer log.Close()
-	profile := t.TempDir()
-	// Exercise reduced-motion dismissal in the mobile run, with normal fades elsewhere.
-	if width == "390" {
-		if err := os.WriteFile(profile+"/user.js", []byte(`user_pref("ui.prefersReducedMotion", 1);`), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	pageURL := s.URL + "/test/viewport"
-	command := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, "--width", width, "--height", "1000", pageURL)
-	command.Stdout, command.Stderr = log, log
-	if err := command.Start(); err != nil {
-		t.Fatal(err)
-	}
-	exited := make(chan struct{})
-	go func() {
-		command.Wait()
-		close(exited)
-	}()
-	defer func() { cancel(); <-exited }()
-	readyAfter, err := waitForBlogBrowser(ctx, ready, result, exited)
-	if readyAfter > 0 {
-		t.Logf("Browser JavaScript ready after %s", readyAfter)
-	}
-	if err != nil {
-		data, _ := os.ReadFile(log.Name())
-		t.Fatalf("%v\nFirefox output:\n%s", err, data)
+		})
 	}
 }
