@@ -32,7 +32,7 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 	if err := cm.ApplyDefaults("blog", func(cm *contentservice.ContentManagerService) {
 		cm.RegisterLayouts(contentservice.PageType, blogModuleFS, "templates/layout.html")
 		cm.RegisterLayouts(contentservice.HtmxType, blogModuleFS, "templates/fragment.html")
-		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html", "templates/album.html")
+		cm.RegisterComponents(contentservice.PageType, blogModuleFS, "templates/page-components.html", "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html", "templates/album.html")
 		cm.RegisterComponents(contentservice.HtmxType, blogModuleFS, "templates/profile.html", "templates/notifications.html", "templates/auth.html", "templates/archive.html", "templates/metadata.html")
 		// Authentication returns through setup before selecting login, profile, or home.
 		cm.AppTitle, cm.HomeURL, cm.AuthURL = "", authReturnURL, loginURL

@@ -24,66 +24,17 @@
 <body{{ if .LayoutData.Profile.BackgroundURL }} style="--site-background: url('{{ .LayoutData.Profile.BackgroundURL }}')"{{ end }}>
   <a class="skip-link" href="#article-content">Skip to content</a>
   {{ if .LayoutData.Setup }}
-  <main class="setup-panel" id="article-content" tabindex="-1">
-    {{ if .LayoutData.SetupTitle }}<header><h1>{{ .LayoutData.SetupTitle }}</h1><p>{{ .LayoutData.SetupHelp }}</p></header>{{ end }}
-    {{ if .LayoutData.SetupVerificationPending }}
-    <p>Already verified? Sign in to continue. If the email is missing or the link expired, sign in to request another.</p>
-    <details class="setup-login"{{ if .LayoutData.SetupLoginOpen }} open{{ end }}>
-      <summary>Sign in</summary>
-      {{ renderPartial .PartialName . }}
-    </details>
-    {{ else }}{{ renderPartial .PartialName . }}{{ end }}
-  </main>
+  {{ template "blog.setupPanel" . }}
   {{ else }}
   <div class="site-layout">
     <div class="page-top">
-      <aside class="site-sidebar">
-        <header class="site-header" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">
-          {{ template "blog.signInLink" . }}
-          <nav class="header-menu" aria-label="Site links">
-            <details class="site-menu-disclosure" open>
-              <summary class="menu-toggle text-button" hidden><span aria-hidden="true">☰</span> Menu</summary>
-              <ul id="site-menu" class="site-links">{{ template "blog.siteLinks" . }}</ul>
-            </details>
-          </nav>
-          <div class="profile">{{ template "blog.profile" . }}</div>
-        </header>
-        <nav id="sidebar-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}</nav>
-      </aside>
-      <main id="main-content" class="article-column">
-        <div class="account-panel">
-          {{ if .LayoutData.Writer }}<span class="account-label">Administration</span>{{ end }}
-          <nav class="account-nav" aria-label="Administration">
-            {{ if .LayoutData.Writer }}<details class="account-menu action-menu" open>
-              <summary>Manage</summary>
-              <div class="action-menu-items" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace"><a href="/post/manage">Posts</a>{{ if .LayoutData.Admin }}<a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media">Media</a>{{ end }}{{ if .LayoutData.UserManagement }}<a href="/users">Users</a>{{ end }}</div>
-            </details>{{ end }}
-            {{ if .LayoutData.SignedIn }}
-            {{ if .LayoutData.NeedsVerification }}<a href="/auth/request/verify">Verify email</a>{{ end }}
-            {{ else }}
-            {{ if .LayoutData.Registration }}<a href="/register">Register</a>{{ end }}
-            {{ end }}
-          </nav>
-        </div>
-        <article id="article-content" class="page-content" tabindex="-1" hx-history-elt>{{ template "blog.articleMetadata" . }}{{ if .HTMX.Request.HistoryRestore }}{{ template "blog.readerSearchUpdates" . }}{{ end }}{{ renderPartial .PartialName . }}</article>
-        <div class="content-search" data-reader-search-slot hx-swap:inherited="innerHTML show:top showTarget:window">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div>
-      </main>
+      {{ template "blog.siteSidebar" . }}
+      {{ template "blog.mainContent" . }}
     </div>
-    <footer class="site-footer">
-      <nav id="post-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap:inherited="innerHTML show:top showTarget:window">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div></nav>
-      {{ if or .LayoutData.ShowLogin .LayoutData.SignedIn }}<div class="footer-account" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">{{ template "blog.signInLink" . }}</div>{{ end }}
-    </footer>
+    {{ template "blog.siteFooter" . }}
   </div>
   {{ end }}
   <div id="notifications" data-request-errors>{{ template "blog.notifications" . }}</div>
-  <div id="dialog-host"></div>
-  {{ template "blog.albumTemplates" . }}
-  {{ if .LayoutData.Admin }}<template id="media-browser-template">
-    <dialog class="media-browser" aria-labelledby="media-browser-title">
-      <header class="page-manager-heading"><h2 id="media-browser-title">Choose an image</h2><button type="button" data-close-dialog autofocus>Cancel</button></header>
-      <p role="status" data-media-status></p>
-      <div id="media-results" data-media-results hx-get="/media?pick=1" hx-trigger="load" hx-target="this" hx-swap="innerHTML show:none settle:0" hx-sync="this:replace"></div>
-    </dialog>
-  </template>{{ end }}
+  {{ template "blog.dialogs" . }}
 </body>
 </html>

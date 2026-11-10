@@ -2,7 +2,11 @@
 
 {{ define "blog.recentUpdates" }}
 <div hx-swap-oob="innerHTML:#sidebar-archive">{{ template "blog.layoutRecent" .LayoutData }}</div>
-<div hx-swap-oob="innerHTML:#post-archive">{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap:inherited="innerHTML show:top showTarget:window">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div></div>
+<div hx-swap-oob="innerHTML:#post-archive">{{ template "blog.footerArchive" . }}</div>
+{{ end }}
+
+{{ define "blog.footerArchive" }}
+{{ template "blog.layoutRecent" .LayoutData }}<div class="footer-search" data-reader-search-slot hx-swap:inherited="innerHTML show:top showTarget:window">{{ if .LayoutData.ReaderSearch }}{{ template "blog.searchForm" "" }}{{ end }}</div>
 {{ end }}
 
 {{ define "blog.layoutRecent" }}

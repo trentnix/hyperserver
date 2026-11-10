@@ -16,3 +16,33 @@
     <p>Sign in to write posts and manage your site.</p>
   </header>
 {{ end }}
+
+{{ define "blog.setupPanel" }}
+<main class="setup-panel" id="article-content" tabindex="-1">
+  {{ if .LayoutData.SetupTitle }}<header><h1>{{ .LayoutData.SetupTitle }}</h1><p>{{ .LayoutData.SetupHelp }}</p></header>{{ end }}
+  {{ if .LayoutData.SetupVerificationPending }}
+  <p>Already verified? Sign in to continue. If the email is missing or the link expired, sign in to request another.</p>
+  <details class="setup-login"{{ if .LayoutData.SetupLoginOpen }} open{{ end }}>
+    <summary>Sign in</summary>
+    {{ renderPartial .PartialName . }}
+  </details>
+  {{ else }}{{ renderPartial .PartialName . }}{{ end }}
+</main>
+{{ end }}
+
+{{ define "blog.accountPanel" }}
+<div class="account-panel">
+  {{ if .LayoutData.Writer }}<span class="account-label">Administration</span>{{ end }}
+  <nav class="account-nav" aria-label="Administration">
+    {{ if .LayoutData.Writer }}<details class="account-menu action-menu" open>
+      <summary>Manage</summary>
+      <div class="action-menu-items" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace"><a href="/post/manage">Posts</a>{{ if .LayoutData.Admin }}<a href="/pages">Pages</a><a href="/profile">Site Profile</a><a href="/media">Media</a>{{ end }}{{ if .LayoutData.UserManagement }}<a href="/users">Users</a>{{ end }}</div>
+    </details>{{ end }}
+    {{ if .LayoutData.SignedIn }}
+    {{ if .LayoutData.NeedsVerification }}<a href="/auth/request/verify">Verify email</a>{{ end }}
+    {{ else }}
+    {{ if .LayoutData.Registration }}<a href="/register">Register</a>{{ end }}
+    {{ end }}
+  </nav>
+</div>
+{{ end }}

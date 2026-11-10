@@ -32,3 +32,19 @@
   </details>{{ end }}
 </li>{{ end }}
 {{ end }}
+
+{{ define "blog.siteSidebar" }}
+<aside class="site-sidebar">
+  <header class="site-header" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">
+    {{ template "blog.signInLink" . }}
+    <nav class="header-menu" aria-label="Site links">
+      <details class="site-menu-disclosure" open>
+        <summary class="menu-toggle text-button" hidden><span aria-hidden="true">☰</span> Menu</summary>
+        <ul id="site-menu" class="site-links">{{ template "blog.siteLinks" . }}</ul>
+      </details>
+    </nav>
+    <div class="profile">{{ template "blog.profile" . }}</div>
+  </header>
+  <nav id="sidebar-archive" class="archive-nav" aria-label="Post archive">{{ template "blog.layoutRecent" .LayoutData }}</nav>
+</aside>
+{{ end }}
