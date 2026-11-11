@@ -91,7 +91,7 @@ func TestMediaMetadataSelection(t *testing.T) {
 	}
 	store := &sqliteRepository{db: db}
 	for _, id := range []string{"first.png", "second.png", "deleted.png"} {
-		if err := store.RememberMedia(t.Context(), id, id, "owner"); err != nil {
+		if err := store.RememberMedia(t.Context(), id, mediaMetadata{Filename: id, UploadedBy: "owner"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -141,7 +141,7 @@ func TestMediaLibraryMetadataScope(t *testing.T) {
 	for i := range mediaPageSize + 2 {
 		id := fmt.Sprintf("%064x.png", i)
 		files = append(files, mediaFile{ID: id, Modified: time.Unix(100, 0)})
-		if err := h.blog.mediaMetadata.RememberMedia(t.Context(), id, "Needle.png", ""); err != nil {
+		if err := h.blog.mediaMetadata.RememberMedia(t.Context(), id, mediaMetadata{Filename: "Needle.png"}); err != nil {
 			t.Fatal(err)
 		}
 	}

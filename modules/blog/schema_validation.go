@@ -9,11 +9,28 @@ import (
 	dbsqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 )
 
-// validateBlogSchema checks storage structure against a fresh bootstrap.
+// ValidateSchema checks an existing blog database without initializing or upgrading it.
+// The caller retains ownership of db. Validation uses the same checks as startup.
+func ValidateSchema(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := validateBlogSchema(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// validateBlogSchema checks version metadata and structure against a fresh bootstrap.
 // SQLite supplies the metadata, so formatting and column order do not matter.
 // The migration version and tests cover view and trigger behavior, CHECK
 // expressions, and deferred constraints, which PRAGMAs do not describe.
 func validateBlogSchema(ctx context.Context, tx *sql.Tx) error {
+	if err := checkBlogVersion(ctx, tx); err != nil {
+		return err
+	}
 	expected, err := dbsqlite.Open(":memory:")
 	if err != nil {
 		return err

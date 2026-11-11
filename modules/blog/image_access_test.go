@@ -388,7 +388,7 @@ func TestImageReferenceTransactions(t *testing.T) {
 			if err := save("![Original](/images/original.png)"); err != nil {
 				t.Fatal(err)
 			}
-			table := "blog_" + kind + "_images"
+			table := "blog_" + kind + "_media"
 			if _, err := store.db.Exec("CREATE TRIGGER fail_image_reference BEFORE INSERT ON " + table + " BEGIN SELECT RAISE(ABORT, 'test reference failure'); END"); err != nil {
 				t.Fatal(err)
 			}

@@ -31,6 +31,8 @@ go run ./cmd/web
 
 Open <http://127.0.0.1:8080/> and register the configured administrator address. With email registration, complete any required verification through Mailpit at <http://127.0.0.1:8025>, then log in. Google registration signs you in immediately. Your first login opens Site Profile. Add your name and bio, then save. Images are optional.
 
+Saving Site Profile returns to the site root with a brief “Profile saved” confirmation. Validation errors stay in the editor and preserve your changes.
+
 Public content opens after registration and any required verification. After saving Site Profile, you can view the site or write a post. Setup progress survives restarts, and verified administrators skip registration. If no administrator exists, enable `auth.registrationEnabled` to register.
 
 A fresh installation shows “My Blog,” neutral portrait/favicon assets, no background, and no posts or pages. Use **Site Profile** for the name, bio, and images. Create About or Projects through **Pages**. Content and user access belong in the database. Operational settings and the first administrator address belong in configuration.
@@ -75,15 +77,17 @@ The [page layout](../../modules/blog/templates/layout.html) composes named compo
 
 Writing operations enforce roles and post ownership, including publishing and restores. They require the authenticated account in the context. HTTP route guards also protect editors and history. Private persistence helpers support authorized operations and trusted test fixtures. New posts belong to the actor. Edits preserve the stored owner.
 
-Fresh startup creates blog schema version 1 from the embedded [migration](../../modules/blog/migrations). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Image references belong to individual post or page versions. Read-only views join current pointers to content for rendering and search.
+Fresh startup creates blog schema version 1 from the embedded [initial migration](../../modules/blog/migrations/000001_blog.up.sql). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Read-only views join current pointers to content for rendering and search.
 
-Existing databases must have a clean version 1 in `blog_schema_version`. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
+`blog_media` holds upload metadata for images and future file types. `blog_post_media` and `blog_page_media` track URLs used by each saved revision. References retain URLs to preserve existing image links and host-specific access checks. Shared metadata does not enable document or audio uploads. The image pipeline and existing page editing behavior remain unchanged.
+
+Existing databases must have a clean version 1 in `blog_schema_version` and match the current baseline. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
 
 ## Database migrations
 
-The application supports one current schema, defined by its baseline migration. Earlier development layouts and backups are unsupported. Use fresh storage, not a changed version marker.
+The initial migration includes shared media metadata and revision references for posts and pages. Earlier baseline databases and backups are unsupported, even if they record version 1. Stop all writers and replace the blog database with fresh storage before running this baseline. Startup rejects the earlier layout without changing it. Never change a version marker to bypass validation.
 
-For later migrations, stop the server and all other writers. Create and verify a [backup](backup.md) with a compatible binary. From the repository root:
+For future migrations, stop the server and all other writers. Create and verify a [backup](backup.md) with a compatible binary. From the repository root:
 
 ```sh
 go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1

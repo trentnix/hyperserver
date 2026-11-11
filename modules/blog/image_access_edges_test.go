@@ -27,7 +27,7 @@ func TestImageReferenceDeduplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM blog_post_images WHERE version_id=(SELECT version_id FROM blog_current_posts WHERE id=?)", p.ID).Scan(&count); err != nil || count != 1 {
+	if err := store.db.QueryRowContext(t.Context(), "SELECT count(*) FROM blog_post_media WHERE version_id=(SELECT version_id FROM blog_current_posts WHERE id=?)", p.ID).Scan(&count); err != nil || count != 1 {
 		t.Fatal("references were not deduplicated", count, err)
 	}
 	p.PreviewImage = ""

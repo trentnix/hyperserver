@@ -10,17 +10,20 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 type rejectedHistoryLookup struct{ imageAccessRepository }
 
 type countedImageWrites struct {
 	imageStore
-	writes int
-	fail   bool
+	writes   int
+	fail     bool
+	storedAt time.Time
 }
 
 func (s *countedImageWrites) Put(ctx context.Context, upload imageUpload) (string, error) {
@@ -28,7 +31,17 @@ func (s *countedImageWrites) Put(ctx context.Context, upload imageUpload) (strin
 	if s.fail {
 		return "", errors.New("image write failed")
 	}
-	return s.imageStore.Put(ctx, upload)
+	id, err := s.imageStore.Put(ctx, upload)
+	if err == nil {
+		s.storedAt = time.Now()
+	}
+	return id, err
+}
+
+type failedUploadRecording struct{ mediaMetadataRepository }
+
+func (failedUploadRecording) RecordMediaUpload(context.Context, string, time.Time) error {
+	return errors.New("private metadata completion failure")
 }
 
 func (rejectedHistoryLookup) ImageInAuthorsPosts(context.Context, string, ...string) (bool, error) {
@@ -45,7 +58,7 @@ func TestPosterHistoricalImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = h.blog.mediaMetadata.RememberMedia(t.Context(), imageID, "admin.png", admin.ID); err != nil {
+	if err = h.blog.mediaMetadata.RememberMedia(t.Context(), imageID, mediaMetadata{Filename: "admin.png", UploadedBy: admin.ID}); err != nil {
 		t.Fatal(err)
 	}
 	poster := registeredPoster(t, h)
@@ -92,7 +105,7 @@ func TestPublicReuseDoesNotGrantOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = h.blog.mediaMetadata.RememberMedia(t.Context(), id, "admin.png", admin.ID); err != nil {
+	if err = h.blog.mediaMetadata.RememberMedia(t.Context(), id, mediaMetadata{Filename: "admin.png", UploadedBy: admin.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = h.blog.persistPost(t.Context(), Post{Title: "Public admin image", Slug: "public-admin-review", Markdown: "Body", AuthorID: admin.ID, PreviewImage: id}); err != nil {
@@ -198,17 +211,44 @@ func TestPosterImageUploads(t *testing.T) {
 	h.blog.mediaMetadata = metadataStore
 	images.fail = true
 	upload(http.StatusInternalServerError)
+	pendingID := imageUploadID(testImageUpload("image/png", image))
+	pending, err := metadataStore.GetMediaMetadata(t.Context(), pendingID)
+	if err != nil || pending.UploadedBy != first.ID || pending.UploadedAt != nil {
+		t.Fatal("failed file write lost ownership or recorded completion", pending, err)
+	}
 	images.fail = false
+	h.blog.mediaMetadata = failedUploadRecording{metadataStore}
+	upload(http.StatusInternalServerError)
+	stored, err := images.Open(t.Context(), pendingID)
+	if err != nil {
+		t.Fatal("completion failure removed the uploaded image", err)
+	}
+	stored.Content.Close()
+	pending, err = metadataStore.GetMediaMetadata(t.Context(), pendingID)
+	if err != nil || pending.UploadedAt != nil {
+		t.Fatal("failed completion recorded an upload timestamp", pending, err)
+	}
+	h.blog.mediaMetadata = metadataStore
 	id := upload(http.StatusOK)
 	metadata, err := h.blog.mediaMetadata.GetMediaMetadata(t.Context(), id)
 	if err != nil || metadata.UploadedBy != first.ID {
 		t.Fatalf("upload attribution: %+v %v", metadata, err)
+	}
+	if metadata.ContentType != "image/png" || metadata.Checksum != strings.TrimSuffix(id, ".png") || metadata.SizeBytes == nil || *metadata.SizeBytes != int64(len(image)) || metadata.UploadedAt == nil || *metadata.UploadedAt <= 0 {
+		t.Fatalf("missing validated upload facts: %+v", metadata)
+	}
+	if *metadata.UploadedAt < images.storedAt.UnixNano() || metadata.Version != 1 {
+		t.Fatal("completion preceded the file write or changed the edit version", metadata)
 	}
 	for _, suffix := range []string{"", "?variant=thumbnail", "?variant=original"} {
 		requireStatus(t, h.request("GET", "/images/"+id+suffix, nil, false), http.StatusOK)
 	}
 	if duplicate := upload(http.StatusOK); duplicate != id {
 		t.Fatal("own duplicate changed image ID")
+	}
+	duplicateMetadata, err := metadataStore.GetMediaMetadata(t.Context(), id)
+	if err != nil || !reflect.DeepEqual(duplicateMetadata, metadata) {
+		t.Fatal("duplicate upload changed original upload facts", duplicateMetadata, err)
 	}
 	fields := url.Values{"title": {"My image"}, "content": {"![Photo](/images/" + id + ")"}, "previewImage": {id}}
 	requireStatus(t, h.request("POST", "/post", fields, false), http.StatusSeeOther)
@@ -227,7 +267,7 @@ func TestPosterImageUploads(t *testing.T) {
 	}
 	upload(http.StatusConflict)
 	afterMetadata, err := h.blog.mediaMetadata.GetMediaMetadata(t.Context(), id)
-	if err != nil || afterMetadata != beforeMetadata || images.writes != beforeWrites {
+	if err != nil || !reflect.DeepEqual(afterMetadata, beforeMetadata) || images.writes != beforeWrites {
 		t.Fatal("denied duplicate changed the image or metadata", err)
 	}
 	requireStatus(t, h.request("POST", "/post", fields, false), http.StatusUnprocessableEntity)

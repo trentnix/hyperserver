@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// insertImageReferences records a new version's references in its save transaction.
-func insertImageReferences(ctx context.Context, tx *sql.Tx, table string, id int64, refs []string) error {
+// insertMediaReferences records a new version's references in its save transaction.
+func insertMediaReferences(ctx context.Context, tx *sql.Tx, table string, id int64, refs []string) error {
 	for _, ref := range refs {
 		if _, err := tx.ExecContext(ctx, "INSERT INTO "+table+" (version_id, url) VALUES (?, ?)", id, ref); err != nil {
 			return err
@@ -20,11 +20,11 @@ func insertImageReferences(ctx context.Context, tx *sql.Tx, table string, id int
 // Resolve matching references through their version's owner, using primary-key
 // lookups rather than scanning current content for a matching version pointer.
 const publicImageQuery = publishedPages + `SELECT
-EXISTS(SELECT 1 FROM blog_post_images i
+EXISTS(SELECT 1 FROM blog_post_media i
  JOIN blog_posts r ON r.id=i.version_id
  JOIN blog_current_posts p ON p.id=r.owner_id AND p.version_id=r.id
  WHERE i.url IN (%[1]s) AND p.draft=0 AND p.published<=?)
-OR EXISTS(SELECT 1 FROM blog_page_images i
+OR EXISTS(SELECT 1 FROM blog_page_media i
  JOIN blog_pages r ON r.id=i.version_id
  JOIN blog_current_pages p ON p.id=r.owner_id AND p.version_id=r.id
  JOIN visible v ON v.id=p.id WHERE i.url IN (%[1]s))`
@@ -65,7 +65,7 @@ func (s *sqliteRepository) ImageInAuthorsPosts(ctx context.Context, author strin
 	}
 	args = append(args, author)
 	var found bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM blog_post_images i
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM blog_post_media i
  JOIN blog_posts v ON v.id=i.version_id JOIN blog_current_posts p ON p.id=v.owner_id
  WHERE i.url IN (`+placeholders+`) AND p.author_id=?)`, args...).Scan(&found)
 	return found, err

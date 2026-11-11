@@ -1,7 +1,6 @@
 {{ define "blog.profileEditor" }}
 <section class="info-page profile-editor">
 <header class="page-manager-heading"><div><h1>Site Profile</h1><p class="form-hint">{{ if .Data.InitialProfile }}Give your blog a name and a short introduction. Images are optional.{{ else }}Your public name, biography, and site images.{{ end }}</p></div>{{ if .Data.HasHistory }}<a class="button-secondary" href="/profile/history">History</a>{{ end }}</header>
-{{ if .Data.ProfileCreated }}<section class="setup-complete" aria-labelledby="profile-saved-title"><h2 id="profile-saved-title">Your site profile is saved.</h2><div><a class="button-secondary" href="/">View site</a><a class="button-primary" href="/post/create">Write your first post</a></div></section>{{ end }}
 {{ with .Data.LoadedRevision }}<p class="revision-notice">Editing the version saved {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}. Save to apply it to the site. <a href="/profile/history?revision={{ .ID }}">Back to history</a></p>{{ end }}
 {{ if .Data.MissingImages }}<p class="revision-notice">Some images are no longer available. Replace or remove their references before saving.</p>{{ end }}
 <form id="profile-form" method="post" action="/profile{{ with .Data.LoadedRevision }}?revision={{ .ID }}{{ end }}" hx-post="/profile{{ with .Data.LoadedRevision }}?revision={{ .ID }}{{ end }}" hx-target="#profile-errors">

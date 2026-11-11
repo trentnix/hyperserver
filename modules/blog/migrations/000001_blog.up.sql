@@ -54,23 +54,28 @@ CREATE TABLE blog_profile (
  favicon_url TEXT NOT NULL, background_url TEXT NOT NULL, recorded INTEGER NOT NULL,
  UNIQUE (owner_id, id)
 );
-CREATE TABLE blog_post_images (
+CREATE TABLE blog_post_media (
  version_id INTEGER NOT NULL REFERENCES blog_posts(id) ON DELETE CASCADE,
  url TEXT NOT NULL, PRIMARY KEY(version_id, url)
 );
-CREATE INDEX blog_post_images_url ON blog_post_images(url, version_id);
-CREATE TABLE blog_page_images (
+CREATE INDEX blog_post_media_url ON blog_post_media(url, version_id);
+CREATE TABLE blog_page_media (
  version_id INTEGER NOT NULL REFERENCES blog_pages(id) ON DELETE CASCADE,
  url TEXT NOT NULL, PRIMARY KEY(version_id, url)
 );
-CREATE INDEX blog_page_images_url ON blog_page_images(url, version_id);
+CREATE INDEX blog_page_media_url ON blog_page_media(url, version_id);
 CREATE TABLE blog_setup (
  email TEXT PRIMARY KEY, complete INTEGER NOT NULL CHECK (complete IN (0, 1))
 );
 CREATE TABLE blog_media (
  id TEXT PRIMARY KEY, filename TEXT NOT NULL, label TEXT NOT NULL,
  version INTEGER NOT NULL CHECK (version>0), tags TEXT NOT NULL DEFAULT '',
- uploaded_by TEXT NOT NULL DEFAULT ''
+ uploaded_by TEXT NOT NULL DEFAULT '',
+ content_type TEXT NOT NULL DEFAULT '',
+ size_bytes INTEGER CHECK (size_bytes>=0),
+ -- First successful upload in UTC Unix nanoseconds. NULL means not recorded.
+ uploaded_at INTEGER CHECK (uploaded_at>0),
+ checksum TEXT NOT NULL DEFAULT '' CHECK (checksum='' OR (length(checksum)=64 AND checksum NOT GLOB '*[^0-9a-f]*'))
 );
 
 -- Read-only joins keep current-content queries independent of history.

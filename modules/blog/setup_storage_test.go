@@ -19,7 +19,7 @@ func TestAssignUnownedContent(t *testing.T) {
 		if _, err := savePostFixture(store, t.Context(), Post{Title: "Post", Slug: "post-" + owner, AuthorID: owner}); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.RememberMedia(t.Context(), "image-"+owner, "image.png", owner); err != nil {
+		if err := store.RememberMedia(t.Context(), "image-"+owner, mediaMetadata{Filename: "image.png", UploadedBy: owner}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -174,7 +174,7 @@ func mediaReferenceSelection(ids []string) (string, []any) {
 		}
 		filter = " WHERE " + strings.Join(conditions, " OR ")
 	}
-	prefix += "post_images AS (SELECT version_id, url FROM blog_post_images" + filter + "), " +
-		"page_images AS (SELECT version_id, url FROM blog_page_images" + filter + ") "
+	prefix += "post_images AS (SELECT version_id, url FROM blog_post_media" + filter + "), " +
+		"page_images AS (SELECT version_id, url FROM blog_page_media" + filter + ") "
 	return prefix, args
 }

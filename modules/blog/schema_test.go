@@ -53,7 +53,7 @@ func TestBlogSchemaDeclarations(t *testing.T) {
 		{"slug TEXT NOT NULL UNIQUE", "slug TEXT NOT NULL UNIQUE COLLATE NOCASE"},
 		{"UNIQUE (owner_id, id)", "UNIQUE (id)"},
 		{"REFERENCES blog_posts(owner_id, id)", "REFERENCES blog_posts(id, owner_id)"},
-		{"ON blog_post_images(url, version_id);", "ON blog_post_images(url, version_id) WHERE url<>'';"},
+		{"ON blog_post_media(url, version_id);", "ON blog_post_media(url, version_id) WHERE url<>'';"},
 		{"id INTEGER PRIMARY KEY AUTOINCREMENT,", "id INTEGER PRIMARY KEY DESC,"},
 	} {
 		t.Run(change[1], func(t *testing.T) {
@@ -122,7 +122,7 @@ func TestBlogSchemaEquivalentDeclarations(t *testing.T) {
 		{"column round trip", `ALTER TABLE blog_media DROP COLUMN tags;
 ALTER TABLE blog_media ADD COLUMN tags TEXT NOT NULL DEFAULT ''`},
 		{"column order and quoting", `ALTER TABLE blog_media RENAME TO previous_media;
-CREATE TABLE "blog_media" (uploaded_by TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL CHECK(version>0), label TEXT NOT NULL, filename TEXT NOT NULL, id TEXT PRIMARY KEY);
+CREATE TABLE "blog_media" (content_type TEXT NOT NULL DEFAULT '', size_bytes INTEGER CHECK (size_bytes>=0), uploaded_at INTEGER CHECK (uploaded_at>0), checksum TEXT NOT NULL DEFAULT '' CHECK (checksum='' OR (length(checksum)=64 AND checksum NOT GLOB '*[^0-9a-f]*')), uploaded_by TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL CHECK(version>0), label TEXT NOT NULL, filename TEXT NOT NULL, id TEXT PRIMARY KEY);
 INSERT INTO blog_media(id,filename,label,version,tags,uploaded_by) SELECT id,filename,label,version,tags,uploaded_by FROM previous_media;
 DROP TABLE previous_media`},
 	} {
@@ -149,7 +149,7 @@ func TestBlogSchemaSpecificErrors(t *testing.T) {
 	for _, test := range []struct{ change, want string }{
 		{`DROP TABLE blog_posts`, "missing table blog_posts"},
 		{`DROP VIEW blog_post_current; ALTER TABLE blog_posts DROP COLUMN tags`, "table blog_posts columns"},
-		{`DROP INDEX blog_post_images_url`, "index blog_post_images_url"},
+		{`DROP INDEX blog_post_media_url`, "index blog_post_media_url"},
 		{`DROP TRIGGER blog_pages_no_cycle`, "missing trigger blog_pages_no_cycle"},
 		{`CREATE TABLE blog_projects(id TEXT)`, "unsupported table blog_projects"},
 	} {
@@ -293,8 +293,8 @@ func TestBlogSchemaRejection(t *testing.T) {
 		`DROP TABLE blog_posts`,
 		`DROP TABLE blog_pages`,
 		`DROP TABLE blog_profile`,
-		`DROP TABLE blog_post_images`,
-		`DROP TABLE blog_page_images`,
+		`DROP TABLE blog_post_media`,
+		`DROP TABLE blog_page_media`,
 		`DROP INDEX blog_pages_parent`,
 		`DROP TRIGGER blog_pages_no_cycle`,
 		`CREATE TABLE blog_projects(id TEXT)`,
@@ -319,6 +319,31 @@ func TestBlogSchemaRejection(t *testing.T) {
 }
 
 // Obsolete development databases are rejected, not migrated or relabeled.
+func TestBlogSchemaRejectsImageOnlyBaseline(t *testing.T) {
+	db, _ := schemaTestDB(t)
+	schema := strings.ReplaceAll(strings.ReplaceAll(blogSchema, "blog_post_media", "blog_post_images"), "blog_page_media", "blog_page_images")
+	start := strings.Index(schema, ",\n content_type TEXT")
+	if start < 0 {
+		t.Fatal("media columns missing from baseline")
+	}
+	end := strings.Index(schema[start:], "\n);")
+	if end < 0 {
+		t.Fatal("media table boundary missing")
+	}
+	schema = schema[:start] + schema[start+end:]
+	if _, err := db.Exec(schema + blogVersionSchema + `; INSERT INTO blog_schema_version VALUES(1,0);
+INSERT INTO blog_media(id,filename,label,version) VALUES('old.png','old.png','Keep until reset',1)`); err != nil {
+		t.Fatal(err)
+	}
+	before := schemaSnapshot(t, db)
+	if err := prepareBlogSchema(t.Context(), db); err == nil || !strings.Contains(err.Error(), "incompatible blog schema") {
+		t.Fatal("startup accepted the earlier version 1 layout", err)
+	}
+	if schemaSnapshot(t, db) != before {
+		t.Fatal("startup changed the earlier baseline instead of rejecting it")
+	}
+}
+
 func TestBlogSchemaRejectsObsoleteStorage(t *testing.T) {
 	db, _ := schemaTestDB(t)
 	if _, err := db.Exec(`CREATE TABLE blog_posts(id TEXT PRIMARY KEY, title TEXT);
@@ -333,6 +358,30 @@ INSERT INTO bookmarks VALUES(1,'post');` + blogVersionSchema + `; INSERT INTO bl
 	}
 	if schemaSnapshot(t, db) != before {
 		t.Fatal("startup changed obsolete content or another module's records")
+	}
+}
+
+func TestValidateSchemaDoesNotInitialize(t *testing.T) {
+	db, _ := schemaTestDB(t)
+	before := schemaSnapshot(t, db)
+	if err := ValidateSchema(t.Context(), db); err == nil {
+		t.Fatal("empty database passed validation")
+	}
+	if schemaSnapshot(t, db) != before {
+		t.Fatal("validation initialized empty storage")
+	}
+	if err := prepareBlogSchema(t.Context(), db); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("PRAGMA query_only=ON"); err != nil {
+		t.Fatal(err)
+	}
+	before = schemaSnapshot(t, db)
+	if err := ValidateSchema(t.Context(), db); err != nil {
+		t.Fatal("read-only validation failed", err)
+	}
+	if schemaSnapshot(t, db) != before {
+		t.Fatal("validation changed existing storage")
 	}
 }
 

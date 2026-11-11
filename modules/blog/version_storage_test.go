@@ -91,7 +91,7 @@ func TestPublicImageQueryUsesIndexes(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	for _, index := range []string{"blog_post_images_url", "blog_page_images_url"} {
+	for _, index := range []string{"blog_post_media_url", "blog_page_media_url"} {
 		if !strings.Contains(plan.String(), index) {
 			t.Errorf("missing %s lookup:\n%s", index, plan.String())
 		}
@@ -131,7 +131,7 @@ func TestVersionReferencesFollowPageURL(t *testing.T) {
 		t.Fatal("historical relative links lost their URL base", old, err)
 	}
 	var n int
-	if err := s.db.QueryRow("SELECT count(*) FROM blog_page_images WHERE version_id=?", versions[1].ID).Scan(&n); err != nil || n != 0 {
+	if err := s.db.QueryRow("SELECT count(*) FROM blog_page_media WHERE version_id=?", versions[1].ID).Scan(&n); err != nil || n != 0 {
 		t.Fatal("old references changed", n, err)
 	}
 }
@@ -175,7 +175,7 @@ func TestVersionPointerConstraints(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := s.db.QueryRow("SELECT count(*) FROM blog_post_images WHERE version_id=?", old[0].ID).Scan(&n); err != nil || n != 0 {
+	if err := s.db.QueryRow("SELECT count(*) FROM blog_post_media WHERE version_id=?", old[0].ID).Scan(&n); err != nil || n != 0 {
 		t.Fatal(n, err)
 	}
 	current, err := s.ListRevisions(t.Context(), "post", a.ID)

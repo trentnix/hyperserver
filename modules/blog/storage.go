@@ -68,9 +68,6 @@ func prepareBlogSchema(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
-	if err := checkBlogVersion(ctx, tx); err != nil {
-		return err
-	}
 	if err := validateBlogSchema(ctx, tx); err != nil {
 		return err
 	}

@@ -30,6 +30,14 @@
       history.click();
       return;
     }
+    if (stage === 'saved') {
+      assert(location.pathname === '/' && !location.search, 'Save did not return to the site root.');
+      assert(document.querySelector('#notifications').textContent.includes('Profile saved'), 'Missing profile confirmation.');
+      assert(document.querySelector('.profile-name').textContent === 'Profile 00', 'Save did not publish the restored name.');
+      sessionStorage.setItem('profile-history-stage', 'saved-editor');
+      location.href = '/profile';
+      return;
+    }
     assert(document.documentElement.scrollWidth <= innerWidth, 'Profile history overflows the viewport.');
     assert(!document.querySelector('.reader-search-form'), 'Profile editing and history must not contain reader search markup.');
     if (stage === 'history') {
@@ -72,7 +80,7 @@
       form.requestSubmit();
       return;
     }
-    if (stage === 'saved') {
+    if (stage === 'saved-editor') {
       assert(location.pathname === '/profile' && !location.search, 'Save did not return to the current profile.');
       assert(document.querySelector('.profile-name').textContent === 'Profile 00', 'Save did not publish the restored name.');
       assert(form.elements.version.value === '14' && !document.querySelector('.revision-notice'), 'Save did not advance the edit token or clear the restore notice.');

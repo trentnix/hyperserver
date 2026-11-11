@@ -27,6 +27,19 @@
       await wait(() => document.querySelector('#profile-form') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       stage = 'edit';
     }
+    if (location.pathname === '/' && ['saved', 'background', 'cleared'].includes(stage)) {
+      assert(document.querySelector('#notifications').textContent.includes('Profile saved'), 'Missing profile confirmation.');
+      if (stage === 'saved') {
+        assert(document.querySelector('.profile-name').textContent === 'Updated Writer', 'Header did not reload.');
+        assert(document.title.startsWith('Updated Writer') && !document.title.includes('Site Profile'), 'Title did not update.');
+        assert(document.querySelector('meta[name="description"]').content === 'An updated biography.', 'Description did not update.');
+        assert(document.querySelector('link[rel="icon"]').getAttribute('href') === sessionStorage.getItem('faviconURL'), 'Favicon did not update.');
+        assert(document.querySelector('.portrait').getAttribute('src') === sessionStorage.getItem('imageURL'), 'Portrait did not update.');
+        assert(getComputedStyle(document.body).backgroundImage === 'none' && getComputedStyle(document.querySelector('.page-top')).backgroundImage === 'none', 'Cleared background is still visible.');
+      }
+      location.href = '/profile';
+      return;
+    }
     const form = document.querySelector('#profile-form');
     const formStyle = getComputedStyle(form);
     assert(formStyle.fontSize === '16px' && formStyle.lineHeight === '24px', 'Profile typography differs from other administrative forms.');
@@ -135,12 +148,6 @@
       return;
     }
     if (stage === 'saved') {
-      assert(document.querySelector('.profile-name').textContent === 'Updated Writer', 'Header did not reload.');
-      assert(document.title === 'Updated Writer | Site Profile', 'Title did not update.');
-      assert(document.querySelector('meta[name="description"]').content === 'An updated biography.', 'Description did not update.');
-      assert(document.querySelector('link[rel="icon"]').getAttribute('href') === sessionStorage.getItem('faviconURL'), 'Favicon did not update.');
-      assert(document.querySelector('.portrait').getAttribute('src') === sessionStorage.getItem('imageURL'), 'Portrait did not update.');
-      assert(getComputedStyle(document.body).backgroundImage === 'none' && getComputedStyle(document.querySelector('.page-top')).backgroundImage === 'none', 'Cleared background is still visible.');
       // A failed network request must leave the saved image selected and controls usable.
       const originalFetch = window.fetch;
       window.fetch = (...args) => args[0] === '/post/images/upload' ? Promise.reject(new Error('Network unavailable')) : originalFetch(...args);

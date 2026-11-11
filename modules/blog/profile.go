@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -111,7 +112,6 @@ type profileEditorData struct {
 	LoadedRevision *ProfileRevision
 	HasHistory     bool
 	InitialProfile bool
-	ProfileCreated bool
 	MissingImages  map[string]bool
 }
 
@@ -195,7 +195,7 @@ func (m *module) saveProfileContent(w http.ResponseWriter, r *http.Request, p Pr
 		m.renderProfileEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity, validationFields(err)...)
 		return
 	}
-	destination := "/profile"
+	destination := "/"
 	if restore {
 		destination = "/profile/history"
 	}
@@ -216,8 +216,10 @@ func (m *module) saveProfileContent(w http.ResponseWriter, r *http.Request, p Pr
 		m.renderProfileEditor(w, r, p, "Unable to save the site profile. Please try again.", http.StatusInternalServerError)
 		return
 	}
-	if p.Version == 0 && !restore {
-		destination = "/profile?created=1"
+	if !restore {
+		if err := flash.AddSuccessNotification(w, r, "Profile saved"); err != nil {
+			logger.LogRequestError(r, errors.New("profile saved but its notification could not be saved"))
+		}
 	}
 	// Reload the whole document so the header, favicon, and background update together.
 	util.RedirectToURL(w, r, destination)
@@ -263,8 +265,6 @@ func (m *module) renderProfileEditor(w http.ResponseWriter, r *http.Request, p P
 	data := profileEditorData{Profile: p, Error: message, ErrorFields: strings.Join(fields, " ")}
 	current := m.profile.Current()
 	data.InitialProfile = current.Version == 0
-	// The redirect flag only selects a confirmation. Stored state determines whether it applies.
-	data.ProfileCreated = r.Method == http.MethodGet && status == http.StatusOK && current.Version == 1 && r.URL.Query().Get("created") == "1" && r.URL.Query().Get("revision") == ""
 	// Failed HTMX submissions leave the mounted editor and its concurrency token intact.
 	view := m.views["profileEditor"]
 	page := view.Content(r, data)

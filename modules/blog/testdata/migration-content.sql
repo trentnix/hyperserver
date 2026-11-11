@@ -35,9 +35,9 @@ INSERT INTO blog_media(id,filename,label,version,tags) VALUES
  ('private.png','private-original.png','Private image',2,'private'),
  ('unused.png','unused-original.png','Unused image',1,'unused');
 
-INSERT INTO blog_post_images(version_id,url) VALUES
+INSERT INTO blog_post_media(version_id,url) VALUES
  (1,'/images/old.png'),(2,'/images/private.png'),(4,'/images/public.png'),(5,'/images/private.png');
-INSERT INTO blog_page_images(version_id,url) VALUES
+INSERT INTO blog_page_media(version_id,url) VALUES
  (2,'/images/old.png'),(3,'/images/private.png'),(5,'/images/public.png'),(6,'/images/private.png');
 
 CREATE TABLE other_version(version INTEGER NOT NULL, dirty BOOLEAN NOT NULL);

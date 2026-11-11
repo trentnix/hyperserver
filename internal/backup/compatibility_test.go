@@ -16,6 +16,17 @@ import (
 	sessionsqlite "github.com/trentnix/hyperserver/pkg/services/session/sqlite"
 )
 
+const imageOnlyBlogSchemaChange = `ALTER TABLE blog_post_media RENAME TO blog_post_images;
+ALTER TABLE blog_page_media RENAME TO blog_page_images;
+DROP INDEX blog_post_media_url;
+DROP INDEX blog_page_media_url;
+CREATE INDEX blog_post_images_url ON blog_post_images(url,version_id);
+CREATE INDEX blog_page_images_url ON blog_page_images(url,version_id);
+ALTER TABLE blog_media DROP COLUMN checksum;
+ALTER TABLE blog_media DROP COLUMN uploaded_at;
+ALTER TABLE blog_media DROP COLUMN size_bytes;
+ALTER TABLE blog_media DROP COLUMN content_type;`
+
 func TestIncompatibleBackupsLeaveOriginalsUntouched(t *testing.T) {
 	cfg := fixture(t)
 	archive := filepath.Join(t.TempDir(), "valid.zip")
@@ -36,12 +47,19 @@ func TestIncompatibleBackupsLeaveOriginalsUntouched(t *testing.T) {
 		{"accounts", "databases/accounts.db", "hyperserver_account_version"},
 		{"sessions", "databases/accounts.db", "hyperserver_session_version_sessions"},
 	} {
-		for _, change := range []string{
+		changes := []string{
 			"UPDATE %s SET version=0", "UPDATE %s SET version=2", "UPDATE %s SET version=3",
 			"UPDATE %s SET dirty=true", "DROP TABLE %s", "DELETE FROM %s",
 			"INSERT INTO %s VALUES (2, false)", "UPDATE %s SET version=NULL",
 			"UPDATE %s SET dirty=NULL", "ALTER TABLE %s RENAME COLUMN version TO missing",
-		} {
+		}
+		for i := range changes {
+			changes[i] = fmt.Sprintf(changes[i], role.table)
+		}
+		if role.name == "blog" {
+			changes = append(changes, imageOnlyBlogSchemaChange, "DROP INDEX blog_post_media_url", "ALTER TABLE blog_media DROP COLUMN size_bytes")
+		}
+		for _, change := range changes {
 			t.Run(role.name+"/"+change, func(t *testing.T) {
 				extracted, _ := unpack(t, archive)
 				filename := filepath.Join(extracted, filepath.FromSlash(role.file))
@@ -49,7 +67,7 @@ func TestIncompatibleBackupsLeaveOriginalsUntouched(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = db.ExecContext(t.Context(), fmt.Sprintf(change, role.table))
+				_, err = db.ExecContext(t.Context(), change)
 				closeErr := db.Close()
 				if err != nil || closeErr != nil {
 					t.Fatal(err, closeErr)
@@ -129,30 +147,34 @@ func TestBackupCompatibilityCustomSessionTable(t *testing.T) {
 }
 
 func TestIncompatibleSourceDoesNotPublishBackup(t *testing.T) {
-	cfg := fixture(t)
-	filename := filepath.Join(cfg.App.WorkingDirectory, "blog.db")
-	db, err := dbsqlite.Open(filename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.ExecContext(t.Context(), `UPDATE blog_schema_version SET version=3`)
-	closeErr := db.Close()
-	if err != nil || closeErr != nil {
-		t.Fatal(err, closeErr)
-	}
-	before, err := os.ReadFile(filename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	destination := filepath.Join(t.TempDir(), "incompatible.zip")
-	if err := Create(t.Context(), cfg, destination); err == nil || !strings.Contains(err.Error(), "incompatible blog backup") {
-		t.Fatalf("backup error = %v", err)
-	}
-	if _, err := os.Stat(destination); !os.IsNotExist(err) {
-		t.Fatal("incompatible backup was published", err)
-	}
-	after, err := os.ReadFile(filename)
-	if err != nil || !bytes.Equal(before, after) {
-		t.Fatal("failed backup changed source data", err)
+	for _, change := range []string{`UPDATE blog_schema_version SET version=3`, imageOnlyBlogSchemaChange} {
+		t.Run(change, func(t *testing.T) {
+			cfg := fixture(t)
+			filename := filepath.Join(cfg.App.WorkingDirectory, "blog.db")
+			db, err := dbsqlite.Open(filename)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = db.ExecContext(t.Context(), change)
+			closeErr := db.Close()
+			if err != nil || closeErr != nil {
+				t.Fatal(err, closeErr)
+			}
+			before, err := os.ReadFile(filename)
+			if err != nil {
+				t.Fatal(err)
+			}
+			destination := filepath.Join(t.TempDir(), "incompatible.zip")
+			if err := Create(t.Context(), cfg, destination); err == nil || !strings.Contains(err.Error(), "incompatible blog backup") {
+				t.Fatalf("backup error = %v", err)
+			}
+			if _, err := os.Stat(destination); !os.IsNotExist(err) {
+				t.Fatal("incompatible backup was published", err)
+			}
+			after, err := os.ReadFile(filename)
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("failed backup changed source data", err)
+			}
+		})
 	}
 }

@@ -178,7 +178,12 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 		}
 	}
 	// Record ownership first so a failed file write can be retried by its uploader.
-	if err := m.mediaMetadata.RememberMedia(r.Context(), id, uploadFilename(files[0].Filename), account.ID); err != nil {
+	size := int64(len(upload.Original))
+	metadata := mediaMetadata{
+		Filename: uploadFilename(files[0].Filename), UploadedBy: account.ID,
+		ContentType: upload.MediaType, Checksum: id[:64], SizeBytes: &size,
+	}
+	if err := m.mediaMetadata.RememberMedia(r.Context(), id, metadata); err != nil {
 		logger.LogRequestError(r, err)
 		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
 	}
@@ -186,6 +191,10 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 	if err != nil {
 		logger.LogRequestError(r, err)
 		return "", http.StatusInternalServerError, errors.New("Unable to save the image.")
+	}
+	if err := m.mediaMetadata.RecordMediaUpload(r.Context(), id, time.Now()); err != nil {
+		logger.LogRequestError(r, err)
+		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
 	}
 	return id, http.StatusOK, nil
 }

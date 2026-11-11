@@ -23,6 +23,7 @@ import (
 	"github.com/trentnix/hyperserver/internal/maintenance"
 	"github.com/trentnix/hyperserver/modules/blog"
 	"github.com/trentnix/hyperserver/pkg/application"
+	dbsqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 )
@@ -188,6 +189,17 @@ func TestApplicationRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	app, _ = recoveryApp(t, restored)
+	mediaDB, err := dbsqlite.Open(filepath.Join(directory, "blog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var contentType, checksum string
+	var size, uploadedAt int64
+	err = mediaDB.QueryRowContext(t.Context(), "SELECT content_type,size_bytes,uploaded_at,checksum FROM blog_media WHERE id=?", mediaID).Scan(&contentType, &size, &uploadedAt, &checksum)
+	closeErr := mediaDB.Close()
+	if err != nil || closeErr != nil || contentType != "image/png" || checksum != strings.TrimSuffix(mediaID, ".png") || size <= 0 || uploadedAt <= 0 {
+		t.Fatal("restored upload facts missing", contentType, size, uploadedAt, checksum, err, closeErr)
+	}
 	// Existing session cookies still identify the same verified administrator.
 	if !strings.Contains(get("/post/update/"+postID), "Recovered title") {
 		t.Fatal("restored session or writing lost")

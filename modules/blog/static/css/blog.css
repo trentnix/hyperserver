@@ -592,9 +592,6 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
 .setup-panel .verification-panel { padding: 0; border: 0; background: none; }
 .setup-login { margin-top: 24px; }
 .setup-login summary { padding-block: 10px; cursor: pointer; font-weight: 600; }
-.setup-complete { margin-bottom: 28px; padding: 20px; background: #eef0f4; border-radius: 5px; }
-.setup-complete h2 { margin: 0 0 16px; font-size: 1.25em; }
-.setup-complete > div { display: flex; flex-wrap: wrap; gap: 12px; }
 :where(.auth-email-form, #reset-request-form, #reset-password-form) {
   label { margin: 24px 0 8px; color: var(--button-bg); }
   label:first-of-type { margin-top: 0; }

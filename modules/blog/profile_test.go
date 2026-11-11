@@ -58,8 +58,16 @@ func TestStoredProfile(t *testing.T) {
 			status, header = http.StatusOK, "HX-Redirect"
 		}
 		requireStatus(t, w, status)
-		if w.Header().Get(header) != "/profile" {
-			t.Fatal("profile save did not reload the document")
+		if w.Header().Get(header) != "/" {
+			t.Fatal("profile save did not return to the site")
+		}
+		home := h.request("GET", "/", nil, false)
+		requireStatus(t, home, http.StatusOK)
+		if strings.Count(home.Body.String(), "Profile saved") != 1 || !strings.Contains(home.Body.String(), html.EscapeString(fields.Get("name"))) {
+			t.Fatal("site did not confirm the saved profile")
+		}
+		if strings.Contains(h.request("GET", "/", nil, false).Body.String(), "Profile saved") {
+			t.Fatal("profile confirmation replayed on refresh")
 		}
 		for _, path := range []string{"/about", "/projects", loginURL, "/missing-page", "/profile"} {
 			w := h.request("GET", path, nil, false)

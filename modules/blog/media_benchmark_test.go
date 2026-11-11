@@ -40,7 +40,7 @@ func BenchmarkMediaLookups(b *testing.B) {
 				if err := seedCurrentPost(b.Context(), tx, post); err != nil {
 					b.Fatal(err)
 				}
-				if _, err := tx.ExecContext(b.Context(), `INSERT INTO blog_post_images(version_id,url) SELECT version_id,? FROM blog_current_posts WHERE id=?`, "/images/"+id, post.ID); err != nil {
+				if _, err := tx.ExecContext(b.Context(), `INSERT INTO blog_post_media(version_id,url) SELECT version_id,? FROM blog_current_posts WHERE id=?`, "/images/"+id, post.ID); err != nil {
 					b.Fatal(err)
 				}
 				for revision := range 2 {
@@ -52,7 +52,7 @@ func BenchmarkMediaLookups(b *testing.B) {
 					if err != nil {
 						b.Fatal(err)
 					}
-					if _, err := tx.ExecContext(b.Context(), `INSERT INTO blog_post_images(version_id,url) VALUES(?,?)`, version, "//old.example/images/"+id); err != nil {
+					if _, err := tx.ExecContext(b.Context(), `INSERT INTO blog_post_media(version_id,url) VALUES(?,?)`, version, "//old.example/images/"+id); err != nil {
 						b.Fatal(err)
 					}
 				}

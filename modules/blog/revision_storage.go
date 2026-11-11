@@ -20,7 +20,7 @@ func revisionTable(kind string) (string, string, error) {
 }
 
 // saveContentVersion reuses unchanged writing or inserts a new immutable version
-// and its image references. The caller locks the current row before calling it.
+// and its media references. The caller locks the current row before calling it.
 func saveContentVersion(ctx context.Context, tx *sql.Tx, kind, id string, content Revision, refs []string) (int64, error) {
 	owners, revisions, err := revisionTable(kind)
 	if err != nil {
@@ -31,10 +31,10 @@ func saveContentVersion(ctx context.Context, tx *sql.Tx, kind, id string, conten
 		return 0, err
 	}
 	path := "/post/s/" + slug
-	images := "blog_post_images"
+	media := "blog_post_media"
 	if kind == "page" {
 		path = (Page{Slug: slug}).URL()
-		images = "blog_page_images"
+		media = "blog_page_media"
 	}
 	// Relative links and images depend on the URL base as well as the writing.
 	// Both must match before reusing a version and its derived references.
@@ -57,7 +57,7 @@ WHERE c.id=? AND r.title=? AND r.summary=? AND r.markdown=? AND r.preview_image=
 	if err != nil {
 		return 0, err
 	}
-	return number, insertImageReferences(ctx, tx, images, number, refs)
+	return number, insertMediaReferences(ctx, tx, media, number, refs)
 }
 
 // editError distinguishes deleted content from a stale editor after a conditional update.

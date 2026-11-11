@@ -2,8 +2,8 @@
 DROP VIEW blog_post_current;
 DROP VIEW blog_page_current;
 DROP VIEW blog_profile_current;
-DROP TABLE blog_post_images;
-DROP TABLE blog_page_images;
+DROP TABLE blog_post_media;
+DROP TABLE blog_page_media;
 -- Remove parent relationships before deleting the page tree.
 UPDATE blog_current_pages SET parent_id=NULL;
 DROP TABLE blog_current_pages;

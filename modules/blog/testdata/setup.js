@@ -72,10 +72,9 @@
       form.requestSubmit();
       return;
     }
-    assert(stage === 'saved' && location.pathname === '/profile', 'First save must return to Site Profile.');
-    const completion = document.querySelector('.setup-complete');
-    assert(completion && completion.textContent.includes('Your site profile is saved.'), 'Missing profile confirmation.');
-    assert(completion.querySelector('a[href="/"]') && completion.querySelector('a[href="/post/create"]'), 'Missing next steps.');
+    assert(stage === 'saved' && location.pathname === '/', 'First save must return to the site root.');
+    assert(document.querySelector('#notifications').textContent.includes('Profile saved'), 'Missing profile confirmation.');
+    assert(document.querySelector('.profile-name').textContent === 'A new blog', 'Saved profile is missing from the site.');
     assert(!document.body.textContent.includes('Images are optional.'), 'Initial guidance remains after saving.');
     await report('PASS');
   } catch (error) { await report(error.message + '\n' + error.stack); }

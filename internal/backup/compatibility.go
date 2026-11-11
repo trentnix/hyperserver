@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/trentnix/hyperserver/modules/blog"
 )
 
 // Recovery supports these stored formats, not arbitrary SQLite files. Keep this
@@ -13,8 +15,8 @@ func checkCompatibility(ctx context.Context, db *sql.DB, roles []string) error {
 	for _, role := range roles {
 		switch role {
 		case "blog":
-			if err := checkSchemaVersion(ctx, db, "blog_schema_version", role, 1); err != nil {
-				return err
+			if err := blog.ValidateSchema(ctx, db); err != nil {
+				return fmt.Errorf("incompatible blog backup: %w", err)
 			}
 		case "accounts":
 			if err := checkSchemaVersion(ctx, db, "hyperserver_account_version", role, 1); err != nil {

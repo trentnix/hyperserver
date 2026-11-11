@@ -100,9 +100,9 @@ func TestSetupProfileGuidance(t *testing.T) {
 			requireStatus(t, h.request("GET", authReturnURL, nil, false), http.StatusSeeOther)
 			const introduction = "Give your blog a name and a short introduction. Images are optional."
 			for range 2 {
-				w := h.request("GET", "/profile?created=1", nil, hx)
+				w := h.request("GET", "/profile", nil, hx)
 				requireStatus(t, w, http.StatusOK)
-				if !strings.Contains(w.Body.String(), introduction) || strings.Contains(w.Body.String(), "setup-complete") {
+				if !strings.Contains(w.Body.String(), introduction) || strings.Contains(w.Body.String(), "Profile saved") {
 					t.Fatal("unsaved profile needs guidance, not a success message")
 				}
 				if err := h.app.ShutdownContext(t.Context()); err != nil {
@@ -118,7 +118,7 @@ func TestSetupProfileGuidance(t *testing.T) {
 			h.blog.profileStore = failingProfileStore{store}
 			w := h.request("POST", "/profile", fields, hx)
 			requireStatus(t, w, http.StatusInternalServerError)
-			if strings.Contains(w.Body.String(), "setup-complete") || h.blog.profile.Current().Version != 0 || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
+			if strings.Contains(w.Body.String(), "Profile saved") || h.blog.profile.Current().Version != 0 || w.Header().Get("HX-Redirect") != "" || w.Header().Get("Location") != "" {
 				t.Fatal("failed save must not finish profile setup")
 			}
 			h.blog.profileStore = store
@@ -128,12 +128,12 @@ func TestSetupProfileGuidance(t *testing.T) {
 				status, header = http.StatusOK, "HX-Redirect"
 			}
 			requireStatus(t, w, status)
-			if w.Header().Get(header) != "/profile?created=1" {
-				t.Fatal("first save must lead to confirmation")
+			if w.Header().Get(header) != "/" {
+				t.Fatal("first save must lead to the site")
 			}
-			w = h.request("GET", "/profile?created=1", nil, hx)
+			w = h.request("GET", "/", nil, false)
 			requireStatus(t, w, http.StatusOK)
-			for _, want := range []string{"Your site profile is saved.", `href="/">View site`, `href="/post/create">Write your first post`} {
+			for _, want := range []string{"Profile saved", "My new blog"} {
 				if !strings.Contains(w.Body.String(), want) {
 					t.Errorf("missing %q", want)
 				}
@@ -141,16 +141,22 @@ func TestSetupProfileGuidance(t *testing.T) {
 			if strings.Contains(w.Body.String(), introduction) {
 				t.Fatal("saved profile still shows initial guidance")
 			}
+			if strings.Contains(h.request("GET", "/", nil, false).Body.String(), "Profile saved") {
+				t.Fatal("refresh must not replay the save confirmation")
+			}
 			requireStatus(t, h.request("POST", "/profile", fields, hx), http.StatusConflict)
-			if strings.Contains(h.request("GET", "/profile", nil, hx).Body.String(), "setup-complete") {
-				t.Fatal("returning to the editor must not replay confirmation")
+			if strings.Contains(h.request("GET", "/profile", nil, hx).Body.String(), "Profile saved") {
+				t.Fatal("a stale edit must not produce a success confirmation")
 			}
 			fields.Set("version", "1")
 			fields.Set("name", "Updated blog")
 			w = h.request("POST", "/profile", fields, hx)
 			requireStatus(t, w, status)
-			if w.Header().Get(header) != "/profile" || strings.Contains(h.request("GET", "/profile?created=1", nil, hx).Body.String(), "setup-complete") {
-				t.Fatal("later saves must not replay first-save confirmation")
+			if w.Header().Get(header) != "/" {
+				t.Fatal("later saves must also return to the site")
+			}
+			if body := h.request("GET", "/", nil, false).Body.String(); strings.Count(body, "Profile saved") != 1 || !strings.Contains(body, "Updated blog") {
+				t.Fatal("later saves must confirm the updated profile once")
 			}
 		})
 	}

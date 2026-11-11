@@ -358,7 +358,7 @@ func TestMediaReferenceScanFailure(t *testing.T) {
 	h := newHarness(t)
 	f := mediaUpload(t, h.blog, "keep after scan failure")
 	store := h.blog.posts.(*sqliteRepository)
-	if _, err := store.db.ExecContext(t.Context(), "DROP TABLE blog_page_images"); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), "DROP TABLE blog_page_media"); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.blog.removeMedia(t.Context(), f.ID, f.Version(), false); err == nil {
