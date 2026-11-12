@@ -168,7 +168,7 @@ func TestRevisionSaveAtomicity(t *testing.T) {
 				t.Fatal("snapshot failure accepted a save")
 			}
 			for ref, want := range map[string]bool{"original.png": true, "new.png": false} {
-				if public, err := store.ImageIsPublic(t.Context(), "/images/"+ref); err != nil || public != want {
+				if public, err := store.MediaIsPublic(t.Context(), "/images/"+ref); err != nil || public != want {
 					t.Fatal("failed save changed image access", public, err)
 				}
 			}

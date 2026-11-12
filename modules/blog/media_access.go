@@ -12,34 +12,34 @@ import (
 	"golang.org/x/net/html"
 )
 
-// imageAccessRepository checks saved references against current publication state.
+// mediaAccessRepository checks saved references against current publication state.
 // References identify equivalent local URLs, including the configured public host.
-type imageAccessRepository interface {
-	ImageIsPublic(ctx context.Context, references ...string) (bool, error)
-	ImageInAuthorsPosts(ctx context.Context, author string, references ...string) (bool, error)
+type mediaAccessRepository interface {
+	MediaIsPublic(ctx context.Context, references ...string) (bool, error)
+	MediaInAuthorsPosts(ctx context.Context, author string, references ...string) (bool, error)
 }
 
-// publicImage allows only references from public content or the saved site profile.
+// publicMedia allows only references from public content or the saved site profile.
 // The request host never decides whether an absolute reference belongs to this site.
-func (m *module) publicImage(ctx context.Context, id string) (bool, error) {
-	references := m.imageLookupReferences(id)
+func (m *module) publicMedia(ctx context.Context, id string) (bool, error) {
+	references := m.mediaLookupReferences(id)
 	profile := m.profile.Current()
 	for _, raw := range []string{profile.ImageURL, profile.FaviconURL, profile.BackgroundURL} {
-		if ref := imageReference(raw, "/"); ref != "" && slices.Contains(references, ref) {
+		if ref := mediaReferenceURL(raw, "/"); ref != "" && slices.Contains(references, ref) {
 			return true, nil
 		}
 	}
-	return m.imageAccess.ImageIsPublic(ctx, references...)
+	return m.mediaAccess.MediaIsPublic(ctx, references...)
 }
 
-// imageLookupReferences identifies local uploads without trusting request host headers.
-func (m *module) imageLookupReferences(id string) []string {
-	local := "/images/" + id
+// mediaLookupReferences identifies local uploads without trusting request host headers.
+func (m *module) mediaLookupReferences(id string) []string {
+	local := mediaURL(id)
 	references := []string{local}
 	// Root-relative references do not require a public origin. If no trusted
 	// absolute address can be built, absolute references cannot grant access.
 	if public, err := util.BuildPublicURL(nil, m.app.Config.HTTP, local, nil); err == nil {
-		references = append(references, imageReference(public.String(), "/"))
+		references = append(references, mediaReferenceURL(public.String(), "/"))
 		defaultPort := "443"
 		if public.Scheme == "http" {
 			defaultPort = "80"
@@ -49,15 +49,15 @@ func (m *module) imageLookupReferences(id string) []string {
 			// explicit default port as an equivalent lookup key.
 			public.Host = net.JoinHostPort(public.Hostname(), defaultPort)
 			public.Scheme = ""
-			references = append(references, imageReference(public.String(), "/"))
+			references = append(references, mediaReferenceURL(public.String(), "/"))
 		}
 	}
 	return references
 }
 
-// imageReference normalizes upload references for lookup. Queries and fragments
+// mediaReferenceURL normalizes upload references for lookup. Queries and fragments
 // do not change the file. A host is retained so foreign URLs cannot expose uploads.
-func imageReference(raw, contentPath string) string {
+func mediaReferenceURL(raw, contentPath string) string {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.User != nil || u.Opaque != "" || (u.Scheme != "" && u.Scheme != "http" && u.Scheme != "https") {
 		return ""
@@ -67,7 +67,7 @@ func imageReference(raw, contentPath string) string {
 	}
 	u = (&url.URL{Path: contentPath}).ResolveReference(u)
 	u.Path = path.Clean(u.Path)
-	if !strings.HasPrefix(u.Path, "/images/") {
+	if !strings.HasPrefix(u.Path, "/images/") && !strings.HasPrefix(u.Path, "/files/") {
 		return ""
 	}
 	if (u.Scheme == "https" && u.Port() == "443") || (u.Scheme == "http" && u.Port() == "80") {
@@ -82,9 +82,9 @@ func imageReference(raw, contentPath string) string {
 	return u.String()
 }
 
-// imageReferences indexes rendered images and download links, not URL-like text
+// contentMediaReferences indexes rendered images and download links, not URL-like text
 // in code blocks, comments, or unused Markdown link definitions.
-func imageReferences(source, contentPath, preview string) ([]string, error) {
+func contentMediaReferences(source, contentPath, preview string) ([]string, error) {
 	rendered, err := markdown(source)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func imageReferences(source, contentPath, preview string) ([]string, error) {
 			token := tokens.Token()
 			for _, attr := range token.Attr {
 				if (token.Data == "img" && attr.Key == "src") || (token.Data == "a" && attr.Key == "href") {
-					if ref := imageReference(attr.Val, contentPath); ref != "" {
+					if ref := mediaReferenceURL(attr.Val, contentPath); ref != "" {
 						refs[ref] = true
 					}
 				}
@@ -115,18 +115,18 @@ func imageReferences(source, contentPath, preview string) ([]string, error) {
 	}
 }
 
-func (m *module) ownsImage(ctx context.Context, id, accountID string) (bool, error) {
+func (m *module) ownsMedia(ctx context.Context, id, accountID string) (bool, error) {
 	metadata, err := m.mediaMetadata.GetMediaMetadata(ctx, id)
 	return accountID != "" && metadata.UploadedBy == accountID, err
 }
 
-func (m *module) privateImageForWriter(ctx context.Context, id, accountID string) (bool, error) {
-	owned, err := m.ownsImage(ctx, id, accountID)
+func (m *module) privateMediaForWriter(ctx context.Context, id, accountID string) (bool, error) {
+	owned, err := m.ownsMedia(ctx, id, accountID)
 	if err != nil {
 		return false, err
 	}
 	if owned {
 		return true, nil
 	}
-	return m.imageAccess.ImageInAuthorsPosts(ctx, accountID, m.imageLookupReferences(id)...)
+	return m.mediaAccess.MediaInAuthorsPosts(ctx, accountID, m.mediaLookupReferences(id)...)
 }

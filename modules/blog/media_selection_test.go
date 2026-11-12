@@ -40,7 +40,7 @@ func TestMediaUsageSelection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	all, err := store.ReferencedImages(t.Context())
+	all, err := store.ReferencedMedia(t.Context())
 	if err != nil || len(all) != len(ids) {
 		t.Fatalf("all usage = %+v, %v", all, err)
 	}
@@ -49,7 +49,7 @@ func TestMediaUsageSelection(t *testing.T) {
 	}
 	missing := strings.Repeat("d", 64) + ".png"
 	for _, selected := range [][]string{ids[:1], ids[1:], {ids[0], ids[0], missing}, {missing}} {
-		got, err := store.ReferencedImages(t.Context(), selected...)
+		got, err := store.ReferencedMedia(t.Context(), selected...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -68,18 +68,18 @@ func TestMediaUsageSelection(t *testing.T) {
 		batch[i] = fmt.Sprintf("%064x.png", i)
 	}
 	batch[0], batch[len(batch)-1] = ids[0], ids[1]
-	if got, err := store.ReferencedImages(t.Context(), batch...); err != nil || len(got) != 2 || !reflect.DeepEqual(got[ids[0]], all[ids[0]]) || !reflect.DeepEqual(got[ids[1]], all[ids[1]]) {
+	if got, err := store.ReferencedMedia(t.Context(), batch...); err != nil || len(got) != 2 || !reflect.DeepEqual(got[ids[0]], all[ids[0]]) || !reflect.DeepEqual(got[ids[1]], all[ids[1]]) {
 		t.Fatalf("maximum deletion batch lost usage: count=%d, error=%v", len(got), err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := store.ReferencedImages(ctx, ids...); !errors.Is(err, context.Canceled) {
+	if _, err := store.ReferencedMedia(ctx, ids...); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled usage lookup = %v", err)
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ReferencedImages(t.Context(), ids[0]); err == nil {
+	if _, err := store.ReferencedMedia(t.Context(), ids[0]); err == nil {
 		t.Fatal("closed storage returned successful usage")
 	}
 }
@@ -127,9 +127,9 @@ type observedMediaReferences struct {
 	requests [][]string
 }
 
-func (s *observedMediaReferences) ReferencedImages(ctx context.Context, ids ...string) (map[string]mediaUsage, error) {
+func (s *observedMediaReferences) ReferencedMedia(ctx context.Context, ids ...string) (map[string]mediaUsage, error) {
 	s.requests = append(s.requests, slices.Clone(ids))
-	return s.mediaReferenceRepository.ReferencedImages(ctx, ids...)
+	return s.mediaReferenceRepository.ReferencedMedia(ctx, ids...)
 }
 
 func TestMediaLibraryMetadataScope(t *testing.T) {
@@ -276,7 +276,7 @@ func TestMediaUsageHistoryFailuresPreventDeletion(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got, err := store.ReferencedImages(t.Context(), file.ID); err == nil || got != nil {
+			if got, err := store.ReferencedMedia(t.Context(), file.ID); err == nil || got != nil {
 				t.Fatalf("failed history lookup returned usage: %+v, %v", got, err)
 			}
 			if err := h.blog.removeMedia(t.Context(), file.ID, file.Version(), true); err == nil || errors.Is(err, errMediaUsed) || errors.Is(err, errMediaHistory) {

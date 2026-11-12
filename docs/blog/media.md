@@ -2,7 +2,7 @@
 
 ## Upload and reuse
 
-Use **Media** to upload images and browse files. **Browse library** beside a preview/profile image and **Choose existing image** in the Markdown toolbar reuse an upload. Single-image choosers return to the editor when you select a card. Save to apply the selection.
+Use **Media** to upload and browse images. For PDF, ZIP, and text attachments, see [file downloads](downloads.md). **Browse library** beside a preview/profile image and **Choose existing image** in the Markdown toolbar reuse an upload. Single-image choosers return to the editor when you select a card. Save to apply the selection.
 
 Media management and library browsing require Admin access. Posters can upload in their post editor and reuse public images or images in their own saved posts.
 
@@ -10,7 +10,7 @@ Uploads accept PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels per file. Th
 
 JPEG copies use quality 85. PNG keeps transparency. JPEG/PNG copies apply EXIF orientation and remove metadata, including location data. GIF keeps its original bytes, animation, and metadata. Animated PNG is rejected.
 
-The server processes one upload at a time. Each editor queues its uploads and blocks Save until all pending uploads finish. Failures restore controls and keep successful uploads. Concurrent requests from other editors can receive a retry response. The optional [imaging package](../../pkg/imaging/image.go) handles processing. The blog owns upload limits, storage, and access rules.
+The server processes one image upload at a time. Each editor queues its uploads and blocks Save until all pending uploads finish. Failures restore controls and keep successful uploads. Concurrent requests from other editors can receive a retry response. The optional [imaging package](../../pkg/imaging/image.go) handles processing. The blog owns upload limits, storage, and access rules.
 
 ## Add an album
 

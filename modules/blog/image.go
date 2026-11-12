@@ -155,7 +155,7 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 		allowed := err == nil && metadata.UploadedBy == account.ID
 		if err == nil && metadata.Version == 0 {
 			// Missing metadata alone does not prove a legacy image is new.
-			var existing storedImage
+			var existing storedMedia
 			existing, err = m.images.Open(r.Context(), id)
 			if errors.Is(err, errNotFound) {
 				allowed, err = true, nil
@@ -164,10 +164,10 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 			}
 		}
 		if err == nil && !allowed {
-			allowed, err = m.publicImage(r.Context(), id)
+			allowed, err = m.publicMedia(r.Context(), id)
 		}
 		if err == nil && !allowed {
-			allowed, err = m.privateImageForWriter(r.Context(), id, account.ID)
+			allowed, err = m.privateMediaForWriter(r.Context(), id, account.ID)
 		}
 		if err != nil {
 			logger.LogRequestError(r, err)
@@ -216,7 +216,7 @@ func (m *module) image(w http.ResponseWriter, r *http.Request) {
 	public := false
 	var err error
 	if !privateAccess && variant != originalImage {
-		public, err = m.publicImage(r.Context(), r.PathValue("id"))
+		public, err = m.publicMedia(r.Context(), r.PathValue("id"))
 		if err != nil {
 			m.storageError(w, r, err)
 			return
@@ -225,9 +225,9 @@ func (m *module) image(w http.ResponseWriter, r *http.Request) {
 	if !public && permission == rolePoster {
 		accountID := user.GetUserFromContext(r.Context()).ID
 		if variant == originalImage {
-			privateAccess, err = m.ownsImage(r.Context(), r.PathValue("id"), accountID)
+			privateAccess, err = m.ownsMedia(r.Context(), r.PathValue("id"), accountID)
 		} else {
-			privateAccess, err = m.privateImageForWriter(r.Context(), r.PathValue("id"), accountID)
+			privateAccess, err = m.privateMediaForWriter(r.Context(), r.PathValue("id"), accountID)
 		}
 		if err != nil {
 			m.storageError(w, r, err)

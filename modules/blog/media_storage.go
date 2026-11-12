@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,9 +12,9 @@ import (
 )
 
 // mediaReferenceRepository includes private content and history. Without IDs,
-// ReferencedImages returns all usage. Otherwise it returns only those uploads.
+// ReferencedMedia returns all usage. Otherwise it returns only those uploads.
 type mediaReferenceRepository interface {
-	ReferencedImages(context.Context, ...string) (map[string]mediaUsage, error)
+	ReferencedMedia(context.Context, ...string) (map[string]mediaUsage, error)
 }
 
 // mediaUsage distinguishes protected current content from removable historical uses.
@@ -34,24 +35,24 @@ type mediaRevision struct {
 	RecordedAt time.Time
 }
 
-// referencedImageID conservatively retains matching uploads even for absolute URLs
+// referencedMediaID conservatively retains matching uploads even for absolute URLs
 // on an old host. Cleanup must not mistake a domain change for an unused image.
-func referencedImageID(reference string) string {
-	u, err := url.Parse(imageReference(reference, "/"))
+func referencedMediaID(reference string) string {
+	u, err := url.Parse(mediaReferenceURL(reference, "/"))
 	if err != nil {
 		return ""
 	}
-	id := strings.TrimPrefix(u.Path, "/images/")
-	if !strings.HasPrefix(u.Path, "/images/") || !validImageID(id) {
+	id := path.Base(u.Path)
+	if !(u.Path == "/images/"+id && validImageID(id) || u.Path == "/files/"+id && validDownloadID(id)) {
 		return ""
 	}
 	return id
 }
 
-// ReferencedImages filters indexed URLs before reading content metadata. It never
+// ReferencedMedia filters indexed URLs before reading content metadata. It never
 // reads historical Markdown. Profile URLs still need Go normalization because
 // they can retain queries, fragments, and escaped paths.
-func (s *sqliteRepository) ReferencedImages(ctx context.Context, ids ...string) (map[string]mediaUsage, error) {
+func (s *sqliteRepository) ReferencedMedia(ctx context.Context, ids ...string) (map[string]mediaUsage, error) {
 	prefix, args := mediaReferenceSelection(ids)
 	wanted := make(map[string]bool, len(ids))
 	for _, id := range ids {
@@ -75,7 +76,7 @@ ORDER BY location, title, url`, args...)
 			rows.Close()
 			return nil, err
 		}
-		if id := referencedImageID(reference); selected(id) {
+		if id := referencedMediaID(reference); selected(id) {
 			usage := used[id]
 			usage.Current = true
 			if !slices.Contains(usage.Content, content) {
@@ -111,7 +112,7 @@ ORDER BY recorded DESC, kind, owner_id, revision_id DESC`, args...)
 		}
 		revision.URL = "/history/" + kind + "/" + url.PathEscape(owner) + "?revision=" + strconv.FormatInt(number, 10)
 		revision.RecordedAt = time.Unix(0, recorded).UTC()
-		if id := referencedImageID(reference); selected(id) {
+		if id := referencedMediaID(reference); selected(id) {
 			usage := used[id]
 			if len(usage.History) == 0 || usage.History[len(usage.History)-1] != revision {
 				usage.History = append(usage.History, revision)
@@ -139,7 +140,7 @@ ORDER BY recorded DESC, kind, owner_id, revision_id DESC`, args...)
 		revision := mediaRevision{URL: "/profile/history?revision=" + strconv.FormatInt(number, 10), Title: "Site Profile — " + name, RecordedAt: time.Unix(0, recorded).UTC()}
 		seen := make(map[string]bool)
 		for _, ref := range []string{portrait, favicon, background} {
-			if id := referencedImageID(ref); selected(id) && !seen[id] {
+			if id := referencedMediaID(ref); selected(id) && !seen[id] {
 				usage := used[id]
 				usage.History = append(usage.History, revision)
 				used[id] = usage

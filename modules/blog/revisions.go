@@ -91,7 +91,7 @@ func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, c
 	if err != nil {
 		return revisionSelection{}, err
 	}
-	missing, err := m.revisionMissingImages(r.Context(), selected, contentPath)
+	missing, err := m.revisionMissingMedia(r.Context(), selected, contentPath)
 	if err != nil {
 		return revisionSelection{}, err
 	}
@@ -101,7 +101,9 @@ func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, c
 		"content": current.Markdown, "previewImage": current.PreviewImage, "tags": current.Tags,
 	}
 	if kind == "post" {
-		fields["content"], fields["album"] = splitPostAlbum(current.Markdown)
+		currentEditor := editorPage{Post: Post{Markdown: current.Markdown}}
+		fields["content"], fields["album"], fields["downloads"] = currentEditor.BodyMarkdown(), currentEditor.AlbumMarkdown(), currentEditor.DownloadsJSON()
+		fields["componentOrder"] = currentEditor.ComponentOrderJSON()
 	}
 	baseline, err := json.Marshal(fields)
 	selection.LoadedRevision, selection.CurrentContent = &selected, string(baseline)
@@ -194,11 +196,11 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 	}
 	if err == nil {
 		var missing map[string]bool
-		missing, err = m.revisionMissingImages(r.Context(), data.Selected, previewPath)
+		missing, err = m.revisionMissingMedia(r.Context(), data.Selected, previewPath)
 		if err == nil {
 			data.MissingImages = len(missing) > 0
 			data.MissingPreview = missing["/images/"+data.Selected.PreviewImage]
-			data.HTML, err = markMissingImages(data.HTML, missing)
+			data.HTML, err = markMissingMedia(data.HTML, missing)
 		}
 	}
 	if err != nil {

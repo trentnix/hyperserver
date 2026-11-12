@@ -44,15 +44,15 @@ func (m *module) renderMedia(w http.ResponseWriter, r *http.Request, message str
 	}
 }
 
-// unusedImages supplies candidates for listing or confirmation, not deletion authority.
-func (m *module) unusedImages(ctx context.Context) ([]mediaFile, error) {
+// unusedMediaFiles supplies candidates for listing or confirmation, not deletion authority.
+func (m *module) unusedMediaFiles(ctx context.Context) ([]mediaFile, error) {
 	data, err := m.mediaCandidates(ctx)
 	return data.Files, err
 }
 
 // mediaCandidates separates unreferenced files from files used only by history.
 func (m *module) mediaCandidates(ctx context.Context) (mediaPage, error) {
-	used, err := m.mediaReferences.ReferencedImages(ctx)
+	used, err := m.mediaReferences.ReferencedMedia(ctx)
 	if err != nil {
 		return mediaPage{}, err
 	}
@@ -78,25 +78,25 @@ func (m *module) mediaCandidates(ctx context.Context) (mediaPage, error) {
 // confirmMediaDelete shows the image and requires an explicit destructive submission.
 func (m *module) confirmMediaDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	image, err := m.images.Open(r.Context(), id)
+	image, err := m.openMedia(r.Context(), id)
 	if err != nil {
 		m.storageError(w, r, err)
 		return
 	}
 	image.Content.Close()
-	used, err := m.mediaReferences.ReferencedImages(r.Context(), id)
+	used, err := m.mediaReferences.ReferencedMedia(r.Context(), id)
 	if err != nil {
 		m.storageError(w, r, err)
 		return
 	}
 	if used[id].Current {
-		m.renderMedia(w, r, "This image is now used by saved content and cannot be deleted.", http.StatusConflict)
+		m.renderMedia(w, r, "This upload is now used by saved content and cannot be deleted.", http.StatusConflict)
 		return
 	}
 	page := m.views["mediaDelete"].Content(r, historicalMedia{mediaFile: mediaFile{ID: id, Modified: image.Modified}, History: used[id].History})
-	page.Title = "Delete image"
+	page.Title = "Delete upload"
 	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display this image.", err)
+		page.HandleRenderError(w, r, "Unable to display this upload.", err)
 	}
 }
 
@@ -109,18 +109,18 @@ func (m *module) deleteMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	version, err := strconv.ParseInt(r.PostForm.Get("version"), 10, 64)
 	if err != nil {
-		m.renderMedia(w, r, "Reload the cleanup page before deleting an image.", http.StatusBadRequest)
+		m.renderMedia(w, r, "Reload the cleanup page before deleting an upload.", http.StatusBadRequest)
 		return
 	}
 	id := r.PathValue("id")
 	err = m.removeMedia(r.Context(), id, version, r.PostForm.Get("deleteHistory") == "true")
 	switch {
 	case errors.Is(err, errMediaUsed):
-		m.renderMedia(w, r, "This image is now used by saved content and cannot be deleted.", http.StatusConflict)
+		m.renderMedia(w, r, "This upload is now used by saved content and cannot be deleted.", http.StatusConflict)
 	case errors.Is(err, errMediaHistory):
-		m.renderMedia(w, r, "This image is used by saved versions. Review its history references and confirm deletion.", http.StatusConflict)
+		m.renderMedia(w, r, "This upload is used by saved versions. Review its history references and confirm deletion.", http.StatusConflict)
 	case errors.Is(err, errMediaChanged):
-		m.renderMedia(w, r, "This image was uploaded again. Review it before deleting.", http.StatusConflict)
+		m.renderMedia(w, r, "This upload was uploaded again. Review it before deleting.", http.StatusConflict)
 	case err != nil:
 		m.storageError(w, r, err)
 	default:
@@ -135,7 +135,7 @@ var errMediaHistory = errors.New("image is referenced by saved versions")
 func (m *module) removeMedia(ctx context.Context, id string, version int64, deleteHistory bool) error {
 	m.mediaMu.Lock()
 	defer m.mediaMu.Unlock()
-	used, err := m.mediaReferences.ReferencedImages(ctx, id)
+	used, err := m.mediaReferences.ReferencedMedia(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (m *module) removeMedia(ctx context.Context, id string, version int64, dele
 	return m.media.Remove(ctx, id, version)
 }
 
-var errMissingMedia = errors.New("An uploaded image is no longer available. Upload it again or remove its reference before saving.")
+var errMissingMedia = errors.New("An uploaded image or file is no longer available. Upload it again or remove its reference before saving.")
 
 // checkMediaReferences rejects stale editor references after cleanup. The caller
 // must hold mediaMu until the content is saved. External images are not fetched.
@@ -168,16 +168,16 @@ func (m *module) checkMediaReferences(ctx context.Context, references []string) 
 func (m *module) missingMedia(ctx context.Context, references []string) (map[string]bool, error) {
 	missing := make(map[string]bool)
 	for _, reference := range references {
-		id := referencedImageID(reference)
+		id := referencedMediaID(reference)
 		if id == "" {
 			continue
 		}
-		normalized := imageReference(reference, "/")
-		local := m.imageLookupReferences(id)
+		normalized := mediaReferenceURL(reference, "/")
+		local := m.mediaLookupReferences(id)
 		if !slices.Contains(local, normalized) {
 			continue
 		}
-		image, err := m.images.Open(ctx, id)
+		image, err := m.openMedia(ctx, id)
 		if errors.Is(err, errNotFound) {
 			missing[normalized] = true
 			continue

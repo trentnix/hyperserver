@@ -35,7 +35,7 @@ func TestAlbumMarkdown(t *testing.T) {
 	if strings.Index(output, "After") > strings.Index(output, `class="photo-album"`) {
 		t.Fatal("album must appear after the writing", output)
 	}
-	refs, err := imageReferences(source, "/post/s/album", "")
+	refs, err := contentMediaReferences(source, "/post/s/album", "")
 	if err != nil || !slices.Contains(refs, "/images/"+id) {
 		t.Fatal("album photos must participate in image tracking", refs, err)
 	}
@@ -111,7 +111,7 @@ func TestAlbumFinalBlock(t *testing.T) {
 	if strings.Count(string(rendered), "data-album-photo") != 1 || !strings.Contains(string(rendered), `data-caption="Managed photo"`) || !strings.Contains(string(rendered), "![Earlier 0]") {
 		t.Fatal("earlier blocks must stay code without consuming the managed album limit", rendered)
 	}
-	refs, err := imageReferences(source, "/post/s/album", "")
+	refs, err := contentMediaReferences(source, "/post/s/album", "")
 	if err != nil || !slices.Equal(refs, []string{"/images/" + id}) {
 		t.Fatal("only the final album can protect or publish images", refs, err)
 	}

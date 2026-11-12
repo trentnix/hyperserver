@@ -19,7 +19,7 @@ func insertMediaReferences(ctx context.Context, tx *sql.Tx, table string, id int
 
 // Resolve matching references through their version's owner, using primary-key
 // lookups rather than scanning current content for a matching version pointer.
-const publicImageQuery = publishedPages + `SELECT
+const publicMediaQuery = publishedPages + `SELECT
 EXISTS(SELECT 1 FROM blog_post_media i
  JOIN blog_posts r ON r.id=i.version_id
  JOIN blog_current_posts p ON p.id=r.owner_id AND p.version_id=r.id
@@ -29,10 +29,10 @@ OR EXISTS(SELECT 1 FROM blog_page_media i
  JOIN blog_current_pages p ON p.id=r.owner_id AND p.version_id=r.id
  JOIN visible v ON v.id=p.id WHERE i.url IN (%[1]s))`
 
-// ImageIsPublic checks both content types in one database snapshot. Page references
-// count only when every ancestor is published. Shared images stay public while
+// MediaIsPublic checks both content types in one database snapshot. Page references
+// count only when every ancestor is published. Shared media stay public while
 // any public content still references them.
-func (s *sqliteRepository) ImageIsPublic(ctx context.Context, references ...string) (bool, error) {
+func (s *sqliteRepository) MediaIsPublic(ctx context.Context, references ...string) (bool, error) {
 	if len(references) == 0 {
 		return false, nil
 	}
@@ -48,13 +48,13 @@ func (s *sqliteRepository) ImageIsPublic(ctx context.Context, references ...stri
 	}
 
 	var public bool
-	err := s.db.QueryRowContext(ctx, fmt.Sprintf(publicImageQuery, placeholders), args...).Scan(&public)
+	err := s.db.QueryRowContext(ctx, fmt.Sprintf(publicMediaQuery, placeholders), args...).Scan(&public)
 	return public, err
 }
 
-// ImageInAuthorsPosts grants a writer access to images already attached to any
-// version of their own posts, including images added by an administrator.
-func (s *sqliteRepository) ImageInAuthorsPosts(ctx context.Context, author string, references ...string) (bool, error) {
+// MediaInAuthorsPosts grants a writer access to media already attached to any
+// version of their own posts, including media added by an administrator.
+func (s *sqliteRepository) MediaInAuthorsPosts(ctx context.Context, author string, references ...string) (bool, error) {
 	if author == "" || len(references) == 0 {
 		return false, nil
 	}

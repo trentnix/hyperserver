@@ -63,7 +63,7 @@ func (m *module) renderMediaDetail(w http.ResponseWriter, r *http.Request, submi
 	if submitted != nil {
 		metadata.Label, metadata.Tags, metadata.Version = submitted.Label, submitted.Tags, submitted.Version
 	}
-	used, err := m.mediaReferences.ReferencedImages(r.Context(), id)
+	used, err := m.mediaReferences.ReferencedMedia(r.Context(), id)
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -122,7 +122,7 @@ func (m *module) saveMediaMetadata(w http.ResponseWriter, r *http.Request) {
 // mediaTagSuggestions excludes writing tags and metadata left behind by deleted uploads.
 // Suggestions are optional, so a lookup failure must not prevent editing.
 func (m *module) mediaTagSuggestions(r *http.Request) []string {
-	files, err := m.media.List(r.Context())
+	files, err := m.imageFiles(r.Context())
 	if err != nil {
 		logger.LogRequestError(r, err)
 		return nil
@@ -238,7 +238,7 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	files, err := m.media.List(r.Context())
+	files, err := m.imageFiles(r.Context())
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -253,7 +253,7 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	var used map[string]mediaUsage
 	if query.Search != "" || query.Usage != "" {
-		used, err = m.mediaReferences.ReferencedImages(r.Context())
+		used, err = m.mediaReferences.ReferencedMedia(r.Context())
 		if err != nil {
 			m.storageError(w, r, err)
 			return

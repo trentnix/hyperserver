@@ -35,7 +35,7 @@ func TestMediaDetail(t *testing.T) {
 		t.Fatal(err)
 	}
 	requireStatus(t, h.request("POST", "/profile", url.Values{"version": {"1"}, "name": {"Profile"}, "imageURL": {"/images/" + f.ID}}, false), http.StatusSeeOther)
-	used, err := h.blog.mediaReferences.ReferencedImages(t.Context())
+	used, err := h.blog.mediaReferences.ReferencedMedia(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestMediaDetail(t *testing.T) {
 	if _, err := savePostFixture(h.blog.posts, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	used, err = h.blog.mediaReferences.ReferencedImages(t.Context())
+	used, err = h.blog.mediaReferences.ReferencedMedia(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

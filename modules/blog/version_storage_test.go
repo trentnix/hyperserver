@@ -69,7 +69,7 @@ func TestPublicImageQueryUsesIndexes(t *testing.T) {
 	if err := prepareBlogSchema(t.Context(), db); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := db.QueryContext(t.Context(), "EXPLAIN QUERY PLAN "+fmt.Sprintf(publicImageQuery, "?"), "/images/missing.png", time.Now().Unix(), "/images/missing.png")
+	rows, err := db.QueryContext(t.Context(), "EXPLAIN QUERY PLAN "+fmt.Sprintf(publicMediaQuery, "?"), "/images/missing.png", time.Now().Unix(), "/images/missing.png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestVersionReferencesFollowPageURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if public, err := s.ImageIsPublic(t.Context(), "/images/x.png"); err != nil || !public {
+	if public, err := s.MediaIsPublic(t.Context(), "/images/x.png"); err != nil || !public {
 		t.Fatal(public, err)
 	}
 	versions, err := s.ListRevisions(t.Context(), "page", page.ID)
@@ -164,10 +164,10 @@ func TestVersionPointerConstraints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if public, err := s.ImageIsPublic(t.Context(), "/images/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"); err != nil || public {
+	if public, err := s.MediaIsPublic(t.Context(), "/images/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"); err != nil || public {
 		t.Fatal("historical image became public", public, err)
 	}
-	usage, err := s.ReferencedImages(t.Context())
+	usage, err := s.ReferencedMedia(t.Context())
 	if err != nil || len(usage["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"].History) != 1 || usage["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"].Current {
 		t.Fatal(usage, err)
 	}

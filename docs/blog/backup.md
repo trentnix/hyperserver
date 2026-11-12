@@ -1,6 +1,6 @@
 # Backup and recovery
 
-The blog creates an ordinary ZIP containing SQLite snapshots, uploads, configuration files, and optional local assets and TLS files. Database snapshots include content, history, image metadata, accounts, and sessions. Shared databases are copied once.
+The blog creates an ordinary ZIP containing SQLite snapshots, uploads, configuration files, and optional local assets and TLS files. Database snapshots include content, history, media metadata, accounts, and sessions. Shared databases are copied once.
 
 Configuration files are copied unchanged. **Save environment overrides separately**, especially signing keys and credentials. Remote images remain URLs. Their contents are not downloaded.
 
@@ -62,9 +62,9 @@ The [deployment rehearsal script](../deployment.md) also holds this lock after s
 2. Extract the ZIP into a new, private staging directory with an ordinary ZIP utility.
 3. Create a separate, empty application directory. Copy `config.yaml` and `modules/blog/config.yaml` there.
 4. Use `manifest.json` to place the database snapshots, uploads, and optional assets/TLS files. Each resource records its archive `Path` and original `Source`. Database `Roles` identifies blog, account, and session storage. If the locations change, update the configuration yourself. Do not copy snapshots over existing databases or reuse old `-wal` and `-shm` files.
-5. Restore environment overrides. Review storage paths, public origin, listener, mail settings, and administrator email before starting the recovered application. Confirm login, content, and images before switching traffic.
+5. Restore environment overrides. Review storage paths, public origin, listener, mail settings, and administrator email before starting the recovered application. Confirm login, content, images, and downloads before switching traffic.
 
-The archive groups snapshots under `databases/`, image bundles under `uploads/`, local assets under `assets/`, and TLS files under `tls/`. These archive paths do not rewrite the configuration. There is no automated restore command.
+The archive groups snapshots under `databases/`, image bundles and download files under `uploads/`, local assets under `assets/`, and TLS files under `tls/`. These archive paths do not rewrite the configuration. There is no automated restore command.
 
 ## Limits
 

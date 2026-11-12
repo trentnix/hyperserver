@@ -68,7 +68,7 @@ func TestMediaTags(t *testing.T) {
 	if err != nil || len(files) != 1 || files[0].Version() != file.Version() {
 		t.Fatal("tags changed file bytes or cleanup version", err)
 	}
-	used, err := h.blog.mediaReferences.ReferencedImages(t.Context())
+	used, err := h.blog.mediaReferences.ReferencedMedia(t.Context())
 	if err != nil || used[file.ID].Current || len(used[file.ID].History) != 0 {
 		t.Fatal("tags changed image references", used, err)
 	}

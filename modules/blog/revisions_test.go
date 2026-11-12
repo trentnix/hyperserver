@@ -179,7 +179,7 @@ func TestRevisionHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if public, err := store.ImageIsPublic(t.Context(), "/images/"+imageID); err != nil || public {
+			if public, err := store.MediaIsPublic(t.Context(), "/images/"+imageID); err != nil || public {
 				t.Fatal("historical reference made an image public", public, err)
 			}
 			prefix := "/post"

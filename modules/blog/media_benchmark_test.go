@@ -72,7 +72,7 @@ func BenchmarkMediaLookups(b *testing.B) {
 				b.Run("usage/"+selected.name, func(b *testing.B) {
 					// Validate and warm the lookup before measuring it. An empty
 					// or incomplete result must not look like an optimization.
-					usage, err := store.ReferencedImages(b.Context(), selected.ids...)
+					usage, err := store.ReferencedMedia(b.Context(), selected.ids...)
 					if err != nil || len(usage) != expected {
 						b.Fatalf("usage: got %d images, want %d: %v", len(usage), expected, err)
 					}
@@ -84,7 +84,7 @@ func BenchmarkMediaLookups(b *testing.B) {
 					}
 					b.ReportAllocs()
 					for b.Loop() {
-						usage, err := store.ReferencedImages(b.Context(), selected.ids...)
+						usage, err := store.ReferencedMedia(b.Context(), selected.ids...)
 						if err != nil || len(usage) != expected {
 							b.Fatalf("usage: got %d images, want %d: %v", len(usage), expected, err)
 						}

@@ -49,7 +49,7 @@
       assert(!componentPicker.open && document.activeElement === publication, 'Escape after leaving the picker must not reopen it or move focus.');
       addComponent.click();
       componentPicker.querySelector('[data-component-add="photo-album"]').click();
-      assert(!form.querySelector('[data-album-editor]').hidden && componentPicker.hidden && !form.elements.album.value && document.activeElement === form.querySelector('[data-album-upload]'), 'Adding an album must reveal its controls and focus Upload without changing post content.');
+      assert(!form.querySelector('[data-album-editor]').hidden && componentPicker.querySelector('[data-component-add="photo-album"]').hidden && !form.elements.album.value && document.activeElement === form.querySelector('[data-album-upload]'), 'Adding an album must reveal its controls and focus Upload without changing post content.');
       const choosePhotoAction = selector => {
         const action = form.querySelector(selector);
         assert(!action.closest('details') && action.getBoundingClientRect().height >= 44, 'Upload and Library must remain visible as touch-sized buttons.');
@@ -810,7 +810,7 @@
       assert(editSavedPost, 'A saved post must offer its editor.');
       await htmx.ajax('GET', editSavedPost.getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
       await wait(() => document.querySelector('[data-album-list]')?.children.length === 3);
-      assert(!document.querySelector('[data-album-editor]').hidden && document.querySelector('[data-component-picker]').hidden, 'Editing a saved album must show its component automatically and exclude a duplicate choice.');
+      assert(!document.querySelector('[data-album-editor]').hidden && document.querySelector('[data-component-add="photo-album"]').hidden, 'Editing a saved album must show its component automatically and exclude a duplicate choice.');
       await htmx.ajax('GET', savedPostURL, {target: '#article-content', swap: 'innerHTML'});
       await wait(() => document.querySelector('.photo-album-grid'));
       sessionStorage.setItem('album-component-saved-check', '1');

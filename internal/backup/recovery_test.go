@@ -147,8 +147,30 @@ func TestApplicationRecovery(t *testing.T) {
 		}
 		return result.Data.FilePath
 	}
+	var attachmentBody bytes.Buffer
+	attachmentForm := multipart.NewWriter(&attachmentBody)
+	attachmentPart, err := attachmentForm.CreateFormFile("file", "recovery.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	attachmentPart.Write([]byte("Recovered downloadable file"))
+	attachmentForm.Close()
+	attachmentResponse := request("POST", "/post/files/upload", &attachmentBody, attachmentForm.FormDataContentType(), http.StatusOK)
+	var attachment struct {
+		ID    string `json:"id"`
+		Label string `json:"label"`
+		Size  int64  `json:"size"`
+	}
+	if err := json.Unmarshal(attachmentResponse.Body.Bytes(), &attachment); err != nil {
+		t.Fatal(err)
+	}
+	attachmentJSON, err := json.Marshal([]any{attachment})
+	if err != nil {
+		t.Fatal(err)
+	}
 	publicImage, privateImage := upload(100), upload(200)
 	public := url.Values{"title": {"Original title"}, "slug": {"recovered"}, "content": {"Public body ![Image](" + publicImage + ")"}, "tags": {"Original tag"}, "published": {"on"}}
+	public.Set("downloads", string(attachmentJSON))
 	form("/post", public)
 	page := get("/post/s/recovered")
 	match := regexp.MustCompile(`/post/update/([a-zA-Z0-9]+)`).FindStringSubmatch(page)
@@ -219,6 +241,12 @@ func TestApplicationRecovery(t *testing.T) {
 	get(privateImage)
 	cookies = make(map[string]*http.Cookie)
 	get(publicImage)
+	if get("/files/"+attachment.ID) != "Recovered downloadable file" {
+		t.Fatal("backup lost attachment bytes")
+	}
+	if !strings.Contains(get("/post/s/recovered"), "recovery.txt") {
+		t.Fatal("backup lost download component")
+	}
 	request("GET", privateImage, nil, "", http.StatusNotFound)
 	request("GET", "/post/s/private", nil, "", http.StatusNotFound)
 	form("/login", credentials)

@@ -24,7 +24,7 @@ func adminWritingContext(ctx context.Context) context.Context {
 // savePostFixture lets storage tests supply rendered references without applying
 // HTTP validation to deliberately incomplete or invalid content fixtures.
 func savePostFixture(store repository, ctx context.Context, p Post) (Post, error) {
-	refs, err := imageReferences(p.Markdown, "/post/s/"+p.Slug, p.PreviewImage)
+	refs, err := contentMediaReferences(p.Markdown, "/post/s/"+p.Slug, p.PreviewImage)
 	if err != nil {
 		return p, err
 	}
@@ -33,7 +33,7 @@ func savePostFixture(store repository, ctx context.Context, p Post) (Post, error
 
 // savePageFixture supplies references for storage-level page fixtures.
 func savePageFixture(store pageRepository, ctx context.Context, p Page) (Page, error) {
-	refs, err := imageReferences(p.Markdown, p.URL(), p.PreviewImage)
+	refs, err := contentMediaReferences(p.Markdown, p.URL(), p.PreviewImage)
 	if err != nil {
 		return p, err
 	}

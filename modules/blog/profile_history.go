@@ -71,7 +71,7 @@ func (m *module) profileHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	data := profileHistoryPage{URL: "/profile/history", Versions: versions, Selected: selected, Current: number == versions[0].ID, Version: current.Version, MatchesCurrent: selected.Profile.sameContent(current)}
 	for _, field := range (profileEditorData{Profile: selected.Profile}).ImageFields() {
-		data.Images = append(data.Images, profileHistoryImage{Label: field.Label, URL: field.PreviewURL(), Missing: missing[imageReference(field.Value, "/")]})
+		data.Images = append(data.Images, profileHistoryImage{Label: field.Label, URL: field.PreviewURL(), Missing: missing[mediaReferenceURL(field.Value, "/")]})
 	}
 	view := "profileHistory"
 	request := htmx.GetRequest(r)

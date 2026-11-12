@@ -21,7 +21,10 @@ const maxAlbumPhotos = 50
 // permissions, and cleanup use the same content and reference transaction.
 var albumLine = regexp.MustCompile(`^!\[((?:\\.|[^\]\\])*)\]\(/images/([a-f0-9]{64}\.(?:png|jpeg|gif))\)$`)
 
-type albumPhoto struct{ ID, Caption string }
+type albumPhoto struct {
+	ID      string `json:"id"`
+	Caption string `json:"caption,omitempty"`
+}
 
 func parseAlbum(source string) ([]albumPhoto, error) {
 	var photos []albumPhoto
@@ -102,7 +105,7 @@ func joinPostAlbum(body, source string) (string, error) {
 }
 
 func (p editorPage) BodyMarkdown() string {
-	body, _ := splitPostAlbum(p.Markdown)
+	body, _, _ := splitPostComponents(p.Markdown)
 	return body
 }
 
@@ -112,8 +115,11 @@ func (p editorPage) AlbumMarkdown() string {
 	if p.AlbumInput != nil {
 		return *p.AlbumInput
 	}
-	_, album := splitPostAlbum(p.Markdown)
-	return album
+	_, components, _ := splitPostComponents(p.Markdown)
+	if len(components.Album()) == 0 {
+		return ""
+	}
+	return albumSource(components.Album()) + "\n"
 }
 
 var albumKind = ast.NewNodeKind("PhotoAlbum")

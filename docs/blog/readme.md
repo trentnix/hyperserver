@@ -64,6 +64,7 @@ Accounts, roles, content, and tokens are preserved. Unexpired invitations work a
 
 - [Writing and site content](content.md): posts, pages, profile, search, sharing, and saved versions.
 - [Images](media.md): uploads, reuse, privacy, cleanup, and optimization.
+- [File downloads](downloads.md): post attachments, limits, access, and storage.
 - [Backup and recovery](backup.md): offline ZIP archives and manual recovery.
 - [Framework setup](../application.md): service selection, modules, rendering, and cleanup.
 
@@ -79,7 +80,7 @@ Writing operations enforce roles and post ownership, including publishing and re
 
 Fresh startup creates blog schema version 1 from the embedded [initial migration](../../modules/blog/migrations/000001_blog.up.sql). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Read-only views join current pointers to content for rendering and search.
 
-`blog_media` holds upload metadata for images and future file types. `blog_post_media` and `blog_page_media` track URLs used by each saved revision. References retain URLs to preserve existing image links and host-specific access checks. Shared metadata does not enable document or audio uploads. The image pipeline and existing page editing behavior remain unchanged.
+`blog_media` holds upload metadata for images and file downloads. `blog_post_media` and `blog_page_media` track URLs used by each saved revision. References retain URLs to preserve existing image links and host-specific access checks. Posts support PDF, ZIP, and text downloads through the shared metadata. Audio uploads and page component controls are not implemented.
 
 Existing databases must have a clean version 1 in `blog_schema_version` and match the current baseline. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
 

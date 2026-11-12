@@ -46,7 +46,7 @@ func TestMediaBulkHTTP(t *testing.T) {
 	h.verify(t)
 	confirmation := h.request("GET", path, nil, false)
 	requireStatus(t, confirmation, http.StatusOK)
-	if confirmation.Header().Get("Cache-Control") != "no-store" || !strings.Contains(confirmation.Body.String(), "4 images") || !strings.Contains(confirmation.Body.String(), "bytes") {
+	if confirmation.Header().Get("Cache-Control") != "no-store" || !strings.Contains(confirmation.Body.String(), "4 uploads") || !strings.Contains(confirmation.Body.String(), "bytes") {
 		t.Fatal("missing confirmation summary or privacy")
 	}
 	values := url.Values{}
@@ -233,7 +233,7 @@ func TestMediaBulkConfirmationBounds(t *testing.T) {
 	h.blog.media = listedMedia{h.blog.media, files}
 	w = h.request("GET", "/media/delete-unused", nil, false)
 	requireStatus(t, w, http.StatusOK)
-	if strings.Count(w.Body.String(), `name="file"`) != maxMediaDeleteBatch || !strings.Contains(w.Body.String(), "Additional images outside this batch: 1.") || !strings.Contains(w.Body.String(), strconv.Itoa(maxMediaDeleteBatch*123)+" bytes") {
+	if strings.Count(w.Body.String(), `name="file"`) != maxMediaDeleteBatch || !strings.Contains(w.Body.String(), "Additional uploads outside this batch: 1.") || !strings.Contains(w.Body.String(), strconv.Itoa(maxMediaDeleteBatch*123)+" bytes") {
 		t.Fatal("incorrect bounded confirmation")
 	}
 	// The largest confirmation must fit both form parsing and the route body limit.

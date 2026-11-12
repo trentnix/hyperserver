@@ -99,7 +99,7 @@ func TestMediaReferences(t *testing.T) {
 		}
 	}
 	unreferenced := mediaUpload(t, m, "unused")
-	used, err := m.mediaReferences.ReferencedImages(t.Context())
+	used, err := m.mediaReferences.ReferencedMedia(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +304,7 @@ func TestMediaFileSafety(t *testing.T) {
 
 type failedMediaReferences struct{}
 
-func (failedMediaReferences) ReferencedImages(context.Context, ...string) (map[string]mediaUsage, error) {
+func (failedMediaReferences) ReferencedMedia(context.Context, ...string) (map[string]mediaUsage, error) {
 	return nil, errors.New("private database failure")
 }
 
@@ -562,12 +562,12 @@ func TestMediaStaleEditors(t *testing.T) {
 func TestMediaReferenceURLs(t *testing.T) {
 	id := strings.Repeat("a", 64) + ".png"
 	for _, reference := range []string{"/images/" + id, "https://old.example/images/" + id + "?x=1#fragment", "//blog.example/images/" + id, "/images/%61" + id[1:]} {
-		if got := referencedImageID(reference); got != id {
+		if got := referencedMediaID(reference); got != id {
 			t.Errorf("%q: %q", reference, got)
 		}
 	}
 	for _, reference := range []string{"", "/assets/" + id, "/images/../../" + id, "/images/bad.png", "data:image/png,content"} {
-		if got := referencedImageID(reference); got != "" {
+		if got := referencedMediaID(reference); got != "" {
 			t.Errorf("%q: %q", reference, got)
 		}
 	}

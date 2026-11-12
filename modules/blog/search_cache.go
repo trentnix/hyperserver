@@ -96,7 +96,7 @@ func (s *sqliteRepository) matchBody(ctx context.Context, tx *sql.Tx, match *con
 		if err := tx.QueryRowContext(ctx, query, id).Scan(&text); err != nil {
 			return false, err
 		}
-		text = string(match.normalize(text))
+		text = string(match.normalize(searchableWriting(text)))
 		s.searchBodies.put(searchBody{key: key, version: version, text: text})
 	}
 	return strings.Contains(text, match.query), nil

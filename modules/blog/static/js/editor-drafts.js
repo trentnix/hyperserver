@@ -80,7 +80,7 @@ import {getMarkdownEditor} from './markdown-editor.js';
         }
         if (typeof data.baseline !== 'string' || !data.fields || !state.fields.every(field =>
           field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' :
-            (['previewImage', 'published', 'publishDate', 'publishTime', 'tags'].includes(field.name) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
+            (['previewImage', 'published', 'publishDate', 'publishTime', 'tags', 'downloads', 'componentOrder'].includes(field.name) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
         copies.push({key, raw, data});
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);
@@ -151,6 +151,8 @@ import {getMarkdownEditor} from './markdown-editor.js';
         }
         getMarkdownEditor(form.elements.content)?.setMarkdown(form.elements.content.value);
         form.elements.album?.dispatchEvent(new Event('change', {bubbles: true}));
+        form.elements.downloads?.dispatchEvent(new Event('change', {bubbles: true}));
+        form.elements.componentOrder?.dispatchEvent(new Event('change', {bubbles: true}));
         form.querySelectorAll('[data-image-value]').forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));
         state.sources.push(copy);
         form.dispatchEvent(new Event('input', {bubbles: true}));

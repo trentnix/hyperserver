@@ -1,0 +1,152 @@
+(async () => {
+  await new Promise(resolve => document.addEventListener('DOMContentLoaded', () => setTimeout(resolve, 0), {once: true}));
+  const report = message => fetch('/test/result', {method: 'POST', body: message});
+  const assert = (value, message) => { if (!value) throw new Error(message); };
+  const equalFiles = (left, right) => {
+    const values = source => JSON.parse(source).map(entry => [entry.id, entry.label, entry.description || '', entry.size]);
+    return JSON.stringify(values(left)) === JSON.stringify(values(right));
+  };
+  const wait = async predicate => {
+    const end = Date.now() + 12000;
+    while (!predicate()) { if (Date.now() > end) throw new Error('Timed out: ' + predicate); await new Promise(resolve => setTimeout(resolve, 25)); }
+  };
+  window.addEventListener('error', event => report('Browser error: ' + event.message));
+  window.blogConfirm = (_, proceed) => proceed();
+  try {
+    const stage = sessionStorage.getItem('downloads-stage');
+    if (!stage) {
+      await wait(() => document.querySelector('#post-form .CodeMirror') && document.querySelector('[data-downloads-editor]').hidden);
+      const form = document.querySelector('#post-form');
+      assert(form.querySelector('[data-album-editor]').hidden, 'Both optional components must start collapsed.');
+      form.elements.title.value = 'A post with downloads';
+      form.elements.slug.value = 'downloads-review';
+      form.querySelector('[data-component-picker] summary').click();
+      form.querySelector('[data-component-add="file-downloads"]').click();
+      const section = form.querySelector('[data-downloads-editor]');
+      const upload = section.querySelector('[data-download-upload]');
+      assert(!section.hidden && document.activeElement === upload, 'Adding downloads must focus Upload.');
+      assert(form.querySelector('[data-component-add="file-downloads"]').hidden && !form.querySelector('[data-component-picker]').hidden, 'A second component must remain available without offering duplicate downloads.');
+      const input = section.querySelector('[data-download-files]');
+      assert(input.multiple && section.querySelector('.downloads-controls').getBoundingClientRect().height >= 44, 'Uploads need a visible touch-sized control and multiple file selection.');
+      const files = new DataTransfer();
+      files.items.add(new File(['First attachment content'], 'First notes.txt', {type: 'text/plain'}));
+      files.items.add(new File(['Second attachment content'], 'Second notes.txt', {type: 'application/pdf'}));
+      files.items.add(new File(['This is not a PDF'], 'Invalid.pdf', {type: 'application/pdf'}));
+      input.files = files.files;
+      input.dispatchEvent(new Event('change', {bubbles: true}));
+      assert(form.dataset.uploading && form.querySelector('[data-publication-save]').disabled, 'Save must wait for the entire upload batch.');
+      await wait(() => !form.dataset.uploading);
+      assert(JSON.parse(form.elements.downloads.value).length === 2, 'A failed file must retain successful uploads. Client MIME must not decide content type.');
+      assert(section.querySelector('[data-downloads-status]').textContent.includes('Invalid.pdf'), 'The failed upload must identify the file.');
+      assert(!form.elements.content.required, 'A file component must allow a post without body text.');
+      const first = section.querySelector('[data-downloads-list] li');
+      const name = first.querySelector('input');
+      name.value = '   ';
+      name.dispatchEvent(new Event('input', {bubbles: true}));
+      form.requestSubmit();
+      assert(name.getAttribute('aria-invalid') === 'true' && document.activeElement === name || !name.validity.valid, 'A blank display name must block submission.');
+      name.value = 'A long download name that wraps without stretching the layout across the screen';
+      name.dispatchEvent(new Event('input', {bubbles: true}));
+      assert(!name.hasAttribute('aria-invalid') && !document.getElementById(name.id + '-error'), 'Correcting a name must clear its field error.');
+      const description = first.querySelector('textarea');
+      description.value = 'A description with enough words to wrap on mobile.\nA second line stays with its file.';
+      description.dispatchEvent(new Event('input', {bubbles: true}));
+      assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Download controls must not overflow the viewport.');
+      first.querySelector('[data-direction="down"]').click();
+      assert(JSON.parse(form.elements.downloads.value)[1].label === name.value, 'File details must move with their file.');
+      const remove = section.querySelector('[data-downloads-list] li button:last-child');
+      remove.click();
+      assert(JSON.parse(form.elements.downloads.value).length === 1 && !section.querySelector('[data-downloads-recovery]').hidden, 'Removing a file must offer Undo.');
+      section.querySelector('[data-download-undo]').click();
+      assert(JSON.parse(form.elements.downloads.value).length === 2, 'Undo must restore the file.');
+      section.querySelector('[data-download-browse]').click();
+      await wait(() => document.querySelector('.download-library input[type="checkbox"]'));
+      const library = document.querySelector('.download-library');
+      const choices = [...library.querySelectorAll('li')];
+      assert(choices.filter(row => row.querySelector('input').disabled).length === 2, 'Already attached files must be marked and unavailable for duplicate selection.');
+      const search = library.querySelector('input[type="search"]');
+      search.value = 'Library guide';
+      search.dispatchEvent(new Event('input', {bubbles: true}));
+      const choice = choices.find(row => row.textContent.includes('Library guide'));
+      assert(!choice.hidden && choices.filter(row => !row.hidden).length === 1, 'Library search must filter names.');
+      choice.querySelector('input').click();
+      library.querySelector('.form-actions button:last-child').click();
+      await wait(() => !document.querySelector('.download-library'));
+      assert(!document.querySelector('.download-library') && JSON.parse(form.elements.downloads.value).length === 3, 'Library selection must add files and close the picker.');
+      const saved = form.elements.downloads.value;
+      section.querySelector('[data-component-remove]').click();
+      assert(section.hidden && !form.elements.downloads.value, 'Removing downloads must clear the submission.');
+      form.querySelector('[data-component-undo="file-downloads"]').click();
+      assert(!section.hidden && form.elements.downloads.value === saved, 'Component Undo must restore all names and descriptions.');
+      form.querySelector('[data-component-picker] summary').click();
+      form.querySelector('[data-component-add="photo-album"]').click();
+      assert(form.querySelector('[data-component-picker]').hidden, 'The picker must hide once both component types are added.');
+      form.querySelector('[data-album-browse]').click();
+      await wait(() => document.querySelector('.media-browser [data-media-select]'));
+      document.querySelector('.media-browser [data-media-select]').click();
+      document.querySelector('[data-media-add-selected]').click();
+      await wait(() => form.elements.album.value && !document.querySelector('.media-browser'));
+      const order = () => [...form.querySelectorAll('[data-post-component]:not([hidden])')].map(node => node.dataset.postComponent).join(',');
+      assert(order() === 'file-downloads,photo-album' && form.elements.componentOrder.value === '["file-downloads","photo-album"]', 'Components must appear in the order they were added.');
+      section.querySelector('[data-component-move="down"]').click();
+      assert(order() === 'photo-album,file-downloads', 'Component move controls must change the visible and submitted order.');
+      section.querySelector('[data-component-move="up"]').click();
+      section.querySelector('[data-component-remove]').click();
+      assert(order() === 'photo-album', 'Removing a component must remove it from the order.');
+      form.querySelector('[data-component-undo="file-downloads"]').click();
+      assert(order() === 'file-downloads,photo-album' && form.elements.downloads.value === saved, 'Undo must restore the component at its original position.');
+      section.querySelector('[data-component-remove]').click();
+      form.querySelector('[data-component-picker] summary').click();
+      form.querySelector('[data-component-add="file-downloads"]').click();
+      assert(order() === 'photo-album,file-downloads' && !form.elements.downloads.value, 'Adding a removed component again must create an empty component at the end.');
+      form.elements.downloads.value = saved;
+      form.elements.downloads.dispatchEvent(new Event('change', {bubbles: true}));
+      section.querySelector('[data-component-move="up"]').click();
+      sessionStorage.setItem('component-order', form.elements.componentOrder.value);
+      form.dispatchEvent(new Event('input', {bubbles: true}));
+      await wait(() => [...Object.keys(localStorage)].some(key => key.startsWith('hyperserver.blog.draft.v1:') && localStorage.getItem(key).includes('A long download name')));
+      sessionStorage.setItem('downloads-source', form.elements.downloads.value);
+      sessionStorage.setItem('downloads-stage', 'recover');
+      location.reload();
+      return;
+    }
+    if (stage === 'recover') {
+      await wait(() => document.querySelector('[data-draft-recovery]') && !document.querySelector('[data-draft-recovery]').hidden);
+      document.querySelector('[data-draft-restore]').click();
+      const form = document.querySelector('#post-form');
+      await wait(() => !form.querySelector('[data-downloads-editor]').hidden && !form.querySelector('[data-album-editor]').hidden);
+      assert(equalFiles(form.elements.downloads.value, sessionStorage.getItem('downloads-source')), 'Recovery must retain file names, descriptions, and order.');
+      assert(!form.elements.content.required, 'Recovered components must allow an empty body.');
+      assert(form.elements.componentOrder.value === sessionStorage.getItem('component-order') && form.querySelector('[data-post-component]:not([hidden])').dataset.postComponent === 'file-downloads', 'Recovery must restore component order as well as contents.');
+      sessionStorage.setItem('downloads-stage', 'view');
+      form.requestSubmit();
+      return;
+    }
+    if (stage === 'view') {
+      await wait(() => document.querySelector('.file-downloads a') && document.querySelector('[data-album-photo]'));
+      const links = [...document.querySelectorAll('.file-downloads a')];
+      assert(document.querySelector('.file-downloads').compareDocumentPosition(document.querySelector('.photo-album')) & Node.DOCUMENT_POSITION_FOLLOWING, 'Saved components must render in the order they were added.');
+      for (const card of links) {
+        assert(card.classList.contains('file-download-card') && card.querySelector('.file-download-type').textContent.trim() === 'TXT' && card.querySelector('.file-download-action svg'), 'Downloads need a clear format badge and download action.');
+        assert(card.getBoundingClientRect().height >= 72 && card.getBoundingClientRect().width <= innerWidth, 'Download cards must be touch-sized and fit the viewport.');
+      }
+      assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Download names and descriptions must wrap without horizontal scrolling.');
+      assert(links.length === 3 && links.every(link => link.getAttribute('hx-boost') === 'false'), 'All downloads must render as ordinary download links.');
+      const response = await fetch(links[0].href);
+      assert(response.ok && response.headers.get('Content-Disposition').startsWith('attachment'), 'Download links must serve attachments.');
+      await htmx.ajax('GET', document.querySelector('a[href^="/post/update/"]').getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
+      await wait(() => document.querySelector('[data-downloads-list] input'));
+      const form = document.querySelector('#post-form');
+      assert(equalFiles(form.elements.downloads.value, sessionStorage.getItem('downloads-source')) && !form.elements.content.value, 'Editing a saved mixed-component post must separate body and components.');
+      assert(!form.querySelector('[data-album-editor]').hidden && !form.querySelector('[data-downloads-editor]').hidden, 'Both saved components must stay visible.');
+      assert(form.elements.componentOrder.value === sessionStorage.getItem('component-order') && form.querySelector('[data-post-component]:not([hidden])').dataset.postComponent === 'file-downloads', 'The saved editor must match reader order.');
+      assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Saved components must fit the viewport.');
+      form.querySelector('[data-download-browse]').click();
+      await wait(() => document.querySelector('.download-library input[type="checkbox"]'));
+      await htmx.ajax('GET', '/post/manage', {target: '#article-content', swap: 'innerHTML'});
+      await wait(() => !document.querySelector('.download-library'));
+      assert(!document.querySelector('dialog[open]'), 'Replacing an editor must close its file picker.');
+      await report('PASS');
+    }
+  } catch (error) { await report(error.message + '\n' + (error.stack || '')); }
+})();

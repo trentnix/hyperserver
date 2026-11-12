@@ -24,7 +24,7 @@ type mediaDeleteBatch struct {
 
 // confirmUnusedMediaDelete snapshots candidates without deleting or reserving them.
 func (m *module) confirmUnusedMediaDelete(w http.ResponseWriter, r *http.Request) {
-	files, err := m.unusedImages(r.Context())
+	files, err := m.unusedMediaFiles(r.Context())
 	if err != nil {
 		m.storageError(w, r, err)
 		return
@@ -38,9 +38,9 @@ func (m *module) confirmUnusedMediaDelete(w http.ResponseWriter, r *http.Request
 		data.Bytes += file.Size
 	}
 	page := m.views["mediaDeleteAll"].Content(r, data)
-	page.Title = "Delete unused images"
+	page.Title = "Delete unused uploads"
 	if err := page.Render(w, r); err != nil {
-		page.HandleRenderError(w, r, "Unable to display unused images.", err)
+		page.HandleRenderError(w, r, "Unable to display unused uploads.", err)
 	}
 }
 
@@ -59,7 +59,7 @@ func (m *module) deleteUnusedMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	files, err := parseMediaDeleteBatch(r.PostForm["file"])
 	if err != nil {
-		m.renderMedia(w, r, "Reload the cleanup page and review the images before deleting.", http.StatusBadRequest)
+		m.renderMedia(w, r, "Reload the cleanup page and review the uploads before deleting.", http.StatusBadRequest)
 		return
 	}
 	result, err := m.removeUnusedMediaBatch(r.Context(), files)
@@ -86,7 +86,7 @@ func parseMediaDeleteBatch(values []string) ([]mediaFile, error) {
 	for _, value := range values {
 		id, rawVersion, ok := strings.Cut(value, ":")
 		version, err := strconv.ParseInt(rawVersion, 10, 64)
-		if !ok || !validImageID(id) || err != nil || seen[id] {
+		if !ok || (!validImageID(id) && !validDownloadID(id)) || err != nil || seen[id] {
 			return nil, errors.New("invalid media batch entry")
 		}
 		seen[id] = true
@@ -108,7 +108,7 @@ func (m *module) removeUnusedMediaBatch(ctx context.Context, files []mediaFile) 
 	for _, file := range files {
 		ids = append(ids, file.ID)
 	}
-	used, err := m.mediaReferences.ReferencedImages(ctx, ids...)
+	used, err := m.mediaReferences.ReferencedMedia(ctx, ids...)
 	if err != nil {
 		return result, err
 	}

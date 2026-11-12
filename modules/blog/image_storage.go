@@ -19,8 +19,8 @@ import (
 type imageStore interface {
 	Put(context.Context, imageUpload) (string, error)
 	// Open returns errNotFound for an unknown ID. The caller closes Content.
-	Open(context.Context, string) (storedImage, error)
-	OpenVariant(context.Context, string, imageVariant) (storedImage, error)
+	Open(context.Context, string) (storedMedia, error)
+	OpenVariant(context.Context, string, imageVariant) (storedMedia, error)
 }
 
 // imageVariant selects a fixed representation, never a filesystem path.
@@ -32,9 +32,9 @@ const (
 	originalImage  imageVariant = "original"
 )
 
-// storedImage pairs a seekable body with the metadata needed for HTTP serving.
+// storedMedia pairs a seekable body with the metadata needed for HTTP serving.
 // Digest is the lowercase hexadecimal SHA-256 digest of Content.
-type storedImage struct {
+type storedMedia struct {
 	Content   io.ReadSeekCloser
 	MediaType string
 	Modified  time.Time
@@ -142,7 +142,7 @@ func (s *fileImageStore) put(ctx context.Context, upload imageUpload, modified t
 
 // Open accepts only generated image IDs and never exposes directory listings.
 // File access stays inside the uploads directory, including when symlinks exist.
-func (s *fileImageStore) Open(ctx context.Context, id string) (storedImage, error) {
+func (s *fileImageStore) Open(ctx context.Context, id string) (storedMedia, error) {
 	return s.OpenVariant(ctx, id, displayImage)
 }
 
@@ -151,12 +151,12 @@ var errImageNotOptimized = errors.New("image requires optimization")
 
 // OpenVariant exposes only the three known entries, never arbitrary archive paths.
 // Legacy uploads are available as originals for explicit offline regeneration only.
-func (s *fileImageStore) OpenVariant(ctx context.Context, id string, variant imageVariant) (storedImage, error) {
+func (s *fileImageStore) OpenVariant(ctx context.Context, id string, variant imageVariant) (storedMedia, error) {
 	if err := ctx.Err(); err != nil {
-		return storedImage{}, err
+		return storedMedia{}, err
 	}
 	if !validImageID(id) || (variant != displayImage && variant != thumbnailImage && variant != originalImage) {
-		return storedImage{}, errNotFound
+		return storedMedia{}, errNotFound
 	}
 	digest, extension, _ := strings.Cut(id, ".")
 	file, err := s.root.Open(id)
@@ -164,7 +164,7 @@ func (s *fileImageStore) OpenVariant(ctx context.Context, id string, variant ima
 		if errors.Is(err, fs.ErrNotExist) {
 			err = errNotFound
 		}
-		return storedImage{}, err
+		return storedMedia{}, err
 	}
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
@@ -172,23 +172,23 @@ func (s *fileImageStore) OpenVariant(ctx context.Context, id string, variant ima
 		if err == nil {
 			err = errNotFound
 		}
-		return storedImage{}, err
+		return storedMedia{}, err
 	}
 	archive, err := zip.NewReader(file, info.Size())
 	if errors.Is(err, zip.ErrFormat) {
 		if variant == originalImage {
-			return storedImage{Content: file, MediaType: "image/" + extension, Modified: info.ModTime(), Digest: digest}, nil
+			return storedMedia{Content: file, MediaType: "image/" + extension, Modified: info.ModTime(), Digest: digest}, nil
 		}
 		file.Close()
-		return storedImage{}, errImageNotOptimized
+		return storedMedia{}, errImageNotOptimized
 	}
 	if err != nil {
 		file.Close()
-		return storedImage{}, err
+		return storedMedia{}, err
 	}
 	if len(archive.File) != 3 {
 		file.Close()
-		return storedImage{}, errors.New("incomplete image archive")
+		return storedMedia{}, errors.New("incomplete image archive")
 	}
 	var selected *zip.File
 	seen := make(map[string]bool)
@@ -198,7 +198,7 @@ func (s *fileImageStore) OpenVariant(ctx context.Context, id string, variant ima
 		validDigest := len(entry.Comment) == 64 && digestError == nil
 		if seen[entry.Name] || !known || !validDigest || entry.Method != zip.Store {
 			file.Close()
-			return storedImage{}, errors.New("invalid image archive")
+			return storedMedia{}, errors.New("invalid image archive")
 		}
 		seen[entry.Name] = true
 		if entry.Name == string(variant) {
@@ -208,15 +208,15 @@ func (s *fileImageStore) OpenVariant(ctx context.Context, id string, variant ima
 	offset, err := selected.DataOffset()
 	if err != nil {
 		file.Close()
-		return storedImage{}, err
+		return storedMedia{}, err
 	}
 	size := selected.UncompressedSize64
 	validSize := size > 0 && size <= 128*1024*1024 && selected.CompressedSize64 == size
 	if !validSize || offset < 0 || offset > info.Size() || size > uint64(info.Size()-offset) {
 		file.Close()
-		return storedImage{}, errors.New("invalid image entry size")
+		return storedMedia{}, errors.New("invalid image entry size")
 	}
-	return storedImage{
+	return storedMedia{
 		Content:   imageSection{io.NewSectionReader(file, offset, int64(size)), file},
 		MediaType: "image/" + extension, Modified: info.ModTime(), Digest: selected.Comment,
 	}, nil

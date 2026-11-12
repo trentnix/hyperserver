@@ -37,7 +37,7 @@ func TestMediaHistoryDeduplicatesEachVersion(t *testing.T) {
 	if _, err := db.Exec("UPDATE blog_posts SET recorded=42; UPDATE blog_pages SET recorded=42"); err != nil {
 		t.Fatal(err)
 	}
-	usage, err := s.ReferencedImages(t.Context())
+	usage, err := s.ReferencedMedia(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestMediaHistoryDeletion(t *testing.T) {
 			form.Set("previewImage", "")
 			response := h.request("POST", endpoint, form, false)
 			requireStatus(t, response, http.StatusUnprocessableEntity)
-			if !strings.Contains(response.Body.String(), "An uploaded image is no longer available.") {
+			if !strings.Contains(response.Body.String(), "An uploaded image or file is no longer available.") {
 				t.Fatal("missing body image was not explained")
 			}
 			form.Set("content", "Recovered writing without the deleted image")
@@ -187,8 +187,8 @@ func TestMediaHistoryConfirmationCannotBypassCurrentUse(t *testing.T) {
 // failedMediaOpen verifies that unavailable storage is not presented as deleted files.
 type failedMediaOpen struct{ imageStore }
 
-func (failedMediaOpen) Open(context.Context, string) (storedImage, error) {
-	return storedImage{}, errors.New("private storage failure")
+func (failedMediaOpen) Open(context.Context, string) (storedMedia, error) {
+	return storedMedia{}, errors.New("private storage failure")
 }
 
 // TestRevisionMissingMedia handles relative URLs and preserves external images and safe HTML.
@@ -200,7 +200,7 @@ func TestRevisionMissingMedia(t *testing.T) {
 	}
 	revision := Revision{Markdown: "![Deleted](../../images/" + f.ID + "?x=1#here)\n\n![External](https://remote.example/images/" + f.ID + ")\n\n<script>alert(1)</script>"}
 	path := "/post/s/example"
-	missing, err := h.blog.revisionMissingImages(t.Context(), revision, path)
+	missing, err := h.blog.revisionMissingMedia(t.Context(), revision, path)
 	if err != nil || len(missing) != 1 {
 		t.Fatal(missing, err)
 	}
@@ -208,12 +208,12 @@ func TestRevisionMissingMedia(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	marked, err := markMissingImages(rendered, missing)
+	marked, err := markMissingMedia(rendered, missing)
 	if err != nil || strings.Count(string(marked), `class="missing-image"`) != 1 || !strings.Contains(string(marked), `src="https://remote.example/images/`) || strings.Contains(string(marked), "<script>") {
 		t.Fatal("incorrect or unsafe placeholders", marked, err)
 	}
 	h.blog.images = failedMediaOpen{h.blog.images}
-	if _, err := h.blog.revisionMissingImages(t.Context(), revision, path); err == nil {
+	if _, err := h.blog.revisionMissingMedia(t.Context(), revision, path); err == nil {
 		t.Fatal("storage failure mistaken for missing media")
 	}
 }

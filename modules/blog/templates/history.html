@@ -51,7 +51,7 @@
       <h2>{{ .Data.Selected.Title }}</h2>
       {{ if .Data.Selected.Summary }}<p class="revision-summary">{{ .Data.Selected.Summary }}</p>{{ end }}
       {{ if .Data.Selected.Tags }}<p class="form-hint">Tags: {{ .Data.Selected.Tags }}</p>{{ end }}
-      {{ if .Data.MissingImages }}<p class="revision-notice">Some images in this version are no longer available. The saved writing has not changed.</p>{{ end }}
+      {{ if .Data.MissingImages }}<p class="revision-notice">Some uploads in this version are no longer available. The saved writing has not changed.</p>{{ end }}
       {{ if .Data.Selected.PreviewImage }}<figure class="revision-image">{{ if .Data.MissingPreview }}<span class="missing-image">Image deleted</span>{{ else }}<img src="/images/{{ .Data.Selected.PreviewImage }}" alt="Saved preview image">{{ end }}<figcaption>Preview image</figcaption></figure>{{ end }}
       <div class="revision-body">{{ .Data.HTML }}</div>
       <details><summary>Markdown source</summary><pre>{{ .Data.Selected.Markdown }}</pre></details>

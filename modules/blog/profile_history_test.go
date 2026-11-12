@@ -306,11 +306,11 @@ func TestProfileHistoryMedia(t *testing.T) {
 	if err := m.persistProfile(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	used, err := m.mediaReferences.ReferencedImages(t.Context())
+	used, err := m.mediaReferences.ReferencedMedia(t.Context())
 	if err != nil || used[f.ID].Current || len(used[f.ID].History) != 1 || used[f.ID].History[0].URL != "/profile/history?revision="+old {
 		t.Fatal("incorrect or duplicate profile history references", used, err)
 	}
-	if public, err := m.imageAccess.ImageIsPublic(t.Context(), "/images/"+f.ID); err != nil || public {
+	if public, err := m.mediaAccess.MediaIsPublic(t.Context(), "/images/"+f.ID); err != nil || public {
 		t.Fatal("history made an image public", public, err)
 	}
 	h.register(t)
@@ -427,7 +427,7 @@ func TestProfileHistoryMediaRoles(t *testing.T) {
 			if err := m.persistProfile(t.Context(), p); err != nil {
 				t.Fatal(err)
 			}
-			used, err := m.mediaReferences.ReferencedImages(t.Context())
+			used, err := m.mediaReferences.ReferencedMedia(t.Context())
 			if err != nil || len(used[f.ID].History) != 1 || used[f.ID].Current {
 				t.Fatal("lost historical image reference", used, err)
 			}

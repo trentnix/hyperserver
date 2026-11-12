@@ -72,7 +72,7 @@ The operator owns schema upgrades. Stop the app and any cleanup jobs, take a bac
 
 Fresh empty stores bootstrap their current schema during startup. Accounts currently require version 1. Existing stores are validated, not automatically upgraded. See [provider migration commands](storage.md#account-schema-migrations).
 
-Accounts and sessions share `/data/hyperserver.db`. Blog content uses `/data/blog.db`, and images use `/data/uploads`. Each schema has its own version table. The maintenance image carries the pinned `golang-migrate` CLI and account/blog SQL. Custom session table names require the provider's rendered migration files described in the [session guide](../pkg/services/session/readme.md).
+Accounts and sessions share `/data/hyperserver.db`. Blog content uses `/data/blog.db`, and uploaded images and download files use `/data/uploads`. Each schema has its own version table. The maintenance image carries the pinned `golang-migrate` CLI and account/blog SQL. Custom session table names require the provider's rendered migration files described in the [session guide](../pkg/services/session/readme.md).
 
 ```sh
 bash deploy/local/storage.sh backup before-upgrade

@@ -90,7 +90,7 @@
     }
     if (stage === 'bulk-confirm' || stage === 'bulk-delete') {
       const panel = document.querySelector('.confirmation-panel');
-      assert(panel.textContent.includes('2 images') && panel.textContent.includes('bytes'), 'Bulk confirmation lacks count or size.');
+      assert(panel.textContent.includes('2 uploads') && panel.textContent.includes('bytes'), 'Bulk confirmation lacks count or size.');
       assert(panel.querySelectorAll('input[name="file"]').length === 2, 'Confirmation did not retain its reviewed uploads.');
       if (stage === 'bulk-confirm') {
         sessionStorage.setItem('media-stage', 'bulk-cancelled');

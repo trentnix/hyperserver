@@ -36,7 +36,7 @@
   <strong>Editing a version saved {{ .RecordedAt.Format "Jan 2, 2006 at 3:04:05 PM UTC" }}.</strong>
   <p>Nothing changes until you save.</p>
 </aside>{{ end }}
-{{ if .Data.MissingImages }}<p class="field-error" role="status">This version references images that are no longer available. Replace or remove their references before saving.</p>{{ end }}
+{{ if .Data.MissingImages }}<p class="field-error" role="status">This version references uploads that are no longer available. Replace or remove their references before saving.</p>{{ end }}
 {{ end }}
 
 {{ define "blog.previewImage" }}

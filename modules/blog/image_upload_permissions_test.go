@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-type rejectedHistoryLookup struct{ imageAccessRepository }
+type rejectedHistoryLookup struct{ mediaAccessRepository }
 
 type countedImageWrites struct {
 	imageStore
@@ -44,7 +44,7 @@ func (failedUploadRecording) RecordMediaUpload(context.Context, string, time.Tim
 	return errors.New("private metadata completion failure")
 }
 
-func (rejectedHistoryLookup) ImageInAuthorsPosts(context.Context, string, ...string) (bool, error) {
+func (rejectedHistoryLookup) MediaInAuthorsPosts(context.Context, string, ...string) (bool, error) {
 	return false, errors.New("public images must not query private history")
 }
 
@@ -112,7 +112,7 @@ func TestPublicReuseDoesNotGrantOriginal(t *testing.T) {
 		t.Fatal(err)
 	}
 	registeredPoster(t, h)
-	h.blog.imageAccess = rejectedHistoryLookup{h.blog.imageAccess}
+	h.blog.mediaAccess = rejectedHistoryLookup{h.blog.mediaAccess}
 	for _, suffix := range []string{"", "?variant=thumbnail"} {
 		requireStatus(t, h.request("GET", "/images/"+id+suffix, nil, false), http.StatusOK)
 	}
@@ -298,7 +298,7 @@ func TestPosterImageUploads(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.cookies = secondCookies
-	h.blog.imageAccess = rejectedHistoryLookup{h.blog.imageAccess}
+	h.blog.mediaAccess = rejectedHistoryLookup{h.blog.mediaAccess}
 	upload(http.StatusOK)
 	requireStatus(t, h.request("POST", "/post", fields, false), http.StatusSeeOther)
 	metadata, _ = h.blog.mediaMetadata.GetMediaMetadata(t.Context(), id)

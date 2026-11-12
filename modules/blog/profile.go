@@ -140,7 +140,7 @@ func (p profileEditorData) ImageFields() []profileImageField {
 		{Name: "backgroundURL", Label: "Background", Value: p.BackgroundURL},
 	}
 	for i := range fields {
-		fields[i].Missing = p.MissingImages[imageReference(fields[i].Value, "/")]
+		fields[i].Missing = p.MissingImages[mediaReferenceURL(fields[i].Value, "/")]
 	}
 	return fields
 }

@@ -11,7 +11,7 @@ func TestImageReferenceCancellation(t *testing.T) {
 	store := newHarness(t).blog.posts.(*sqliteRepository)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := store.ImageIsPublic(ctx, "/images/example.png"); !errors.Is(err, context.Canceled) {
+	if _, err := store.MediaIsPublic(ctx, "/images/example.png"); !errors.Is(err, context.Canceled) {
 		t.Fatal("lookup ignored cancellation", err)
 	}
 }
@@ -35,10 +35,10 @@ func TestImageReferenceDeduplication(t *testing.T) {
 	if _, err := savePostFixture(store, t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	if public, err := store.ImageIsPublic(t.Context(), "/images/same.png"); err != nil || !public {
+	if public, err := store.MediaIsPublic(t.Context(), "/images/same.png"); err != nil || !public {
 		t.Fatal("removing a duplicate revoked the remaining reference", public, err)
 	}
-	if public, err := store.ImageIsPublic(t.Context()); err != nil || public {
+	if public, err := store.MediaIsPublic(t.Context()); err != nil || public {
 		t.Fatal("empty lookup granted access", public, err)
 	}
 }
@@ -89,7 +89,7 @@ func TestImageReferencesConcurrentSave(t *testing.T) {
 			wg.Go(func() {
 				<-start
 				for range 200 {
-					if public, err := store.ImageIsPublic(t.Context(), "/images/private.png"); err != nil || public {
+					if public, err := store.MediaIsPublic(t.Context(), "/images/private.png"); err != nil || public {
 						t.Error("read saw private references as public", public, err)
 						return
 					}

@@ -112,6 +112,7 @@ func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templa
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/users.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/posts.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/post-editor.html"},
+		content.TemplatePath{FS: blogModuleFS, Path: "templates/post-components.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/page-editor.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/search.html"},
 		content.TemplatePath{FS: blogModuleFS, Path: "templates/pages.html"},

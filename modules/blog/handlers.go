@@ -28,6 +28,8 @@ type editorPage struct {
 	Post
 	revisionSelection
 	AlbumInput                 *string
+	DownloadsInput             *string
+	ComponentOrderInput        *string
 	NoLibrary                  bool
 	Error                      string
 	ErrorFields                string
@@ -177,14 +179,14 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 	if version, valid := editorVersion(r); valid {
 		p.Version = version
 	}
-	var albumError error
-	p.Markdown, albumError = joinPostAlbum(p.Markdown, r.PostForm.Get("album"))
-	if albumError != nil {
-		fields := validationFields(albumError)
+	var componentError error
+	p.Markdown, componentError = joinPostComponents(p.Markdown, r.PostForm.Get("album"), r.PostForm.Get("downloads"), r.PostForm.Get("componentOrder"))
+	if componentError != nil {
+		fields := validationFields(componentError)
 		if len(fields) == 0 {
-			fields = []string{"album"}
+			fields = []string{"content"}
 		}
-		m.editorError(w, r, p, albumError.Error(), http.StatusUnprocessableEntity, fields...)
+		m.editorError(w, r, p, componentError.Error(), http.StatusUnprocessableEntity, fields...)
 		return
 	}
 	publicationError := m.readPublication(r, &p)
@@ -240,6 +242,14 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	if r.PostForm.Has("album") {
 		album := r.PostForm.Get("album")
 		data.AlbumInput = &album
+	}
+	if r.PostForm.Has("downloads") {
+		downloads := r.PostForm.Get("downloads")
+		data.DownloadsInput = &downloads
+	}
+	if r.PostForm.Has("componentOrder") {
+		order := r.PostForm.Get("componentOrder")
+		data.ComponentOrderInput = &order
 	}
 	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster

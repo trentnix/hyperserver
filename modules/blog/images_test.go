@@ -208,11 +208,11 @@ func (failingImageStore) Put(context.Context, imageUpload) (string, error) {
 	return "", errors.New("private image storage failure")
 }
 
-func (failingImageStore) Open(context.Context, string) (storedImage, error) {
-	return storedImage{}, errors.New("private image storage failure")
+func (failingImageStore) Open(context.Context, string) (storedMedia, error) {
+	return storedMedia{}, errors.New("private image storage failure")
 }
 
-func (s failingImageStore) OpenVariant(ctx context.Context, id string, _ imageVariant) (storedImage, error) {
+func (s failingImageStore) OpenVariant(ctx context.Context, id string, _ imageVariant) (storedMedia, error) {
 	return s.Open(ctx, id)
 }
 

@@ -33,7 +33,7 @@ type Settings struct {
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
 
-	// UploadsDirectory holds uploaded images, relative to the application configuration directory.
+	// UploadsDirectory holds uploaded images and files, relative to the application configuration directory.
 	UploadsDirectory string `yaml:"uploadsDirectory"`
 
 	// AssetsDirectory optionally serves application-owned files at /local-assets/{name}.
@@ -85,37 +85,39 @@ func (a *Access) AllowAccount(ctx context.Context, address string) (bool, error)
 	return len(users) == 0, nil
 }
 
-// module owns one application's views, content repositories, and images.
+// module owns one application's views, content repositories, and uploads.
 type module struct {
-	site            *Site
-	settings        *Settings
-	access          *Access
-	accounts        user.AccountRepository
-	administration  user.AdministrationRepository
-	mail            *messaging.MailClient
-	app             *server.ApplicationServer
-	auth            *auth.AuthManager
-	posts           repository
-	pageStore       pageRepository
-	searchStore     publicSearchRepository
-	tags            tagRepository
-	profileStore    profileRepository
-	profile         *ProfileState
-	images          imageStore
-	media           mediaStore
-	mediaReferences mediaReferenceRepository
-	mediaMetadata   mediaMetadataRepository
-	imageAccess     imageAccessRepository
-	history         revisionRepository
-	localAssets     *os.Root
-	close           func() error
-	views           map[string]*content.View
-	feed            feedCache
-	recentPosts     cachedValue[int, []ArchiveEntry]
-	archivePosts    cachedValue[int, []ArchiveEntry]
-	now             func() time.Time
+	site             *Site
+	settings         *Settings
+	access           *Access
+	accounts         user.AccountRepository
+	administration   user.AdministrationRepository
+	mail             *messaging.MailClient
+	app              *server.ApplicationServer
+	auth             *auth.AuthManager
+	posts            repository
+	pageStore        pageRepository
+	searchStore      publicSearchRepository
+	tags             tagRepository
+	profileStore     profileRepository
+	profile          *ProfileState
+	images           imageStore
+	downloads        downloadStore
+	downloadUploadMu sync.Mutex
+	media            mediaStore
+	mediaReferences  mediaReferenceRepository
+	mediaMetadata    mediaMetadataRepository
+	mediaAccess      mediaAccessRepository
+	history          revisionRepository
+	localAssets      *os.Root
+	close            func() error
+	views            map[string]*content.View
+	feed             feedCache
+	recentPosts      cachedValue[int, []ArchiveEntry]
+	archivePosts     cachedValue[int, []ArchiveEntry]
+	now              func() time.Time
 
-	// mediaMu prevents cleanup from racing with uploads or saves of image references.
+	// mediaMu prevents cleanup from racing with uploads or saves of media references.
 	mediaMu sync.RWMutex
 	// imageProcessing bounds decode/resize memory to one upload per application.
 	imageProcessing chan struct{}
@@ -216,16 +218,20 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 		return fmt.Errorf("open blog storage: %w", err)
 	}
 	var images *fileImageStore
+	var downloads *fileDownloadStore
 	var assets *os.Root
 	closeResources := func() error {
-		var assetError, imageError error
+		var assetError, imageError, downloadError error
+		if downloads != nil {
+			downloadError = downloads.root.Close()
+		}
 		if assets != nil {
 			assetError = assets.Close()
 		}
 		if images != nil {
 			imageError = images.Close()
 		}
-		return errors.Join(assetError, imageError, closeStore())
+		return errors.Join(assetError, imageError, downloadError, closeStore())
 	}
 	defer func() {
 		if err != nil {
@@ -276,13 +282,18 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	}
 	m.posts, m.images = store, images
 	m.imageProcessing = make(chan struct{}, 1)
-	m.media, m.mediaReferences = images, store
+	downloads, err = openDownloadStore(images.root)
+	if err != nil {
+		return fmt.Errorf("open blog downloads: %w", err)
+	}
+	m.downloads = downloads
+	m.media, m.mediaReferences = downloadMedia{images, downloads}, store
 	m.mediaMetadata = store
 	m.pageStore = store
 	m.searchStore = store
 	m.tags = store
 	m.profileStore = store
-	m.imageAccess = store
+	m.mediaAccess = store
 	m.history = store
 	if m.profile == nil {
 		m.profile = &ProfileState{}

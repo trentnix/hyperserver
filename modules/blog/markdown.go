@@ -21,8 +21,8 @@ const maxMarkdownBytes = 256 * 1024
 func markdown(source string) (template.HTML, error) {
 	var out bytes.Buffer
 	engine := goldmark.New(
-		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(albumTransformer{}, 100))),
-		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100))),
+		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(albumTransformer{}, 100), util.Prioritized(componentsTransformer{}, 110))),
+		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100), util.Prioritized(downloadsRenderer{}, 110))),
 	)
 	if err := engine.Convert([]byte(source), &out); err != nil {
 		return "", err

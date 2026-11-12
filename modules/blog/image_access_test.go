@@ -177,7 +177,7 @@ func TestImageReferenceParsing(t *testing.T) {
 		{"![Image](https:/images/a.png)", "/", ""},
 		{"![Image](http:///images/a.png)", "/", ""},
 	} {
-		refs, err := imageReferences(tc.source, tc.path, "")
+		refs, err := contentMediaReferences(tc.source, tc.path, "")
 		if err != nil || (tc.want == "" && len(refs) != 0) || (tc.want != "" && !slices.Equal(refs, []string{tc.want})) {
 			t.Errorf("%q: refs=%v error=%v, want %q", tc.source, refs, err, tc.want)
 		}
@@ -326,7 +326,7 @@ func TestAuthorImageHistoryBoundaries(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, author := range []string{"owner", "other", ""} {
-				got, err := store.ImageInAuthorsPosts(t.Context(), author, "/images/saved.png")
+				got, err := store.MediaInAuthorsPosts(t.Context(), author, "/images/saved.png")
 				if err != nil || got != (tc.allowed && author == "owner") {
 					t.Fatalf("author %q: allowed=%t, error=%v", author, got, err)
 				}
@@ -338,23 +338,23 @@ func TestAuthorImageHistoryBoundaries(t *testing.T) {
 			if err := store.DeleteRevision(t.Context(), "post", p.ID, revisions[len(revisions)-1].ID); err != nil {
 				t.Fatal(err)
 			}
-			if got, err := store.ImageInAuthorsPosts(t.Context(), "owner", "/images/saved.png"); err != nil || got {
+			if got, err := store.MediaInAuthorsPosts(t.Context(), "owner", "/images/saved.png"); err != nil || got {
 				t.Fatalf("deleted revision still grants access: %t %v", got, err)
 			}
 		})
 	}
 }
 
-type failedImageAccess struct{ imageAccessRepository }
+type failedImageAccess struct{ mediaAccessRepository }
 
-func (failedImageAccess) ImageIsPublic(context.Context, ...string) (bool, error) {
+func (failedImageAccess) MediaIsPublic(context.Context, ...string) (bool, error) {
 	return false, errors.New("private visibility lookup failure")
 }
 
 // TestImageAccessFailure fails closed without revealing storage details or validators.
 func TestImageAccessFailure(t *testing.T) {
 	h := newHarness(t)
-	h.blog.imageAccess = failedImageAccess{}
+	h.blog.mediaAccess = failedImageAccess{}
 	w := h.request("GET", "/images/"+strings.Repeat("a", 64)+".png", nil, false)
 	requireStatus(t, w, http.StatusInternalServerError)
 	if w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("ETag") != "" || strings.Contains(w.Body.String(), "private visibility") {
@@ -403,7 +403,7 @@ func TestImageReferenceTransactions(t *testing.T) {
 				t.Fatal("failed index update changed content", source, err)
 			}
 			for _, ref := range []string{"original", "replacement"} {
-				public, err := store.ImageIsPublic(t.Context(), "/images/"+ref+".png")
+				public, err := store.MediaIsPublic(t.Context(), "/images/"+ref+".png")
 				if err != nil || public != (ref == "original") {
 					t.Fatal("failed update changed access", ref, public, err)
 				}

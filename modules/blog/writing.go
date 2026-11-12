@@ -85,7 +85,7 @@ func (m *module) persistPost(ctx context.Context, p Post) (Post, error) {
 	defer m.mediaMu.RUnlock()
 	base := p.Slug
 	for suffix := 2; ; suffix++ {
-		refs, err := m.writingImages(ctx, p.Markdown, "/post/s/"+p.Slug, p.PreviewImage)
+		refs, err := m.writingMedia(ctx, p.Markdown, "/post/s/"+p.Slug, p.PreviewImage)
 		if err != nil {
 			return p, err
 		}
@@ -131,7 +131,7 @@ func (m *module) persistPage(ctx context.Context, p Page) (Page, error) {
 	defer m.mediaMu.RUnlock()
 	base := p.Slug
 	for suffix := 2; ; suffix++ {
-		refs, err := m.writingImages(ctx, p.Markdown, p.URL(), p.PreviewImage)
+		refs, err := m.writingMedia(ctx, p.Markdown, p.URL(), p.PreviewImage)
 		if err != nil {
 			return p, err
 		}
@@ -144,9 +144,9 @@ func (m *module) persistPage(ctx context.Context, p Page) (Page, error) {
 	}
 }
 
-// writingImages derives references once for validation and persistence.
+// writingMedia derives references once for validation and persistence.
 // Callers hold mediaMu until the content and its references have been saved.
-func (m *module) writingImages(ctx context.Context, source, path, preview string) ([]string, error) {
+func (m *module) writingMedia(ctx context.Context, source, path, preview string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -160,7 +160,28 @@ func (m *module) writingImages(ctx context.Context, source, path, preview string
 		}
 		image.Content.Close()
 	}
-	refs, err := imageReferences(source, path, preview)
+	_, components, err := splitPostComponents(source)
+	if err != nil {
+		return nil, writingFieldError{err, "content"}
+	}
+	for _, entry := range components.Downloads() {
+		file, err := m.downloads.Open(ctx, entry.ID)
+		if errors.Is(err, errNotFound) {
+			return nil, writingFieldError{errMissingMedia, "downloads"}
+		}
+		if err != nil {
+			return nil, err
+		}
+		info, err := file.Stat()
+		file.Close()
+		if err != nil {
+			return nil, err
+		}
+		if info.Size() != entry.Size {
+			return nil, writingFieldError{contentError("The file details are out of date. Remove the file and choose it again."), "downloads"}
+		}
+	}
+	refs, err := contentMediaReferences(source, path, preview)
 	if err != nil {
 		return nil, err
 	}
@@ -174,22 +195,22 @@ func (m *module) writingImages(ctx context.Context, source, path, preview string
 		}
 		if permission == rolePoster {
 			for _, ref := range refs {
-				id := referencedImageID(ref)
-				if id == "" || !slices.Contains(m.imageLookupReferences(id), ref) {
+				id := referencedMediaID(ref)
+				if id == "" || !slices.Contains(m.mediaLookupReferences(id), ref) {
 					continue
 				}
-				allowed, err := m.publicImage(ctx, id)
+				allowed, err := m.publicMedia(ctx, id)
 				if err != nil {
 					return nil, err
 				}
 				if !allowed {
-					allowed, err = m.privateImageForWriter(ctx, id, account.ID)
+					allowed, err = m.privateMediaForWriter(ctx, id, account.ID)
 				}
 				if err != nil {
 					return nil, err
 				}
 				if !allowed {
-					return nil, writingFieldError{contentError("Choose an image you uploaded, already used in your posts, or in public content."), "content"}
+					return nil, writingFieldError{contentError("Choose media you uploaded, already used in your posts, or in public content."), "content"}
 				}
 			}
 		}
