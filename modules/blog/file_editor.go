@@ -9,9 +9,9 @@ type fileEditor struct {
 func (p editorPage) DownloadsEditor() fileEditor {
 	return fileEditor{
 		Kind: "file-downloads", Field: "downloads", Name: "File downloads", Source: p.DownloadsJSON(),
-		Accept: ".pdf,.zip,.txt", MaxFiles: maxPostDownloads,
+		Accept: ".pdf,.zip,.txt,.mp3", MaxFiles: maxPostDownloads,
 		Help:   "Offer files below your post. Save with your post.",
-		Limits: "Up to 20 files per post. PDF, ZIP, or UTF-8 text, up to 32 MiB per file. File storage: 1 GiB per site.",
+		Limits: "Up to 20 files per post. PDF, ZIP, UTF-8 text, or MP3, up to 32 MiB per file. File storage: 1 GiB per site.",
 	}
 }
 

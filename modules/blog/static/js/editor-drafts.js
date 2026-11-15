@@ -97,7 +97,7 @@ import {componentValue} from './post-components.js';
         }
         if (typeof data.baseline !== 'string' || !data.fields || !state.fields.every(field =>
           field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' :
-            (['previewImage', 'published', 'publishDate', 'publishTime', 'tags', 'downloads', 'pdf', 'link', 'video', 'componentOrder'].includes(field.name) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
+            (['previewImage', 'published', 'publishDate', 'publishTime', 'tags', 'downloads', 'pdf', 'link', 'video', 'audio', 'componentOrder'].includes(field.name) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
         copies.push({key, raw, data});
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);
@@ -173,6 +173,7 @@ import {componentValue} from './post-components.js';
         form.elements.downloads?.dispatchEvent(new Event('change', {bubbles: true}));
         form.elements.pdf?.dispatchEvent(new Event('change', {bubbles: true}));
         form.elements.link?.dispatchEvent(new Event('change', {bubbles: true}));
+        form.elements.audio?.dispatchEvent(new Event('change', {bubbles: true}));
         form.elements.video?.dispatchEvent(new Event('change', {bubbles: true}));
         form.elements.componentOrder?.dispatchEvent(new Event('change', {bubbles: true}));
         form.querySelectorAll('[data-image-value]').forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));

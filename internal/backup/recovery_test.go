@@ -73,6 +73,10 @@ func recoveryApp(t *testing.T, cfg config.Config) (*application.Application, fun
 // TestApplicationRecovery exercises accounts, sessions, published and draft writing,
 // revision history, profile content, media tags, and image visibility after restoration.
 func TestApplicationRecovery(t *testing.T) {
+	audioBytes, err := os.ReadFile("../../modules/blog/testdata/audio.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := fixture(t)
 	// The archive unit fixture uses arbitrary bytes. The running application
 	// needs real image bundles, which this test creates through its upload route.
@@ -168,9 +172,31 @@ func TestApplicationRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	var audioBody bytes.Buffer
+	audioForm := multipart.NewWriter(&audioBody)
+	audioPart, err := audioForm.CreateFormFile("file", "recovery.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	audioPart.Write(audioBytes)
+	audioForm.Close()
+	audioResponse := request("POST", "/post/files/upload", &audioBody, audioForm.FormDataContentType(), http.StatusOK)
+	var audio struct {
+		ID   string `json:"id"`
+		Size int64  `json:"size"`
+	}
+	if err := json.Unmarshal(audioResponse.Body.Bytes(), &audio); err != nil {
+		t.Fatal(err)
+	}
+	audioJSON, err := json.Marshal(map[string]any{"id": audio.ID, "size": audio.Size, "transcript": "Recovered transcript", "hideDownload": true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	publicImage, privateImage := upload(100), upload(200)
 	public := url.Values{"title": {"Original title"}, "slug": {"recovered"}, "content": {"Public body ![Image](" + publicImage + ")"}, "tags": {"Original tag"}, "published": {"on"}}
 	public.Set("downloads", string(attachmentJSON))
+	public.Set("audio", string(audioJSON))
 	form("/post", public)
 	page := get("/post/s/recovered")
 	match := regexp.MustCompile(`/post/update/([a-zA-Z0-9]+)`).FindStringSubmatch(page)
@@ -241,6 +267,9 @@ func TestApplicationRecovery(t *testing.T) {
 	get(privateImage)
 	cookies = make(map[string]*http.Cookie)
 	get(publicImage)
+	if !bytes.Equal([]byte(get("/files/"+audio.ID+"?preview=1")), audioBytes) || !strings.Contains(get("/post/s/recovered"), "Recovered transcript") {
+		t.Fatal("backup lost audio bytes or transcript")
+	}
 	if get("/files/"+attachment.ID) != "Recovered downloadable file" {
 		t.Fatal("backup lost attachment bytes")
 	}

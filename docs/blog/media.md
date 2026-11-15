@@ -2,7 +2,7 @@
 
 ## Upload and reuse
 
-Use **Media** to upload and browse images. For PDF, ZIP, and text attachments, see [file downloads](downloads.md). **Browse library** beside a preview/profile image and **Choose existing image** in the Markdown toolbar reuse an upload. Single-image choosers return to the editor when you select a card. Save to apply the selection.
+Use **Media** to upload and browse images. For PDF, ZIP, text, and MP3 attachments, see [file downloads](downloads.md). **Browse library** beside a preview/profile image and **Choose existing image** in the Markdown toolbar reuse an upload. Single-image choosers return to the editor when you select a card. Save to apply the selection.
 
 Media management and library browsing require Admin access. Posters can upload in their post editor and reuse public images or images in their own saved posts.
 

@@ -50,7 +50,7 @@ func (m *module) download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	id := r.PathValue("id")
 	preview := r.URL.Query().Get("preview") == "1"
-	if !validDownloadID(id) || preview && downloadType(id) != "application/pdf" {
+	if !validDownloadID(id) || preview && downloadType(id) != "application/pdf" && downloadType(id) != "audio/mpeg" {
 		m.storageError(w, r, errNotFound)
 		return
 	}
@@ -96,6 +96,8 @@ func (m *module) download(w http.ResponseWriter, r *http.Request) {
 	disposition := "attachment"
 	if preview {
 		disposition = "inline"
+	}
+	if preview && downloadType(id) == "application/pdf" {
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
 	}
@@ -172,7 +174,7 @@ func (m *module) storeDownload(r *http.Request, accountID string, permission rol
 	defer r.MultipartForm.RemoveAll()
 	files := r.MultipartForm.File["file"]
 	if len(files) != 1 || len(r.MultipartForm.File) != 1 || files[0].Size > maxDownloadBytes {
-		return postDownload{}, http.StatusUnprocessableEntity, contentError("Choose one PDF, ZIP, or text file of at most 32 MiB.")
+		return postDownload{}, http.StatusUnprocessableEntity, contentError("Choose one PDF, ZIP, text, or MP3 file of at most 32 MiB.")
 	}
 	file, err := files[0].Open()
 	if err != nil {
@@ -242,6 +244,9 @@ func (m *module) storeDownload(r *http.Request, accountID string, permission rol
 	}
 	if err := m.mediaMetadata.RecordMediaUpload(r.Context(), id, time.Now()); err != nil {
 		return failed(err)
+	}
+	if metadata.Filename != "" {
+		name = metadata.Filename
 	}
 	return postDownload{ID: id, Label: name, Size: size}, http.StatusOK, nil
 }

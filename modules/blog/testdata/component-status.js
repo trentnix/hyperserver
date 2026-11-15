@@ -25,12 +25,12 @@
       await open(paths.editor);
       let form = document.querySelector('#post-form');
       const sections = [...form.querySelectorAll('[data-post-component]')];
-      assert(sections.length === 5 && sections.every(section => !section.hidden) && dirty().length === 0, 'Saved components must start without unsaved indicators.');
+      assert(sections.length === 6 && sections.every(section => !section.hidden) && dirty().length === 0, 'Saved components must start without unsaved indicators.');
       set(form.elements.title, form.elements.title.value + ' edited');
       assert(dirty().length === 0, 'Post fields must not mark unchanged components unsaved.');
       set(form.elements.title, 'Component status');
       for (const section of sections) {
-        const input = section.querySelector('[data-album-caption], [data-downloads-list] input, [data-link-controls] input, #video-title');
+        const input = section.querySelector('[data-album-caption], [data-downloads-list] input, [data-link-controls] input, #video-title, #audio-title');
         const saved = input.value;
         set(input, saved + ' edited');
         assert(!badge(section).hidden && dirty().length === 1, 'Only the edited component should be marked: ' + section.dataset.postComponent);
@@ -42,11 +42,11 @@
         form.querySelector('[data-component-undo="' + section.dataset.postComponent + '"]').click();
         assert(dirty().length === 0, 'Undoing removal must restore the saved component and position.');
       }
-      for (const name of ['video', 'pdf']) {
+      for (const name of ['video', 'pdf', 'audio']) {
         const source = form.elements.namedItem(name);
         const saved = source.value;
         const invalid = JSON.parse(saved);
-        if (name === 'video') invalid.title = false;
+        if (name === 'video' || name === 'audio') invalid.title = false;
         else invalid[0].description = false;
         source.value = JSON.stringify(invalid);
         source.dispatchEvent(new Event('change', {bubbles: true}));

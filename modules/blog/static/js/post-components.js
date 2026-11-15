@@ -7,7 +7,7 @@ const editors = new WeakMap();
 export function componentValue(name, value) {
   if (name === 'album') return value.split(/\r?\n/).filter(line => line.trim()).join('\n');
   const optionalDefault = (key, value) =>
-    value === '' && ['title', 'caption', 'description', 'siteName', 'imageID'].includes(key) ||
+    value === '' && ['title', 'caption', 'description', 'transcript', 'siteName', 'imageID'].includes(key) ||
     value === false && ['hideImage', 'hideDownload'].includes(key);
   const normalize = value => {
     if (Array.isArray(value)) return value.map(normalize);
@@ -40,6 +40,30 @@ function createEditor(root) {
   const removed = new Map();
   let order = [];
   let baseline;
+
+  function updateError(section) {
+    const source = section.querySelector('textarea[name]');
+    let message = section.querySelector('[data-component-error]');
+    const invalid = source.getAttribute('aria-invalid') === 'true';
+    if (!message && invalid) {
+      message = document.createElement('p');
+      message.className = 'field-error';
+      message.dataset.componentError = '';
+      message.id = source.id + '-component-error';
+      section.querySelector('.album-editor-heading').after(message);
+    }
+    if (message) {
+      message.hidden = !invalid;
+      message.textContent = invalid ? document.getElementById(source.dataset.errorDescription)?.textContent.trim() || '' : '';
+      if (invalid) section.setAttribute('aria-describedby', message.id);
+      else section.removeAttribute('aria-describedby');
+    }
+    if (invalid) queueMicrotask(() => {
+      if (!section.isConnected || section.hidden || source.getAttribute('aria-invalid') !== 'true') return;
+      entries.get(section.dataset.postComponent)?.focus();
+      section.scrollIntoView({block: 'nearest'});
+    });
+  }
 
   function updateUnsaved() {
     if (baseline === undefined) return;
@@ -95,7 +119,7 @@ function createEditor(root) {
   }
 
   function updateRequired() {
-    const required = ![...sections.values()].some(section => section.querySelector('textarea[name]').value.trim());
+    const required = order.length === 0 && ![...sections.values()].some(section => section.querySelector('textarea[name]').value.trim());
     const content = form.elements.content;
     const editor = getMarkdownEditor(content);
     if (editor) editor.setRequired(required);
@@ -162,8 +186,15 @@ function createEditor(root) {
     updateUnsaved();
   });
   form.addEventListener('blog:uploads-finished', render);
+  form.addEventListener('blog:field-validation', event => {
+    const section = event.target.closest('[data-post-component]');
+    if (section && event.target.matches('textarea[name]')) updateError(section);
+  });
   sync();
-  return {register(type, callbacks) { entries.set(type, callbacks); }};
+  return {register(type, callbacks) {
+    entries.set(type, callbacks);
+    updateError(sections.get(type));
+  }};
 }
 
 function dismissPickers(event) {

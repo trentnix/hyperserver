@@ -36,7 +36,7 @@ func markMissingMedia(rendered template.HTML, missing map[string]bool) (template
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
 			deleted := false
-			if token.Data == "img" || token.Data == "a" {
+			if token.Data == "img" || token.Data == "a" || token.Data == "audio" {
 				for _, attr := range token.Attr {
 					if (attr.Key == "src" || attr.Key == "href") && missing[mediaReferenceURL(attr.Val, "/")] {
 						deleted = true
@@ -46,6 +46,10 @@ func markMissingMedia(rendered template.HTML, missing map[string]bool) (template
 			if deleted {
 				if token.Data == "img" {
 					out.WriteString(`<span class="missing-image">Image deleted</span>`)
+				} else if token.Data == "audio" {
+					out.WriteString(`<p class="missing-image">Audio file deleted</p>`)
+					token.Attr = []html.Attribute{{Key: "hidden", Val: ""}}
+					out.WriteString(token.String())
 				} else {
 					for i, attr := range token.Attr {
 						if attr.Key == "href" {

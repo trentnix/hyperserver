@@ -75,7 +75,13 @@ function initialize(root) {
 
 for (const name of ['input', 'change']) {
   document.addEventListener(name, event => {
-    if (event.target.form && event.target.name) markField(event.target, false);
+    const control = event.target;
+    if (!control.form || !control.name) return;
+    markField(control, false);
+    for (const message of control.form.querySelectorAll('[data-error-fields]')) {
+      const fields = message.dataset.errorFields.split(' ');
+      if (fields.includes(control.name) && ![...control.form.elements].some(input => fields.includes(input.name) && input.hasAttribute('aria-invalid'))) message.remove();
+    }
   });
 }
 document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));

@@ -22,7 +22,7 @@ func markdown(source string) (template.HTML, error) {
 	var out bytes.Buffer
 	engine := goldmark.New(
 		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(albumTransformer{}, 100), util.Prioritized(componentsTransformer{}, 110))),
-		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100), util.Prioritized(downloadsRenderer{}, 110), util.Prioritized(pdfRenderer{}, 120), util.Prioritized(linkRenderer{}, 130), util.Prioritized(videoRenderer{}, 140))),
+		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100), util.Prioritized(downloadsRenderer{}, 110), util.Prioritized(pdfRenderer{}, 120), util.Prioritized(linkRenderer{}, 130), util.Prioritized(videoRenderer{}, 140), util.Prioritized(audioRenderer{}, 150))),
 	)
 	if err := engine.Convert([]byte(source), &out); err != nil {
 		return "", err
@@ -48,11 +48,14 @@ func markdownAt(source string, base *url.URL) (template.HTML, error) {
 			}
 			return "", tokens.Err()
 		case html.EndTagToken:
-			if tokens.Token().Data != "iframe" {
+			if tokens.Token().Data != "iframe" && tokens.Token().Data != "audio" {
 				out.Write(tokens.Raw())
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
+			if token.Data == "audio" {
+				continue // The audio fallback link works in feed readers without media controls.
+			}
 			if token.Data == "iframe" {
 				for _, attr := range token.Attr {
 					if attr.Key != "src" {

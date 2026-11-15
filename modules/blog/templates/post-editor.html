@@ -14,15 +14,16 @@
   {{ template "blog.markdownFields" .Data }}
   <div class="post-components" data-post-components>
   <input type="hidden" name="componentOrder" value="{{ .Data.ComponentOrderJSON }}">
-  {{ range .Data.EditorComponents }}{{ if eq . "photo-album" }}{{ template "blog.albumEditor" $ }}{{ else if eq . "file-downloads" }}{{ template "blog.fileEditor" $.Data.DownloadsEditor }}{{ else if eq . "pdf-preview" }}{{ template "blog.fileEditor" $.Data.PDFEditor }}{{ else if eq . "link-preview" }}{{ template "blog.linkEditor" $ }}{{ else if eq . "video" }}{{ template "blog.videoEditor" $ }}{{ end }}{{ end }}
+  {{ range .Data.EditorComponents }}{{ if eq . "photo-album" }}{{ template "blog.albumEditor" $ }}{{ else if eq . "file-downloads" }}{{ template "blog.fileEditor" $.Data.DownloadsEditor }}{{ else if eq . "pdf-preview" }}{{ template "blog.fileEditor" $.Data.PDFEditor }}{{ else if eq . "link-preview" }}{{ template "blog.linkEditor" $ }}{{ else if eq . "video" }}{{ template "blog.videoEditor" $ }}{{ else if eq . "audio" }}{{ template "blog.audioEditor" $ }}{{ end }}{{ end }}
   <details class="component-picker" data-component-picker hidden>
     <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add component</summary>
     <div class="component-picker-options">
       <button type="button" data-component-add="photo-album"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 16l5-5 4 4 3-3 4 4"/><circle cx="15.5" cy="8.5" r="1"/></svg><span><strong>Photo album</strong><small>A grid of photos with captions</small></span></button>
-      <button type="button" data-component-add="file-downloads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M12 11v7m-3-3 3 3 3-3"/></svg><span><strong>File downloads</strong><small>PDFs, ZIP archives, and text files</small></span></button>
+      <button type="button" data-component-add="file-downloads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M12 11v7m-3-3 3 3 3-3"/></svg><span><strong>File downloads</strong><small>PDFs, ZIP archives, text files, and MP3s</small></span></button>
       <button type="button" data-component-add="pdf-preview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6"/></svg><span><strong>PDF preview</strong><small>A document readers can view in the post</small></span></button>
       <button type="button" data-component-add="link-preview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 14 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg><span><strong>Link preview</strong><small>A card with a title, description, and image</small></span></button>
       <button type="button" data-component-add="video"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span><strong>Video</strong><small>A YouTube or Vimeo player</small></span></button>
+      <button type="button" data-component-add="audio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13M9 9l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/></svg><span><strong>Audio</strong><small>An MP3 player with an optional transcript</small></span></button>
     </div>
   </details>
   <div class="album-removal-recovery" data-component-recovery="photo-album" role="status" hidden>Photo album removed.<button type="button" class="text-button" data-component-undo="photo-album">Undo</button></div>
@@ -30,6 +31,7 @@
   <div class="album-removal-recovery" data-component-recovery="pdf-preview" role="status" hidden>PDF preview removed.<button type="button" class="text-button" data-component-undo="pdf-preview">Undo</button></div>
   <div class="album-removal-recovery" data-component-recovery="link-preview" role="status" hidden>Link preview removed.<button type="button" class="text-button" data-component-undo="link-preview">Undo</button></div>
   <div class="album-removal-recovery" data-component-recovery="video" role="status" hidden>Video removed.<button type="button" class="text-button" data-component-undo="video">Undo</button></div>
+  <div class="album-removal-recovery" data-component-recovery="audio" role="status" hidden>Audio removed.<button type="button" class="text-button" data-component-undo="audio">Undo</button></div>
   </div>
   <div class="publication-options" role="radiogroup" aria-label="Publication">
     <label><input type="radio" name="published" value=""{{ if eq .Data.Publication "" }} checked{{ end }}><span>Draft</span></label>

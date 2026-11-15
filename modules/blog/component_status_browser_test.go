@@ -25,7 +25,9 @@ func TestBrowserComponentStatus(t *testing.T) {
 					photo := mediaUpload(t, h.blog, "Saved photo")
 					file := testDownload(t, h, "saved.txt", "Saved download")
 					pdf := testPDF(t, h)
+					audio := testAudio(t, h)
 					fields := url.Values{
+						"audio": {audioJSON(t, audio)},
 						"title": {"Component status"}, "slug": {"component-status"}, "content": {"Body"},
 						"album": {"![Saved caption](/images/" + photo.ID + ")"}, "downloads": {downloadSource(t, file)}, "pdf": {downloadSource(t, pdf)},
 						"link":  {linkSource(t, postLink{URL: "https://example.com/", Title: "Saved link"})},

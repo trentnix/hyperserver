@@ -31,9 +31,10 @@ type postComponent struct {
 	Files  []postDownload `json:"files,omitempty"`
 	Link   *postLink      `json:"link,omitempty"`
 	Video  *postVideo     `json:"video,omitempty"`
+	Audio  *postAudio     `json:"audio,omitempty"`
 }
 
-var componentTypes = [...]string{"photo-album", "file-downloads", "pdf-preview", "link-preview", "video"}
+var componentTypes = [...]string{"photo-album", "file-downloads", "pdf-preview", "link-preview", "video", "audio"}
 
 func (p postComponents) Album() []albumPhoto {
 	for _, component := range p.Components {
@@ -173,14 +174,14 @@ func parseComponents(source string) (postComponents, error) {
 		seen[component.Type] = true
 		switch component.Type {
 		case "photo-album":
-			if component.Link != nil || component.Video != nil || len(component.Files) > 0 || len(component.Photos) == 0 {
+			if component.Audio != nil || component.Link != nil || component.Video != nil || len(component.Files) > 0 || len(component.Photos) == 0 {
 				return result, unsupported
 			}
 			if err := validateComponentAlbum(component.Photos); err != nil {
 				return result, err
 			}
 		case "file-downloads", "pdf-preview":
-			if component.Link != nil || component.Video != nil || len(component.Photos) > 0 || len(component.Files) == 0 {
+			if component.Audio != nil || component.Link != nil || component.Video != nil || len(component.Photos) > 0 || len(component.Files) == 0 {
 				return result, unsupported
 			}
 			if err := validateDownloads(component.Files); err != nil {
@@ -192,17 +193,24 @@ func parseComponents(source string) (postComponents, error) {
 				}
 			}
 		case "link-preview":
-			if component.Link == nil || component.Video != nil || len(component.Photos) > 0 || len(component.Files) > 0 {
+			if component.Audio != nil || component.Link == nil || component.Video != nil || len(component.Photos) > 0 || len(component.Files) > 0 {
 				return result, unsupported
 			}
 			if err := validateLink(component.Link); err != nil {
 				return result, err
 			}
 		case "video":
-			if component.Video == nil || component.Link != nil || len(component.Photos) > 0 || len(component.Files) > 0 {
+			if component.Audio != nil || component.Video == nil || component.Link != nil || len(component.Photos) > 0 || len(component.Files) > 0 {
 				return result, unsupported
 			}
 			if err := validateVideo(component.Video); err != nil {
+				return result, err
+			}
+		case "audio":
+			if component.Audio == nil || component.Video != nil || component.Link != nil || len(component.Photos) > 0 || len(component.Files) > 0 {
+				return result, unsupported
+			}
+			if err := validateAudio(component.Audio); err != nil {
 				return result, err
 			}
 		default:
@@ -280,7 +288,7 @@ func splitPostComponents(source string) (string, postComponents, error) {
 }
 
 type componentInput struct {
-	Album, Downloads, Order, PDF, Link, Video string
+	Album, Downloads, Order, PDF, Link, Video, Audio string
 }
 
 func joinPostComponents(body string, input componentInput) (string, error) {
@@ -312,11 +320,34 @@ func joinPostComponents(body string, input componentInput) (string, error) {
 	if err != nil {
 		return body, writingFieldError{err, "video"}
 	}
+	audio, err := parseAudio(input.Audio)
+	if err != nil {
+		return body, writingFieldError{err, "audio"}
+	}
 	order, err := parseComponentOrder(input.Order)
 	if err != nil {
 		return body, writingFieldError{err, "componentOrder"}
 	}
-	if len(entries) == 0 && len(pdf) == 0 && link == nil && video == nil {
+	// The submitted order also records added components with no content yet.
+	// Reject those before applying defaults for older forms that omit the order.
+	selected := map[string]struct {
+		present bool
+		field   string
+		message string
+	}{
+		"photo-album":    {len(photos) > 0, "album", "Add at least one photo or remove the photo album."},
+		"file-downloads": {len(entries) > 0, "downloads", "Add at least one file or remove the file downloads component."},
+		"pdf-preview":    {len(pdf) > 0, "pdf", "Choose a PDF or remove the PDF preview."},
+		"link-preview":   {link != nil, "link", "Enter a link or remove the link preview."},
+		"video":          {video != nil, "video", "Enter a video URL or remove the video component."},
+		"audio":          {audio != nil, "audio", "Choose an MP3 or remove the audio component."},
+	}
+	for _, kind := range order {
+		if component := selected[kind]; !component.present {
+			return body, writingFieldError{contentError(component.message), component.field}
+		}
+	}
+	if len(entries) == 0 && len(pdf) == 0 && link == nil && video == nil && audio == nil {
 		return joinPostAlbum(body, input.Album)
 	}
 	// Missing fields from older or ordinary forms retain the original default
@@ -347,6 +378,9 @@ func joinPostComponents(body string, input componentInput) (string, error) {
 		if kind == "video" && video != nil {
 			components.Components = append(components.Components, postComponent{Type: kind, Video: video})
 		}
+		if kind == "audio" && audio != nil {
+			components.Components = append(components.Components, postComponent{Type: kind, Audio: audio})
+		}
 	}
 	data, err := json.Marshal(components)
 	if err != nil {
@@ -366,7 +400,7 @@ func (p editorPage) DownloadsJSON() string { return p.fileSource("file-downloads
 func (p editorPage) componentFields() map[string]string {
 	return map[string]string{
 		"album": p.AlbumMarkdown(), "downloads": p.DownloadsJSON(), "pdf": p.PDFJSON(),
-		"link": p.LinkJSON(), "video": p.VideoJSON(), "componentOrder": p.ComponentOrderJSON(),
+		"link": p.LinkJSON(), "video": p.VideoJSON(), "audio": p.AudioJSON(), "componentOrder": p.ComponentOrderJSON(),
 	}
 }
 
@@ -428,6 +462,9 @@ func searchableWriting(source string) string {
 		if video := component.Video; video != nil {
 			text.WriteString("\n" + video.Title + "\n" + video.Caption)
 		}
+		if audio := component.Audio; audio != nil {
+			text.WriteString("\n" + audio.Title + "\n" + audio.Description + "\n" + audio.Transcript)
+		}
 		for _, file := range component.Files {
 			text.WriteString("\n" + file.Label + "\n" + file.Description)
 		}
@@ -468,6 +505,8 @@ func (componentsTransformer) Transform(document *ast.Document, reader text.Reade
 			document.InsertBefore(document, block, &linkNode{Link: *component.Link})
 		case "video":
 			document.InsertBefore(document, block, &videoNode{Video: *component.Video})
+		case "audio":
+			document.InsertBefore(document, block, &audioNode{Audio: *component.Audio})
 		}
 	}
 	document.RemoveChild(document, block)

@@ -33,6 +33,7 @@ type editorPage struct {
 	PDFInput                   *string
 	LinkInput                  *string
 	VideoInput                 *string
+	AudioInput                 *string
 	ComponentOrderInput        *string
 	NoLibrary                  bool
 	Error                      string
@@ -184,7 +185,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		p.Version = version
 	}
 	var componentError error
-	p.Markdown, componentError = joinPostComponents(p.Markdown, componentInput{Album: r.PostForm.Get("album"), Downloads: r.PostForm.Get("downloads"), Order: r.PostForm.Get("componentOrder"), PDF: r.PostForm.Get("pdf"), Link: r.PostForm.Get("link"), Video: r.PostForm.Get("video")})
+	p.Markdown, componentError = joinPostComponents(p.Markdown, componentInput{Album: r.PostForm.Get("album"), Downloads: r.PostForm.Get("downloads"), Order: r.PostForm.Get("componentOrder"), PDF: r.PostForm.Get("pdf"), Link: r.PostForm.Get("link"), Video: r.PostForm.Get("video"), Audio: r.PostForm.Get("audio")})
 	if componentError != nil {
 		fields := validationFields(componentError)
 		if len(fields) == 0 {
@@ -258,6 +259,10 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	if r.PostForm.Has("link") {
 		link := r.PostForm.Get("link")
 		data.LinkInput = &link
+	}
+	if r.PostForm.Has("audio") {
+		audio := r.PostForm.Get("audio")
+		data.AudioInput = &audio
 	}
 	if r.PostForm.Has("video") {
 		video := r.PostForm.Get("video")

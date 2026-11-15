@@ -9,10 +9,10 @@ A post can contain downloads, a photo album, or a [PDF preview](pdf.md) without 
 ## Limits
 
 - Up to 20 downloads per post.
-- PDF, ZIP, or UTF-8 text files with `.pdf`, `.zip`, or `.txt` extensions.
+- PDF, ZIP, UTF-8 text, or MP3 files with `.pdf`, `.zip`, `.txt`, or `.mp3` extensions.
 - Up to 32 MiB per file and 1 GiB of stored download files per site. Images have separate limits.
 
-The server checks PDF signatures and trailers, ZIP directory structure, and text encoding. It ignores the submitted MIME type and never extracts archives. These checks do not scan files for malware. Downloads are served as attachments with `nosniff`. PDF previews have a separate inline viewing option.
+The server checks PDF signatures and trailers, ZIP directory structure, text encoding, and MP3 frame headers. It ignores the submitted MIME type and never extracts archives. These checks do not scan files for malware. Downloads are served as attachments with `nosniff`. PDF previews and [audio components](audio.md) have separate inline viewing options.
 
 Each editor queues uploads and blocks Save until the batch finishes. Failed uploads identify files that were not added. Successful uploads and unsaved edits remain available. Retry attempts only files that were not added. Browser recovery retains selected files, names, descriptions, and order.
 

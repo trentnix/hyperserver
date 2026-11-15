@@ -46,6 +46,8 @@ func openDownloadStore(uploads *os.Root) (*fileDownloadStore, error) {
 
 func downloadType(id string) string {
 	switch filepath.Ext(id) {
+	case ".mp3":
+		return "audio/mpeg"
 	case ".pdf":
 		return "application/pdf"
 	case ".zip":
@@ -58,7 +60,7 @@ func downloadType(id string) string {
 
 func validDownloadID(id string) bool {
 	digest, extension, ok := strings.Cut(id, ".")
-	if !ok || len(digest) != 64 || (extension != "pdf" && extension != "zip" && extension != "txt") {
+	if !ok || len(digest) != 64 || (extension != "pdf" && extension != "zip" && extension != "txt" && extension != "mp3") {
 		return false
 	}
 	_, err := hex.DecodeString(digest)
@@ -66,7 +68,7 @@ func validDownloadID(id string) bool {
 }
 
 // validateDownload checks file signatures and structure, never the submitted MIME
-// type. ZIP entries are not extracted. Only PDFs have an inline preview option.
+// type. ZIP entries are not extracted. MP3 checks do not decode the recording.
 func validateDownload(data []byte, filename string) (string, error) {
 	if len(data) > maxDownloadBytes {
 		return "", contentError("Choose a file of at most 32 MiB.")
@@ -74,6 +76,8 @@ func validateDownload(data []byte, filename string) (string, error) {
 	extension := strings.ToLower(filepath.Ext(filename))
 	valid := false
 	switch extension {
+	case ".mp3":
+		valid = validMP3(data)
 	case ".pdf":
 		valid = len(data) >= 9 && bytes.HasPrefix(data, []byte("%PDF-")) &&
 			(data[5] == '1' || data[5] == '2') && data[6] == '.' && data[7] >= '0' && data[7] <= '9' &&
@@ -91,7 +95,7 @@ func validateDownload(data []byte, filename string) (string, error) {
 		}
 	}
 	if !valid {
-		return "", contentError("Choose a valid PDF, ZIP, or UTF-8 text file with a .pdf, .zip, or .txt extension.")
+		return "", contentError("Choose a valid PDF, ZIP, UTF-8 text, or MP3 file with a .pdf, .zip, .txt, or .mp3 extension.")
 	}
 	return extension, nil
 }

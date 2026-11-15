@@ -110,7 +110,7 @@ func contentMediaReferences(source, contentPath, preview string) ([]string, erro
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
 			for _, attr := range token.Attr {
-				if (token.Data == "img" && attr.Key == "src") || (token.Data == "a" && attr.Key == "href") {
+				if ((token.Data == "img" || token.Data == "audio") && attr.Key == "src") || (token.Data == "a" && attr.Key == "href") {
 					if ref := mediaReferenceURL(attr.Val, contentPath); ref != "" {
 						refs[ref] = true
 					}

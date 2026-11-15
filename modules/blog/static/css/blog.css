@@ -626,8 +626,8 @@ dialog { color: inherit; border: 1px solid #d4d7df; border-radius: 6px; padding:
 dialog::backdrop { background: rgb(20 25 35 / 55%); }
 
 /* A shared surface groups each reader component with its heading. */
-:is(.photo-album, .file-downloads, .pdf-preview, .link-preview, .video-component) { margin-block: 32px; padding: 20px 20px 24px; border-radius: 20px; background: #f4f6f9; }
-:is(.photo-album, .file-downloads, .pdf-preview, .link-preview, .video-component) > h2 { margin: 0 0 16px; padding-inline: 4px; color: #43536a; font-size: .9em; font-weight: 650; letter-spacing: .015em; line-height: 1.4; }
+:is(.photo-album, .file-downloads, .pdf-preview, .link-preview, .video-component, .audio-component) { margin-block: 32px; padding: 20px 20px 24px; border-radius: 20px; background: #f4f6f9; }
+:is(.photo-album, .file-downloads, .pdf-preview, .link-preview, .video-component, .audio-component) > h2 { margin: 0 0 16px; padding-inline: 4px; color: #43536a; font-size: .9em; font-weight: 650; letter-spacing: .015em; line-height: 1.4; }
 .photo-album { container-type: inline-size; }
 .photo-album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 20px; }
 .photo-album-grid a { display: block; min-width: 0; overflow: hidden; border: 1px solid #dce1e7; border-radius: 8px; background: var(--surface); color: inherit; text-decoration: none; }
@@ -637,8 +637,8 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .post-body .photo-album-grid img, .photo-album-grid img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; padding: 0; margin: 0; object-fit: cover; }
 .photo-album-grid figcaption { margin: 0; padding: 12px 14px; border-top: 1px solid #dce1e7; font-size: .9em; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 767px) {
-  :is(.photo-album, .file-downloads, .pdf-preview, .link-preview, .video-component) { margin-inline: -12px; padding: 12px 12px 20px; border-radius: 16px; }
-  :is(.photo-album, .file-downloads, .pdf-preview, .link-preview, .video-component) > h2 { margin-block: 4px 14px; }
+  :is(.photo-album, .file-downloads, .pdf-preview, .link-preview, .video-component, .audio-component) { margin-inline: -12px; padding: 12px 12px 20px; border-radius: 16px; }
+  :is(.photo-album, .file-downloads, .pdf-preview, .link-preview, .video-component, .audio-component) > h2 { margin-block: 4px 14px; }
   .photo-album-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .photo-album-grid > a:only-child { grid-column: 1 / -1; }
   .photo-album-grid figcaption { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 8px 10px; padding: 0; border: 0; }
@@ -690,8 +690,8 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .download-fields label { margin: 0 0 10px; color: var(--muted); font-size: 13px; font-weight: 400; }
 .download-fields input, .download-fields textarea { display: block; width: 100%; margin: 4px 0 0; padding: 8px 10px; font-size: 16px; }
 .download-fields textarea { min-height: 44px; resize: vertical; }
-.download-fields .pdf-download-option { display: flex; align-items: center; gap: 8px; min-height: 44px; color: #43536a; font-size: 14px; cursor: pointer; }
-.download-fields .pdf-download-option input { flex: none; width: 18px; height: 18px; margin: 0; padding: 0; accent-color: #43536a; }
+.file-download-option { display: flex; align-items: center; gap: 8px; min-height: 44px; color: #43536a; font-size: 14px; font-weight: 400; cursor: pointer; }
+.file-download-option input { flex: none; width: 18px; height: 18px; margin: 0; padding: 0; accent-color: #43536a; }
 .download-actions { display: flex; flex-wrap: wrap; gap: 8px; max-width: 148px; }
 .download-actions button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 1px solid #c4cfdd; border-radius: 50%; background: #edf2f8; color: #354c6a; font-size: 22px; text-decoration: none; }
 .download-actions button:hover:not(:disabled) { border-color: #9aadc5; background: #dce6f2; }
@@ -701,10 +701,10 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .pdf-document-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 20px; }
 .pdf-document-meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 14px; }
 .pdf-document-meta a { display: inline-flex; align-items: center; min-height: 44px; color: #405b78; text-decoration: underline; text-underline-offset: .18em; }
-.pdf-editor .download-fields > label:not(.pdf-download-option) { margin: 18px 0 6px; color: inherit; font-size: inherit; font-weight: 600; }
+.pdf-editor .download-fields > label:not(.file-download-option) { margin: 18px 0 6px; color: inherit; font-size: inherit; font-weight: 600; }
 .pdf-editor .download-fields > label:first-child { margin-top: 0; }
 .pdf-editor .download-fields input:not([type=checkbox]), .pdf-editor .download-fields textarea { margin: 6px 0 0; padding: 10px 12px; font-size: inherit; font-weight: 400; }
-.pdf-editor .pdf-download-option { margin: 12px 0 0; }
+.pdf-editor .file-download-option { margin: 12px 0 0; }
 .download-library { width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; border: 1px solid #dce1e7; border-radius: 16px; background: #fff; color: #303946; }
 .download-library::backdrop { background: #111d30a6; }
 .download-library h2 { margin: 0 0 20px; }
@@ -1041,3 +1041,30 @@ html:has(.album-viewer[open]) { overflow: hidden; scrollbar-gutter: stable; }
   .video-editor [data-video-fetch] { justify-self: start; margin-top: 24px; }
   .video-details { margin-top: 12px; }
 }
+
+/* Audio keeps native controls and the same flat component surface. */
+.audio-component audio:not([hidden]), .audio-editor audio { display: block; width: 100%; min-width: 0; max-width: 100%; height: 54px; }
+.audio-title { margin: 0 4px 12px; font-size: 1.1em; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.audio-description { margin: 0 4px 16px; color: #596573; font-size: .9em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.audio-download { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 44px; margin: 8px 4px 0; color: #405b78; font-size: 14px; font-weight: 600; text-underline-offset: 3px; }
+.audio-download span { font-weight: 400; }
+.audio-transcript { margin: 12px 4px 0; }
+.audio-transcript summary { display: list-item; width: fit-content; min-height: 44px; padding-block: 10px; color: #405b78; font-size: 14px; font-weight: 600; cursor: pointer; }
+.audio-transcript > div { padding-top: 4px; overflow-wrap: anywhere; }
+.audio-transcript > div > :first-child { margin-top: 0; }
+.audio-transcript > div > :last-child { margin-bottom: 0; }
+.audio-editor h2 { margin: 0; font-size: 1.2em; }
+.audio-editor > .form-hint { margin: 8px 0 18px; font-size: 14px; }
+.audio-file-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.audio-file-actions button { min-height: 44px; border-radius: 24px; font-size: 14px; }
+.audio-file-actions .form-hint { margin: 0; }
+.audio-file-info { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 12px 0 0; overflow-wrap: anywhere; }
+.audio-file-info [data-audio-name] { min-width: 0; }
+.audio-file-info:has([data-audio-name]:empty) { display: none; }
+.audio-file-row audio { margin-top: 18px; }
+.audio-editor-fields { min-width: 0; margin: 20px 0 0; padding: 0; border: 0; }
+.audio-editor-fields > label:first-child { margin-top: 0; }
+.audio-editor-fields > .file-download-option { margin-top: 20px; }
+[data-audio-status] { min-height: 1.5em; margin-top: 12px; font-size: 14px; line-height: 1.5; }
+
+.audio-component audio[hidden] { display: none; }

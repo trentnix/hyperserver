@@ -169,7 +169,12 @@ func (m *module) writingMedia(ctx context.Context, source, path, preview string)
 		if component.Type == "pdf-preview" {
 			field = "pdf"
 		}
-		for _, entry := range component.Files {
+		files := component.Files
+		if component.Audio != nil {
+			field = "audio"
+			files = []postDownload{{ID: component.Audio.ID, Size: component.Audio.Size}}
+		}
+		for _, entry := range files {
 			file, err := m.downloads.Open(ctx, entry.ID)
 			if errors.Is(err, errNotFound) {
 				return nil, writingFieldError{errMissingMedia, field}
