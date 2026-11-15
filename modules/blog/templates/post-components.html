@@ -55,6 +55,21 @@
   </section>
 {{ end }}
 
+{{ define "blog.videoEditor" }}
+  <section class="video-editor" data-video-editor data-post-component="video" aria-labelledby="video-editor-title">
+    <div class="album-editor-heading"><h2 id="video-editor-title">Video</h2><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Video" }}<button type="button" class="text-button component-remove" data-component-remove="video" hidden>Remove video</button></div></div>
+    <p class="form-hint" id="video-help">Add a YouTube or Vimeo URL. The player shows a preview and waits for Play. Save with your post.</p>
+    <label for="post-video" data-video-source-label>Video (JSON)</label>
+    <textarea id="post-video" name="video" rows="3" aria-describedby="video-help">{{ .Data.VideoJSON }}</textarea>
+    <fieldset data-video-controls data-component-fields hidden disabled>
+      <label for="video-url">Video URL</label><input id="video-url" data-video-field="url" type="url" maxlength="2048" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="video-help" required>
+      <label for="video-title">Title</label><input id="video-title" data-video-field="title" maxlength="240" required>
+      <label for="video-caption">Caption (optional)</label><textarea id="video-caption" data-video-field="caption" rows="2" maxlength="1000"></textarea>
+    </fieldset>
+    <div data-video-status role="status"></div>
+  </section>
+{{ end }}
+
 {{ define "blog.componentOrderControls" }}
 <div class="component-order-controls" data-component-order-controls hidden>
   <button type="button" class="text-button" data-component-move="up" aria-label="Move {{ . }} up" title="Move {{ . }} up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg></button>

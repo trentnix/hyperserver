@@ -106,6 +106,7 @@ func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, c
 		fields["componentOrder"] = currentEditor.ComponentOrderJSON()
 		fields["pdf"] = currentEditor.PDFJSON()
 		fields["link"] = currentEditor.LinkJSON()
+		fields["video"] = currentEditor.VideoJSON()
 	}
 	baseline, err := json.Marshal(fields)
 	selection.LoadedRevision, selection.CurrentContent = &selected, string(baseline)

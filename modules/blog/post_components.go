@@ -30,9 +30,10 @@ type postComponent struct {
 	Photos []albumPhoto   `json:"photos,omitempty"`
 	Files  []postDownload `json:"files,omitempty"`
 	Link   *postLink      `json:"link,omitempty"`
+	Video  *postVideo     `json:"video,omitempty"`
 }
 
-var componentTypes = [...]string{"photo-album", "file-downloads", "pdf-preview", "link-preview"}
+var componentTypes = [...]string{"photo-album", "file-downloads", "pdf-preview", "link-preview", "video"}
 
 func (p postComponents) Album() []albumPhoto {
 	for _, component := range p.Components {
@@ -172,14 +173,14 @@ func parseComponents(source string) (postComponents, error) {
 		seen[component.Type] = true
 		switch component.Type {
 		case "photo-album":
-			if component.Link != nil || len(component.Files) > 0 || len(component.Photos) == 0 {
+			if component.Link != nil || component.Video != nil || len(component.Files) > 0 || len(component.Photos) == 0 {
 				return result, unsupported
 			}
 			if err := validateComponentAlbum(component.Photos); err != nil {
 				return result, err
 			}
 		case "file-downloads", "pdf-preview":
-			if component.Link != nil || len(component.Photos) > 0 || len(component.Files) == 0 {
+			if component.Link != nil || component.Video != nil || len(component.Photos) > 0 || len(component.Files) == 0 {
 				return result, unsupported
 			}
 			if err := validateDownloads(component.Files); err != nil {
@@ -191,10 +192,17 @@ func parseComponents(source string) (postComponents, error) {
 				}
 			}
 		case "link-preview":
-			if component.Link == nil || len(component.Photos) > 0 || len(component.Files) > 0 {
+			if component.Link == nil || component.Video != nil || len(component.Photos) > 0 || len(component.Files) > 0 {
 				return result, unsupported
 			}
 			if err := validateLink(component.Link); err != nil {
+				return result, err
+			}
+		case "video":
+			if component.Video == nil || component.Link != nil || len(component.Photos) > 0 || len(component.Files) > 0 {
+				return result, unsupported
+			}
+			if err := validateVideo(component.Video); err != nil {
 				return result, err
 			}
 		default:
@@ -272,7 +280,7 @@ func splitPostComponents(source string) (string, postComponents, error) {
 }
 
 type componentInput struct {
-	Album, Downloads, Order, PDF, Link string
+	Album, Downloads, Order, PDF, Link, Video string
 }
 
 func joinPostComponents(body string, input componentInput) (string, error) {
@@ -300,11 +308,15 @@ func joinPostComponents(body string, input componentInput) (string, error) {
 	if err != nil {
 		return body, writingFieldError{err, "link"}
 	}
+	video, err := parseVideo(input.Video)
+	if err != nil {
+		return body, writingFieldError{err, "video"}
+	}
 	order, err := parseComponentOrder(input.Order)
 	if err != nil {
 		return body, writingFieldError{err, "componentOrder"}
 	}
-	if len(entries) == 0 && len(pdf) == 0 && link == nil {
+	if len(entries) == 0 && len(pdf) == 0 && link == nil && video == nil {
 		return joinPostAlbum(body, input.Album)
 	}
 	// Missing fields from older or ordinary forms retain the original default
@@ -331,6 +343,9 @@ func joinPostComponents(body string, input componentInput) (string, error) {
 		}
 		if kind == "link-preview" && link != nil {
 			components.Components = append(components.Components, postComponent{Type: kind, Link: link})
+		}
+		if kind == "video" && video != nil {
+			components.Components = append(components.Components, postComponent{Type: kind, Video: video})
 		}
 	}
 	data, err := json.Marshal(components)
@@ -402,6 +417,9 @@ func searchableWriting(source string) string {
 		if link := component.Link; link != nil {
 			text.WriteString("\n" + link.Title + "\n" + link.Description + "\n" + link.SiteName)
 		}
+		if video := component.Video; video != nil {
+			text.WriteString("\n" + video.Title + "\n" + video.Caption)
+		}
 		for _, file := range component.Files {
 			text.WriteString("\n" + file.Label + "\n" + file.Description)
 		}
@@ -440,6 +458,8 @@ func (componentsTransformer) Transform(document *ast.Document, reader text.Reade
 			document.InsertBefore(document, block, &pdfNode{File: component.Files[0]})
 		case "link-preview":
 			document.InsertBefore(document, block, &linkNode{Link: *component.Link})
+		case "video":
+			document.InsertBefore(document, block, &videoNode{Video: *component.Video})
 		}
 	}
 	document.RemoveChild(document, block)

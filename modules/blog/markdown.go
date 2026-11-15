@@ -22,7 +22,7 @@ func markdown(source string) (template.HTML, error) {
 	var out bytes.Buffer
 	engine := goldmark.New(
 		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(albumTransformer{}, 100), util.Prioritized(componentsTransformer{}, 110))),
-		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100), util.Prioritized(downloadsRenderer{}, 110), util.Prioritized(pdfRenderer{}, 120), util.Prioritized(linkRenderer{}, 130))),
+		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100), util.Prioritized(downloadsRenderer{}, 110), util.Prioritized(pdfRenderer{}, 120), util.Prioritized(linkRenderer{}, 130), util.Prioritized(videoRenderer{}, 140))),
 	)
 	if err := engine.Convert([]byte(source), &out); err != nil {
 		return "", err

@@ -2,6 +2,7 @@ import './editor.js';
 import './album-editor.js';
 import './downloads-editor.js';
 import './link-editor.js';
+import './video-editor.js';
 import './editor-drafts.js';
 
 // Browser Back can restore a whole document without contacting the server.
