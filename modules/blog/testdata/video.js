@@ -121,7 +121,7 @@
     assert(stage === 'youtube' ? video.querySelector('h3')?.textContent === title : !video.querySelector('h3'), 'An optional title must render only when provided.');
     assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Video components must fit all tested viewports.');
     const frame = video.querySelector('iframe');
-    assert(frame && frame.title === expectedTitle && frame.referrerPolicy === 'strict-origin' && frame.allowFullscreen && !frame.allow.includes('autoplay'), 'Player controls, accessible title, fullscreen, and origin-only referrer policy must be set without autoplay permission.');
+    assert(frame && frame.title === expectedTitle && frame.referrerPolicy === 'strict-origin' && frame.allow.includes('fullscreen') && !frame.hasAttribute('allowfullscreen') && !frame.allow.includes('autoplay'), 'Player controls, accessible title, fullscreen, and origin-only referrer policy must be set without duplicate fullscreen or autoplay permissions.');
     assert(frame.loading === 'lazy' && !video.querySelector('button') && new URL(frame.src).searchParams.get('autoplay') === '0', 'The provider preview must appear without an extra click and wait for Play.');
     assert(frame.getBoundingClientRect().height >= 200, 'The player must remain usable on narrow screens.');
     if (stage === 'youtube') {

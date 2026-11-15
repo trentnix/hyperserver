@@ -85,10 +85,13 @@ func TestVideoComponent(t *testing.T) {
 	if !strings.Contains(string(rendered), `src="https://player.vimeo.com/video/76979871?autoplay=0&amp;dnt=1#t=90s"`) || strings.Contains(string(rendered), `href="https://vimeo.com/`) {
 		t.Fatal("the player must use a normalized URL without a redundant viewing link", rendered)
 	}
-	for _, want := range []string{`loading="lazy"`, `referrerpolicy="strict-origin"`, `allowfullscreen`} {
+	for _, want := range []string{`loading="lazy"`, `referrerpolicy="strict-origin"`, `allow="encrypted-media; fullscreen; picture-in-picture"`} {
 		if !strings.Contains(string(rendered), want) {
 			t.Fatal("player preview is missing its loading, referrer, or fullscreen settings", want)
 		}
+	}
+	if strings.Contains(string(rendered), "allowfullscreen") {
+		t.Fatal("fullscreen permission must not be declared twice", rendered)
 	}
 	if strings.Contains(string(rendered), "autoplay=1") || strings.Contains(string(rendered), "<button") {
 		t.Fatal("the provider preview must appear without an extra play button or autoplay", rendered)

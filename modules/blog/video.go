@@ -229,7 +229,7 @@ func (videoRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer)
 		} else {
 			title = source.Provider + " video"
 		}
-		fmt.Fprintf(writer, `<div class="video-player"><iframe src="%s" title="%s" loading="lazy" referrerpolicy="strict-origin" allow="encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></div>`, html.EscapeString(source.embedURL()), html.EscapeString(title))
+		fmt.Fprintf(writer, `<div class="video-player"><iframe src="%s" title="%s" loading="lazy" referrerpolicy="strict-origin" allow="encrypted-media; fullscreen; picture-in-picture"></iframe></div>`, html.EscapeString(source.embedURL()), html.EscapeString(title))
 		if video.Caption != "" {
 			fmt.Fprintf(writer, `<p class="video-caption">%s</p>`, html.EscapeString(video.Caption))
 		}
