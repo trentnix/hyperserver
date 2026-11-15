@@ -625,7 +625,10 @@ form .post-time-field:has(:user-invalid):focus-within { outline: 2px solid #a126
 dialog { color: inherit; border: 1px solid #d4d7df; border-radius: 6px; padding: 30px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; }
 dialog::backdrop { background: rgb(20 25 35 / 55%); }
 
-.photo-album { container-type: inline-size; margin-top: 32px; padding-top: 16px; border-top: 1px solid #dce1e7; }
+/* A shared surface groups each reader component with its heading. */
+:is(.photo-album, .file-downloads) { margin-block: 32px; padding: 20px 20px 24px; border-radius: 20px; background: #f4f6f9; }
+:is(.photo-album, .file-downloads) > h2 { margin: 0 0 16px; padding-inline: 4px; color: #43536a; font-size: .9em; font-weight: 650; letter-spacing: .015em; line-height: 1.4; }
+.photo-album { container-type: inline-size; }
 .photo-album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 20px; }
 .photo-album-grid a { display: block; min-width: 0; overflow: hidden; border: 1px solid #dce1e7; border-radius: 8px; background: var(--surface); color: inherit; text-decoration: none; }
 .photo-album-grid a:hover { border-color: #8b9db7; box-shadow: 0 3px 12px #18253b14; }
@@ -634,6 +637,8 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .post-body .photo-album-grid img, .photo-album-grid img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; padding: 0; margin: 0; object-fit: cover; }
 .photo-album-grid figcaption { margin: 0; padding: 12px 14px; border-top: 1px solid #dce1e7; font-size: .9em; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 767px) {
+  :is(.photo-album, .file-downloads) { margin-inline: -12px; padding: 12px 12px 20px; border-radius: 16px; }
+  :is(.photo-album, .file-downloads) > h2 { margin-block: 4px 14px; }
   .photo-album-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .photo-album-grid > a:only-child { grid-column: 1 / -1; }
   .photo-album-grid figcaption { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 8px 10px; padding: 0; border: 0; }
@@ -693,8 +698,6 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .component-order-controls button:hover:not(:disabled) { background: #edf2f8; border-color: #bac9da; }
 .component-order-controls button:disabled { color: #b7c0cb; background: #f8f9fb; }
 .component-order-controls svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.file-downloads { margin-block: 32px; }
-.file-downloads h2 { margin: 0 0 14px; }
 .file-downloads ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .file-downloads li { min-width: 0; margin: 0; padding: 0; }
 .file-downloads .file-download-card { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 18px 20px; border: 1px solid #dce2e9; border-radius: 14px; background: #fff; box-shadow: 0 2px 6px #24394e06; color: #273849; text-decoration: none; }
