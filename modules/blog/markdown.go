@@ -22,7 +22,7 @@ func markdown(source string) (template.HTML, error) {
 	var out bytes.Buffer
 	engine := goldmark.New(
 		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(albumTransformer{}, 100), util.Prioritized(componentsTransformer{}, 110))),
-		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100), util.Prioritized(downloadsRenderer{}, 110))),
+		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100), util.Prioritized(downloadsRenderer{}, 110), util.Prioritized(pdfRenderer{}, 120))),
 	)
 	if err := engine.Convert([]byte(source), &out); err != nil {
 		return "", err
@@ -47,8 +47,15 @@ func markdownAt(source string, base *url.URL) (template.HTML, error) {
 				return template.HTML(out.String()), nil
 			}
 			return "", tokens.Err()
+		case html.EndTagToken:
+			if tokens.Token().Data != "iframe" {
+				out.Write(tokens.Raw())
+			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
+			if token.Data == "iframe" {
+				continue
+			}
 			for i, attr := range token.Attr {
 				if attr.Val == "" || !(token.Data == "a" && attr.Key == "href" || token.Data == "img" && attr.Key == "src") {
 					continue

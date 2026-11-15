@@ -164,21 +164,27 @@ func (m *module) writingMedia(ctx context.Context, source, path, preview string)
 	if err != nil {
 		return nil, writingFieldError{err, "content"}
 	}
-	for _, entry := range components.Downloads() {
-		file, err := m.downloads.Open(ctx, entry.ID)
-		if errors.Is(err, errNotFound) {
-			return nil, writingFieldError{errMissingMedia, "downloads"}
+	for _, component := range components.Components {
+		field := "downloads"
+		if component.Type == "pdf-preview" {
+			field = "pdf"
 		}
-		if err != nil {
-			return nil, err
-		}
-		info, err := file.Stat()
-		file.Close()
-		if err != nil {
-			return nil, err
-		}
-		if info.Size() != entry.Size {
-			return nil, writingFieldError{contentError("The file details are out of date. Remove the file and choose it again."), "downloads"}
+		for _, entry := range component.Files {
+			file, err := m.downloads.Open(ctx, entry.ID)
+			if errors.Is(err, errNotFound) {
+				return nil, writingFieldError{errMissingMedia, field}
+			}
+			if err != nil {
+				return nil, err
+			}
+			info, err := file.Stat()
+			file.Close()
+			if err != nil {
+				return nil, err
+			}
+			if info.Size() != entry.Size {
+				return nil, writingFieldError{contentError("The file details are out of date. Remove the file and choose it again."), field}
+			}
 		}
 	}
 	refs, err := contentMediaReferences(source, path, preview)

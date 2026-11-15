@@ -104,6 +104,7 @@ func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, c
 		currentEditor := editorPage{Post: Post{Markdown: current.Markdown}}
 		fields["content"], fields["album"], fields["downloads"] = currentEditor.BodyMarkdown(), currentEditor.AlbumMarkdown(), currentEditor.DownloadsJSON()
 		fields["componentOrder"] = currentEditor.ComponentOrderJSON()
+		fields["pdf"] = currentEditor.PDFJSON()
 	}
 	baseline, err := json.Marshal(fields)
 	selection.LoadedRevision, selection.CurrentContent = &selected, string(baseline)

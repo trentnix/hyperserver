@@ -31,14 +31,19 @@ async function requestFiles(path, options) {
 
 function validEntry(entry) {
   return entry && validID.test(entry.id) && typeof entry.label === 'string' && entry.label.trim() && [...entry.label].length <= 240 &&
-    (!entry.description || typeof entry.description === 'string' && [...entry.description].length <= 1000) && Number.isSafeInteger(entry.size) && entry.size >= 0 && entry.size <= 33554432;
+    (!entry.description || typeof entry.description === 'string' && [...entry.description].length <= 1000) &&
+    (entry.hideDownload === undefined || typeof entry.hideDownload === 'boolean') && Number.isSafeInteger(entry.size) && entry.size >= 0 && entry.size <= 33554432;
 }
 
 function initialize(root) {
   root.querySelectorAll('[data-downloads-editor]').forEach(section => {
     if (initialized.has(section)) return;
     initialized.add(section);
-    const source = section.querySelector('[name="downloads"]');
+    const source = section.querySelector('textarea[name]');
+    const maxFiles = Number(section.dataset.maxFiles);
+    const pdfOnly = section.dataset.postComponent === 'pdf-preview';
+    const accepts = entry => validEntry(entry) && (!pdfOnly || entry.id.endsWith('.pdf'));
+    const limitMessage = pdfOnly ? 'Choose one PDF for the preview.' : 'Choose at most 20 files per post.';
     const form = source.form;
     const list = section.querySelector('[data-downloads-list]');
     const status = section.querySelector('[data-downloads-status]');
@@ -54,12 +59,12 @@ function initialize(root) {
     function render() {
       const busy = Boolean(form.dataset.uploading);
       section.querySelector('[data-downloads-count]').textContent = entries.length ? `${entries.length} ${entries.length === 1 ? 'file' : 'files'}` : '';
-      section.querySelector('[data-download-upload]').disabled = busy || entries.length >= 20;
-      section.querySelector('[data-download-browse]').disabled = busy || entries.length >= 20;
+      section.querySelector('[data-download-upload]').disabled = busy || entries.length >= maxFiles;
+      section.querySelector('[data-download-browse]').disabled = busy || entries.length >= maxFiles;
       section.querySelector('[data-component-remove]').disabled = busy;
       recovery.hidden = !removed.length;
       recovery.querySelector('span').textContent = `${removed.length} ${removed.length === 1 ? 'file' : 'files'} removed.`;
-      recovery.querySelector('button').disabled = busy || entries.length >= 20;
+      recovery.querySelector('button').disabled = busy || entries.length >= maxFiles;
       list.replaceChildren(...entries.map((entry, index) => {
         const item = element('li');
         const type = entry.id.split('.').pop().toUpperCase();
@@ -73,7 +78,7 @@ function initialize(root) {
         const name = element('input');
         name.value = entry.label;
         name.maxLength = 240;
-        name.id = 'download-name-' + entry.id;
+        name.id = source.name + '-name-' + entry.id;
         name.pattern = '.*\\S.*';
         name.required = true;
         name.setAttribute('aria-label', 'Name for ' + entry.label);
@@ -88,9 +93,23 @@ function initialize(root) {
         name.addEventListener('input', () => { markField(name, false); update(); });
         name.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); name.blur(); } });
         description.addEventListener('input', update);
-        fields.append(label, detail, element('small', sizeLabel(entry.size), 'form-hint'));
+        fields.append(label, detail);
+        if (pdfOnly) {
+          const option = element('label', '', 'pdf-download-option');
+          const showDownload = element('input');
+          showDownload.type = 'checkbox';
+          showDownload.checked = !entry.hideDownload;
+          showDownload.addEventListener('change', () => {
+            if (showDownload.checked) delete entry.hideDownload;
+            else entry.hideDownload = true;
+            serialize();
+          });
+          option.append(showDownload, document.createTextNode('Show download link'));
+          fields.append(option);
+        }
+        fields.append(element('small', sizeLabel(entry.size), 'form-hint'));
         const actions = element('div', '', 'download-actions');
-        for (const [direction, delta, text] of [['up', -1, '↑'], ['down', 1, '↓']]) {
+        for (const [direction, delta, text] of (maxFiles > 1 ? [['up', -1, '↑'], ['down', 1, '↓']] : [])) {
           const move = button(text, `Move ${entry.label} ${direction}`);
           move.disabled = busy || index + delta < 0 || index + delta >= entries.length;
           move.addEventListener('click', () => {
@@ -120,7 +139,7 @@ function initialize(root) {
     function read() {
       try {
         const next = source.value.trim() ? JSON.parse(source.value) : [];
-        if (!Array.isArray(next) || next.length > 20 || !next.every(validEntry) || new Set(next.map(entry => entry.id)).size !== next.length) throw new Error();
+        if (!Array.isArray(next) || next.length > maxFiles || !next.every(accepts) || new Set(next.map(entry => entry.id)).size !== next.length) throw new Error();
         entries = next;
       } catch {
         source.hidden = false;
@@ -139,9 +158,9 @@ function initialize(root) {
     }
 
     function add(values) {
-      if (!Array.isArray(values) || !values.every(validEntry)) throw new Error('Invalid file response. Try again.');
+      if (!Array.isArray(values) || !values.every(accepts)) throw new Error('Invalid file response. Try again.');
       const next = values.filter(entry => !entries.some(current => current.id === entry.id));
-      if (entries.length + next.length > 20) throw new Error('Choose at most 20 files per post.');
+      if (entries.length + next.length > maxFiles) throw new Error(limitMessage);
       entries.push(...next);
       removed = removed.filter(value => !entries.some(entry => entry.id === value.entry.id));
       serialize(); render();
@@ -149,7 +168,7 @@ function initialize(root) {
 
     async function upload(files) {
       if (!section.isConnected || form.dataset.uploading) return;
-      if (files.length + entries.length > 20) { setMediaStatus(status, 'Choose fewer files. Posts can offer up to 20 downloads.', true); return; }
+      if (files.length + entries.length > maxFiles) { setMediaStatus(status, limitMessage, true); return; }
       await runFormUpload(form, async () => {
         const failed = [];
         let lastError;
@@ -157,6 +176,7 @@ function initialize(root) {
           if (!section.isConnected) return;
           setMediaStatus(status, `Uploading ${index + 1} of ${files.length}: ${files[index].name}`);
           try {
+            if (pdfOnly && !files[index].name.toLowerCase().endsWith('.pdf')) throw new Error('Choose a PDF file.');
             if (files[index].size > 33554432) throw new Error('Choose a file of at most 32 MiB.');
             const data = new FormData();
             data.append('file', files[index]);
@@ -191,9 +211,9 @@ function initialize(root) {
       event.target.value = '';
       if (files.length) upload(files);
     });
-    section.querySelector('[data-download-browse]').addEventListener('click', () => openLibrary(entries, add, status, form));
+    section.querySelector('[data-download-browse]').addEventListener('click', () => openLibrary(entries, add, status, form, {maxFiles, pdfOnly}));
     section.querySelector('[data-download-undo]').addEventListener('click', () => {
-      if (form.dataset.uploading || !removed.length || entries.length >= 20) return;
+      if (form.dataset.uploading || !removed.length || entries.length >= maxFiles) return;
       const value = removed.pop();
       entries.splice(Math.min(value.index, entries.length), 0, value.entry);
       serialize(); render();
@@ -211,12 +231,12 @@ function initialize(root) {
   });
 }
 
-async function openLibrary(existing, add, status, form) {
+async function openLibrary(existing, add, status, form, {maxFiles, pdfOnly}) {
   if (document.querySelector('.download-library')) return;
   const opener = document.activeElement;
   const dialog = element('dialog', '', 'download-library');
   dialog.setAttribute('aria-labelledby', 'download-library-title');
-  const title = element('h2', 'Choose files');
+  const title = element('h2', pdfOnly ? 'Choose a PDF' : 'Choose files');
   title.id = 'download-library-title';
   const close = button('Cancel');
   const confirm = button('Add files');
@@ -234,7 +254,7 @@ async function openLibrary(existing, add, status, form) {
   document.body.append(dialog);
   const controller = new AbortController();
   const selected = new Map();
-  const room = 20 - existing.length;
+  const room = maxFiles - existing.length;
   document.addEventListener('htmx:before:cleanup', event => { if (event.target.contains?.(form)) dialog.close(); }, {signal: controller.signal});
   document.addEventListener('htmx:after:swap', () => { if (!form.isConnected) dialog.close(); }, {signal: controller.signal});
   close.addEventListener('click', () => dialog.close());
@@ -253,12 +273,14 @@ async function openLibrary(existing, add, status, form) {
     const files = await requestFiles('/post/files', {signal: controller.signal});
     if (!dialog.isConnected) return;
     if (files !== null && (!Array.isArray(files) || !files.every(validEntry))) throw new Error('Unable to read files.');
-    feedback.textContent = files?.length ? 'Choose files to offer as downloads.' : 'No uploaded files. Upload files from the post editor.';
-    for (const entry of files || []) {
+    const choices = (files || []).filter(entry => !pdfOnly || entry.id.endsWith('.pdf'));
+    feedback.textContent = choices.length ? (pdfOnly ? 'Choose a PDF to embed.' : 'Choose files to offer as downloads.') : (pdfOnly ? 'No uploaded PDFs. Upload a PDF from the post editor.' : 'No uploaded files. Upload files from the post editor.');
+    for (const entry of choices) {
       const row = element('li');
       const label = element('label');
       const check = element('input');
-      check.type = 'checkbox';
+      check.type = pdfOnly ? 'radio' : 'checkbox';
+      check.name = 'download-library-choice';
       check.disabled = existing.some(current => current.id === entry.id);
       const name = element('span', entry.label);
       name.append(element('small', check.disabled ? 'Added to this post' : entry.id.split('.').pop().toUpperCase() + ' · ' + sizeLabel(entry.size)));
@@ -266,6 +288,7 @@ async function openLibrary(existing, add, status, form) {
       row.append(label);
       list.append(row);
       check.addEventListener('change', () => {
+        if (pdfOnly) selected.clear();
         if (check.checked && selected.size >= room) { check.checked = false; feedback.textContent = 'Post limit reached. Deselect a file to choose another.'; return; }
         if (check.checked) selected.set(entry.id, {...entry}); else selected.delete(entry.id);
         confirm.disabled = !selected.size;
@@ -274,7 +297,7 @@ async function openLibrary(existing, add, status, form) {
       });
     }
   } catch (error) {
-    if (error.name !== 'AbortError' && dialog.isConnected) showUploadFailure(feedback, error, () => { dialog.close(); openLibrary(existing, add, status, form); }, 'Your edits are unchanged.');
+    if (error.name !== 'AbortError' && dialog.isConnected) showUploadFailure(feedback, error, () => { dialog.close(); openLibrary(existing, add, status, form, {maxFiles, pdfOnly}); }, 'Your edits are unchanged.');
   }
 }
 

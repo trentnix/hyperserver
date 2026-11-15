@@ -626,8 +626,8 @@ dialog { color: inherit; border: 1px solid #d4d7df; border-radius: 6px; padding:
 dialog::backdrop { background: rgb(20 25 35 / 55%); }
 
 /* A shared surface groups each reader component with its heading. */
-:is(.photo-album, .file-downloads) { margin-block: 32px; padding: 20px 20px 24px; border-radius: 20px; background: #f4f6f9; }
-:is(.photo-album, .file-downloads) > h2 { margin: 0 0 16px; padding-inline: 4px; color: #43536a; font-size: .9em; font-weight: 650; letter-spacing: .015em; line-height: 1.4; }
+:is(.photo-album, .file-downloads, .pdf-preview) { margin-block: 32px; padding: 20px 20px 24px; border-radius: 20px; background: #f4f6f9; }
+:is(.photo-album, .file-downloads, .pdf-preview) > h2 { margin: 0 0 16px; padding-inline: 4px; color: #43536a; font-size: .9em; font-weight: 650; letter-spacing: .015em; line-height: 1.4; }
 .photo-album { container-type: inline-size; }
 .photo-album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 20px; }
 .photo-album-grid a { display: block; min-width: 0; overflow: hidden; border: 1px solid #dce1e7; border-radius: 8px; background: var(--surface); color: inherit; text-decoration: none; }
@@ -637,8 +637,8 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .post-body .photo-album-grid img, .photo-album-grid img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; padding: 0; margin: 0; object-fit: cover; }
 .photo-album-grid figcaption { margin: 0; padding: 12px 14px; border-top: 1px solid #dce1e7; font-size: .9em; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 767px) {
-  :is(.photo-album, .file-downloads) { margin-inline: -12px; padding: 12px 12px 20px; border-radius: 16px; }
-  :is(.photo-album, .file-downloads) > h2 { margin-block: 4px 14px; }
+  :is(.photo-album, .file-downloads, .pdf-preview) { margin-inline: -12px; padding: 12px 12px 20px; border-radius: 16px; }
+  :is(.photo-album, .file-downloads, .pdf-preview) > h2 { margin-block: 4px 14px; }
   .photo-album-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .photo-album-grid > a:only-child { grid-column: 1 / -1; }
   .photo-album-grid figcaption { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 8px 10px; padding: 0; border: 0; }
@@ -669,7 +669,7 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .post-components > section:not([hidden]) ~ section:not([hidden]), .post-components > section:not([hidden]) ~ .component-picker { margin-top: 24px; }
 .downloads-editor h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.2em; }
 .downloads-editor h2 span { color: var(--muted); font-size: 14px; font-weight: 400; }
-.downloads-editor #downloads-help { margin: 8px 0 18px; font-size: 14px; }
+.downloads-editor > .form-hint:not(.downloads-limits) { margin: 8px 0 18px; font-size: 14px; }
 .downloads-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .downloads-controls button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 9px 14px; border-radius: 24px; font-size: 14px; }
 .downloads-controls svg, .file-downloads svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -680,6 +680,8 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .download-fields label { margin: 0 0 10px; color: var(--muted); font-size: 13px; font-weight: 400; }
 .download-fields input, .download-fields textarea { display: block; width: 100%; margin: 4px 0 0; padding: 8px 10px; font-size: 16px; }
 .download-fields textarea { min-height: 44px; resize: vertical; }
+.download-fields .pdf-download-option { display: flex; align-items: center; gap: 8px; min-height: 44px; color: #43536a; font-size: 14px; cursor: pointer; }
+.download-fields .pdf-download-option input { flex: none; width: 18px; height: 18px; margin: 0; padding: 0; accent-color: #43536a; }
 .download-actions { display: flex; flex-wrap: wrap; gap: 8px; max-width: 148px; }
 .download-actions button { min-width: 44px; min-height: 44px; border-radius: 50%; background: #edf2f8; color: #354c6a; font-size: 22px; }
 .download-actions button:hover:not(:disabled) { background: #dce6f2; }
@@ -965,3 +967,15 @@ html:has(.album-viewer[open]) { overflow: hidden; scrollbar-gutter: stable; }
 .user-role-guide { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px; font-size: .9em; }
 .user-role-guide p { color: var(--muted); margin-top: 6px; }
 @media (max-width: 767px) { .user-role-guide { grid-template-columns: 1fr; gap: 12px; } }
+
+/* PDF previews use the same reader surface and native browser controls. */
+.pdf-preview-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 16px; }
+.pdf-preview-heading > div { min-width: 0; }
+.pdf-preview-heading h3 { margin: 0; font-size: 1.1em; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.pdf-preview-heading nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.pdf-preview-heading nav a { display: inline-flex; align-items: center; min-height: 44px; color: #405b78; font-size: 14px; font-weight: 600; text-underline-offset: 3px; }
+.pdf-preview-description { margin: 0 0 16px; color: #596573; font-size: .9em; white-space: pre-wrap; }
+.pdf-preview-frame { display: block; width: 100%; height: min(75vh, 720px); min-height: 420px; border: 0; border-radius: 12px; background: #fff; }
+@media (max-width: 767px) {
+  .pdf-preview-frame { height: 420px; min-height: 0; }
+}

@@ -29,6 +29,7 @@ type editorPage struct {
 	revisionSelection
 	AlbumInput                 *string
 	DownloadsInput             *string
+	PDFInput                   *string
 	ComponentOrderInput        *string
 	NoLibrary                  bool
 	Error                      string
@@ -180,7 +181,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		p.Version = version
 	}
 	var componentError error
-	p.Markdown, componentError = joinPostComponents(p.Markdown, r.PostForm.Get("album"), r.PostForm.Get("downloads"), r.PostForm.Get("componentOrder"))
+	p.Markdown, componentError = joinPostComponents(p.Markdown, r.PostForm.Get("album"), r.PostForm.Get("downloads"), r.PostForm.Get("componentOrder"), r.PostForm.Get("pdf"))
 	if componentError != nil {
 		fields := validationFields(componentError)
 		if len(fields) == 0 {
@@ -246,6 +247,10 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	if r.PostForm.Has("downloads") {
 		downloads := r.PostForm.Get("downloads")
 		data.DownloadsInput = &downloads
+	}
+	if r.PostForm.Has("pdf") {
+		pdf := r.PostForm.Get("pdf")
+		data.PDFInput = &pdf
 	}
 	if r.PostForm.Has("componentOrder") {
 		order := r.PostForm.Get("componentOrder")

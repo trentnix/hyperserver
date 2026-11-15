@@ -49,7 +49,8 @@ func (m *module) openMedia(ctx context.Context, id string) (storedMedia, error) 
 func (m *module) download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	id := r.PathValue("id")
-	if !validDownloadID(id) {
+	preview := r.URL.Query().Get("preview") == "1"
+	if !validDownloadID(id) || preview && downloadType(id) != "application/pdf" {
 		m.storageError(w, r, errNotFound)
 		return
 	}
@@ -92,8 +93,14 @@ func (m *module) download(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = id
 	}
+	disposition := "attachment"
+	if preview {
+		disposition = "inline"
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
+	}
 	w.Header().Set("Content-Type", downloadType(id))
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": name}))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("ETag", strconv.Quote(id[:64]))
 	if public {

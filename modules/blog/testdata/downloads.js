@@ -80,7 +80,7 @@
       assert(!section.hidden && form.elements.downloads.value === saved, 'Component Undo must restore all names and descriptions.');
       form.querySelector('[data-component-picker] summary').click();
       form.querySelector('[data-component-add="photo-album"]').click();
-      assert(form.querySelector('[data-component-picker]').hidden, 'The picker must hide once both component types are added.');
+      assert(!form.querySelector('[data-component-picker]').hidden && !form.querySelector('[data-component-add="pdf-preview"]').hidden, 'The picker must keep PDF preview available after adding photos and downloads.');
       form.querySelector('[data-album-browse]').click();
       await wait(() => document.querySelector('.media-browser [data-media-select]'));
       document.querySelector('.media-browser [data-media-select]').click();

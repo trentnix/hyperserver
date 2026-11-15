@@ -66,7 +66,7 @@ func validDownloadID(id string) bool {
 }
 
 // validateDownload checks file signatures and structure, never the submitted MIME
-// type. ZIP entries are not extracted. All accepted formats are served as attachments.
+// type. ZIP entries are not extracted. Only PDFs have an inline preview option.
 func validateDownload(data []byte, filename string) (string, error) {
 	if len(data) > maxDownloadBytes {
 		return "", contentError("Choose a file of at most 32 MiB.")

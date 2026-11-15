@@ -331,7 +331,7 @@ func TestDownloadAccessAndReuse(t *testing.T) {
 		t.Fatal("private library entry exposed")
 	}
 	ctx := context.WithValue(t.Context(), user.UserContextKey, poster)
-	source, err := joinPostComponents("", "", downloadSource(t, entry), "")
+	source, err := joinPostComponents("", "", downloadSource(t, entry), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func TestDownloadCleanupAndSearch(t *testing.T) {
 	h.login(t)
 	entry := testDownload(t, h, "notes.txt", "Downloadable text")
 	entry.Description = "A searchable attachment description"
-	source, err := joinPostComponents("Ordinary writing", "", downloadSource(t, entry), "")
+	source, err := joinPostComponents("Ordinary writing", "", downloadSource(t, entry), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

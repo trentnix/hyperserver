@@ -15,7 +15,7 @@ func TestPostComponentsRoundTrip(t *testing.T) {
 	photo := strings.Repeat("a", 64) + ".jpeg"
 	file := postDownload{ID: strings.Repeat("b", 64) + ".pdf", Label: `A <script> & "guide"`, Description: "Long description\nwith another line", Size: 1024}
 	album := `![Caption \[brackets\] \\ slash](/images/` + photo + `)`
-	source, err := joinPostComponents("Writing before components", album, downloadSource(t, file), "")
+	source, err := joinPostComponents("Writing before components", album, downloadSource(t, file), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestPostComponentsRoundTrip(t *testing.T) {
 		t.Fatal("component reference extraction", refs, err)
 	}
 	// Removing downloads converts the album back to the existing readable format.
-	legacy, err := joinPostComponents(page.BodyMarkdown(), page.AlbumMarkdown(), "", "")
+	legacy, err := joinPostComponents(page.BodyMarkdown(), page.AlbumMarkdown(), "", "", "")
 	if err != nil || !strings.Contains(legacy, "```photo-album") || strings.Contains(legacy, "post-components") {
 		t.Fatal("legacy album regression", legacy, err)
 	}
@@ -132,7 +132,7 @@ func TestComponentOrderCompatibility(t *testing.T) {
 		t.Fatal("legacy order changed", page.ComponentOrderJSON())
 	}
 	for _, order := range []string{`["file-downloads","photo-album"]`, `["photo-album","file-downloads"]`, ""} {
-		source, err := joinPostComponents(page.BodyMarkdown(), page.AlbumMarkdown(), page.DownloadsJSON(), order)
+		source, err := joinPostComponents(page.BodyMarkdown(), page.AlbumMarkdown(), page.DownloadsJSON(), order, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -154,12 +154,12 @@ func TestComponentOrderCompatibility(t *testing.T) {
 			t.Fatal("search text order differs from reader order")
 		}
 		reopened := editorPage{Post: Post{Markdown: source}}
-		if !slices.Equal(reopened.EditorComponents(), components.Order()) {
+		if !slices.Equal(reopened.EditorComponents(), append(components.Order(), "pdf-preview")) {
 			t.Fatal("editor order differs from reader")
 		}
 	}
 	for _, order := range []string{`["unknown"]`, `["photo-album","photo-album"]`, `{"type":"photo-album"}`, `[1]`, `[] trailing`} {
-		if _, err := joinPostComponents("Body", page.AlbumMarkdown(), page.DownloadsJSON(), order); err == nil {
+		if _, err := joinPostComponents("Body", page.AlbumMarkdown(), page.DownloadsJSON(), order, ""); err == nil {
 			t.Fatal("invalid order accepted", order)
 		}
 	}
@@ -177,7 +177,7 @@ func TestUnknownOrderedComponentsPreserved(t *testing.T) {
 		if page.BodyMarkdown() != source || page.AlbumMarkdown() != "" || page.DownloadsJSON() != "" {
 			t.Fatal("unsupported component source was discarded")
 		}
-		if _, err := joinPostComponents(source, "", "", ""); err == nil {
+		if _, err := joinPostComponents(source, "", "", "", ""); err == nil {
 			t.Fatal("unsupported component saved silently")
 		}
 	}
@@ -185,7 +185,7 @@ func TestUnknownOrderedComponentsPreserved(t *testing.T) {
 
 func TestPostComponentsMalformedAndNested(t *testing.T) {
 	entry := postDownload{ID: strings.Repeat("a", 64) + ".txt", Label: "Download", Size: 10}
-	valid, err := joinPostComponents("Body", "", downloadSource(t, entry), "")
+	valid, err := joinPostComponents("Body", "", downloadSource(t, entry), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestPostComponentsMalformedAndNested(t *testing.T) {
 		if page.BodyMarkdown() != source || page.DownloadsJSON() != "" || page.AlbumMarkdown() != "" {
 			t.Fatal("unsupported data discarded")
 		}
-		if _, err := joinPostComponents(source, "", "", ""); err == nil {
+		if _, err := joinPostComponents(source, "", "", "", ""); err == nil {
 			t.Fatal("unsupported components saved silently")
 		}
 		rendered, err := markdown(source)
@@ -222,7 +222,7 @@ func TestPostComponentsMalformedAndNested(t *testing.T) {
 		}
 	}
 	for _, body := range []string{"```go\nunfinished", "<script>\nunclosed"} {
-		if _, err := joinPostComponents(body, "", downloadSource(t, entry), ""); err == nil {
+		if _, err := joinPostComponents(body, "", downloadSource(t, entry), "", ""); err == nil {
 			t.Fatal("component swallowed by body")
 		}
 	}

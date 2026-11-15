@@ -4,7 +4,7 @@ Use **Add component → File downloads** below a post's Markdown editor. **Uploa
 
 Components appear in the order you add them, below the Markdown body. Use the component heading’s up/down buttons to move the whole component. Undo restores a removed component at its original position. Adding the component again starts an empty component at the end.
 
-A post can contain downloads, a photo album, or both without body text. File downloads are available on posts. Page editing does not expose the component yet.
+A post can contain downloads, a photo album, or a [PDF preview](pdf.md) without body text. File downloads are available on posts. Page editing does not expose the component yet.
 
 ## Limits
 
@@ -12,7 +12,7 @@ A post can contain downloads, a photo album, or both without body text. File dow
 - PDF, ZIP, or UTF-8 text files with `.pdf`, `.zip`, or `.txt` extensions.
 - Up to 32 MiB per file and 1 GiB of stored download files per site. Images have separate limits.
 
-The server checks PDF signatures and trailers, ZIP directory structure, and text encoding. It ignores the submitted MIME type and never extracts archives. These checks do not scan files for malware. Accepted files are served as attachments with `nosniff`.
+The server checks PDF signatures and trailers, ZIP directory structure, and text encoding. It ignores the submitted MIME type and never extracts archives. These checks do not scan files for malware. Downloads are served as attachments with `nosniff`. PDF previews have a separate inline viewing option.
 
 Each editor queues uploads and blocks Save until the batch finishes. Failed uploads identify files that were not added. Successful uploads and unsaved edits remain available. Retry attempts only files that were not added. Browser recovery retains selected files, names, descriptions, and order.
 
