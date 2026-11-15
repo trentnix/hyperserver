@@ -48,6 +48,8 @@ Historical images do not become public merely because history references them. I
 
 ## Unsaved writing
 
+Post components show **Unsaved changes** beside their heading when their content or position differs from the saved post. Adding a component also shows the indicator. Saving the post or restoring the saved values clears it. Fetched details and restored browser copies remain unsaved until you save the post.
+
 With JavaScript enabled, post/page editors save browser recovery copies after a half-second pause and when leaving. Reopen the editor to restore or discard a copy. Recovery does not change server content until you save. Failed saves retain the copy. Successful saves remove the relevant copies.
 
 Copies are separate by account, editor, and tab. They remain after logout, expire after seven days, and are cleaned up when an editor next opens. They are not encrypted, synced, or included in backups. Use a private browser profile on shared devices. Profile and authentication forms do not have recovery copies.

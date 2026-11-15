@@ -99,23 +99,35 @@ func newLinkClient() *http.Client {
 	}
 }
 
-func fetchLinkBytes(ctx context.Context, client *http.Client, raw, accept string, limit int64) ([]byte, *url.URL, string, error) {
+func openLinkResponse(ctx context.Context, client *http.Client, raw, accept string) (*http.Response, error) {
 	u, err := linkURL(raw)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, err
 	}
 	request, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, err
 	}
 	request.Header.Set("Accept", accept)
 	request.Header.Set("User-Agent", "HyperServer-LinkPreview/1.0")
 	response, err := client.Do(request)
 	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		response.Body.Close()
+		return nil, errors.New("unexpected response")
+	}
+	return response, nil
+}
+
+func fetchLinkBytes(ctx context.Context, client *http.Client, raw, accept string, limit int64) ([]byte, *url.URL, string, error) {
+	response, err := openLinkResponse(ctx, client, raw, accept)
+	if err != nil {
 		return nil, nil, "", err
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK || response.ContentLength > limit {
+	if response.ContentLength > limit {
 		return nil, nil, "", errors.New("unexpected or oversized response")
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
@@ -123,6 +135,42 @@ func fetchLinkBytes(ctx context.Context, client *http.Client, raw, accept string
 		return nil, nil, "", errors.New("unable to read response within its limit")
 	}
 	return data, response.Request.URL, response.Header.Get("Content-Type"), nil
+}
+
+// Only the head supplies preview metadata. Stop before a potentially large body.
+func fetchLinkHead(ctx context.Context, client *http.Client, raw string) ([]byte, *url.URL, error) {
+	response, err := openLinkResponse(ctx, client, raw, "text/html, application/xhtml+xml")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer response.Body.Close()
+	kind, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if kind != "text/html" && kind != "application/xhtml+xml" {
+		return nil, nil, errors.New("unexpected content type")
+	}
+	reader := &io.LimitedReader{R: response.Body, N: maxLinkHTML + 1}
+	tokens := html.NewTokenizer(reader)
+	var head bytes.Buffer
+	for {
+		kind := tokens.Next()
+		if reader.N == 0 {
+			return nil, nil, errors.New("metadata exceeds its limit")
+		}
+		if kind == html.ErrorToken {
+			if tokens.Err() != io.EOF {
+				return nil, nil, tokens.Err()
+			}
+			break
+		}
+		head.Write(tokens.Raw())
+		if token := tokens.Token(); kind == html.EndTagToken && token.Data == "head" || kind == html.StartTagToken && token.Data == "body" {
+			break
+		}
+	}
+	if !utf8.Valid(head.Bytes()) {
+		return nil, nil, contentError("This page uses an unsupported text encoding. Enter the details yourself.")
+	}
+	return head.Bytes(), response.Request.URL, nil
 }
 
 // Metadata is untrusted text. Ignore embed markup, og:url, and document base URLs.
@@ -235,6 +283,14 @@ func (b *linkFetchBudget) allow(id string, now time.Time) bool {
 }
 
 func (m *module) fetchLink(w http.ResponseWriter, r *http.Request) {
+	m.fetchPreview(w, r, false)
+}
+
+func (m *module) fetchVideoDetails(w http.ResponseWriter, r *http.Request) {
+	m.fetchPreview(w, r, true)
+}
+
+func (m *module) fetchPreview(w http.ResponseWriter, r *http.Request, video bool) {
 	account, permission, ok := m.mediaActor(w, r)
 	if !ok {
 		return
@@ -249,6 +305,13 @@ func (m *module) fetchLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	destination, err := linkURL(strings.TrimSpace(r.PostForm.Get("url")))
+	var source videoSource
+	if err == nil && video {
+		source, err = videoURL(destination.String())
+		if err == nil {
+			destination, _ = url.Parse(source.viewingURL())
+		}
+	}
 	if err != nil {
 		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
@@ -263,18 +326,36 @@ func (m *module) fetchLink(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), linkFetchTimeout)
 	defer cancel()
-	data, final, kind, err := fetchLinkBytes(ctx, m.linkClient, destination.String(), "text/html, application/xhtml+xml", maxLinkHTML)
-	mediaType, _, _ := mime.ParseMediaType(kind)
-	if err != nil || mediaType != "text/html" && mediaType != "application/xhtml+xml" {
-		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": "Couldn't fetch this page. You can enter the card details yourself."})
-		return
-	}
-	if !utf8.Valid(data) {
-		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": "This page uses an unsupported text encoding. Enter the card details yourself."})
+	data, final, err := fetchLinkHead(ctx, m.linkClient, destination.String())
+	if err != nil {
+		message := "Couldn't fetch this page. You can enter the details yourself."
+		var textError contentError
+		if errors.As(err, &textError) {
+			message = textError.Error()
+		}
+		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": message})
 		return
 	}
 	link, imageURL := linkMetadata(data, destination)
 	warning := ""
+	if video {
+		resolved, err := videoURL(final.String())
+		if err != nil || resolved.Provider != source.Provider || resolved.ID != source.ID || resolved.Hash != source.Hash || link.Title == destination.Hostname() && link.Description == "" {
+			writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": "No video details were available. You can enter them yourself."})
+			return
+		}
+		if link.Title == destination.Hostname() {
+			link.Title = ""
+		}
+		if link.Description == "" {
+			warning = "Title fetched. No description was available."
+		}
+		writeJSON(w, r, http.StatusOK, struct {
+			Video   postVideo `json:"video"`
+			Warning string    `json:"warning,omitempty"`
+		}{postVideo{URL: strings.TrimSpace(r.PostForm.Get("url")), Title: link.Title, Caption: link.Description}, warning})
+		return
+	}
 	if imageURL != "" && r.PostForm.Get("image") != "false" {
 		ref, err := url.Parse(imageURL)
 		if err == nil {

@@ -362,6 +362,14 @@ func joinPostComponents(body string, input componentInput) (string, error) {
 
 func (p editorPage) DownloadsJSON() string { return p.fileSource("file-downloads", p.DownloadsInput) }
 
+// componentFields supplies the saved baseline for history and rejected forms.
+func (p editorPage) componentFields() map[string]string {
+	return map[string]string{
+		"album": p.AlbumMarkdown(), "downloads": p.DownloadsJSON(), "pdf": p.PDFJSON(),
+		"link": p.LinkJSON(), "video": p.VideoJSON(), "componentOrder": p.ComponentOrderJSON(),
+	}
+}
+
 func (p editorPage) fileSource(kind string, input *string) string {
 	if input != nil {
 		return *input

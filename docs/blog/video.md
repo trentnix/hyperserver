@@ -1,8 +1,10 @@
 # Video
 
-Use **Add component → Video** below a post's Markdown editor. Paste a YouTube or Vimeo URL, enter a title, and add an optional caption. Save with the post. One video component is allowed per post.
+Use **Add component → Video** below a post's Markdown editor. Paste a YouTube or Vimeo URL. The title and caption are optional. Save with the post. One video component is allowed per post.
 
-Readers see the provider's preview image and playback controls, plus an **Open on YouTube** or **Open on Vimeo** link. The player loads as it approaches the viewport. Autoplay is disabled, so playback waits for Play. The embedded player works without the blog's JavaScript. Feed entries include the title, viewing link, and caption.
+Choose **Fetch details** to copy the video's title and available description into the title and caption fields. You can edit or clear either field. **Refresh details** asks before replacing existing text. Missing source fields and failed requests leave your text intact. Source descriptions may be shortened by the provider.
+
+Readers see the provider's preview image and playback controls. The player loads as it approaches the viewport. Autoplay is disabled, so playback waits for Play. The embedded player works without the blog's JavaScript. Feed entries replace the player with a viewing link and include any title or caption.
 
 ## Supported URLs
 
@@ -14,9 +16,11 @@ Provider settings still control whether a video can be embedded. Deleted, privat
 
 ## Storage and rendering
 
-The existing version 2 `post-components` block stores a `video` record containing a `video` object with `url`, `title`, and optional `caption`. Titles are limited to 240 characters, captions to 1,000, and URLs to 2,048 bytes. No database migration is required.
+The existing version 2 `post-components` block stores a `video` record containing a `video` object with `url` and optional `title` and `caption`. Titles are limited to 240 characters, captions to 1,000, and URLs to 2,048 bytes. If the title is blank, the player uses an accessibility label such as “YouTube video” and omits the title heading. No database migration is required.
 
-Ordering, removal, Undo, browser recovery, and revision history use the existing component flow. Search includes titles and captions. Video files stay with their provider. Saving and rendering never fetch remote video data or metadata.
+Ordering, removal, Undo, browser recovery, and revision history use the existing component flow. Search includes titles and captions. Video files stay with their provider. Metadata is fetched only when the author requests it and saved with the post. Saving and rendering never fetch remote video data or metadata.
+
+Video details share the link preview's authenticated endpoint protections: public destinations, checked DNS addresses, three redirects, a five-second timeout, two concurrent requests, and ten requests per author per minute. The fetcher reads at most 1 MiB of decoded HTML and stops at the end of the metadata section. It imports text only and ignores embed markup and thumbnails. Both title and caption remain optional if metadata is unavailable.
 
 The application accepts only supported provider hosts and validated video IDs. It constructs player URLs itself and never accepts embed HTML. YouTube uses `www.youtube-nocookie.com`. Vimeo uses `player.vimeo.com` with `dnt=1`. Loading the preview contacts the provider before Play. The iframe shares only the embedding origin through its referrer policy. Other page requests retain the application's existing policy.
 

@@ -2,6 +2,23 @@ import {getMarkdownEditor} from './markdown-editor.js';
 
 const editors = new WeakMap();
 
+// JSON sources omit optional empty values when saved. Compare values rather than
+// formatting so restoring a field also restores the component's saved state.
+export function componentValue(name, value) {
+  if (name === 'album') return value.split(/\r?\n/).filter(line => line.trim()).join('\n');
+  const optionalDefault = (key, value) =>
+    value === '' && ['title', 'caption', 'description', 'siteName', 'imageID'].includes(key) ||
+    value === false && ['hideImage', 'hideDownload'].includes(key);
+  const normalize = value => {
+    if (Array.isArray(value)) return value.map(normalize);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.keys(value).sort().filter(key => !optionalDefault(key, value[key])).map(key => [key, normalize(value[key])]));
+  };
+  try {
+    return JSON.stringify(normalize(JSON.parse(value || (['downloads', 'pdf'].includes(name) ? '[]' : '{}'))));
+  } catch { return value; }
+}
+
 // One controller owns component placement and removal. Each component owns its
 // fields and supplies a snapshot so Undo also restores its unsaved local state.
 export function registerComponent(section, callbacks) {
@@ -22,6 +39,18 @@ function createEditor(root) {
   const entries = new Map();
   const removed = new Map();
   let order = [];
+  let baseline;
+
+  function updateUnsaved() {
+    if (baseline === undefined) return;
+    const savedOrder = baseline ? JSON.parse(baseline.componentOrder || '[]') || [] : [];
+    for (const [type, section] of sections) {
+      const source = section.querySelector('textarea[name]');
+      const changed = !baseline || order.indexOf(type) !== savedOrder.indexOf(type) ||
+        componentValue(source.name, source.value) !== componentValue(source.name, baseline[source.name] || '');
+      section.querySelector('[data-component-unsaved]').hidden = section.hidden || !changed;
+    }
+  }
 
   function render() {
     const busy = Boolean(form.dataset.uploading);
@@ -47,6 +76,7 @@ function createEditor(root) {
     picker.hidden = order.length === sections.size;
     field.value = JSON.stringify(order);
     updateRequired();
+    updateUnsaved();
   }
 
   function sync() {
@@ -123,6 +153,13 @@ function createEditor(root) {
       render();
     }
     updateRequired();
+    updateUnsaved();
+  });
+  // Draft recovery and history keep the server baseline. Only a confirmed save
+  // replaces it, including when an HTMX response leaves this editor in place.
+  form.addEventListener('blog:editor-baseline', event => {
+    baseline = event.detail;
+    updateUnsaved();
   });
   form.addEventListener('blog:uploads-finished', render);
   sync();

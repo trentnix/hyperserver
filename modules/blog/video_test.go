@@ -82,8 +82,8 @@ func TestVideoComponent(t *testing.T) {
 	if err != nil || strings.Contains(string(rendered), "<script>") || !strings.Contains(string(rendered), "<iframe") || !strings.Contains(string(rendered), html.EscapeString(video.Title)) || !strings.Contains(string(rendered), html.EscapeString(video.Caption)) || strings.Index(string(rendered), `class="video-component"`) > strings.Index(string(rendered), `class="link-preview"`) {
 		t.Fatal("unsafe or incorrect video rendering", rendered, err)
 	}
-	if !strings.Contains(string(rendered), `src="https://player.vimeo.com/video/76979871?autoplay=0&amp;dnt=1#t=90s"`) || !strings.Contains(string(rendered), `href="https://vimeo.com/76979871#t=90s"`) {
-		t.Fatal("player and ordinary viewing link must use normalized URLs", rendered)
+	if !strings.Contains(string(rendered), `src="https://player.vimeo.com/video/76979871?autoplay=0&amp;dnt=1#t=90s"`) || strings.Contains(string(rendered), `href="https://vimeo.com/`) {
+		t.Fatal("the player must use a normalized URL without a redundant viewing link", rendered)
 	}
 	for _, want := range []string{`loading="lazy"`, `referrerpolicy="strict-origin"`, `allowfullscreen`} {
 		if !strings.Contains(string(rendered), want) {
@@ -105,7 +105,7 @@ func TestVideoComponent(t *testing.T) {
 	if !strings.Contains(search, video.Title) || !strings.Contains(search, video.Caption) || strings.Contains(search, "76979871") || strings.Contains(search, `"video"`) {
 		t.Fatal("search must index video text instead of serialized data", search)
 	}
-	for _, raw := range []string{`null`, `{"url":"https://youtu.be/M7lc1UVf-VE","title":""}`, `{"url":"https://youtu.be/M7lc1UVf-VE","title":"Video","iframe":"bad"}`, `{"url":"https://youtu.be/M7lc1UVf-VE","title":"Video"} {}`} {
+	for _, raw := range []string{`null`, `{"url":"","title":"Video"}`, `{"url":"https://youtu.be/M7lc1UVf-VE","title":"Video","iframe":"bad"}`, `{"url":"https://youtu.be/M7lc1UVf-VE","title":"Video"} {}`} {
 		if _, err := joinPostComponents("Body", componentInput{Video: raw}); err == nil {
 			t.Fatal("invalid video accepted", raw)
 		}
@@ -121,6 +121,36 @@ func TestVideoComponent(t *testing.T) {
 	}
 }
 
+func TestVideoOptionalTitle(t *testing.T) {
+	for _, video := range []postVideo{
+		{URL: "https://youtu.be/M7lc1UVf-VE"},
+		{URL: "https://vimeo.com/76979871", Title: " \t\n"},
+	} {
+		source, err := joinPostComponents("", componentInput{Video: videoJSON(t, video)})
+		if err != nil {
+			t.Fatal("a video URL must be sufficient without a title or caption", err)
+		}
+		_, components, err := splitPostComponents(source)
+		if err != nil || components.Video() == nil || *components.Video() != video {
+			t.Fatal("an untitled video must round trip without adding a stored title", components, err)
+		}
+		provider, _ := videoURL(video.URL)
+		rendered, err := markdown(source)
+		if err != nil || strings.Contains(string(rendered), "<h3") || !strings.Contains(string(rendered), `title="`+provider.Provider+` video"`) || strings.Contains(string(rendered), "<a ") {
+			t.Fatal("an untitled player needs an accessibility label without an empty heading", rendered, err)
+		}
+		feed, err := markdownAt(source, &url.URL{Scheme: "https", Host: "blog.example"})
+		if err != nil || !strings.Contains(string(feed), "Open on "+provider.Provider) || strings.Contains(string(feed), "<iframe") {
+			t.Fatal("an untitled video needs a usable feed link", feed, err)
+		}
+	}
+	for _, title := range []string{strings.Repeat("a", 241), string([]byte{0xff})} {
+		if err := validateVideo(&postVideo{URL: "https://youtu.be/M7lc1UVf-VE", Title: title}); err == nil {
+			t.Fatal("optional titles must still satisfy length and encoding limits")
+		}
+	}
+}
+
 func TestVideoFormsAndHistory(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ordinary", true: "htmx"}[hx], func(t *testing.T) {
@@ -128,7 +158,7 @@ func TestVideoFormsAndHistory(t *testing.T) {
 			h.register(t)
 			h.verify(t)
 			h.login(t)
-			video := postVideo{URL: "https://youtu.be/M7lc1UVf-VE", Title: "A video", Caption: "A saved caption"}
+			video := postVideo{URL: "https://youtu.be/M7lc1UVf-VE", Caption: "A saved caption"}
 			fields := url.Values{"title": {""}, "slug": {"video-review"}, "video": {videoJSON(t, video)}, "componentOrder": {`["video"]`}}
 			response := h.request("POST", "/post", fields, hx)
 			requireStatus(t, response, http.StatusUnprocessableEntity)

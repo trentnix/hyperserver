@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
@@ -286,6 +287,8 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 				data.SaveActions = publication.SaveActions
 				data.PublishedSlug, data.CanSchedule = publication.PublishedSlug, publication.CanSchedule
 				data.ScheduledSlug, data.ScheduledAt = publication.ScheduledSlug, publication.ScheduledAt
+				baseline, _ := json.Marshal(publication.componentFields())
+				data.CurrentContent = string(baseline)
 			}
 		}
 		page.Data = data

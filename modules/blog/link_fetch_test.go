@@ -161,6 +161,48 @@ func TestLinkMetadata(t *testing.T) {
 	}
 }
 
+func TestLinkHeadLimits(t *testing.T) {
+	client := linkTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		switch r.URL.Path {
+		case "/large-body":
+			body := `<head><title>Small head</title></head><body>` + strings.Repeat("x", 2*maxLinkHTML)
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			io.WriteString(w, body)
+		case "/large-head":
+			io.WriteString(w, `<head><title>`+strings.Repeat("x", maxLinkHTML)+`</title></head>`)
+		case "/compressed-head":
+			w.Header().Set("Content-Encoding", "gzip")
+			out := gzip.NewWriter(w)
+			io.WriteString(out, `<head><title>`+strings.Repeat("x", maxLinkHTML)+`</title></head>`)
+			out.Close()
+		case "/wrong-type":
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{}`)
+		case "/slow":
+			<-r.Context().Done()
+		}
+	}))
+	data, destination, err := fetchLinkHead(t.Context(), client, "http://example.test/large-body")
+	if err != nil {
+		t.Fatal("a large body must not prevent reading a bounded metadata head", err)
+	}
+	link, _ := linkMetadata(data, destination)
+	if link.Title != "Small head" || len(data) > 100 {
+		t.Fatal("metadata fetching must stop at the end of the head", len(data), link)
+	}
+	for _, path := range []string{"large-head", "compressed-head", "wrong-type"} {
+		if _, _, err := fetchLinkHead(t.Context(), client, "http://example.test/"+path); err == nil {
+			t.Fatal("metadata fetching accepted an invalid or oversized head", path)
+		}
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+	defer cancel()
+	if _, _, err := fetchLinkHead(ctx, client, "http://example.test/slow"); err == nil {
+		t.Fatal("metadata fetching ignored cancellation")
+	}
+}
+
 func TestLinkFetchTextEncoding(t *testing.T) {
 	h := newHarness(t)
 	h.register(t)

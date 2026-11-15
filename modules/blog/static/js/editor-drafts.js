@@ -1,4 +1,5 @@
 import {getMarkdownEditor} from './markdown-editor.js';
+import {componentValue} from './post-components.js';
 
 // Recovery copies belong to this browser, not the published content. Each editor
 // instance owns a key so separate tabs never overwrite one another's writing.
@@ -13,8 +14,24 @@ import {getMarkdownEditor} from './markdown-editor.js';
       .map(field => [field.name, field.type === 'checkbox' ? field.checked : getMarkdownEditor(field)?.getMarkdown() ?? field.value]));
   }
   const encoded = state => JSON.stringify(snapshot(state));
-  const dirty = state => encoded(state) !== state.baseline;
+  function dirty(state) {
+    if (!state.baseline) return true;
+    const before = JSON.parse(state.baseline);
+    const after = snapshot(state);
+    for (const source of state.componentSources) {
+      before[source.name] = componentValue(source.name, before[source.name] || '');
+      after[source.name] = componentValue(source.name, after[source.name] || '');
+    }
+    return JSON.stringify(after) !== JSON.stringify(before);
+  }
   const active = state => state.form.isConnected;
+
+  function publishBaseline(state) {
+    // Rejected ordinary submissions retain a component baseline without treating
+    // their other submitted fields as saved.
+    const baseline = state.baseline || state.form.dataset.currentContent;
+    state.form.dispatchEvent(new CustomEvent('blog:editor-baseline', {detail: baseline ? JSON.parse(baseline) : null}));
+  }
 
   function setStatus(state, message, failed = false) {
     if (state.status.textContent !== message) state.status.textContent = message;
@@ -107,13 +124,14 @@ import {getMarkdownEditor} from './markdown-editor.js';
       const state = {
         form, ownerPrefix, scope, key: scope + crypto.randomUUID(), sources: [],
         fields: [...form.querySelectorAll('input[name], textarea[name], select[name]')].filter(field => field.type !== 'file' && field.name !== 'version'),
+        componentSources: [...form.querySelectorAll('[data-post-component] textarea[name]')],
         status: form.querySelector('[data-draft-status]')
       };
       // Rejected ordinary submissions contain unsaved input, not a server baseline.
       state.baseline = form.hasAttribute('data-unsaved') ? '' : encoded(state);
       // A loaded saved version is an edit, not the current server baseline.
       // The concurrency token always belongs to the newly opened editor, not a recovery copy.
-      if (form.dataset.currentContent) {
+      if (form.dataset.currentContent && !form.hasAttribute('data-unsaved')) {
         const baseline = snapshot(state);
         for (const [name, value] of Object.entries(JSON.parse(form.dataset.currentContent))) {
           // Match the browser's input and textarea normalization without changing the editor.
@@ -124,6 +142,7 @@ import {getMarkdownEditor} from './markdown-editor.js';
         state.baseline = JSON.stringify(baseline);
       }
       states.set(form, state);
+      publishBaseline(state);
       state.status.hidden = false;
       offerRecovery(state);
       if (dirty(state)) persist(state);
@@ -287,6 +306,7 @@ import {getMarkdownEditor} from './markdown-editor.js';
     const state = states.get(ctx.sourceElement);
     if (!state || !state.submitted) return;
     state.baseline = state.submitted;
+    publishBaseline(state);
     try {
       state.sources.forEach(removeCopy);
       state.sources = [];

@@ -58,6 +58,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /files/{id}", m.requireSetup(m.download))
 	routes.HandleFunc("GET /post/files", m.downloadLibrary)
 	routes.HandleWithBodyLimit("POST /post/link-preview", http.HandlerFunc(m.fetchLink), 16*1024)
+	routes.HandleWithBodyLimit("POST /post/video-details", http.HandlerFunc(m.fetchVideoDetails), 16*1024)
 	routes.HandleWithBodyLimit("POST /post/files/upload", http.HandlerFunc(m.uploadDownload), (maxDownloadBytes + 2*routing.MiB))
 	routes.HandleFunc("GET /rss", m.requireSetup(m.rss))
 	routes.HandleFunc("GET /sitemap.xml", m.requireSetup(m.sitemap))

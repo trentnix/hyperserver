@@ -31,7 +31,7 @@ async function requestFiles(path, options) {
 
 function validEntry(entry) {
   return entry && validID.test(entry.id) && typeof entry.label === 'string' && entry.label.trim() && [...entry.label].length <= 240 &&
-    (!entry.description || typeof entry.description === 'string' && [...entry.description].length <= 1000) &&
+    (entry.description === undefined || typeof entry.description === 'string' && [...entry.description].length <= 1000) &&
     (entry.hideDownload === undefined || typeof entry.hideDownload === 'boolean') && Number.isSafeInteger(entry.size) && entry.size >= 0 && entry.size <= 33554432;
 }
 
@@ -48,6 +48,7 @@ function initialize(root) {
     const list = section.querySelector('[data-downloads-list]');
     const status = section.querySelector('[data-downloads-status]');
     const recovery = section.querySelector('[data-downloads-recovery]');
+    const pdfRow = section.querySelector('[data-pdf-document-row]');
     let entries = [];
     let removed = [];
 
@@ -58,21 +59,26 @@ function initialize(root) {
 
     function render() {
       const busy = Boolean(form.dataset.uploading);
-      section.querySelector('[data-downloads-count]').textContent = entries.length ? `${entries.length} ${entries.length === 1 ? 'file' : 'files'}` : '';
-      section.querySelector('[data-download-upload]').disabled = busy || entries.length >= maxFiles;
-      section.querySelector('[data-download-browse]').disabled = busy || entries.length >= maxFiles;
+      const count = section.querySelector('[data-downloads-count]');
+      if (count) count.textContent = entries.length ? `${entries.length} ${entries.length === 1 ? 'file' : 'files'}` : '';
+      section.querySelector('[data-download-upload]').disabled = busy || !pdfOnly && entries.length >= maxFiles;
+      section.querySelector('[data-download-browse]').disabled = busy || !pdfOnly && entries.length >= maxFiles;
+      if (pdfOnly) {
+        pdfRow.hidden = false;
+        const metadata = pdfRow.querySelector('[data-pdf-document]');
+        metadata.hidden = !entries.length;
+        section.querySelector('[data-download-upload-label]').textContent = entries.length ? 'Replace PDF' : 'Upload PDF';
+        if (entries.length) {
+          metadata.querySelector('a').href = '/files/' + entries[0].id + '?preview=1';
+          metadata.querySelector('[data-pdf-size]').textContent = sizeLabel(entries[0].size);
+        }
+      }
       section.querySelector('[data-component-remove]').disabled = busy;
       recovery.hidden = !removed.length;
-      recovery.querySelector('span').textContent = `${removed.length} ${removed.length === 1 ? 'file' : 'files'} removed.`;
-      recovery.querySelector('button').disabled = busy || entries.length >= maxFiles;
+      recovery.querySelector('span').textContent = pdfOnly ? 'PDF replaced.' : `${removed.length} ${removed.length === 1 ? 'file' : 'files'} removed.`;
+      recovery.querySelector('button').disabled = busy || !pdfOnly && entries.length >= maxFiles;
       list.replaceChildren(...entries.map((entry, index) => {
-        const item = element('li');
-        const type = entry.id.split('.').pop().toUpperCase();
-        const badge = element('a', type, 'download-type');
-        badge.href = '/files/' + entry.id;
-        badge.setAttribute('hx-boost', 'false');
-        badge.setAttribute('download', '');
-        badge.setAttribute('aria-label', 'Download ' + entry.label);
+        const item = element(pdfOnly ? 'div' : 'li');
         const fields = element('div', '', 'download-fields');
         const label = element('label', 'Display name');
         const name = element('input');
@@ -86,7 +92,7 @@ function initialize(root) {
         const detail = element('label', 'Description (optional)');
         const description = element('textarea');
         description.value = entry.description || '';
-        description.rows = 1;
+        description.rows = pdfOnly ? 2 : 1;
         description.maxLength = 1000;
         detail.append(description);
         const update = () => { entry.label = name.value; entry.description = description.value; serialize(); };
@@ -107,6 +113,15 @@ function initialize(root) {
           option.append(showDownload, document.createTextNode('Show download link'));
           fields.append(option);
         }
+        if (pdfOnly) {
+          item.append(fields);
+          return item;
+        }
+        const badge = element('a', entry.id.split('.').pop().toUpperCase(), 'download-type');
+        badge.href = '/files/' + entry.id;
+        badge.setAttribute('hx-boost', 'false');
+        badge.setAttribute('download', '');
+        badge.setAttribute('aria-label', 'Download ' + entry.label);
         fields.append(element('small', sizeLabel(entry.size), 'form-hint'));
         const actions = element('div', '', 'download-actions');
         for (const [direction, delta, text] of (maxFiles > 1 ? [['up', -1, '↑'], ['down', 1, '↓']] : [])) {
@@ -145,6 +160,7 @@ function initialize(root) {
         source.hidden = false;
         section.querySelector('[data-downloads-source-label]').hidden = false;
         section.querySelector('.downloads-controls').hidden = true;
+        if (pdfRow) pdfRow.hidden = true;
         list.replaceChildren();
         setMediaStatus(status, 'Some file entries are invalid. Correct the source before adding files.', true);
         return;
@@ -160,15 +176,23 @@ function initialize(root) {
     function add(values) {
       if (!Array.isArray(values) || !values.every(accepts)) throw new Error('Invalid file response. Try again.');
       const next = values.filter(entry => !entries.some(current => current.id === entry.id));
-      if (entries.length + next.length > maxFiles) throw new Error(limitMessage);
-      entries.push(...next);
-      removed = removed.filter(value => !entries.some(entry => entry.id === value.entry.id));
+      if (pdfOnly) {
+        if (next.length > 1) throw new Error(limitMessage);
+        if (!next.length) return;
+        const previous = entries[0];
+        removed = previous ? [{entry: previous, index: 0}] : [];
+        entries = [previous ? {...previous, id: next[0].id, size: next[0].size} : next[0]];
+      } else {
+        if (entries.length + next.length > maxFiles) throw new Error(limitMessage);
+        entries.push(...next);
+        removed = removed.filter(value => !entries.some(entry => entry.id === value.entry.id));
+      }
       serialize(); render();
     }
 
     async function upload(files) {
       if (!section.isConnected || form.dataset.uploading) return;
-      if (files.length + entries.length > maxFiles) { setMediaStatus(status, limitMessage, true); return; }
+      if (files.length + (pdfOnly ? 0 : entries.length) > maxFiles) { setMediaStatus(status, limitMessage, true); return; }
       await runFormUpload(form, async () => {
         const failed = [];
         let lastError;
@@ -192,12 +216,12 @@ function initialize(root) {
             }
           }
         }
-        if (!failed.length) { setMediaStatus(status, 'Files added. Save the post to apply changes.'); return; }
+        if (!failed.length) { setMediaStatus(status, pdfOnly ? 'PDF ready. Save the post to apply changes.' : 'Files added. Save the post to apply changes.'); return; }
         const retry = () => upload(failed);
-        showUploadFailure(status, lastError, retry, 'Files already added and your edits are preserved.');
+        showUploadFailure(status, lastError, retry, pdfOnly ? 'Your edits are preserved.' : 'Files already added and your edits are preserved.');
         status.append(element('p', 'Not added: ' + failed.map(file => file.name).join(', ')));
         if (!status.querySelector('[data-upload-retry]')) {
-          const retryButton = button('Retry remaining uploads');
+          const retryButton = button(pdfOnly ? 'Retry upload' : 'Retry remaining uploads');
           retryButton.dataset.uploadRetry = '';
           retryButton.addEventListener('click', retry);
           status.append(retryButton);
@@ -213,11 +237,13 @@ function initialize(root) {
     });
     section.querySelector('[data-download-browse]').addEventListener('click', () => openLibrary(entries, add, status, form, {maxFiles, pdfOnly}));
     section.querySelector('[data-download-undo]').addEventListener('click', () => {
-      if (form.dataset.uploading || !removed.length || entries.length >= maxFiles) return;
+      if (form.dataset.uploading || !removed.length || !pdfOnly && entries.length >= maxFiles) return;
       const value = removed.pop();
-      entries.splice(Math.min(value.index, entries.length), 0, value.entry);
+      if (pdfOnly) entries = [value.entry];
+      else entries.splice(Math.min(value.index, entries.length), 0, value.entry);
       serialize(); render();
-      setMediaStatus(status, 'File restored. Save the post to apply changes.');
+      if (pdfOnly) list.querySelector('input')?.focus();
+      setMediaStatus(status, pdfOnly ? 'PDF restored. Save the post to apply changes.' : 'File restored. Save the post to apply changes.');
     });
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
@@ -234,12 +260,14 @@ function initialize(root) {
 async function openLibrary(existing, add, status, form, {maxFiles, pdfOnly}) {
   if (document.querySelector('.download-library')) return;
   const opener = document.activeElement;
+  const replacing = pdfOnly && existing.length > 0;
   const dialog = element('dialog', '', 'download-library');
   dialog.setAttribute('aria-labelledby', 'download-library-title');
-  const title = element('h2', pdfOnly ? 'Choose a PDF' : 'Choose files');
+  const title = element('h2', pdfOnly ? (replacing ? 'Choose a replacement PDF' : 'Choose a PDF') : 'Choose files');
   title.id = 'download-library-title';
   const close = button('Cancel');
-  const confirm = button('Add files');
+  const pdfAction = replacing ? 'Replace PDF' : 'Use PDF';
+  const confirm = button(pdfOnly ? pdfAction : 'Add files');
   confirm.disabled = true;
   const searchLabel = element('label', 'Search files');
   const search = element('input');
@@ -254,14 +282,14 @@ async function openLibrary(existing, add, status, form, {maxFiles, pdfOnly}) {
   document.body.append(dialog);
   const controller = new AbortController();
   const selected = new Map();
-  const room = maxFiles - existing.length;
+  const room = pdfOnly ? 1 : maxFiles - existing.length;
   document.addEventListener('htmx:before:cleanup', event => { if (event.target.contains?.(form)) dialog.close(); }, {signal: controller.signal});
   document.addEventListener('htmx:after:swap', () => { if (!form.isConnected) dialog.close(); }, {signal: controller.signal});
   close.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => { controller.abort(); dialog.remove(); if (opener?.isConnected) opener.focus(); }, {once: true});
   confirm.addEventListener('click', () => {
     if (!form.isConnected || form.dataset.uploading) return;
-    try { add([...selected.values()]); dialog.close(); setMediaStatus(status, 'Files added. Save the post to apply changes.'); }
+    try { add([...selected.values()]); dialog.close(); setMediaStatus(status, pdfOnly ? 'PDF ready. Save the post to apply changes.' : 'Files added. Save the post to apply changes.'); }
     catch (error) { feedback.textContent = error.message; }
   });
   search.addEventListener('input', () => {
@@ -283,7 +311,7 @@ async function openLibrary(existing, add, status, form, {maxFiles, pdfOnly}) {
       check.name = 'download-library-choice';
       check.disabled = existing.some(current => current.id === entry.id);
       const name = element('span', entry.label);
-      name.append(element('small', check.disabled ? 'Added to this post' : entry.id.split('.').pop().toUpperCase() + ' · ' + sizeLabel(entry.size)));
+      name.append(element('small', check.disabled ? (pdfOnly ? 'Current PDF' : 'Added to this post') : entry.id.split('.').pop().toUpperCase() + ' · ' + sizeLabel(entry.size)));
       label.append(check, name);
       row.append(label);
       list.append(row);
@@ -292,7 +320,7 @@ async function openLibrary(existing, add, status, form, {maxFiles, pdfOnly}) {
         if (check.checked && selected.size >= room) { check.checked = false; feedback.textContent = 'Post limit reached. Deselect a file to choose another.'; return; }
         if (check.checked) selected.set(entry.id, {...entry}); else selected.delete(entry.id);
         confirm.disabled = !selected.size;
-        confirm.textContent = selected.size ? `Add ${selected.size} ${selected.size === 1 ? 'file' : 'files'}` : 'Add files';
+        confirm.textContent = pdfOnly ? pdfAction : selected.size ? `Add ${selected.size} ${selected.size === 1 ? 'file' : 'files'}` : 'Add files';
         feedback.textContent = `${selected.size} ${selected.size === 1 ? 'file' : 'files'} selected`;
       });
     }

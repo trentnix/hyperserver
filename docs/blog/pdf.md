@@ -2,6 +2,8 @@
 
 Use **Add component → PDF preview** below a post's Markdown editor. Upload one PDF or choose one from the library. Edit its display name and optional description. Save the post to apply changes.
 
+The editor shows one document's fields directly on the component background. **Open PDF** opens the selected file. **Replace PDF** uploads a replacement, and **Library** chooses another existing PDF. Replacement preserves the display name, description, and download setting. Undo restores the previous file. Canceling or failing to replace leaves the current file intact.
+
 Readers see the document in their browser's PDF viewer. **Open PDF** opens a separate tab when inline viewing is unavailable. **Download** saves the original file. Clear **Show download link** beneath the description to hide Download above the preview. The checkbox is checked by default, including for existing previews. The browser's viewer may still offer its own download control.
 
 PDF previews use the same rounded container as photo albums and downloads. The viewer has a bounded height, with a shorter height on mobile. Authors can move, remove, and undo the component. Draft recovery and revision history retain the file, display name, description, download link setting, and component order. Posts can contain a PDF without body text. Page editing does not expose the component yet.

@@ -54,6 +54,15 @@ func markdownAt(source string, base *url.URL) (template.HTML, error) {
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
 			if token.Data == "iframe" {
+				for _, attr := range token.Attr {
+					if attr.Key != "src" {
+						continue
+					}
+					if video, err := videoURL(attr.Val); err == nil {
+						link := html.Token{Type: html.StartTagToken, Data: "a", Attr: []html.Attribute{{Key: "href", Val: video.viewingURL()}}}
+						out.WriteString(link.String() + "Open on " + video.Provider + "</a>")
+					}
+				}
 				continue
 			}
 			for i, attr := range token.Attr {

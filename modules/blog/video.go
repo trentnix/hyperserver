@@ -19,7 +19,7 @@ import (
 // Save the author's fields. Derive provider URLs locally instead of storing embed HTML.
 type postVideo struct {
 	URL     string `json:"url"`
-	Title   string `json:"title"`
+	Title   string `json:"title,omitempty"`
 	Caption string `json:"caption,omitempty"`
 }
 
@@ -162,8 +162,8 @@ func validateVideo(video *postVideo) error {
 	if _, err := videoURL(video.URL); err != nil {
 		return err
 	}
-	if strings.TrimSpace(video.Title) == "" || !utf8.ValidString(video.Title) || utf8.RuneCountInString(video.Title) > 240 {
-		return contentError("Give the video a title of at most 240 characters.")
+	if !utf8.ValidString(video.Title) || utf8.RuneCountInString(video.Title) > 240 {
+		return contentError("Keep the video title at most 240 characters.")
 	}
 	if !utf8.ValidString(video.Caption) || utf8.RuneCountInString(video.Caption) > 1000 {
 		return contentError("Keep the video caption under 1,000 characters.")
@@ -222,8 +222,14 @@ func (videoRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer)
 		}
 		video := node.(*videoNode).Video
 		source, _ := videoURL(video.URL) // Component validation runs before creating this node.
-		title := html.EscapeString(video.Title)
-		fmt.Fprintf(writer, `<section class="video-component" aria-label="Video"><h2>Video</h2><div class="video-heading"><h3>%s</h3><a href="%s" target="_blank" rel="noopener" hx-boost="false">Open on %s</a></div><div class="video-player"><iframe src="%s" title="%s" loading="lazy" referrerpolicy="strict-origin" allow="encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></div>`, title, html.EscapeString(source.viewingURL()), source.Provider, html.EscapeString(source.embedURL()), title)
+		title := strings.TrimSpace(video.Title)
+		writer.WriteString(`<section class="video-component" aria-label="Video"><h2>Video</h2>`)
+		if title != "" {
+			fmt.Fprintf(writer, `<h3 class="video-heading">%s</h3>`, html.EscapeString(title))
+		} else {
+			title = source.Provider + " video"
+		}
+		fmt.Fprintf(writer, `<div class="video-player"><iframe src="%s" title="%s" loading="lazy" referrerpolicy="strict-origin" allow="encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></div>`, html.EscapeString(source.embedURL()), html.EscapeString(title))
 		if video.Caption != "" {
 			fmt.Fprintf(writer, `<p class="video-caption">%s</p>`, html.EscapeString(video.Caption))
 		}
