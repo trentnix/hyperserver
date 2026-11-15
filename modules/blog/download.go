@@ -109,13 +109,13 @@ func (m *module) download(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, name, info.ModTime(), file)
 }
 
-// downloadActor preserves the JSON contract when a fetch upload or picker loses
+// mediaActor preserves the JSON contract when a fetch upload or picker loses
 // its session. No redirect can replace the author's unsaved form.
-func (m *module) downloadActor(w http.ResponseWriter, r *http.Request) (*user.User, role, bool) {
+func (m *module) mediaActor(w http.ResponseWriter, r *http.Request) (*user.User, role, bool) {
 	w.Header().Set("Cache-Control", "no-store")
 	account := user.GetUserFromContext(r.Context())
 	if account == nil {
-		writeJSON(w, r, http.StatusUnauthorized, map[string]string{"code": "authentication_required", "error": "Sign in again to upload or choose files."})
+		writeJSON(w, r, http.StatusUnauthorized, map[string]string{"code": "authentication_required", "error": "Sign in again to add files or link previews."})
 		return nil, "", false
 	}
 	permission, err := m.access.Role(r.Context(), account)
@@ -125,9 +125,9 @@ func (m *module) downloadActor(w http.ResponseWriter, r *http.Request) (*user.Us
 		return nil, "", false
 	}
 	if !permission.valid() {
-		code, message := "access_denied", "This account cannot upload or choose files."
+		code, message := "access_denied", "This account cannot add files or link previews."
 		if account.NeedsVerification() {
-			code, message = "verification_required", "Verify your email before uploading files."
+			code, message = "verification_required", "Verify your email before adding files or link previews."
 		}
 		writeJSON(w, r, http.StatusForbidden, map[string]string{"code": code, "error": message})
 		return nil, "", false
@@ -136,7 +136,7 @@ func (m *module) downloadActor(w http.ResponseWriter, r *http.Request) (*user.Us
 }
 
 func (m *module) uploadDownload(w http.ResponseWriter, r *http.Request) {
-	account, permission, ok := m.downloadActor(w, r)
+	account, permission, ok := m.mediaActor(w, r)
 	if !ok {
 		return
 	}
@@ -247,7 +247,7 @@ func (m *module) storeDownload(r *http.Request, accountID string, permission rol
 }
 
 func (m *module) downloadLibrary(w http.ResponseWriter, r *http.Request) {
-	account, permission, ok := m.downloadActor(w, r)
+	account, permission, ok := m.mediaActor(w, r)
 	if !ok {
 		return
 	}

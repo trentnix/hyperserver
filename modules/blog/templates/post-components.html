@@ -44,6 +44,17 @@
   </section>
 {{ end }}
 
+{{ define "blog.linkEditor" }}
+  <section class="link-editor" data-link-editor data-post-component="link-preview" aria-labelledby="link-editor-title">
+    <div class="album-editor-heading"><h2 id="link-editor-title">Link preview</h2><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Link preview" }}<button type="button" class="text-button component-remove" data-component-remove="link-preview" hidden>Remove link</button></div></div>
+    <p class="form-hint" id="link-help">Paste a URL to fetch its preview, or enter the details yourself. Save with your post.</p>
+    <label for="post-link" data-link-source-label>Link preview (JSON)</label>
+    <textarea id="post-link" name="link" rows="3" aria-describedby="link-help">{{ .Data.LinkJSON }}</textarea>
+    <fieldset data-link-controls data-component-fields hidden disabled></fieldset>
+    <div data-link-status role="status"></div>
+  </section>
+{{ end }}
+
 {{ define "blog.componentOrderControls" }}
 <div class="component-order-controls" data-component-order-controls hidden>
   <button type="button" class="text-button" data-component-move="up" aria-label="Move {{ . }} up" title="Move {{ . }} up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg></button>

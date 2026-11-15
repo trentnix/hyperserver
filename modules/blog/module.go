@@ -104,6 +104,9 @@ type module struct {
 	images           imageStore
 	downloads        downloadStore
 	downloadUploadMu sync.Mutex
+	linkClient       *http.Client
+	linkBudget       linkFetchBudget
+	linkProcessing   chan struct{}
 	media            mediaStore
 	mediaReferences  mediaReferenceRepository
 	mediaMetadata    mediaMetadataRepository
@@ -282,6 +285,8 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	}
 	m.posts, m.images = store, images
 	m.imageProcessing = make(chan struct{}, 1)
+	m.linkClient = newLinkClient()
+	m.linkProcessing = make(chan struct{}, 2)
 	downloads, err = openDownloadStore(images.root)
 	if err != nil {
 		return fmt.Errorf("open blog downloads: %w", err)

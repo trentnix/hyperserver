@@ -25,6 +25,8 @@ HS_TEST_PERFORMANCE=1 go test -v -count=5 ./internal/test/web -run '^TestFramewo
 
 CI does not enforce latency budgets. Use `perfcheck -timing` only on the recorded CPU with comparable storage and no competing workload. Review the workload and environment before changing a budget. These checks are regression guards, not production capacity guarantees.
 
+The stripped Linux/amd64 blog binary is limited to 18,200,000 bytes. Link previews raised the measured size from about 17.93 MB to 18.00 MB on Go 1.27.4. The allowance covers the added fetcher, renderer, and embedded editor assets. Runtime allocation and memory budgets remain unchanged.
+
 ## Blog search
 
 Search scans current metadata and text. It is not a full-text index. SQLite checks publication visibility on every public search and orders metadata without sorting Markdown bodies. Results prefer title, tags, summary, then body matches.

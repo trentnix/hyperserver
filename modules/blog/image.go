@@ -143,7 +143,16 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 	if err != nil || len(data) > maxImageBytes {
 		return "", http.StatusUnprocessableEntity, errors.New("Unable to read the image, or it exceeds 8 MiB.")
 	}
-	upload, err := prepareImage(r.Context(), data)
+	return m.storeImageData(r.Context(), data, files[0].Filename, permission)
+}
+
+// Callers hold an imageProcessing slot while decoding and storing image bytes.
+func (m *module) storeImageData(ctx context.Context, data []byte, filename string, permission role) (string, int, error) {
+	account := user.GetUserFromContext(ctx)
+	if account == nil || !permission.valid() {
+		return "", http.StatusForbidden, errors.New("You don't have permission to upload images.")
+	}
+	upload, err := prepareImage(ctx, data)
 	if err != nil {
 		return "", http.StatusUnprocessableEntity, err
 	}
@@ -151,12 +160,12 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 	defer m.mediaMu.RUnlock()
 	id := imageUploadID(upload)
 	if permission == rolePoster {
-		metadata, err := m.mediaMetadata.GetMediaMetadata(r.Context(), id)
+		metadata, err := m.mediaMetadata.GetMediaMetadata(ctx, id)
 		allowed := err == nil && metadata.UploadedBy == account.ID
 		if err == nil && metadata.Version == 0 {
 			// Missing metadata alone does not prove a legacy image is new.
 			var existing storedMedia
-			existing, err = m.images.Open(r.Context(), id)
+			existing, err = m.images.Open(ctx, id)
 			if errors.Is(err, errNotFound) {
 				allowed, err = true, nil
 			} else if err == nil {
@@ -164,13 +173,15 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 			}
 		}
 		if err == nil && !allowed {
-			allowed, err = m.publicMedia(r.Context(), id)
+			allowed, err = m.publicMedia(ctx, id)
 		}
 		if err == nil && !allowed {
-			allowed, err = m.privateMediaForWriter(r.Context(), id, account.ID)
+			allowed, err = m.privateMediaForWriter(ctx, id, account.ID)
 		}
 		if err != nil {
-			logger.LogRequestError(r, err)
+			if log := logger.Get(ctx); log != nil {
+				log.ErrorContext(ctx, "Unable to store image", "error", err)
+			}
 			return "", http.StatusInternalServerError, errors.New("Unable to check image access. Retry the upload.")
 		}
 		if !allowed {
@@ -180,20 +191,26 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 	// Record ownership first so a failed file write can be retried by its uploader.
 	size := int64(len(upload.Original))
 	metadata := mediaMetadata{
-		Filename: uploadFilename(files[0].Filename), UploadedBy: account.ID,
+		Filename: uploadFilename(filename), UploadedBy: account.ID,
 		ContentType: upload.MediaType, Checksum: id[:64], SizeBytes: &size,
 	}
-	if err := m.mediaMetadata.RememberMedia(r.Context(), id, metadata); err != nil {
-		logger.LogRequestError(r, err)
+	if err := m.mediaMetadata.RememberMedia(ctx, id, metadata); err != nil {
+		if log := logger.Get(ctx); log != nil {
+			log.ErrorContext(ctx, "Unable to store image", "error", err)
+		}
 		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
 	}
-	id, err = m.images.Put(r.Context(), upload)
+	id, err = m.images.Put(ctx, upload)
 	if err != nil {
-		logger.LogRequestError(r, err)
+		if log := logger.Get(ctx); log != nil {
+			log.ErrorContext(ctx, "Unable to store image", "error", err)
+		}
 		return "", http.StatusInternalServerError, errors.New("Unable to save the image.")
 	}
-	if err := m.mediaMetadata.RecordMediaUpload(r.Context(), id, time.Now()); err != nil {
-		logger.LogRequestError(r, err)
+	if err := m.mediaMetadata.RecordMediaUpload(ctx, id, time.Now()); err != nil {
+		if log := logger.Get(ctx); log != nil {
+			log.ErrorContext(ctx, "Unable to store image", "error", err)
+		}
 		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
 	}
 	return id, http.StatusOK, nil

@@ -30,6 +30,7 @@ type editorPage struct {
 	AlbumInput                 *string
 	DownloadsInput             *string
 	PDFInput                   *string
+	LinkInput                  *string
 	ComponentOrderInput        *string
 	NoLibrary                  bool
 	Error                      string
@@ -181,7 +182,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		p.Version = version
 	}
 	var componentError error
-	p.Markdown, componentError = joinPostComponents(p.Markdown, r.PostForm.Get("album"), r.PostForm.Get("downloads"), r.PostForm.Get("componentOrder"), r.PostForm.Get("pdf"))
+	p.Markdown, componentError = joinPostComponents(p.Markdown, componentInput{Album: r.PostForm.Get("album"), Downloads: r.PostForm.Get("downloads"), Order: r.PostForm.Get("componentOrder"), PDF: r.PostForm.Get("pdf"), Link: r.PostForm.Get("link")})
 	if componentError != nil {
 		fields := validationFields(componentError)
 		if len(fields) == 0 {
@@ -251,6 +252,10 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	if r.PostForm.Has("pdf") {
 		pdf := r.PostForm.Get("pdf")
 		data.PDFInput = &pdf
+	}
+	if r.PostForm.Has("link") {
+		link := r.PostForm.Get("link")
+		data.LinkInput = &link
 	}
 	if r.PostForm.Has("componentOrder") {
 		order := r.PostForm.Get("componentOrder")

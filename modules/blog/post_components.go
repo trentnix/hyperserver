@@ -6,6 +6,7 @@ import (
 	"html"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -28,9 +29,10 @@ type postComponent struct {
 	Type   string         `json:"type"`
 	Photos []albumPhoto   `json:"photos,omitempty"`
 	Files  []postDownload `json:"files,omitempty"`
+	Link   *postLink      `json:"link,omitempty"`
 }
 
-var componentTypes = [...]string{"photo-album", "file-downloads", "pdf-preview"}
+var componentTypes = [...]string{"photo-album", "file-downloads", "pdf-preview", "link-preview"}
 
 func (p postComponents) Album() []albumPhoto {
 	for _, component := range p.Components {
@@ -170,14 +172,14 @@ func parseComponents(source string) (postComponents, error) {
 		seen[component.Type] = true
 		switch component.Type {
 		case "photo-album":
-			if len(component.Files) > 0 || len(component.Photos) == 0 {
+			if component.Link != nil || len(component.Files) > 0 || len(component.Photos) == 0 {
 				return result, unsupported
 			}
 			if err := validateComponentAlbum(component.Photos); err != nil {
 				return result, err
 			}
 		case "file-downloads", "pdf-preview":
-			if len(component.Photos) > 0 || len(component.Files) == 0 {
+			if component.Link != nil || len(component.Photos) > 0 || len(component.Files) == 0 {
 				return result, unsupported
 			}
 			if err := validateDownloads(component.Files); err != nil {
@@ -187,6 +189,13 @@ func parseComponents(source string) (postComponents, error) {
 				if err := validatePDFPreview(component.Files); err != nil {
 					return result, err
 				}
+			}
+		case "link-preview":
+			if component.Link == nil || len(component.Photos) > 0 || len(component.Files) > 0 {
+				return result, unsupported
+			}
+			if err := validateLink(component.Link); err != nil {
+				return result, err
 			}
 		default:
 			return result, unsupported
@@ -219,7 +228,7 @@ func parseComponentOrder(source string) ([]string, error) {
 	}
 	seen := make(map[string]bool)
 	for _, kind := range order {
-		if (kind != "photo-album" && kind != "file-downloads" && kind != "pdf-preview") || seen[kind] {
+		if !slices.Contains(componentTypes[:], kind) || seen[kind] {
 			return nil, contentError("Choose each component only once.")
 		}
 		seen[kind] = true
@@ -262,33 +271,41 @@ func splitPostComponents(source string) (string, postComponents, error) {
 	return body, result, nil
 }
 
-func joinPostComponents(body, album, downloads, orderSource, pdfSource string) (string, error) {
+type componentInput struct {
+	Album, Downloads, Order, PDF, Link string
+}
+
+func joinPostComponents(body string, input componentInput) (string, error) {
 	// An unsupported saved envelope must remain visible and recoverable. Never
 	// silently strip fields from a newer component version.
 	if _, _, err := splitPostComponents(body); err != nil {
 		return body, writingFieldError{err, "content"}
 	}
-	photos, err := parseAlbum(album)
+	photos, err := parseAlbum(input.Album)
 	if err != nil {
 		return body, writingFieldError{err, "album"}
 	}
-	entries, err := parseDownloads(downloads)
+	entries, err := parseDownloads(input.Downloads)
 	if err != nil {
 		return body, writingFieldError{err, "downloads"}
 	}
-	pdf, err := parseDownloads(pdfSource)
+	pdf, err := parseDownloads(input.PDF)
 	if err == nil {
 		err = validatePDFPreview(pdf)
 	}
 	if err != nil {
 		return body, writingFieldError{err, "pdf"}
 	}
-	order, err := parseComponentOrder(orderSource)
+	link, err := parseLink(input.Link)
+	if err != nil {
+		return body, writingFieldError{err, "link"}
+	}
+	order, err := parseComponentOrder(input.Order)
 	if err != nil {
 		return body, writingFieldError{err, "componentOrder"}
 	}
-	if len(entries) == 0 && len(pdf) == 0 {
-		return joinPostAlbum(body, album)
+	if len(entries) == 0 && len(pdf) == 0 && link == nil {
+		return joinPostAlbum(body, input.Album)
 	}
 	// Missing fields from older or ordinary forms retain the original default
 	// order. An explicit order takes precedence for every component it includes.
@@ -311,6 +328,9 @@ func joinPostComponents(body, album, downloads, orderSource, pdfSource string) (
 		}
 		if kind == "pdf-preview" && len(pdf) > 0 {
 			components.Components = append(components.Components, postComponent{Type: kind, Files: pdf})
+		}
+		if kind == "link-preview" && link != nil {
+			components.Components = append(components.Components, postComponent{Type: kind, Link: link})
 		}
 	}
 	data, err := json.Marshal(components)
@@ -379,6 +399,9 @@ func searchableWriting(source string) string {
 		for _, photo := range component.Photos {
 			text.WriteString("\n" + photo.Caption)
 		}
+		if link := component.Link; link != nil {
+			text.WriteString("\n" + link.Title + "\n" + link.Description + "\n" + link.SiteName)
+		}
 		for _, file := range component.Files {
 			text.WriteString("\n" + file.Label + "\n" + file.Description)
 		}
@@ -415,6 +438,8 @@ func (componentsTransformer) Transform(document *ast.Document, reader text.Reade
 			document.InsertBefore(document, block, &downloadsNode{Entries: component.Files})
 		case "pdf-preview":
 			document.InsertBefore(document, block, &pdfNode{File: component.Files[0]})
+		case "link-preview":
+			document.InsertBefore(document, block, &linkNode{Link: *component.Link})
 		}
 	}
 	document.RemoveChild(document, block)

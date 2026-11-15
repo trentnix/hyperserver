@@ -64,6 +64,7 @@ Accounts, roles, content, and tokens are preserved. Unexpired invitations work a
 
 - [Writing and site content](content.md): posts, pages, profile, search, sharing, and saved versions.
 - [Images](media.md): uploads, reuse, privacy, cleanup, and optimization.
+- [Link previews](links.md): saved cards with editable details and local thumbnails.
 - [File downloads](downloads.md): post attachments, limits, access, and storage.
 - [Backup and recovery](backup.md): offline ZIP archives and manual recovery.
 - [Framework setup](../application.md): service selection, modules, rendering, and cleanup.

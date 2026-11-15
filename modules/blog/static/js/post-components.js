@@ -28,6 +28,7 @@ function createEditor(root) {
     for (const [type, section] of sections) {
       const index = order.indexOf(type);
       section.hidden = index < 0;
+      section.querySelectorAll('[data-component-fields]').forEach(fields => { fields.disabled = index < 0 || fields.hidden; });
       root.querySelector(`[data-component-add="${type}"]`).hidden = index >= 0;
       root.querySelector(`[data-component-recovery="${type}"]`).hidden = index >= 0 || !removed.has(type);
       section.querySelector('[data-component-remove]').hidden = false;
