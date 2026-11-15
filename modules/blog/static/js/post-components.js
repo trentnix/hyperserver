@@ -1,3 +1,5 @@
+import {getMarkdownEditor} from './markdown-editor.js';
+
 const editors = new WeakMap();
 
 // One controller owns component placement and removal. Each component owns its
@@ -62,7 +64,11 @@ function createEditor(root) {
   }
 
   function updateRequired() {
-    form.elements.content.required = ![...sections.values()].some(section => section.querySelector('textarea[name]').value.trim());
+    const required = ![...sections.values()].some(section => section.querySelector('textarea[name]').value.trim());
+    const content = form.elements.content;
+    const editor = getMarkdownEditor(content);
+    if (editor) editor.setRequired(required);
+    else content.required = required;
   }
 
   root.addEventListener('click', event => {

@@ -10,7 +10,7 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
   if (editors.has(textarea)) return editors.get(textarea);
   if (!window.EasyMDE) return;
 
-  const required = textarea.required;
+  let required = textarea.required;
   const label = textarea.labels[0];
   const labelFor = label?.htmlFor;
   let destroyed = false;
@@ -73,6 +73,13 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
     },
     focus() {
       if (!destroyed && textarea.isConnected) editor.codemirror.focus();
+    },
+    setRequired(value) {
+      if (destroyed) return;
+      required = value;
+      textarea.required = false;
+      if (required) input.setAttribute('aria-required', 'true');
+      else input.removeAttribute('aria-required');
     },
     syncValidation() {
       for (const attribute of ['aria-invalid', 'aria-describedby']) {
