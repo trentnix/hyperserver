@@ -1,0 +1,12 @@
+{{ define "blog.linkEditor" }}
+  <section class="link-editor" data-link-editor data-post-component="link-preview" aria-labelledby="link-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="link-editor-title">Link preview</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Link preview" }}<button type="button" class="text-button component-remove" data-component-remove="link-preview" hidden>Remove link</button></div></div>
+    <p class="form-hint" id="link-help">Paste a URL to fetch its preview, or enter the details yourself. Save with your post.</p>
+    <label for="post-link" data-link-source-label>Link preview (JSON)</label>
+    <textarea id="post-link" name="link" rows="3" aria-describedby="link-help">{{ .Source }}</textarea>
+    <fieldset data-link-controls data-component-fields hidden disabled></fieldset>
+    <div data-link-status role="status"></div>
+  </section>
+{{ end }}
+
+{{ define "blog.linkIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 14 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg>{{ end }}

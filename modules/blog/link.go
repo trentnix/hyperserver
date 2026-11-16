@@ -1,7 +1,6 @@
 package blog
 
 import (
-	"encoding/json"
 	"fmt"
 	"html"
 	"net/url"
@@ -72,23 +71,14 @@ func parseLink(source string) (*postLink, error) {
 func (p postComponents) Link() *postLink {
 	for _, component := range p.Components {
 		if component.Type == "link-preview" {
-			return component.Link
+			value, _ := component.Content.(*postLink)
+			return value
 		}
 	}
 	return nil
 }
 
-func (p editorPage) LinkJSON() string {
-	if p.LinkInput != nil {
-		return *p.LinkInput
-	}
-	_, components, _ := splitPostComponents(p.Markdown)
-	if components.Link() == nil {
-		return ""
-	}
-	data, _ := json.Marshal(components.Link())
-	return string(data)
-}
+func (p editorPage) LinkJSON() string { return p.componentSource("link") }
 
 type linkNode struct {
 	ast.BaseBlock

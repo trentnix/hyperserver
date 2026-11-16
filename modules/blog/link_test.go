@@ -25,7 +25,7 @@ func TestLinkComponent(t *testing.T) {
 	link := postLink{URL: "https://example.test/story?query=a&other=b", Title: `A <script>title</script>`, Description: `A "description"`, SiteName: "Example & site", ImageID: strings.Repeat("a", 64) + ".png"}
 	for _, hidden := range []bool{false, true} {
 		link.HideImage = hidden
-		source, err := joinPostComponents("Body", componentInput{Link: linkSource(t, link), Order: `["link-preview"]`})
+		source, err := joinPostComponents("Body", componentInput{"link": linkSource(t, link), "componentOrder": `["link-preview"]`})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,12 +55,12 @@ func TestLinkComponent(t *testing.T) {
 		}
 	}
 	for _, source := range []string{`null`, `{"url":"javascript:alert(1)","title":"Bad"}`, `{"url":"https://example.test/","title":""}`, `{"url":"https://example.test/","title":"Good","imageID":"https://attacker.test/track.png"}`, `{"url":"https://example.test/","title":"Good","unexpected":true}`} {
-		if _, err := joinPostComponents("Body", componentInput{Link: source}); err == nil {
+		if _, err := joinPostComponents("Body", componentInput{"link": source}); err == nil {
 			t.Fatal("invalid link accepted", source)
 		}
 	}
 	file := postDownload{ID: strings.Repeat("b", 64) + ".txt", Label: "Notes"}
-	source, err := joinPostComponents("Body", componentInput{Downloads: downloadSource(t, file), Link: linkSource(t, link), Order: `["link-preview","file-downloads"]`})
+	source, err := joinPostComponents("Body", componentInput{"downloads": downloadSource(t, file), "link": linkSource(t, link), "componentOrder": `["link-preview","file-downloads"]`})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 import {runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 import {markField} from './forms.js';
-import {registerComponent} from './post-components.js';
+import {registerComponent, jsonComponentValue} from './post-components.js';
 import {requestFiles, validEntry, openFileLibrary, sizeLabel} from './file-picker.js';
 
 const initialized = new WeakSet();
@@ -233,6 +233,7 @@ function initialize(root) {
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
     registerComponent(section, {
+      normalize: value => jsonComponentValue(value, {strings: ['description'], flags: ['hideDownload'], empty: '[]'}),
       snapshot: () => ({source: source.value, removed: [...removed]}),
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy.source; read(); removed = copy.removed; render(); },

@@ -19,10 +19,22 @@ const maxMarkdownBytes = 256 * 1024
 // markdown is the trust boundary for rendered blog content. Goldmark omits raw
 // HTML and unsafe URL schemes. Previews and published pages use the same renderer.
 func markdown(source string) (template.HTML, error) {
+	return markdownComponents(source, postComponentCatalog)
+}
+
+func markdownComponents(source string, catalog componentCatalog) (template.HTML, error) {
 	var out bytes.Buffer
+	var renderers []util.PrioritizedValue
+	for index, definition := range catalog {
+		renderers = append(renderers, util.Prioritized(definition.Renderer, 100+index))
+	}
+	transformers := []util.PrioritizedValue{util.Prioritized(componentsTransformer{catalog: catalog}, 110)}
+	if _, supported := catalog.find("photo-album"); supported {
+		transformers = append(transformers, util.Prioritized(albumTransformer{}, 100))
+	}
 	engine := goldmark.New(
-		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(albumTransformer{}, 100), util.Prioritized(componentsTransformer{}, 110))),
-		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(albumRenderer{}, 100), util.Prioritized(downloadsRenderer{}, 110), util.Prioritized(pdfRenderer{}, 120), util.Prioritized(linkRenderer{}, 130), util.Prioritized(videoRenderer{}, 140), util.Prioritized(audioRenderer{}, 150))),
+		goldmark.WithParserOptions(parser.WithASTTransformers(transformers...)),
+		goldmark.WithRendererOptions(renderer.WithNodeRenderers(renderers...)),
 	)
 	if err := engine.Convert([]byte(source), &out); err != nil {
 		return "", err

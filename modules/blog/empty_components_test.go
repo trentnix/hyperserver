@@ -81,15 +81,15 @@ func TestEmptyComponentsCannotBeSaved(t *testing.T) {
 
 func TestEmptyComponentArraysCannotBeSaved(t *testing.T) {
 	for _, input := range []componentInput{
-		{Order: `["photo-album"]`, Album: " \n"},
-		{Order: `["file-downloads"]`, Downloads: `[]`},
-		{Order: `["file-downloads"]`, Downloads: `null`},
-		{Order: `["pdf-preview"]`, PDF: `[]`},
-		{Order: `["pdf-preview"]`, PDF: `null`},
-		{Order: `["audio"]`},
+		{"componentOrder": `["photo-album"]`, "album": " \n"},
+		{"componentOrder": `["file-downloads"]`, "downloads": `[]`},
+		{"componentOrder": `["file-downloads"]`, "downloads": `null`},
+		{"componentOrder": `["pdf-preview"]`, "pdf": `[]`},
+		{"componentOrder": `["pdf-preview"]`, "pdf": `null`},
+		{"componentOrder": `["audio"]`},
 	} {
 		if _, err := joinPostComponents("", input); err == nil {
-			t.Fatal("added empty component was silently dropped", input.Order)
+			t.Fatal("added empty component was silently dropped", input["componentOrder"])
 		}
 	}
 }

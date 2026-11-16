@@ -90,10 +90,12 @@ func contentMediaReferences(source, contentPath, preview string) ([]string, erro
 		return nil, err
 	}
 	refs := make(map[string]bool)
-	// A hidden link thumbnail remains available if the author shows it again.
+	// Components report every upload, including optional hidden media.
 	_, components, _ := splitPostComponents(source)
-	if link := components.Link(); link != nil && link.ImageID != "" {
-		refs["/images/"+link.ImageID] = true
+	for _, component := range components.Components {
+		for _, media := range component.Content.Media() {
+			refs[mediaURL(media.ID)] = true
+		}
 	}
 	if preview != "" {
 		refs["/images/"+preview] = true

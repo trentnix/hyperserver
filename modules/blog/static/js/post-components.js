@@ -2,26 +2,30 @@ import {getMarkdownEditor} from './markdown-editor.js';
 
 const editors = new WeakMap();
 
-// JSON sources omit optional empty values when saved. Compare values rather than
-// formatting so restoring a field also restores the component's saved state.
-export function componentValue(name, value) {
-  if (name === 'album') return value.split(/\r?\n/).filter(line => line.trim()).join('\n');
-  const optionalDefault = (key, value) =>
-    value === '' && ['title', 'caption', 'description', 'transcript', 'siteName', 'imageID'].includes(key) ||
-    value === false && ['hideImage', 'hideDownload'].includes(key);
+const comparisons = new WeakMap();
+
+export function componentValue(source, value) {
+  return comparisons.get(source)?.(value) ?? value;
+}
+
+// Each editor declares its optional defaults. Canonical JSON comparison itself
+// stays shared, including nested entries in file lists.
+export function jsonComponentValue(value, {strings = [], flags = [], empty = '{}'} = {}) {
+  const optionalDefault = (key, value) => value === '' && strings.includes(key) || value === false && flags.includes(key);
   const normalize = value => {
     if (Array.isArray(value)) return value.map(normalize);
     if (!value || typeof value !== 'object') return value;
     return Object.fromEntries(Object.keys(value).sort().filter(key => !optionalDefault(key, value[key])).map(key => [key, normalize(value[key])]));
   };
-  try {
-    return JSON.stringify(normalize(JSON.parse(value || (['downloads', 'pdf'].includes(name) ? '[]' : '{}'))));
-  } catch { return value; }
+  try { return JSON.stringify(normalize(JSON.parse(value || empty))); }
+  catch { return value; }
 }
 
 // One controller owns component placement and removal. Each component owns its
 // fields and supplies a snapshot so Undo also restores its unsaved local state.
 export function registerComponent(section, callbacks) {
+  const source = section.querySelector('textarea[name]');
+  comparisons.set(source, callbacks.normalize);
   const root = section.closest('[data-post-components]');
   let editor = editors.get(root);
   if (!editor) {
@@ -71,7 +75,7 @@ function createEditor(root) {
     for (const [type, section] of sections) {
       const source = section.querySelector('textarea[name]');
       const changed = !baseline || order.indexOf(type) !== savedOrder.indexOf(type) ||
-        componentValue(source.name, source.value) !== componentValue(source.name, baseline[source.name] || '');
+        componentValue(source, source.value) !== componentValue(source, baseline[source.name] || '');
       section.querySelector('[data-component-unsaved]').hidden = section.hidden || !changed;
     }
   }

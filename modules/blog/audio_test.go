@@ -78,7 +78,7 @@ func TestAudioComponent(t *testing.T) {
 	audio := postAudio{ID: strings.Repeat("a", 64) + ".mp3", Size: 1024, Title: `<script>A title</script>`, Description: "Description <markup> & quotes.", Transcript: "**Spoken words.**\n\n<script>alert(1)</script>\n\n[Unsafe](javascript:alert(1))"}
 	for _, hidden := range []bool{false, true} {
 		audio.HideDownload = hidden
-		source, err := joinPostComponents("Body", componentInput{Audio: audioJSON(t, audio), Video: videoJSON(t, postVideo{URL: "https://youtu.be/M7lc1UVf-VE"}), Order: `["audio","video"]`})
+		source, err := joinPostComponents("Body", componentInput{"audio": audioJSON(t, audio), "video": videoJSON(t, postVideo{URL: "https://youtu.be/M7lc1UVf-VE"}), "componentOrder": `["audio","video"]`})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -124,7 +124,7 @@ func TestAudioComponent(t *testing.T) {
 		}
 	}
 	for _, invalid := range []string{"{}", "null", `{"id":"https://example.test/remote.mp3","size":1}`, `{"id":"` + audio.ID + `","size":1,"title":false}`, strings.Replace(audioJSON(t, audio), ".mp3", ".pdf", 1), audioJSON(t, postAudio{ID: audio.ID, Size: maxDownloadBytes + 1}), audioJSON(t, postAudio{ID: audio.ID, Size: 1, Transcript: strings.Repeat("x", 20001)})} {
-		if _, err := joinPostComponents("Body", componentInput{Audio: invalid}); err == nil {
+		if _, err := joinPostComponents("Body", componentInput{"audio": invalid}); err == nil {
 			t.Fatal("invalid audio accepted", invalid)
 		}
 	}
@@ -271,7 +271,7 @@ func TestAudioOwnership(t *testing.T) {
 	if strings.Contains(h.request("GET", "/post/files", nil, false).Body.String(), audio.ID) {
 		t.Fatal("another author's private MP3 appeared in the library")
 	}
-	source, err := joinPostComponents("", componentInput{Audio: audioJSON(t, audio)})
+	source, err := joinPostComponents("", componentInput{"audio": audioJSON(t, audio)})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -320,6 +320,7 @@ function initialize(root) {
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
     registerComponent(section, {
+      normalize: value => value.split(/\r?\n/).filter(line => line.trim()).join('\n'),
       snapshot: () => ({source: source.value, removed: [...removed]}),
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy.source; read(); removed = copy.removed; updateRecovery(); },

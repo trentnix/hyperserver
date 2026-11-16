@@ -1,7 +1,6 @@
 package blog
 
 import (
-	"encoding/json"
 	"fmt"
 	"html"
 	"net/url"
@@ -185,23 +184,14 @@ func parseVideo(source string) (*postVideo, error) {
 func (p postComponents) Video() *postVideo {
 	for _, component := range p.Components {
 		if component.Type == "video" {
-			return component.Video
+			value, _ := component.Content.(*postVideo)
+			return value
 		}
 	}
 	return nil
 }
 
-func (p editorPage) VideoJSON() string {
-	if p.VideoInput != nil {
-		return *p.VideoInput
-	}
-	_, components, _ := splitPostComponents(p.Markdown)
-	if components.Video() == nil {
-		return ""
-	}
-	data, _ := json.Marshal(components.Video())
-	return string(data)
-}
+func (p editorPage) VideoJSON() string { return p.componentSource("video") }
 
 type videoNode struct {
 	ast.BaseBlock

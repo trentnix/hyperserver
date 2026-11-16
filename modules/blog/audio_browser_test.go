@@ -3,8 +3,10 @@ package blog
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestBrowserAudio(t *testing.T) {
@@ -23,6 +25,17 @@ func TestBrowserAudio(t *testing.T) {
 					testPDF(t, h)
 					testDownload(t, h, "Notes.txt", "Not an MP3")
 					return h
+				},
+				routes: func(h *harness) map[string]http.HandlerFunc {
+					return map[string]http.HandlerFunc{"/post/files": func(w http.ResponseWriter, r *http.Request) {
+						// A slow metadata response must not expose the storage ID.
+						select {
+						case <-r.Context().Done():
+							return
+						case <-time.After(300 * time.Millisecond):
+						}
+						h.app.Handler.ServeHTTP(w, r)
+					}}
 				},
 				prepareScript: func(t *testing.T, _ *harness, script []byte) []byte {
 					data, err := os.ReadFile("testdata/audio.mp3")

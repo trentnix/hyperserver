@@ -1,4 +1,4 @@
-import {registerComponent} from './post-components.js';
+import {registerComponent, jsonComponentValue} from './post-components.js';
 import {runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 import {requestFiles, validEntry, openFileLibrary, sizeLabel} from './file-picker.js';
 
@@ -71,7 +71,7 @@ function initialize(root) {
       }
       player.hidden = !value;
       section.querySelector('[data-audio-size]').textContent = value ? sizeLabel(value.size) : '';
-      section.querySelector('[data-audio-name]').textContent = value ? filenames.get(value.id) || value.id : '';
+      section.querySelector('[data-audio-name]').textContent = value ? filenames.get(value.id) || 'Selected MP3' : '';
       filename();
     }
 
@@ -164,6 +164,7 @@ function initialize(root) {
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
     registerComponent(section, {
+      normalize: value => jsonComponentValue(value, {strings: ['title', 'description', 'transcript'], flags: ['hideDownload']}),
       snapshot: () => ({source: source.value, previous}),
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy.source; read(); previous = copy.previous; render(); },

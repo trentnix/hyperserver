@@ -111,16 +111,7 @@ func (p editorPage) BodyMarkdown() string {
 
 func (p pageContent) BodyMarkdown() string { return p.Markdown }
 
-func (p editorPage) AlbumMarkdown() string {
-	if p.AlbumInput != nil {
-		return *p.AlbumInput
-	}
-	_, components, _ := splitPostComponents(p.Markdown)
-	if len(components.Album()) == 0 {
-		return ""
-	}
-	return albumSource(components.Album()) + "\n"
-}
+func (p editorPage) AlbumMarkdown() string { return p.componentSource("album") }
 
 var albumKind = ast.NewNodeKind("PhotoAlbum")
 

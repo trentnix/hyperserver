@@ -67,7 +67,7 @@ func TestVideoURLs(t *testing.T) {
 func TestVideoComponent(t *testing.T) {
 	video := postVideo{URL: "https://vimeo.com/76979871#t=1m30s", Title: `A <script>title</script>`, Caption: "A caption with <markup> & quotes.\nAnother line."}
 	link := postLink{URL: "https://example.test/article", Title: "Related link"}
-	source, err := joinPostComponents("Body", componentInput{Video: videoJSON(t, video), Link: linkSource(t, link), Order: `["video","link-preview"]`})
+	source, err := joinPostComponents("Body", componentInput{"video": videoJSON(t, video), "link": linkSource(t, link), "componentOrder": `["video","link-preview"]`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestVideoComponent(t *testing.T) {
 		t.Fatal("search must index video text instead of serialized data", search)
 	}
 	for _, raw := range []string{`null`, `{"url":"","title":"Video"}`, `{"url":"https://youtu.be/M7lc1UVf-VE","title":"Video","iframe":"bad"}`, `{"url":"https://youtu.be/M7lc1UVf-VE","title":"Video"} {}`} {
-		if _, err := joinPostComponents("Body", componentInput{Video: raw}); err == nil {
+		if _, err := joinPostComponents("Body", componentInput{"video": raw}); err == nil {
 			t.Fatal("invalid video accepted", raw)
 		}
 	}
@@ -129,7 +129,7 @@ func TestVideoOptionalTitle(t *testing.T) {
 		{URL: "https://youtu.be/M7lc1UVf-VE"},
 		{URL: "https://vimeo.com/76979871", Title: " \t\n"},
 	} {
-		source, err := joinPostComponents("", componentInput{Video: videoJSON(t, video)})
+		source, err := joinPostComponents("", componentInput{"video": videoJSON(t, video)})
 		if err != nil {
 			t.Fatal("a video URL must be sufficient without a title or caption", err)
 		}

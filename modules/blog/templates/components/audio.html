@@ -1,0 +1,26 @@
+{{ define "blog.audioEditor" }}
+  <section class="audio-editor" data-audio-editor data-post-component="audio" aria-labelledby="audio-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="audio-editor-title">Audio</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Audio" }}<button type="button" class="text-button component-remove" data-component-remove="audio" hidden>Remove audio</button></div></div>
+    <p class="form-hint" id="audio-help">Add an MP3 for readers to play. Save with your post.</p>
+    <label for="post-audio" data-audio-source-label>Audio (JSON)</label>
+    <textarea id="post-audio" name="audio" rows="3" aria-describedby="audio-help">{{ .Source }}</textarea>
+    <div class="audio-file-row" data-audio-controls hidden>
+      <div class="audio-file-actions"><button type="button" data-audio-upload>Upload MP3</button><button type="button" class="button-secondary" data-audio-browse>Library</button></div>
+      <p class="audio-file-info form-hint"><span data-audio-name></span><span data-audio-size></span></p>
+      <input type="file" accept=".mp3,audio/mpeg" data-audio-file hidden>
+      <audio controls preload="none" aria-label="Preview audio" hidden></audio>
+    </div>
+    <fieldset class="audio-editor-fields" data-audio-fields data-component-fields hidden disabled>
+      <label for="audio-title">Title (optional)</label><input id="audio-title" data-audio-field="title" maxlength="240">
+      <label for="audio-description">Description (optional)</label><textarea id="audio-description" data-audio-field="description" rows="2" maxlength="1000"></textarea>
+      <label for="audio-transcript">Transcript (optional)</label><textarea id="audio-transcript" data-audio-field="transcript" rows="4" maxlength="20000" aria-describedby="audio-transcript-help"></textarea>
+      <p class="form-hint" id="audio-transcript-help">Markdown supported. Readers can expand the transcript below the player.</p>
+      <label class="file-download-option"><input type="checkbox" data-audio-download checked>Show download link</label>
+    </fieldset>
+    <p class="form-hint downloads-limits">One MP3, up to 32 MiB. Shares the site's 1 GiB file storage.</p>
+    <div data-audio-status role="status"></div>
+    <div class="album-removal-recovery" data-audio-recovery role="status" hidden><span>MP3 replaced.</span><button type="button" class="text-button">Undo</button></div>
+  </section>
+{{ end }}
+
+{{ define "blog.audioIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13M9 9l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/></svg>{{ end }}

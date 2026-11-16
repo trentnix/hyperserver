@@ -19,8 +19,8 @@ import {componentValue} from './post-components.js';
     const before = JSON.parse(state.baseline);
     const after = snapshot(state);
     for (const source of state.componentSources) {
-      before[source.name] = componentValue(source.name, before[source.name] || '');
-      after[source.name] = componentValue(source.name, after[source.name] || '');
+      before[source.name] = componentValue(source, before[source.name] || '');
+      after[source.name] = componentValue(source, after[source.name] || '');
     }
     return JSON.stringify(after) !== JSON.stringify(before);
   }
@@ -97,7 +97,7 @@ import {componentValue} from './post-components.js';
         }
         if (typeof data.baseline !== 'string' || !data.fields || !state.fields.every(field =>
           field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' :
-            (['previewImage', 'published', 'publishDate', 'publishTime', 'tags', 'downloads', 'pdf', 'link', 'video', 'audio', 'componentOrder'].includes(field.name) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
+            ((['previewImage', 'published', 'publishDate', 'publishTime', 'tags', 'componentOrder'].includes(field.name) || state.componentSources.includes(field)) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
         copies.push({key, raw, data});
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);
@@ -169,12 +169,7 @@ import {componentValue} from './post-components.js';
           else field.value = copy.data.fields[field.name];
         }
         getMarkdownEditor(form.elements.content)?.setMarkdown(form.elements.content.value);
-        form.elements.album?.dispatchEvent(new Event('change', {bubbles: true}));
-        form.elements.downloads?.dispatchEvent(new Event('change', {bubbles: true}));
-        form.elements.pdf?.dispatchEvent(new Event('change', {bubbles: true}));
-        form.elements.link?.dispatchEvent(new Event('change', {bubbles: true}));
-        form.elements.audio?.dispatchEvent(new Event('change', {bubbles: true}));
-        form.elements.video?.dispatchEvent(new Event('change', {bubbles: true}));
+        state.componentSources.forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));
         form.elements.componentOrder?.dispatchEvent(new Event('change', {bubbles: true}));
         form.querySelectorAll('[data-image-value]').forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));
         state.sources.push(copy);

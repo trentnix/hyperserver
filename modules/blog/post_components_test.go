@@ -15,7 +15,7 @@ func TestPostComponentsRoundTrip(t *testing.T) {
 	photo := strings.Repeat("a", 64) + ".jpeg"
 	file := postDownload{ID: strings.Repeat("b", 64) + ".pdf", Label: `A <script> & "guide"`, Description: "Long description\nwith another line", Size: 1024}
 	album := `![Caption \[brackets\] \\ slash](/images/` + photo + `)`
-	source, err := joinPostComponents("Writing before components", componentInput{Album: album, Downloads: downloadSource(t, file)})
+	source, err := joinPostComponents("Writing before components", componentInput{"album": album, "downloads": downloadSource(t, file)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestPostComponentsRoundTrip(t *testing.T) {
 		t.Fatal("component reference extraction", refs, err)
 	}
 	// Removing downloads converts the album back to the existing readable format.
-	legacy, err := joinPostComponents(page.BodyMarkdown(), componentInput{Album: page.AlbumMarkdown()})
+	legacy, err := joinPostComponents(page.BodyMarkdown(), componentInput{"album": page.AlbumMarkdown()})
 	if err != nil || !strings.Contains(legacy, "```photo-album") || strings.Contains(legacy, "post-components") {
 		t.Fatal("legacy album regression", legacy, err)
 	}
@@ -132,7 +132,7 @@ func TestComponentOrderCompatibility(t *testing.T) {
 		t.Fatal("legacy order changed", page.ComponentOrderJSON())
 	}
 	for _, order := range []string{`["file-downloads","photo-album"]`, `["photo-album","file-downloads"]`, ""} {
-		source, err := joinPostComponents(page.BodyMarkdown(), componentInput{Album: page.AlbumMarkdown(), Downloads: page.DownloadsJSON(), Order: order})
+		source, err := joinPostComponents(page.BodyMarkdown(), componentInput{"album": page.AlbumMarkdown(), "downloads": page.DownloadsJSON(), "componentOrder": order})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,7 +159,7 @@ func TestComponentOrderCompatibility(t *testing.T) {
 		}
 	}
 	for _, order := range []string{`["unknown"]`, `["photo-album","photo-album"]`, `{"type":"photo-album"}`, `[1]`, `[] trailing`} {
-		if _, err := joinPostComponents("Body", componentInput{Album: page.AlbumMarkdown(), Downloads: page.DownloadsJSON(), Order: order}); err == nil {
+		if _, err := joinPostComponents("Body", componentInput{"album": page.AlbumMarkdown(), "downloads": page.DownloadsJSON(), "componentOrder": order}); err == nil {
 			t.Fatal("invalid order accepted", order)
 		}
 	}
@@ -185,7 +185,7 @@ func TestUnknownOrderedComponentsPreserved(t *testing.T) {
 
 func TestPostComponentsMalformedAndNested(t *testing.T) {
 	entry := postDownload{ID: strings.Repeat("a", 64) + ".txt", Label: "Download", Size: 10}
-	valid, err := joinPostComponents("Body", componentInput{Downloads: downloadSource(t, entry)})
+	valid, err := joinPostComponents("Body", componentInput{"downloads": downloadSource(t, entry)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestPostComponentsMalformedAndNested(t *testing.T) {
 		}
 	}
 	for _, body := range []string{"```go\nunfinished", "<script>\nunclosed"} {
-		if _, err := joinPostComponents(body, componentInput{Downloads: downloadSource(t, entry)}); err == nil {
+		if _, err := joinPostComponents(body, componentInput{"downloads": downloadSource(t, entry)}); err == nil {
 			t.Fatal("component swallowed by body")
 		}
 	}

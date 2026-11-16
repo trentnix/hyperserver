@@ -78,6 +78,7 @@
       document.querySelector('[data-draft-restore]').click();
       const form = document.querySelector('#post-form');
       assert(form.querySelector('#audio-title').value === title && form.querySelector('#audio-transcript').value === transcript && form.elements.componentOrder.value === '["audio"]', 'Recovery must preserve audio and component order.');
+      assert(form.querySelector('[data-audio-name]').textContent === 'Selected MP3', 'Recovered audio must show a readable label while its filename loads.');
       await wait(() => form.querySelector('[data-audio-name]').textContent === sessionStorage.getItem('audio-filename'));
       sessionStorage.setItem('audio-stage', 'reader'); form.requestSubmit(); return;
     }
@@ -99,6 +100,7 @@
     await htmx.ajax('GET', document.querySelector('a[href^="/post/update/"]').getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
     await wait(() => document.querySelector('#audio-title'));
     assert(document.querySelector('#audio-title').value === title && !document.querySelector('[data-audio-editor] [data-component-unsaved]:not([hidden])'), 'Reopening must retain details with a clean saved indicator.');
+    assert(document.querySelector('[data-audio-name]').textContent === 'Selected MP3', 'Reopened audio must not flash a storage ID before its filename loads.');
     await wait(() => document.querySelector('[data-audio-name]').textContent === sessionStorage.getItem('audio-filename'));
     sessionStorage.removeItem('audio-filename');
     sessionStorage.removeItem('audio-stage'); await report('PASS');

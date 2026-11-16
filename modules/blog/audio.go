@@ -1,7 +1,6 @@
 package blog
 
 import (
-	"encoding/json"
 	"fmt"
 	"html"
 	"strings"
@@ -56,23 +55,14 @@ func validateAudio(audio *postAudio) error {
 func (p postComponents) Audio() *postAudio {
 	for _, component := range p.Components {
 		if component.Type == "audio" {
-			return component.Audio
+			value, _ := component.Content.(*postAudio)
+			return value
 		}
 	}
 	return nil
 }
 
-func (p editorPage) AudioJSON() string {
-	if p.AudioInput != nil {
-		return *p.AudioInput
-	}
-	_, components, _ := splitPostComponents(p.Markdown)
-	if audio := components.Audio(); audio != nil {
-		data, _ := json.Marshal(audio)
-		return string(data)
-	}
-	return ""
-}
+func (p editorPage) AudioJSON() string { return p.componentSource("audio") }
 
 type audioNode struct {
 	ast.BaseBlock

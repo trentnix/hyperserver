@@ -1,4 +1,4 @@
-import {registerComponent} from './post-components.js';
+import {registerComponent, jsonComponentValue} from './post-components.js';
 import {openMediaLibrary, uploadImage, runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 import {markField} from './forms.js';
 
@@ -190,6 +190,7 @@ function initialize(root) {
 
     source.addEventListener('change', read);
     registerComponent(section, {
+      normalize: value => jsonComponentValue(value, {strings: ['description', 'siteName', 'imageID'], flags: ['hideImage']}),
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy; read(); },

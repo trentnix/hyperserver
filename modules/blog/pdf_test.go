@@ -24,7 +24,7 @@ func testPDF(t *testing.T, h *harness) postDownload {
 
 func TestPDFComponent(t *testing.T) {
 	file := postDownload{ID: strings.Repeat("a", 64) + ".pdf", Label: `A <document> "title"`, Description: "A <script>description</script>", Size: 1200}
-	source, err := joinPostComponents("Body", componentInput{Order: `["pdf-preview"]`, PDF: downloadSource(t, file)})
+	source, err := joinPostComponents("Body", componentInput{"componentOrder": `["pdf-preview"]`, "pdf": downloadSource(t, file)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestPDFComponent(t *testing.T) {
 		downloadSource(t, file, postDownload{ID: strings.Repeat("b", 64) + ".pdf", Label: "Second PDF"}),
 		`[{"id":"https://external.example/file.pdf","label":"External"}]`,
 	} {
-		if _, err := joinPostComponents("Body", componentInput{PDF: invalid}); err == nil {
+		if _, err := joinPostComponents("Body", componentInput{"pdf": invalid}); err == nil {
 			t.Fatal("invalid PDF component accepted", invalid)
 		}
 	}
@@ -71,7 +71,7 @@ func TestPDFDownloadLink(t *testing.T) {
 	for _, hidden := range []bool{false, true} {
 		t.Run(map[bool]string{false: "visible by default", true: "hidden"}[hidden], func(t *testing.T) {
 			file := postDownload{ID: strings.Repeat("a", 64) + ".pdf", Label: "Document", HideDownload: hidden}
-			source, err := joinPostComponents("Body", componentInput{PDF: downloadSource(t, file)})
+			source, err := joinPostComponents("Body", componentInput{"pdf": downloadSource(t, file)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,7 +99,7 @@ func TestPDFDownloadLink(t *testing.T) {
 				t.Fatal("feed discarded the download link setting", feed, err)
 			}
 			// The setting only affects PDF previews, even when the same file is also a download.
-			source, err = joinPostComponents("Body", componentInput{Downloads: downloadSource(t, file)})
+			source, err = joinPostComponents("Body", componentInput{"downloads": downloadSource(t, file)})
 			if err != nil {
 				t.Fatal(err)
 			}

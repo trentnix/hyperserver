@@ -28,13 +28,7 @@ type postPage struct {
 type editorPage struct {
 	Post
 	revisionSelection
-	AlbumInput                 *string
-	DownloadsInput             *string
-	PDFInput                   *string
-	LinkInput                  *string
-	VideoInput                 *string
-	AudioInput                 *string
-	ComponentOrderInput        *string
+	ComponentInputs            componentInput
 	NoLibrary                  bool
 	Error                      string
 	ErrorFields                string
@@ -185,7 +179,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		p.Version = version
 	}
 	var componentError error
-	p.Markdown, componentError = joinPostComponents(p.Markdown, componentInput{Album: r.PostForm.Get("album"), Downloads: r.PostForm.Get("downloads"), Order: r.PostForm.Get("componentOrder"), PDF: r.PostForm.Get("pdf"), Link: r.PostForm.Get("link"), Video: r.PostForm.Get("video"), Audio: r.PostForm.Get("audio")})
+	p.Markdown, componentError = joinPostComponents(p.Markdown, componentForm(r.PostForm))
 	if componentError != nil {
 		fields := validationFields(componentError)
 		if len(fields) == 0 {
@@ -244,34 +238,7 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
 	data := editorPage{Post: p, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
-	if r.PostForm.Has("album") {
-		album := r.PostForm.Get("album")
-		data.AlbumInput = &album
-	}
-	if r.PostForm.Has("downloads") {
-		downloads := r.PostForm.Get("downloads")
-		data.DownloadsInput = &downloads
-	}
-	if r.PostForm.Has("pdf") {
-		pdf := r.PostForm.Get("pdf")
-		data.PDFInput = &pdf
-	}
-	if r.PostForm.Has("link") {
-		link := r.PostForm.Get("link")
-		data.LinkInput = &link
-	}
-	if r.PostForm.Has("audio") {
-		audio := r.PostForm.Get("audio")
-		data.AudioInput = &audio
-	}
-	if r.PostForm.Has("video") {
-		video := r.PostForm.Get("video")
-		data.VideoInput = &video
-	}
-	if r.PostForm.Has("componentOrder") {
-		order := r.PostForm.Get("componentOrder")
-		data.ComponentOrderInput = &order
-	}
+	data.ComponentInputs = componentForm(r.PostForm)
 	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.ErrorFields = strings.Join(fields, " ")

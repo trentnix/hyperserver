@@ -107,21 +107,29 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 // prepareTemplates parses the blog's feature templates together at startup so
 // named components can be shared without rereading files for each request.
 func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templates, error) {
-	return content.PrepareTemplates(cm,
-		content.TemplatePath{FS: blogModuleFS, Path: responsesFile},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/users.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/posts.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/post-editor.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/post-components.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/page-editor.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/search.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/pages.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/media.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/history.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/profile-editor.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/profile-history.html"},
-		content.TemplatePath{FS: blogModuleFS, Path: "templates/editor-components.html"},
-	)
+	files := []content.TemplatePath{
+		{FS: blogModuleFS, Path: responsesFile},
+		{FS: blogModuleFS, Path: "templates/users.html"},
+		{FS: blogModuleFS, Path: "templates/posts.html"},
+		{FS: blogModuleFS, Path: "templates/post-editor.html"},
+		{FS: blogModuleFS, Path: "templates/post-components.html"},
+		{FS: blogModuleFS, Path: "templates/page-editor.html"},
+		{FS: blogModuleFS, Path: "templates/search.html"},
+		{FS: blogModuleFS, Path: "templates/pages.html"},
+		{FS: blogModuleFS, Path: "templates/media.html"},
+		{FS: blogModuleFS, Path: "templates/history.html"},
+		{FS: blogModuleFS, Path: "templates/profile-editor.html"},
+		{FS: blogModuleFS, Path: "templates/profile-history.html"},
+		{FS: blogModuleFS, Path: "templates/editor-components.html"},
+	}
+	seen := make(map[string]bool)
+	for _, definition := range postComponentCatalog {
+		if !seen[definition.TemplateFile] {
+			files = append(files, content.TemplatePath{FS: blogModuleFS, Path: definition.TemplateFile})
+			seen[definition.TemplateFile] = true
+		}
+	}
+	return content.PrepareTemplates(cm, files...)
 }
 
 // navigation holds the profile, links, and sharing metadata for the current request.

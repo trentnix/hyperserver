@@ -16,7 +16,7 @@ func validatePDFPreview(files []postDownload) error {
 	return nil
 }
 
-func (p editorPage) PDFJSON() string { return p.fileSource("pdf-preview", p.PDFInput) }
+func (p editorPage) PDFJSON() string { return p.componentSource("pdf") }
 
 type pdfNode struct {
 	ast.BaseBlock

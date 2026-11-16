@@ -165,16 +165,12 @@ func (m *module) writingMedia(ctx context.Context, source, path, preview string)
 		return nil, writingFieldError{err, "content"}
 	}
 	for _, component := range components.Components {
-		field := "downloads"
-		if component.Type == "pdf-preview" {
-			field = "pdf"
-		}
-		files := component.Files
-		if component.Audio != nil {
-			field = "audio"
-			files = []postDownload{{ID: component.Audio.ID, Size: component.Audio.Size}}
-		}
-		for _, entry := range files {
+		definition, _ := postComponentCatalog.find(component.Type)
+		field := definition.Field
+		for _, entry := range component.Content.Media() {
+			if entry.Bytes == nil {
+				continue
+			}
 			file, err := m.downloads.Open(ctx, entry.ID)
 			if errors.Is(err, errNotFound) {
 				return nil, writingFieldError{errMissingMedia, field}
@@ -187,7 +183,7 @@ func (m *module) writingMedia(ctx context.Context, source, path, preview string)
 			if err != nil {
 				return nil, err
 			}
-			if info.Size() != entry.Size {
+			if info.Size() != *entry.Bytes {
 				return nil, writingFieldError{contentError("The file details are out of date. Remove the file and choose it again."), field}
 			}
 		}

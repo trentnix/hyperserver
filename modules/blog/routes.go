@@ -41,6 +41,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	}
 	routes.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets)))
 	routes.HandleFunc("GET /assets/js/htmx-errors.js", htmx.ServeErrorScript)
+	routes.Handle("GET /assets/js/component-editors.js", postComponentCatalog.editorScript())
 	if m.localAssets != nil {
 		routes.HandleFunc("GET /local-assets/{name}", m.requireSetup(m.localAsset))
 	}

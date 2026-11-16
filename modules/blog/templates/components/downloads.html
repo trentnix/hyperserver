@@ -1,0 +1,30 @@
+{{ define "blog.fileEditor" }}
+  <section class="downloads-editor{{ if eq .Kind "pdf-preview" }} pdf-editor{{ end }}" data-downloads-editor data-post-component="{{ .Kind }}" data-max-files="{{ .MaxFiles }}" aria-labelledby="{{ .Field }}-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="{{ .Field }}-editor-title">{{ .Name }}{{ if gt .MaxFiles 1 }} <span data-downloads-count></span>{{ end }}</h2>{{ template "blog.componentStatus" }}</div>
+      <div class="album-editor-actions">{{ if ne .Kind "pdf-preview" }}{{ template "blog.fileControls" . }}{{ end }}{{ template "blog.componentOrderControls" .Name }}<button type="button" class="text-button component-remove" data-component-remove="{{ .Kind }}" hidden>Remove {{ .Name }}</button></div>
+    </div>
+    <p class="form-hint" id="{{ .Field }}-help">{{ .Help }}</p>
+    {{ if eq .Kind "pdf-preview" }}<div class="pdf-document-row" data-pdf-document-row hidden>
+      <div class="pdf-document-meta" data-pdf-document hidden><a target="_blank" rel="noopener" hx-boost="false" aria-label="Open PDF in a new tab">Open PDF</a><span data-pdf-size></span></div>
+      {{ template "blog.fileControls" . }}
+    </div>{{ end }}
+    <label for="post-{{ .Field }}" data-downloads-source-label>{{ .Name }} (JSON)</label>
+    <textarea id="post-{{ .Field }}" name="{{ .Field }}" rows="3" aria-describedby="{{ .Field }}-help">{{ .Source }}</textarea>
+    {{ if eq .Kind "pdf-preview" }}<div class="pdf-editor-fields" data-downloads-list></div>{{ else }}<ol class="downloads-editor-list" data-downloads-list></ol>{{ end }}
+    <p class="form-hint downloads-limits">{{ .Limits }}</p>
+    <div data-downloads-status role="status"></div>
+    <div class="album-removal-recovery" data-downloads-recovery role="status" hidden><span>File removed.</span><button type="button" class="text-button" data-download-undo>Undo</button></div>
+  </section>
+{{ end }}
+
+{{ define "blog.downloadsIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M12 11v7m-3-3 3 3 3-3"/></svg>{{ end }}
+
+{{ define "blog.fileControls" }}
+  <div class="downloads-controls" hidden>
+    <button type="button" data-download-upload><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 16v4h16v-4"/></svg><span data-download-upload-label>{{ if eq .Kind "pdf-preview" }}Upload PDF{{ else }}Upload{{ end }}</span></button>
+    <button type="button" class="button-secondary" data-download-browse>Library</button>
+    <input type="file" data-download-files accept="{{ .Accept }}"{{ if gt .MaxFiles 1 }} multiple{{ end }} hidden>
+  </div>
+{{ end }}
+
+{{ define "blog.pdfIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6"/></svg>{{ end }}
