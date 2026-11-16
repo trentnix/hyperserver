@@ -10,7 +10,8 @@ const observer = typeof IntersectionObserver === 'function' ? new IntersectionOb
 
 function initialize(root) {
   for (const section of root.querySelectorAll('.x-post-component')) {
-    if (initialized.has(section)) continue;
+    if (initialized.has(section) || !section.querySelector('[data-x-post]')) continue;
+    reset(section);
     initialized.add(section);
     if (observer) observer.observe(section);
     else section.querySelector('[data-x-post-load]').hidden = false;
@@ -24,7 +25,10 @@ function finish(frame, failed = false) {
   if (!section) return;
   const button = section.querySelector('[data-x-post-load]');
   const actions = section.querySelector('.x-post-actions');
-  const focused = actions.contains(document.activeElement) || document.activeElement === frame;
+  const fallback = section.querySelector('[data-x-post-fallback]');
+  const focused = actions.contains(document.activeElement) || fallback?.contains(document.activeElement) || document.activeElement === frame;
+  if (fallback) fallback.hidden = !failed;
+  section.querySelector('[data-x-post]').classList.remove('x-post-pending');
   button.disabled = false;
   button.hidden = !failed;
   actions.hidden = !failed;
@@ -38,6 +42,7 @@ function load(section, moveFocus = false) {
   const button = section.querySelector('[data-x-post-load]');
   if (!section.isConnected || button.disabled || section.querySelector('.x-post-frame')) return;
   const host = section.querySelector('[data-x-post]');
+  const fallback = section.querySelector('[data-x-post-fallback]');
   const frame = document.createElement('iframe');
   frame.className = 'x-post-frame';
   frame.title = 'Embedded X post';
@@ -49,8 +54,9 @@ function load(section, moveFocus = false) {
   frame.src = 'https://platform.twitter.com/embed/Tweet.html?' + new URLSearchParams({id: host.dataset.xPost, dnt: 'true', hideThread: 'true', theme: 'light', lang: 'en'});
   button.disabled = true;
   section.querySelector('[data-x-post-status]').textContent = 'Loading X post…';
+  host.classList.toggle('x-post-pending', Boolean(fallback));
   host.replaceChildren(frame);
-  if (moveFocus) frame.focus({preventScroll: true});
+  if (moveFocus) (fallback || frame).focus({preventScroll: true});
   pending.set(frame, setTimeout(() => finish(frame, true), 15000));
 }
 
@@ -86,21 +92,26 @@ document.addEventListener('htmx:before:cleanup', event => {
   }
 });
 // Reset live provider frames before the browser caches this document.
+function reset(section) {
+  const button = section.querySelector('[data-x-post-load]');
+  if (!button) return;
+  initialized.delete(section);
+  const frame = section.querySelector('.x-post-frame');
+  clearTimeout(pending.get(frame));
+  pending.delete(frame);
+  frame?.remove();
+  section.querySelector('[data-x-post]').classList.remove('x-post-pending');
+  const fallback = section.querySelector('[data-x-post-fallback]');
+  if (fallback) fallback.hidden = false;
+  button.hidden = true;
+  button.disabled = false;
+  button.textContent = 'Load X post';
+  section.querySelector('.x-post-actions').hidden = false;
+  section.querySelector('[data-x-post-status]').textContent = '';
+}
 window.addEventListener('pagehide', () => {
   observer?.disconnect();
-  for (const section of document.querySelectorAll('.x-post-component')) {
-    initialized.delete(section);
-    const frame = section.querySelector('.x-post-frame');
-    clearTimeout(pending.get(frame));
-    pending.delete(frame);
-    frame?.remove();
-    const button = section.querySelector('[data-x-post-load]');
-    button.hidden = true;
-    button.disabled = false;
-    button.textContent = 'Load X post';
-    section.querySelector('.x-post-actions').hidden = false;
-    section.querySelector('[data-x-post-status]').textContent = '';
-  }
+  document.querySelectorAll('.x-post-component').forEach(reset);
 });
 window.addEventListener('pageshow', () => initialize(document));
 document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));

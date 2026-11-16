@@ -1,7 +1,9 @@
 import {registerComponent, jsonComponentValue} from './post-components.js';
 import {markField} from './forms.js';
+import './media.js';
 
 const initialized = new WeakSet();
+const imageID = /^[a-f0-9]{64}\.(png|jpeg|gif)$/;
 
 function initialize(root) {
   for (const section of root.querySelectorAll('[data-x-post-editor]')) {
@@ -12,12 +14,24 @@ function initialize(root) {
     const controls = section.querySelector('[data-x-post-controls]');
     const fields = [...controls.querySelectorAll('[data-x-post-field]')];
     const error = section.querySelector('[data-x-post-error]');
+    const picker = controls.querySelector('[data-image-picker]');
+
+    function preview() {
+      const id = picker.querySelector('[data-image-value]').value;
+      const image = picker.querySelector('[data-image-preview]');
+      picker.querySelector('[data-x-post-preview]').hidden = !id;
+      image.hidden = !id;
+      if (id) image.src = '/images/' + id + '?variant=thumbnail';
+      else image.removeAttribute('src');
+      picker.querySelector('[data-image-reset]').disabled = Boolean(source.form.dataset.uploading) || !id;
+      picker.querySelector('[data-image-reset]').hidden = !id;
+    }
 
     function read() {
       let value;
       try {
         value = source.value.trim() ? JSON.parse(source.value) : {};
-        if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(key => ['url', 'description'].includes(key) && typeof value[key] === 'string')) throw new Error();
+        if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(key => ['url', 'description', 'imageID'].includes(key) && typeof value[key] === 'string') || value.imageID && !imageID.test(value.imageID)) throw new Error();
       } catch {
         source.hidden = label.hidden = false;
         controls.hidden = controls.disabled = true;
@@ -31,6 +45,7 @@ function initialize(root) {
       controls.disabled = section.hidden;
       error.hidden = true;
       error.textContent = '';
+      preview();
     }
 
     for (const field of fields) {
@@ -39,11 +54,13 @@ function initialize(root) {
         const value = Object.fromEntries(fields.map(input => [input.dataset.xPostField, input.value]));
         source.value = Object.values(value).some(text => text.trim()) ? JSON.stringify(value) : '';
         source.dispatchEvent(new Event('input', {bubbles: true}));
+        preview();
       });
     }
     source.addEventListener('change', read);
+    source.form.addEventListener('blog:uploads-finished', preview);
     registerComponent(section, {
-      normalize: value => jsonComponentValue(value, {strings: ['description']}),
+      normalize: value => jsonComponentValue(value, {strings: ['description', 'imageID']}),
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy; read(); },

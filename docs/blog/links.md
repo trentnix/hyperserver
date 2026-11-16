@@ -1,6 +1,6 @@
 # Link previews
 
-Use **Add component → Link preview** below a post's Markdown editor. Enter an HTTP or HTTPS URL and choose **Fetch preview**. Edit the title, description, and site name. Upload or choose an image, hide it with **Show image**, or remove it. Save the post to apply changes.
+Use **Add component → Link preview** below a post's Markdown editor. Enter an HTTP or HTTPS URL and choose **Fetch preview**. The card appears above its fields and updates as you edit. Edit the title, description, and site name. Upload or choose an image, hide it with **Show image**, or remove it. Save the post to apply changes.
 
 Fetching is optional. If a site blocks requests or has no useful metadata, enter the card details yourself. Refresh asks before replacing existing details. If you edit while a request runs, your edits take precedence over the response.
 

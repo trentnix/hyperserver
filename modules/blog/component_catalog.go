@@ -38,7 +38,14 @@ type componentMedia struct {
 type componentCatalog []componentDefinition
 
 var postComponentCatalog = componentCatalog{
-	albumDefinition(), downloadsDefinition(), pdfDefinition(), linkDefinition(), videoDefinition(), audioDefinition(), xPostDefinition(),
+	albumDefinition(),
+	downloadsDefinition(),
+	pdfDefinition(),
+	linkDefinition(),
+	videoDefinition(),
+	audioDefinition(),
+	xPostDefinition(),
+	comparisonDefinition(),
 }
 
 func (catalog componentCatalog) find(kind string) (componentDefinition, bool) {

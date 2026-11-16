@@ -63,6 +63,9 @@ function initialize(root) {
     });
     fetchButton.dataset.linkFetch = '';
     fields.url.parentElement.after(fetchButton);
+    const preview = element('div', '', 'link-editor-preview');
+    preview.setAttribute('aria-label', 'Card preview');
+    fetchButton.after(preview);
     const imageControls = element('div', '', 'link-image-controls');
     const toggle = element('label', '', 'link-image-toggle');
     const showImage = element('input');
@@ -99,9 +102,7 @@ function initialize(root) {
     }
     const removeImage = button('Remove image', () => { delete link.imageID; delete link.hideImage; serialize(); render(); });
     imageControls.append(toggle, removeImage);
-    const preview = element('div', '', 'link-editor-preview');
-    preview.setAttribute('aria-label', 'Card preview');
-    controls.append(imageControls, preview);
+    controls.append(imageControls);
 
     function serialize() {
       source.value = Object.values(link).some(value => value) ? JSON.stringify(link) : '';

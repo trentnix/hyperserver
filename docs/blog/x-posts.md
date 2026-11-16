@@ -1,14 +1,16 @@
 # X posts
 
-Use **Add component → X post** below a post's Markdown editor. Paste a public X post URL. Old `twitter.com` share links also work. An optional description gives readers context and remains available when the embed cannot load. Save the post to apply changes. One X post component is allowed per post.
+Use **Add component → X post** below a post's Markdown editor. Paste a public X post URL or an old `twitter.com` share link. The editor shows any fallback image below the URL, followed by the optional description and image controls. The description appears above the embedded post. Save the post to apply changes. One X post component is allowed per post.
 
-The post and its media load automatically when the component comes into view. Loading connects to X. If loading fails, readers can choose **Retry X post**. **Open on X** stays visible until the embed renders successfully. The link also works without JavaScript and when embedding is blocked or unavailable. X controls the embedded content and its availability. The blog does not copy the post text or download its media.
+Upload or choose an optional fallback image, such as a screenshot. It appears while the embed loads and remains visible if loading fails. Once the embed renders, the screenshot hides. The screenshot links to the original post. It stays saved for future visits and remains visible without JavaScript, in feeds, and in historical previews. Images use the site's PNG, JPEG, and GIF limits: 8 MiB and 20 megapixels.
+
+The post and its media load automatically when the component comes into view. Loading connects to X. If loading fails, readers can choose **Retry X post**. **Open on X** stays visible until the embed renders successfully. The link also works without JavaScript and when embedding is blocked or unavailable. X controls the embedded content and its availability. The blog does not automatically copy post text or media from X.
 
 ## Storage and editing
 
-The existing version 2 `post-components` block stores an `x-post` record with an `xPost` object. Fields are `url` and optional `description`. URLs allow 2,048 bytes. Descriptions allow 1,000 characters. No database migration or X API credentials are required.
+The existing version 2 `post-components` block stores an `x-post` record with an `xPost` object. Fields are `url`, optional `description`, and optional `imageID`. URLs allow 2,048 bytes. Descriptions allow 1,000 characters. Image permissions, cleanup protection, and revision history use the shared media paths. No database migration or X API credentials are required.
 
-The component uses shared ordering, removal, Undo, unsaved indicators, browser recovery, and revision history. An added empty component must be completed or removed before Save. A component-only post is allowed. Search includes the description. Feeds and historical previews keep the description and a canonical viewing link without interactive controls. Page editing does not expose the component yet.
+The component uses shared ordering, removal, Undo, unsaved indicators, browser recovery, and revision history. An added empty component must be completed or removed before Save. An image alone does not complete the component. A component-only post is allowed. Search includes the description. Feeds and historical previews keep the description, any fallback image, and a canonical viewing link without interactive controls. Page editing does not expose the component yet.
 
 ## Embedding
 

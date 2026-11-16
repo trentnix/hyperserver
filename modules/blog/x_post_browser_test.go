@@ -45,7 +45,12 @@ else if (id !== '3') {
 		t.Run(width, func(t *testing.T) {
 			testBrowser(t, browser, width, browserScenario{
 				scriptFile: "testdata/x-post.js", startPath: "/post/create", authenticated: true, frameOrigin: provider.URL,
-				setup: func(t *testing.T) *harness { h := registeredBrowserHarness(t); h.login(t); return h },
+				setup: func(t *testing.T) *harness {
+					h := registeredBrowserHarness(t)
+					h.login(t)
+					mediaUpload(t, h.blog, "X post screenshot")
+					return h
+				},
 				routes: func(_ *harness) map[string]http.HandlerFunc {
 					return map[string]http.HandlerFunc{"/assets/js/x-post.js": func(w http.ResponseWriter, r *http.Request) {
 						data, err := blogModuleFS.ReadFile("static/js/x-post.js")

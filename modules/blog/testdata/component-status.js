@@ -24,8 +24,9 @@
       assert(dirty().length === 0, 'Removing a new empty component must clear its indicator.');
       await open(paths.editor);
       let form = document.querySelector('#post-form');
-      const sections = [...form.querySelectorAll('[data-post-component]')];
-      assert(sections.length === 6 && sections.every(section => !section.hidden) && dirty().length === 0, 'Saved components must start without unsaved indicators.');
+      const order = JSON.parse(form.elements.componentOrder.value);
+      const sections = [...form.querySelectorAll('[data-post-component]')].filter(section => !section.hidden);
+      assert(sections.length === order.length && sections.every((section, index) => section.dataset.postComponent === order[index]) && dirty().length === 0, 'Saved components must appear in order without unsaved indicators. Unused editors must stay hidden.');
       set(form.elements.title, form.elements.title.value + ' edited');
       assert(dirty().length === 0, 'Post fields must not mark unchanged components unsaved.');
       set(form.elements.title, 'Component status');

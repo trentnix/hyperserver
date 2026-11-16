@@ -15,6 +15,7 @@ import (
 type postXPost struct {
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
+	ImageID     string `json:"imageID,omitempty"`
 }
 
 var xPostID = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
@@ -76,6 +77,9 @@ func parseXPost(source string) (*postXPost, error) {
 	if !utf8.ValidString(value.Description) || utf8.RuneCountInString(value.Description) > 1000 {
 		return nil, contentError("Keep the X post description at most 1,000 characters.")
 	}
+	if value.ImageID != "" && !validImageID(value.ImageID) {
+		return nil, contentError("Choose an uploaded image for the X post fallback.")
+	}
 	return value, nil
 }
 
@@ -86,9 +90,14 @@ func (value *postXPost) EditorSource() string {
 	}
 	return componentJSON(value)
 }
-func (value *postXPost) SearchText() string      { return "\n" + value.Description }
-func (value *postXPost) Media() []componentMedia { return nil }
-func (value *postXPost) Node() ast.Node          { return &xPostNode{Post: *value} }
+func (value *postXPost) SearchText() string { return "\n" + value.Description }
+func (value *postXPost) Media() []componentMedia {
+	if value.ImageID == "" {
+		return nil
+	}
+	return []componentMedia{{ID: value.ImageID}}
+}
+func (value *postXPost) Node() ast.Node { return &xPostNode{Post: *value} }
 
 type xPostNode struct {
 	ast.BaseBlock
@@ -113,7 +122,11 @@ func (xPostRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer)
 		if post.Description != "" {
 			fmt.Fprintf(writer, `<p class="x-post-description">%s</p>`, html.EscapeString(post.Description))
 		}
-		fmt.Fprintf(writer, `<div data-reader-only><div class="x-post-embed" data-x-post="%s"></div></div><div class="x-post-actions"><div data-reader-only><button type="button" class="button-primary" data-x-post-load hidden>Load X post</button></div><a href="https://x.com/i/web/status/%s" target="_blank" rel="noopener noreferrer" hx-boost="false">Open on X</a></div>`, id, id)
+		writer.WriteString(`<div class="x-post-media">`)
+		if post.ImageID != "" {
+			fmt.Fprintf(writer, `<a class="x-post-fallback" data-x-post-fallback href="https://x.com/i/web/status/%s" target="_blank" rel="noopener noreferrer" hx-boost="false"><img src="/images/%s?variant=display" alt="Screenshot of the X post" loading="lazy" decoding="async"></a>`, id, post.ImageID)
+		}
+		fmt.Fprintf(writer, `<div data-reader-only class="x-post-embed" data-x-post="%s"></div></div><div class="x-post-actions"><div data-reader-only><button type="button" class="button-primary" data-x-post-load hidden>Load X post</button></div><a href="https://x.com/i/web/status/%s" target="_blank" rel="noopener noreferrer" hx-boost="false">Open on X</a></div>`, id, id)
 		writer.WriteString(`<div data-reader-only><p class="x-post-status" data-x-post-status role="status"></p></div></section>`)
 		return ast.WalkSkipChildren, nil
 	})

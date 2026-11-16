@@ -24,6 +24,25 @@
       await wait(() => section.querySelector('[data-component-error]:not([hidden])'));
       assert(form.querySelector('#x-post-description').value === description, 'Invalid URL errors must retain authored context.');
       set(form.querySelector('#x-post-url'), 'https://twitter.com/user/status/560070183650213889?s=20');
+      const picker = section.querySelector('[data-image-picker]');
+      assert(picker.querySelector('[data-image-preview]').hidden && picker.querySelector('[data-image-reset]').disabled, 'The fallback image must be optional.');
+      picker.querySelector('[data-media-browse]').click();
+      await wait(() => document.querySelector('.media-browser [data-media-select]'));
+      document.querySelector('.media-browser [data-media-select]').click();
+      await wait(() => !document.querySelector('.media-browser'));
+      assert(JSON.parse(form.elements.xPost.value).imageID && !picker.querySelector('[data-image-preview]').hidden, 'Library selection must update the saved fallback image.');
+      picker.querySelector('[data-image-reset]').click();
+      assert(!JSON.parse(form.elements.xPost.value).imageID && picker.querySelector('[data-image-preview]').hidden, 'Clear must remove the fallback without changing the post URL.');
+      const canvas = document.createElement('canvas');
+      canvas.width = 120; canvas.height = 160;
+      canvas.getContext('2d').fillRect(10, 10, 100, 30);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      const transfer = new DataTransfer(); transfer.items.add(new File([blob], 'x-post-screenshot.png', {type: 'image/png'}));
+      const upload = picker.querySelector('input[type="file"]');
+      upload.files = transfer.files; upload.dispatchEvent(new Event('change', {bubbles: true}));
+      assert(form.dataset.uploading && form.querySelector('[type="submit"]').disabled, 'Save must wait for the screenshot upload.');
+      await wait(() => !form.dataset.uploading && picker.querySelector('[data-image-status]').textContent.includes('uploaded'));
+      sessionStorage.setItem('x-post-image', JSON.parse(form.elements.xPost.value).imageID);
       const original = form.elements.xPost.value;
       section.querySelector('[data-component-remove]').click();
       assert(section.hidden && !form.elements.xPost.value && section.querySelector('fieldset').disabled, 'Removal must clear and disable fields.');
@@ -42,7 +61,7 @@
       await wait(() => document.querySelector('[data-draft-recovery]') && !document.querySelector('[data-draft-recovery]').hidden);
       document.querySelector('[data-draft-restore]').click();
       const form = document.querySelector('#post-form');
-      assert(form.querySelector('#x-post-description').value === description && form.elements.componentOrder.value === '["x-post"]', 'Recovery must preserve X post content and order.');
+      assert(form.querySelector('#x-post-description').value === description && JSON.parse(form.elements.xPost.value).imageID === sessionStorage.getItem('x-post-image') && !form.querySelector('[data-x-post-editor] [data-image-preview]').hidden && form.elements.componentOrder.value === '["x-post"]', 'Recovery must preserve X post content, fallback image, and order.');
       sessionStorage.setItem('x-post-stage', 'reader'); form.requestSubmit(); return;
     }
     await wait(() => document.querySelector('.post-body .x-post-component'));
@@ -50,6 +69,7 @@
     const host = component.querySelector('[data-x-post]');
     const button = component.querySelector('[data-x-post-load]');
     const actions = component.querySelector('.x-post-actions');
+    const fallback = component.querySelector('[data-x-post-fallback]');
     assert(component.querySelector('.x-post-description').textContent === description && !component.querySelector('markup'), 'Authored context must render safely.');
     const focused = document.activeElement;
     component.scrollIntoView({block: 'center'});
@@ -57,6 +77,8 @@
     await wait(() => host.querySelector('iframe')?.style.height === '221px');
     let frame = host.querySelector('iframe');
     assert(!actions.hidden, 'Open on X must remain available while the embed loads.');
+    await wait(() => fallback.querySelector('img').complete && fallback.querySelector('img').naturalWidth > 0);
+    assert(!fallback.hidden && getComputedStyle(host).visibility === 'hidden' && fallback.href.endsWith('/i/web/status/560070183650213889'), 'A linked screenshot must replace the loading iframe until X confirms rendering.');
     assert(button.disabled && button.hidden && component.querySelector('[data-x-post-status]').textContent.includes('Loading'), 'A resize must not report successful loading before X confirms rendering.');
     const rendered = {'twttr.embed': {jsonrpc: '2.0', method: 'twttr.private.rendered', params: [{}]}};
     const untrusted = new MessageEvent('message', {origin: 'https://untrusted.example', data: rendered});
@@ -65,6 +87,7 @@
     window.dispatchEvent(untrusted);
     window.dispatchEvent(new MessageEvent('message', {origin: new URL(frame.src).origin, source: window, data: rendered}));
     assert(button.disabled && button.hidden, 'Another origin or window must not finish loading the post.');
+    assert(!fallback.hidden, 'Untrusted messages must not hide the screenshot.');
     const geometry = new Promise(resolve => {
       const receive = event => {
         if (event.source !== frame.contentWindow || event.data?.['twttr.embed']?.method !== 'twttr.private.rendered') return;
@@ -78,6 +101,7 @@
     assert(dimensions.viewport === dimensions.content, 'The provider must not force a scrollbar when its content fits.');
     await wait(() => button.hidden && !button.disabled);
     assert(actions.hidden && getComputedStyle(actions).display === 'none', 'A rendered embed must hide the redundant Open on X link.');
+    assert(fallback.hidden && getComputedStyle(fallback).display === 'none' && getComputedStyle(host).visibility === 'visible', 'A rendered embed must replace the screenshot.');
     assert(document.activeElement === focused, 'Automatic loading must not move keyboard focus.');
     assert(frame.sandbox.contains('allow-same-origin') && frame.referrerPolicy === 'no-referrer' && button.hidden, 'The working embed must stay isolated and hide its load button.');
     window.dispatchEvent(new MessageEvent('message', {origin: new URL(frame.src).origin, source: window, data: {'twttr.embed': {jsonrpc:'2.0', method:'twttr.private.resize', params:[{height:3000}]}}}));
@@ -94,6 +118,7 @@
     // A component below the viewport waits until the reader reaches it.
     const later = component.cloneNode(true);
     later.querySelector('iframe').remove();
+    later.querySelector('[data-x-post-fallback]').remove();
     later.querySelector('.x-post-actions').hidden = false;
     later.style.marginTop = '200vh';
     component.parentElement.append(later);
@@ -109,22 +134,36 @@
     later.remove();
     component.scrollIntoView({block: 'center'});
     assert(host.querySelector('iframe') === frame, 'Scrolling back must not reload a working post.');
+    // HTMX restores serialized markup rather than the original provider window.
+    const restored = component.cloneNode(true);
+    const cachedFrame = restored.querySelector('iframe');
+    component.parentElement.append(restored);
+    restored.dispatchEvent(new Event('htmx:after:process', {bubbles: true}));
+    assert(!cachedFrame.isConnected && !restored.querySelector('[data-x-post-fallback]').hidden, 'Restored markup must discard stale frames and show the screenshot while reloading.');
+    restored.scrollIntoView({block: 'center'});
+    await wait(() => restored.querySelector('iframe')?.style.height === '221px');
+    const restoredFrame = restored.querySelector('iframe');
+    restoredFrame.contentWindow.postMessage('test:render', new URL(restoredFrame.src).origin);
+    await wait(() => restored.querySelector('[data-x-post-fallback]').hidden);
+    restored.dispatchEvent(new Event('htmx:before:cleanup', {bubbles: true}));
+    restored.remove();
+    component.scrollIntoView({block: 'center'});
     // Browser-cache restoration automatically reloads a visible post.
     window.dispatchEvent(new Event('pagehide'));
-    assert(!host.querySelector('iframe') && button.hidden && !button.disabled && !actions.hidden, 'History must discard live frames and restore the fallback link.');
+    assert(!host.querySelector('iframe') && button.hidden && !button.disabled && !actions.hidden && !fallback.hidden, 'History must discard live frames and restore the screenshot and fallback link.');
     window.dispatchEvent(new Event('pageshow'));
     await wait(() => host.querySelector('iframe')?.style.height === '221px');
     frame = host.querySelector('iframe');
-    actions.querySelector('a').focus();
+    fallback.focus();
     frame.contentWindow.postMessage('test:render', new URL(frame.src).origin);
     await wait(() => button.hidden && !button.disabled);
-    assert(actions.hidden && document.activeElement === frame, 'Hiding a focused fallback link must move focus to the rendered embed.');
+    assert(actions.hidden && fallback.hidden && document.activeElement === frame, 'Hiding a focused screenshot must move focus to the rendered embed.');
     // An automatic failure exposes Retry without creating a retry loop.
     window.dispatchEvent(new Event('pagehide'));
     host.dataset.xPost = '2';
     window.dispatchEvent(new Event('pageshow'));
     await wait(() => !button.hidden && button.textContent === 'Retry X post');
-    assert(!actions.hidden, 'A failed embed must show the Open on X fallback.');
+    assert(!actions.hidden && !fallback.hidden, 'A failed embed must show the screenshot and Open on X fallback.');
     component.dispatchEvent(new Event('htmx:after:process', {bubbles: true}));
     await new Promise(resolve => setTimeout(resolve, 150));
     assert(!host.querySelector('iframe'), 'Failed automatic loading must wait for a manual retry.');
@@ -136,7 +175,7 @@
       button.click();
       await wait(() => !button.disabled && button.textContent === 'Retry X post');
       window.setTimeout = originalTimeout;
-      assert(!host.querySelector('iframe') && component.querySelector('[data-x-post-status]').textContent.includes('could not load') && component.querySelector('a') && document.activeElement === button, 'Missing and stalled embeds must offer retry, return keyboard focus, and keep the fallback.');
+      assert(!host.querySelector('iframe') && component.querySelector('[data-x-post-status]').textContent.includes('could not load') && !fallback.hidden && document.activeElement === button, 'Missing and stalled embeds must offer retry, return keyboard focus, and keep the screenshot.');
     }
     host.dataset.xPost = '560070183650213889'; button.click();
     await wait(() => host.querySelector('iframe')?.style.height === '221px');
@@ -148,7 +187,7 @@
     assert(document.activeElement === otherLink, 'Finishing loading must not steal focus after the reader moves away.');
     await htmx.ajax('GET', document.querySelector('a[href^="/post/update/"]').getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
     await wait(() => document.querySelector('#x-post-description'));
-    assert(document.querySelector('#x-post-description').value === description && !document.querySelector('[data-x-post-editor] [data-component-unsaved]:not([hidden])'), 'Reopening must preserve content with a clean saved indicator.');
-    sessionStorage.removeItem('x-post-stage'); await report('PASS');
+    assert(document.querySelector('#x-post-description').value === description && JSON.parse(document.querySelector('[name="xPost"]').value).imageID === sessionStorage.getItem('x-post-image') && !document.querySelector('[data-x-post-editor] [data-component-unsaved]:not([hidden])'), 'Reopening must preserve content and the screenshot with a clean saved indicator.');
+    sessionStorage.removeItem('x-post-stage'); sessionStorage.removeItem('x-post-image'); await report('PASS');
   } catch (error) { await report(String(error) + '\n' + (error.stack || '')); }
 })();

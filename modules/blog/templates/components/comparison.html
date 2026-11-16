@@ -1,0 +1,33 @@
+{{ define "blog.comparisonEditor" }}
+  <section class="comparison-editor" data-comparison-editor data-post-component="image-comparison" aria-labelledby="comparison-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="comparison-editor-title">Image Comparison</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Image comparison" }}<button type="button" class="text-button component-remove" data-component-remove="image-comparison" hidden>Remove comparison</button></div></div>
+    <p class="form-hint" id="comparison-help">Choose two images of the same subject. Matching dimensions and framing work best. Save with your post.</p>
+    <label for="post-comparison" data-comparison-source-label>Image comparison (JSON)</label>
+    <textarea id="post-comparison" name="comparison" rows="3" aria-describedby="comparison-help">{{ .Source }}</textarea>
+    <fieldset data-comparison-controls data-component-fields hidden disabled>
+      <label for="comparison-title">Title (optional)</label><input id="comparison-title" data-comparison-field="title" maxlength="240">
+      <label for="comparison-caption">Caption (optional)</label><textarea id="comparison-caption" data-comparison-field="caption" rows="2" maxlength="1000"></textarea>
+      <div class="comparison-editor-images">
+        {{ range $side := .Sides }}
+        <fieldset class="comparison-image-picker" data-image-picker data-image-prefix="/images/" data-comparison-side="{{ $side }}">
+          <legend>{{ if eq $side "before" }}First image{{ else }}Second image{{ end }}</legend>
+          <input type="hidden" data-image-value data-comparison-field="{{ $side }}ID">
+          <div class="comparison-image-frame"><img data-image-preview hidden alt="Selected {{ if eq $side "before" }}first{{ else }}second{{ end }} image"><span class="image-empty">Choose an image</span></div>
+          <div class="image-upload-controls" hidden>
+            <button type="button" class="button-secondary" data-image-upload>Upload</button>{{ if not $.NoLibrary }}<button type="button" class="button-secondary" data-media-browse>Library</button>{{ end }}
+            <button type="button" class="text-button" data-image-reset>Clear</button>
+            <input type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload {{ if eq $side "before" }}first{{ else }}second{{ end }} image" hidden>
+          </div>
+          <p data-image-status role="status"></p>
+          <label for="comparison-{{ $side }}-label">Label (optional)</label><input id="comparison-{{ $side }}-label" maxlength="80" placeholder="{{ if eq $side "before" }}Before{{ else }}After{{ end }}" data-comparison-field="{{ $side }}Label">
+          <label for="comparison-{{ $side }}-alt">Image description (optional)</label><input id="comparison-{{ $side }}-alt" maxlength="500" data-comparison-field="{{ $side }}Alt">
+        </fieldset>
+        {{ end }}
+      </div>
+    </fieldset>
+    <p class="form-hint">PNG, JPEG, or GIF. Each image can be up to 8 MiB and 20 megapixels.</p>
+    <p data-comparison-error role="alert" hidden></p>
+  </section>
+{{ end }}
+
+{{ define "blog.comparisonIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 2v20M6 15l3-4 3 4m0-2 3-4 3 4"/></svg>{{ end }}

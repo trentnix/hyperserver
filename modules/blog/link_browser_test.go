@@ -10,7 +10,7 @@ func TestBrowserLink(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check link previews")
 	}
-	for _, width := range []string{"390", "1100", "3440"} {
+	for _, width := range []string{"320", "390", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) {
 			testBrowser(t, browser, width, browserScenario{
 				scriptFile: "testdata/link.js", startPath: "/post/create", authenticated: true,
