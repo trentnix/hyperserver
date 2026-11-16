@@ -52,19 +52,44 @@ func markdownAt(source string, base *url.URL) (template.HTML, error) {
 	}
 	tokens := html.NewTokenizer(strings.NewReader(string(rendered)))
 	var out strings.Builder
+	readerOnly := 0
 	for {
-		switch tokens.Next() {
+		kind := tokens.Next()
+		if readerOnly > 0 {
+			if kind == html.StartTagToken && tokens.Token().Data == "div" {
+				readerOnly++
+			}
+			if kind == html.EndTagToken && tokens.Token().Data == "div" {
+				readerOnly--
+			}
+			if kind != html.ErrorToken {
+				continue
+			}
+		}
+		switch kind {
 		case html.ErrorToken:
 			if tokens.Err() == io.EOF {
 				return template.HTML(out.String()), nil
 			}
 			return "", tokens.Err()
 		case html.EndTagToken:
-			if tokens.Token().Data != "iframe" && tokens.Token().Data != "audio" {
+			token := tokens.Token()
+			if token.Data != "iframe" && token.Data != "audio" {
 				out.Write(tokens.Raw())
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
+			if token.Data == "div" {
+				for _, attr := range token.Attr {
+					if attr.Key == "data-reader-only" {
+						readerOnly = 1
+						break
+					}
+				}
+				if readerOnly > 0 {
+					continue
+				}
+			}
 			if token.Data == "audio" {
 				continue // The audio fallback link works in feed readers without media controls.
 			}

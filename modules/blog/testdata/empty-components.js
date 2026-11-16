@@ -25,7 +25,7 @@
       form.elements.title.value = 'Empty component review';
       form.elements.slug.value = 'empty-component-review';
       form.noValidate = true; // Also exercise server validation when native checks are bypassed.
-      for (const [kind, field] of [['photo-album', 'album'], ['file-downloads', 'downloads'], ['pdf-preview', 'pdf'], ['link-preview', 'link'], ['video', 'video'], ['audio', 'audio']]) {
+      for (const [kind, field] of [['photo-album', 'album'], ['file-downloads', 'downloads'], ['pdf-preview', 'pdf'], ['link-preview', 'link'], ['video', 'video'], ['audio', 'audio'], ['x-post', 'xPost']]) {
         form.querySelector(`[data-component-add="${kind}"]`).click();
         const section = form.querySelector(`[data-post-component="${kind}"]`);
         const required = form.querySelector('.CodeMirror').CodeMirror.getInputField().getAttribute('aria-required');

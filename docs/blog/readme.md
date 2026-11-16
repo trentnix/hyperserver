@@ -67,6 +67,7 @@ Accounts, roles, content, and tokens are preserved. Unexpired invitations work a
 - [Link previews](links.md): saved cards with editable details and local thumbnails.
 - [File downloads](downloads.md): post attachments, limits, access, and storage.
 - [Audio](audio.md): MP3 playback, transcripts, and download controls.
+- [X posts](x-posts.md): public posts and their media, loaded when displayed.
 - [Component implementation](components.md): ownership, registration, storage, and editor contracts.
 - [Backup and recovery](backup.md): offline ZIP archives and manual recovery.
 - [Framework setup](../application.md): service selection, modules, rendering, and cleanup.

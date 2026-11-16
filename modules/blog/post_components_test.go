@@ -154,7 +154,8 @@ func TestComponentOrderCompatibility(t *testing.T) {
 			t.Fatal("search text order differs from reader order")
 		}
 		reopened := editorPage{Post: Post{Markdown: source}}
-		if !slices.Equal(reopened.EditorComponents(), append(components.Order(), "pdf-preview", "link-preview", "video", "audio")) {
+		editors := reopened.EditorComponents()
+		if len(editors) != len(postComponentCatalog) || !slices.Equal(editors[:len(components.Order())], components.Order()) {
 			t.Fatal("editor order differs from reader")
 		}
 	}

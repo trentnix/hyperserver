@@ -23,6 +23,7 @@ import (
 // reporting, framing, and cleanup.
 type browserScenario struct {
 	scriptFile, startPath        string
+	frameOrigin                  string
 	setup                        func(*testing.T) *harness
 	prepareScript                func(*testing.T, *harness, []byte) []byte
 	routes                       func(*harness) map[string]http.HandlerFunc
@@ -168,6 +169,9 @@ func testBrowser(t *testing.T, browser, width string, scenario browserScenario) 
 		// Allow only this test server to frame the page at the requested size.
 		// Production responses still prohibit framing.
 		w.Header().Set("Content-Security-Policy", strings.ReplaceAll(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'", "frame-ancestors 'self'"))
+		if scenario.frameOrigin != "" {
+			w.Header().Set("Content-Security-Policy", strings.Replace(w.Header().Get("Content-Security-Policy"), "frame-src 'self'", "frame-src 'self' "+scenario.frameOrigin, 1))
+		}
 		if scenario.allowFrames {
 			// A second editor frame exercises separate-tab storage ownership.
 			w.Header().Set("Content-Security-Policy", w.Header().Get("Content-Security-Policy")+"; frame-src 'self'")

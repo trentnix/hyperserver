@@ -100,7 +100,7 @@ func (linkRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer) 
 		link := node.(*linkNode).Link
 		u, _ := linkURL(link.URL) // Component validation runs before creating this node.
 		domain := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
-		fmt.Fprintf(writer, `<section class="link-preview" aria-label="Link preview"><h2>Link</h2><a class="link-preview-card" href="%s" hx-boost="false" rel="noopener"><span class="link-preview-details"><span class="link-preview-domain">%s</span><strong class="link-preview-title">%s</strong>`, html.EscapeString(link.URL), html.EscapeString(domain), html.EscapeString(link.Title))
+		fmt.Fprintf(writer, `<section class="link-preview" aria-label="Link preview"><a class="link-preview-card" href="%s" hx-boost="false" rel="noopener"><span class="link-preview-details"><span class="link-preview-domain">%s</span><strong class="link-preview-title">%s</strong>`, html.EscapeString(link.URL), html.EscapeString(domain), html.EscapeString(link.Title))
 		if link.Description != "" {
 			fmt.Fprintf(writer, `<span class="link-preview-description">%s</span>`, html.EscapeString(link.Description))
 		}

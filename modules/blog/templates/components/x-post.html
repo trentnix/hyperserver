@@ -1,0 +1,16 @@
+{{ define "blog.xPostEditor" }}
+  <section class="x-post-editor" data-x-post-editor data-post-component="x-post" aria-labelledby="x-post-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="x-post-editor-title">X post</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "X post" }}<button type="button" class="text-button component-remove" data-component-remove="x-post" hidden>Remove X post</button></div></div>
+    <p class="form-hint" id="x-post-help">Add a public post from X, including its photos or video. It loads when readers reach it. Save with your post.</p>
+    <label for="post-x-post" data-x-post-source-label>X post (JSON)</label>
+    <textarea id="post-x-post" name="xPost" rows="3" aria-describedby="x-post-help">{{ .Source }}</textarea>
+    <fieldset data-x-post-controls data-component-fields hidden disabled>
+      <label for="x-post-url">Post URL</label><input id="x-post-url" data-x-post-field="url" type="url" maxlength="2048" placeholder="https://x.com/username/status/…" required>
+      <label for="x-post-description">Description (optional)</label><textarea id="x-post-description" data-x-post-field="description" rows="3" maxlength="1000" aria-describedby="x-post-description-help"></textarea>
+      <p class="form-hint" id="x-post-description-help">Shown with the post and available when the embed cannot load.</p>
+    </fieldset>
+    <p data-x-post-error role="status" hidden></p>
+  </section>
+{{ end }}
+
+{{ define "blog.xPostIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l10 16h-4zM19 4 5 20"/></svg>{{ end }}
