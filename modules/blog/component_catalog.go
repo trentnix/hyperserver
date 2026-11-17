@@ -51,6 +51,7 @@ var postComponentCatalog = componentCatalog{
 	legacySocialPostDefinition(threadsProvider()),
 	legacySocialPostDefinition(facebookProvider()),
 	comparisonDefinition(),
+	relatedDefinition(),
 }
 
 func (catalog componentCatalog) find(kind string) (componentDefinition, bool) {

@@ -144,7 +144,7 @@ func (m *module) page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	html, err := markdown(p.Markdown)
+	html, err := m.renderWriting(r.Context(), p.Markdown, "")
 	if err != nil {
 		m.app.ContentManager.HandleError(w, r, "Unable to display this page.", err, http.StatusInternalServerError)
 		return

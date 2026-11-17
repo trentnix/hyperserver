@@ -57,6 +57,8 @@ type repository interface {
 	// ListMetadata supplies all posts for administration, without summaries or Markdown.
 	// Drafts come first, then scheduled and published posts newest first.
 	ListMetadata(context.Context) ([]Post, error)
+	// PublicPostLinks resolves selected IDs without loading post bodies.
+	PublicPostLinks(context.Context, []string) ([]Post, error)
 	// SearchPosts searches all publication states, returning metadata only.
 	// Literal case-insensitive matches rank title, tags, summary, then Markdown.
 	// A nonempty authorID restricts the scan before loading or matching content.

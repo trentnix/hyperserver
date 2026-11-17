@@ -194,7 +194,11 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 		previewPath = contentPath
 	}
 	if err == nil {
-		data.HTML, err = markdownAt(data.Selected.Markdown, &url.URL{Path: previewPath})
+		postID := ""
+		if kind == "post" {
+			postID = id
+		}
+		data.HTML, err = m.renderWritingAt(r.Context(), data.Selected.Markdown, postID, &url.URL{Path: previewPath})
 	}
 	if err == nil {
 		var missing map[string]bool

@@ -1,0 +1,28 @@
+{{ define "blog.relatedEditor" }}
+  <section class="related-editor" data-related-editor data-post-component="related-posts" aria-labelledby="related-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="related-editor-title">Related posts</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Related posts" }}<button type="button" class="text-button component-remove" data-component-remove="related-posts" hidden>Remove related posts</button></div></div>
+    <p class="form-hint" id="related-help">Choose up to 12 posts. Only published posts appear to readers.</p>
+    <label for="post-related" data-related-source-label>Related posts (JSON)</label>
+    <textarea id="post-related" name="related" rows="3" aria-describedby="related-help">{{ .Source }}</textarea>
+    <fieldset data-related-controls data-component-fields hidden disabled>
+      <div class="related-heading-field"><label for="related-title">Heading <span>(optional)</span></label><input id="related-title" maxlength="240" placeholder="Related posts" data-related-title></div>
+      <div class="related-picker">
+        <div class="related-search-panel">
+          <label for="related-search">Add a post</label>
+          <div class="related-search-field">
+            <input id="related-search" type="search" maxlength="240" placeholder="Start typing a post title…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-describedby="related-help related-search-status" data-related-search aria-controls="related-results">
+            <div class="related-results" id="related-results" data-related-results role="listbox" aria-multiselectable="true" aria-label="Matching posts" hidden></div>
+          </div>
+          <p class="form-hint" id="related-limit" data-related-limit hidden>12 posts selected. Remove one to choose another.</p>
+        </div>
+        <div class="related-selected-panel" hidden>
+          <div class="related-list-heading">Selected posts <span data-related-count>0</span></div>
+          <ul class="related-selections" data-related-selections aria-label="Selected posts"></ul>
+        </div>
+      </div>
+    </fieldset>
+    <div class="form-hint" id="related-search-status" data-related-status role="status"></div>
+  </section>
+{{ end }}
+
+{{ define "blog.relatedIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M3 6h1M3 12h1M3 18h1"/></svg>{{ end }}

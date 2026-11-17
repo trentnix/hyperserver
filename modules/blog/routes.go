@@ -59,6 +59,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /files/{id}", m.requireSetup(m.download))
 	routes.HandleFunc("GET /social/mastodon", m.requireSetup(m.mastodonEmbed))
 	routes.HandleFunc("GET /post/files", m.downloadLibrary)
+	routes.Handle("GET /post/related", m.requireWriter(m.relatedPostChoices))
 	routes.HandleWithBodyLimit("POST /post/link-preview", http.HandlerFunc(m.fetchLink), 16*1024)
 	routes.HandleWithBodyLimit("POST /post/video-details", http.HandlerFunc(m.fetchVideoDetails), 16*1024)
 	routes.HandleWithBodyLimit("POST /post/social-preview", m.requireWriter(m.previewSocialPost), 32*1024)

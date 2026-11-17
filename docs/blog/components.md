@@ -31,6 +31,8 @@ The content type supplies:
 
 Reader rendering must escape authored text. Raw HTML remains disabled in Markdown. Media authorization, storage, quotas, and cleanup stay shared.
 
+Content with post references can supply `PostReferences` for save validation and `ResolveReader` for a request-owned renderer. The narrow `postLinkReader` contract resolves public link metadata. The application renderer handles reader pages, previews, feeds, and history. Pure Markdown rendering performs no lookup and omits unresolved links. See [related posts](related-posts.md).
+
 ## Editor contract
 
 Each script registers its section with `registerComponent`. It supplies snapshot, clear, restore, focus, and normalization callbacks. Normalization defines which optional empty fields equal omitted fields. `jsonComponentValue` provides the shared JSON comparison.

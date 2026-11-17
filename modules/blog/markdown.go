@@ -2,6 +2,7 @@ package blog
 
 import (
 	"bytes"
+	"context"
 	"html/template"
 	"io"
 	"net/url"
@@ -22,11 +23,14 @@ func markdown(source string) (template.HTML, error) {
 	return markdownComponents(source, postComponentCatalog)
 }
 
-func markdownComponents(source string, catalog componentCatalog) (template.HTML, error) {
+func markdownComponents(source string, catalog componentCatalog, overrides ...renderer.NodeRenderer) (template.HTML, error) {
 	var out bytes.Buffer
 	var renderers []util.PrioritizedValue
 	for index, definition := range catalog {
 		renderers = append(renderers, util.Prioritized(definition.Renderer, 100+index))
+	}
+	for _, override := range overrides {
+		renderers = append(renderers, util.Prioritized(override, 0))
 	}
 	transformers := []util.PrioritizedValue{util.Prioritized(componentsTransformer{catalog: catalog}, 110)}
 	if _, supported := catalog.find("photo-album"); supported {
@@ -42,6 +46,28 @@ func markdownComponents(source string, catalog componentCatalog) (template.HTML,
 	return template.HTML(out.String()), nil
 }
 
+// Components can resolve public post references for this render. Pure Markdown
+// rendering stays independent of storage for media extraction and other callers.
+func (m *module) renderWriting(ctx context.Context, source, postID string) (template.HTML, error) {
+	_, components, err := splitPostComponents(source)
+	if err != nil {
+		return markdown(source)
+	}
+	var readers []renderer.NodeRenderer
+	for _, component := range components.Components {
+		if resolver, ok := component.Content.(interface {
+			ResolveReader(context.Context, postLinkReader, string) (renderer.NodeRenderer, error)
+		}); ok {
+			reader, err := resolver.ResolveReader(ctx, m.posts, postID)
+			if err != nil {
+				return "", err
+			}
+			readers = append(readers, reader)
+		}
+	}
+	return markdownComponents(source, postComponentCatalog, readers...)
+}
+
 // markdownAt renders content for previews and feeds, resolving relative links
 // and images against the content URL rather than the page displaying the preview.
 // The shared Markdown renderer still removes raw HTML and unsafe URL schemes.
@@ -50,6 +76,18 @@ func markdownAt(source string, base *url.URL) (template.HTML, error) {
 	if err != nil {
 		return "", err
 	}
+	return markdownURLs(rendered, base)
+}
+
+func (m *module) renderWritingAt(ctx context.Context, source, postID string, base *url.URL) (template.HTML, error) {
+	rendered, err := m.renderWriting(ctx, source, postID)
+	if err != nil {
+		return "", err
+	}
+	return markdownURLs(rendered, base)
+}
+
+func markdownURLs(rendered template.HTML, base *url.URL) (template.HTML, error) {
 	tokens := html.NewTokenizer(strings.NewReader(string(rendered)))
 	var out strings.Builder
 	readerOnly := 0

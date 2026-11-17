@@ -95,7 +95,7 @@ func (m *module) post(w http.ResponseWriter, r *http.Request) {
 
 // renderPost converts stored Markdown through the shared renderer before display.
 func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
-	html, err := markdown(p.Markdown)
+	html, err := m.renderWriting(r.Context(), p.Markdown, p.ID)
 	if err != nil {
 		m.app.ContentManager.HandleError(w, r, "Unable to display this post.", err, http.StatusInternalServerError)
 		return
@@ -311,7 +311,7 @@ func (m *module) preview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Markdown must be valid UTF-8.", http.StatusUnprocessableEntity)
 		return
 	}
-	html, err := markdown(text)
+	html, err := m.renderWriting(r.Context(), text, "")
 	if err != nil {
 		http.Error(w, "Unable to preview the post.", http.StatusInternalServerError)
 		return

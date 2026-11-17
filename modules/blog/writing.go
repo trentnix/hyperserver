@@ -81,6 +81,9 @@ func (m *module) persistPost(ctx context.Context, p Post) (Post, error) {
 	if p.ID != "" && p.Version < 1 {
 		return p, errEditConflict
 	}
+	if err := m.validatePostReferences(ctx, p); err != nil {
+		return p, err
+	}
 	m.mediaMu.RLock()
 	defer m.mediaMu.RUnlock()
 	base := p.Slug

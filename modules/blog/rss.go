@@ -80,7 +80,7 @@ func (m *module) buildFeed(ctx context.Context, origin *url.URL) ([]byte, error)
 		link.Path = "/post/s/" + p.Slug
 		guid := *origin
 		guid.Path = "/post/id/" + p.ID
-		body, err := markdownAt(p.Markdown, &link)
+		body, err := m.renderWritingAt(ctx, p.Markdown, p.ID, &link)
 		if err != nil {
 			return nil, err
 		}

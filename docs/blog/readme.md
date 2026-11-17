@@ -69,6 +69,7 @@ Accounts, roles, content, and tokens are preserved. Unexpired invitations work a
 - [Audio](audio.md): MP3 playback, transcripts, and download controls.
 - [Social media](social-posts.md): one component for X, Bluesky, Threads, Facebook, Reddit, Mastodon, Instagram, LinkedIn, and TikTok, detected from the URL.
 - [Before and after images](comparisons.md): two images with a draggable comparison.
+- [Related posts](related-posts.md): links to other posts, displayed only on the source post.
 - [Component implementation](components.md): ownership, registration, storage, and editor contracts.
 - [Backup and recovery](backup.md): offline ZIP archives and manual recovery.
 - [Framework setup](../application.md): service selection, modules, rendering, and cleanup.

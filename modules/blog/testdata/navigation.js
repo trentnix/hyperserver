@@ -60,11 +60,11 @@
     for (const link of archive.querySelectorAll('li a')) {
       const style = getComputedStyle(link);
       assert(style.display === 'block' && link.getBoundingClientRect().height >= 24, 'Recent post links need full-row targets at every width.');
-      assert(style.fontSize === '16px' && style.fontWeight === '400' && Math.abs(parseFloat(style.lineHeight) - 25.6) < .1, 'Recent post links must use regular text with a consistent line height.');
+      assert(style.fontSize === '16px' && style.fontWeight === '400' && Math.abs(parseFloat(style.lineHeight) - 22.4) < .1, 'Recent post links must use regular text with compact wrapped lines.');
       assert(style.paddingTop === '0px' && style.paddingBottom === '0px', 'Recent post links must use the same compact spacing at every width.');
       assert(style.textDecorationLine.includes('underline') && style.textDecorationColor === style.color, 'Recent post links must have clear, persistent underlines.');
       const previous = link.parentElement.previousElementSibling;
-      if (previous) assert(Math.abs(link.parentElement.getBoundingClientRect().top - previous.getBoundingClientRect().bottom) < 1, 'Recent post links must flow without extra gaps between rows.');
+      if (previous) assert(link.parentElement.getBoundingClientRect().top - previous.getBoundingClientRect().bottom >= 5, 'Separate post titles need more space than wrapped lines within one title.');
       assert(link.getBoundingClientRect().width <= archive.getBoundingClientRect().width, 'Post links must stay within the reading list.');
     }
     const article = document.querySelector('#article-content');
