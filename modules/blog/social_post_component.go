@@ -37,7 +37,7 @@ func xProvider() socialProvider {
 func socialPostDefinition() componentDefinition {
 	return componentDefinition{
 		Kind: "social-post", Field: "socialPost", Payload: "socialPost",
-		Name: "Social media", Summary: "X, Bluesky, Threads, or Facebook",
+		Name: "Social media", Summary: "Public posts, photos, and videos",
 		EmptyMessage: "Enter a public post URL or remove the social media component.",
 		TemplateFile: "templates/components/social-post.html", Template: "blog.socialPostEditor", Icon: "blog.socialPostIcon", Script: "social-post-editor.js",
 		Parse: func(source string) (componentContent, error) { return parseSocialPost(source) }, Renderer: socialPostRenderer{},
@@ -71,8 +71,19 @@ func socialPostProvider(raw string) (socialProvider, error) {
 		provider = threadsProvider()
 	case "facebook.com", "www.facebook.com", "m.facebook.com", "mbasic.facebook.com":
 		provider = facebookProvider()
+	case "reddit.com", "www.reddit.com", "old.reddit.com", "np.reddit.com":
+		provider = socialProvider{Kind: "reddit-post", Name: "Reddit"}
+	case "instagram.com", "www.instagram.com":
+		provider = socialProvider{Kind: "instagram-post", Name: "Instagram"}
+	case "linkedin.com", "www.linkedin.com":
+		provider = socialProvider{Kind: "linkedin-post", Name: "LinkedIn"}
+	case "tiktok.com", "www.tiktok.com", "m.tiktok.com":
+		provider = socialProvider{Kind: "tiktok-post", Name: "TikTok"}
 	default:
-		return socialProvider{}, contentError("Enter a public post URL from X, Bluesky, Threads, or Facebook.")
+		if _, err := mastodonPostURL(u); err != nil {
+			return socialProvider{}, contentError("Enter a public post URL from a supported social media platform.")
+		}
+		provider = socialProvider{Kind: "mastodon-post", Name: "Mastodon"}
 	}
 	_, err = provider.postURL(raw)
 	return provider, err
@@ -108,7 +119,7 @@ func (provider socialProvider) postURL(raw string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if u.RawPath != "" {
+	if u.RawPath != "" && provider.Kind != "reddit-post" {
 		return "", invalid
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
@@ -148,6 +159,8 @@ func (provider socialProvider) postURL(raw string) (string, error) {
 				return "https://www.facebook.com/permalink.php?" + url.Values{"story_fbid": {query.Get("story_fbid")}, "id": {query.Get("id")}}.Encode(), nil
 			}
 		}
+	default:
+		return additionalSocialPostURL(provider, u)
 	}
 	return "", invalid
 }

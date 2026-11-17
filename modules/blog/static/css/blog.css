@@ -1081,6 +1081,12 @@ html:has(.album-viewer[open]) { overflow: hidden; scrollbar-gutter: stable; }
 .social-post-editor [data-social-post-controls] { margin-top: 20px; }
 .social-post-editor fieldset > label:first-child { margin-top: 0; }
 .social-post-editor fieldset > .form-hint { margin: 8px 0 0; font-size: 14px; }
+.social-post-editor-preview { min-width: 0; margin-top: 20px; }
+.social-post-editor-preview > .form-hint { margin: 0 0 8px; font-size: 13px; }
+.social-post-editor-preview [data-social-post-preview-status] { margin: 0; color: var(--muted); font-size: 14px; }
+.social-post-editor-preview [data-social-post-preview-status]:empty { display: none; }
+.social-post-editor-preview > button { margin-top: 12px; min-height: 44px; border-radius: 24px; font-size: 14px; }
+.social-post-editor-preview .social-post-component, .social-post-editor-preview .x-post-component { margin: 0; }
 .social-post-editor .social-post-image-settings { margin-top: 24px; }
 .social-post-image-settings legend { font-weight: 600; }
 .social-post-image-preview { margin: 20px 0 0; }
@@ -1112,6 +1118,7 @@ html:has(.album-viewer[open]) { overflow: hidden; scrollbar-gutter: stable; }
 .social-post-description { white-space: pre-wrap; overflow-wrap: anywhere; }
 .social-post-component .social-post-description { margin: 0 0 16px; }
 .social-post-component { max-width: 600px; margin: 32px 0; }
+.social-post-component[data-social-provider="tiktok-post"] { max-width: 360px; }
 .social-post-media { position: relative; }
 .social-post-fallback { display: block; margin-bottom: 16px; }
 .social-post-fallback[hidden] { display: none; }

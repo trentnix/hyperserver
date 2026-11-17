@@ -2,7 +2,12 @@
 const providers = {
   'bluesky-post': {name: 'Bluesky', origin: 'https://embed.bsky.app', minWidth: 300},
   'threads-post': {name: 'Threads', origin: 'https://www.threads.com', minWidth: 270},
-  'facebook-post': {name: 'Facebook', origin: 'https://www.facebook.com', minWidth: 350}
+  'facebook-post': {name: 'Facebook', origin: 'https://www.facebook.com', minWidth: 350},
+  'reddit-post': {name: 'Reddit', origin: 'https://embed.reddit.com', minWidth: 300},
+  'instagram-post': {name: 'Instagram', origin: 'https://www.instagram.com', minWidth: 326},
+  'linkedin-post': {name: 'LinkedIn', origin: 'https://www.linkedin.com', minWidth: 300, fixedHeight: 600},
+  'tiktok-post': {name: 'TikTok', origin: 'https://www.tiktok.com', minWidth: 240, portrait: true},
+  'mastodon-post': {name: 'Mastodon', origin: location.origin, minWidth: 300}
 };
 const active = new Map();
 const initialized = new WeakSet();
@@ -31,6 +36,10 @@ function fit(section, state) {
   const scale = width / frameWidth;
   state.frame.style.width = frameWidth + 'px';
   state.frame.style.transform = scale < 1 ? 'scale(' + scale + ')' : '';
+  if (state.provider.portrait) {
+    state.height = Math.ceil(frameWidth * 16 / 9);
+    state.frame.style.height = state.height + 'px';
+  }
   host.style.height = Math.ceil((state.height || 100) * scale) + 'px';
 }
 
@@ -85,6 +94,17 @@ async function frameURL(section, state) {
         href: url, show_text: 'true', width: state.width, container_width: state.width, sdk: 'joey', locale: 'en_US', channel
       });
     }
+    case 'reddit-post':
+      return providers['reddit-post'].origin + new URL(url).pathname + '?' + new URLSearchParams({embed: 'true', theme: 'light'});
+    case 'instagram-post':
+      await embedResponse('https://graph.facebook.com/v27.0/instagram_oembed', url, state.controller.signal);
+      return url + 'embed/captioned/';
+    case 'linkedin-post':
+      return providers['linkedin-post'].origin + '/embed' + new URL(url).pathname;
+    case 'tiktok-post':
+      return providers['tiktok-post'].origin + '/player/v1/' + new URL(url).pathname.split('/').pop() + '?' + new URLSearchParams({autoplay: '0', description: '1', music_info: '1'});
+    case 'mastodon-post':
+      return '/social/mastodon?' + new URLSearchParams({url, id: state.id});
     default: throw new Error('Unknown social provider');
   }
 }
@@ -127,7 +147,13 @@ function finish(section, failed = false) {
 }
 
 async function load(section, moveFocus = false) {
-  if (!section.isConnected || active.has(section)) return;
+  if (!section.isConnected) return;
+  const previous = active.get(section);
+  if (previous) {
+    if (!previous.preview || previous.ready) return;
+    reset(section);
+    initialized.add(section);
+  }
   const button = section.querySelector('[data-social-post-load]');
   const host = section.querySelector('[data-social-post]');
   const fallback = section.querySelector('[data-social-post-fallback]');
@@ -151,6 +177,27 @@ async function load(section, moveFocus = false) {
     frame.setAttribute('allow', "autoplay 'none'; fullscreen; picture-in-picture");
     frame.referrerPolicy = 'no-referrer';
     frame.src = src;
+    if (provider.fixedHeight) {
+      state.height = provider.fixedHeight;
+      frame.style.height = state.height + 'px';
+      frame.setAttribute('scrolling', 'auto');
+    }
+    if (provider.fixedHeight || provider.portrait) {
+      frame.addEventListener('load', () => {
+        if (active.get(section) !== state || state.ready) return;
+        // LinkedIn cannot confirm rendering to another site. TikTok confirms
+        // readiness after Play. Keep recovery controls on a loaded preview.
+        state.preview = true;
+        clearTimeout(state.timer);
+        host.classList.remove('social-post-pending');
+        const focused = fallback?.contains(document.activeElement);
+        if (fallback) fallback.hidden = true;
+        button.disabled = button.hidden = false;
+        button.textContent = 'Retry ' + provider.name + ' post';
+        section.querySelector('[data-social-post-status]').textContent = '';
+        if (focused) frame.focus({preventScroll: true});
+      });
+    }
     frame.addEventListener('error', () => { if (active.get(section) === state) finish(section, true); });
     host.replaceChildren(frame);
     fit(section, state);
@@ -169,7 +216,10 @@ document.addEventListener('click', event => {
 window.addEventListener('message', event => {
   for (const [section, state] of active) {
     if (!state.frame || event.origin !== state.provider.origin || event.source !== state.frame.contentWindow) continue;
-    let height;
+    let height, message = event.data;
+    if (typeof message === 'string' && message.startsWith('{')) {
+      try { message = JSON.parse(message); } catch { continue; }
+    }
     switch (section.dataset.socialProvider) {
       case 'bluesky-post':
         if (event.data?.id === state.id) height = event.data.height;
@@ -187,14 +237,28 @@ window.addEventListener('message', event => {
         if (['resize', 'resize.iframe', 'resize.flow'].includes(message.type) && /^(\d+)(\.\d+)?$/.test(String(message.height))) height = Number(message.height);
         break;
       }
+      case 'reddit-post':
+        if (message?.type === 'resize.embed') height = message.data;
+        break;
+      case 'instagram-post':
+        if (message?.type === 'MEASURE') height = message.details?.height;
+        break;
+      case 'mastodon-post':
+        if (message?.type === 'mastodon:resize' && message.id === state.id) height = message.height;
+        break;
+      case 'tiktok-post':
+        if (message?.['x-tiktok-player'] === true) {
+          if (['onPlayerError', 'onError'].includes(message.type)) { finish(section, true); return; }
+          if (message.type === 'onPlayerReady') height = state.height;
+        }
+        break;
     }
     if (!Number.isFinite(height) || height < 1) return;
     state.height = Math.min(4096, Math.max(100, Math.ceil(height) + 1));
     state.frame.style.height = state.height + 'px';
     fit(section, state);
     state.frame.setAttribute('scrolling', height >= 4096 ? 'auto' : 'no');
-    // These providers report a height after rendering their post or availability
-    // notice. An iframe load event alone never hides the local fallback.
+    // A height report can describe a post or the provider's availability notice.
     if (!state.ready) finish(section);
     return;
   }

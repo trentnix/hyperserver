@@ -23,7 +23,7 @@ const (
 // ContentSecurityPolicy permits bundled assets. Deployment configuration supplies
 // additional form-action origins for external authentication redirects.
 // Editor-generated inline styles use style attributes, not inline scripts.
-const ContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https:; connect-src 'self' https://embed.bsky.app https://graph.threads.com https://graph.facebook.com; media-src 'self'; frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com https://platform.twitter.com https://embed.bsky.app https://www.threads.com https://www.facebook.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+const ContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https:; connect-src 'self' https://embed.bsky.app https://graph.threads.com https://graph.facebook.com; media-src 'self'; frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com https://platform.twitter.com https://embed.bsky.app https://www.threads.com https://www.facebook.com https://embed.reddit.com https://www.instagram.com https://www.linkedin.com https://www.tiktok.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
 // configureRendering selects shared layouts and installs one navigation callback.
 // Site owns the profile and administrator rule used by rendering and authentication.
@@ -109,6 +109,7 @@ func (s *Site) configureRendering(cm *contentservice.ContentManagerService, acco
 func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templates, error) {
 	files := []content.TemplatePath{
 		{FS: blogModuleFS, Path: responsesFile},
+		{FS: blogModuleFS, Path: "templates/mastodon-embed.html"},
 		{FS: blogModuleFS, Path: "templates/users.html"},
 		{FS: blogModuleFS, Path: "templates/posts.html"},
 		{FS: blogModuleFS, Path: "templates/post-editor.html"},

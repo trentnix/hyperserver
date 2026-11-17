@@ -178,6 +178,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	}
 	m.views = make(map[string]*content.View)
 	for _, name := range []string{
+		"mastodonEmbed",
 		"users",
 		"userEditor",
 		"userRemove",

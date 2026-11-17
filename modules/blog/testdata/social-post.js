@@ -7,6 +7,18 @@
     while (!predicate()) { if (Date.now() > end) throw new Error('Timed out: ' + predicate); await new Promise(resolve => setTimeout(resolve, 25)); }
   };
   const pause = () => new Promise(resolve => setTimeout(resolve, 100));
+  const frameReady = async frame => {
+    let ready = false;
+    const origin = new URL(frame.src, location.href).origin;
+    const receive = event => { if (event.source === frame.contentWindow && event.origin === origin && event.data === 'test:ready') ready = true; };
+    window.addEventListener('message', receive);
+    try {
+      await wait(() => {
+        frame.contentWindow.postMessage('test:ready', '*');
+        return ready;
+      });
+    } finally { window.removeEventListener('message', receive); }
+  };
   const set = (field, value) => { field.value = value; field.dispatchEvent(new Event('input', {bubbles: true})); };
   const platforms = [
     ['bluesky-post', 'blueskyPost', 'https://bsky.app/profile/example.bsky.social/post/3kabc12345678'],
@@ -113,6 +125,7 @@
         section.scrollIntoView({block: 'center'});
         await wait(() => section.querySelector('iframe'));
         const frame = section.querySelector('iframe');
+        await frameReady(frame);
         const fallback = section.querySelector('[data-social-post-fallback]');
         const actions = section.querySelector('.social-post-actions');
         assert(!fallback.hidden && !actions.hidden && getComputedStyle(frame).visibility === 'hidden', 'Loading must preserve the screenshot and viewing link.');
@@ -165,6 +178,7 @@
       assert(!first.querySelector('[data-social-post-fallback]').hidden && !first.querySelector('iframe'), 'Stalled loading must preserve the screenshot and offer Retry.');
       first.querySelector('[data-social-post-load]').click();
       await wait(() => first.querySelector('iframe'));
+      await frameReady(first.querySelector('iframe'));
       first.querySelector('iframe').contentWindow.postMessage('test:render', '*');
       await wait(() => first.querySelector('[data-social-post-fallback]').hidden);
       sessionStorage.setItem('social-post-stage', 'edit');

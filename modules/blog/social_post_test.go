@@ -26,6 +26,22 @@ func socialPostCases() []struct {
 	}
 }
 
+func additionalSocialPostCases() []struct {
+	provider socialProvider
+	url      string
+} {
+	return []struct {
+		provider socialProvider
+		url      string
+	}{
+		{socialProvider{Kind: "reddit-post", Name: "Reddit"}, "https://www.reddit.com/r/reddit/comments/135shj5/making_it_easier_to_share/"},
+		{socialProvider{Kind: "mastodon-post", Name: "Mastodon"}, "https://mastodon.social/@Mastodon/117625790631441803"},
+		{socialProvider{Kind: "instagram-post", Name: "Instagram"}, "https://www.instagram.com/p/fA9uwTtkSN/"},
+		{socialProvider{Kind: "linkedin-post", Name: "LinkedIn"}, "https://www.linkedin.com/feed/update/urn:li:activity:7062468048728842240"},
+		{socialProvider{Kind: "tiktok-post", Name: "TikTok"}, "https://www.tiktok.com/@scout2015/video/6718335390845095173"},
+	}
+}
+
 func TestSocialPostURLs(t *testing.T) {
 	for _, test := range []struct {
 		provider  socialProvider
@@ -115,7 +131,7 @@ func TestSocialPostComponents(t *testing.T) {
 }
 
 func TestSocialPostFormsAndHistory(t *testing.T) {
-	for _, test := range socialPostCases() {
+	for _, test := range append(socialPostCases(), additionalSocialPostCases()...) {
 		for _, hx := range []bool{false, true} {
 			t.Run(test.provider.Name+map[bool]string{false: "/ordinary", true: "/htmx"}[hx], func(t *testing.T) {
 				h := registeredBrowserHarness(t)
@@ -180,7 +196,7 @@ func TestSocialPostFormsAndHistory(t *testing.T) {
 }
 
 func TestSocialPostPermissions(t *testing.T) {
-	for _, test := range socialPostCases() {
+	for _, test := range append(socialPostCases(), additionalSocialPostCases()...) {
 		t.Run(test.provider.Name, func(t *testing.T) {
 			h := usersHarness(t)
 			admin, err := h.app.Accounts.GetByEmail(t.Context(), "trentnix@gmail.com")
@@ -211,7 +227,7 @@ func TestSocialPostPermissions(t *testing.T) {
 }
 
 func TestUnifiedSocialPost(t *testing.T) {
-	cases := append(socialPostCases(), struct {
+	cases := append(append(socialPostCases(), additionalSocialPostCases()...), struct {
 		provider socialProvider
 		url      string
 	}{xProvider(), "https://twitter.com/user/status/123?s=20"})

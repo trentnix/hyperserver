@@ -15,7 +15,7 @@ The definition names the kind, form field, JSON payload key, editor template, ic
 
 Shared code discovers form fields, preserves rejected input, prepares templates, builds picker entries, and registers reader renderers from the catalog. The catalog also generates `/assets/js/component-editors.js` with ordinary module imports. Each editor loads before draft recovery initializes.
 
-The **Social media** component detects X, Bluesky, Threads, or Facebook from the URL. Its shared editor accepts the same fields for every platform. Provider-specific readers handle each embed protocol. Legacy definitions preserve existing envelopes and recovered drafts without offering separate picker entries. See [social media](social-posts.md).
+The **Social media** component detects X, Bluesky, Threads, Facebook, Reddit, Mastodon, Instagram, LinkedIn, or TikTok from the URL. Its shared editor accepts the same fields for every platform. Provider-specific readers handle each embed protocol. Legacy definitions preserve existing envelopes and recovered drafts without offering separate picker entries. See [social media](social-posts.md).
 
 ## Content contract
 
@@ -34,6 +34,8 @@ Reader rendering must escape authored text. Raw HTML remains disabled in Markdow
 ## Editor contract
 
 Each script registers its section with `registerComponent`. It supplies snapshot, clear, restore, focus, and normalization callbacks. Normalization defines which optional empty fields equal omitted fields. `jsonComponentValue` provides the shared JSON comparison.
+
+Reordering preserves iframe state when the browser supports `moveBefore`. Editors with live previews can supply `beforeMove` and `afterMove` callbacks to release and rebuild their preview when an older browser must remove and reinsert the section.
 
 The shared controller owns ordering, removal, Undo, field errors, and unsaved indicators. Draft recovery discovers component source fields from the page. A new component must not add another type switch or field list to those paths.
 

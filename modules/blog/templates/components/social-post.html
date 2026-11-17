@@ -5,7 +5,13 @@
     <textarea id="post-{{ .Kind }}" name="{{ .Field }}" rows="3">{{ .Source }}</textarea>
     <fieldset data-social-post-controls data-component-fields hidden disabled>
       <label for="{{ .Kind }}-url">Post URL</label><input id="{{ .Kind }}-url" data-social-post-field="url" type="url" maxlength="2048" placeholder="{{ .Example }}" required aria-describedby="{{ .Kind }}-url-help">
-      <p class="form-hint" id="{{ .Kind }}-url-help">X, Bluesky, Threads, or Facebook. The platform is detected from the URL.</p>
+      <p class="form-hint" id="{{ .Kind }}-url-help">X, Bluesky, Threads, Facebook, Reddit, Mastodon, Instagram, LinkedIn, or TikTok. The platform is detected from the URL.</p>
+      <div class="social-post-editor-preview" data-social-post-live-preview role="region" aria-label="Social media preview" tabindex="-1" hidden>
+        <p class="form-hint">Preview</p>
+        <p data-social-post-preview-status role="status"></p>
+        <button type="button" class="button-secondary" data-social-post-preview-retry hidden>Retry preview</button>
+        <div data-social-post-preview-content></div>
+      </div>
       <div class="social-post-image-picker" data-image-picker data-image-prefix="/images/">
         <input type="hidden" data-image-value data-social-post-field="imageID">
         <figure class="social-post-image-preview" data-social-post-preview hidden>

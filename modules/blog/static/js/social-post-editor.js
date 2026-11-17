@@ -16,6 +16,77 @@ function initialize(root) {
     const fields = [...controls.querySelectorAll('[data-social-post-field]')];
     const error = section.querySelector('[data-social-post-error]');
     const picker = controls.querySelector('[data-image-picker]');
+    const url = fields.find(field => field.dataset.socialPostField === 'url');
+    const description = fields.find(field => field.dataset.socialPostField === 'description');
+    const livePreview = controls.querySelector('[data-social-post-live-preview]');
+    const previewContent = livePreview.querySelector('[data-social-post-preview-content]');
+    const previewStatus = livePreview.querySelector('[data-social-post-preview-status]');
+    const retry = livePreview.querySelector('[data-social-post-preview-retry]');
+    const lifetime = new AbortController();
+    let request, previewKey = '';
+
+    function clearPreview() {
+      request?.abort();
+      request = undefined;
+      previewKey = '';
+      // Release provider observers, timers, and requests before replacing a card.
+      previewContent.dispatchEvent(new CustomEvent('htmx:before:cleanup', {bubbles: true}));
+      previewContent.replaceChildren();
+      livePreview.hidden = retry.hidden = true;
+      previewStatus.textContent = '';
+    }
+
+    function updateDescription() {
+      const card = previewContent.querySelector('.social-post-component, .x-post-component');
+      if (!card) return;
+      let text = card.querySelector('.social-post-description, .x-post-description');
+      if (!description.value) { text?.remove(); return; }
+      if (!text) {
+        text = document.createElement('p');
+        text.className = card.classList.contains('x-post-component') ? 'x-post-description' : 'social-post-description';
+        card.prepend(text);
+      }
+      text.textContent = description.value;
+    }
+
+    async function loadPreview(force = false) {
+      if (!section.isConnected || section.hidden || controls.disabled || !url.value.trim() || !url.validity.valid) return;
+      const value = {url: url.value.trim(), imageID: picker.querySelector('[data-image-value]').value};
+      const key = JSON.stringify(value);
+      if (!force && key === previewKey) return;
+      const retrying = document.activeElement === retry;
+      clearPreview();
+      previewKey = key;
+      request = new AbortController();
+      const active = request;
+      livePreview.hidden = false;
+      previewStatus.textContent = 'Loading preview…';
+      if (retrying) livePreview.focus({preventScroll: true});
+      function failed(message) {
+        previewStatus.textContent = message;
+        retry.hidden = false;
+      }
+      const timeout = setTimeout(() => {
+        active.abort();
+        if (request === active && section.isConnected) failed('The preview timed out. Try again.');
+      }, 10000);
+      try {
+        const response = await fetch('/post/social-preview', {
+          method: 'POST', body: new URLSearchParams({socialPost: JSON.stringify(value)}), signal: active.signal, redirect: 'error'
+        });
+        const html = await response.text();
+        if (active.signal.aborted || !section.isConnected) return;
+        if (!response.ok) throw new Error(response.status === 422 ? html.trim() : 'Unable to load the preview. Try again.');
+        if (!(response.headers.get('Content-Type') || '').includes('text/html')) throw new Error('Unable to load the preview. Try again.');
+        // Only the same-origin, validated component renderer supplies this HTML.
+        previewContent.innerHTML = html;
+        updateDescription();
+        previewStatus.textContent = '';
+        htmx.process(previewContent);
+      } catch (error) {
+        if (!active.signal.aborted && section.isConnected) failed(error.message);
+      } finally { clearTimeout(timeout); }
+    }
 
     function preview() {
       const id = picker.querySelector('[data-image-value]').value;
@@ -29,6 +100,7 @@ function initialize(root) {
     }
 
     function read() {
+      clearPreview();
       let value;
       try {
         value = source.value.trim() ? JSON.parse(source.value) : {};
@@ -47,6 +119,8 @@ function initialize(root) {
       error.hidden = true;
       error.textContent = '';
       preview();
+      // Recovery can reveal a component after its source change has bubbled.
+      queueMicrotask(() => loadPreview());
     }
 
     for (const field of fields) {
@@ -56,15 +130,27 @@ function initialize(root) {
         source.value = Object.values(value).some(text => text.trim()) ? JSON.stringify(value) : '';
         source.dispatchEvent(new Event('input', {bubbles: true}));
         preview();
+        if (field === url) clearPreview();
+        else if (field === description) updateDescription();
+        else loadPreview();
       });
     }
     source.addEventListener('change', read);
     source.form.addEventListener('blog:uploads-finished', preview);
+    url.addEventListener('blur', () => loadPreview());
+    retry.addEventListener('click', () => loadPreview(true));
+    window.addEventListener('pagehide', clearPreview, {signal: lifetime.signal});
+    window.addEventListener('pageshow', () => loadPreview(), {signal: lifetime.signal});
+    document.addEventListener('htmx:before:cleanup', event => {
+      if (event.target.contains?.(section)) { request?.abort(); lifetime.abort(); }
+    }, {signal: lifetime.signal});
     registerComponent(section, {
       normalize: value => jsonComponentValue(value, {strings: ['description', 'imageID']}),
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy; read(); },
+      beforeMove: clearPreview,
+      afterMove: () => loadPreview(),
       focus: () => (source.hidden ? fields[0] : source).focus()
     });
     read();

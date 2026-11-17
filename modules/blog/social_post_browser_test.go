@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBrowserSocialPosts(t *testing.T) {
@@ -31,11 +32,18 @@ function send(height, badID = false) {
 }
 window.addEventListener('message', event => {
  if (event.source !== parent) return;
+ if (event.data === 'test:ready') event.source.postMessage('test:ready', event.origin);
  if (event.data === 'test:render') send(220.4);
  if (event.data === 'test:bad-id') send(777, true);
  if (event.data?.resize !== undefined) send(event.data.resize);
 });`)
 			return
+		}
+		// Keep iframe insertion separate from its script becoming ready.
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(75 * time.Millisecond):
 		}
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, `<!doctype html><html><head><script src="/widget.js" defer></script></head><body></body></html>`)

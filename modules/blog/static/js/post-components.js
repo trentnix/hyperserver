@@ -107,7 +107,16 @@ function createEditor(root) {
     const placement = [...order, ...[...sections.keys()].filter(type => !order.includes(type))];
     for (const type of placement.reverse()) {
       const section = sections.get(type);
-      if (section.nextElementSibling !== next) root.insertBefore(section, next);
+      if (section.nextElementSibling !== next) {
+        // Keep loaded frames intact. Older browsers must rebuild live previews
+        // around insertBefore, which destroys an iframe's browsing context.
+        if (root.moveBefore) root.moveBefore(section, next);
+        else {
+          entries.get(type)?.beforeMove?.();
+          root.insertBefore(section, next);
+          entries.get(type)?.afterMove?.();
+        }
+      }
       next = section;
     }
     picker.hidden = ![...picker.querySelectorAll('[data-component-add]')].some(button => !button.hidden);
