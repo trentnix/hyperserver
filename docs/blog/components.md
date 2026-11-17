@@ -11,9 +11,11 @@ Components stay in the post's Markdown revision. The final `post-components` fen
 3. Add the definition to `postComponentCatalog` in `modules/blog/component_catalog.go`.
 4. Add validation, reader, and browser tests for its behavior.
 
-The definition names the kind, form field, JSON payload key, editor template, icon, and script. It supplies the parser, reader renderer, and error for an added empty component. `Decode` is needed only when stored content differs from editor input, as with photo albums. `EditorData` can supply additional template data.
+The definition names the kind, form field, JSON payload key, editor template, icon, and script. It supplies the parser, reader renderer, and error for an added empty component. `Decode` is needed only when stored content differs from editor input, as with photo albums. `EditorData` can supply additional template data. `AliasFor` keeps an older stored kind editable under a canonical component choice and hides its picker entry. A submitted alias cannot accompany its canonical component.
 
 Shared code discovers form fields, preserves rejected input, prepares templates, builds picker entries, and registers reader renderers from the catalog. The catalog also generates `/assets/js/component-editors.js` with ordinary module imports. Each editor loads before draft recovery initializes.
+
+The **Social media** component detects X, Bluesky, Threads, or Facebook from the URL. Its shared editor accepts the same fields for every platform. Provider-specific readers handle each embed protocol. Legacy definitions preserve existing envelopes and recovered drafts without offering separate picker entries. See [social media](social-posts.md).
 
 ## Content contract
 

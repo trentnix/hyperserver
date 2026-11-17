@@ -19,7 +19,7 @@
   <details class="component-picker" data-component-picker hidden>
     <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add component</summary>
     <div class="component-picker-options">
-      {{ range $components }}<button type="button" data-component-add="{{ .Kind }}">{{ renderPartial .Icon . }}<span><strong>{{ .Name }}</strong><small>{{ .Summary }}</small></span></button>{{ end }}
+      {{ range $components }}{{ if not .AliasFor }}<button type="button" data-component-add="{{ .Kind }}">{{ renderPartial .Icon . }}<span><strong>{{ .Name }}</strong><small>{{ .Summary }}</small></span></button>{{ end }}{{ end }}
     </div>
   </details>
   {{ range $components }}<div class="album-removal-recovery" data-component-recovery="{{ .Kind }}" role="status" hidden>{{ .Name }} removed.<button type="button" class="text-button" data-component-undo="{{ .Kind }}">Undo</button></div>{{ end }}

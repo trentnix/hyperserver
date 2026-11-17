@@ -28,6 +28,12 @@ func TestComponentCatalogMetadata(t *testing.T) {
 		if definition.Payload == "" || definition.Payload == "type" || definition.Template == "" || definition.Icon == "" || definition.Script == "" || definition.EmptyMessage == "" || definition.Parse == nil || definition.Renderer == nil {
 			t.Fatal("incomplete component definition", definition)
 		}
+		if definition.AliasFor != "" {
+			canonical, ok := postComponentCatalog.find(definition.AliasFor)
+			if !ok || canonical.Kind == definition.Kind || canonical.AliasFor != "" {
+				t.Fatal("component aliases must name a canonical definition", definition)
+			}
+		}
 		for _, path := range []string{definition.TemplateFile, "static/js/" + definition.Script} {
 			if _, err := fs.Stat(blogModuleFS, path); err != nil {
 				t.Fatal(definition.Kind, err)

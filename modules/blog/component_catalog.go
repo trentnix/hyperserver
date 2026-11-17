@@ -17,6 +17,7 @@ type componentDefinition struct {
 	TemplateFile, Template, Icon, Script string
 	Parse                                func(string) (componentContent, error)
 	Decode                               func(string) (componentContent, error)
+	AliasFor                             string // Original stored kinds share the canonical component choice.
 	Renderer                             renderer.NodeRenderer
 	EditorData                           func(source string, noLibrary bool) any
 }
@@ -44,7 +45,11 @@ var postComponentCatalog = componentCatalog{
 	linkDefinition(),
 	videoDefinition(),
 	audioDefinition(),
-	xPostDefinition(),
+	socialPostDefinition(),
+	legacySocialPostDefinition(xProvider()),
+	legacySocialPostDefinition(blueskyProvider()),
+	legacySocialPostDefinition(threadsProvider()),
+	legacySocialPostDefinition(facebookProvider()),
 	comparisonDefinition(),
 }
 

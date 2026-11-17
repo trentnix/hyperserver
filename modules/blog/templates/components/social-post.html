@@ -1,0 +1,34 @@
+{{ define "blog.socialPostEditor" }}
+  <section class="social-post-editor" data-social-post-editor{{ if eq .Kind "x-post" }} data-x-post-editor{{ end }} data-social-post-name="{{ .Name }}" data-post-component="{{ .Kind }}" data-component-choice="social-post" aria-labelledby="{{ .Kind }}-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="{{ .Kind }}-editor-title">Social media</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "social media component" }}<button type="button" class="text-button component-remove" data-component-remove="{{ .Kind }}" aria-label="Remove social media component" hidden>Remove</button></div></div>
+    <label for="post-{{ .Kind }}" data-social-post-source-label>Social media (JSON)</label>
+    <textarea id="post-{{ .Kind }}" name="{{ .Field }}" rows="3">{{ .Source }}</textarea>
+    <fieldset data-social-post-controls data-component-fields hidden disabled>
+      <label for="{{ .Kind }}-url">Post URL</label><input id="{{ .Kind }}-url" data-social-post-field="url" type="url" maxlength="2048" placeholder="{{ .Example }}" required aria-describedby="{{ .Kind }}-url-help">
+      <p class="form-hint" id="{{ .Kind }}-url-help">X, Bluesky, Threads, or Facebook. The platform is detected from the URL.</p>
+      <div class="social-post-image-picker" data-image-picker data-image-prefix="/images/">
+        <input type="hidden" data-image-value data-social-post-field="imageID">
+        <figure class="social-post-image-preview" data-social-post-preview hidden>
+          <figcaption>Fallback image</figcaption>
+          <img data-image-preview alt="Selected fallback image" hidden>
+        </figure>
+        <label for="{{ .Kind }}-description">Description (optional)</label><textarea id="{{ .Kind }}-description" data-social-post-field="description" rows="2" maxlength="1000" aria-describedby="{{ .Kind }}-description-help"></textarea>
+        <p class="form-hint" id="{{ .Kind }}-description-help">Shown above the embedded post.</p>
+        <fieldset class="social-post-image-settings">
+          <legend>Fallback image (optional)</legend>
+          <p class="form-hint" id="{{ .Kind }}-image-help">Shown while the post loads or if the post cannot load.</p>
+          <div class="image-upload-controls" hidden>
+            <button type="button" class="button-secondary" data-image-upload>Upload</button>{{ if not .NoLibrary }}<button type="button" class="button-secondary" data-media-browse>Library</button>{{ end }}
+            <button type="button" class="text-button" data-image-reset>Clear</button>
+            <input type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload fallback image" aria-describedby="{{ .Kind }}-image-help" hidden>
+          </div>
+          <p data-image-status role="status"></p>
+          <p class="form-hint">PNG, JPEG, or GIF. Up to 8 MiB and 20 megapixels.</p>
+        </fieldset>
+      </div>
+    </fieldset>
+    <p data-social-post-error role="status" hidden></p>
+  </section>
+{{ end }}
+
+{{ define "blog.socialPostIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v12H9l-4 4zM8 8h8M8 12h5"/></svg>{{ end }}

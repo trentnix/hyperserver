@@ -11,28 +11,28 @@
   try {
     const stage = sessionStorage.getItem('x-post-stage');
     if (!stage) {
-      await wait(() => document.querySelector('[name="xPost"]').hidden && document.querySelector('#post-form .CodeMirror'));
+      await wait(() => document.querySelector('[name="socialPost"]').hidden && document.querySelector('#post-form .CodeMirror'));
       const form = document.querySelector('#post-form');
-      const section = form.querySelector('[data-x-post-editor]');
+      const section = form.querySelector('[data-post-component="social-post"]');
       assert(section.hidden && section.querySelector('fieldset').disabled, 'An unused component must not block Save.');
       form.elements.title.value = 'X post component review'; form.elements.slug.value = 'x-post-component-review';
-      form.querySelector('[data-component-add="x-post"]').click();
-      assert(!section.hidden && document.activeElement.id === 'x-post-url', 'Adding an X post must focus its URL.');
-      set(form.querySelector('#x-post-url'), 'https://evil.test/user/status/123');
-      set(form.querySelector('#x-post-description'), description);
+      form.querySelector('[data-component-add="social-post"]').click();
+      assert(!section.hidden && document.activeElement.id === 'social-post-url', 'Adding an X post must focus its URL.');
+      set(form.querySelector('#social-post-url'), 'https://evil.test/user/status/123');
+      set(form.querySelector('#social-post-description'), description);
       form.requestSubmit();
       await wait(() => section.querySelector('[data-component-error]:not([hidden])'));
-      assert(form.querySelector('#x-post-description').value === description, 'Invalid URL errors must retain authored context.');
-      set(form.querySelector('#x-post-url'), 'https://twitter.com/user/status/560070183650213889?s=20');
+      assert(form.querySelector('#social-post-description').value === description, 'Invalid URL errors must retain authored context.');
+      set(form.querySelector('#social-post-url'), 'https://twitter.com/user/status/560070183650213889?s=20');
       const picker = section.querySelector('[data-image-picker]');
       assert(picker.querySelector('[data-image-preview]').hidden && picker.querySelector('[data-image-reset]').disabled, 'The fallback image must be optional.');
       picker.querySelector('[data-media-browse]').click();
       await wait(() => document.querySelector('.media-browser [data-media-select]'));
       document.querySelector('.media-browser [data-media-select]').click();
       await wait(() => !document.querySelector('.media-browser'));
-      assert(JSON.parse(form.elements.xPost.value).imageID && !picker.querySelector('[data-image-preview]').hidden, 'Library selection must update the saved fallback image.');
+      assert(JSON.parse(form.elements.socialPost.value).imageID && !picker.querySelector('[data-image-preview]').hidden, 'Library selection must update the saved fallback image.');
       picker.querySelector('[data-image-reset]').click();
-      assert(!JSON.parse(form.elements.xPost.value).imageID && picker.querySelector('[data-image-preview]').hidden, 'Clear must remove the fallback without changing the post URL.');
+      assert(!JSON.parse(form.elements.socialPost.value).imageID && picker.querySelector('[data-image-preview]').hidden, 'Clear must remove the fallback without changing the post URL.');
       const canvas = document.createElement('canvas');
       canvas.width = 120; canvas.height = 160;
       canvas.getContext('2d').fillRect(10, 10, 100, 30);
@@ -42,15 +42,15 @@
       upload.files = transfer.files; upload.dispatchEvent(new Event('change', {bubbles: true}));
       assert(form.dataset.uploading && form.querySelector('[type="submit"]').disabled, 'Save must wait for the screenshot upload.');
       await wait(() => !form.dataset.uploading && picker.querySelector('[data-image-status]').textContent.includes('uploaded'));
-      sessionStorage.setItem('x-post-image', JSON.parse(form.elements.xPost.value).imageID);
-      const original = form.elements.xPost.value;
+      sessionStorage.setItem('x-post-image', JSON.parse(form.elements.socialPost.value).imageID);
+      const original = form.elements.socialPost.value;
       section.querySelector('[data-component-remove]').click();
-      assert(section.hidden && !form.elements.xPost.value && section.querySelector('fieldset').disabled, 'Removal must clear and disable fields.');
-      form.querySelector('[data-component-undo="x-post"]').click();
-      assert(form.elements.xPost.value === original && form.querySelector('#x-post-description').value === description, 'Undo must restore the whole component.');
+      assert(section.hidden && !form.elements.socialPost.value && section.querySelector('fieldset').disabled, 'Removal must clear and disable fields.');
+      form.querySelector('[data-component-undo="social-post"]').click();
+      assert(form.elements.socialPost.value === original && form.querySelector('#social-post-description').value === description, 'Undo must restore the whole component.');
       form.querySelector('[data-component-add="video"]').click();
       section.querySelector('[data-component-move="down"]').click();
-      assert(form.elements.componentOrder.value === '["video","x-post"]', 'X posts must use shared ordering.');
+      assert(form.elements.componentOrder.value === '["video","social-post"]', 'X posts must use shared ordering.');
       form.querySelector('[data-video-editor] [data-component-remove]').click();
       form.querySelector('[name="published"][value="on"]').checked = true;
       form.dispatchEvent(new Event('input', {bubbles: true}));
@@ -61,7 +61,7 @@
       await wait(() => document.querySelector('[data-draft-recovery]') && !document.querySelector('[data-draft-recovery]').hidden);
       document.querySelector('[data-draft-restore]').click();
       const form = document.querySelector('#post-form');
-      assert(form.querySelector('#x-post-description').value === description && JSON.parse(form.elements.xPost.value).imageID === sessionStorage.getItem('x-post-image') && !form.querySelector('[data-x-post-editor] [data-image-preview]').hidden && form.elements.componentOrder.value === '["x-post"]', 'Recovery must preserve X post content, fallback image, and order.');
+      assert(form.querySelector('#social-post-description').value === description && JSON.parse(form.elements.socialPost.value).imageID === sessionStorage.getItem('x-post-image') && !form.querySelector('[data-post-component="social-post"] [data-image-preview]').hidden && form.elements.componentOrder.value === '["social-post"]', 'Recovery must preserve X post content, fallback image, and order.');
       sessionStorage.setItem('x-post-stage', 'reader'); form.requestSubmit(); return;
     }
     await wait(() => document.querySelector('.post-body .x-post-component'));
@@ -186,8 +186,8 @@
     await wait(() => button.hidden && !button.disabled);
     assert(document.activeElement === otherLink, 'Finishing loading must not steal focus after the reader moves away.');
     await htmx.ajax('GET', document.querySelector('a[href^="/post/update/"]').getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
-    await wait(() => document.querySelector('#x-post-description'));
-    assert(document.querySelector('#x-post-description').value === description && JSON.parse(document.querySelector('[name="xPost"]').value).imageID === sessionStorage.getItem('x-post-image') && !document.querySelector('[data-x-post-editor] [data-component-unsaved]:not([hidden])'), 'Reopening must preserve content and the screenshot with a clean saved indicator.');
+    await wait(() => document.querySelector('#social-post-description'));
+    assert(document.querySelector('#social-post-description').value === description && JSON.parse(document.querySelector('[name="socialPost"]').value).imageID === sessionStorage.getItem('x-post-image') && !document.querySelector('[data-post-component="social-post"] [data-component-unsaved]:not([hidden])'), 'Reopening must preserve content and the screenshot with a clean saved indicator.');
     sessionStorage.removeItem('x-post-stage'); sessionStorage.removeItem('x-post-image'); await report('PASS');
   } catch (error) { await report(String(error) + '\n' + (error.stack || '')); }
 })();

@@ -665,7 +665,7 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .component-picker summary::-webkit-details-marker { display: none; }
 .component-picker summary:hover, .component-picker[open] summary { background: #edf0f4; color: #283447; }
 .component-picker svg { flex-shrink: 0; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.component-picker-options { display: grid; grid-auto-rows: 1fr; position: absolute; top: calc(100% + 8px); left: 0; z-index: 3; width: max-content; max-width: 100%; padding: 6px; border: 1px solid #dce1e7; border-radius: 12px; background: #fff; box-shadow: 0 8px 24px #1b30501f; }
+.component-picker-options { display: grid; grid-auto-rows: 1fr; position: absolute; top: calc(100% + 8px); left: 0; z-index: 3; width: max-content; max-width: 100%; max-height: min(70vh, 680px); overflow-y: auto; overscroll-behavior: contain; padding: 6px; border: 1px solid #dce1e7; border-radius: 12px; background: #fff; box-shadow: 0 8px 24px #1b30501f; }
 .component-picker-options button { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 68px; padding: 10px; border: 0; border-radius: 8px; background: transparent; color: #303946; text-align: left; }
 .component-picker-options button:hover { background: #f3f6fb; }
 .component-picker-options button > svg { width: 36px; height: 36px; padding: 8px; border-radius: 8px; background: #edf2f8; color: #354c6a; }
@@ -1075,24 +1075,24 @@ html:has(.album-viewer[open]) { overflow: hidden; scrollbar-gutter: stable; }
 
 .audio-component audio[hidden] { display: none; }
 
-/* X provides its own reader card. Keep the editor on the shared surface. */
-.x-post-editor h2 { margin: 0; font-size: 1.2em; }
-.x-post-editor fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-.x-post-editor [data-x-post-controls] { margin-top: 20px; }
-.x-post-editor fieldset > label:first-child { margin-top: 0; }
-.x-post-editor fieldset > .form-hint { margin: 8px 0 0; font-size: 14px; }
-.x-post-editor .x-post-image-settings { margin-top: 24px; }
-.x-post-image-settings legend { font-weight: 600; }
-.x-post-image-preview { margin: 20px 0 0; }
-.x-post-image-preview figcaption { margin-bottom: 8px; color: var(--muted); font-size: 13px; }
-.x-post-image-preview img { display: block; max-width: min(100%, 360px); max-height: 280px; border: 1px solid #dce2e9; border-radius: 12px; }
-.x-post-image-picker > .form-hint { margin: 8px 0 0; font-size: 14px; }
-.x-post-image-picker .image-upload-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
-.x-post-image-picker button { min-height: 44px; margin: 0; padding: 9px 14px; border-radius: 24px; font-size: 14px; }
-.x-post-image-picker .text-button { display: inline-flex; align-items: center; justify-content: center; margin: 0; }
-.x-post-image-picker [data-image-status] { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
-.x-post-image-picker [data-image-status]:empty { display: none; }
-.x-post-editor [hidden], .x-post-fallback[hidden] { display: none; }
+/* Social providers supply their own reader cards. Editors use the shared surface. */
+.social-post-editor h2 { margin: 0; font-size: 1.2em; }
+.social-post-editor fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.social-post-editor [data-social-post-controls] { margin-top: 20px; }
+.social-post-editor fieldset > label:first-child { margin-top: 0; }
+.social-post-editor fieldset > .form-hint { margin: 8px 0 0; font-size: 14px; }
+.social-post-editor .social-post-image-settings { margin-top: 24px; }
+.social-post-image-settings legend { font-weight: 600; }
+.social-post-image-preview { margin: 20px 0 0; }
+.social-post-image-preview figcaption { margin-bottom: 8px; color: var(--muted); font-size: 13px; }
+.social-post-image-preview img { display: block; max-width: min(100%, 360px); max-height: 280px; border: 1px solid #dce2e9; border-radius: 12px; }
+.social-post-image-picker > .form-hint { margin: 8px 0 0; font-size: 14px; }
+.social-post-image-picker .image-upload-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.social-post-image-picker button { min-height: 44px; margin: 0; padding: 9px 14px; border-radius: 24px; font-size: 14px; }
+.social-post-image-picker .text-button { display: inline-flex; align-items: center; justify-content: center; margin: 0; }
+.social-post-image-picker [data-image-status] { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.social-post-image-picker [data-image-status]:empty { display: none; }
+.social-post-editor [hidden], .x-post-fallback[hidden] { display: none; }
 .x-post-description { white-space: pre-wrap; overflow-wrap: anywhere; }
 .x-post-component .x-post-description { margin: 0 0 16px; }
 .x-post-component { max-width: 550px; margin: 32px 0; }
@@ -1108,6 +1108,24 @@ html:has(.album-viewer[open]) { overflow: hidden; scrollbar-gutter: stable; }
 .x-post-status:empty { display: none; }
 .x-post-embed:has(iframe) { margin-bottom: 16px; }
 .x-post-actions > div:has(button[hidden]) { display: none; }
+
+.social-post-description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.social-post-component .social-post-description { margin: 0 0 16px; }
+.social-post-component { max-width: 600px; margin: 32px 0; }
+.social-post-media { position: relative; }
+.social-post-fallback { display: block; margin-bottom: 16px; }
+.social-post-fallback[hidden] { display: none; }
+.post-body .social-post-fallback img, .social-post-fallback img { display: block; width: 100%; height: auto; margin: 0; padding: 0; border: 1px solid #dce2e9; border-radius: 14px; }
+.social-post-embed.social-post-pending { position: absolute; inset: 0 0 auto; visibility: hidden; pointer-events: none; }
+.social-post-embed { position: relative; }
+.social-post-frame { position: absolute; inset: 0 auto auto 0; display: block; width: 100%; max-width: none; height: 100px; border: 0; transform-origin: top left; }
+.social-post-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
+.social-post-actions[hidden] { display: none; }
+.social-post-actions button { min-height: 44px; margin: 0; padding: 10px 18px; border-radius: 24px; font-size: 14px; }
+.social-post-component .social-post-status { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.social-post-status:empty { display: none; }
+.social-post-embed:has(iframe) { margin-bottom: 16px; }
+.social-post-actions > div:has(button[hidden]) { display: none; }
 
 /* Comparisons keep both images intact within the same frame. */
 .image-comparison { margin: 32px 0; }

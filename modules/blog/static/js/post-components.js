@@ -80,13 +80,22 @@ function createEditor(root) {
     }
   }
 
+  const choice = type => sections.get(type).dataset.componentChoice || type;
+
+  function removeComponent(type) {
+    removed.set(type, {index: order.indexOf(type), value: entries.get(type).snapshot()});
+    entries.get(type).clear();
+    order = order.filter(current => current !== type);
+  }
+
   function render() {
     const busy = Boolean(form.dataset.uploading);
     for (const [type, section] of sections) {
       const index = order.indexOf(type);
       section.hidden = index < 0;
       section.querySelectorAll('[data-component-fields]').forEach(fields => { fields.disabled = index < 0 || fields.hidden; });
-      root.querySelector(`[data-component-add="${type}"]`).hidden = index >= 0;
+      const add = root.querySelector(`[data-component-add="${type}"]`);
+      if (add) add.hidden = order.some(kind => choice(kind) === type);
       root.querySelector(`[data-component-recovery="${type}"]`).hidden = index >= 0 || !removed.has(type);
       section.querySelector('[data-component-remove]').hidden = false;
       section.querySelector('[data-component-remove]').disabled = busy;
@@ -101,7 +110,7 @@ function createEditor(root) {
       if (section.nextElementSibling !== next) root.insertBefore(section, next);
       next = section;
     }
-    picker.hidden = order.length === sections.size;
+    picker.hidden = ![...picker.querySelectorAll('[data-component-add]')].some(button => !button.hidden);
     field.value = JSON.stringify(order);
     updateRequired();
     updateUnsaved();
@@ -140,8 +149,13 @@ function createEditor(root) {
     const entry = entries.get(type);
     if (!entry) return;
     if ((add || undo) && !order.includes(type)) {
+      const conflicts = order.filter(kind => choice(kind) === choice(type));
+      if (add && conflicts.length) return;
       const copy = removed.get(type);
       if (undo && copy) {
+        // Undo restores the old choice. Keep its replacement in Undo as well,
+        // so switching between stored aliases cannot discard either version.
+        for (const kind of conflicts) removeComponent(kind);
         entry.restore(copy.value);
         order.splice(Math.min(copy.index, order.length), 0, type);
       } else {
@@ -150,11 +164,10 @@ function createEditor(root) {
       removed.delete(type);
       picker.open = false;
       changed(type);
+      for (const kind of conflicts) sections.get(kind).querySelector('textarea[name]').dispatchEvent(new Event('input', {bubbles: true}));
       entry.focus();
     } else if (remove && order.includes(type)) {
-      removed.set(type, {index: order.indexOf(type), value: entry.snapshot()});
-      entry.clear();
-      order = order.filter(current => current !== type);
+      removeComponent(type);
       changed(type);
       picker.querySelector('summary').focus();
     } else if (move && order.includes(type)) {

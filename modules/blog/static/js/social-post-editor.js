@@ -6,20 +6,21 @@ const initialized = new WeakSet();
 const imageID = /^[a-f0-9]{64}\.(png|jpeg|gif)$/;
 
 function initialize(root) {
-  for (const section of root.querySelectorAll('[data-x-post-editor]')) {
+  for (const section of root.querySelectorAll('[data-social-post-editor]')) {
     if (initialized.has(section)) continue;
     initialized.add(section);
-    const source = section.querySelector('[name="xPost"]');
-    const label = section.querySelector('[data-x-post-source-label]');
-    const controls = section.querySelector('[data-x-post-controls]');
-    const fields = [...controls.querySelectorAll('[data-x-post-field]')];
-    const error = section.querySelector('[data-x-post-error]');
+    const source = section.querySelector('textarea[name]');
+    const name = section.dataset.socialPostName;
+    const label = section.querySelector('[data-social-post-source-label]');
+    const controls = section.querySelector('[data-social-post-controls]');
+    const fields = [...controls.querySelectorAll('[data-social-post-field]')];
+    const error = section.querySelector('[data-social-post-error]');
     const picker = controls.querySelector('[data-image-picker]');
 
     function preview() {
       const id = picker.querySelector('[data-image-value]').value;
       const image = picker.querySelector('[data-image-preview]');
-      picker.querySelector('[data-x-post-preview]').hidden = !id;
+      picker.querySelector('[data-social-post-preview]').hidden = !id;
       image.hidden = !id;
       if (id) image.src = '/images/' + id + '?variant=thumbnail';
       else image.removeAttribute('src');
@@ -36,10 +37,10 @@ function initialize(root) {
         source.hidden = label.hidden = false;
         controls.hidden = controls.disabled = true;
         error.hidden = false;
-        error.textContent = 'The X post source is invalid. Correct it before saving.';
+        error.textContent = 'The ' + name + ' post source is invalid. Correct it before saving.';
         return;
       }
-      for (const field of fields) field.value = value[field.dataset.xPostField] || '';
+      for (const field of fields) field.value = value[field.dataset.socialPostField] || '';
       source.hidden = label.hidden = true;
       controls.hidden = false;
       controls.disabled = section.hidden;
@@ -51,7 +52,7 @@ function initialize(root) {
     for (const field of fields) {
       field.addEventListener('input', () => {
         markField(field, false);
-        const value = Object.fromEntries(fields.map(input => [input.dataset.xPostField, input.value]));
+        const value = Object.fromEntries(fields.map(input => [input.dataset.socialPostField, input.value]));
         source.value = Object.values(value).some(text => text.trim()) ? JSON.stringify(value) : '';
         source.dispatchEvent(new Event('input', {bubbles: true}));
         preview();

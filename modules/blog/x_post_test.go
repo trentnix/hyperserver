@@ -41,7 +41,7 @@ func TestXPostURLs(t *testing.T) {
 }
 
 func TestXPostComponent(t *testing.T) {
-	post := postXPost{URL: "https://twitter.com/user/status/560070183650213889?s=20", Description: "A <script>description</script> & context.\nMore context.", ImageID: strings.Repeat("b", 64) + ".png"}
+	post := postSocialPost{URL: "https://twitter.com/user/status/560070183650213889?s=20", Description: "A <script>description</script> & context.\nMore context.", ImageID: strings.Repeat("b", 64) + ".png"}
 	source, err := joinPostComponents("Body", componentInput{"xPost": componentJSON(post), "video": `{"url":"https://youtu.be/M7lc1UVf-VE"}`, "audio": componentJSON(postAudio{ID: strings.Repeat("a", 64) + ".mp3", Size: 1, Title: "A saved recording"}), "componentOrder": `["x-post","video","audio"]`})
 	if err != nil {
 		t.Fatal(err)
@@ -79,12 +79,12 @@ func TestXPostComponent(t *testing.T) {
 	if err != nil || len(refs) != 2 || !slices.Contains(refs, "/files/"+strings.Repeat("a", 64)+".mp3") || !slices.Contains(refs, "/images/"+post.ImageID) {
 		t.Fatal("mixed components must retain local audio and fallback image references", refs, err)
 	}
-	for _, raw := range []string{`null`, `{}`, `{"url":""}`, `{"url":"https://x.com/user/status/123","html":"bad"}`, `{"url":"https://x.com/user/status/123"} {}`, componentJSON(postXPost{URL: post.URL, Description: strings.Repeat("a", 1001)}), componentJSON(postXPost{URL: post.URL, ImageID: "https://example.test/screenshot.png"}), componentJSON(postXPost{ImageID: post.ImageID})} {
+	for _, raw := range []string{`null`, `{}`, `{"url":""}`, `{"url":"https://x.com/user/status/123","html":"bad"}`, `{"url":"https://x.com/user/status/123"} {}`, componentJSON(postSocialPost{URL: post.URL, Description: strings.Repeat("a", 1001)}), componentJSON(postSocialPost{URL: post.URL, ImageID: "https://example.test/screenshot.png"}), componentJSON(postSocialPost{ImageID: post.ImageID})} {
 		if _, err := joinPostComponents("Body", componentInput{"xPost": raw}); err == nil {
 			t.Fatal("invalid component accepted", raw)
 		}
 	}
-	withoutImage, err := parseXPost(`{"url":"https://x.com/user/status/123"}`)
+	withoutImage, err := parseSocialPost(`{"url":"https://x.com/user/status/123"}`)
 	if err != nil || len(withoutImage.Media()) != 0 {
 		t.Fatal("existing X posts must work without a fallback image", withoutImage, err)
 	}
@@ -96,7 +96,7 @@ func TestXPostFormsAndHistory(t *testing.T) {
 			h := registeredBrowserHarness(t)
 			h.login(t)
 			image := mediaUpload(t, h.blog, "X post screenshot").ID
-			value := postXPost{URL: "https://x.com/user/status/560070183650213889", Description: "Keep this context.", ImageID: image}
+			value := postSocialPost{URL: "https://x.com/user/status/560070183650213889", Description: "Keep this context.", ImageID: image}
 			input := componentJSON(value)
 			fields := url.Values{"title": {""}, "slug": {"x-post-review"}, "xPost": {input}, "componentOrder": {`["x-post"]`}}
 			response := h.request("POST", "/post", fields, hx)
@@ -183,7 +183,7 @@ func TestXPostPermissions(t *testing.T) {
 	if err := h.blog.mediaMetadata.RememberMedia(t.Context(), image, mediaMetadata{Filename: "screenshot.png", UploadedBy: admin.ID}); err != nil {
 		t.Fatal(err)
 	}
-	value := postXPost{URL: "https://x.com/user/status/123", ImageID: image}
+	value := postSocialPost{URL: "https://x.com/user/status/123", ImageID: image}
 	fields.Set("xPost", componentJSON(value))
 	for _, hx := range []bool{false, true} {
 		requireStatus(t, h.request("POST", "/post", fields, hx), http.StatusUnprocessableEntity)

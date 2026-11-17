@@ -5,18 +5,11 @@ import (
 	"html"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
 )
-
-type postXPost struct {
-	URL         string `json:"url"`
-	Description string `json:"description,omitempty"`
-	ImageID     string `json:"imageID,omitempty"`
-}
 
 var xPostID = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
 var xUsername = regexp.MustCompile(`^[A-Za-z0-9_]{1,15}$`)
@@ -54,54 +47,9 @@ func xPostURL(raw string) (string, error) {
 	return parts[3], nil
 }
 
-func xPostDefinition() componentDefinition {
-	return componentDefinition{
-		Kind: "x-post", Field: "xPost", Payload: "xPost",
-		Name: "X post", Summary: "A public post and its media", EmptyMessage: "Enter an X post URL or remove the X post component.",
-		TemplateFile: "templates/components/x-post.html", Template: "blog.xPostEditor", Icon: "blog.xPostIcon", Script: "x-post-editor.js",
-		Parse: func(source string) (componentContent, error) { return parseXPost(source) }, Renderer: xPostRenderer{},
-	}
-}
-
-func parseXPost(source string) (*postXPost, error) {
-	if strings.TrimSpace(source) == "" {
-		return nil, nil
-	}
-	var value *postXPost
-	if err := decodeComponentJSON(source, &value); err != nil || value == nil || !utf8.ValidString(source) {
-		return nil, contentError("Unable to read the X post. Check its source before saving.")
-	}
-	if _, err := xPostURL(value.URL); err != nil {
-		return nil, err
-	}
-	if !utf8.ValidString(value.Description) || utf8.RuneCountInString(value.Description) > 1000 {
-		return nil, contentError("Keep the X post description at most 1,000 characters.")
-	}
-	if value.ImageID != "" && !validImageID(value.ImageID) {
-		return nil, contentError("Choose an uploaded image for the X post fallback.")
-	}
-	return value, nil
-}
-
-func (value *postXPost) Empty() bool { return value == nil }
-func (value *postXPost) EditorSource() string {
-	if value.Empty() {
-		return ""
-	}
-	return componentJSON(value)
-}
-func (value *postXPost) SearchText() string { return "\n" + value.Description }
-func (value *postXPost) Media() []componentMedia {
-	if value.ImageID == "" {
-		return nil
-	}
-	return []componentMedia{{ID: value.ImageID}}
-}
-func (value *postXPost) Node() ast.Node { return &xPostNode{Post: *value} }
-
 type xPostNode struct {
 	ast.BaseBlock
-	Post postXPost
+	Post postSocialPost
 }
 
 var xPostKind = ast.NewNodeKind("XPost")

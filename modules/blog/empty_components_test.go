@@ -17,7 +17,7 @@ func TestEmptyComponentsCannotBeSaved(t *testing.T) {
 			h.login(t)
 			for _, component := range []struct{ kind, field string }{
 				{"photo-album", "album"}, {"file-downloads", "downloads"}, {"pdf-preview", "pdf"},
-				{"link-preview", "link"}, {"video", "video"}, {"audio", "audio"}, {"x-post", "xPost"}, {"image-comparison", "comparison"},
+				{"link-preview", "link"}, {"video", "video"}, {"audio", "audio"}, {"social-post", "socialPost"}, {"x-post", "xPost"}, {"bluesky-post", "blueskyPost"}, {"threads-post", "threadsPost"}, {"facebook-post", "facebookPost"}, {"image-comparison", "comparison"},
 			} {
 				t.Run(component.kind, func(t *testing.T) {
 					fields := url.Values{

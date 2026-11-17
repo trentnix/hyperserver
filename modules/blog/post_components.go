@@ -203,6 +203,17 @@ func (catalog componentCatalog) join(body string, input componentInput) (string,
 			selected[definition.Kind] = postComponent{Type: definition.Kind, payload: definition.Payload, Content: content}
 		}
 	}
+	// Older envelopes can contain several provider-specific records. Keep those
+	// editable, but never add the canonical choice beside one of its aliases.
+	for _, definition := range catalog {
+		if _, alias := selected[definition.Kind]; definition.AliasFor == "" || !alias {
+			continue
+		}
+		if _, canonical := selected[definition.AliasFor]; canonical {
+			choice, _ := catalog.find(definition.AliasFor)
+			return body, writingFieldError{contentError("Keep one " + strings.ToLower(choice.Name) + " component. Remove the other before saving."), choice.Field}
+		}
+	}
 	order, err := catalog.order(input["componentOrder"])
 	if err != nil {
 		return body, writingFieldError{err, "componentOrder"}

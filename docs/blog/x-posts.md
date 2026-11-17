@@ -1,6 +1,6 @@
 # X posts
 
-Use **Add component → X post** below a post's Markdown editor. Paste a public X post URL or an old `twitter.com` share link. The editor shows any fallback image below the URL, followed by the optional description and image controls. The description appears above the embedded post. Save the post to apply changes. One X post component is allowed per post.
+Use **Add component → Social media** below a post's Markdown editor. The URL determines the platform. Paste a public X post URL or an old `twitter.com` share link. The editor shows any fallback image below the URL, followed by the optional description and image controls. The description appears above the embedded post. Save the post to apply changes. The same editor also accepts Bluesky, Threads, and Facebook URLs. See [social media](social-posts.md).
 
 Upload or choose an optional fallback image, such as a screenshot. It appears while the embed loads and remains visible if loading fails. Once the embed renders, the screenshot hides. The screenshot links to the original post. It stays saved for future visits and remains visible without JavaScript, in feeds, and in historical previews. Images use the site's PNG, JPEG, and GIF limits: 8 MiB and 20 megapixels.
 
@@ -8,7 +8,7 @@ The post and its media load automatically when the component comes into view. Lo
 
 ## Storage and editing
 
-The existing version 2 `post-components` block stores an `x-post` record with an `xPost` object. Fields are `url`, optional `description`, and optional `imageID`. URLs allow 2,048 bytes. Descriptions allow 1,000 characters. Image permissions, cleanup protection, and revision history use the shared media paths. No database migration or X API credentials are required.
+New posts use the unified `social-post` record with a `socialPost` object in the version 2 `post-components` block. Existing `x-post` records with an `xPost` object remain supported. Fields are `url`, optional `description`, and optional `imageID`. URLs allow 2,048 bytes. Descriptions allow 1,000 characters. Image permissions, cleanup protection, and revision history use the shared media paths. No database migration or X API credentials are required.
 
 The component uses shared ordering, removal, Undo, unsaved indicators, browser recovery, and revision history. An added empty component must be completed or removed before Save. An image alone does not complete the component. A component-only post is allowed. Search includes the description. Feeds and historical previews keep the description, any fallback image, and a canonical viewing link without interactive controls. Page editing does not expose the component yet.
 
