@@ -30,7 +30,7 @@ Draft pages and descendants of draft parents return 404 to visitors. Administrat
 
 ## Site Profile
 
-Edit the name, short bio, portrait, favicon, and background through **Site Profile**. Changes are stored in SQLite and take effect without restarting. Clearing images restores the neutral portrait/favicon or removes the background. The administrator email remains in module configuration.
+Edit the name, short bio, portrait, favicon, and background through **Site Profile**. Changes are stored in SQLite and take effect without restarting. Clearing images restores the neutral portrait/favicon or removes the background. The administrator email remains in module configuration. Saving returns to the site root with a brief confirmation.
 
 Images can be uploaded, selected from Media, or supplied as local absolute paths or HTTPS URLs. Use PNG for uploaded favicons. Upload controls require JavaScript. See [images](media.md) for privacy and local-file setup.
 
@@ -60,7 +60,9 @@ Editors warn about unsaved changes before navigation. Browsers may suppress relo
 
 All Posts lists 30 published posts per page, grouped by month. `recentPostCount` controls Recent Posts and must be positive.
 
-In `modules/blog/config.yaml`, `rssPostLimit` controls how many published posts RSS includes with their full content. The default is 50. Use `0` for no limit. Negative values and non-integers fail at startup. Restart after changing either setting. Older posts remain available through All Posts and their URLs. Post changes invalidate the feed and list caches, and scheduled publication expires them on time.
+In `modules/blog/config.yaml`, `rssPostLimit` controls how many published posts RSS includes with their full content. The default is 50. Use `0` for no limit. Negative values and non-integers fail at startup. Restart after changing either setting.
+
+Older posts remain available through All Posts and their URLs. Post changes invalidate the feed and list caches, and scheduled publication expires them on time.
 
 Search at `/search` matches literal phrases in public titles, tags, summaries, and Markdown, in that rank order. It excludes drafts, future posts, hidden descendants, and history. It returns up to 50 matches with a total count.
 

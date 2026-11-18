@@ -32,7 +32,7 @@ Registration offers all enabled registration methods. Login offers all enabled m
 
 Forms work without JavaScript. Disabled providers cannot log in or accept callbacks. Google-only authentication needs no mail service. Global auth and session settings still apply.
 
-Existing SQLite account databases must use the current schema before starting the application. See [account migrations](storage.md#account-schema-migrations) for the required version and upgrade commands. Fresh databases initialize automatically.
+Account storage must support external identities and use the [current schema](storage.md#account-schema-migrations). Fresh SQLite databases initialize automatically.
 
 ## Existing accounts
 
@@ -46,8 +46,6 @@ Setup links cannot be used for password recovery, including unused links left af
 
 The site never allows removing Google when it is the only usable method. Disconnection removes the site's local association, not the Google account or its permissions at Google.
 
-The blog places **Account** with the site navigation on mobile and ultrawide screens, and at the bottom of the page on other widths. If no enabled provider offers an account action, it shows **Sign out** instead.
-
 Matching email addresses never link accounts automatically. A Google identity can belong to only one local account. Each local account can have one Google identity. Connect the account before disabling email if the administrator originally registered with email. To change Google accounts, add a password first, disconnect Google, then connect the new Google account.
 
 ## First-time setup
@@ -58,7 +56,7 @@ Google registration accepts Gmail addresses and Google Workspace addresses ident
 
 ## Security and dependencies
 
-The provider uses the authorization-code flow with PKCE, browser-bound state, and a nonce. Flow state expires after ten minutes. Atomic server-side session rotation permits only one callback to consume a flow. Starting another flow in the same browser replaces the previous flow.
+The provider uses authorization-code flow with PKCE, a nonce, and single-use browser-bound state that expires after ten minutes. Starting another flow replaces the previous one. Atomic server-side rotation permits only one callback per flow.
 
 The callback checks the token's signature, issuer, audience, expiry, subject, nonce, and verified email before accessing accounts. Google access and refresh tokens are not persisted. Logging out ends the local session, not the Google session.
 

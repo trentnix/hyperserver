@@ -1,15 +1,28 @@
 # Compatibility
 
-HyperServer is experimental. Public APIs, configuration, HTTP behavior, and stored formats can change during `v0`, including between commits. Applications must pin a version or commit and test upgrades.
+HyperServer is experimental. Public APIs, configuration, HTTP behavior, and stored formats can change during `v0`, even between commits. Applications must pin a revision and test upgrades. Packages under `internal` and blog internals are not reusable framework contracts.
 
-A breaking change must document the affected contract and required application changes. Published release notes must link to upgrade instructions. If an old Go API is retained during a transition, its documentation must include a `Deprecated:` comment naming the replacement. There is no guaranteed deprecation period during `v0`.
+Breaking changes must document the affected contract and application changes. Release notes must link to upgrade instructions. If a breaking change retains an old Go API, its documentation must include a `Deprecated:` comment naming the replacement. No deprecation period is guaranteed during `v0`.
 
-Storage compatibility is separate from source compatibility. Format changes must specify migration, invalidation of disposable data, or recreation of development storage. They must not silently discard durable data. Follow the [storage migration procedures](storage.md), [session format rules](../pkg/services/session/readme.md#replacing-serialization), and [backup compatibility requirements](blog/backup.md#compatibility).
+Storage changes must specify migration, invalidation of disposable data, or recreation of development storage. Never silently discard durable data. Follow [schema migrations](storage.md#account-schema-migrations), [session format rules](../pkg/services/session/readme.md#replacing-serialization), and [backup compatibility](blog/backup.md#compatibility).
 
-Documented extension points are supported at the pinned revision, not frozen interfaces. Run the shared provider contracts and application tests when replacing a service. SQLite coverage alone does not establish compatibility with another backend.
+Run [provider contracts](storage.md#testing-a-replacement-provider) and application tests when replacing services. SQLite coverage does not prove another backend's guarantees. A stable release must define its public surface and validate a separately pinned application.
 
-Account adapters must follow the [account capability upgrade instructions](storage.md#account-capabilities-and-adapter-upgrades). Password changes, tokens, password resets, and email verification are separate from `AccountRepository`. SQLite retains every capability and needs no migration for this interface change.
+## Account capabilities
 
-Rendering requires templates prepared during initialization. The request-time file fields, registration methods, and unused `LogMessages` helpers on `Content` are removed. Follow the [rendering API upgrade instructions](../pkg/components/readme.md#rendering-api-upgrade). Modules can still contribute components for request-time composition. `Templates.WithLayouts` selects prepared layouts without rereading files. Manager-level template configuration remains available, and no database change is required.
+Password changes, tokens, resets, and verification use optional interfaces rather than `AccountRepository`. SQLite retains all capabilities without a schema change. See [adapter upgrade instructions](storage.md#account-capabilities-and-adapter-upgrades).
 
-Packages under `internal` and blog implementation details are not reusable framework contracts. A future stable release must identify its supported public interfaces and compatibility guarantees. Validate a separately pinned application before promising external framework stability.
+## Rendering API upgrade
+
+Request-time file registration and parsing are removed. Update applications that use these `Content` fields or methods:
+
+| Removed API | Replacement |
+| --- | --- |
+| `Layouts`, `AddLayout` | Load layouts during preparation. Use `WithLayouts` to select their named roots. |
+| `Contents`, `AddContent` | Pass `TemplatePath` values to `PrepareView` or `PrepareTemplates` during initialization. |
+| `Components`, `AddComponent` | Collect module contributions or configure manager components before preparation. Select and order named components in request data. |
+| `LogMessages`, `AddLogMessage`, `AddLogMessages` | Use the request logger for diagnostics. These values never emitted output. |
+
+Create responses with `view.Content(r, data)`. Direct construction with `NewContent` or `NewManagedContent` must assign a prepared set to `Templates` before rendering a body. Redirects and 204 responses do not require templates. The manager's template registration methods remain available for startup configuration. No stored-data migration is needed.
+
+`Refresh: true` still renders a body and requires prepared templates. To request an HTMX refresh without rendering, also set `NoContent: true`. Ordinary and history-restoration requests ignore both HTMX settings and still require templates.

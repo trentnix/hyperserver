@@ -25,9 +25,7 @@ HS_TEST_PERFORMANCE=1 go test -v -count=5 ./internal/test/web -run '^TestFramewo
 
 CI does not enforce latency budgets. Use `perfcheck -timing` only on the recorded CPU with comparable storage and no competing workload. Review the workload and environment before changing a budget. These checks are regression guards, not production capacity guarantees.
 
-The stripped Linux/amd64 blog binary is limited to 18,700,000 bytes. With Go 1.27.4 and CGO enabled, the series implementation measures 18,426,712 bytes locally using the build command above. The allowance covers the series code, templates, and embedded assets. Runtime allocation and memory budgets remain unchanged.
-
-RSS loads and renders up to `rssPostLimit` published posts, selected in SQLite before reading bodies. The default is 50. Setting `0` includes every published post, so feed generation and memory use grow with the archive. Its cache retains one feed document. Conditional requests reuse that document until a post or profile change invalidates it or a scheduled publication expires it.
+The [RSS limit](blog/content.md#reader-navigation-and-sharing) applies in SQLite before reading post bodies. Unlimited feeds grow with the archive. The cache retains one document until a post/profile change invalidates it or scheduled publication expires it. Conditional requests reuse that document.
 
 ## Blog search
 
@@ -62,7 +60,9 @@ Run the repository benchmarks with the environment above:
 go test ./modules/blog -run '^$' -bench '^BenchmarkMediaLookups$' -benchmem -benchtime=500ms -count=5
 ```
 
-Fixtures use temporary SQLite files with 100, 1,000, and 10,000 images. Each image has metadata, three post revisions, and a current reference. Cases read all images, one image, or a 24-image page. Before timing, each case warms the lookup and checks the expected metadata and usage. Results measure repository lookups and Go allocations. They exclude image bytes, filesystem enumeration, authentication, and HTTP rendering. Keep machine-specific comparisons with local benchmark output.
+Fixtures use temporary SQLite files with 100, 1,000, and 10,000 images. Each image has metadata, three post revisions, and a current reference. Cases read all images, one image, or a 24-image page.
+
+Before timing, each case warms the lookup and checks the expected metadata and usage. Results measure repository lookups and Go allocations. They exclude image bytes, filesystem enumeration, authentication, and HTTP rendering. Keep machine-specific comparisons with local benchmark output.
 
 ## Profiling
 

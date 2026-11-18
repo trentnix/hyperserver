@@ -10,7 +10,9 @@ The `session` package defines session values, storage contracts, and request han
 
 Both providers bind cookies to the session name. Renaming a cookie cannot restore its original session.
 
-Both stores default to versioned JSON encoded in URL-safe base64. Each store can select a different [Serializer](serializer.go). `Session.Data` still accepts JSON-compatible values. The JSON serializer restores numbers as `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read values into the expected type. That helper uses JSON conversion independently of the storage format.
+Both stores default to versioned JSON encoded in URL-safe base64. Each store can select a different [Serializer](serializer.go).
+
+`Session.Data` still accepts JSON-compatible values. The JSON serializer restores numbers as `json.Number` to preserve integer precision. Go structs and concrete numeric types are not preserved automatically. Use `DecodeValue` to read values into the expected type. That helper uses JSON conversion independently of the storage format.
 
 - `MaxSessionDataSize` limits serialized data to 64 KiB before base64 encoding. Reads reject oversized data before calling the serializer. Saves and rotations reject oversized serializer output before writing storage.
 - `MaxCookieSize` limits each cookie to 4 KiB, including its name and outgoing attributes. JWT and base64 overhead reduce the space available for cookie-store data.
@@ -24,7 +26,9 @@ Providers serve concurrent requests, but each request owns its mutable session d
 
 SQLite creates use unique IDs and reject collisions without replacing existing data. Saving a deleted session fails. Reads reject expired sessions even before cleanup. Saves preserve the original expiration and cannot revive an expired session. Rotation creates a new lifetime and revokes the previous ID atomically. Only one concurrent rotation of a stored session can succeed.
 
-SQLite issues cookies only after successful writes. Persistent database files survive normal close and reopen. Crash durability depends on SQLite settings and the filesystem. In-memory databases do not survive closing their connections. Cookie-only storage has no server-side persistence or revocation. Its data lasts only as long as the browser retains a valid cookie. Neither provider can guarantee delivery of a response cookie.
+SQLite issues cookies only after successful writes. Persistent database files survive normal close and reopen. Crash durability depends on SQLite settings and the filesystem. In-memory databases do not survive closing their connections.
+
+Cookie-only storage has no server-side persistence or revocation. Its data lasts only as long as the browser retains a valid cookie. Neither provider can guarantee delivery of a response cookie.
 
 Storage I/O must use the request context. Cancellation after a completed write does not undo that write. Authentication rejects providers without `RotatingStore` during initialization. Custom implementations must satisfy its revocation and concurrency rules, not merely implement a method with that name.
 
@@ -69,7 +73,7 @@ The [cleanup command](../../../cmd/cleanup) removes expired SQLite sessions and 
 
 ## Ownership and extension
 
-`application.New` supplies the built-in providers and exposes the configured manager as `app.Sessions`. Use `Options.SessionProviders` to add or replace providers. For lower-level setup, choose the available providers explicitly:
+`application.New` opens only providers supplied through `Options.SessionProviders` and exposes the manager as `app.Sessions`. The catalog has no implicit entries. Supply `configured.SessionProviders(cfg)` for the built-ins, or choose providers individually:
 
 ```go
 providers := map[string]session.ConfiguredProvider{
@@ -81,9 +85,9 @@ manager, err := session.NewConfiguredManager(ctx, cfg, providers)
 
 `http.session.types` selects from those providers. Provider names are case-insensitive. `NewConfiguredManager` validates configuration and opens each selected provider once. The manager owns the stores and must be closed after requests stop. Failed setup closes acquired resources. For programmatic setup without configuration, use `NewSessionManager` with store factories directly.
 
-Custom providers supply `ConfiguredProvider` callbacks. Validation performs no I/O, and callbacks receive private option maps. `CleanupConfiguredStores` uses the same selection with maintenance factories, without requiring signing keys or initializing schema. [configured.SessionProviders](../configured/sessions.go) supplies the built-in catalog used by startup and the cleanup command.
+Custom `ConfiguredProvider` callbacks validate without I/O and receive private option maps. `CleanupConfiguredStores` uses maintenance factories without requiring signing keys or initializing schema. See [expired-record cleanup](../../../docs/storage.md#expired-record-cleanup).
 
-Each SQLite store owns its pool and prepares its table, expiration index, and version metadata in one transaction. Its pool uses one connection to preserve `:memory:` databases and serialize session writes. Session-store transactions use `BEGIN IMMEDIATE`, overriding `_txlock`, so concurrent initializations acquire the write lock before inspecting storage. Separate managers use separate pools, even when configured for the same file. They share session records only if configured for the same database and table.
+Each SQLite store owns a one-connection pool and initializes its table, expiration index, and version metadata in one transaction. Transactions use `BEGIN IMMEDIATE`, overriding `_txlock`, to reserve the writer before inspecting storage. Separate managers use separate pools and share records only when configured for the same file and table. See [SQLite connection behavior](../../../docs/storage.md#sqlite-connections-and-native-access).
 
 Startup checks writable `id` and `session` columns with text affinity and `expires_at`, `created_at`, and `updated_at` columns declared as `DATE`, `DATETIME`, or `TIMESTAMP`. The table must have a non-partial unique key on `id` alone with binary comparison. Nullable declarations remain supported. Each configured table requires clean schema version 1. Setup does not alter existing columns, repair indexes, or validate stored values. The selected serializer checks payload formats when sessions are read.
 
@@ -100,19 +104,13 @@ migrate -path pkg/services/session/sqlite/migrations \
 
 For a custom table, make a deployment-local copy of the migration files. Change the quoted `"sessions"` and `"sessions_expiration"` identifiers to your table and index names in the up/down SQL. Set `x-migrations-table` to `hyperserver_session_version_<table>`. If the metadata name needs SQL quoting, include the double quotes in the query parameter value and URL-encode that value. Stop writers and run only one migration process per database at a time.
 
-Missing, malformed, dirty, or unsupported versions stop startup without changing storage. Recreate disposable unversioned development databases. After `down 1`, startup rejects the empty version marker until an explicit `up` recreates the schema.
+Missing, malformed, dirty, or unsupported versions stop startup. After `down 1`, startup rejects the empty marker until explicit `up` recreates storage. Follow the shared [migration precautions](../../../docs/storage.md#account-schema-migrations) for backups, dirty markers, and recovery.
 
-### Store construction and ownership
+### Ownership
 
-Built-in constructors accept `cookie.Options` or `sqlite.Options`, not application configuration. Application setup selects enabled providers and resolves SQLite paths before construction. Both constructors reject lifetimes shorter than one second. The cookie constructor also rejects signing keys shorter than 32 bytes and placeholders. SQLite needs no signing key.
+Built-in constructors accept `cookie.Options` or `sqlite.Options`. Both require lifetimes of at least one second. Cookie stores require a [signing key](../../../docs/configuration.md#signing-keys). SQLite requires a connection and table, not a signing key. Successful constructors return enabled stores.
 
-Successful constructors return enabled stores. SQLite also requires a connection string and table name. See [signing-key generation](../../../docs/application.md#signing-keys).
-
-[application.New](../../application/application.go) resolves paths and creates the session manager before initializing modules. Services and modules share `app.initializationTimeout`, defaulting to ten seconds. The constructor registers cleanup for managers it creates. Managers supplied through `Options.Services.Sessions` remain caller-owned.
-
-With lower-level setup, register owned managers with `app.OnShutdown` before their consumers initialize. Shutdown hooks close consumers before session stores after requests drain. Give each resource one owner. A closed manager must not be reused.
-
-Retrieved sessions are cached in the request context. Do not share their mutable data across concurrent requests. Set manager mappings before serving requests, not while requests are active.
+The application closes managers it creates after consumers stop. Managers supplied through `Options.Services.Sessions` remain caller-owned. With lower-level setup, register owned managers with `app.OnShutdown` before their consumers. Do not reuse closed managers or change mappings while serving requests. Sessions are request-local mutable values and must not be shared across concurrent requests.
 
 ### Custom stores
 
@@ -176,8 +174,12 @@ A serializer implements `Encode(map[string]any) ([]byte, error)` and `Decode([]b
 
 Base64 framing, cookie signing, expiration, revocation, and size limits stay outside serialization. Neither selecting a serializer nor encoding data encrypts it. Decode failures return errors rather than new sessions. Encode failures issue no cookie and leave stored data unchanged.
 
-The default payload is `[1,{"key":"value"}]` wrapped in padded URL-safe base64. The array contains the payload version and the application's data object. Object keys, including `version` and `data`, belong to the application. Unknown versions and malformed payloads return errors. Payload versions are independent of database schema versions. SQLite stores the payload in its session table. Cookie-only sessions carry it in signed claims.
+The default payload is `[1,{"key":"value"}]` wrapped in padded URL-safe base64. The array contains the payload version and the application's data object. Object keys, including `version` and `data`, belong to the application. Unknown versions and malformed payloads return errors. Payload versions are independent of database schema versions.
 
-The default reader also accepts unversioned JSON objects. Reading leaves storage unchanged. A successful save writes version 1 without changing the session ID or expiration. The four-byte version wrapper counts toward existing limits. If a rewrite exceeds the payload or cookie limit, saving fails without replacing the stored data or issuing a cookie. Reduce the session's data or invalidate the session before retrying. Applications that cannot read version 1 must invalidate affected sessions before rolling back to an older serializer.
+SQLite stores the payload in its session table. Cookie-only sessions carry it in signed claims.
+
+The default reader also accepts unversioned JSON objects. Reading leaves storage unchanged. A successful save writes version 1 without changing the session ID or expiration.
+
+The four-byte version wrapper counts toward existing limits. If a rewrite exceeds the payload or cookie limit, saving fails without replacing the stored data or issuing a cookie. Reduce the session's data or invalidate the session before retrying. Applications that cannot read version 1 must invalidate affected sessions before rolling back to an older serializer.
 
 A custom serializer owns its format and compatibility rules. The stores do not add a version wrapper to custom output. A replacement must explicitly read existing data or the application must invalidate those sessions before switching formats. SQLite cookies contain session identifiers rather than stored payloads, so changing the stored payload format does not require changing those cookies.

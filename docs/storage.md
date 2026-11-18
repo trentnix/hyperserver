@@ -1,143 +1,12 @@
 # Storage providers and maintenance
 
-Use [application.New](application.md#services-and-serving) for configured account and session setup. This guide covers custom providers, explicit setup, migrations, and cleanup. See the [session guide](../pkg/services/session/readme.md) for session APIs.
+Use [application setup](application.md#services-and-serving) for shared services and the [session guide](../pkg/services/session/readme.md) for session behavior. This guide covers storage contracts, SQLite, migrations, and cleanup.
 
 ## Account storage
 
-For explicit setup, [`configured.OpenAccounts`](../pkg/services/configured/accounts.go) opens `auth.accountStorage` when auth is enabled. An empty provider selects SQLite and requires `auth.accountStorage.options.connection`. Call the returned cleanup function after consumers stop. [`configured.NewSessionManager`](../pkg/services/configured/sessions.go) opens the stores selected by `http.session.types`. The caller owns and closes that manager.
+`Options.AccountProviders` supplies the complete catalog for `auth.accountStorage.provider`. No provider is included by default. `Options.Services.Accounts` instead accepts an initialized repository without transferring ownership. [configured.AccountProviders](../pkg/services/configured/accounts.go) supplies built-in factories.
 
-Both helpers accept provider overrides. Resolve paths first. Neither installs modules, middleware, or shutdown hooks.
-
-For accounts that share an existing SQLite pool, supply `user/sqlite.ConfiguredProvider(cfg, pool)` as the `"sqlite"` factory. The pool keeps its existing owner. Runtime setup needs no connection option in that case. If using maintenance, set the option to the same database. Without an override, account setup opens and owns its pool.
-
-SQLite account connections use the config directory or `app.workingDirectory` for relative paths. Missing connections and unsupported options stop startup. Accounts do not read the legacy `database` setting. Modules choose their own storage and can share a database file without sharing a pool. `:memory:` creates a separate database per pool.
-
-Account models and contracts live in [`user`](../pkg/services/user), with SQLite support in [`user/sqlite`](../pkg/services/user/sqlite). For explicit setup, call `sqlite.NewAccountRepository(pool)` and then `Initialize(ctx)` before supplying it to consumers. A supplied pool keeps its existing owner.
-
-Initialization checks writable columns, supported types, required `NOT NULL` declarations, and unique keys for account IDs, normalized email keys, and account/token pairs. Keys must cover every row and use binary comparison. Tokens must reference `user(id)` through `user_id` with `ON DELETE CASCADE`. These checks do not validate every stored value. See [schema versions and migrations](#account-schema-migrations) for startup's version checks.
-
-### Account capabilities and adapter upgrades
-
-`user.AccountRepository` requires only `GetByID`, `GetByEmail`, `Create`, and `Update`. Additional interfaces describe optional features. SQLite implements all of them.
-
-| Interface | Methods moved from `AccountRepository` | Required by |
-| --- | --- | --- |
-| `PasswordRepository` | `ChangePassword` | Email authentication. |
-| `TokenRepository` | `GetToken`, `InsertToken` | Token-based features. |
-| `PasswordResetRepository` | `ResetPassword`, plus `TokenRepository` | Email authentication. |
-| `VerificationRepository` | `Verify`, plus `TokenRepository` | Email authentication, including verification for existing accounts. |
-
-Google authentication requires `ExternalIdentityRepository`. It does not require passwords, recovery tokens, or email-verification storage. The shared email-verification redemption routes are registered only when storage supplies `VerificationRepository`.
-
-Closing registration or removing the verification requirement for new accounts does not clear existing accounts' verification requirements. Email authentication therefore always requires verification storage. Mail configuration is still checked at startup only when new registration requires verification.
-
-`PasswordSetupRepository` and `InvitationRepository` now include `TokenRepository`. Password setup remains optional. The blog requires invitation storage only when `multiUser` is enabled. User administration remains required for blog roles and initial setup.
-
-To upgrade a custom adapter, keep its existing methods and advertise the capabilities its enabled features need. Consumers that previously called token or password methods through `AccountRepository` must use the corresponding interface. Wrappers must forward optional methods explicitly. Embedding only `AccountRepository` hides those capabilities. Required but missing capabilities stop startup. No SQLite schema or stored-format change is needed.
-
-## Storage guarantees
-
-Replacement providers must preserve the [account](../pkg/services/user/account_repository.go) and [session](../pkg/services/session/store.go) guarantees, not just their method signatures. Account security changes use version checks and atomic writes. Sessions support [serializer replacement](../pkg/services/session/readme.md#replacing-serialization) independently of storage, with JSON as the default.
-
-Account providers must distinguish rejected recovery tokens from storage failures using the [documented errors](../pkg/services/user/errors.go) and `errors.Is`. Reset-link validation and token redemption return HTTP 400 for rejected tokens and HTTP 500 for infrastructure failures. Error responses and diagnostics omit token values and private provider details. Notification or redirect-session cleanup failures after a committed account change or login are logged without undoing the successful operation.
-
-Account matching and uniqueness use [EmailKey](../pkg/services/user/email.go). Unicode case-insensitive local parts and equivalent Unicode/Punycode domains share a key. The original address is preserved for display and delivery. Dots, tags, local-part quoting, and local-part Unicode normalization remain significant. Non-transitional IDNA keeps `faß.example` and `fass.example` distinct.
-
-SQLite writes complete before reporting success. File-backed data survives normal close and reopen. Crash durability depends on SQLite settings and the filesystem. In-memory databases are temporary.
-
-Factories must reject unsupported settings and release partially acquired resources. Authentication rejects session providers without revocable rotation, and maintenance rejects missing cleanup capabilities. Interface checks cannot prove a custom provider's behavior. Its tests must establish the required guarantees. See [session behavior](../pkg/services/session/readme.md#storage-guarantees) for concurrent saves and expiration.
-
-Accounts and each configured SQLite session table have independent schema versions. Default session payloads have a separate format version and support reading unversioned JSON objects. See [session serialization](../pkg/services/session/readme.md#replacing-serialization) for compatibility and size limits.
-
-## Testing a replacement provider
-
-Import the shared suites from your provider's `_test.go` files. They work from another Go module and require no registration or application startup.
-
-| Contract | Test package and entry point |
-| --- | --- |
-| Account storage | [`pkg/services/user/accounttest.Run`](../pkg/services/user/accounttest/contract.go) |
-| Token-only account storage | [`pkg/services/user/accounttest.RunTokens`](../pkg/services/user/accounttest/token_storage.go), with explicit supported purposes |
-| Common session behavior | [`pkg/services/session/sessiontest.RunCommon`](../pkg/services/session/sessiontest/contract.go) |
-| Server-side sessions with revocable rotation | [`pkg/services/session/sessiontest.Run`](../pkg/services/session/sessiontest/contract.go), which also runs the common suite |
-
-Pass a factory that creates empty, initialized storage for each call and registers cleanup with the supplied `*testing.T`. Use temporary databases, isolated schemas, or unique namespaces. Never point the suites at production data. Providers must support the concurrent operations exercised by their suite.
-
-For example, call the account suite from your provider package:
-
-```go
-func TestAccountContract(t *testing.T) {
-    accounttest.Run(t, func(t *testing.T) user.AccountRepository {
-        return openTestRepository(t)
-    })
-}
-```
-
-Your `openTestRepository` helper owns backend setup and cleanup. See the [SQLite account test](../pkg/services/user/sqlite/contract_test.go) and [session test](../pkg/services/session/sqlite/contract_test.go) for complete factories.
-
-The account suite keeps core checks independent of token storage. It tests advertised password-change, password-reset, and verification capabilities, and checks token storage using only the purposes those features support. It also checks storage for password-setup and invitation tokens when advertised. Unsupported capability checks are skipped. If an adapter exposes only `TokenRepository`, call `RunTokens` with its supported purposes. Keep tests for backend failures, schema migrations, exact expiration boundaries, timestamp precision, durability, external identities, password setup, invitations, and maintenance with the provider. Run the suites with `go test` and `go test -race` alongside application integration tests. The test APIs follow the framework's [experimental compatibility policy](compatibility.md).
-
-## Account schema migrations
-
-The [version 1 baseline](../pkg/services/user/sqlite/migrations/000001_accounts.up.sql) creates accounts, roles, invitation flags, external identity links, and recipient-bound tokens. Empty storage bootstraps from embedded numbered `.up.sql` files in one transaction. Fresh databases need no migration tool. Existing storage must use the required schema.
-
-Each binary supports exactly one account schema version, declared by `accountSchemaVersion`. To change the schema, add the next zero-padded, sequential migration pair and update the required version and repository code together. Startup does not select between schema implementations or upgrade existing storage. The bootstrap runner requires the embedded migrations to end at the declared version.
-
-Existing account storage must match the current schema and record version 1 with `dirty = false` in `hyperserver_account_version`. Missing, malformed, dirty, or unsupported versions stop startup without changes. Startup never deletes storage or migrates an existing database. Back up before an offline migration. Do not change version metadata merely to bypass startup checks.
-
-Install [golang-migrate v4.20.1](https://github.com/golang-migrate/migrate/releases/tag/v4.20.1) with its SQLite driver. The executable goes in `GOBIN`, or `$(go env GOPATH)/bin` when unset. Put that directory on `PATH`. From the repository root:
-
-```sh
-go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
-migrate -path pkg/services/user/sqlite/migrations \
-  -database 'sqlite3://file:///absolute/path/database.db?x-migrations-table=hyperserver_account_version&_foreign_keys=on' up
-```
-
-Before migrating, stop all writers, including cleanup jobs, and back up the data. Run one migration process per database. The SQLite driver does not coordinate migration-process locks. Keep `x-migrations-table=hyperserver_account_version` and `_foreign_keys=on` in every command. Validate the result before restarting.
-
-Reversing the baseline deletes all accounts, external identity links, tokens, and their indexes. Back up before downgrading. Session and blog schemas have separate version tables and remain unchanged. After the baseline is reversed, startup rejects the empty version table until an explicit `up` recreates the schema.
-
-Failed transactional migrations must roll back. Inspect and repair the database before using `force` to correct its version marker. `force` does not run or undo SQL.
-
-After a committed change, use forward repair or restore a compatible backup. Restart an older application only if it supports the resulting format.
-
-CI installs the pinned CLI and tests bootstrap compatibility, up/down, independent version tables, failed-migration rollback, and explicit repair. To run those tests locally:
-
-```sh
-HS_TEST_MIGRATE=migrate go test ./pkg/services/user/sqlite -run '^TestAccountMigration' -count=1
-```
-
-The command fails if `migrate` is not on `PATH`. You can also set `HS_TEST_MIGRATE` to an absolute executable path. Without `HS_TEST_MIGRATE`, CLI integration tests skip. Schema and version-validation tests still run.
-
-## Session migrations
-
-See [session migrations](../pkg/services/session/readme.md#sqlite-schema-migrations) for per-table versions and custom table names. These providers can share a database without sharing version markers. Run each provider's migrations separately.
-
-## SQLite connections
-
-The built-in account, session, blog, and maintenance providers use the [SQLite pool opener](../pkg/database/sqlite/pool.go). Each pool retains one connection, enables foreign keys, and waits up to 5000 milliseconds for locks. `_timeout` or `_busy_timeout` changes the wait. Zero disables waiting. Disabling foreign keys is rejected.
-
-Cancellation stops a wait for a free pool connection. During a SQLite lock wait, cancellation can be delayed until the lock timeout and return a lock error instead of a context error. Caller-supplied pools retain their owner's settings.
-
-## Direct backend access
-
-Keep native clients in application setup and pass them to modules that need them. A pool shared with repositories can also serve a reporting query:
-
-```go
-var accountCount int
-if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM user").Scan(&accountCount); err != nil {
-    return err
-}
-```
-
-Use a typed constructor parameter such as `*sql.DB` for application-supplied clients. If another module supplies the client, publish it as a capability, declare the requirement, and retrieve it with `handlers.GetDependency[*sql.DB](d, "sqlite-pool")`. The [shared-pool test](../pkg/handlers/storage_initialization_test.go) covers native queries alongside an account repository and a test-only consumer table. Other backends can use their own client types without adding a framework interface.
-
-Application setup owns the clients it supplies and closes them after modules stop. Modules must not close supplied clients. A module that creates its own client owns its cleanup. Modules must still close query results and any dedicated `*sql.Conn` they acquire. Closing a dedicated connection returns it to the pool without closing the pool.
-
-Direct access couples that code to the backend. Direct writes must preserve the affected service's rules, including validation, token invalidation, and session revocation. Sharing a pool does not make separate operations one transaction.
-
-## Provider selection
-
-Applications can use `user.OpenConfiguredStorage` with an explicit map of available adapters. Selection and failure cleanup belong to the library. The application owns successful resources and decides when to close them:
+For direct setup, resolve paths first and call `user.OpenConfiguredStorage`:
 
 ```go
 providers := map[string]user.StorageProvider{
@@ -153,25 +22,104 @@ if err != nil {
 // Supply repository to consumers. Call closeStorage, if non-nil, after they stop.
 ```
 
-Factories receive the caller's context and a private copy of the configured options. The library has no default provider. For SQLite, `usersqlite.ConfiguredProvider(*cfg, pool)` wraps an application-owned pool without closing it. Direct repository constructors remain available for applications that do not need configuration-driven selection.
+Names are case-sensitive. Factories receive the caller's context and private option maps. Only the selected factory runs. Failed opens close partial resources. Applications own successful resources. `OpenMaintenance` must not create or migrate storage.
 
-Select the registered name and its options in configuration:
+`configured.OpenAccounts` and `configured.NewSessionManager` are convenience helpers with built-in catalogs and optional overrides. They install no modules, middleware, or cleanup hooks. Unlike the application constructor, `configured.OpenAccounts` defaults an empty account-provider name to SQLite when auth is enabled.
 
-```yaml
-auth:
-  accountStorage:
-    provider: company
-    options:
-      connection: your-provider-connection
+SQLite accounts require a `connection` option unless using an existing pool. Relative connections use the application's resource directory. The legacy `database` setting does not select account storage. Different pools can share a file. `:memory:` creates a separate database per pool.
+
+For a borrowed pool, supply `usersqlite.ConfiguredProvider(cfg, pool)` under the selected name. The pool keeps its original owner. Maintenance still needs a connection option pointing to the same database. For direct construction, call `sqlite.NewAccountRepository(pool)` and `Initialize(ctx)` before supplying the repository.
+
+### Account capabilities and adapter upgrades
+
+[`user.AccountRepository`](../pkg/services/user/account_repository.go) requires `GetByID`, `GetByEmail`, `Create`, and `Update`. Other features use optional interfaces. SQLite implements all of them.
+
+| Capability | Required by |
+| --- | --- |
+| `PasswordRepository` | Password changes and email authentication. |
+| `TokenRepository` | Token-backed features. |
+| `PasswordResetRepository` | Email authentication. Includes `TokenRepository`. |
+| `VerificationRepository` | Email authentication, including verification of existing accounts. Includes `TokenRepository`. |
+| `ExternalIdentityRepository` | Google authentication. Password and verification storage are not required. |
+| `PasswordSetupRepository` | Optional password enrollment. Includes `TokenRepository`. |
+| `InvitationRepository` | Blog invitations when `multiUser` is enabled. Includes `TokenRepository`. |
+
+Closing registration or disabling verification for new accounts does not clear existing verification requirements. Email authentication therefore still requires verification storage. Mail configuration is required at startup only when enabled features need it. Blog roles and setup also require user administration.
+
+Adapters migrating from the combined interface can retain their methods. Consumers must use the appropriate capability interface. Wrappers must forward optional methods explicitly because embedding only `AccountRepository` hides them. Missing required capabilities stop startup. This interface change requires no SQLite migration.
+
+## Storage guarantees
+
+Replacement providers must preserve the [account](../pkg/services/user/account_repository.go) and [session](../pkg/services/session/store.go) contracts, including concurrency and failure behavior. Account security changes require version checks and atomic writes. Session encoding remains [independent of storage](../pkg/services/session/readme.md#replacing-serialization).
+
+Use [EmailKey](../pkg/services/user/email.go) for account matching and uniqueness. It normalizes Unicode case in local parts and equivalent Unicode/Punycode domains while preserving the original address. Dots, tags, quoting, and local-part Unicode normalization remain significant. Non-transitional IDNA keeps `faß.example` and `fass.example` distinct.
+
+Providers must distinguish rejected tokens from infrastructure failures through the [documented errors](../pkg/services/user/errors.go) and `errors.Is`. HTTP recovery handlers return 400 for rejected tokens and 500 for storage failures. Errors must not expose tokens or private provider details. Notification failures after a committed change are logged and cannot undo it.
+
+SQLite reports success after writes complete. File-backed data survives normal close and reopen. Crash durability depends on SQLite settings and the filesystem. In-memory data does not survive closing its pool.
+
+Factories must reject unsupported settings and release partial acquisitions. Authentication requires revocable session rotation. Maintenance requires an explicit cleanup capability.
+
+## Testing a replacement provider
+
+Import shared suites from your provider's `_test.go` files. They work from another Go module without application startup or registration.
+
+| Contract | Test entry point |
+| --- | --- |
+| Accounts | [accounttest.Run](../pkg/services/user/accounttest/contract.go) |
+| Token-only storage | [accounttest.RunTokens](../pkg/services/user/accounttest/token_storage.go), with supported purposes |
+| Common sessions | [sessiontest.RunCommon](../pkg/services/session/sessiontest/contract.go) |
+| Revocable sessions | [sessiontest.Run](../pkg/services/session/sessiontest/contract.go), including common checks |
+
+Each factory must return empty, initialized storage and register cleanup with its `*testing.T`. Use temporary databases, isolated schemas, or unique namespaces. Never run contract suites on production data.
+
+```go
+func TestAccountContract(t *testing.T) {
+    accounttest.Run(t, func(t *testing.T) user.AccountRepository {
+        return openTestRepository(t)
+    })
+}
 ```
 
-Provider names are case-sensitive. `application.Options.AccountProviders` supplies the complete catalog. The constructor includes no storage providers and requires an explicit `auth.accountStorage.provider` when opening accounts. Supplying `Options.Services.Accounts` bypasses selection and initialization without transferring ownership. [`configured.AccountProviders`](../pkg/services/configured/accounts.go) supplies the built-in catalog for startup and maintenance. Pass custom factories to both operations when replacing a provider.
+See the SQLite [account factory](../pkg/services/user/sqlite/contract_test.go) and [session factory](../pkg/services/session/sqlite/contract_test.go). The account suite checks advertised capabilities and their supported token purposes. Token-only providers must call `RunTokens` separately. Keep backend-specific tests for failures, migrations, expiry boundaries, timestamp precision, durability, external identities, invitations, password setup, and maintenance. Run contracts and application flows with both ordinary tests and the race detector.
 
-`OpenMaintenance` returns [TokenMaintenance](../pkg/services/user/account_repository.go), an optional close function, and an error. It must not create or migrate tables. Each batch closes acquired resources, including on failure. Missing maintenance capabilities return errors rather than skipping cleanup.
+## Account schema migrations
 
-`configured.CleanupAccountTokens(ctx, cfg, limit, additional)` uses the same defaults and provider overrides as `configured.OpenAccounts`, without opening a runtime repository. Disabled authentication skips cleanup. For an explicit catalog without built-in defaults, use `user.CleanupConfiguredTokens`. Applications already holding a repository with `TokenMaintenance` can call `DeleteExpiredTokens` directly.
+Fresh account storage bootstraps schema 1 from [embedded migrations](../pkg/services/user/sqlite/migrations/000001_accounts.up.sql) in one transaction. Existing storage must have clean version 1 in `hyperserver_account_version` and pass structural validation. Startup checks required writable columns, types, nullability, binary unique keys, and cascading token references. It does not validate every stored value, upgrade existing databases, or repair them.
 
-`configured.CleanupSessions(ctx, cfg, limit, additional)` uses the same defaults and provider overrides as `configured.NewSessionManager`. It removes up to `limit` expired sessions from each selected store without initializing runtime stores or schema. For an explicit catalog without built-in defaults, use `session.CleanupConfiguredStores`. Both configured cleanup helpers close the storage they open and use the caller's context for cancellation and deadlines.
+Install the pinned CLI with its SQLite driver. It goes in `GOBIN` or `$(go env GOPATH)/bin`, which must be on `PATH`:
+
+```sh
+go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
+migrate -path pkg/services/user/sqlite/migrations \
+  -database 'sqlite3://file:///absolute/path/database.db?x-migrations-table=hyperserver_account_version&_foreign_keys=on' up
+```
+
+Before any offline migration, stop writers and cleanup jobs, prevent restarts, and verify a backup. Run only one migration process per database. The CLI does not acquire the blog lock or serialize migration processes. Keep the intended `x-migrations-table` and `_foreign_keys=on` parameters in every command.
+
+Missing, dirty, malformed, or unsupported markers stop startup. Never change a marker to bypass schema validation. Reversing the account baseline deletes accounts, identity links, tokens, and indexes. Startup rejects the resulting empty version table until explicit `up` recreates it. Accounts, [sessions](../pkg/services/session/readme.md#sqlite-schema-migrations), and [blog content](blog/readme.md#database-migrations) have independent migrations and version tables, even in a shared database.
+
+Failed transactional migrations roll back SQL but can leave a dirty marker. Inspect and repair the failure before using `force`, which changes metadata only. After a committed change, use forward repair or restore a compatible backup. An older binary must support the resulting schema before restarting.
+
+Keep deployed SQL immutable. Add a sequential numbered migration pair and update the binary's required version, bootstrap, validation, and repositories together. Each binary supports one schema version. Test fresh startup, populated upgrades, downgrades, failures, and recovery compatibility.
+
+CI installs the pinned CLI. To include account migration integration tests locally:
+
+```sh
+HS_TEST_MIGRATE=migrate go test ./pkg/services/user/sqlite -run '^TestAccountMigration' -count=1
+```
+
+An absolute CLI path also works. Without `HS_TEST_MIGRATE`, CLI tests skip. Schema-validation tests still run.
+
+## SQLite connections and native access
+
+The built-in providers use the [SQLite pool opener](../pkg/database/sqlite/pool.go). Each pool retains one connection, enables foreign keys, and waits up to 5,000 milliseconds for locks. `_timeout` or `_busy_timeout` changes the wait. Zero disables waiting. Disabling foreign keys is rejected. Borrowed pools retain their owner's settings.
+
+Cancellation stops waiting for a pool connection. A SQLite lock wait can delay cancellation until the lock timeout and return a lock error instead of a context error.
+
+Pass native clients such as `*sql.DB` through typed module constructors. If another module owns the client, publish a capability and retrieve it with `handlers.GetDependency[*sql.DB]`. See the [shared-pool test](../pkg/handlers/storage_initialization_test.go).
+
+The creator owns client cleanup. Consumers must close rows and dedicated `*sql.Conn` values, not borrowed pools. Native writes must preserve the service's validation, token invalidation, and session revocation rules. Sharing a pool does not make separate operations one transaction.
 
 ## Expired-record cleanup
 
@@ -181,12 +129,10 @@ With the same configuration as `cmd/web`, run:
 go run ./cmd/cleanup -batch-size 100 -timeout 10s
 ```
 
-Each run deletes at most 100 expired rows per selected server-side session store and, when auth is enabled, account-token storage. Live records and accounts are unchanged.
+This deletes at most 100 expired records per selected server-side session store and, when auth is enabled, account-token storage. It leaves live records and accounts unchanged. Expiry checks reject records even before cleanup runs. Schedule runs externally.
 
-Providers own maintenance setup and pool handling. SQLite files and tables must already exist. Cleanup does not create missing files or support in-memory databases.
+The command includes built-in providers. Custom providers must also be supplied to the maintenance executable. Unknown providers and missing maintenance support return errors. Independent cleanup operations are still attempted after a failure. SQLite files and tables must already exist. Maintenance does not create storage or support in-memory databases.
 
-The supplied command includes the built-in providers. Custom account and session providers must also be supplied to the application's maintenance executable. Unknown providers and missing maintenance capabilities produce an error without falling back to SQLite. Independent session cleanup still runs.
+For direct use, `configured.CleanupAccountTokens` and `configured.CleanupSessions` use the same built-in defaults and overrides as their setup helpers. `user.CleanupConfiguredTokens` and `session.CleanupConfiguredStores` use explicit catalogs. Factories receive cancellation and private options, open existing storage, and close acquisitions even on failure.
 
-Schedule the command externally for regular cleanup. The server does not run cleanup automatically. The command reports deleted counts and exits with an error if either cleanup fails. Expiration checks still reject expired sessions and tokens before cleanup runs.
-
-Cleanup can run alongside the server, but it does not acquire the blog's process lock. Pause scheduled cleanup and wait for active runs to finish before backup, restore, or migrations. SQLite locking protects individual transactions, not an offline operation spanning databases and uploads. See [maintenance locking](blog/backup.md#maintenance-locking).
+Cleanup can run alongside the server but does not acquire the blog lock. Pause it and wait for active runs before backups, restores, or migrations. SQLite transaction locks do not protect an operation spanning databases and uploads. See [maintenance locking](blog/backup.md#maintenance-locking).

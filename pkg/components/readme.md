@@ -38,11 +38,9 @@ if err != nil {
 
 Use the same manager that prepared the templates. Nested `{{template "name" .}}` calls do not need view objects. Views share parsed templates, not rendered HTML or request data. `view.Content` returns a request-local `*content.Content` for titles, redirects, and HTMX instructions. Direct `NewManagedContent` construction also accepts prepared templates.
 
-`Content` renders only prepared templates. File composition and parsing happen during preparation. Restart and prepare new sets to apply template changes. There is no file watcher.
+`Content` renders only prepared templates. Restart and prepare new sets after template changes. There is no file watcher. See [API upgrade notes](../../docs/compatibility.md#rendering-api-upgrade) when replacing request-time parsing.
 
 Return preparation errors from `Init` to stop startup. Execution errors still occur per request. Rendering buffers all templates before writing content. Use `page.HandleRenderError` to report failures. It avoids writing another response after a delivery failure. Rendering failures do not undo application changes.
-
-Run `go test ./pkg/components/content -run '^$' -bench '^BenchmarkRenderTemplates$' -benchmem` to measure prepared rendering. The benchmark excludes HTTP delivery and notification storage.
 
 ## Compose pages from loaded modules
 
@@ -67,7 +65,9 @@ A shared composition template renders that slice:
 {{end}}
 ```
 
-Each component receives its own `Component` value and reads `.Data`. A component rendered directly through `Content.PartialName` also reads `.Data`. The request chooses from loaded, permitted components. Module availability does not grant access. Ordinary requests render the composition inside the page layout. HTMX requests can render the composition or one selected component inside the fragment layout. No distinct template file is required for every page combination.
+Each component receives its own `Component` value and reads `.Data`. A component rendered directly through `Content.PartialName` also reads `.Data`. The request chooses from loaded, permitted components.
+
+Module availability does not grant access. Ordinary requests render the composition inside the page layout. HTMX requests can render the composition or one selected component inside the fragment layout. No distinct template file is required for every page combination.
 
 Modules can also publish prepared views and use `View.RenderPartial` to contribute escaped markup when their templates must remain in separate sets. The application owns component selection and data loading in either approach.
 
@@ -82,22 +82,9 @@ if err != nil {
 }
 ```
 
-The first name selects the page layout. The second selects the HTMX layout. An empty name keeps the current root. Missing names return an error without a partial result. The selected set shares immutable templates with the original and leaves it unchanged. Create alternatives during initialization. Requests can select a set through `Content.Templates` or a view created from that set. History restoration uses the selected page layout.
+The first name selects the page layout. The second selects the HTMX layout. An empty name keeps the current root. Missing names return an error without a partial result. The selected set shares immutable templates with the original and leaves it unchanged. Create alternatives during initialization.
 
-## Rendering API upgrade
-
-Request-time file registration and parsing are removed. Update applications that use these `Content` fields or methods:
-
-| Removed API | Replacement |
-| --- | --- |
-| `Layouts`, `AddLayout` | Load layouts during preparation. Use `WithLayouts` to select their named roots. |
-| `Contents`, `AddContent` | Pass `TemplatePath` values to `PrepareView` or `PrepareTemplates` during initialization. |
-| `Components`, `AddComponent` | Collect module contributions or configure manager components before preparation. Select and order named components in request data. |
-| `LogMessages`, `AddLogMessage`, `AddLogMessages` | Use the request logger for diagnostics. These values never emitted output. |
-
-Create responses with `view.Content(r, data)`. Direct construction with `NewContent` or `NewManagedContent` must assign a prepared set to `Templates` before rendering a body. Redirects and 204 responses do not require templates. The manager's template registration methods remain available for startup configuration. No stored-data migration is needed.
-
-`Refresh: true` still renders a body and requires prepared templates. To request an HTMX refresh without rendering, also set `NoContent: true`. Ordinary and history-restoration requests ignore both HTMX settings and still require templates.
+Requests can select a set through `Content.Templates` or a view created from that set. History restoration uses the selected page layout.
 
 ## Shared rendering policy
 
@@ -221,6 +208,6 @@ A nil error means parsing, binding, and field validation succeeded. Invalid fiel
 
 If rendering fails, `HandleFormError` uses `ContentManager.HandleError`, or a plain-text 500 response when no handler is configured.
 
-Parsing limits decoded fields to 16 KiB and encoded queries to 64 KiB, independently of the route body limit. `ParseAndValidateWithOptions` can change field limits or explicitly disable them. Account and contact forms return 413 for oversized input, 400 for malformed forms, and 415 for unsupported encodings.
+Parsing uses separate [field, query, and route body limits](../../docs/http.md#responses-and-body-limits). `ParseAndValidateWithOptions` can change or disable field limits. Account and contact forms return 413 for oversized input, 400 for malformed forms, and 415 for unsupported encodings.
 
 Use both ordinary `method`/`action` attributes and HTMX attributes when a form must work without JavaScript. See the [contact template](../../internal/test/web/testdata/templates/partials/contact-form.html). Render submitted values and messages through `html/template`. For internationalized email addresses, use `type="text" inputmode="email"` and validate on the server.
