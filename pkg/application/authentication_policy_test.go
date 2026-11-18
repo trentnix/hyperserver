@@ -12,6 +12,7 @@ import (
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -57,25 +58,28 @@ func TestRegisteredProviderUsesSharedPolicy(t *testing.T) {
 					cfg.Auth.Services = map[string]map[string]string{"policy-test": {"enabled": "true"}}
 					cfg.Auth.RegistrationEnabled = false
 					admissions, logins := 0, 0
-					app, err := application.New(t.Context(), cfg, application.Options{Modules: authenticationModules, AuthPolicy: auth.Policy{
-						AllowAccount: func(ctx context.Context, email string) (bool, error) {
-							admissions++
-							if ctx.Err() != nil || email != "reader@example.com" {
-								t.Errorf("wrong admission input: %q %v", email, ctx.Err())
-							}
-							if outcome == "unavailable" {
-								return false, errors.New("private policy failure")
-							}
-							return outcome != "denied", nil
-						},
-						AfterLogin: func(w http.ResponseWriter, r *http.Request, u *user.User) {
-							logins++
-							if user.GetUserFromContext(r.Context()) != u {
-								t.Error("login hook has no authenticated identity")
-							}
-							http.SetCookie(w, &http.Cookie{Name: "policy-login", Value: "yes"})
-						},
-					}})
+					app, err := application.New(t.Context(), cfg, application.Options{
+						AccountProviders: configured.AccountProviders(cfg),
+						SessionProviders: configured.SessionProviders(cfg),
+						Modules:          authenticationModules, AuthPolicy: auth.Policy{
+							AllowAccount: func(ctx context.Context, email string) (bool, error) {
+								admissions++
+								if ctx.Err() != nil || email != "reader@example.com" {
+									t.Errorf("wrong admission input: %q %v", email, ctx.Err())
+								}
+								if outcome == "unavailable" {
+									return false, errors.New("private policy failure")
+								}
+								return outcome != "denied", nil
+							},
+							AfterLogin: func(w http.ResponseWriter, r *http.Request, u *user.User) {
+								logins++
+								if user.GetUserFromContext(r.Context()) != u {
+									t.Error("login hook has no authenticated identity")
+								}
+								http.SetCookie(w, &http.Cookie{Name: "policy-login", Value: "yes"})
+							},
+						}})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -122,21 +126,24 @@ func TestEmailRegistrationUsesSharedPolicy(t *testing.T) {
 		t.Run(outcome, func(t *testing.T) {
 			cfg := authenticationConfig(t)
 			cfg.Auth.RegisterRequiresVerification = false
-			app, err := application.New(t.Context(), cfg, application.Options{Modules: authenticationModules, AuthPolicy: auth.Policy{
-				AllowAccount: func(context.Context, string) (bool, error) {
-					if outcome == "unavailable" {
-						return false, errors.New("private policy failure")
-					}
-					return outcome != "denied", nil
-				},
-				BeforeRegister: func(w http.ResponseWriter, _ *http.Request) bool {
-					if outcome == "closed" {
-						w.WriteHeader(http.StatusGone)
-						return false
-					}
-					return true
-				},
-			}})
+			app, err := application.New(t.Context(), cfg, application.Options{
+				AccountProviders: configured.AccountProviders(cfg),
+				SessionProviders: configured.SessionProviders(cfg),
+				Modules:          authenticationModules, AuthPolicy: auth.Policy{
+					AllowAccount: func(context.Context, string) (bool, error) {
+						if outcome == "unavailable" {
+							return false, errors.New("private policy failure")
+						}
+						return outcome != "denied", nil
+					},
+					BeforeRegister: func(w http.ResponseWriter, _ *http.Request) bool {
+						if outcome == "closed" {
+							w.WriteHeader(http.StatusGone)
+							return false
+						}
+						return true
+					},
+				}})
 			if err != nil {
 				t.Fatal(err)
 			}

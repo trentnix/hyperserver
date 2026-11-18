@@ -9,6 +9,7 @@ import (
 	"github.com/trentnix/hyperserver/modules/blog"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 )
 
 // newApplication selects the blog and authentication modules with one shared
@@ -19,6 +20,8 @@ func newApplication(ctx context.Context, cfg config.Config) (*application.Applic
 	}
 	site := &blog.Site{}
 	return application.New(ctx, cfg, application.Options{
+		AccountProviders:      configured.AccountProviders(cfg),
+		SessionProviders:      configured.SessionProviders(cfg),
 		AuthPolicy:            site.AuthenticationPolicy(),
 		ContentSecurityPolicy: blog.ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {

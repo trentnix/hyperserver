@@ -30,12 +30,16 @@ If you enable cookie-backed sessions, generate `http.session.jwtKey` with `opens
 
 ### Services and serving
 
-[`application.New`](../pkg/application/application.go) copies configuration, resolves paths, and opens configured accounts, sessions, and mail. Failed startup closes acquired resources. `Options.Services` supplies initialized, caller-owned services. `AccountProviders` and `SessionProviders` add or replace built-in factories.
+[`application.New`](../pkg/application/application.go) copies configuration, resolves paths, and opens configured accounts, sessions, and mail. Failed startup closes acquired resources. `Options.Services` supplies initialized, caller-owned services. `AccountProviders` and `SessionProviders` supply the complete storage provider catalogs. Nil catalogs include no providers. A configured provider must exist in its catalog. If authentication needs account storage, `auth.accountStorage.provider` must be explicit.
 
 `Options.Modules` runs after shared services are ready. Return the desired descriptors, or `handlers.Registered()` for the import catalog. A nil callback selects nothing. `Options.ProviderSelections` resolves ambiguous capabilities. The constructor calls `handlers.Setup` to load settings, initialize modules, and bind routes. Do not repeat setup.
 
+For the built-in SQLite account store and SQLite/cookie session stores, import `pkg/services/configured` and select its catalogs:
+
 ```go
 app, err := application.New(ctx, cfg, application.Options{
+    AccountProviders: configured.AccountProviders(cfg),
+    SessionProviders: configured.SessionProviders(cfg),
     Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
         return handlers.Registered(), nil
     },
@@ -44,6 +48,8 @@ if err != nil {
     return err
 }
 ```
+
+Catalog construction performs no I/O. To replace a factory, modify the returned map before passing it to `application.New`. Applications can also supply only their own factories or individual built-in providers. Omit the catalogs for a stateless application. The constructor does not import SQLite or require CGO. The built-in SQLite providers still require CGO and a C compiler.
 
 Startup shares `app.initializationTimeout`, defaulting to ten seconds. Configure shared rendering before modules prepare templates. Register callback-owned resources with `app.OnShutdown`. Cleanup closes modules before those resources and shared services.
 
@@ -262,4 +268,4 @@ If HTTP draining fails, Run closes HTTP connections and returns `server.ErrHTTPD
 
 ## Blog setup
 
-For the included blog, create one [`blog.Site`](../modules/blog/site.go) per application startup. `Configure(app)` sets shared rendering and returns the blog descriptor. `AuthenticationPolicy()` supplies account admission and onboarding behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider settings and credentials belong in `config.yaml`. See the [blog application](../cmd/web/application.go).
+For the included blog, create one [`blog.Site`](../modules/blog/site.go) per application startup. `Configure(app)` sets shared rendering and returns the blog descriptor. `AuthenticationPolicy()` supplies account admission and onboarding behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`, and supply the built-in storage catalogs through `Options.AccountProviders` and `Options.SessionProviders`. Provider settings and credentials belong in `config.yaml`. See the [blog application](../cmd/web/application.go).

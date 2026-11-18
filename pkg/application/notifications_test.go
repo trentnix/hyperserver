@@ -15,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -43,7 +44,11 @@ func TestConfiguredNotifications(t *testing.T) {
 					cfg := authenticationConfig(t)
 					cfg.Auth.Enabled = authEnabled
 					cfg.App.RenderNotifications = enabled
-					app, err := application.New(t.Context(), cfg, application.Options{Modules: authenticationModules})
+					app, err := application.New(t.Context(), cfg, application.Options{
+						AccountProviders: configured.AccountProviders(cfg),
+						SessionProviders: configured.SessionProviders(cfg),
+						Modules:          authenticationModules,
+					})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -101,16 +106,19 @@ func TestCustomNotificationsOverrideConfiguration(t *testing.T) {
 				}
 				cfg.App.RenderNotifications = enabled
 				loads, acknowledgments := 0, 0
-				app, err := application.New(t.Context(), cfg, application.Options{Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-					app.ContentManager.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
-						loads++
-						return []messages.Notification{messages.NewNotification("Custom notification", messages.NotificationTypeSuccess)}, func(http.ResponseWriter) error {
-							acknowledgments++
-							return nil
-						}, nil
-					}
-					return authenticationModules(ctx, app)
-				}})
+				app, err := application.New(t.Context(), cfg, application.Options{
+					AccountProviders: configured.AccountProviders(cfg),
+					SessionProviders: configured.SessionProviders(cfg),
+					Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
+						app.ContentManager.LoadNotifications = func(*http.Request) ([]messages.Notification, func(http.ResponseWriter) error, error) {
+							loads++
+							return []messages.Notification{messages.NewNotification("Custom notification", messages.NotificationTypeSuccess)}, func(http.ResponseWriter) error {
+								acknowledgments++
+								return nil
+							}, nil
+						}
+						return authenticationModules(ctx, app)
+					}})
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -2,17 +2,17 @@
 
 This example uses `application.New`, standard HTTP handlers, and prepared HTML templates. Ordinary navigation renders a full page. HTMX updates only the greeting. It opens no database, session, authentication, or mail service.
 
-Use Go 1.27.4 and a C compiler with CGO enabled. The current application constructor imports the built-in SQLite providers even when those services are disabled.
+Use Go 1.27.4. This example also builds with `CGO_ENABLED=0`. Applications that select the built-in SQLite providers still require CGO and a C compiler.
 
 ## Create the application
 
-Create a separate directory and pin a tested framework revision:
+Create a separate directory. Replace `FRAMEWORK_REVISION` with a tested framework commit or tag that supports explicit storage provider catalogs:
 
 ```sh
 mkdir hello-hyperserver
 cd hello-hyperserver
 go mod init example.com/hello
-go get github.com/trentnix/hyperserver@b19cd79563c8
+go get github.com/trentnix/hyperserver@FRAMEWORK_REVISION
 mkdir -p templates static
 curl --fail --location https://cdn.jsdelivr.net/npm/htmx.org@4.0.2/dist/htmx.min.js --output static/htmx.min.js
 ```

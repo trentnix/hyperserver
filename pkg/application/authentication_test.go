@@ -23,6 +23,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	contentservices "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -83,27 +84,30 @@ func TestConfiguredAuthenticationHTTPFlow(t *testing.T) {
 		t.Run(map[bool]string{false: "ordinary", true: "HTMX"}[htmx], func(t *testing.T) {
 			cfg := authenticationConfig(t)
 			var catalog []handlers.Descriptor
-			app, err := application.New(t.Context(), cfg, application.Options{Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-				catalog, _ = authenticationModules(ctx, app)
-				feature := &moduleStub{routes: func(routes *routing.Routes) error {
-					routes.HandleFunc("GET /public", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "public") })
-					guard := authmiddleware.RequireAuthentication(app.Accounts, app.ContentManager)
-					routes.Handle("GET /private", guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						if session.GetSessionManager(r) != app.Sessions {
-							t.Error("wrong session manager")
-						}
-						u := user.GetUserFromContext(r.Context())
-						if u == nil {
-							t.Error("identity was not loaded into request context")
-							return
-						}
-						fmt.Fprint(w, u.Email)
-					})))
-					return routes.Err()
-				}}
-				catalog = append(catalog, handlers.Descriptor{Name: "feature", New: func() handlers.Handler { return feature }})
-				return catalog, nil
-			}})
+			app, err := application.New(t.Context(), cfg, application.Options{
+				AccountProviders: configured.AccountProviders(cfg),
+				SessionProviders: configured.SessionProviders(cfg),
+				Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
+					catalog, _ = authenticationModules(ctx, app)
+					feature := &moduleStub{routes: func(routes *routing.Routes) error {
+						routes.HandleFunc("GET /public", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "public") })
+						guard := authmiddleware.RequireAuthentication(app.Accounts, app.ContentManager)
+						routes.Handle("GET /private", guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+							if session.GetSessionManager(r) != app.Sessions {
+								t.Error("wrong session manager")
+							}
+							u := user.GetUserFromContext(r.Context())
+							if u == nil {
+								t.Error("identity was not loaded into request context")
+								return
+							}
+							fmt.Fprint(w, u.Email)
+						})))
+						return routes.Err()
+					}}
+					catalog = append(catalog, handlers.Descriptor{Name: "feature", New: func() handlers.Handler { return feature }})
+					return catalog, nil
+				}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -175,7 +179,9 @@ func TestConfiguredVerificationUsesSuppliedMail(t *testing.T) {
 		t.Fatal(err)
 	}
 	app, err := application.New(t.Context(), cfg, application.Options{
-		Services: application.Services{Mail: mail}, Modules: authenticationModules,
+		AccountProviders: configured.AccountProviders(cfg),
+		SessionProviders: configured.SessionProviders(cfg),
+		Services:         application.Services{Mail: mail}, Modules: authenticationModules,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -246,6 +252,8 @@ func TestCustomAuthenticationProvidersAndApplicationsAreIndependent(t *testing.T
 	for range 2 {
 		cfg := authenticationConfig(t)
 		cfg.Auth.Services = map[string]map[string]string{"custom": {"enabled": "true"}}
+		options.AccountProviders = configured.AccountProviders(cfg)
+		options.SessionProviders = configured.SessionProviders(cfg)
 		app, err := application.New(t.Context(), cfg, options)
 		if err != nil {
 			t.Fatal(err)
@@ -290,6 +298,8 @@ func TestAuthProviderSelectionRequiresEnabledAuthModule(t *testing.T) {
 				cfg.Auth.Enabled = false
 				options.Modules = authenticationModules
 			}
+			options.AccountProviders = configured.AccountProviders(cfg)
+			options.SessionProviders = configured.SessionProviders(cfg)
 			app, err := application.New(t.Context(), cfg, options)
 			if err != nil {
 				t.Fatal(err)
@@ -360,6 +370,8 @@ func TestAuthenticationFailuresCloseOwnedServices(t *testing.T) {
 				}
 				return catalog, err
 			}
+			options.AccountProviders = configured.AccountProviders(cfg)
+			options.SessionProviders = configured.SessionProviders(cfg)
 			app, err := application.New(ctx, cfg, options)
 			if app != nil || err == nil || captured == nil {
 				t.Fatalf("bad auth setup: app=%v err=%v captured=%v", app, err, captured)
@@ -448,17 +460,20 @@ func TestAuthenticationSelectionAndPresentationOverrides(t *testing.T) {
 			}
 			var catalog []handlers.Descriptor
 			var factory uintptr
-			app, err := application.New(t.Context(), cfg, application.Options{Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
-				catalog, _ = authenticationModules(ctx, app)
-				if mode == "unselected" {
-					catalog = nil
-				} else {
-					factory = reflect.ValueOf(catalog[0].New).Pointer()
-				}
-				app.ContentManager.AuthURL, app.ContentManager.HomeURL = "/sign-in", "/home"
-				app.ContentManager.BuildLayoutData = func(*http.Request) any { return "custom" }
-				return catalog, nil
-			}})
+			app, err := application.New(t.Context(), cfg, application.Options{
+				AccountProviders: configured.AccountProviders(cfg),
+				SessionProviders: configured.SessionProviders(cfg),
+				Modules: func(ctx context.Context, app *application.Application) ([]handlers.Descriptor, error) {
+					catalog, _ = authenticationModules(ctx, app)
+					if mode == "unselected" {
+						catalog = nil
+					} else {
+						factory = reflect.ValueOf(catalog[0].New).Pointer()
+					}
+					app.ContentManager.AuthURL, app.ContentManager.HomeURL = "/sign-in", "/home"
+					app.ContentManager.BuildLayoutData = func(*http.Request) any { return "custom" }
+					return catalog, nil
+				}})
 			if err != nil {
 				t.Fatal(err)
 			}

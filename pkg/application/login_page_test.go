@@ -13,6 +13,7 @@ import (
 	"github.com/trentnix/hyperserver/auth"
 	email "github.com/trentnix/hyperserver/auth/modules/email"
 	"github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
 
@@ -20,7 +21,11 @@ func TestSharedLoginPage(t *testing.T) {
 	cfg := authenticationConfig(t)
 	cfg.HTTP.PublicOrigin = "http://localhost"
 	cfg.Auth.Services["google"] = map[string]string{"enabled": "true", "clientID": "test-client", "clientSecret": "test-secret"}
-	app, err := application.New(t.Context(), cfg, application.Options{Modules: authenticationModules})
+	app, err := application.New(t.Context(), cfg, application.Options{
+		AccountProviders: configured.AccountProviders(cfg),
+		SessionProviders: configured.SessionProviders(cfg),
+		Modules:          authenticationModules,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +89,9 @@ func TestInlineLoginProviderSelection(t *testing.T) {
 		cfg := authenticationConfig(t)
 		cfg.Auth.Services["another-form"] = map[string]string{"enabled": "true"}
 		app, err := application.New(t.Context(), cfg, application.Options{
-			Modules: authenticationModules,
+			AccountProviders: configured.AccountProviders(cfg),
+			SessionProviders: configured.SessionProviders(cfg),
+			Modules:          authenticationModules,
 			AuthPolicy: auth.Policy{LoginAccount: func(context.Context) (*user.User, error) {
 				account := &user.User{}
 				if passwordAvailable {
@@ -156,7 +163,12 @@ func TestInlineLoginProviderSelection(t *testing.T) {
 }
 
 func TestLoginRequiresExplicitProvider(t *testing.T) {
-	app, err := application.New(t.Context(), authenticationConfig(t), application.Options{Modules: authenticationModules})
+	cfg := authenticationConfig(t)
+	app, err := application.New(t.Context(), cfg, application.Options{
+		AccountProviders: configured.AccountProviders(cfg),
+		SessionProviders: configured.SessionProviders(cfg),
+		Modules:          authenticationModules,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

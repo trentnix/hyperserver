@@ -12,13 +12,18 @@ import (
 	"github.com/trentnix/hyperserver/auth"
 	email "github.com/trentnix/hyperserver/auth/modules/email"
 	"github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 )
 
 func TestSharedRegistrationPage(t *testing.T) {
 	cfg := authenticationConfig(t)
 	cfg.HTTP.PublicOrigin = "http://localhost"
 	cfg.Auth.Services["google"] = map[string]string{"enabled": "true", "clientID": "test-client", "clientSecret": "test-secret"}
-	app, err := application.New(t.Context(), cfg, application.Options{Modules: authenticationModules})
+	app, err := application.New(t.Context(), cfg, application.Options{
+		AccountProviders: configured.AccountProviders(cfg),
+		SessionProviders: configured.SessionProviders(cfg),
+		Modules:          authenticationModules,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +89,9 @@ func TestRegistrationProviderSelection(t *testing.T) {
 	cfg := authenticationConfig(t)
 	cfg.Auth.Services["another-form"] = map[string]string{"enabled": "true"}
 	app, err := application.New(t.Context(), cfg, application.Options{
-		Modules: authenticationModules,
+		AccountProviders: configured.AccountProviders(cfg),
+		SessionProviders: configured.SessionProviders(cfg),
+		Modules:          authenticationModules,
 		AuthProviders: func(context.Context, *application.Application) ([]auth.Descriptor, error) {
 			return []auth.Descriptor{
 				{Name: "another-form", New: func(auth.Dependencies) auth.AuthService { return &inlineRegistrationProvider{} }},

@@ -15,6 +15,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -80,9 +81,9 @@ func TestNewWithoutOptionalServices(t *testing.T) {
 	}
 }
 
-func TestNewOpensBuiltInsAndClosesStorage(t *testing.T) {
+func TestNewOpensSelectedProvidersAndClosesStorage(t *testing.T) {
 	cfg := storageConfig(t)
-	cfg.Auth.AccountStorage.Provider = ""
+	cfg.Auth.AccountStorage.Provider = "sqlite"
 	cfg.Auth.AccountStorage.Options = map[string]string{"connection": "accounts.db"}
 	cfg.HTTP.Session.JwtKey = strings.Repeat("s", 64)
 	cfg.HTTP.Session.TokenAge, cfg.HTTP.Session.CookieAge = time.Hour, time.Hour
@@ -92,7 +93,10 @@ func TestNewOpensBuiltInsAndClosesStorage(t *testing.T) {
 	}
 	// A syntactically valid but unreachable host must not be contacted at startup.
 	cfg.Mail = config.MailConfig{Hostname: "smtp.invalid", Port: 587, User: "test", Password: "test", FromAddress: "sender@example.com"}
-	app, err := application.New(t.Context(), cfg, application.Options{})
+	app, err := application.New(t.Context(), cfg, application.Options{
+		AccountProviders: configured.AccountProviders(cfg),
+		SessionProviders: configured.SessionProviders(cfg),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +129,7 @@ func TestNewOpensBuiltInsAndClosesStorage(t *testing.T) {
 	if err := app.Sessions.CheckHealth(t.Context()); err == nil {
 		t.Fatal("session storage remained open")
 	}
-	if cfg.Auth.AccountStorage.Provider != "" || cfg.Auth.AccountStorage.Options["connection"] != "accounts.db" {
+	if cfg.Auth.AccountStorage.Provider != "sqlite" || cfg.Auth.AccountStorage.Options["connection"] != "accounts.db" {
 		t.Fatal("startup changed caller configuration")
 	}
 	app.Config.HTTP.Session.Types["default"] = "changed"

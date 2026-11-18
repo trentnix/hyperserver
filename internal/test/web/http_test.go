@@ -173,6 +173,7 @@ func newHTTPHarness(t *testing.T, configure ...func(*config.Config)) *httpHarnes
 		HTTP: config.HTTPConfig{ListenHost: "127.0.0.1", Port: 8080},
 		Auth: config.AuthConfig{
 			Enabled: true, JwtKey: "http-test-only-auth-signing-key0",
+			AccountStorage:      config.AccountStorageConfig{Provider: "sqlite"},
 			RegistrationEnabled: true, RegisterRequiresVerification: true,
 			VerificationTokenExpiration: time.Hour, ResetTokenExpiration: time.Hour,
 			ResetMinimumResponseTime: 0,

@@ -10,7 +10,7 @@ Public APIs can change during `v0.x`. HyperServer is **not production-ready**. S
 
 ## Run the blog
 
-Use the Go version in [go.mod](go.mod). SQLite and race tests require CGO and a C compiler.
+Use the Go version in [go.mod](go.mod). Stateless applications can use `application.New` with CGO disabled. SQLite and race tests require CGO and a C compiler. Applications select storage provider catalogs explicitly. See [application setup](docs/application.md#services-and-serving).
 
 The included [blog](docs/blog/readme.md) supports posts, pages, photo albums, search, and Admin and Poster roles. Follow its [setup instructions](docs/blog/readme.md#run-locally), then run from the repository root:
 

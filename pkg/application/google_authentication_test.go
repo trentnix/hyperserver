@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 )
 
 func TestConfiguredLoginChoices(t *testing.T) {
@@ -23,7 +24,11 @@ func TestConfiguredLoginChoices(t *testing.T) {
 			if mode != "email" {
 				cfg.Auth.Services["google"]["enabled"] = "true"
 			}
-			app, err := application.New(t.Context(), cfg, application.Options{Modules: authenticationModules})
+			app, err := application.New(t.Context(), cfg, application.Options{
+				AccountProviders: configured.AccountProviders(cfg),
+				SessionProviders: configured.SessionProviders(cfg),
+				Modules:          authenticationModules,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}

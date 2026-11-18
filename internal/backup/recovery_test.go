@@ -25,6 +25,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/application"
 	dbsqlite "github.com/trentnix/hyperserver/pkg/database/sqlite"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 )
 
@@ -45,6 +46,8 @@ func recoveryApp(t *testing.T, cfg config.Config) (*application.Application, fun
 	}
 	site := &blog.Site{}
 	app, err := application.New(t.Context(), cfg, application.Options{
+		AccountProviders:      configured.AccountProviders(cfg),
+		SessionProviders:      configured.SessionProviders(cfg),
 		Services:              application.Services{Mail: mail},
 		ContentSecurityPolicy: blog.ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {

@@ -31,6 +31,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/messages"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	contentservice "github.com/trentnix/hyperserver/pkg/services/content"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/session"
@@ -507,6 +508,8 @@ func startHarness(t *testing.T, cfg config.Config) *harness {
 	}
 	site := &Site{}
 	h.app, err = application.New(t.Context(), cfg, application.Options{
+		AccountProviders:      configured.AccountProviders(cfg),
+		SessionProviders:      configured.SessionProviders(cfg),
 		Services:              application.Services{Mail: mail},
 		ContentSecurityPolicy: ContentSecurityPolicy,
 		Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {

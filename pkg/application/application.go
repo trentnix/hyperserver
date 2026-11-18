@@ -15,7 +15,6 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/server"
-	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
@@ -34,15 +33,17 @@ type Services struct {
 }
 
 // Options selects modules, the browser security policy, and service overrides.
-// Supplied services bypass their factories. Additional factories replace matching
-// built-in names and are local to this application.
+// Supplied services bypass their factories. Provider catalogs are explicit and
+// local to this application. No storage providers are included by default.
 type Options struct {
 	// ContentSecurityPolicy must match the application's assets and HTMX settings.
 	// Empty omits the Content-Security-Policy header.
 	ContentSecurityPolicy string
 	Services              Services
-	AccountProviders      map[string]user.StorageProvider
-	SessionProviders      map[string]session.ConfiguredProvider
+	// AccountProviders supplies the catalog for auth.accountStorage.provider.
+	AccountProviders map[string]user.StorageProvider
+	// SessionProviders supplies the catalog for http.session.types, using lowercase keys.
+	SessionProviders map[string]session.ConfiguredProvider
 	// AuthProviders selects providers after Modules returns, with shared services
 	// ready but modules not yet initialized. It runs only when auth is selected
 	// and enabled. A nil callback selects the registered provider catalog. An empty result selects
@@ -150,8 +151,8 @@ func (a *Application) openServices(ctx context.Context, options Options) error {
 				return errors.New("supplied account repository is nil")
 			}
 		}
-	} else {
-		repository, cleanup, err := configured.OpenAccounts(ctx, a.Config, options.AccountProviders)
+	} else if a.Config.Auth.Enabled {
+		repository, cleanup, err := user.OpenConfiguredStorage(ctx, a.Config.Auth.AccountStorage, options.AccountProviders)
 		if err != nil {
 			return fmt.Errorf("prepare accounts: %w", err)
 		}
@@ -162,7 +163,7 @@ func (a *Application) openServices(ctx context.Context, options Options) error {
 	}
 
 	if a.Sessions == nil {
-		manager, err := configured.NewSessionManager(ctx, a.Config, options.SessionProviders)
+		manager, err := session.NewConfiguredManager(ctx, a.Config, options.SessionProviders)
 		if err != nil {
 			return fmt.Errorf("prepare sessions: %w", err)
 		}

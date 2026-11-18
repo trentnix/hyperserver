@@ -16,6 +16,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/handlers"
 	"github.com/trentnix/hyperserver/pkg/requestinfo"
 	"github.com/trentnix/hyperserver/pkg/routing"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 )
@@ -67,6 +68,8 @@ func TestConfiguredWebMiddlewareWrapsAuthentication(t *testing.T) {
 	cfg.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 3, Window: time.Hour, MaxClients: 10}
 	calls := 0
 	app, err := application.New(ctx, cfg, application.Options{
+		AccountProviders:      configured.AccountProviders(cfg),
+		SessionProviders:      configured.SessionProviders(cfg),
 		ContentSecurityPolicy: "default-src 'none'",
 		Modules:               authenticationModules,
 	})
@@ -168,7 +171,10 @@ func TestMiddlewareFailureClosesModulesBeforeOwnedServices(t *testing.T) {
 			var captured *application.Application
 			closed := false
 			closeErr := errors.New("module cleanup failed")
-			app, err := application.New(t.Context(), authenticationConfig(t), application.Options{
+			cfg := authenticationConfig(t)
+			app, err := application.New(t.Context(), cfg, application.Options{
+				AccountProviders: configured.AccountProviders(cfg),
+				SessionProviders: configured.SessionProviders(cfg),
 				Modules: func(_ context.Context, app *application.Application) ([]handlers.Descriptor, error) {
 					captured = app
 					// Exercise final middleware validation after services have opened.

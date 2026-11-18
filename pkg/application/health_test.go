@@ -14,6 +14,7 @@ import (
 	"github.com/trentnix/hyperserver/config"
 	"github.com/trentnix/hyperserver/pkg/application"
 	"github.com/trentnix/hyperserver/pkg/health"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -88,7 +89,11 @@ func TestHealthEndpointsUseSelectedServicesAndRunContext(t *testing.T) {
 func TestHealthEndpointsBypassAuthAndRateLimits(t *testing.T) {
 	cfg := authenticationConfig(t)
 	cfg.HTTP.SharedRateLimit = config.RateLimitConfig{Enabled: true, Requests: 1, Window: time.Hour, MaxClients: 10}
-	app, err := application.New(t.Context(), cfg, application.Options{Modules: authenticationModules})
+	app, err := application.New(t.Context(), cfg, application.Options{
+		AccountProviders: configured.AccountProviders(cfg),
+		SessionProviders: configured.SessionProviders(cfg),
+		Modules:          authenticationModules,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

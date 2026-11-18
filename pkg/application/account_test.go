@@ -8,6 +8,7 @@ import (
 
 	"github.com/trentnix/hyperserver/auth/identity"
 	"github.com/trentnix/hyperserver/pkg/application"
+	"github.com/trentnix/hyperserver/pkg/services/configured"
 	"github.com/trentnix/hyperserver/pkg/services/session"
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -24,7 +25,11 @@ func TestAccountPage(t *testing.T) {
 			if mode == "google" {
 				cfg.Auth.Services["email"]["enabled"] = "false"
 			}
-			app, err := application.New(t.Context(), cfg, application.Options{Modules: authenticationModules})
+			app, err := application.New(t.Context(), cfg, application.Options{
+				AccountProviders: configured.AccountProviders(cfg),
+				SessionProviders: configured.SessionProviders(cfg),
+				Modules:          authenticationModules,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}

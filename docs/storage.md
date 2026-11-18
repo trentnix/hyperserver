@@ -165,7 +165,7 @@ auth:
       connection: your-provider-connection
 ```
 
-Provider names are case-sensitive. `application.Options.AccountProviders` adds or replaces factories. Supplying `Options.Services.Accounts` bypasses selection and initialization without transferring ownership. [`configured.AccountProviders`](../pkg/services/configured/accounts.go) supplies the built-in catalog for startup and maintenance. Pass custom factories to both operations when replacing a provider.
+Provider names are case-sensitive. `application.Options.AccountProviders` supplies the complete catalog. The constructor includes no storage providers and requires an explicit `auth.accountStorage.provider` when opening accounts. Supplying `Options.Services.Accounts` bypasses selection and initialization without transferring ownership. [`configured.AccountProviders`](../pkg/services/configured/accounts.go) supplies the built-in catalog for startup and maintenance. Pass custom factories to both operations when replacing a provider.
 
 `OpenMaintenance` returns [TokenMaintenance](../pkg/services/user/account_repository.go), an optional close function, and an error. It must not create or migrate tables. Each batch closes acquired resources, including on failure. Missing maintenance capabilities return errors rather than skipping cleanup.
 

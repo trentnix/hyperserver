@@ -16,7 +16,7 @@ The [CI workflow](../.github/workflows/ci.yml) runs these checks on pushes and p
 
 [Container recovery and soak tests](deployment.md#start-and-test) are opt-in. Ordinary Go test runs and CI skip them. Never run failure/recovery tests alongside a soak test or against real data.
 
-CI also builds and tests the core without CGO. Dependency checks verify that the core does not import optional storage, authentication, session, or mail implementations. Compatibility with a separately pinned external application is not established by those checks.
+CI also builds the core and `application.New` without CGO. The [stateless fixture](../internal/test/stateless/application_test.go) covers full pages, HTMX fragments, history restoration, and HTML escaping without storage. Dependency checks keep storage implementations out of the application constructor and optional services out of the core. Compatibility with a separately pinned external application is not established by those checks.
 
 The root commands include the blog. For blog browser checks, run:
 
