@@ -70,6 +70,7 @@ Accounts, roles, content, and tokens are preserved. Unexpired invitations work a
 - [Social media](social-posts.md): one component for X, Bluesky, Threads, Facebook, Reddit, Mastodon, Instagram, LinkedIn, and TikTok, detected from the URL.
 - [Before and after images](comparisons.md): two images with a draggable comparison.
 - [Related posts](related-posts.md): links to other posts, displayed only on the source post.
+- [Series](series.md): shared reading order and navigation, managed from member posts.
 - [Component implementation](components.md): ownership, registration, storage, and editor contracts.
 - [Backup and recovery](backup.md): offline ZIP archives and manual recovery.
 - [Framework setup](../application.md): service selection, modules, rendering, and cleanup.
@@ -86,15 +87,15 @@ The [page layout](../../modules/blog/templates/layout.html) composes named compo
 
 Writing operations enforce roles and post ownership, including publishing and restores. They require the authenticated account in the context. HTTP route guards also protect editors and history. Private persistence helpers support authorized operations and trusted test fixtures. New posts belong to the actor. Edits preserve the stored owner.
 
-Fresh startup creates blog schema version 1 from the embedded [initial migration](../../modules/blog/migrations/000001_blog.up.sql). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Read-only views join current pointers to content for rendering and search.
+Fresh startup creates blog schema version 2 from the embedded [initial migration](../../modules/blog/migrations/000001_blog.up.sql) and [collections migration](../../modules/blog/migrations/000002_collections.up.sql). Current rows hold identity, publication settings, and a pointer to the selected content version. Post ownership belongs to the current row. Posts, pages, and site profiles each store their current and historical content together. Read-only views join current pointers to content for rendering and search.
 
 `blog_media` holds upload metadata for images and file downloads. `blog_post_media` and `blog_page_media` track URLs used by each saved revision. References retain URLs to preserve existing image links and host-specific access checks. Posts support PDF, ZIP, text, and MP3 downloads and [embedded PDF previews](pdf.md) through the shared metadata. [Video components](video.md) show YouTube and Vimeo player previews with autoplay disabled. [Audio components](audio.md) play uploaded MP3s with optional transcripts. Page component controls are not implemented.
 
-Existing databases must have a clean version 1 in `blog_schema_version` and match the current baseline. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
+Existing databases must have a clean version 2 in `blog_schema_version` and match the current schema. Startup validates the schema without upgrading existing storage. Accounts and sessions keep their own [migration histories](../storage.md).
 
 ## Database migrations
 
-The initial migration includes shared media metadata and revision references for posts and pages. Earlier baseline databases and backups are unsupported, even if they record version 1. Stop all writers and replace the blog database with fresh storage before running this baseline. Startup rejects the earlier layout without changing it. Never change a version marker to bypass validation.
+The initial migration includes shared media metadata and revision references for posts and pages. Migration 2 adds shared series metadata and ordered membership. It preserves existing post content. Version 1 databases using the current initial migration can upgrade with the command below. Earlier development layouts remain unsupported. Never change a version marker to bypass validation.
 
 For future migrations, stop the server and all other writers. Create and verify a [backup](backup.md) with a compatible binary. From the repository root:
 
@@ -106,7 +107,7 @@ migrate -path modules/blog/migrations \
 
 Keep `x-migrations-table=blog_schema_version` and `_foreign_keys=on` in every command. The CLI does not acquire the blog's maintenance lock. Run only one migration process, with all other writers stopped. Accounts and sessions have separate migrations even when they share the database file.
 
-Reversing the baseline deletes all blog content and ownership metadata. Back up before downgrading. Failed migrations roll back their SQL but leave a dirty version marker. Inspect and repair the failure before correcting that marker. `force` changes metadata, not tables or data.
+Reversing migration 2 removes series data and preserves posts. Reversing the baseline deletes all blog content and ownership metadata. Back up before downgrading. Failed migrations roll back their SQL but leave a dirty version marker. Inspect and repair the failure before correcting that marker. `force` changes metadata, not tables or data.
 
 Keep deployed migration files immutable. For a later schema change, add a numbered up/down pair and update the required version, current bootstrap and validation, repositories, and backup compatibility together. Runtime code must support only the resulting schema. Test populated upgrades, downgrades, failed migrations, and fresh startup. Set `HS_TEST_MIGRATE` to the pinned CLI executable to run migration integration tests.
 

@@ -112,6 +112,7 @@ type module struct {
 	mediaMetadata    mediaMetadataRepository
 	mediaAccess      mediaAccessRepository
 	history          revisionRepository
+	series           seriesRepository
 	localAssets      *os.Root
 	close            func() error
 	views            map[string]*content.View
@@ -193,7 +194,9 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 		"pageEditor",
 		"pageDelete",
 		"editor",
+		"seriesNavigation",
 		"formError",
+		"postError",
 		"delete",
 		"message",
 		"profileEditor",
@@ -301,6 +304,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	m.profileStore = store
 	m.mediaAccess = store
 	m.history = store
+	m.series = store
 	if m.profile == nil {
 		m.profile = &ProfileState{}
 	}

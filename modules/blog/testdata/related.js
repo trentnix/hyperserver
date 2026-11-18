@@ -18,7 +18,7 @@
       assert(navigation.querySelector('h3').textContent === 'Keep reading' && navigation.querySelectorAll('li').length === 2 && !navigation.textContent.includes('Private draft'), 'Readers must see the heading and public targets only.');
       const edit = document.querySelector('a[href^="/post/update/"]');
       await htmx.ajax('GET', edit.getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
-      await wait(() => document.querySelector('[data-related-selections]')?.children.length === 3 && !document.querySelector('[data-related-results]').hasAttribute('aria-busy'));
+      await wait(() => document.querySelector('[data-post-picker-selections]')?.children.length === 3 && !document.querySelector('[data-post-picker-results]').hasAttribute('aria-busy'));
       const restored = document.querySelector('[data-related-editor]');
       assert(restored.querySelector('[data-component-unsaved]').hidden, 'Reopened component must match its saved baseline.');
       assert(document.documentElement.scrollWidth <= innerWidth + 1, 'The saved editor must fit narrow viewports.');
@@ -29,8 +29,8 @@
     if (stage === 'recover') {
       await wait(() => document.querySelector('[data-draft-recovery]') && !document.querySelector('[data-draft-recovery]').hidden);
       document.querySelector('[data-draft-restore]').click();
-      await wait(() => document.querySelector('[data-related-selections]')?.children.length === 3 && !document.querySelector('[data-related-results]').hasAttribute('aria-busy'));
-      assert(document.querySelector('[data-related-title]').value === 'Keep reading', 'Draft recovery must preserve the heading and selections.');
+      await wait(() => document.querySelector('[data-post-picker-selections]')?.children.length === 3 && !document.querySelector('[data-post-picker-results]').hasAttribute('aria-busy'));
+      assert(document.querySelector('[data-post-picker-title]').value === 'Keep reading', 'Draft recovery must preserve the heading and selections.');
       sessionStorage.setItem('related-stage', 'view');
       document.querySelector('#post-form').requestSubmit();
       return;
@@ -40,12 +40,12 @@
     form.querySelector('[data-component-add="related-posts"]').click();
     const section = form.querySelector('[data-related-editor]');
     const source = form.elements.related;
-    const results = section.querySelector('[data-related-results]');
-    const rows = () => [...section.querySelector('[data-related-selections]').children];
-    const search = section.querySelector('[data-related-search]');
-    const status = section.querySelector('[data-related-status]');
+    const results = section.querySelector('[data-post-picker-results]');
+    const rows = () => [...section.querySelector('[data-post-picker-selections]').children];
+    const search = section.querySelector('[data-post-picker-search]');
+    const status = section.querySelector('[data-post-picker-status]');
     assert(results.hidden && results.children.length === 0 && search.getAttribute('aria-expanded') === 'false', 'Adding the component must not preload a list of post choices.');
-    assert(section.querySelector('.related-selected-panel').hidden, 'An empty component must not show an empty selected-post panel.');
+    assert(section.querySelector('.post-picker-selected-panel').hidden, 'An empty component must not show an empty selected-post panel.');
     assert(!section.querySelector('[data-component-unsaved]').hidden, 'A new component must show unsaved changes.');
     form.noValidate = true;
     set(form.elements.title, 'Related browser review');
@@ -55,10 +55,10 @@
     assert(section.contains(document.activeElement), 'An empty selection must focus its component.');
     for (const title of ['A long target', 'Second target', 'Private draft target']) {
       search.focus();
-      const top = section.querySelector('.related-selected-panel').getBoundingClientRect().top;
+      const top = section.querySelector('.post-picker-selected-panel').getBoundingClientRect().top;
       set(search, title);
       await wait(() => !results.hidden && [...results.children].some(button => button.textContent.startsWith(title)));
-      if (rows().length) assert(section.querySelector('.related-selected-panel').getBoundingClientRect().top === top, 'Search suggestions must overlay the selected list without moving it.');
+      if (rows().length) assert(section.querySelector('.post-picker-selected-panel').getBoundingClientRect().top === top, 'Search suggestions must overlay the selected list without moving it.');
       assert(search.getAttribute('aria-expanded') === 'true', 'Search must announce its open suggestions.');
       search.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
       assert(results.hidden && search.getAttribute('aria-expanded') === 'false', 'Escape must dismiss suggestions.');
@@ -73,20 +73,20 @@
     }
     assert(JSON.parse(source.value).posts.length === 3 && source.getAttribute('aria-invalid') !== 'true', 'Selection must update source and clear its error.');
     assert(rows()[2].querySelector('small').textContent === 'Draft', 'Draft targets need a concise publication hint.');
-    assert(section.querySelector('[data-related-count]').textContent === '3' && !section.querySelector('.related-selected-panel').hidden, 'The selected-post heading must show the current count.');
+    assert(section.querySelector('[data-post-picker-count]').textContent === '3' && !section.querySelector('.post-picker-selected-panel').hidden, 'The selected-post heading must show the current count.');
     for (const row of rows()) {
-      const stacked = row.querySelector('.related-selection-actions').getBoundingClientRect().top >= row.querySelector('.related-selection-details').getBoundingClientRect().bottom;
+      const stacked = row.querySelector('.post-picker-selection-actions').getBoundingClientRect().top >= row.querySelector('.post-picker-selection-details').getBoundingClientRect().bottom;
       assert(row.getBoundingClientRect().height <= (stacked ? 112 : 76), 'Selected links must remain compact while giving narrow-screen titles their own line.');
-      assert(row.querySelector('.related-selection-actions').getBoundingClientRect().height === 44, 'Movement and removal controls must stay together on one line.');
+      assert(row.querySelector('.post-picker-selection-actions').getBoundingClientRect().height === 44, 'Movement and removal controls must stay together on one line.');
       const title = row.querySelector('strong');
       assert(title.title === title.textContent && title.getBoundingClientRect().height <= parseFloat(getComputedStyle(title).lineHeight) * 2 + 1, 'Long titles must stop after two lines while retaining their full text.');
       assert(title.getBoundingClientRect().width >= 150, 'Titles need enough room to read beside movement and removal controls.');
     }
-    assert(section.querySelector('.related-search-panel').getBoundingClientRect().bottom <= section.querySelector('.related-selected-panel').getBoundingClientRect().top, 'Search and selected posts must form one column at every width.');
+    assert(section.querySelector('.post-picker-search-panel').getBoundingClientRect().bottom <= section.querySelector('.post-picker-selected-panel').getBoundingClientRect().top, 'Search and selected posts must form one column at every width.');
     const original = JSON.parse(source.value).posts;
     rows()[0].querySelectorAll('button')[1].click();
-    assert(JSON.parse(source.value).posts[1] === original[0] && document.activeElement.closest('[data-related-id]').dataset.relatedId === original[0], 'Movement must preserve focus and author order.');
-    set(section.querySelector('[data-related-title]'), 'Keep reading');
+    assert(JSON.parse(source.value).posts[1] === original[0] && document.activeElement.closest('[data-post-picker-id]').dataset.postPickerId === original[0], 'Movement must preserve focus and author order.');
+    set(section.querySelector('[data-post-picker-title]'), 'Keep reading');
     search.focus();
     set(search, 'no such title');
     await wait(() => status.textContent === 'No matching posts.');
@@ -145,10 +145,10 @@
     assert(selectionRequests === 0, 'Adding results must not reload or reorder the search response.');
     window.fetch = nativeFetch;
     for (const choice of choices.slice(4, 8)) choice.click();
-    const limit = section.querySelector('[data-related-limit]');
+    const limit = section.querySelector('[data-post-picker-limit]');
     assert(rows().length === 12 && search.disabled && results.hidden && !limit.hidden && limit.textContent.includes('Remove one') && search.getAttribute('aria-describedby').includes(limit.id), 'The selection limit must close suggestions and explain the disabled search immediately.');
-    section.querySelector('[data-related-title]').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
-    section.querySelector('[data-related-title]').focus();
+    section.querySelector('[data-post-picker-title]').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
+    section.querySelector('[data-post-picker-title]').focus();
     await wait(() => !results.hasAttribute('aria-busy'));
     assert(!limit.hidden && search.disabled, 'Dismissing suggestions or leaving search must preserve the selection-limit explanation.');
     rows()[0].querySelector('button:last-child').click();
@@ -165,11 +165,11 @@
     await wait(() => status.textContent === 'No matching posts.');
     source.value = '{"posts":[false]}';
     source.dispatchEvent(new Event('change', {bubbles: true}));
-    assert(!source.hidden && section.querySelector('[data-related-controls]').disabled, 'Invalid source must remain repairable without enhancement.');
+    assert(!source.hidden && section.querySelector('[data-post-picker-controls]').disabled, 'Invalid source must remain repairable without enhancement.');
     source.value = savedSource;
     source.dispatchEvent(new Event('change', {bubbles: true}));
     await wait(() => source.hidden && !results.hasAttribute('aria-busy'));
-    for (const button of section.querySelectorAll('.related-selection-actions button')) {
+    for (const button of section.querySelectorAll('.post-picker-selection-actions button')) {
       const box = button.getBoundingClientRect();
       assert(box.width >= 44 && box.height >= 44, 'Selected-post controls must provide touch targets.');
     }
@@ -180,8 +180,8 @@
     sessionStorage.setItem('related-stage', 'recover');
     location.reload();
   } catch (error) {
-    const search = document.querySelector('[data-related-search]');
-    const results = document.querySelector('[data-related-results]');
-    await report(error.message + '\n' + error.stack + '\n' + JSON.stringify({focus: document.activeElement?.id, query: search?.value, expanded: search?.getAttribute('aria-expanded'), hidden: results?.hidden, choices: results?.textContent, status: document.querySelector('[data-related-status]')?.textContent}));
+    const search = document.querySelector('[data-post-picker-search]');
+    const results = document.querySelector('[data-post-picker-results]');
+    await report(error.message + '\n' + error.stack + '\n' + JSON.stringify({focus: document.activeElement?.id, query: search?.value, expanded: search?.getAttribute('aria-expanded'), hidden: results?.hidden, choices: results?.textContent, status: document.querySelector('[data-post-picker-status]')?.textContent}));
   }
 })();

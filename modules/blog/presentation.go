@@ -113,6 +113,8 @@ func prepareTemplates(cm *contentservice.ContentManagerService) (*content.Templa
 		{FS: blogModuleFS, Path: "templates/users.html"},
 		{FS: blogModuleFS, Path: "templates/posts.html"},
 		{FS: blogModuleFS, Path: "templates/post-editor.html"},
+		{FS: blogModuleFS, Path: "templates/post-picker.html"},
+		{FS: blogModuleFS, Path: "templates/series.html"},
 		{FS: blogModuleFS, Path: "templates/post-components.html"},
 		{FS: blogModuleFS, Path: "templates/page-editor.html"},
 		{FS: blogModuleFS, Path: "templates/search.html"},

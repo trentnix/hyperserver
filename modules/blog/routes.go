@@ -100,6 +100,8 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("GET /post/create", m.requirePostOwner(m.editor))
 	routes.Handle("GET /post/manage", m.requireWriter(m.managePosts))
 	routes.Handle("GET /post/update/{id}", m.requirePostOwner(m.editor))
+	routes.Handle("GET /post/series/{id}", m.requirePostOwner(m.seriesEditor))
+	routes.Handle("GET /post/series", m.requirePostOwner(m.seriesEditor))
 	routes.Handle("GET /post/delete/{id}", m.requirePostOwner(m.confirmDelete))
 	routes.HandleWithBodyLimit("POST /post", m.requirePostOwner(m.save), routing.MiB)
 	routes.HandleWithBodyLimit("POST /post/{id}", m.requirePostOwner(m.save), routing.MiB)

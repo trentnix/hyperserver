@@ -116,7 +116,7 @@ func TestBlogBaselineOwnership(t *testing.T) {
 INSERT INTO blog_media(id,filename,label,version,uploaded_by) VALUES('image','image.png','Example',1,'account')`); err != nil {
 		t.Fatal(err)
 	}
-	before := blogMigrationSnapshot(t, db, "schema")
+	before := blogMigrationSnapshot(t, db, "schema", "blog_collections", "blog_collection_content")
 	for range 2 {
 		if output, err := run("up"); err != nil {
 			t.Fatal(output, err)
@@ -124,7 +124,7 @@ INSERT INTO blog_media(id,filename,label,version,uploaded_by) VALUES('image','im
 		if err := prepareBlogSchema(t.Context(), db); err != nil {
 			t.Fatal(err)
 		}
-		if got := blogMigrationSnapshot(t, db, "schema"); got != before {
+		if got := blogMigrationSnapshot(t, db, "schema", "blog_collections", "blog_collection_content"); got != before {
 			t.Fatal("repeated setup changed ownership, content, versions, references, or another module")
 		}
 	}

@@ -89,8 +89,12 @@
       await wait(() => form.elements.displayOrder.getAttribute('aria-invalid') === 'true' && settled());
       assertField(form.elements.displayOrder);
       assertPanel(form.querySelector('#editor-errors'));
+      const summary = form.querySelector('#editor-errors');
+      summary.prepend(document.createTextNode('\n  '));
+      summary.append(document.createTextNode('\n  '));
       edit(form.elements.displayOrder, '10');
       assert(form.elements.displayOrder.getAttribute('aria-describedby') === 'order-help', 'Clearing an error must keep the field help.');
+      assert(summary.isConnected && summary.childNodes.length === 0 && getComputedStyle(summary).display === 'none', 'Clearing the last field error must remove its empty panel and retain the HTMX target.');
 
       form = await navigate('/profile', '#profile-form');
       await nativeError(form, 'name');

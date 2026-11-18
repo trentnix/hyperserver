@@ -80,7 +80,23 @@ func (m *module) buildFeed(ctx context.Context, origin *url.URL) ([]byte, error)
 		link.Path = "/post/s/" + p.Slug
 		guid := *origin
 		guid.Path = "/post/id/" + p.ID
-		body, err := m.renderWritingAt(ctx, p.Markdown, p.ID, &link)
+		body, err := m.renderWriting(ctx, p.Markdown, p.ID)
+		if err != nil {
+			return nil, err
+		}
+		navigation, err := m.seriesNavigation(ctx, p.ID)
+		if err != nil {
+			return nil, err
+		}
+		if navigation != nil {
+			request := (&http.Request{Method: http.MethodGet, URL: &link, Header: make(http.Header)}).WithContext(ctx)
+			series, err := m.views["seriesNavigation"].RenderPartial(request, navigation)
+			if err != nil {
+				return nil, err
+			}
+			body += series
+		}
+		body, err = markdownURLs(body, &link)
 		if err != nil {
 			return nil, err
 		}

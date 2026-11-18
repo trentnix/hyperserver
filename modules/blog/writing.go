@@ -32,11 +32,19 @@ func validationFields(err error) []string {
 
 // writePost authorizes the actor before validating and saving writing.
 func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
+	return m.writePostWithSeries(ctx, p, nil)
+}
+
+func (m *module) writePostWithSeries(ctx context.Context, p Post, update *seriesUpdate) (Post, error) {
 	p, err := m.authorizePostWrite(ctx, p)
 	if err != nil {
 		return p, err
 	}
-	return m.persistPost(ctx, p)
+	update, err = m.authorizeSeriesUpdate(ctx, update)
+	if err != nil {
+		return p, err
+	}
+	return m.persistPostWithSeries(ctx, p, update)
 }
 
 func (m *module) authorizePostWrite(ctx context.Context, p Post) (Post, error) {
@@ -66,6 +74,10 @@ func (m *module) authorizePostWrite(ctx context.Context, p Post) (Post, error) {
 // persistPost validates and saves authorized writing or trusted test fixtures.
 // The repository saves content, references, and history atomically.
 func (m *module) persistPost(ctx context.Context, p Post) (Post, error) {
+	return m.persistPostWithSeries(ctx, p, nil)
+}
+
+func (m *module) persistPostWithSeries(ctx context.Context, p Post, update *seriesUpdate) (Post, error) {
 	var err error
 	p.Tags, err = normalizeTags(p.Tags)
 	if err != nil {
@@ -92,7 +104,12 @@ func (m *module) persistPost(ctx context.Context, p Post) (Post, error) {
 		if err != nil {
 			return p, err
 		}
-		saved, err := m.posts.Save(ctx, p, refs)
+		var saved Post
+		if update == nil {
+			saved, err = m.posts.Save(ctx, p, refs)
+		} else {
+			saved, err = m.posts.SaveWithSeries(ctx, p, refs, update)
+		}
 		if generated && errors.Is(err, errSlugTaken) {
 			p.Slug = numberedSlug(base, suffix)
 			continue

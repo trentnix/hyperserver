@@ -97,7 +97,7 @@ import {componentValue} from './post-components.js';
         }
         if (typeof data.baseline !== 'string' || !data.fields || !state.fields.every(field =>
           field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' :
-            ((['previewImage', 'published', 'publishDate', 'publishTime', 'tags', 'componentOrder'].includes(field.name) || state.componentSources.includes(field)) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
+            ((['previewImage', 'published', 'publishDate', 'publishTime', 'tags', 'componentOrder', 'seriesID', 'seriesVersion', 'seriesBaseline'].includes(field.name) || state.componentSources.includes(field)) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
         copies.push({key, raw, data});
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);
@@ -124,7 +124,7 @@ import {componentValue} from './post-components.js';
       const state = {
         form, ownerPrefix, scope, key: scope + crypto.randomUUID(), sources: [],
         fields: [...form.querySelectorAll('input[name], textarea[name], select[name]')].filter(field => field.type !== 'file' && field.name !== 'version'),
-        componentSources: [...form.querySelectorAll('[data-post-component] textarea[name]')],
+        componentSources: [...form.querySelectorAll('[data-post-component] textarea[name], [data-post-picker-source]')],
         status: form.querySelector('[data-draft-status]')
       };
       // Rejected ordinary submissions contain unsaved input, not a server baseline.
@@ -156,6 +156,19 @@ import {componentValue} from './post-components.js';
       };
       form.addEventListener('input', changed);
       form.addEventListener('change', changed);
+      form.addEventListener('blog:editor-adopt-fields', event => {
+        if (state.baseline) {
+          const baseline = JSON.parse(state.baseline);
+          const current = snapshot(state);
+          for (const name of event.detail) {
+            if (Object.hasOwn(current, name)) baseline[name] = current[name];
+          }
+          state.baseline = JSON.stringify(baseline);
+          publishBaseline(state);
+        }
+        changed();
+        persist(state);
+      });
       function restoreCopy() {
         if (!active(state) || !state.recovery) return;
         const copy = state.recovery;
@@ -184,7 +197,7 @@ import {componentValue} from './post-components.js';
       form.querySelector('[data-draft-restore]').addEventListener('click', () => {
         if (!state.recovery) return;
         if (dirty(state)) {
-          window.blogConfirm({title: 'Replace your current edits?', message: 'Restoring this browser copy replaces the fields in this editor. It does not change the saved post or page until you save.', action: 'Restore copy', cancel: 'Keep editing'}, restoreCopy);
+          window.blogConfirm({title: 'Replace your current edits?', message: 'Restoring this browser copy replaces the fields in this editor. Saved content stays unchanged until you save.', action: 'Restore copy', cancel: 'Keep editing'}, restoreCopy);
         } else restoreCopy();
       });
       form.querySelector('[data-draft-discard]').addEventListener('click', () => {

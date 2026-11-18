@@ -5,7 +5,7 @@
   "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
   "gomaxprocs": 2,
   "minimum_samples": 5,
-  "max_binary_bytes": 18400000,
+  "max_binary_bytes": 18700000,
   "benchmarks": {
     "BenchmarkRenderTemplates/page/prepared": {
       "ns/op": 2690,

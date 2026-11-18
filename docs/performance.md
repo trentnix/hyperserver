@@ -25,7 +25,7 @@ HS_TEST_PERFORMANCE=1 go test -v -count=5 ./internal/test/web -run '^TestFramewo
 
 CI does not enforce latency budgets. Use `perfcheck -timing` only on the recorded CPU with comparable storage and no competing workload. Review the workload and environment before changing a budget. These checks are regression guards, not production capacity guarantees.
 
-The stripped Linux/amd64 blog binary is limited to 18,400,000 bytes. On Go 1.27.4 with CGO enabled, commit `dd1a227` measures 18,203,960 bytes locally and in CI. Its image comparison component and editor changes add 41,312 bytes over the previous commit when both builds omit VCS metadata. The allowance covers the added component code, templates, and embedded assets. Runtime allocation and memory budgets remain unchanged.
+The stripped Linux/amd64 blog binary is limited to 18,700,000 bytes. With Go 1.27.4 and CGO enabled, the series implementation measures 18,426,712 bytes locally using the build command above. The allowance covers the series code, templates, and embedded assets. Runtime allocation and memory budgets remain unchanged.
 
 ## Blog search
 

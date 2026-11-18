@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -180,6 +181,48 @@ func (s *sqliteRepository) GetBySlug(ctx context.Context, slug string, includeDr
 // Updates require the current Version and fail if the post no longer exists.
 // The database enforces slug uniqueness and conflicts return errSlugTaken.
 func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Post, error) {
+	return s.SaveWithSeries(ctx, p, refs, nil)
+}
+
+// SaveWithSeries commits writing, history, media references, and shared series
+// changes together. A conflict in either edit rolls back the complete save.
+func (s *sqliteRepository) SaveWithSeries(ctx context.Context, p Post, refs []string, update *seriesUpdate) (Post, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return p, err
+	}
+	defer tx.Rollback()
+	saved, err := s.savePost(ctx, tx, p, refs)
+	if err != nil {
+		return p, err
+	}
+	if update != nil {
+		ids := append([]string{}, update.Posts...)
+		if p.ID == "" {
+			ids = append(ids, saved.ID)
+		}
+		var current string
+		err := tx.QueryRowContext(ctx, `SELECT collection_id FROM blog_collection_content WHERE post_id=?`, saved.ID).Scan(&current)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return p, err
+		}
+		if current != "" && current != update.Series.ID {
+			return p, writingFieldError{errEditConflict, "series"}
+		}
+		if current == "" && !slices.Contains(ids, saved.ID) {
+			return p, writingFieldError{contentError("Include this post when choosing its series."), "series"}
+		}
+		if len(ids) > maxSeriesPosts {
+			return p, writingFieldError{contentError("Choose up to 100 posts for the series."), "series"}
+		}
+		if _, err := s.saveSeries(ctx, tx, update.Series, ids, update.AuthorID); err != nil {
+			return p, writingFieldError{err, "series"}
+		}
+	}
+	return saved, tx.Commit()
+}
+
+func (s *sqliteRepository) savePost(ctx context.Context, tx *sql.Tx, p Post, refs []string) (Post, error) {
 	now := s.now().UTC().Truncate(time.Second)
 	var publication int64
 	if !p.Draft {
@@ -189,7 +232,7 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 		}
 	}
 	if p.ID != "" {
-		current, err := s.GetByID(ctx, p.ID, true)
+		current, err := scanPost(tx.QueryRowContext(ctx, "SELECT "+postColumns+" FROM blog_post_current WHERE id=?", p.ID))
 		if err != nil {
 			return p, err
 		}
@@ -212,12 +255,8 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 			return current, nil
 		}
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return p, err
-	}
-	defer tx.Rollback()
 
+	var err error
 	if p.ID == "" {
 		p.ID = rand.Text()
 		var published int64
@@ -254,9 +293,6 @@ func (s *sqliteRepository) Save(ctx context.Context, p Post, refs []string) (Pos
 		if err == nil {
 			_, err = tx.ExecContext(ctx, "UPDATE blog_current_posts SET version_id=? WHERE id=?", number, p.ID)
 		}
-	}
-	if err == nil {
-		err = tx.Commit()
 	}
 	return p, err
 }

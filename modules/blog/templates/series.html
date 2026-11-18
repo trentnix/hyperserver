@@ -1,0 +1,52 @@
+{{ define "blog.seriesPanel" }}
+<section id="post-series" class="series-panel post-picker-editor" data-series-panel data-post-id="{{ .PostID }}" data-saved-series="{{ with .Value }}{{ .ID }}{{ end }}" data-series-url="/post/series{{ if .PostID }}/{{ .PostID }}{{ end }}">
+<details>
+  <summary><strong>Series</strong><span data-series-title{{ if and (not .Value) (not .Selection) }} hidden{{ end }}>{{ with .Value }}{{ .Title }}{{ end }}</span><span class="component-unsaved" data-series-unsaved hidden>Unsaved changes</span></summary>
+  <div class="series-editor-body">
+  {{ if .CanEdit }}
+    <input type="hidden" name="seriesID" value="{{ .Selection }}">
+    <input type="hidden" name="seriesVersion" value="{{ .Version }}">
+    <input type="hidden" name="seriesBaseline" value="{{ .Baseline }}">
+    <div data-series-actions{{ if .Selection }} hidden{{ end }}>
+      <p class="form-hint">This post isn’t part of a series.</p>
+      <div class="series-actions"><button type="button" data-series-create>Create a series</button><button type="button" class="button-secondary" data-series-find>Find a series</button></div>
+    </div>
+    <div class="series-search" data-series-search-panel hidden>
+      <label for="series-search">Find a series</label>
+      <input id="series-search" type="search" maxlength="240" autocomplete="off" placeholder="Search series or posts…" aria-describedby="series-search-help series-search-status" data-series-search>
+      <p class="form-hint" id="series-search-help">Search by series name or a post’s title, tags, summary, or text.</p>
+      <p class="form-hint" id="series-search-status" data-series-search-status role="status"></p>
+      <ul class="series-search-results" data-series-search-results aria-label="Matching series" hidden></ul>
+      <button type="button" class="text-button" data-series-search-cancel>Cancel</button>
+    </div>
+    <p class="form-hint" data-series-recovery hidden>This post has a saved series. Saving your post keeps that membership.</p>
+    <p class="form-hint" id="series-content-help" data-series-help{{ if not .Selection }} hidden{{ end }}>Series changes apply to every member.{{ if not .PostID }} This post is included when you save.{{ end }}</p>
+    <div data-series-selection{{ if not .Selection }} hidden{{ end }}>
+      {{ template "blog.postPicker" .Picker }}
+      <p class="form-hint" data-series-empty hidden>Saving an empty series removes it.</p>
+    </div>
+    <div class="series-actions">
+      <button type="button" class="text-button" data-series-cancel{{ if or .Value (not .Selection) }} hidden{{ end }}>Cancel series selection</button>
+    </div>
+    <p class="form-hint" data-series-status role="status" hidden></p>
+  {{ else }}
+    <p class="form-hint">This series is managed by another author.</p>
+  {{ end }}
+  </div>
+</details>
+</section>
+{{ end }}
+
+{{ define "blog.seriesNavigation" }}{{ template "blog.seriesLinks" .Data }}{{ end }}
+{{ define "blog.seriesLinks" }}
+{{ with . }}
+<nav class="series-navigation" aria-label="Series: {{ .Title }}">
+  <div class="series-heading"><span>Series · Part {{ .Position }} of {{ len .Posts }}</span><h2>{{ .Title }}</h2></div>
+  {{ if or .Previous .Next }}<div class="series-neighbors">
+    <div>{{ with .Previous }}<a href="/post/s/{{ .Slug }}" rel="prev"><small>Previous</small><span>{{ .Title }}</span></a>{{ end }}</div>
+    <div>{{ with .Next }}<a href="/post/s/{{ .Slug }}" rel="next"><small>Next</small><span>{{ .Title }}</span></a>{{ end }}</div>
+  </div>{{ end }}
+  <details open><summary>All {{ len .Posts }} posts</summary><ol>{{ $current := .CurrentID }}{{ range .Posts }}<li>{{ if eq .ID $current }}<span aria-current="page">{{ .Title }}</span>{{ else }}<a href="/post/s/{{ .Slug }}">{{ .Title }}</a>{{ end }}</li>{{ end }}</ol></details>
+</nav>
+{{ end }}
+{{ end }}

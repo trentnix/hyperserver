@@ -80,7 +80,12 @@ for (const name of ['input', 'change']) {
     markField(control, false);
     for (const message of control.form.querySelectorAll('[data-error-fields]')) {
       const fields = message.dataset.errorFields.split(' ');
-      if (fields.includes(control.name) && ![...control.form.elements].some(input => fields.includes(input.name) && input.hasAttribute('aria-invalid'))) message.remove();
+      if (fields.includes(control.name) && ![...control.form.elements].some(input => fields.includes(input.name) && input.hasAttribute('aria-invalid'))) {
+        const summary = message.closest('.form-error');
+        message.remove();
+        // Keep the HTMX target, but remove whitespace left by the response.
+        if (summary && !summary.textContent.trim()) summary.replaceChildren();
+      }
     }
   });
 }

@@ -89,6 +89,8 @@ type repository interface {
 	// The caller supplies rendered image references for the same content.
 	// Unchanged content and settings preserve Version and history.
 	Save(context.Context, Post, []string) (Post, error)
+	// SaveWithSeries also applies shared membership in the same transaction.
+	SaveWithSeries(context.Context, Post, []string, *seriesUpdate) (Post, error)
 	// Delete removes a post or returns errNotFound. Uploaded images remain available.
 	Delete(context.Context, string) error
 }

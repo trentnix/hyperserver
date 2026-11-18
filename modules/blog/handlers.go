@@ -5,6 +5,8 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -22,6 +24,7 @@ type postPage struct {
 	Scheduled  bool
 	CanEdit    bool
 	EditURL    string
+	Series     *seriesNavigation
 }
 
 // editorPage retains a draft and any user-facing error for the editing form.
@@ -32,6 +35,7 @@ type editorPage struct {
 	NoLibrary                  bool
 	Error                      string
 	ErrorFields                string
+	SeriesConflict             bool
 	PublishedSlug              string
 	ScheduledSlug              string
 	ScheduledAt                int64
@@ -41,6 +45,7 @@ type editorPage struct {
 	SaveActions                publicationActions
 	TagSuggestions             []string
 	ReturnURL                  string
+	SeriesEditor               *seriesEditorData
 }
 
 // PreviewField configures the shared image picker for post sharing.
@@ -101,6 +106,11 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 		return
 	}
 	data := postPage{Post: p, HTML: html, Scheduled: p.Scheduled(m.currentTime()), CanEdit: m.canEditPost(r.Context(), p)}
+	data.Series, err = m.seriesNavigation(r.Context(), p.ID)
+	if err != nil {
+		m.storageError(w, r, err)
+		return
+	}
 	if data.CanEdit {
 		data.EditURL = editorURL("/post/update/"+p.ID, r)
 		data.HasHistory, err = m.history.HasHistory(r.Context(), "post", p.ID)
@@ -137,6 +147,14 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.TagSuggestions = m.tagSuggestions(r)
+	{
+		var err error
+		data.SeriesEditor, err = m.loadSeriesEditor(r, p.ID, "")
+		if err != nil {
+			m.storageError(w, r, err)
+			return
+		}
+	}
 	selection, err := m.selectRevision(r, "post", p.ID, "/post/s/"+p.Slug, Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags})
 	if err != nil {
 		m.storageError(w, r, err)
@@ -197,7 +215,16 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		m.editorError(w, r, p, publicationError, http.StatusUnprocessableEntity, fields...)
 		return
 	}
-	saved, err := m.writePost(r.Context(), p)
+	update, err := readSeriesUpdate(r)
+	if err != nil {
+		m.editorError(w, r, p, err.Error(), http.StatusUnprocessableEntity, "series")
+		return
+	}
+	saved, err := m.writePostWithSeries(r.Context(), p, update)
+	if errors.Is(err, errAccessDenied) && slices.Contains(validationFields(err), "series") {
+		m.editorError(w, r, p, "You don't have permission to change this series or one of its posts.", http.StatusForbidden, "series")
+		return
+	}
 	if errors.Is(err, errAccessDenied) {
 		m.app.ContentManager.HandleError(w, r, err.Error(), nil, http.StatusForbidden)
 		return
@@ -212,7 +239,11 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, errEditConflict) {
-		m.editorError(w, r, p, editConflictMessage, http.StatusConflict)
+		if slices.Contains(validationFields(err), "series") {
+			m.editorError(w, r, p, "This series changed in another editor. Neither the post nor the series was saved.", http.StatusConflict, "series")
+		} else {
+			m.editorError(w, r, p, editConflictMessage, http.StatusConflict)
+		}
 		return
 	}
 	if errors.Is(err, errAlreadyPublished) {
@@ -242,14 +273,21 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.ErrorFields = strings.Join(fields, " ")
+	data.SeriesConflict = status == http.StatusConflict && slices.Contains(fields, "series")
 	data.SaveActions = editorActions("post", false, false)
 	data.Publication = r.PostForm.Get("published")
 	data.ScheduleDate, data.ScheduleTime = r.PostForm.Get("publishDate"), r.PostForm.Get("publishTime")
 	page := m.views["editor"].Content(r, data)
 	if page.IsHtmx() {
-		page = m.views["formError"].Content(r, data)
+		page = m.views["postError"].Content(r, data)
 	} else {
 		data.TagSuggestions = m.tagSuggestions(r)
+		var seriesError error
+		data.SeriesEditor, seriesError = m.loadSeriesEditor(r, p.ID, "")
+		if seriesError != nil {
+			logger.LogRequestError(r, seriesError)
+		}
+
 		if p.ID != "" {
 			stored, err := m.posts.GetByID(r.Context(), p.ID, true)
 			if err != nil {
@@ -262,6 +300,22 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 				baseline, _ := json.Marshal(publication.componentFields())
 				data.CurrentContent = string(baseline)
 			}
+		}
+		if data.SeriesEditor != nil && data.SeriesEditor.CanEdit {
+			baseline := make(map[string]string)
+			_ = json.Unmarshal([]byte(data.CurrentContent), &baseline)
+			baseline["seriesID"], baseline["seriesVersion"], baseline["series"] = data.SeriesEditor.Selection, "0", data.SeriesEditor.Picker.Source
+			baseline["seriesBaseline"] = data.SeriesEditor.Baseline
+			if data.SeriesEditor.Value != nil {
+				baseline["seriesVersion"] = strconv.FormatInt(data.SeriesEditor.Value.Version, 10)
+			}
+			encoded, _ := json.Marshal(baseline)
+			data.CurrentContent = string(encoded)
+			data.SeriesEditor.Selection = r.PostForm.Get("seriesID")
+			data.SeriesEditor.Picker.Source = r.PostForm.Get("series")
+			version, _ := strconv.ParseInt(r.PostForm.Get("seriesVersion"), 10, 64)
+			data.SeriesEditor.Version = version
+			data.SeriesEditor.Baseline = r.PostForm.Get("seriesBaseline")
 		}
 		page.Data = data
 	}

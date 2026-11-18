@@ -57,6 +57,7 @@ func TestIncompatibleBackupsLeaveOriginalsUntouched(t *testing.T) {
 			changes[i] = fmt.Sprintf(changes[i], role.table)
 		}
 		if role.name == "blog" {
+			changes[1] = "UPDATE blog_schema_version SET version=1"
 			changes = append(changes, imageOnlyBlogSchemaChange, "DROP INDEX blog_post_media_url", "ALTER TABLE blog_media DROP COLUMN size_bytes")
 		}
 		for _, change := range changes {

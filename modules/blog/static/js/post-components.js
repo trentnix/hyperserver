@@ -8,6 +8,10 @@ export function componentValue(source, value) {
   return comparisons.get(source)?.(value) ?? value;
 }
 
+export function registerSourceComparison(source, normalize) {
+  comparisons.set(source, normalize);
+}
+
 // Each editor declares its optional defaults. Canonical JSON comparison itself
 // stays shared, including nested entries in file lists.
 export function jsonComponentValue(value, {strings = [], flags = [], empty = '{}'} = {}) {
@@ -25,7 +29,7 @@ export function jsonComponentValue(value, {strings = [], flags = [], empty = '{}
 // fields and supplies a snapshot so Undo also restores its unsaved local state.
 export function registerComponent(section, callbacks) {
   const source = section.querySelector('textarea[name]');
-  comparisons.set(source, callbacks.normalize);
+  registerSourceComparison(source, callbacks.normalize);
   const root = section.closest('[data-post-components]');
   let editor = editors.get(root);
   if (!editor) {

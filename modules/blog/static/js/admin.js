@@ -1,5 +1,6 @@
 import './editor.js';
 import './component-editors.js';
+import './series-editor.js';
 import './editor-drafts.js';
 
 // Browser Back can restore a whole document without contacting the server.

@@ -37,6 +37,8 @@ Content with post references can supply `PostReferences` for save validation and
 
 Each script registers its section with `registerComponent`. It supplies snapshot, clear, restore, focus, and normalization callbacks. Normalization defines which optional empty fields equal omitted fields. `jsonComponentValue` provides the shared JSON comparison.
 
+Related posts and the Series section in the post editor share `post-picker.js` and the `blog.postPicker` partial. The picker owns search, selection, and movement. Its consumer owns validation, saving, and the serialized value. [Series](series.md) use shared relational metadata and do not belong to the component catalog.
+
 Reordering preserves iframe state when the browser supports `moveBefore`. Editors with live previews can supply `beforeMove` and `afterMove` callbacks to release and rebuild their preview when an older browser must remove and reinsert the section.
 
 The shared controller owns ordering, removal, Undo, field errors, and unsaved indicators. Draft recovery discovers component source fields from the page. A new component must not add another type switch or field list to those paths.
