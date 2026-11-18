@@ -267,6 +267,48 @@ func TestSeriesConcurrentMembership(t *testing.T) {
 	}
 }
 
+func TestSeriesConcurrentPostSaves(t *testing.T) {
+	h := newHarness(t)
+	first, second := seriesPost(t, h, "First"), seriesPost(t, h, "Second")
+	ids := []string{first.ID, second.ID}
+	value, err := h.blog.writeSeries(adminWritingContext(t.Context()), Series{Title: "Original series"}, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := h.blog.posts.(*sqliteRepository)
+	store.db.SetMaxOpenConns(3)
+	value.Title = "Changed series"
+	update := &seriesUpdate{Series: *value, Posts: ids}
+	results := make(chan error, 8)
+	var writers sync.WaitGroup
+	for i := range 8 {
+		writers.Go(func() {
+			post := []Post{first, second}[i%2]
+			_, err := store.SaveWithSeries(t.Context(), post, nil, update)
+			results <- err
+		})
+	}
+	writers.Wait()
+	close(results)
+	winners := 0
+	for err := range results {
+		if err == nil {
+			winners++
+		} else if !errors.Is(err, errEditConflict) {
+			t.Fatal("a concurrent series save did not return an edit conflict", err)
+		}
+	}
+	if winners != 1 {
+		t.Fatal("concurrent series saves must have exactly one winner", winners)
+	}
+	for _, post := range []Post{first, second} {
+		stored, err := store.GetByID(t.Context(), post.ID, true)
+		if err != nil || stored != post {
+			t.Fatal("a series-only save changed post content or version", stored, err)
+		}
+	}
+}
+
 func TestSeriesCapacityAndPrivateMetadata(t *testing.T) {
 	h := usersHarness(t)
 	var ids []string

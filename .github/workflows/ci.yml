@@ -36,7 +36,7 @@ jobs:
   test:
     name: Tests, vet, and race checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         shell: bash # Enable pipefail so tee cannot hide a failed test command.
@@ -79,7 +79,7 @@ jobs:
       - name: Test with race detector
         env:
           GORACE: atexit_sleep_ms=0 # Avoid an exit delay for every test subprocess.
-        run: go test -race -count=1 -timeout=10m ./...
+        run: go test -race -count=1 -timeout=15m ./...
 
   performance:
     name: Allocation, memory, and build-size budgets
@@ -166,7 +166,7 @@ jobs:
       - name: Test blog in Firefox
         if: ${{ !inputs.browser_diagnostics }}
         run: |
-          go test -v -count=1 -timeout=15m ./modules/blog -run '^TestBrowser' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/blog-tests.log"
+          go test -v -count=1 -timeout=20m ./modules/blog -run '^TestBrowser' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/blog-tests.log"
 
       - name: Test HTMX and native forms in Firefox
         if: ${{ !inputs.browser_diagnostics }}

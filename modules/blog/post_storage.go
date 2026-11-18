@@ -192,6 +192,11 @@ func (s *sqliteRepository) SaveWithSeries(ctx context.Context, p Post, refs []st
 		return p, err
 	}
 	defer tx.Rollback()
+	// Reserve the writer before reading. Concurrent deferred snapshots cannot
+	// upgrade after another writer commits. No rows change in this statement.
+	if _, err := tx.ExecContext(ctx, "UPDATE blog_current_posts SET version=version WHERE 0"); err != nil {
+		return p, err
+	}
 	saved, err := s.savePost(ctx, tx, p, refs)
 	if err != nil {
 		return p, err
