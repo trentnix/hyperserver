@@ -41,7 +41,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     const ready = await fetch("/test/browser/ready", { method: "POST" });
     check(ready.ok, "Could not report browser readiness");
     check(typeof htmx !== "undefined", "HTMX did not load");
-    check(htmx.version === '4.0.1' && htmx.config.includeIndicatorCSS === false, "HTMX configuration is missing");
+    check(htmx.version === '4.0.2' && htmx.config.includeIndicatorCSS === false, "HTMX configuration is missing");
     check(consoleMessages.includes("</script><script>window.systemMessageInjected=true</script>"), "console message was not logged as text");
     check(!window.systemMessageInjected, "console message executed as JavaScript");
     for (const [path, status] of [["bad-request", 400], ["forbidden", 403], ["unavailable", 503]]) {
@@ -185,22 +185,26 @@ document.addEventListener("DOMContentLoaded", async function () {
     check(policyViolations.length === 0, "unexpected CSP violations: " + policyViolations.join(", "));
 
     // Prove the browser enforces the response policy, not just HTMX's settings.
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("inline script was not blocked by CSP")), 2000);
-      function blocked(event) {
-        if (event.blockedURI === "inline" && event.effectiveDirective.startsWith("script-src")) {
-          clearTimeout(timeout);
-          document.removeEventListener("securitypolicyviolation", blocked);
-          resolve();
+    for (const kind of ['script', 'handler']) {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error(`inline ${kind} was not blocked by CSP`)), 2000);
+        function blocked(event) {
+          if (event.blockedURI === "inline" && event.effectiveDirective.startsWith("script-src")) {
+            clearTimeout(timeout);
+            document.removeEventListener("securitypolicyviolation", blocked);
+            resolve();
+          }
         }
-      }
-      document.addEventListener("securitypolicyviolation", blocked);
-      const script = document.createElement("script");
-      script.textContent = "window.inlineScriptExecuted=true";
-      document.head.appendChild(script);
-      script.remove();
-    });
-    check(!window.inlineScriptExecuted, "CSP allowed inline JavaScript");
+        document.addEventListener("securitypolicyviolation", blocked);
+        const node = document.createElement(kind === 'handler' ? 'button' : 'script');
+        if (kind === 'handler') node.setAttribute('onclick', 'window.inlineHandlerExecuted=true');
+        else node.textContent = 'window.inlineScriptExecuted=true';
+        document.body.appendChild(node);
+        if (kind === 'handler') node.click();
+        node.remove();
+      });
+    }
+    check(!window.inlineScriptExecuted && !window.inlineHandlerExecuted, "CSP allowed inline JavaScript");
 
     // Submit through the browser's native form machinery, not fetch or HTMX.
     // The receiving handler validates the POST and reports the final result.

@@ -121,6 +121,45 @@ jobs:
           go run ./internal/test/perfcheck -results tmp/performance/results.txt -binary tmp/performance/web
           HS_TEST_PERFORMANCE=1 go test -v -count=5 ./internal/test/web -run '^TestFrameworkHeapBudget$'
 
+  chromium:
+    name: Chromium browser smoke checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: '1'
+      GOTOOLCHAIN: local
+      GOFLAGS: -mod=readonly
+      HS_TEST_CHROMIUM: google-chrome
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Check navigation, forms, errors, and history
+        env:
+          HS_TEST_BROWSER_ARTIFACTS: ${{ runner.temp }}/chromium-diagnostics
+        run: |
+          google-chrome --version
+          mkdir -p "$HS_TEST_BROWSER_ARTIFACTS"
+          go test -v -count=1 -timeout=5m ./internal/test/web \
+            -run '^TestBrowser(SiteErrors|ResponseDispatch|History)$' 2>&1 | tee "$HS_TEST_BROWSER_ARTIFACTS/tests.log"
+      - name: Upload browser diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chromium-diagnostics-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/chromium-diagnostics
+          if-no-files-found: ignore
+          retention-days: 7
+
   browser:
     name: Firefox browser checks
     # No dependency on the test job: either job must run even if the other fails.

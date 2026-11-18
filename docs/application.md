@@ -1,8 +1,6 @@
 # Application setup and modules
 
-Use `application.New` to configure services, modules, middleware, and cleanup. Start with the [blog application](../cmd/web/application.go). The [HTTP fixtures](../internal/test/web) exercise public APIs, provider replacement, and ordinary forms.
-
-Create one [`blog.Site`](../modules/blog/site.go) per application startup. `Configure(app)` sets shared rendering and returns the blog descriptor. `AuthenticationPolicy()` supplies account admission and onboarding behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider settings and credentials belong in `config.yaml`.
+Use `application.New` to configure services, modules, middleware, and cleanup. Start with the standalone [quickstart](quickstart.md). Applications select their own modules and rendering policy. They do not need the blog. The [HTTP fixtures](../internal/test/web) exercise public APIs, provider replacement, and ordinary forms.
 
 ## Adding or replacing a feature
 
@@ -261,3 +259,7 @@ Resource-owning modules can implement `Shutdown(context.Context) error`. `Initia
 When called directly, `Initialize` uses the caller's deadline or defaults to ten seconds. Context deadlines cannot interrupt code that ignores cancellation. Initialization contexts must not be retained for request I/O.
 
 If HTTP draining fails, Run closes HTTP connections and returns `server.ErrHTTPDrainIncomplete` without closing services under active handlers. The command must exit or wait for those handlers before cleanup. The blog command exits with an error. Applications must manage hijacked connections separately.
+
+## Blog setup
+
+For the included blog, create one [`blog.Site`](../modules/blog/site.go) per application startup. `Configure(app)` sets shared rendering and returns the blog descriptor. `AuthenticationPolicy()` supplies account admission and onboarding behavior through `Options.AuthPolicy`. Select the blog and `auth.Module` in `Options.Modules`. Provider settings and credentials belong in `config.yaml`. See the [blog application](../cmd/web/application.go).

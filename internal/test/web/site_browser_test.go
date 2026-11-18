@@ -26,11 +26,11 @@ const (
 )
 
 // TestBrowserSiteErrors uses the site's embedded HTMX asset.
-// CI enables it with HS_TEST_FIREFOX=firefox.
+// CI runs it with Firefox and Chromium through their browser environment settings.
 func TestBrowserSiteErrors(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
-	if browser == "" {
-		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
+	if browser == "" && os.Getenv("HS_TEST_CHROMIUM") == "" {
+		t.Skip("set HS_TEST_FIREFOX or HS_TEST_CHROMIUM to run browser tests")
 	}
 	runSiteScenario(t, func(h *httpHarness) {
 		// Render the real layout and retain the local HTMX URL and integrity check.
@@ -59,7 +59,9 @@ func TestBrowserSiteErrors(t *testing.T) {
 			})
 		}
 		h.app.Web.HandleFunc("GET /test/browser/plain", func(w http.ResponseWriter, r *http.Request) {
-			util.HttpError(w, r, `<img id="error-injection" src=x onerror="window.errorInjected=true">`, nil, http.StatusInternalServerError)
+			// Inline execution is tested by the dedicated CSP probe. Chromium can
+			// report blocked handlers while HTMX parses a detached error fragment.
+			util.HttpError(w, r, `<img id="error-injection" src=x>`, nil, http.StatusInternalServerError)
 		})
 		h.app.Web.HandleFunc("GET /test/browser/json", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -164,20 +166,32 @@ func browserTestPage(html string) string {
 func runBrowser(t *testing.T, url string, ready <-chan struct{}, result <-chan string, logs func() string) {
 	t.Helper()
 	browser := os.Getenv("HS_TEST_FIREFOX")
+	chromium := browser == ""
+	logName := "firefox.log"
+	if chromium {
+		browser = os.Getenv("HS_TEST_CHROMIUM")
+		logName = "chromium.log"
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	artifacts := browserArtifactDirectory(t)
-	logPath := filepath.Join(artifacts, "firefox.log")
+	logPath := filepath.Join(artifacts, logName)
 	logFile, err := os.Create(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer logFile.Close()
 	profile := t.TempDir()
-	cmd := exec.CommandContext(ctx, browser, "--headless", "--no-remote", "--profile", profile, url)
+	args := []string{"--headless", "--no-remote", "--profile", profile, url}
+	if chromium {
+		args = []string{"--headless", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--user-data-dir=" + profile, url}
+	}
+	cmd := exec.CommandContext(ctx, browser, args...)
 	// Log process startup, not HTTP headers or credential form values.
-	cmd.Env = append(os.Environ(), "MOZ_LOG=timestamp,sync,ChildProcessLifecycle:5",
-		"MOZ_LOG_FILE="+filepath.Join(artifacts, "process-launch"))
+	if !chromium {
+		cmd.Env = append(os.Environ(), "MOZ_LOG=timestamp,sync,ChildProcessLifecycle:5",
+			"MOZ_LOG_FILE="+filepath.Join(artifacts, "process-launch"))
+	}
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 2 * time.Second

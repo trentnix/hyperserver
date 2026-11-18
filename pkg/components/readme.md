@@ -138,7 +138,7 @@ page.HTMX.Response = &htmx.Response{
 }
 ```
 
-Other fields support after-swap and after-settle events, history URLs, and refreshes. These are server-selected instructions. Do not copy untrusted values into them. Ordinary and history-restoration requests ignore fragment response metadata.
+Other fields select history URLs, refreshes, and no-content responses. These are server-selected instructions. Do not copy untrusted values into them. Ordinary and history-restoration requests ignore fragment response metadata.
 
 For additional fragments, define named templates containing their own `hx-swap-oob` markup and set `page.OutOfBand = []string{"notice"}`. They share the main view's data and notifications. They render only for HTMX fragment requests, and all must succeed before response content is written.
 

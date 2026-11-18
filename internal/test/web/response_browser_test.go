@@ -37,8 +37,8 @@ func (f *browserResponseForm) Validate() form.FieldErrors {
 
 // Exercise the dispatcher through the site's real HTMX version and security policy.
 func TestBrowserResponseDispatch(t *testing.T) {
-	if os.Getenv("HS_TEST_FIREFOX") == "" {
-		t.Skip("set HS_TEST_FIREFOX to a Firefox executable to run browser tests")
+	if os.Getenv("HS_TEST_FIREFOX") == "" && os.Getenv("HS_TEST_CHROMIUM") == "" {
+		t.Skip("set HS_TEST_FIREFOX or HS_TEST_CHROMIUM to run browser tests")
 	}
 	runSiteScenario(t, func(h *httpHarness) {
 		file := testTemplateFile(t, "internal/test/web/testdata/response-dispatch.html")

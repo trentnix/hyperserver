@@ -215,7 +215,7 @@ func TestModuleImageStorageLifecycle(t *testing.T) {
 	if _, err := images.Open(t.Context(), id); err == nil {
 		t.Fatal("shutdown left image storage open")
 	}
-	if _, err := h.blog.posts.List(t.Context()); err == nil {
+	if _, err := h.blog.posts.ListPublished(t.Context(), 1); err == nil {
 		t.Fatal("shutdown left post storage open")
 	}
 }

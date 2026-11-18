@@ -29,7 +29,7 @@ func assertBrowserHeaders(t *testing.T, w *httptest.ResponseRecorder) {
 // Changes to the permitted sources or restrictions must receive explicit review.
 func assertReferenceCSP(t *testing.T, policy, page string) {
 	t.Helper()
-	const htmxSource = "/js/vendor/htmx/4.0.1/htmx.min.js"
+	const htmxSource = "/js/vendor/htmx/4.0.2/htmx.min.js"
 	want := map[string]string{
 		"default-src":     "'none'",
 		"script-src":      "'self'",
@@ -63,8 +63,8 @@ func assertReferenceCSP(t *testing.T, policy, page string) {
 
 func TestHTTPVendoredHTMX(t *testing.T) {
 	runSiteScenario(t, func(h *httpHarness) {
-		const path = "/js/vendor/htmx/4.0.1/htmx.min.js"
-		const integrity = "sha384-Qp9rdC8H7EqOoX+nR0P3RPG2Noji+qdwJlGpfzwQJsfOpp3sGwIdSP9xO3+UlEhn"
+		const path = "/js/vendor/htmx/4.0.2/htmx.min.js"
+		const integrity = "sha384-6NzMyCdh08UZ4b4M17SJJKQLdDijx4z2IqqKLKD0Q/PzCFQLpFuk3konY0WgqbTy"
 		page := h.request(http.MethodGet, "/", nil, false)
 		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `src="`+path+`"`) || !strings.Contains(page.Body.String(), `integrity="`+integrity+`"`) {
 			t.Fatal("page does not pin the local HTMX asset and expected integrity hash")

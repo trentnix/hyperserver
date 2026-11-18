@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestPostStoragePersistenceAndConflicts(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := store.List(ctx); !errors.Is(err, context.Canceled) {
+	if _, err := store.ListPublished(ctx, 1); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation ignored: %v", err)
 	}
 	var wg sync.WaitGroup
@@ -113,9 +114,20 @@ func TestNavigationQueries(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	posts, err := store.List(t.Context())
+	posts, err := store.ListPublished(t.Context(), 10)
 	if err != nil || len(posts) != 3 || posts[0].ID != "third" || posts[1].ID != "second" || posts[2].ID != "first" {
 		t.Fatalf("published posts = %+v, %v", posts, err)
+	}
+	limited, err := store.ListPublished(t.Context(), 1)
+	if err != nil || len(limited) != 1 || limited[0] != posts[0] {
+		t.Fatalf("limited published posts = %+v, %v", limited, err)
+	}
+	unlimited, err := store.ListPublished(t.Context(), 0)
+	if err != nil || !slices.Equal(unlimited, posts) {
+		t.Fatalf("unlimited published posts = %+v, %v", unlimited, err)
+	}
+	if _, err := store.ListPublished(t.Context(), -1); err == nil {
+		t.Fatal("accepted negative published post limit")
 	}
 	metadata, err := store.ListMetadata(t.Context())
 	if err != nil || len(metadata) != 4 {

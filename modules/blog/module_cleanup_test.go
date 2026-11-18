@@ -47,7 +47,7 @@ func TestBlogInitializationResourceCleanup(t *testing.T) {
 			if _, err := h.app.Accounts.GetByEmail(t.Context(), settings.AdminEmail); err != nil && !errors.Is(err, user.ErrUserNotFound) {
 				t.Fatal("failed initialization closed borrowed accounts", err)
 			}
-			if _, err := h.blog.posts.List(t.Context()); err != nil {
+			if _, err := h.blog.posts.ListPublished(t.Context(), 1); err != nil {
 				t.Fatal("failed initialization closed another module's storage", err)
 			}
 
@@ -63,7 +63,7 @@ func TestBlogInitializationResourceCleanup(t *testing.T) {
 						t.Error(err)
 					}
 				}()
-				if _, err := m.posts.List(t.Context()); err != nil {
+				if _, err := m.posts.ListPublished(t.Context(), 1); err != nil {
 					t.Fatal("retry did not open usable storage", err)
 				}
 			}()

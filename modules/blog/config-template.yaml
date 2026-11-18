@@ -12,6 +12,8 @@ inviteExpiration: 168h
 assetsDirectory: ""
 # Number of links in Recent Posts. Must be greater than zero. All posts stays complete.
 recentPostCount: 10
+# Maximum RSS entries. Defaults to 50. Use 0 for all published posts. Restart after changing.
+rssPostLimit: 50
 # Private image bundles, served through access checks. Keep outside public file roots and back up with the database.
 uploadsDirectory: uploads
 storage:

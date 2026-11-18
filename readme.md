@@ -22,10 +22,13 @@ go run ./cmd/web
 
 Use `application.New` to open configured services and initialize the modules selected by `application.Options.Modules`. Configure shared rendering in that callback. Serve `app.Handler` through `app.Run` to drain requests before closing resources. Imports register available module factories. The application selects which modules run.
 
-Start with [application setup](docs/application.md) and the blog's [application.go](cmd/web/application.go). [AGENTS.md](AGENTS.md#building-an-application-with-hyperserver) gives coding agents the same starting points and constraints.
+Start with the [quickstart](docs/quickstart.md), then use [application setup](docs/application.md) for service selection and extension. The blog's [application.go](cmd/web/application.go) shows a larger application. [AGENTS.md](AGENTS.md#building-an-application-with-hyperserver) gives coding agents the same starting points and constraints.
+
+Browser integration targets **HTMX 4**, including its request headers, attribute inheritance, and events. See [HTMX responses](pkg/components/readme.md#htmx-responses) before using another version.
 
 | Guide | Covers |
 | --- | --- |
+| [Quickstart](docs/quickstart.md) | A complete standalone application with full pages and HTMX fragments. |
 | [Application setup](docs/application.md) | Modules, service selection, dependency injection, and cleanup. |
 | [Configuration](docs/configuration.md) | YAML, environment overrides, registration, and mail. |
 | [Rendering and forms](pkg/components/readme.md) | Prepared views, full pages, fragments, validation, and notifications. |

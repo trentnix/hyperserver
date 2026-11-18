@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   try {
     await fetch("/test/history-ready", { method: "POST" });
-    if (htmx.version !== "4.0.1" || !htmx.config.history) {
+    if (htmx.version !== "4.0.2" || !htmx.config.history) {
       throw new Error("Unexpected HTMX version or history policy");
     }
     assertPage("a");

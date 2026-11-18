@@ -44,7 +44,17 @@ CI tests error responses, native forms, HTMX history, redirects, retargeting, re
 HS_TEST_FIREFOX=firefox go test -count=1 -timeout=10m ./internal/test/web -run '^TestBrowser(SiteErrors|NativeForms|ResponseDispatch|History|ErrorReporting)$'
 ```
 
-HTMX tests use the vendored asset and the layout's integrity check. Ordinary Go test runs skip browser tests unless `HS_TEST_FIREFOX` is set.
+An independent Chromium job runs the shared error, form, response, navigation, and history scenarios. Use Chrome or Chromium with an isolated temporary profile:
+
+```sh
+HS_TEST_CHROMIUM=google-chrome go test -count=1 -timeout=5m ./internal/test/web -run '^TestBrowser(SiteErrors|ResponseDispatch|History)$'
+```
+
+If both browser settings are present, the shared runner uses Firefox. Clear `HS_TEST_FIREFOX` before selecting Chromium. Blog browser scenarios remain Firefox-only.
+
+HTMX tests use the vendored asset and the layout's integrity check. Ordinary Go test runs skip browser scenarios unless a supported browser setting is present.
+
+The scheduled [browser dependency check](../.github/workflows/browser-dependencies.yml) compares the versions in the [library inventory](../modules/blog/static/lib/README.md) with upstream releases. A newer release fails the check for review. It does not update assets automatically. Update both HTMX copies, the fixture URL and integrity hash, and browser version assertions together. Run the Go suite and both browser engines after updating HTMX.
 
 ### Blog accessibility
 

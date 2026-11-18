@@ -27,6 +27,8 @@ CI does not enforce latency budgets. Use `perfcheck -timing` only on the recorde
 
 The stripped Linux/amd64 blog binary is limited to 18,700,000 bytes. With Go 1.27.4 and CGO enabled, the series implementation measures 18,426,712 bytes locally using the build command above. The allowance covers the series code, templates, and embedded assets. Runtime allocation and memory budgets remain unchanged.
 
+RSS loads and renders up to `rssPostLimit` published posts, selected in SQLite before reading bodies. The default is 50. Setting `0` includes every published post, so feed generation and memory use grow with the archive. Its cache retains one feed document. Conditional requests reuse that document until a post or profile change invalidates it or a scheduled publication expires it.
+
 ## Blog search
 
 Search scans current metadata and text. It is not a full-text index. SQLite checks publication visibility on every public search and orders metadata without sorting Markdown bodies. Results prefer title, tags, summary, then body matches.

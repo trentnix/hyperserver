@@ -44,7 +44,7 @@ func TestBlogOptionalInvitationStorage(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			if _, err := m.posts.List(t.Context()); err != nil {
+			if _, err := m.posts.ListPublished(t.Context(), 1); err != nil {
 				t.Fatal("single-user content storage is unusable", err)
 			}
 		})

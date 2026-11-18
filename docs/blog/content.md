@@ -58,7 +58,9 @@ Editors warn about unsaved changes before navigation. Browsers may suppress relo
 
 ## Reader navigation and sharing
 
-All Posts lists 30 published posts per page, grouped by month. `recentPostCount` controls Recent Posts and must be positive. Restart after changing it. RSS includes the full published feed. Post changes invalidate the feed and list caches, and scheduled publication expires them on time.
+All Posts lists 30 published posts per page, grouped by month. `recentPostCount` controls Recent Posts and must be positive.
+
+In `modules/blog/config.yaml`, `rssPostLimit` controls how many published posts RSS includes with their full content. The default is 50. Use `0` for no limit. Negative values and non-integers fail at startup. Restart after changing either setting. Older posts remain available through All Posts and their URLs. Post changes invalidate the feed and list caches, and scheduled publication expires them on time.
 
 Search at `/search` matches literal phrases in public titles, tags, summaries, and Markdown, in that rank order. It excludes drafts, future posts, hidden descendants, and history. It returns up to 50 matches with a total count.
 

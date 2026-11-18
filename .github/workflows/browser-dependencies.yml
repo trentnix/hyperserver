@@ -1,0 +1,47 @@
+name: Browser dependency updates
+on:
+  schedule:
+    - cron: '31 9 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check vendored browser versions
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+          import urllib.request
+
+          source = pathlib.Path('modules/blog/static/lib/README.md').read_text()
+          versions = dict(re.findall(r'^- (HTMX|EasyMDE) ([0-9.]+):', source, re.M))
+          packages = {'HTMX': 'htmx.org', 'EasyMDE': 'easymde'}
+          if versions.keys() != packages.keys():
+              raise SystemExit('Missing browser dependency version in the library README.')
+          updates = []
+          for name, package in packages.items():
+              request = urllib.request.Request(
+                  f'https://registry.npmjs.org/{package}',
+                  headers={'Accept': 'application/vnd.npm.install-v1+json'})
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  data = response.read(2 * 1024 * 1024 + 1)
+              if len(data) > 2 * 1024 * 1024:
+                  raise SystemExit(f'{name}: release metadata exceeds its size limit')
+              releases = [version for version in json.loads(data)['versions']
+                          if re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)]
+              # HTMX maintains multiple major releases. The latest npm tag can lag 4.x.
+              latest = max(releases, key=lambda version: tuple(map(int, version.split('.'))))
+              if latest != versions[name]:
+                  updates.append(f'{name}: vendored {versions[name]}, current release {latest}')
+          if updates:
+              raise SystemExit('\n'.join(updates))
+          print('Vendored browser dependencies match their current releases.')
+          PY

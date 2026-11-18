@@ -52,8 +52,9 @@ type ArchiveEntry struct {
 // repository describes the storage guarantees used by HTTP handlers.
 // Slugs must be unique, including under concurrent writes.
 type repository interface {
-	// List supplies complete published posts for RSS, newest first.
-	List(context.Context) ([]Post, error)
+	// ListPublished returns at most limit complete public posts, newest first.
+	// Zero means no limit. Negative limits fail. Drafts and scheduled posts are excluded.
+	ListPublished(context.Context, int) ([]Post, error)
 	// ListMetadata supplies all posts for administration, without summaries or Markdown.
 	// Drafts come first, then scheduled and published posts newest first.
 	ListMetadata(context.Context) ([]Post, error)

@@ -64,9 +64,9 @@ func (m *module) rss(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "feed.xml", time.Time{}, bytes.NewReader(document.data))
 }
 
-// buildFeed includes every published post. No request-specific account data enters the cache.
+// buildFeed applies the configured public post limit. No account data enters the cache.
 func (m *module) buildFeed(ctx context.Context, origin *url.URL) ([]byte, error) {
-	posts, err := m.posts.List(ctx)
+	posts, err := m.posts.ListPublished(ctx, m.settings.RSSPostLimit)
 	if err != nil {
 		return nil, err
 	}

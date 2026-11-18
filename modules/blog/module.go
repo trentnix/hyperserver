@@ -19,10 +19,13 @@ import (
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed templates static
 var blogModuleFS embed.FS
+
+const defaultRSSPostLimit = 50
 
 // Settings is loaded from modules/blog/config.yaml during module initialization.
 type Settings struct {
@@ -32,6 +35,9 @@ type Settings struct {
 
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
+
+	// RSSPostLimit limits feed entries. Zero includes all published posts.
+	RSSPostLimit int `yaml:"rssPostLimit"`
 
 	// UploadsDirectory holds uploaded images and files, relative to the application configuration directory.
 	UploadsDirectory string `yaml:"uploadsDirectory"`
@@ -44,6 +50,22 @@ type Settings struct {
 		Provider   string `yaml:"provider"`
 		Connection string `yaml:"connection"`
 	} `yaml:"storage"`
+}
+
+// UnmarshalYAML rejects fractional RSS limits instead of letting YAML truncate them.
+// The callback preserves the caller's strict field validation.
+func (s *Settings) UnmarshalYAML(unmarshal func(any) error) error {
+	var fields map[string]yaml.Node
+	if err := unmarshal(&fields); err != nil {
+		return err
+	}
+	if value, ok := fields["rssPostLimit"]; ok {
+		if value.ShortTag() != "!!int" {
+			return fmt.Errorf("yaml: line %d: blog.rssPostLimit must be an integer", value.Line)
+		}
+	}
+	type plain Settings
+	return unmarshal((*plain)(s))
 }
 
 // Access shares blog access with authentication and rendering.
@@ -130,7 +152,7 @@ type module struct {
 // init registers the factory without opening storage or creating runtime state.
 func init() {
 	handlers.Register(handlers.Descriptor{Name: "blog", Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}, New: func() handlers.Handler {
-		return &module{settings: &Settings{InviteExpiration: 7 * 24 * time.Hour}}
+		return &module{settings: &Settings{InviteExpiration: 7 * 24 * time.Hour, RSSPostLimit: defaultRSSPostLimit}}
 	}})
 }
 
@@ -157,6 +179,9 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	}
 	if m.settings.RecentPostCount < 1 {
 		return errors.New("blog.recentPostCount must be greater than zero")
+	}
+	if m.settings.RSSPostLimit < 0 {
+		return errors.New("blog.rssPostLimit must be zero or greater")
 	}
 	if !app.Config.Auth.Enabled || m.accounts == nil {
 		return errors.New("blog requires authentication and account storage")

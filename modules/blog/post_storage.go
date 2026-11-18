@@ -27,9 +27,15 @@ func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	return p, err
 }
 
-// List returns complete posts newest first, using insertion order to break ties.
-func (s *sqliteRepository) List(ctx context.Context) ([]Post, error) {
-	return s.listPosts(ctx, "SELECT "+postColumns+" FROM blog_post_current WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC", s.now().Unix())
+// ListPublished limits complete public posts in SQLite, using insertion order to break ties.
+func (s *sqliteRepository) ListPublished(ctx context.Context, limit int) ([]Post, error) {
+	if limit < 0 {
+		return nil, errors.New("published post limit must be zero or greater")
+	}
+	if limit == 0 {
+		limit = -1 // SQLite uses a negative LIMIT for an unlimited result.
+	}
+	return s.listPosts(ctx, "SELECT "+postColumns+" FROM blog_post_current WHERE draft=0 AND published<=? ORDER BY published DESC, rowid DESC LIMIT ?", s.now().Unix(), limit)
 }
 
 // ListMetadata returns drafts newest-created first, then posts newest-published first.

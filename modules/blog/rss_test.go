@@ -161,7 +161,9 @@ type feedRepository struct {
 	list func(context.Context) ([]Post, error)
 }
 
-func (s feedRepository) List(ctx context.Context) ([]Post, error) { return s.list(ctx) }
+func (s feedRepository) ListPublished(ctx context.Context, _ int) ([]Post, error) {
+	return s.list(ctx)
+}
 
 func (s feedRepository) NextPublication(context.Context) (time.Time, error) {
 	return time.Time{}, nil
@@ -171,7 +173,7 @@ func (s feedRepository) NextPublication(context.Context) (time.Time, error) {
 func TestRSSConditionalRequests(t *testing.T) {
 	h := newHarness(t)
 	calls := 0
-	m := &module{app: h.app.ApplicationServer, profile: h.blog.profile, series: h.blog.series, posts: feedRepository{list: func(context.Context) ([]Post, error) {
+	m := &module{app: h.app.ApplicationServer, settings: h.blog.settings, profile: h.blog.profile, series: h.blog.series, posts: feedRepository{list: func(context.Context) ([]Post, error) {
 		calls++
 		return []Post{{ID: "one", Slug: "hello", Title: "Hello", Markdown: "Body"}}, nil
 	}}}
@@ -220,7 +222,7 @@ func TestRSSOriginIsolation(t *testing.T) {
 	h.app.Config.HTTP.PublicOrigin = ""
 	calls := 0
 	store := feedRepository{list: func(context.Context) ([]Post, error) { calls++; return nil, nil }}
-	m := &module{app: h.app.ApplicationServer, profile: h.blog.profile, series: h.blog.series, posts: store}
+	m := &module{app: h.app.ApplicationServer, settings: h.blog.settings, profile: h.blog.profile, series: h.blog.series, posts: store}
 	for _, secure := range []bool{false, true, true, false} {
 		r := httptest.NewRequest(http.MethodGet, "http://untrusted.example/rss", nil)
 		scheme := "http"
@@ -236,7 +238,7 @@ func TestRSSOriginIsolation(t *testing.T) {
 	if calls != 3 {
 		t.Fatalf("origin cache builds=%d, want 3", calls)
 	}
-	other := &module{app: h.app.ApplicationServer, profile: h.blog.profile, series: h.blog.series, posts: store}
+	other := &module{app: h.app.ApplicationServer, settings: h.blog.settings, profile: h.blog.profile, series: h.blog.series, posts: store}
 	other.rss(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/rss", nil))
 	if calls != 4 {
 		t.Fatal("module instances shared cached content")
@@ -247,7 +249,7 @@ func TestRSSOriginIsolation(t *testing.T) {
 func TestRSSStorageFailureDoesNotCache(t *testing.T) {
 	h := newHarness(t)
 	calls := 0
-	m := &module{app: h.app.ApplicationServer, profile: h.blog.profile, series: h.blog.series, posts: feedRepository{list: func(context.Context) ([]Post, error) {
+	m := &module{app: h.app.ApplicationServer, settings: h.blog.settings, profile: h.blog.profile, series: h.blog.series, posts: feedRepository{list: func(context.Context) ([]Post, error) {
 		calls++
 		if calls == 1 {
 			return nil, errors.New("private storage failure")
@@ -322,6 +324,77 @@ func TestRSSPostChanges(t *testing.T) {
 	}
 	requireStatus(t, h.request(http.MethodPost, "/post/delete/"+id, nil, false), http.StatusSeeOther)
 	read(1, editedTag)
+}
+
+// TestRSSPostLimit checks configured limits, unlimited feeds, and replacement of deleted entries.
+func TestRSSPostLimit(t *testing.T) {
+	h := newHarness(t)
+	store := h.blog.posts.(*sqliteRepository)
+	tx, err := store.db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	now := time.Now().UTC()
+	for index := range defaultRSSPostLimit + 2 {
+		p := Post{
+			ID: fmt.Sprintf("feed-%03d", index), Slug: fmt.Sprintf("feed-%03d", index),
+			Title: fmt.Sprintf("Post %d", index), Markdown: "Feed body",
+			Published: now.Add(time.Duration(index-defaultRSSPostLimit-2) * time.Hour),
+		}
+		if err := seedCurrentPost(t.Context(), tx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []Post{
+		{ID: "feed-draft", Slug: "feed-draft", Title: "Draft", Markdown: "Private body", Draft: true, Published: now},
+		{ID: "feed-scheduled", Slug: "feed-scheduled", Title: "Scheduled", Markdown: "Future body", Published: now.Add(time.Hour)},
+	} {
+		if err := seedCurrentPost(t.Context(), tx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	read := func(first, count int) string {
+		t.Helper()
+		response := h.request(http.MethodGet, "/rss", nil, false)
+		requireStatus(t, response, http.StatusOK)
+		var result feed
+		if err := xml.Unmarshal(response.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if len(result.Channel.Items) != count {
+			t.Fatalf("feed items=%d, want %d", len(result.Channel.Items), count)
+		}
+		for index, item := range result.Channel.Items {
+			if item.Title != fmt.Sprintf("Post %d", first-index) {
+				t.Fatalf("feed item %d=%s", index, item.Title)
+			}
+		}
+		return response.Header().Get("ETag")
+	}
+	for _, limit := range []int{defaultRSSPostLimit, 3, 0} {
+		h.blog.settings.RSSPostLimit = limit
+		h.blog.invalidatePosts()
+		count := limit
+		if count == 0 {
+			count = defaultRSSPostLimit + 2
+		}
+		read(defaultRSSPostLimit+1, count)
+	}
+	h.blog.settings.RSSPostLimit = defaultRSSPostLimit
+	h.blog.invalidatePosts()
+	previous := read(defaultRSSPostLimit+1, defaultRSSPostLimit)
+	requireStatus(t, h.request(http.MethodGet, "/post/s/feed-000", nil, false), http.StatusOK)
+	if err := store.Delete(t.Context(), fmt.Sprintf("feed-%03d", defaultRSSPostLimit+1)); err != nil {
+		t.Fatal(err)
+	}
+	h.blog.invalidatePosts()
+	if tag := read(defaultRSSPostLimit, defaultRSSPostLimit); tag == previous {
+		t.Fatal("feed did not change after deleting the newest post")
+	}
 }
 
 // TestFeedHTML keeps feed references equivalent to links on the post page.
