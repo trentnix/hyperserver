@@ -6,13 +6,13 @@ Use Go 1.27.4. This example also builds with `CGO_ENABLED=0`. Applications that 
 
 ## Create the application
 
-Create a separate directory. Replace `FRAMEWORK_REVISION` with a tested framework commit or tag that supports explicit storage provider catalogs:
+Create a separate directory and pin the tested framework revision:
 
 ```sh
 mkdir hello-hyperserver
 cd hello-hyperserver
 go mod init example.com/hello
-go get github.com/trentnix/hyperserver@FRAMEWORK_REVISION
+go get github.com/trentnix/hyperserver@6e3e875
 mkdir -p templates static
 curl --fail --location https://cdn.jsdelivr.net/npm/htmx.org@4.0.2/dist/htmx.min.js --output static/htmx.min.js
 ```
