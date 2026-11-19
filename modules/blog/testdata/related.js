@@ -44,6 +44,10 @@
     const rows = () => [...section.querySelector('[data-post-picker-selections]').children];
     const search = section.querySelector('[data-post-picker-search]');
     const status = section.querySelector('[data-post-picker-status]');
+    const heading = section.querySelector('[data-post-picker-title]');
+    const labelRect = heading.labels[0].getBoundingClientRect();
+    const headingRect = heading.getBoundingClientRect();
+    assert(labelRect.bottom < headingRect.top && labelRect.left === headingRect.left && headingRect.width === search.getBoundingClientRect().width, 'The heading label must sit above an input aligned with the search field.');
     assert(results.hidden && results.children.length === 0 && search.getAttribute('aria-expanded') === 'false', 'Adding the component must not preload a list of post choices.');
     assert(section.querySelector('.post-picker-selected-panel').hidden, 'An empty component must not show an empty selected-post panel.');
     assert(!section.querySelector('[data-component-unsaved]').hidden, 'A new component must show unsaved changes.');

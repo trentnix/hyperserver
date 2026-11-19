@@ -11,7 +11,7 @@
 {{ end }}
 
 {{ define "blog.markdownFields" }}
-  <label id="markdown-label" for="post-content">Markdown</label><textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help" required>{{ .BodyMarkdown }}</textarea>
+  <label id="markdown-label" for="post-content">Content</label><textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help" required>{{ .BodyMarkdown }}</textarea>
   {{ template "blog.markdownHelp" . }}
 {{ end }}
 
@@ -20,7 +20,7 @@
 {{ end }}
 
 {{ define "blog.markdownHelp" }}
-  <small id="markdown-help" class="form-hint">Up to 256 KiB of Markdown. Editor uploads have the same image limits as preview images.</small>
+  <small id="markdown-help" class="form-hint">Supports Markdown up to 256 KiB. Image uploads use the same limits as preview images.</small>
 {{ end }}
 
 {{ define "blog.draftRecovery" }}

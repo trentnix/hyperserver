@@ -200,7 +200,10 @@ func TestEditorPages(t *testing.T) {
 				response := h.request("GET", path, nil, hx)
 				requireStatus(t, response, http.StatusOK)
 				body := activeMarkup(response.Body.String())
-				for _, want := range []string{`class="info-page editor-panel"`, `data-draft-owner=`, `class="form-actions"`, `href="` + manager + `"`} {
+				for _, want := range []string{
+					`class="info-page editor-panel"`, `data-draft-owner=`, `class="form-actions"`, `href="` + manager + `"`,
+					`<label id="markdown-label" for="post-content">Content</label>`,
+				} {
 					if !strings.Contains(body, want) {
 						t.Fatalf("%s missing %s", path, want)
 					}
@@ -210,7 +213,7 @@ func TestEditorPages(t *testing.T) {
 				}
 				for _, field := range []struct{ id, help, text string }{
 					{kind + "-slug", "slug-help", "Custom slugs use lowercase letters"},
-					{"post-content", "markdown-help", "Up to 256 KiB of Markdown"},
+					{"post-content", "markdown-help", "Supports Markdown up to 256 KiB"},
 				} {
 					control := regexp.MustCompile(`<(?:input|textarea)[^>]*id="` + field.id + `"[^>]*>`).FindString(body)
 					help := regexp.MustCompile(`<small id="` + field.help + `"[^>]*>[^<]*</small>`).FindString(body)

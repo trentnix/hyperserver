@@ -14,6 +14,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
 | [Video](#video) | A YouTube or Vimeo player. |
+| [Embed](#embed) | An interactive page or widget from an approved site. |
 | [Social media](social-posts.md) | A public post, with its platform detected from the URL. |
 | [Related posts](#related-posts) | An ordered list of links shown only on this post. |
 
@@ -94,6 +95,12 @@ YouTube accepts watch, `youtu.be`, Shorts, live, and embed links. Vimeo accepts 
 Readers see the provider's preview and controls. Autoplay is disabled. The iframe loads near the viewport and contacts the provider before Play. It also works without the blog's JavaScript. Provider restrictions can prevent embedding. Saving does not check availability.
 
 One video is allowed per post. Titles allow 240 characters, captions 1,000, and URLs 2,048 bytes. Text is fetched only at the author's request and saved with the post. Feeds use a viewing link with authored details. Search includes the title and caption. Video files remain with the provider.
+
+## Embed
+
+Paste the provider’s HTTPS embed URL and enter a title that describes the content. You can add up to 2,000 characters of Markdown above the embed. Choose **Preview embed** to check the URL before saving. Readers can open the source in a new tab. Link-only views, feeds, and revision previews show the description and link.
+
+Set `embedOrigins` in `modules/blog/config.yaml` to a list of exact HTTPS origins, such as `https://charts.example.com`, then restart the blog. The list starts empty. A URL whose origin is absent from the list appears as a link. Providers must permit framing and work within a sandbox.
 
 ## Related posts
 

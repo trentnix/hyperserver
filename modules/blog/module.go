@@ -36,6 +36,9 @@ type Settings struct {
 	// TimeZone is the IANA time zone for author-entered times. It defaults to UTC.
 	TimeZone string `yaml:"timeZone"`
 
+	// EmbedOrigins lists HTTPS origins that the Embed component can frame.
+	EmbedOrigins []string `yaml:"embedOrigins"`
+
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
 
@@ -115,6 +118,7 @@ type module struct {
 	site             *Site
 	settings         *Settings
 	location         *time.Location
+	embedOrigins     embedOrigins
 	access           *Access
 	accounts         user.AccountRepository
 	administration   user.AdministrationRepository
@@ -194,6 +198,10 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 			return fmt.Errorf("blog.timeZone must name an IANA time zone: %w", err)
 		}
 	}
+	m.embedOrigins, err = parseEmbedOrigins(m.settings.EmbedOrigins)
+	if err != nil {
+		return err
+	}
 	if !app.Config.Auth.Enabled || m.accounts == nil {
 		return errors.New("blog requires authentication and account storage")
 	}
@@ -216,6 +224,7 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	m.views = make(map[string]*content.View)
 	for _, name := range []string{
 		"mastodonEmbed",
+		"embedFrame",
 		"users",
 		"userEditor",
 		"userRemove",

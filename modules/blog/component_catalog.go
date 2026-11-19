@@ -44,6 +44,7 @@ var postComponentCatalog = componentCatalog{
 	pdfDefinition(),
 	linkDefinition(),
 	videoDefinition(),
+	embedDefinition(),
 	audioDefinition(),
 	eventDefinition(),
 	socialPostDefinition(),

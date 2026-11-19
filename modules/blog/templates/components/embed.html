@@ -1,0 +1,33 @@
+{{ define "blog.embedEditor" }}
+  <section class="embed-editor" data-embed-editor data-post-component="embed" aria-labelledby="embed-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="embed-editor-title">Embed</h2>{{ template "blog.componentStatus" }}</div>{{ template "blog.componentActions" "embed" }}</div>
+    <label for="post-embed" data-embed-source-label>Embed (JSON)</label>
+    <textarea id="post-embed" name="embed" rows="3">{{ .Source }}</textarea>
+    <fieldset data-component-fields hidden disabled>
+      <label for="embed-url">HTTPS embed URL</label>
+      <input id="embed-url" type="url" maxlength="2048" placeholder="https://" required>
+      <label for="embed-title">Title</label>
+      <input id="embed-title" maxlength="240" required>
+      <div class="embed-editor-description-label">
+        <label for="embed-description">Description (optional)</label>
+        <span class="form-hint" id="embed-description-help">Markdown supported</span>
+      </div>
+      <textarea id="embed-description" rows="2" maxlength="2000" aria-describedby="embed-description-help"></textarea>
+      <button type="button" class="button-secondary" data-embed-preview-button aria-controls="embed-editor-preview" aria-expanded="false">Preview embed</button>
+      <div id="embed-editor-preview" hidden>
+        <p class="form-hint" data-embed-preview-status role="status"></p>
+        <div class="web-embed-frame" hidden><iframe title="Embed preview" referrerpolicy="no-referrer"></iframe></div>
+        <a data-embed-preview-link target="_blank" rel="noopener noreferrer" hx-boost="false" hidden>Open embed (new tab)</a>
+      </div>
+    </fieldset>
+  </section>
+{{ end }}
+
+{{ define "blog.embedIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18m-11 3-2 2 2 2m4-4 2 2-2 2"/></svg>{{ end }}
+
+{{ define "blog.embedFrame" }}<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ .Data.Title }}</title><link rel="stylesheet" href="/assets/css/embed-frame.css"></head>
+<body><iframe src="{{ .Data.URL }}" title="{{ .Data.Title }}" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe></body>
+</html>
+{{ end }}
