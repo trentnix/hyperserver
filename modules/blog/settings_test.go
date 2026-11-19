@@ -67,3 +67,20 @@ func TestRSSPostLimitSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestInvalidSiteTimeZone(t *testing.T) {
+	for _, name := range []string{"Local", "America/Unknown"} {
+		t.Run(name, func(t *testing.T) {
+			site := &Site{}
+			descriptor, err := site.Configure(assemblyApplication())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := descriptor.New().(*module)
+			m.settings.AdminEmail, m.settings.RecentPostCount, m.settings.TimeZone = "admin@example.com", 10, name
+			if err := m.Init(t.Context(), nil); err == nil || !strings.Contains(err.Error(), "blog.timeZone") {
+				t.Fatalf("expected startup to reject %q, got %v", name, err)
+			}
+		})
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,6 +52,102 @@ func TestPublicationTimeInput(t *testing.T) {
 				t.Fatalf("unexpected schedule: %q, %+v", message, post)
 			}
 		})
+	}
+}
+
+func TestSiteTimeZone(t *testing.T) {
+	cfg := harnessConfig(t, 10)
+	path := filepath.Join(cfg.App.WorkingDirectory, "modules", "blog", "config.yaml")
+	settings, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(settings, "timeZone: America/Chicago\n"...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	h := startHarness(t, cfg)
+	if err := h.blog.access.setup.finish(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	advance := publicationClock(h, time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC))
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+
+	values := url.Values{"title": {"Evening post"}, "content": {"Body"}, "published": {"scheduled"}, "publishDate": {"2027-01-31"}, "publishTime": {"8:15 PM"}, "publishTimeZone": {"America/Chicago"}}
+	requireStatus(t, h.request("POST", "/post", values, false), http.StatusSeeOther)
+	post, err := h.blog.posts.GetBySlug(t.Context(), "evening-post", true)
+	if err != nil || post.Published.Format(time.RFC3339) != "2027-02-01T02:15:00Z" {
+		t.Fatalf("expected a Chicago evening stored as a UTC instant: %v, %v", post.Published, err)
+	}
+	for path, fragments := range map[string][]string{
+		"/post/update/" + post.ID:  {`data-time-zone="America/Chicago"`, `name="publishTimeZone" value="America/Chicago"`, `value="2027-01-31"`, `value="8:15 PM"`},
+		"/post/s/evening-post":     {"Scheduled for Jan 31, 2027 at 8:15 PM CST"},
+		"/post/manage":             {"Scheduled Jan 31, 2027 at 8:15 PM CST"},
+		"/history/post/" + post.ID: {"Scheduled for Jan 31, 2027 at 8:15 PM CST"},
+	} {
+		page := h.request("GET", path, nil, false)
+		requireStatus(t, page, http.StatusOK)
+		for _, fragment := range fragments {
+			if !strings.Contains(page.Body.String(), fragment) {
+				t.Fatalf("%s: missing %q", path, fragment)
+			}
+		}
+	}
+	advance(post.Published)
+	page := h.request("GET", "/post/s/evening-post", nil, false)
+	requireStatus(t, page, http.StatusOK)
+	if !strings.Contains(page.Body.String(), `<time datetime="2027-01-31">January 31, 2027</time>`) {
+		t.Fatal("the published date must use the same calendar day as the schedule")
+	}
+	archive := h.request("GET", "/posts", nil, false)
+	requireStatus(t, archive, http.StatusOK)
+	if !strings.Contains(archive.Body.String(), "January 2027") {
+		t.Fatal("the archive must group the post by the site's publication month")
+	}
+}
+
+func TestPublicationTimeZoneTransitions(t *testing.T) {
+	zone, err := loadTimeZone("America/Chicago")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := module{location: zone, now: func() time.Time { return time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC) }}
+	for _, tc := range []struct {
+		name, day, clock, zone, want, message string
+	}{
+		{name: "daylight offset", day: "2027-07-01", clock: "9:15 AM", zone: "America/Chicago", want: "2027-07-01T14:15:00Z"},
+		{name: "spring gap", day: "2027-03-14", clock: "2:30 AM", zone: "America/Chicago", message: "skipped"},
+		{name: "fall overlap", day: "2027-11-07", clock: "1:30 AM", zone: "America/Chicago", message: "occurs twice"},
+		{name: "site default", day: "2027-01-12", clock: "9:30 AM", want: "2027-01-12T15:30:00Z"},
+		{name: "former zone", day: "2027-11-07", clock: "7:30 AM", zone: "UTC", want: "2027-11-07T07:30:00Z"},
+		{name: "invalid zone", day: "2027-11-07", clock: "7:30 AM", zone: "Local", message: "time zone is invalid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest("POST", "/post", nil)
+			r.PostForm = url.Values{"published": {"scheduled"}, "publishDate": {tc.day}, "publishTime": {tc.clock}}
+			if tc.zone != "" {
+				r.PostForm.Set("publishTimeZone", tc.zone)
+			}
+			post := Post{Draft: true}
+			message := m.readPublication(r, &post)
+			if tc.message != "" {
+				if !strings.Contains(message, tc.message) || !post.Draft || !post.Published.IsZero() {
+					t.Fatalf("expected %q and an unchanged draft, got %q and %+v", tc.message, message, post)
+				}
+				return
+			}
+			if message != "" || post.Draft || post.Published.Format(time.RFC3339) != tc.want {
+				t.Fatalf("expected %s, got %s with %q", tc.want, post.Published, message)
+			}
+		})
+	}
+	// A UTC schedule made before configuring the site zone can fall inside a
+	// repeated hour. The editor must be able to resubmit its exact instant.
+	at := time.Date(2027, 11, 7, 7, 30, 0, 0, time.UTC)
+	editor := m.postEditorData(Post{Published: at})
+	if editor.TimeZone != "America/Chicago" || editor.ScheduleZone != "UTC" || editor.ScheduleTime != "7:30 AM" {
+		t.Fatalf("editor did not preserve the existing schedule: %+v", editor)
 	}
 }
 

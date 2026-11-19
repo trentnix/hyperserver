@@ -10,6 +10,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | [File downloads](#file-downloads) | Up to 20 PDF, ZIP, UTF-8 text, or MP3 attachments. |
 | [PDF preview](#pdf-preview) | One PDF in the browser's viewer or a page-by-page presentation. |
 | [Audio](#audio) | One MP3 with an optional transcript. |
+| [Event](#event) | An all-day or timed event with an optional location and details link. |
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
 | [Video](#video) | A YouTube or Vimeo player. |
@@ -51,6 +52,16 @@ Replacing the recording preserves its details and download setting. Titles allow
 Validation requires two complete MPEG Layer III frames after an optional ID3v2 tag. Standard constant and variable bitrates work. Free-format bitrates do not. The application does not transcode audio.
 
 Feeds provide a listening link. Search includes authored details and transcript text.
+
+## Event
+
+Enter a name and start date. Select **All day** to disable the times and time zone. Add an end date for an event that spans several days. Readers see both the first and last days.
+
+For a timed event, enter a start time. New events use the [site time zone](content.md#posts) by default. To change the event's time zone, search by city or region. An end time without an end date uses the start date. If the event ends on another day, enter both the end date and end time. If a clock change repeats a time, enter it in UTC.
+
+Timed events show their UTC offset. If a time-zone rule change makes a saved time invalid, the card shows the entered local time and zone.
+
+You can add a place or describe where to join online. For a physical venue, paste a map share link in **Map link** to show **View map** below the location. Use **Event website** for more information or registration. You can upload an image or choose one from the library. If the image conveys information, add an image description. Event dates are independent of the post's publication date.
 
 ## Image comparison
 

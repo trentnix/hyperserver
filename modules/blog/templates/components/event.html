@@ -1,0 +1,49 @@
+{{ define "blog.eventEditor" }}
+  <section class="event-editor" data-event-editor data-post-component="event" aria-labelledby="event-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="event-editor-title">Event</h2>{{ template "blog.componentStatus" }}</div>{{ template "blog.componentActions" "event" }}</div>
+    <label for="post-event" data-event-source-label>Event (JSON)</label>
+    <textarea id="post-event" name="event" rows="3">{{ .Source }}</textarea>
+    <fieldset data-component-fields hidden disabled>
+      <label for="event-title">Name</label><input id="event-title" data-event-field="title" maxlength="240" required>
+      <div class="event-date-fields" role="group" aria-label="Dates and times">
+        <div><label for="event-start-date">Start date</label><input id="event-start-date" data-event-field="startDate" type="date" required></div>
+        <div><label for="event-end-date">End date (optional)</label><input id="event-end-date" data-event-field="endDate" type="date"></div>
+        <label class="event-all-day file-download-option"><input id="event-all-day" type="checkbox"> All day</label>
+        <div data-event-timed><label for="event-start-time">Start time</label><input id="event-start-time" data-event-field="startTime" type="time" required></div>
+        <div data-event-timed><label for="event-end-time">End time<span data-requirement> (optional)</span></label><input id="event-end-time" data-event-field="endTime" type="time"></div>
+        <div class="event-zone">
+          <input id="event-zone" data-event-field="timeZone" type="hidden">
+          <div class="event-zone-summary">
+            <span>Time zone: <strong id="event-zone-name"></strong></span>
+            <button id="event-zone-change" class="text-button" type="button" aria-expanded="false" aria-controls="event-zone-picker" aria-label="Change time zone">Change</button>
+          </div>
+          <div id="event-zone-picker" class="event-zone-picker" hidden>
+            <input id="event-zone-search" type="search" aria-label="Search time zones" placeholder="Search by city or region" autocomplete="off" maxlength="80">
+            <p class="form-hint" data-event-zone-empty role="status" hidden>No matching time zones.</p>
+            <ul data-event-zone-results aria-label="Matching time zones" hidden></ul>
+          </div>
+        </div>
+      </div>
+      <label for="event-location">Location<span data-requirement> (optional)</span></label><input id="event-location" data-event-field="location" maxlength="240">
+      <label for="event-map-url">Map link (optional)</label><input id="event-map-url" data-event-field="mapURL" type="url" maxlength="2048" placeholder="Paste a map share link">
+      <label for="event-url">Event website (optional)</label><input id="event-url" data-event-field="url" type="url" maxlength="2048">
+      <fieldset class="event-image-picker" data-image-picker data-image-prefix="/images/">
+        <legend>Event image (optional)</legend>
+        <input type="hidden" data-image-value data-event-field="imageID">
+        <img data-image-preview alt="Selected event image" hidden>
+        <div class="image-upload-controls" hidden>
+          <button type="button" class="button-secondary" data-image-upload>Upload</button>
+          {{ if not .NoLibrary }}<button type="button" class="button-secondary" data-media-browse>Library</button>{{ end }}
+          <button type="button" class="text-button" data-image-reset hidden>Clear</button>
+          <input type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload event image" hidden>
+        </div>
+        <div data-event-image-description hidden>
+          <label for="event-image-alt">Image description (optional)</label><input id="event-image-alt" data-event-field="imageAlt" maxlength="500">
+        </div>
+        <p data-image-status role="status"></p>
+      </fieldset>
+    </fieldset>
+  </section>
+{{ end }}
+
+{{ define "blog.eventIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-14 5h3m4 0h3"/></svg>{{ end }}

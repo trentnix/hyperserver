@@ -45,6 +45,7 @@ var postComponentCatalog = componentCatalog{
 	linkDefinition(),
 	videoDefinition(),
 	audioDefinition(),
+	eventDefinition(),
 	socialPostDefinition(),
 	legacySocialPostDefinition(xProvider()),
 	legacySocialPostDefinition(blueskyProvider()),

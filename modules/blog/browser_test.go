@@ -302,7 +302,7 @@ func TestBrowserPostPublication(t *testing.T) {
 	}
 }
 
-// TestBrowserScheduling checks UTC scheduling, editor visibility, and cancellation.
+// TestBrowserScheduling checks scheduling in the site time zone, recovery, and cancellation.
 func TestBrowserScheduling(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
 	if browser == "" {
@@ -313,6 +313,15 @@ func TestBrowserScheduling(t *testing.T) {
 			testBrowser(t, browser, width, browserScenario{
 				scriptFile: "testdata/scheduling.js",
 				startPath:  "/login",
+				setup: func(t *testing.T) *harness {
+					h := registeredBrowserHarness(t)
+					var err error
+					h.blog.location, err = loadTimeZone("America/Chicago")
+					if err != nil {
+						t.Fatal(err)
+					}
+					return h
+				},
 				// Expose clipped time options at the editor's scroll limit.
 				height: 600,
 			})

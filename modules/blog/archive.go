@@ -38,7 +38,7 @@ func (m *module) archive(w http.ResponseWriter, r *http.Request) {
 		data.Next = archiveURL(number + 1)
 		posts = posts[:archivePageSize]
 	}
-	data.Months = groupArchive(posts)
+	data.Months = groupArchive(posts, m.siteTimeZone())
 
 	page := m.views["archive"].Content(r, data)
 	page.Title = "All Posts"
@@ -101,9 +101,10 @@ type archiveMonth struct {
 
 // groupArchive groups adjacent entries by publication month, preserving order.
 // Posts must already be sorted by publication time.
-func groupArchive(posts []ArchiveEntry) []archiveMonth {
+func groupArchive(posts []ArchiveEntry, zone *time.Location) []archiveMonth {
 	var months []archiveMonth
 	for _, post := range posts {
+		post.Published = post.Published.In(zone)
 		name := post.Published.Format("January 2006")
 		if len(months) == 0 || months[len(months)-1].Name != name {
 			months = append(months, archiveMonth{Name: name})

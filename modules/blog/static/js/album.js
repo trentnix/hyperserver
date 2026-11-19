@@ -4,17 +4,20 @@ import {enableAlbumGestures} from './album-gestures.js';
 // focus. The viewer owns presentation only, not album content or persistence.
 (() => {
   let active;
-  let activeAlbum;
+  let activeSource;
   document.addEventListener('click', event => {
-    const opener = event.target.closest('[data-album-photo]');
+    const opener = event.target.closest('[data-album-photo], [data-view-image]');
     if (!opener || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    const album = opener.closest('.photo-album, [data-album-editor]');
-    if (!album || typeof HTMLDialogElement === 'undefined') return;
+    const standalone = opener.hasAttribute('data-view-image');
+    const source = standalone ? opener : opener.closest('.photo-album, [data-album-editor]');
+    const template = document.querySelector('#album-viewer-template');
+    if (!source || !template || typeof HTMLDialogElement === 'undefined') return;
     event.preventDefault();
     active?.close();
     const scroll = {x: scrollX, y: scrollY};
-    const photos = [...album.querySelectorAll('[data-album-photo]')];
+    const photos = standalone ? [opener] : [...source.querySelectorAll('[data-album-photo]')];
     let index = photos.indexOf(opener);
+    const photoCount = () => standalone ? '' : `Photo ${index + 1} of ${photos.length}`;
     let captionsVisible = true;
     let captionExpanded = false;
     let thumbnailsVisible = !matchMedia('(max-width: 600px)').matches;
@@ -23,17 +26,33 @@ import {enableAlbumGestures} from './album-gestures.js';
     let neighbors = [];
     let loading = true;
     let loadingTimer;
-    const dialog = document.querySelector('#album-viewer-template').content.firstElementChild.cloneNode(true);
-    const count = dialog.querySelector('header p');
+    const dialog = template.content.firstElementChild.cloneNode(true);
+    const header = dialog.querySelector('header');
+    const count = header.querySelector('p');
     const zoom = dialog.querySelector('[data-album-zoom]');
     const captionToggle = dialog.querySelector('[data-album-captions]');
     const thumbnailsToggle = dialog.querySelector('[data-album-thumbnails]');
     thumbnailsToggle.hidden = photos.length < 2;
-    dialog.querySelector('[data-album-close]').addEventListener('click', () => dialog.close());
+    const close = dialog.querySelector('[data-album-close]');
+    close.addEventListener('click', () => dialog.close());
     function label(button, text) { button.setAttribute('aria-label', text); button.title = text; }
+    const singleImage = photos.length === 1;
+    if (singleImage) {
+      dialog.classList.add('album-viewer-single');
+      dialog.append(header.querySelector('.album-viewer-tools'));
+      header.hidden = true;
+      captionToggle.hidden = !opener.dataset.caption;
+      const icon = close.querySelector('path');
+      icon.setAttribute('d', icon.dataset.collapsePath);
+      label(close, 'Collapse image');
+    }
+    if (standalone) {
+      dialog.setAttribute('aria-label', 'Image viewer');
+    }
     const figure = dialog.querySelector('figure');
     figure.classList.toggle('album-viewer-with-captions', photos.some(photo => photo.dataset.caption));
     const frame = dialog.querySelector('.album-viewer-image-frame');
+    frame.toggleAttribute('data-dismiss-on-tap', singleImage);
     const image = dialog.querySelector('[data-album-image]');
     const caption = dialog.querySelector('figcaption');
     const captionText = caption.querySelector('.album-viewer-caption-text');
@@ -83,7 +102,7 @@ import {enableAlbumGestures} from './album-gestures.js';
     captionLayout.observe(frame);
     image.addEventListener('load', positionCaption);
     const navigation = dialog.querySelector('.album-viewer-thumbnails');
-    const thumbnails = photos.map((photo, position) => {
+    const thumbnails = (photos.length > 1 ? photos : []).map((photo, position) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.albumThumbnail = '';
@@ -106,18 +125,18 @@ import {enableAlbumGestures} from './album-gestures.js';
       caption.hidden = image.hidden || !captionsVisible || !captionText.textContent;
       captionToggle.disabled = image.hidden || !captionText.textContent;
       captionToggle.setAttribute('aria-pressed', String(captionsVisible && Boolean(captionText.textContent)));
-      label(captionToggle, !captionText.textContent ? 'No caption for this photo' : captionsVisible ? 'Hide captions' : 'Show captions');
+      captionToggle.title = !captionText.textContent ? 'No caption for this photo' : captionsVisible ? 'Hide captions' : 'Show captions';
       navigation.hidden = !thumbnailsVisible || photos.length < 2;
       thumbnailsToggle.setAttribute('aria-pressed', String(thumbnailsVisible));
-      label(thumbnailsToggle, thumbnailsVisible ? 'Hide thumbnails' : 'Show thumbnails');
+      thumbnailsToggle.title = thumbnailsVisible ? 'Hide thumbnails' : 'Show thumbnails';
       scrollThumbnail();
       positionCaption();
     }
     const gestures = enableAlbumGestures(frame, image, {
       enabled: () => !loading,
-      navigate: direction => show(index + direction),
+      navigate: direction => { if (photos.length > 1) show(index + direction); },
+      dismiss: singleImage ? () => dialog.close() : undefined,
       changed: scale => {
-        zoom.setAttribute('aria-pressed', String(scale > 1));
         label(zoom, scale > 1 ? 'Reset zoom' : 'Zoom in');
         positionCaption();
       }
@@ -137,7 +156,7 @@ import {enableAlbumGestures} from './album-gestures.js';
       image.hidden = true;
       caption.hidden = true;
       captionToggle.disabled = true;
-      count.textContent = `Photo ${index + 1} of ${photos.length}`;
+      count.textContent = photoCount();
       thumbnails.forEach((button, position) => {
         button.tabIndex = position === index ? 0 : -1;
         if (position === index) button.setAttribute('aria-current', 'true');
@@ -160,7 +179,7 @@ import {enableAlbumGestures} from './album-gestures.js';
       index = (next + photos.length) % photos.length;
       const selected = photos[index];
       if (image.hidden) {
-        count.textContent = `Photo ${index + 1} of ${photos.length}`;
+        count.textContent = photoCount();
         caption.hidden = true;
         captionToggle.disabled = true;
       }
@@ -178,13 +197,13 @@ import {enableAlbumGestures} from './album-gestures.js';
       pending.onload = () => {
         if (currentRequest !== request || !dialog.open) return;
         gestures.reset();
-        image.alt = selected.dataset.caption || `Photo ${index + 1}`;
+        image.alt = standalone ? selected.querySelector('img').alt || 'Image' : selected.dataset.caption || `Photo ${index + 1}`;
         image.src = selected.href;
         image.hidden = false;
         setCaptionExpanded(false);
-        captionText.textContent = selected.dataset.caption;
+        captionText.textContent = selected.dataset.caption || '';
         captionText.scrollTop = 0;
-        count.textContent = `Photo ${index + 1} of ${photos.length}`;
+        count.textContent = photoCount();
         thumbnails.forEach((button, position) => {
           button.tabIndex = position === index ? 0 : -1;
           if (position === index) button.setAttribute('aria-current', 'true');
@@ -215,25 +234,27 @@ import {enableAlbumGestures} from './album-gestures.js';
       if (event.key === 'Escape') {
         event.preventDefault();
         if (captionExpanded) setCaptionExpanded(false, true);
-        else if (gestures.scale > 1) gestures.reset();
+        else if (!singleImage && gestures.scale > 1) gestures.reset();
         else dialog.close();
         return;
       }
+      if (caption.contains(event.target)) return;
       if (['+', '=', '-', '0'].includes(event.key) && !loading && !image.hidden) {
         event.preventDefault();
         gestures.zoom(event.key === '0' ? 1 : gestures.scale * (event.key === '-' ? 1 / 1.5 : 1.5));
         return;
       }
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-      if (event.target.closest('[data-album-thumbnail]') && ['ArrowUp', 'ArrowDown'].includes(event.key)) return;
-      if (gestures.scale === 1 && ['ArrowUp', 'ArrowDown'].includes(event.key)) return;
-      if (event.target.closest('figcaption') && ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      if (gestures.scale > 1 && event.key.startsWith('Arrow') && !event.target.closest('[data-album-thumbnail]')) {
+      const arrow = event.key.startsWith('Arrow');
+      const vertical = event.key === 'ArrowUp' || event.key === 'ArrowDown';
+      const thumbnail = event.target.closest('[data-album-thumbnail]');
+      if (gestures.scale > 1 && arrow && !thumbnail) {
+        event.preventDefault();
         gestures.pan(event.key === 'ArrowLeft' ? 60 : event.key === 'ArrowRight' ? -60 : 0, event.key === 'ArrowUp' ? 60 : event.key === 'ArrowDown' ? -60 : 0);
-      } else {
+      } else if (!singleImage && !vertical) {
+        event.preventDefault();
         show(event.key === 'Home' ? 0 : event.key === 'End' ? photos.length - 1 : index + (event.key === 'ArrowRight' ? 1 : -1));
-        if (event.target.closest('[data-album-thumbnail]')) thumbnails[index].focus({preventScroll: true});
+        if (thumbnail) thumbnails[index].focus({preventScroll: true});
       }
     });
     dialog.addEventListener('cancel', event => { event.preventDefault(); dialog.close(); });
@@ -247,7 +268,7 @@ import {enableAlbumGestures} from './album-gestures.js';
       dialog.remove();
       if (active === dialog) {
         active = null;
-        activeAlbum = null;
+        activeSource = null;
         if (opener.isConnected) {
           opener.focus({preventScroll: true});
           window.scrollTo(scroll.x, scroll.y);
@@ -256,7 +277,7 @@ import {enableAlbumGestures} from './album-gestures.js';
     }, {once: true});
     document.body.append(dialog);
     active = dialog;
-    activeAlbum = album;
+    activeSource = source;
     dialog.showModal();
     presentation();
     show(index);
@@ -266,12 +287,12 @@ import {enableAlbumGestures} from './album-gestures.js';
     return typeof candidate === 'string' ? document.querySelector(candidate) : candidate;
   }
   document.addEventListener('htmx:before:cleanup', event => {
-    if (active && (event.target === activeAlbum || event.target.contains?.(activeAlbum))) active.close();
+    if (active && event.target.contains?.(activeSource)) active.close();
   });
   document.addEventListener('htmx:before:swap', event => {
-    if (active && navigationTarget(event)?.contains(activeAlbum)) active.close();
+    if (active && navigationTarget(event)?.contains(activeSource)) active.close();
   });
   document.addEventListener('htmx:after:swap', () => {
-    if (active && !activeAlbum.isConnected) active.close();
+    if (active && !activeSource.isConnected) active.close();
   });
 })();

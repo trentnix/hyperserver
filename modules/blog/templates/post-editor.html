@@ -1,6 +1,6 @@
 {{ define "blog.editor" }}
 <section class="info-page editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
-<form id="post-form" data-media-library="{{ if .Data.NoLibrary }}false{{ else }}true{{ end }}" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+<form id="post-form" data-time-zone="{{ .Data.TimeZone }}" data-media-library="{{ if .Data.NoLibrary }}false{{ else }}true{{ end }}" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   <input type="hidden" name="version" value="{{ .Data.Version }}">
   <input type="hidden" name="returnTo" value="{{ .Data.ReturnURL }}">
   {{ template "blog.revisionNotice" . }}
@@ -32,15 +32,16 @@
   </div>
   <div class="publication-footer">
   {{ if or .Data.CanSchedule (eq .Data.Publication "scheduled") }}<div class="post-schedule" data-publication-time>
+    <input type="hidden" name="publishTimeZone" value="{{ .Data.ScheduleZone }}">
     <div class="post-schedule-fields">
       <div><label for="post-publish-date">Date</label><input id="post-publish-date" name="publishDate" type="date" value="{{ .Data.ScheduleDate }}" aria-describedby="schedule-help"></div>
       <div>
-        <label for="post-publish-time">Time (UTC)</label>
+        <label for="post-publish-time">Time</label>
         <div class="post-time-field">
           <input id="post-publish-time" name="publishTime" type="text" autocomplete="off" value="{{ .Data.ScheduleTime }}" placeholder="9:30 AM" aria-describedby="time-help schedule-help">
           <details class="post-time-menu" hidden>
-          <summary aria-label="Choose a time in UTC" title="Choose a time"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></summary>
-          <select data-time-choice size="8" aria-label="Suggested times in UTC" aria-describedby="time-help schedule-help">
+          <summary aria-label="Choose a time" aria-describedby="schedule-help" title="Choose a time"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></summary>
+          <select data-time-choice size="8" aria-label="Suggested times" aria-describedby="time-help schedule-help">
             <option value="" disabled hidden selected></option>
             <option>12:00 AM</option>
             <option>12:30 AM</option>
@@ -96,7 +97,7 @@
         <p class="form-hint" id="time-help">Choose a time or type your own, such as 9:15 AM or 14:30.</p>
       </div>
     </div>
-    <p class="form-hint" id="schedule-help">When Schedule is selected, your post stays private until this time. Use UTC, not your device’s time zone.</p>
+    <p class="form-hint" id="schedule-help">Time zone: <span data-schedule-zone>{{ .Data.ScheduleZone }}</span>. The post stays private until the scheduled time.</p>
   </div>{{ end }}
   <p class="form-hint">Changes take effect when you save.</p>
   <div id="editor-errors" class="form-error" role="alert">{{ if .Data.Error }}{{ template "blog.postError" . }}{{ end }}</div>

@@ -4,10 +4,14 @@
     <header>
       <p aria-live="polite"></p>
       <div class="album-viewer-tools">
-        <button type="button" data-album-zoom aria-label="Zoom in" title="Zoom in" aria-pressed="false" disabled><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 7v6M7 10h6M15 15l6 6M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0"/></svg></button>
-        <button type="button" data-album-captions aria-label="Hide captions" title="Hide captions" aria-controls="album-viewer-caption" aria-pressed="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4zM7 9h10M7 13h7"/></svg></button>
-        <button type="button" data-album-thumbnails aria-label="Hide thumbnails" title="Hide thumbnails" aria-controls="album-viewer-thumbnails"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3zM3 14h18M9 14v5M15 14v5"/></svg></button>
-        <button type="button" data-album-close aria-label="Close album" title="Close album" autofocus><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
+        <button type="button" data-album-zoom aria-label="Zoom in" title="Zoom in" disabled>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10h6M15 15l6 6M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0"/><path data-album-zoom-in d="M10 7v6"/></svg>
+        </button>
+        <button type="button" data-album-captions aria-label="Captions" title="Hide captions" aria-controls="album-viewer-caption" aria-pressed="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4zM7 9h10M7 13h7"/></svg></button>
+        <button type="button" data-album-thumbnails aria-label="Thumbnails" title="Hide thumbnails" aria-controls="album-viewer-thumbnails"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3zM3 14h18M9 14v5M15 14v5"/></svg></button>
+        <button type="button" data-album-close aria-label="Close album" title="Close album" autofocus>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M6 18L18 6" data-collapse-path="M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5"/></svg>
+        </button>
       </div>
     </header>
     <figure>

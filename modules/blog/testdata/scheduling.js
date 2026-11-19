@@ -50,7 +50,7 @@
       choose(form, 'scheduled');
       assert(form.querySelector('[type="submit"]').textContent === 'Schedule post', 'A new schedule must say Schedule post.');
       assert(form.querySelector('[name="published"]:checked').labels[0].textContent.trim() === 'Schedule', 'The selected radio must identify Schedule.');
-      assert(!field.hidden && field.textContent.includes('UTC'), 'Scheduling must expose its time zone.');
+      assert(!field.hidden && field.querySelector('[data-schedule-zone]').textContent === 'America/Chicago', 'Scheduling must expose the site time zone.');
       assert(form.elements.publishDate.type === 'date' && form.elements.publishTime.type === 'text', 'Scheduling should offer a date picker and a single editable time.');
       const timeChoices = form.querySelector('[data-time-choice]');
       const timeMenu = timeChoices.closest('details');
@@ -150,7 +150,7 @@
       const choiceBox = timeToggle.getBoundingClientRect();
       const timeField = form.querySelector('.post-time-field');
       const fieldBox = timeField.getBoundingClientRect();
-      assert(timeToggle.getAttribute('aria-label') === 'Choose a time in UTC', 'The time menu must have an accessible toggle.');
+      assert(timeToggle.getAttribute('aria-label') === 'Choose a time' && timeToggle.getAttribute('aria-describedby') === 'schedule-help', 'The time menu must have an accessible toggle and describe its time zone.');
       assert(choiceBox.width === 44 && Math.abs(choiceBox.left - timeBox.right) < 1 && choiceBox.height === timeBox.height, 'The arrow must form a compact, aligned end to the time field.');
       assert(getComputedStyle(timeField).outlineStyle === 'solid' && getComputedStyle(form.elements.publishTime).outlineStyle === 'none', 'Focus must outline the whole time field, not just its text input.');
       assert(choiceBox.right <= scheduleBox.right + 1 && timeBox.width >= 90, 'The editable time and menu must fit at narrow widths.');
@@ -171,7 +171,7 @@
       assert(Object.keys(localStorage).some(key => {
         if (!key.startsWith(prefix)) return false;
         const fields = JSON.parse(localStorage.getItem(key)).fields;
-        return fields.published === 'scheduled' && fields.publishDate === date.slice(0, 10) && fields.publishTime === time;
+        return fields.published === 'scheduled' && fields.publishDate === date.slice(0, 10) && fields.publishTime === time && fields.publishTimeZone === 'America/Chicago';
       }), 'Local recovery must preserve the complete schedule.');
       sessionStorage.setItem('schedule-stage', 'scheduled');
       form.requestSubmit();
@@ -181,7 +181,7 @@
       assert(document.querySelector('.post-heading').textContent.includes('Scheduled'), 'Scheduled preview needs its publication state.');
       assert((await fetch(location.pathname, {credentials: 'omit'})).status === 404, 'Scheduled post is public too early.');
       const form = await edit(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
-      assert(form.elements.published.value === 'scheduled' && form.elements.publishDate.value === sessionStorage.getItem('schedule-date').slice(0, 10) && form.elements.publishTime.value === sessionStorage.getItem('schedule-time'), 'Reopening changed the saved UTC schedule.');
+      assert(form.elements.published.value === 'scheduled' && form.elements.publishDate.value === sessionStorage.getItem('schedule-date').slice(0, 10) && form.elements.publishTime.value === sessionStorage.getItem('schedule-time'), 'Reopening changed the schedule in the site time zone.');
       assert(!form.querySelector('[data-publication-time]').hidden, 'Reopening hid the schedule.');
       assert(form.querySelector('[type="submit"]').textContent === 'Save schedule', 'An existing schedule must say Save schedule.');
       choose(form, '');
@@ -200,7 +200,7 @@
       const stopSave = event => { event.preventDefault(); event.stopImmediatePropagation(); };
       form.addEventListener('submit', stopSave, true);
       try {
-        const publication = Date.parse(sessionStorage.getItem('schedule-date') + 'Z');
+        const publication = Number(form.elements.slug.dataset.scheduledAt) * 1000;
         form.elements.slug.value = 'changed-scheduled-url';
         for (const [instant, expected] of [[publication - 1, 0], [publication, 1]]) {
           Date.now = () => instant;
@@ -224,8 +224,22 @@
     }
     if (stage === 'draft') {
       assert(document.querySelector('.post-heading').textContent.includes('Draft preview'), 'Canceling must return to a private draft.');
-      const form = await edit(document.querySelector('a[href^="/post/update/"]').getAttribute('href'));
+      const path = document.querySelector('a[href^="/post/update/"]').getAttribute('href');
+      let form = await edit(path);
       assert(form.elements.publishDate.value === '' && form.elements.publishTime.value === '' && form.querySelector('[name="published"][value="scheduled"]'), 'Canceled draft must allow a fresh schedule.');
+      const fields = Object.fromEntries(new FormData(form));
+      delete fields.version;
+      const key = 'hyperserver.blog.draft.v1:' + form.dataset.draftOwner + ':' + new URL(form.action).pathname + ':different-zone';
+      localStorage.setItem(key, JSON.stringify({saved: Date.now(), baseline: JSON.stringify(fields), fields: {
+        ...fields, published: 'scheduled', publishDate: '2030-02-01', publishTime: '7:30 AM', publishTimeZone: 'America/Denver'
+      }}));
+      form.querySelector('.form-actions a').click();
+      await wait(() => !form.isConnected && !document.querySelector('#article-content').classList.contains('htmx-settling'));
+      form = await edit(path);
+      form.querySelector('[data-draft-restore]').click();
+      assert(form.elements.published.value === 'scheduled' && form.elements.publishTime.value === '7:30 AM' &&
+        form.elements.publishTimeZone.value === 'America/Denver' && form.querySelector('[data-schedule-zone]').textContent === 'America/Denver',
+      'A restored schedule must keep its clock time and recorded zone when the site default differs.');
       choose(form, 'on');
       sessionStorage.setItem('schedule-stage', 'published');
       form.requestSubmit();

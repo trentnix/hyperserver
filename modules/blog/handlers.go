@@ -40,6 +40,7 @@ type editorPage struct {
 	ScheduledSlug              string
 	ScheduledAt                int64
 	Publication                string
+	TimeZone, ScheduleZone     string
 	ScheduleDate, ScheduleTime string
 	CanSchedule                bool
 	SaveActions                publicationActions
@@ -106,6 +107,7 @@ func (m *module) renderPost(w http.ResponseWriter, r *http.Request, p Post) {
 		return
 	}
 	data := postPage{Post: p, HTML: html, Scheduled: p.Scheduled(m.currentTime()), CanEdit: m.canEditPost(r.Context(), p)}
+	data.Published = p.Published.In(m.siteTimeZone())
 	data.Series, err = m.seriesNavigation(r.Context(), p.ID)
 	if err != nil {
 		m.storageError(w, r, err)
@@ -268,7 +270,8 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, message string, status int, fields ...string) {
 	// Keep an omitted slug automatic when the user corrects another field.
 	p.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
-	data := editorPage{Post: p, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
+	defaultZone := m.siteTimeZone().String()
+	data := editorPage{Post: p, TimeZone: defaultZone, ScheduleZone: defaultZone, CanSchedule: true, Error: message, revisionSelection: editorRevision(r, "post", p.ID)}
 	data.ComponentInputs = componentForm(r.PostForm)
 	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster
@@ -277,6 +280,9 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	data.SaveActions = editorActions("post", false, false)
 	data.Publication = r.PostForm.Get("published")
 	data.ScheduleDate, data.ScheduleTime = r.PostForm.Get("publishDate"), r.PostForm.Get("publishTime")
+	if zone, err := m.scheduleZone(r.PostForm.Get("publishTimeZone")); err == nil {
+		data.ScheduleZone = zone.String()
+	}
 	page := m.views["editor"].Content(r, data)
 	if page.IsHtmx() {
 		page = m.views["postError"].Content(r, data)

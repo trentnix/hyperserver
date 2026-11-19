@@ -70,6 +70,7 @@ func (m *module) postManagement(ctx context.Context, query string) (postManageme
 		}
 		data.Total++
 		entry := postPage{Post: post, HasHistory: history[post.ID], Scheduled: post.Scheduled(now), CanEdit: true}
+		entry.Published = post.Published.In(m.siteTimeZone())
 		if post.Draft {
 			data.Drafts = append(data.Drafts, entry)
 		} else if entry.Scheduled {

@@ -1,16 +1,18 @@
 // Fit, zoom, and pan use the displayed image bounds. A gesture that starts
 // zoomed or uses two fingers cannot also advance the album.
-export function enableAlbumGestures(frame, image, {navigate, changed, enabled}) {
+export function enableAlbumGestures(frame, image, {navigate, dismiss, changed, enabled}) {
   let scale = 1;
   let x = 0;
   let y = 0;
   let gesture;
   let pinch;
   let multiple = false;
+  let tapToDismiss = false;
   let lastTap;
   let lastTouch = -Infinity;
   const pointers = new Map();
   const events = new AbortController();
+  const tapDistance = 10;
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   function draw() {
     const width = frame.clientWidth;
@@ -45,6 +47,7 @@ export function enableAlbumGestures(frame, image, {navigate, changed, enabled}) 
     gesture = null;
     pinch = null;
     multiple = false;
+    tapToDismiss = false;
     lastTap = null;
     frame.classList.remove('album-panning');
   }
@@ -53,6 +56,7 @@ export function enableAlbumGestures(frame, image, {navigate, changed, enabled}) 
     return {distance: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
   }
   frame.addEventListener('pointerdown', event => {
+    tapToDismiss = false;
     if (!enabled() || event.target.closest('button') || image.hidden || !image.naturalWidth || (event.pointerType === 'mouse' && event.button !== 0)) return;
     if (event.pointerType === 'touch') lastTouch = performance.now();
     const point = {x: event.clientX, y: event.clientY};
@@ -70,6 +74,9 @@ export function enableAlbumGestures(frame, image, {navigate, changed, enabled}) 
   frame.addEventListener('pointermove', event => {
     if (!pointers.has(event.pointerId)) return;
     pointers.set(event.pointerId, {x: event.clientX, y: event.clientY});
+    if (dismiss && gesture?.id === event.pointerId && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >= tapDistance) {
+      gesture.moved = true;
+    }
     if (pointers.size === 2 && pinch) {
       const current = geometry();
       scale = clamp(pinch.scale * current.distance / Math.max(1, pinch.distance), 1, 4);
@@ -87,12 +94,15 @@ export function enableAlbumGestures(frame, image, {navigate, changed, enabled}) 
     if (!pointers.has(event.pointerId)) return;
     pointers.delete(event.pointerId);
     if (frame.hasPointerCapture(event.pointerId)) frame.releasePointerCapture(event.pointerId);
-    if (!canceled && !multiple && gesture?.id === event.pointerId && gesture.touch) {
+    if (!canceled && !multiple && gesture?.id === event.pointerId) {
       const dx = event.clientX - gesture.x;
       const dy = event.clientY - gesture.y;
-      if (!gesture.zoomed && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      const tapped = Math.hypot(dx, dy) < tapDistance;
+      if (dismiss) {
+        tapToDismiss = !gesture.moved && tapped;
+      } else if (gesture.touch && !gesture.zoomed && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         navigate(dx < 0 ? 1 : -1);
-      } else if (Math.hypot(dx, dy) < 10) {
+      } else if (gesture.touch && tapped) {
         const point = {x: event.clientX, y: event.clientY};
         if (lastTap && performance.now() - lastTap.time < 300 && Math.hypot(point.x - lastTap.x, point.y - lastTap.y) < 24) {
           zoom(scale > 1 ? 1 : 2, point);
@@ -111,8 +121,14 @@ export function enableAlbumGestures(frame, image, {navigate, changed, enabled}) 
   frame.addEventListener('pointerup', event => finish(event));
   frame.addEventListener('pointercancel', event => finish(event, true));
   frame.addEventListener('lostpointercapture', event => finish(event, true));
+  // Keep the dialog open until the click so a touch cannot reach the post below.
+  frame.addEventListener('click', () => {
+    if (!tapToDismiss) return;
+    tapToDismiss = false;
+    dismiss();
+  });
   frame.addEventListener('dblclick', event => {
-    if (enabled() && performance.now() - lastTouch > 500 && !event.target.closest('button') && !image.hidden) {
+    if (!dismiss && enabled() && performance.now() - lastTouch > 500 && !event.target.closest('button') && !image.hidden) {
       event.preventDefault();
       zoom(scale > 1 ? 1 : 2, {x: event.clientX, y: event.clientY});
     }

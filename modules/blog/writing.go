@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/trentnix/hyperserver/pkg/services/user"
 )
@@ -25,6 +26,9 @@ func (e writingFieldError) Unwrap() error { return e.error }
 func validationFields(err error) []string {
 	var invalid writingFieldError
 	if errors.As(err, &invalid) {
+		if component, _, ok := strings.Cut(invalid.field, "."); ok {
+			return []string{component, invalid.field}
+		}
 		return []string{invalid.field}
 	}
 	return nil

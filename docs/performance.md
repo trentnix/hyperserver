@@ -25,7 +25,7 @@ HS_TEST_PERFORMANCE=1 go test -v -count=5 ./internal/test/web -run '^TestFramewo
 
 CI does not enforce latency budgets. Use `perfcheck -timing` only on the recorded CPU with comparable storage and no competing workload. Review the workload and environment before changing a budget. These checks are regression guards, not production capacity guarantees.
 
-The binary-size budget includes the local PDF.js renderer, fonts, character maps, and JavaScript decoders used by PDF presentation mode. These browser assets do not change the allocation or retained-heap limits.
+The binary-size budget includes the local PDF.js assets for presentation mode and the Go time-zone database for events. The embedded database lets the blog resolve event times on hosts without zoneinfo files.
 
 The [RSS limit](blog/content.md#reader-navigation-and-sharing) applies in SQLite before reading post bodies. Unlimited feeds grow with the archive. The cache retains one document until a post/profile change invalidates it or scheduled publication expires it. Conditional requests reuse that document.
 

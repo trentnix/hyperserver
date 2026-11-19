@@ -2,7 +2,9 @@
 
 ## Posts
 
-Use **Posts → New post** to write a title and Markdown body. Choose **Draft**, **Publish**, or **Schedule** before saving. Schedules use UTC and are available only for never-published posts. Choose **Draft** to unpublish or cancel a schedule.
+Use **Posts → New post** to write a title and Markdown body. Choose **Draft**, **Publish**, or **Schedule** before saving. Scheduling is available only for never-published posts. Choose **Draft** to unpublish or cancel a schedule.
+
+Set `timeZone` in `modules/blog/config.yaml` to an IANA name such as `America/Chicago`, then restart the blog. The default is `UTC`. The setting applies to scheduling, publication dates, and new Events. Events can use a different time zone. A change to the setting preserves the publication time of existing schedules and the time zone of saved Events.
 
 Republishing keeps the original publication date. Canceling before a scheduled time clears that date. Scheduled content becomes public at the saved time without a background worker, so the server clock must be accurate.
 

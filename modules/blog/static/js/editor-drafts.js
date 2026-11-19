@@ -97,7 +97,7 @@ import {componentValue} from './post-components.js';
         }
         if (typeof data.baseline !== 'string' || !data.fields || !state.fields.every(field =>
           field.type === 'checkbox' ? data.fields[field.name] === undefined || typeof data.fields[field.name] === 'boolean' :
-            ((['previewImage', 'published', 'publishDate', 'publishTime', 'tags', 'componentOrder', 'seriesID', 'seriesVersion', 'seriesBaseline'].includes(field.name) || state.componentSources.includes(field)) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
+            ((['previewImage', 'published', 'publishDate', 'publishTime', 'publishTimeZone', 'tags', 'componentOrder', 'seriesID', 'seriesVersion', 'seriesBaseline'].includes(field.name) || state.componentSources.includes(field)) && data.fields[field.name] === undefined) || typeof data.fields[field.name] === 'string')) continue;
         copies.push({key, raw, data});
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);
@@ -177,6 +177,7 @@ import {componentValue} from './post-components.js';
           // Fields added after this copy was saved keep their current settings.
           if (!Object.hasOwn(copy.data.fields, field.name)) continue;
           if (field.name === 'published' && keepPublication) continue;
+          if (field.name === 'publishTimeZone' && !copy.data.fields.publishDate && !copy.data.fields.publishTime) continue;
           if (field.type === 'checkbox') field.checked = copy.data.fields[field.name];
           else if (field.type === 'radio') field.checked = field.value === copy.data.fields[field.name];
           else field.value = copy.data.fields[field.name];

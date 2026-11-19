@@ -33,6 +33,9 @@ type Settings struct {
 	MultiUser        bool          `yaml:"multiUser"`
 	InviteExpiration time.Duration `yaml:"inviteExpiration"`
 
+	// TimeZone is the IANA time zone for author-entered times. It defaults to UTC.
+	TimeZone string `yaml:"timeZone"`
+
 	// RecentPostCount limits sidebar and footer links, not the full archive.
 	RecentPostCount int `yaml:"recentPostCount"`
 
@@ -111,6 +114,7 @@ func (a *Access) AllowAccount(ctx context.Context, address string) (bool, error)
 type module struct {
 	site             *Site
 	settings         *Settings
+	location         *time.Location
 	access           *Access
 	accounts         user.AccountRepository
 	administration   user.AdministrationRepository
@@ -182,6 +186,13 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	}
 	if m.settings.RSSPostLimit < 0 {
 		return errors.New("blog.rssPostLimit must be zero or greater")
+	}
+	m.location = time.UTC
+	if m.settings.TimeZone != "" {
+		m.location, err = loadTimeZone(m.settings.TimeZone)
+		if err != nil {
+			return fmt.Errorf("blog.timeZone must name an IANA time zone: %w", err)
+		}
 	}
 	if !app.Config.Auth.Enabled || m.accounts == nil {
 		return errors.New("blog requires authentication and account storage")

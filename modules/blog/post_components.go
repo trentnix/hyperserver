@@ -197,6 +197,9 @@ func (catalog componentCatalog) join(body string, input componentInput) (string,
 	for _, definition := range catalog {
 		content, err := definition.Parse(input[definition.Field])
 		if err != nil {
+			if len(validationFields(err)) > 0 {
+				return body, err
+			}
 			return body, writingFieldError{err, definition.Field}
 		}
 		if content != nil && !content.Empty() {

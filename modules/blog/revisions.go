@@ -150,7 +150,7 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 		if p.Draft {
 			data.PublicationStatus = "Draft"
 		} else if p.Scheduled(m.currentTime()) {
-			data.PublicationStatus = "Scheduled for " + p.Published.Format("Jan 2, 2006 at 3:04 PM UTC")
+			data.PublicationStatus = "Scheduled for " + p.Published.In(m.siteTimeZone()).Format("Jan 2, 2006 at 3:04 PM MST")
 		}
 		current = Revision{Title: p.Title, Summary: p.Summary, Markdown: p.Markdown, PreviewImage: p.PreviewImage, Tags: p.Tags}
 		contentPath = "/post/s/" + p.Slug

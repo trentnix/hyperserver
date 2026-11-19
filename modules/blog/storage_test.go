@@ -171,7 +171,7 @@ func TestNavigationQueries(t *testing.T) {
 			t.Fatalf("accepted invalid archive bounds %+v", tc)
 		}
 	}
-	months := groupArchive(entries)
+	months := groupArchive(entries, time.UTC)
 	if len(months) != 2 || months[0].Name != "October 2026" || len(months[0].Posts) != 2 || months[1].Name != "September 2026" {
 		t.Fatalf("grouped archive = %+v", months)
 	}

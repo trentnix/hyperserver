@@ -37,7 +37,10 @@ function updatePublication(form) {
   const field = form?.querySelector('[data-publication-time]');
   if (!field) return;
   field.hidden = form.elements.published.value !== 'scheduled';
-  for (const input of field.querySelectorAll('input')) {
+  const zone = field.querySelector('[data-schedule-zone]');
+  const name = form.elements.publishTimeZone.value;
+  if (zone.textContent !== name) zone.textContent = name;
+  for (const input of field.querySelectorAll('input:not([type=hidden])')) {
     input.disabled = field.hidden;
     input.required = !field.hidden;
     if (field.hidden) markField(input, false);

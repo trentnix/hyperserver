@@ -412,8 +412,11 @@
         assert(detailBounds.top >= pictureBottom + 6, 'Expanded captions must use available space below the image before covering it.');
         assert(Math.abs(expandedTextBounds.top - compactTextBounds.top) < 1, 'When space permits, expanding a caption must keep its first line at the same distance below the image.');
       }
-      fullCaptionText.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true, cancelable: true}));
-      assert(draftViewer.querySelector('header p').textContent.includes('3'), 'Scrolling a caption must not navigate the album.');
+      for (const [key, shiftKey] of [['ArrowDown', false], ['ArrowLeft', false], ['ArrowRight', true], ['+', true]]) {
+        const uncanceled = fullCaptionText.dispatchEvent(new KeyboardEvent('keydown', {key, shiftKey, bubbles: true, cancelable: true}));
+        assert(uncanceled && ready(draftViewer) && draftViewer.querySelector('header p').textContent === 'Photo 3 of 3' && fullCaptionText.textContent === wrappingCaption && document.activeElement === fullCaptionText,
+          'Caption scrolling and selection keys must remain available without changing the photo or moving focus.');
+      }
       fullCaptionText.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
       assert(draftViewer.open && !expandedCaption.classList.contains('album-viewer-caption-expanded') && document.activeElement === moreCaption && moreCaption.getAttribute('aria-expanded') === 'false', 'Escape must collapse the caption and return focus to its action.');
       moreCaption.click();
@@ -871,10 +874,10 @@
     captionToggle.click();
     assert(dialog.querySelector('figcaption').hidden && frame.getBoundingClientRect().height === frameBounds.height, 'Hiding captions must leave the image and navigation in place.');
     captionToggle.click();
-    assert(!dialog.querySelector('figcaption').hidden && captionToggle.getAttribute('aria-pressed') === 'true', 'Captions must be easy to restore.');
+    assert(!dialog.querySelector('figcaption').hidden && captionToggle.getAttribute('aria-pressed') === 'true' && captionToggle.getAttribute('aria-label') === 'Captions', 'The caption toggle must retain its name and expose its pressed state.');
     const zoom = dialog.querySelector('[data-album-zoom]');
     zoom.click();
-    assert(zoom.getAttribute('aria-pressed') === 'true' && zoom.getAttribute('aria-label') === 'Reset zoom', 'Zoom must expose its state and reset action.');
+    assert(zoom.getAttribute('aria-label') === 'Reset zoom' && !zoom.hasAttribute('aria-pressed'), 'Zoom must expose the reset action.');
     assertCaptionPlacement(dialog);
     const zoomedTransform = image.style.transform;
     const center = {x: frameBounds.left + frameBounds.width / 2, y: frameBounds.top + frameBounds.height / 2};
@@ -887,12 +890,12 @@
     key('ArrowRight');
     assert(dialog.querySelector('header p').textContent === 'Photo 2 of 3', 'Arrow keys must pan a zoomed photo without advancing the album.');
     key('Escape');
-    assert(dialog.open && zoom.getAttribute('aria-pressed') === 'false', 'Escape must reset zoom before closing the viewer.');
+    assert(dialog.open && zoom.getAttribute('aria-label') === 'Zoom in', 'Escape must reset zoom before closing the multi-photo viewer.');
     frame.dispatchEvent(new MouseEvent('dblclick', {clientX: center.x, clientY: center.y, bubbles: true, cancelable: true}));
-    assert(zoom.getAttribute('aria-pressed') === 'true', 'Double-click must zoom into a photo.');
+    assert(zoom.getAttribute('aria-label') === 'Reset zoom', 'Double-click must zoom into a photo.');
     key('0');
     frame.dispatchEvent(new WheelEvent('wheel', {deltaY: -200, clientX: center.x, clientY: center.y, bubbles: true, cancelable: true}));
-    assert(zoom.getAttribute('aria-pressed') === 'true', 'Mouse wheel zoom must be available.');
+    assert(zoom.getAttribute('aria-label') === 'Reset zoom', 'Mouse wheel zoom must be available.');
     key('0');
     pointer('pointerdown', 21, center.x - 40, center.y);
     pointer('pointerdown', 22, center.x + 40, center.y);
@@ -900,7 +903,7 @@
     pointer('pointermove', 22, center.x + 80, center.y);
     pointer('pointerup', 21, center.x - 80, center.y);
     pointer('pointerup', 22, center.x + 80, center.y);
-    assert(zoom.getAttribute('aria-pressed') === 'true' && dialog.querySelector('header p').textContent === 'Photo 2 of 3', 'Pinch zoom must not also navigate to another photo.');
+    assert(zoom.getAttribute('aria-label') === 'Reset zoom' && dialog.querySelector('header p').textContent === 'Photo 2 of 3', 'Pinch zoom must not also navigate to another photo.');
     pointer('pointerdown', 23, center.x, center.y);
     pointer('pointermove', 23, center.x - 100, center.y + 30);
     pointer('pointerup', 23, center.x - 100, center.y + 30);
@@ -910,7 +913,7 @@
       pointer('pointerdown', id, center.x, center.y);
       pointer('pointerup', id, center.x, center.y);
     }
-    assert(zoom.getAttribute('aria-pressed') === 'true', 'Double-tap must zoom on touch screens.');
+    assert(zoom.getAttribute('aria-label') === 'Reset zoom', 'Double-tap must zoom on touch screens.');
     key('0');
     captionToggle.click();
     key('ArrowRight');
@@ -1115,14 +1118,30 @@
         const singleGrid = document.querySelector('.photo-album-grid');
         assert(Math.abs(singleGrid.firstElementChild.getBoundingClientRect().width - singleGrid.clientWidth) < 1, 'A single-photo mobile album must use the full gallery width.');
       }
-      document.querySelector('[data-album-photo]').click();
+      const singleLink = document.querySelector('[data-album-photo]');
+      singleLink.click();
       const singleViewer = document.querySelector('.album-viewer');
       assert(singleViewer.open && singleViewer.querySelector('nav').hidden && singleViewer.querySelector('[data-album-prev]').hidden && singleViewer.querySelector('[data-album-next]').hidden, 'Single-photo albums must hide unnecessary navigation.');
       await wait(() => ready(singleViewer));
       assert(singleViewer.querySelector('figcaption').hidden && singleViewer.querySelector('[data-album-image]').alt === 'Photo 1', 'Uncaptioned photos need an accessible name without a placeholder caption.');
       await wait(() => singleViewer.querySelector('[data-album-image]').naturalWidth);
-      singleViewer.querySelector('[data-album-close]').click();
+      const singleImage = singleViewer.querySelector('[data-album-image]');
+      const singleKey = key => singleViewer.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true}));
+      assert(['ArrowLeft', 'ArrowRight', 'Home', 'End'].every(singleKey) && ready(singleViewer), 'A single photo must ignore navigation keys.');
+      for (const type of ['pointerdown', 'pointerup']) {
+        singleImage.dispatchEvent(new PointerEvent(type, {pointerType: 'touch', pointerId: 30, button: 0, bubbles: true}));
+      }
+      singleImage.click();
       await wait(() => !singleViewer.isConnected);
+      singleLink.click();
+      const reopened = document.querySelector('.album-viewer');
+      const singleZoom = reopened.querySelector('[data-album-zoom]');
+      await wait(() => !singleZoom.disabled);
+      singleZoom.click();
+      assert(singleZoom.getAttribute('aria-label') === 'Reset zoom', 'The single photo must support zoom.');
+      reopened.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
+      await wait(() => !reopened.isConnected);
+      assert(document.activeElement === singleLink, 'Escape must close a zoomed single-photo album and restore focus.');
       await fetch('/auth/logout', {method: 'POST', redirect: 'manual'});
       sessionStorage.setItem('album-stage', 'public');
       location.assign('/post/s/photo-album');
