@@ -111,6 +111,44 @@ func TestPDFDownloadLink(t *testing.T) {
 	}
 }
 
+func TestPDFPresentation(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "native by default", true: "presentation"}[enabled], func(t *testing.T) {
+			file := postDownload{ID: strings.Repeat("a", 64) + ".pdf", Label: `Slides <one> "two"`, Size: 1200, Presentation: enabled, HideDownload: true}
+			source, err := joinPostComponents("Body", componentInput{"pdf": downloadSource(t, file)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, components, err := splitPostComponents(source)
+			if err != nil || !slices.Equal(components.PDF(), []postDownload{file}) {
+				t.Fatal("PDF presentation setting did not round trip", components, err)
+			}
+			if !enabled && strings.Contains(source, "presentation") {
+				t.Fatal("existing PDFs must keep their saved format")
+			}
+			page := editorPage{Post: Post{Markdown: source}}
+			if page.PDFJSON() != downloadSource(t, file) {
+				t.Fatal("editor lost the presentation setting")
+			}
+			rendered, err := markdown(source)
+			if err != nil || strings.Contains(string(rendered), "data-pdf-presentation") != enabled || strings.Contains(string(rendered), "Slides <one>") || strings.Contains(string(rendered), " download ") {
+				t.Fatal("incorrect presentation rendering", rendered, err)
+			}
+			if enabled && (!strings.Contains(string(rendered), "data-pdf-fullscreen") || !strings.Contains(string(rendered), "<noscript><iframe")) {
+				t.Fatal("presentation needs controls and a native fallback", rendered)
+			}
+			refs, err := contentMediaReferences(source, "/post/s/slides", "")
+			if err != nil || !slices.Equal(refs, []string{"/files/" + file.ID}) {
+				t.Fatal("presentation changed file references", refs, err)
+			}
+			feed, err := markdownAt(source, &url.URL{Scheme: "https", Host: "blog.example", Path: "/post/s/slides"})
+			if err != nil || strings.Contains(string(feed), "canvas") || strings.Contains(string(feed), "iframe") || strings.Contains(string(feed), "data-pdf-presentation") || !strings.Contains(string(feed), "https://blog.example/files/"+file.ID+"?preview=1") {
+				t.Fatal("feed needs a PDF link without presentation controls", feed, err)
+			}
+		})
+	}
+}
+
 func TestPDFFormsHistoryAndAccess(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ordinary", true: "htmx"}[hx], func(t *testing.T) {

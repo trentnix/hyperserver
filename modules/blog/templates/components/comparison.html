@@ -1,7 +1,7 @@
 {{ define "blog.comparisonEditor" }}
   <section class="comparison-editor" data-comparison-editor data-post-component="image-comparison" aria-labelledby="comparison-editor-title">
-    <div class="album-editor-heading"><div class="component-heading"><h2 id="comparison-editor-title">Image Comparison</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Image comparison" }}<button type="button" class="text-button component-remove" data-component-remove="image-comparison" hidden>Remove comparison</button></div></div>
-    <p class="form-hint" id="comparison-help">Choose two images of the same subject. Matching dimensions and framing work best. Save with your post.</p>
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="comparison-editor-title">Image Comparison</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentActions" "image comparison" }}</div></div>
+    <p class="form-hint" id="comparison-help">Choose two images of the same subject. Matching dimensions and framing work best.</p>
     <label for="post-comparison" data-comparison-source-label>Image comparison (JSON)</label>
     <textarea id="post-comparison" name="comparison" rows="3" aria-describedby="comparison-help">{{ .Source }}</textarea>
     <fieldset data-comparison-controls data-component-fields hidden disabled>

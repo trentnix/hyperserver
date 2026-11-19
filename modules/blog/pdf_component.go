@@ -20,7 +20,8 @@ func pdfDefinition() componentDefinition {
 		EditorData: func(source string, _ bool) any {
 			return fileEditor{Source: source,
 				Kind: "pdf-preview", Field: "pdf", Name: "PDF preview", Accept: ".pdf", MaxFiles: 1,
-				Help: "Embed a PDF below your post. Save with your post.", Limits: "One PDF, up to 32 MiB. Shares the site's 1 GiB file storage.",
+				Help:   "Readers can view the PDF directly in the post.",
+				Limits: "One PDF, up to 32 MiB. Shares the site's 1 GiB file storage.",
 			}
 		},
 	}

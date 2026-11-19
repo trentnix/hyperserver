@@ -22,8 +22,8 @@ jobs:
           import urllib.request
 
           source = pathlib.Path('modules/blog/static/lib/README.md').read_text()
-          versions = dict(re.findall(r'^- (HTMX|EasyMDE) ([0-9.]+):', source, re.M))
-          packages = {'HTMX': 'htmx.org', 'EasyMDE': 'easymde'}
+          versions = dict(re.findall(r'^- (HTMX|EasyMDE|PDF\.js) ([0-9.]+):', source, re.M))
+          packages = {'HTMX': 'htmx.org', 'EasyMDE': 'easymde', 'PDF.js': 'pdfjs-dist'}
           if versions.keys() != packages.keys():
               raise SystemExit('Missing browser dependency version in the library README.')
           updates = []

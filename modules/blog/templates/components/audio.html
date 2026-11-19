@@ -1,7 +1,7 @@
 {{ define "blog.audioEditor" }}
   <section class="audio-editor" data-audio-editor data-post-component="audio" aria-labelledby="audio-editor-title">
-    <div class="album-editor-heading"><div class="component-heading"><h2 id="audio-editor-title">Audio</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Audio" }}<button type="button" class="text-button component-remove" data-component-remove="audio" hidden>Remove audio</button></div></div>
-    <p class="form-hint" id="audio-help">Add an MP3 for readers to play. Save with your post.</p>
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="audio-editor-title">Audio</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentActions" "audio" }}</div></div>
+    <p class="form-hint" id="audio-help">Add an MP3 for readers to play.</p>
     <label for="post-audio" data-audio-source-label>Audio (JSON)</label>
     <textarea id="post-audio" name="audio" rows="3" aria-describedby="audio-help">{{ .Source }}</textarea>
     <div class="audio-file-row" data-audio-controls hidden>

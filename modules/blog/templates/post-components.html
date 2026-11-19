@@ -2,9 +2,14 @@
 <span class="component-unsaved" data-component-unsaved title="Save the post to apply these changes." hidden>Unsaved changes</span>
 {{ end }}
 
-{{ define "blog.componentOrderControls" }}
-<div class="component-order-controls" data-component-order-controls hidden>
-  <button type="button" class="text-button" data-component-move="up" aria-label="Move {{ . }} up" title="Move {{ . }} up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg></button>
-  <button type="button" class="text-button" data-component-move="down" aria-label="Move {{ . }} down" title="Move {{ . }} down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg></button>
+{{ define "blog.uploadIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 16v4h16v-4"/></svg>{{ end }}
+
+{{ define "blog.componentActions" }}
+<div class="component-actions">
+  <div class="component-order-controls" data-component-order-controls hidden>
+    <button type="button" class="text-button" data-component-move="up" aria-label="Move {{ . }} up" title="Move {{ . }} up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg></button>
+    <button type="button" class="text-button" data-component-move="down" aria-label="Move {{ . }} down" title="Move {{ . }} down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg></button>
+  </div>
+  <button type="button" class="text-button component-remove" data-component-remove aria-label="Remove {{ . }}" hidden>Remove</button>
 </div>
 {{ end }}

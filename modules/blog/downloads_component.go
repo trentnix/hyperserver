@@ -27,7 +27,7 @@ func downloadsDefinition() componentDefinition {
 		EditorData: func(source string, _ bool) any {
 			return fileEditor{Source: source,
 				Kind: "file-downloads", Field: "downloads", Name: "File downloads", Accept: ".pdf,.zip,.txt,.mp3", MaxFiles: maxPostDownloads,
-				Help:   "Offer files below your post. Save with your post.",
+				Help:   "Attach files readers can download.",
 				Limits: "Up to 20 files per post. PDF, ZIP, UTF-8 text, or MP3, up to 32 MiB per file. File storage: 1 GiB per site.",
 			}
 		},
@@ -67,6 +67,8 @@ type postDownload struct {
 	Size        int64  `json:"size"`
 	// PDF previews can hide their download link. Missing settings keep it visible.
 	HideDownload bool `json:"hideDownload,omitempty"`
+	// PDF previews can opt into a single-page presentation instead of the native viewer.
+	Presentation bool `json:"presentation,omitempty"`
 }
 
 func (d postDownload) TypeLabel() string {

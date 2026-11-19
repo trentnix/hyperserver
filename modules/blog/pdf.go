@@ -45,7 +45,27 @@ func (pdfRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer) {
 		if file.Description != "" {
 			fmt.Fprintf(writer, `<p class="pdf-preview-description">%s</p>`, html.EscapeString(file.Description))
 		}
-		fmt.Fprintf(writer, `<iframe src="/files/%s?preview=1" title="%s" loading="lazy" class="pdf-preview-frame"></iframe></section>`, file.ID, label)
+		if file.Presentation {
+			renderPDFPresentation(writer, file)
+		} else {
+			fmt.Fprintf(writer, `<iframe src="/files/%s?preview=1" title="%s" loading="lazy" class="pdf-preview-frame"></iframe>`, file.ID, label)
+		}
+		writer.WriteString(`</section>`)
 		return ast.WalkSkipChildren, nil
 	})
+}
+
+func renderPDFPresentation(writer util.BufWriter, file postDownload) {
+	fmt.Fprintf(writer, `<div class="pdf-presentation" data-pdf-presentation data-pdf-url="/files/%s?preview=1" data-reader-only tabindex="0" role="region" aria-label="%s presentation">
+<div class="pdf-slide" data-pdf-slide hidden><canvas aria-hidden="true"></canvas><div class="screen-reader-text" data-pdf-text></div></div>
+<div class="pdf-presentation-controls" hidden>
+<button type="button" data-pdf-previous aria-label="Previous page" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+<span data-pdf-page aria-live="polite">Loading PDF…</span>
+<button type="button" data-pdf-next aria-label="Next page" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+<button type="button" class="pdf-fullscreen" data-pdf-fullscreen aria-label="Enter fullscreen" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path class="pdf-fullscreen-enter" d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><path class="pdf-fullscreen-exit" d="M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5"/></svg></button>
+<button type="button" data-pdf-retry hidden>Retry</button>
+</div>
+<p class="form-hint pdf-presentation-status" data-pdf-status role="status"></p>
+<noscript><iframe src="/files/%s?preview=1" title="%s" loading="lazy" class="pdf-preview-frame"></iframe></noscript>
+</div>`, file.ID, html.EscapeString(file.Label), file.ID, html.EscapeString(file.Label))
 }

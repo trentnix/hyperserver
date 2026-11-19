@@ -8,7 +8,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | --- | --- |
 | [Photo album](media.md#add-an-album) | Up to 50 photos with captions and a full-screen viewer. |
 | [File downloads](#file-downloads) | Up to 20 PDF, ZIP, UTF-8 text, or MP3 attachments. |
-| [PDF preview](#pdf-preview) | One PDF shown in the browser's viewer. |
+| [PDF preview](#pdf-preview) | One PDF in the browser's viewer or a page-by-page presentation. |
 | [Audio](#audio) | One MP3 with an optional transcript. |
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
@@ -32,9 +32,13 @@ Files live under `uploadsDirectory/files`, identified by SHA-256 hashes and vali
 
 ## PDF preview
 
-Upload or choose one PDF, then edit its display name and optional description. **Open PDF** opens the file in a separate tab. **Replace PDF** and **Library** replace the document while preserving its details and download setting. Canceling or failing to replace keeps the current file.
+Upload or choose one PDF, then edit its display name and optional description. **Open PDF** opens the file in a separate tab. **Replace PDF** and **Library** replace the document while preserving its details and display settings. Canceling or failing to replace keeps the current file.
 
-Readers use the browser's PDF viewer. Clear **Show download link** to hide the component's Download link. The browser may still offer downloading. This setting controls presentation, not access. The same PDF can appear in a preview and File downloads without storing another copy.
+The browser's PDF viewer is the default. Clear **Show download link** to hide the component's Download link. The browser may still offer downloading. This setting controls the link's visibility. The same PDF can appear in a preview and File downloads without storing another copy.
+
+Enable **Presentation mode** to show one page at a time, with Previous/Next controls, a page indicator, and fullscreen where supported. Focus the presentation to use Left/Right, Page Up/Page Down, or Home/End. Pages fit without cropping, and portrait pages use more vertical space on narrow screens.
+
+Mozilla PDF.js renders presentations locally in the browser. If rendering fails or JavaScript is unavailable, the ordinary viewer or **Open PDF** remains available.
 
 PDF previews use the file limits and access rules above. `/files/{id}?preview=1` permits inline same-origin viewing after access checks. Ordinary pages and attachments retain their framing restrictions. Feeds and historical previews show links and descriptions. Search indexes the display name and description, not text inside the PDF.
 

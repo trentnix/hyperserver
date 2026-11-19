@@ -1,7 +1,7 @@
 {{ define "blog.linkEditor" }}
   <section class="link-editor" data-link-editor data-post-component="link-preview" aria-labelledby="link-editor-title">
-    <div class="album-editor-heading"><div class="component-heading"><h2 id="link-editor-title">Link preview</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Link preview" }}<button type="button" class="text-button component-remove" data-component-remove="link-preview" hidden>Remove link</button></div></div>
-    <p class="form-hint" id="link-help">Paste a URL to fetch its preview, or enter the details yourself. Save with your post.</p>
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="link-editor-title">Link preview</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentActions" "link preview" }}</div></div>
+    <p class="form-hint" id="link-help">Paste a URL to fetch its preview, or enter the details yourself.</p>
     <label for="post-link" data-link-source-label>Link preview (JSON)</label>
     <textarea id="post-link" name="link" rows="3" aria-describedby="link-help">{{ .Source }}</textarea>
     <fieldset data-link-controls data-component-fields hidden disabled></fieldset>

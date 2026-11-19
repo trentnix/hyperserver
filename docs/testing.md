@@ -54,7 +54,7 @@ If both browser settings are present, the shared runner uses Firefox. Clear `HS_
 
 HTMX tests use the vendored asset and the layout's integrity check. Ordinary Go test runs skip browser scenarios unless a supported browser setting is present.
 
-The scheduled [browser dependency check](../.github/workflows/browser-dependencies.yml) compares the versions in the [library inventory](../modules/blog/static/lib/README.md) with upstream releases. A newer release fails the check for review. It does not update assets automatically. Update both HTMX copies, the fixture URL and integrity hash, and browser version assertions together. Run the Go suite and both browser engines after updating HTMX.
+The scheduled [browser dependency check](../.github/workflows/browser-dependencies.yml) compares HTMX, EasyMDE, and PDF.js versions in the [library inventory](../modules/blog/static/lib/README.md) with upstream releases. A newer release fails the check for review. It does not update assets automatically. Update both HTMX copies, the fixture URL and integrity hash, and browser version assertions together. Run the Go suite and both browser engines after updating HTMX. Keep PDF.js browser and worker modules on the same version and run the PDF browser checks after updating them.
 
 ### Blog accessibility
 

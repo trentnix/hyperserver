@@ -1,7 +1,7 @@
 {{ define "blog.videoEditor" }}
   <section class="video-editor" data-video-editor data-post-component="video" aria-labelledby="video-editor-title">
-    <div class="album-editor-heading"><div class="component-heading"><h2 id="video-editor-title">Video</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "Video" }}<button type="button" class="text-button component-remove" data-component-remove="video" hidden>Remove video</button></div></div>
-    <p class="form-hint" id="video-help">Add a YouTube or Vimeo URL. Fetch its title and description, or leave the details blank. Save with your post.</p>
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="video-editor-title">Video</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentActions" "video" }}</div></div>
+    <p class="form-hint" id="video-help">Add a YouTube or Vimeo URL. Fetch its title and description, or leave the details blank.</p>
     <label for="post-video" data-video-source-label>Video (JSON)</label>
     <textarea id="post-video" name="video" rows="3" aria-describedby="video-help">{{ .Source }}</textarea>
     <fieldset data-video-controls data-component-fields hidden disabled>

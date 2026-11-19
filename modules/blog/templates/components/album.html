@@ -2,20 +2,17 @@
   <section class="album-editor" data-album-editor data-post-component="photo-album" aria-labelledby="album-editor-title">
     <div class="album-editor-heading">
       <div class="component-heading"><h2 id="album-editor-title">Photo album <span data-album-count></span></h2>{{ template "blog.componentStatus" }}</div>
-      <div class="album-editor-actions">
-      <div class="album-editor-controls" hidden>
-        <button type="button" data-album-upload data-album-add title="Upload photos from your device"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 16v4h16v-4"/></svg>Upload</button>
-        {{ if not .NoLibrary }}<button type="button" data-album-browse title="Choose photos from the library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 16l5-5 4 4 3-3 4 4"/><circle cx="15.5" cy="8.5" r="1"/></svg>Library</button>{{ end }}
-        <button type="button" data-album-reorder disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20V4m-4 4 4-4 4 4M17 4v16m-4-4 4 4 4-4"/></svg>Reorder</button>
-        <span class="album-upload-progress" data-album-upload-progress role="status" hidden></span>
-        <span class="album-capacity" data-album-capacity role="status" hidden></span>
-        <input type="file" data-album-files accept="image/png,image/jpeg,image/gif" multiple hidden>
-      </div>
-      {{ template "blog.componentOrderControls" "Photo album" }}
-      <button type="button" class="text-button component-remove" data-component-remove="photo-album" hidden>Remove album</button>
-      </div>
+      {{ template "blog.componentActions" "photo album" }}
     </div>
-    <p class="form-hint" id="album-help">Add photos and captions. Save with your post.</p>
+    <p class="form-hint" id="album-help">Add photos and captions.</p>
+    <div class="album-editor-controls component-file-controls" hidden>
+      <button type="button" class="button-primary" data-album-upload data-album-add title="Upload photos from your device">{{ template "blog.uploadIcon" }}Upload</button>
+      {{ if not .NoLibrary }}<button type="button" class="button-secondary" data-album-browse title="Choose photos from the library">{{ template "blog.albumIcon" }}Library</button>{{ end }}
+      <button type="button" class="button-secondary" data-album-reorder disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20V4m-4 4 4-4 4 4M17 4v16m-4-4 4 4 4-4"/></svg>Reorder</button>
+      <span class="album-upload-progress" data-album-upload-progress role="status" hidden></span>
+      <span class="album-capacity" data-album-capacity role="status" hidden></span>
+      <input type="file" data-album-files accept="image/png,image/jpeg,image/gif" multiple hidden>
+    </div>
     <label for="post-album" data-album-source-label>Album photos (one Markdown image per line)</label>
     <textarea id="post-album" name="album" rows="3" aria-describedby="album-help">{{ .Source }}</textarea>
     <ol class="album-editor-photos" data-album-list></ol>

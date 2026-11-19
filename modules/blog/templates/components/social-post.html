@@ -1,6 +1,6 @@
 {{ define "blog.socialPostEditor" }}
   <section class="social-post-editor" data-social-post-editor{{ if eq .Kind "x-post" }} data-x-post-editor{{ end }} data-social-post-name="{{ .Name }}" data-post-component="{{ .Kind }}" data-component-choice="social-post" aria-labelledby="{{ .Kind }}-editor-title">
-    <div class="album-editor-heading"><div class="component-heading"><h2 id="{{ .Kind }}-editor-title">Social media</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentOrderControls" "social media component" }}<button type="button" class="text-button component-remove" data-component-remove="{{ .Kind }}" aria-label="Remove social media component" hidden>Remove</button></div></div>
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="{{ .Kind }}-editor-title">Social media</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentActions" "social media component" }}</div></div>
     <label for="post-{{ .Kind }}" data-social-post-source-label>Social media (JSON)</label>
     <textarea id="post-{{ .Kind }}" name="{{ .Field }}" rows="3">{{ .Source }}</textarea>
     <fieldset data-social-post-controls data-component-fields hidden disabled>

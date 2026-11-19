@@ -31,6 +31,7 @@ type browserScenario struct {
 	authenticated, returningUser bool
 	delayAsset                   func(*http.Request) bool
 	earlyScript, allowFrames     bool
+	allowFullscreen              bool
 }
 
 func browserFontAsset(r *http.Request) bool {
@@ -109,7 +110,11 @@ func testBrowser(t *testing.T, browser, width string, scenario browserScenario) 
 			// Firefox limits ordinary windows to 500px. An iframe gives each
 			// flow an exact viewport, including narrow mobile sizes.
 			w.Header().Set("Content-Type", "text/html")
-			fmt.Fprintf(w, `<!DOCTYPE html><iframe src="%s" style="border:0;width:%spx;height:%dpx"></iframe>`, html.EscapeString(scenario.startPath), width, height)
+			fullscreen := ""
+			if scenario.allowFullscreen {
+				fullscreen = " allowfullscreen"
+			}
+			fmt.Fprintf(w, `<!DOCTYPE html><iframe src="%s" style="border:0;width:%spx;height:%dpx"%s></iframe>`, html.EscapeString(scenario.startPath), width, height, fullscreen)
 			return
 		case "/test/plain-error":
 			http.Error(w, `<img src=x onerror="window.errorInjected=true"> Please try again.`, http.StatusTooManyRequests)
@@ -198,8 +203,16 @@ func testBrowser(t *testing.T, browser, width string, scenario browserScenario) 
 	defer log.Close()
 	profile := t.TempDir()
 	// Exercise reduced-motion dismissal in the mobile run, with normal fades elsewhere.
+	var prefs []string
 	if width == "390" {
-		if err := os.WriteFile(profile+"/user.js", []byte(`user_pref("ui.prefersReducedMotion", 1);`), 0600); err != nil {
+		prefs = append(prefs, `user_pref("ui.prefersReducedMotion", 1);`)
+	}
+	if scenario.allowFullscreen {
+		// Let the headless test drive the fullscreen button without a trusted click.
+		prefs = append(prefs, `user_pref("full-screen-api.allow-trusted-requests-only", false);`)
+	}
+	if len(prefs) > 0 {
+		if err := os.WriteFile(profile+"/user.js", []byte(strings.Join(prefs, "\n")), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}

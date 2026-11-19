@@ -652,7 +652,7 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 }
 .album-editor { margin-block: 24px; padding-top: 12px; }
 .post-components { margin-block: 24px; }
-.component-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.component-heading { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .component-unsaved { display: inline-flex; align-items: center; gap: 6px; color: #795720; font-size: 13px; line-height: 1.5; white-space: nowrap; }
 .component-unsaved::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #a7782b; }
 [data-video-status] { min-height: 1.5em; margin-top: 12px; font-size: 14px; line-height: 1.5; }
@@ -761,7 +761,8 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
   .post-components > [data-post-component] { padding: 16px 12px 20px; border-radius: 16px; }
 }
 .album-editor-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.component-remove { min-height: 44px; padding: 9px 12px; border-radius: 24px; color: var(--muted); font-size: 14px; }
+.component-actions { display: flex; align-items: center; gap: 8px; }
+.component-remove { min-width: 44px; min-height: 44px; padding: 9px 12px; border-radius: 24px; color: var(--muted); font-size: 14px; }
 .component-remove:hover:not(:disabled) { background: #fff3f2; color: #a12626; }
 .component-picker { position: relative; width: 100%; }
 .component-picker summary { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 9px 14px; border: 1px solid #cbd1da; border-radius: 24px; background: #fff; color: #505969; font-size: 14px; font-weight: 600; list-style: none; cursor: pointer; }
@@ -779,13 +780,13 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .post-components > section:not([hidden]) ~ section:not([hidden]), .post-components > section:not([hidden]) ~ .component-picker { margin-top: 24px; }
 .downloads-editor h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.2em; }
 .downloads-editor h2 span { color: var(--muted); font-size: 14px; font-weight: 400; }
-.downloads-editor > .form-hint:not(.downloads-limits) { margin: 8px 0 18px; font-size: 14px; }
-.downloads-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.downloads-controls button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 9px 14px; border-radius: 24px; font-size: 14px; }
-.downloads-controls .button-secondary { border-color: #9aa9bd; background: #fff; }
-.downloads-controls .button-secondary:hover:not(:disabled) { background: #e5e9ef; }
-.downloads-controls button:disabled { opacity: 1; border-color: #cbd3de; background: #e7ebf1; color: #737d8a; }
-.downloads-controls svg, .file-downloads svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+:is(.album-editor, .downloads-editor) > .form-hint:not(.album-limits, .downloads-limits) { margin: 8px 0 18px; font-size: 14px; }
+.component-file-controls:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+.component-file-controls button { gap: 7px; min-height: 44px; padding: 9px 14px; border-radius: 24px; font-size: 14px; font-weight: 600; }
+.component-file-controls .button-secondary { border-color: #9aa9bd; background: #fff; }
+.component-file-controls .button-secondary:hover:not(:disabled) { background: #e5e9ef; }
+.component-file-controls button:disabled { opacity: 1; border-color: #cbd3de; background: #e7ebf1; color: #737d8a; }
+.component-file-controls svg, .file-downloads svg { flex-shrink: 0; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .downloads-editor-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
 .downloads-editor-list > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 16px; border: 1px solid #dce1e7; border-radius: 12px; background: #fff; }
 .download-type, .download-file-icon { display: grid; align-content: center; justify-content: center; width: 52px; min-height: 60px; border-radius: 8px; background: #edf2f8; color: #354c6a; font-size: 12px; font-weight: 600; text-decoration: none; }
@@ -801,13 +802,18 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .download-actions button:last-child:hover:not(:disabled) { border-color: #e4b6b0; background: #fff0ee; color: #a12626; }
 .download-actions button:disabled { opacity: .4; }
 .downloads-limits { margin-top: 14px; font-size: 13px; }
-.pdf-document-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 20px; }
+.pdf-document-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 20px; }
+.pdf-document-row .component-file-controls:not([hidden]) { margin: 0; }
+.pdf-document-row .downloads-limits { flex-basis: 100%; margin: 0; }
 .pdf-document-meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 14px; }
 .pdf-document-meta a { display: inline-flex; align-items: center; min-height: 44px; color: #405b78; text-decoration: underline; text-underline-offset: .18em; }
 .pdf-editor .download-fields > label:not(.file-download-option) { margin: 18px 0 6px; color: inherit; font-size: inherit; font-weight: 600; }
 .pdf-editor .download-fields > label:first-child { margin-top: 0; }
 .pdf-editor .download-fields input:not([type=checkbox]), .pdf-editor .download-fields textarea { margin: 6px 0 0; padding: 10px 12px; font-size: inherit; font-weight: 400; }
-.pdf-editor .file-download-option { margin: 12px 0 0; }
+.pdf-editor-options { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 28px; min-width: 0; margin: 10px 0 0; padding: 0; border: 0; }
+.pdf-editor-options .file-download-option { margin: 0; color: #43536a; font-size: 14px; }
+.pdf-editor-presentation-option { min-width: 0; }
+.pdf-editor-presentation-option .form-hint { display: block; margin: -4px 0 0 26px; font-size: 13px; }
 .download-library { width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; border: 1px solid #dce1e7; border-radius: 16px; background: #fff; color: #303946; }
 .download-library::backdrop { background: #111d30a6; }
 .download-library h2 { margin: 0 0 20px; }
@@ -817,6 +823,11 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .download-library-list span { min-width: 0; overflow-wrap: anywhere; }
 .download-library-list small { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
 .component-order-controls { display: flex; gap: 8px; padding-inline: 4px; }
+@media (max-width: 767px) {
+  .component-actions { gap: 4px; }
+  .component-order-controls { gap: 4px; padding-inline: 0; }
+  .component-remove { padding-inline: 2px; }
+}
 .component-order-controls button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px; border: 1px solid #dce1e7; border-radius: 50%; background: #fff; color: #526275; }
 .component-order-controls button:hover:not(:disabled) { background: #edf2f8; border-color: #bac9da; }
 .component-order-controls button:disabled { color: #b7c0cb; background: #f8f9fb; }
@@ -854,16 +865,12 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 }
 .album-editor [hidden] { display: none; }
 .album-editor-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 479px) {
+  .album-editor-heading:has([data-component-order-controls]:not([hidden])) { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
 .album-editor h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.2em; }
 .album-editor h2 span { padding: 3px 8px; border-radius: 20px; background: #eff2f5; color: #626975; font-size: 13px; font-weight: 500; white-space: nowrap; }
 .album-editor h2 span:empty { display: none; }
-.album-editor #album-help { margin: 8px 0 18px; font-size: 14px; }
-.album-editor-controls:not([hidden]) { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
-.album-editor-controls > button { gap: 7px; min-height: 44px; padding: 9px 12px; border: 0; border-radius: 24px; background: transparent; color: #505969; font-size: 14px; font-weight: 600; }
-.album-editor-controls > button:hover:not(:disabled) { background: #edf0f4; color: #283447; }
-.album-editor-controls [data-album-upload] { background: #303c4e; color: #fff; }
-.album-editor-controls [data-album-upload]:hover:not(:disabled) { background: #455770; color: #fff; }
-.album-editor-controls svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .album-upload-progress { color: var(--muted); font-size: 14px; margin-inline: 8px; }
 .album-capacity { color: var(--muted); font-size: 14px; margin-inline: 8px; }
 .album-editor-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 18px; margin: 0; padding: 0; list-style: none; }
@@ -1097,8 +1104,30 @@ html:has(.album-viewer[open]) { overflow: hidden; scrollbar-gutter: stable; }
 .pdf-preview-heading nav a { display: inline-flex; align-items: center; min-height: 44px; color: #405b78; font-size: 14px; font-weight: 600; text-underline-offset: 3px; }
 .pdf-preview-description { margin: 0 0 16px; color: #596573; font-size: .9em; white-space: pre-wrap; }
 .pdf-preview-frame { display: block; width: 100%; height: min(75vh, 720px); min-height: 420px; border: 0; border-radius: 12px; background: #fff; }
+.pdf-presentation { min-width: 0; }
+.pdf-slide { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 16 / 9; max-height: 75vh; min-height: 160px; overflow: hidden; border: 1px solid #dde4ec; border-radius: 12px; background: #e9edf3; }
+.pdf-slide canvas { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.pdf-slide .screen-reader-text { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: pre-wrap; }
+.pdf-presentation-controls { display: grid; grid-template-columns: 1fr auto minmax(8ch, auto) auto 1fr; align-items: center; gap: 12px; margin-top: 12px; }
+.pdf-presentation-controls button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: 0; padding: 10px; border: 1px solid #c8d5e5; border-radius: 50%; background: #fff; color: #405b78; }
+.pdf-presentation-controls button:disabled { opacity: .4; cursor: default; }
+.pdf-presentation-controls button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+[data-pdf-previous] { grid-column: 2; grid-row: 1; }
+[data-pdf-page] { grid-column: 3; grid-row: 1; text-align: center; font-size: .85em; font-variant-numeric: tabular-nums; }
+[data-pdf-next] { grid-column: 4; grid-row: 1; }
+.pdf-presentation-controls .pdf-fullscreen, .pdf-presentation-controls [data-pdf-retry] { grid-column: 5; grid-row: 1; justify-self: end; }
+.pdf-presentation:not(:fullscreen) .pdf-fullscreen-exit, .pdf-presentation:fullscreen .pdf-fullscreen-enter { display: none; }
+.pdf-presentation-controls [data-pdf-retry] { width: auto; padding-inline: 14px; border-radius: 22px; }
+.pdf-presentation-controls.pdf-presentation-failed { display: flex; justify-content: flex-end; }
+.pdf-presentation-status { min-height: 1.4em; margin: 8px 0 0; }
+.pdf-presentation:fullscreen { display: flex; flex-direction: column; gap: 0; width: 100%; height: 100dvh; padding: 12px; background: #101820; color: #fff; }
+.pdf-presentation:fullscreen .pdf-slide { flex: 1; min-height: 0; max-height: none; aspect-ratio: auto; border: 0; background: #101820; }
+.pdf-presentation:fullscreen .pdf-presentation-controls { flex-shrink: 0; }
+.pdf-presentation:fullscreen .pdf-presentation-status { color: #dce5ef; }
+.pdf-presentation [hidden] { display: none; }
 @media (max-width: 767px) {
   .pdf-preview-frame { height: 420px; min-height: 0; }
+  .pdf-slide-portrait { aspect-ratio: 3 / 4; }
 }
 
 .link-preview { margin-block: 32px; }

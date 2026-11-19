@@ -86,6 +86,8 @@ function initialize(root) {
         description.addEventListener('input', update);
         fields.append(label, detail);
         if (pdfOnly) {
+          const options = element('fieldset', '', 'pdf-editor-options');
+          options.setAttribute('aria-label', 'Viewer options');
           const option = element('label', '', 'file-download-option');
           const showDownload = element('input');
           showDownload.type = 'checkbox';
@@ -96,9 +98,24 @@ function initialize(root) {
             serialize();
           });
           option.append(showDownload, document.createTextNode('Show download link'));
-          fields.append(option);
-        }
-        if (pdfOnly) {
+
+          const mode = element('div', '', 'pdf-editor-presentation-option');
+          const presentationOption = element('label', '', 'file-download-option');
+          const hint = element('small', 'One page at a time, with Previous and Next buttons.', 'form-hint');
+          hint.id = source.id + '-presentation-help';
+          const presentation = element('input');
+          presentation.type = 'checkbox';
+          presentation.checked = Boolean(entry.presentation);
+          presentation.setAttribute('aria-describedby', hint.id);
+          presentation.addEventListener('change', () => {
+            if (presentation.checked) entry.presentation = true;
+            else delete entry.presentation;
+            serialize();
+          });
+          presentationOption.append(presentation, document.createTextNode('Presentation mode'));
+          mode.append(presentationOption, hint);
+          options.append(option, mode);
+          fields.append(options);
           item.append(fields);
           return item;
         }
@@ -233,7 +250,7 @@ function initialize(root) {
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
     registerComponent(section, {
-      normalize: value => jsonComponentValue(value, {strings: ['description'], flags: ['hideDownload'], empty: '[]'}),
+      normalize: value => jsonComponentValue(value, {strings: ['description'], flags: ['hideDownload', 'presentation'], empty: '[]'}),
       snapshot: () => ({source: source.value, removed: [...removed]}),
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy.source; read(); removed = copy.removed; render(); },

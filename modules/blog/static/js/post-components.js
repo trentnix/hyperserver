@@ -158,7 +158,7 @@ function createEditor(root) {
     const undo = event.target.closest('[data-component-undo]');
     const remove = event.target.closest('[data-component-remove]');
     const move = event.target.closest('[data-component-move]');
-    const type = add?.dataset.componentAdd || undo?.dataset.componentUndo || remove?.dataset.componentRemove || move?.closest('[data-post-component]').dataset.postComponent;
+    const type = add?.dataset.componentAdd || undo?.dataset.componentUndo || (remove || move)?.closest('[data-post-component]').dataset.postComponent;
     const entry = entries.get(type);
     if (!entry) return;
     if ((add || undo) && !order.includes(type)) {

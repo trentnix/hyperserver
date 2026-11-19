@@ -7,7 +7,9 @@
     while (!predicate()) { if (Date.now() > end) throw new Error('Timed out: ' + predicate); await new Promise(resolve => setTimeout(resolve, 25)); }
   };
   window.addEventListener('error', event => report('Browser error: ' + event.message));
+  document.addEventListener('securitypolicyviolation', event => report('CSP violation: ' + event.violatedDirective + ' ' + event.blockedURI));
   try {
+    const presentationMode = typeof testPresentationMode !== 'undefined' && testPresentationMode;
     const stage = sessionStorage.getItem('pdf-stage');
     if (!stage) {
       await wait(() => document.querySelector('#post-form .CodeMirror') && document.querySelector('[data-post-component="pdf-preview"] textarea[hidden]'));
@@ -31,6 +33,9 @@
       assert(section.querySelector('[data-pdf-document] a').href.endsWith('?preview=1') && section.querySelector('[data-download-upload-label]').textContent === 'Replace PDF', 'The selected PDF needs an Open link and a replacement action.');
       const firstOption = section.querySelector('input[type="checkbox"]');
       assert(firstOption?.checked && firstOption.closest('label').textContent === 'Show download link', 'Existing PDFs must show a clearly labeled download option, checked by default.');
+      const presentation = [...section.querySelectorAll('input[type=checkbox]')].find(input => input.closest('label').textContent === 'Presentation mode');
+      assert(presentation && !presentation.checked, 'Existing PDFs must default to the native viewer.');
+      if (presentationMode) presentation.click();
       const authorDescription = section.querySelector('[data-downloads-list] textarea');
       authorDescription.value = 'An author-written description to retain when replacing the PDF.';
       authorDescription.dispatchEvent(new Event('input', {bubbles: true}));
@@ -49,7 +54,7 @@
       await wait(() => !form.dataset.uploading && form.elements.pdf.value !== saved);
       const replacement = JSON.parse(form.elements.pdf.value)[0];
       const original = JSON.parse(saved)[0];
-      assert(replacement.id !== original.id && replacement.label === original.label && replacement.description === original.description && replacement.hideDownload === true && !section.querySelector('[data-downloads-recovery]').hidden, 'Replacement must keep author details and offer Undo.');
+      assert(replacement.id !== original.id && replacement.label === original.label && replacement.description === original.description && replacement.hideDownload === true && Boolean(replacement.presentation) === presentationMode && !section.querySelector('[data-downloads-recovery]').hidden, 'Replacement must keep author details and offer Undo.');
       section.querySelector('[data-download-undo]').click();
       assert(form.elements.pdf.value === saved, 'Undo must restore the PDF.');
       assert(!section.querySelector('input[type="checkbox"]').checked, 'Undo must retain the download setting.');
@@ -114,10 +119,8 @@
       return;
     }
     if (stage === 'view') {
-      await wait(() => document.querySelector('.pdf-preview-frame'));
+      await wait(() => document.querySelector('.pdf-preview'));
       const section = document.querySelector('.pdf-preview');
-      const frame = section.querySelector('iframe');
-      assert(frame.title.includes('document with a title') && frame.getBoundingClientRect().height >= 300, 'The viewer needs a title and useful bounded height.');
       assert(section.textContent.includes('two pages'), 'The saved description must render.');
       assert(document.documentElement.scrollWidth <= innerWidth + 1, 'PDF content must fit the viewport.');
       assert(document.querySelector('.file-downloads').compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING, 'PDF order must survive saving.');
@@ -127,13 +130,54 @@
       const inlineResponse = await fetch(open.href);
       const attachment = await fetch(download.href);
       assert(inlineResponse.headers.get('Content-Disposition').startsWith('inline') && attachment.headers.get('Content-Disposition').startsWith('attachment'), 'Open PDF and Download need distinct browser behaviors.');
-      frame.scrollIntoView({block: 'center'});
-      // Firefox owns the native viewer in a privileged document. Page scripts cannot inspect its controls.
-      await wait(() => frame.contentDocument === null);
+      if (presentationMode) {
+        const viewer = section.querySelector('[data-pdf-presentation]');
+        assert(viewer, 'The saved presentation option must select the presentation renderer.');
+        viewer.scrollIntoView({block: 'center'});
+        const page = viewer.querySelector('[data-pdf-page]');
+        await wait(() => page.textContent === 'Page 1 of 2');
+        const previous = viewer.querySelector('[data-pdf-previous]');
+        const next = viewer.querySelector('[data-pdf-next]');
+        assert(previous.disabled && !next.disabled, 'Page navigation must respect the first page.');
+        assert(viewer.querySelector('canvas').width > 0 && !viewer.querySelector(':scope > iframe'), 'Presentation must render a canvas without loading a second native viewer.');
+        const text = viewer.querySelector('[data-pdf-text]');
+        await wait(() => text.textContent.trim());
+        const firstText = text.textContent;
+        next.click();
+        await wait(() => page.textContent === 'Page 2 of 2');
+        await wait(() => text.textContent.trim() && text.textContent !== firstText);
+        assert(!previous.disabled && next.disabled, 'Page navigation must respect the last page.');
+        viewer.focus();
+        const key = value => viewer.dispatchEvent(new KeyboardEvent('keydown', {key: value, bubbles: true, cancelable: true}));
+        key('Home');
+        await wait(() => page.textContent === 'Page 1 of 2');
+        key('End');
+        await wait(() => page.textContent === 'Page 2 of 2');
+        key('ArrowLeft'); key('ArrowRight'); key('ArrowLeft');
+        await wait(() => page.textContent === 'Page 1 of 2' && !viewer.hasAttribute('aria-busy'));
+        const canvas = viewer.querySelector('canvas').getBoundingClientRect();
+        const bounds = viewer.querySelector('[data-pdf-slide]').getBoundingClientRect();
+        assert(canvas.width <= bounds.width + 1 && canvas.height <= bounds.height + 1, 'Each complete page must fit its presentation area.');
+        const fullscreen = viewer.querySelector('[data-pdf-fullscreen]');
+        assert(fullscreen.hidden === !document.fullscreenEnabled, 'Fullscreen should only be offered when the browser supports it.');
+        assert(getComputedStyle(fullscreen.querySelector('.pdf-fullscreen-enter')).display !== 'none' && getComputedStyle(fullscreen.querySelector('.pdf-fullscreen-exit')).display === 'none', 'The fullscreen button should show only the enter icon in the inline viewer.');
+        assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Presentation controls must fit narrow viewports.');
+      } else {
+        const frame = section.querySelector('iframe');
+        assert(frame.title.includes('document with a title') && frame.getBoundingClientRect().height >= 300, 'The viewer needs a title and useful bounded height.');
+        frame.scrollIntoView({block: 'center'});
+        // Firefox owns the native viewer in a privileged document.
+        await wait(() => frame.contentDocument === null);
+        assert(!performance.getEntriesByType('resource').some(resource => resource.name.includes('/lib/pdfjs/')), 'Ordinary PDF previews must not load presentation libraries.');
+      }
+      const oldCanvas = section.querySelector('[data-pdf-slide] canvas');
       await htmx.ajax('GET', document.querySelector('a[href^="/post/update/"]').getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
       await wait(() => document.querySelector('[data-post-component="pdf-preview"] input'));
       assert(document.querySelector('#post-form').elements.pdf.value.includes('two pages'), 'Reopening the editor must retain the PDF fields.');
       assert(!document.querySelector('[data-post-component="pdf-preview"] input[type="checkbox"]').checked, 'Reopening the editor must retain the download setting.');
+      const restoredPresentation = [...document.querySelectorAll('[data-post-component="pdf-preview"] input[type=checkbox]')].find(input => input.closest('label').textContent === 'Presentation mode');
+      assert(restoredPresentation.checked === presentationMode, 'Reopening the editor must retain the presentation setting.');
+      if (oldCanvas) assert(oldCanvas.width === 0, 'HTMX navigation must release the previous presentation canvas.');
       await report('PASS');
     }
   } catch (error) { await report(error.message + '\n' + error.stack); }
