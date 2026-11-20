@@ -37,33 +37,11 @@
       const form = document.querySelector('#post-form');
       form.elements.title.value = 'Social post review'; form.elements.slug.value = 'social-post-review';
       assert(form.querySelectorAll('[data-component-add="social-post"]').length === 1 && !form.querySelector('[data-component-add="x-post"], [data-component-add="bluesky-post"], [data-component-add="threads-post"], [data-component-add="facebook-post"]'), 'The picker must offer one Social post option.');
-      // Old recovery data still uses provider-specific field names. Those
-      // sections share the single picker choice and accept every platform.
-      for (const [legacyKind, legacyField, legacyURL] of [...platforms, ['x-post', 'xPost', 'https://x.com/user/status/123']]) {
-        const legacy = form.querySelector(`[data-post-component="${legacyKind}"]`);
-        form.elements[legacyField].value = JSON.stringify({url: legacyURL, description});
-        form.elements[legacyField].dispatchEvent(new Event('change', {bubbles: true}));
-        assert(!legacy.hidden && !form.querySelector('[data-component-add="social-post"]').hidden, 'Recovered social posts must use the single picker choice.');
-        set(legacy.querySelector('[data-social-post-field="url"]'), platformURL);
-        assert(JSON.parse(form.elements[legacyField].value).url === platformURL, 'Legacy editors must allow platform changes.');
-        await removeTestComponent(legacy.querySelector('[data-component-remove]'));
-        assert(!form.querySelector('[data-component-add="social-post"]').hidden, 'Removing a legacy component must restore the unified picker choice.');
-        await addTestComponent(form.querySelector('[data-component-add="social-post"]'));
-        const replacement = form.querySelector('[data-post-component="social-post"]');
-        set(replacement.querySelector('[data-social-post-field="url"]'), platformURL);
-        set(replacement.querySelector('[data-social-post-field="description"]'), 'Replacement context for ' + legacyKind);
-        const replacementSource = form.elements.socialPost.value;
-        await undoTestComponent(form.querySelector(`[data-component-undo="${legacyKind}"]`));
-        assert(!legacy.hidden && !replacement.hidden && form.elements.socialPost.value === replacementSource &&
-          JSON.parse(form.elements[legacyField].value).description === description, 'Undo must restore the legacy component alongside the new Social media component.');
-        await removeTestComponent(replacement.querySelector('[data-component-remove]'));
-        await removeTestComponent(legacy.querySelector('[data-component-remove]'));
-      }
       for (const [kind, field, url] of cases) {
         const section = form.querySelector(`[data-post-component="${kind}"]`);
         assert(section.hidden && section.querySelector('fieldset').disabled, 'Unused editors must stay disabled.');
-        await addTestComponent(form.querySelector(`[data-component-add="${kind}"]`));
-        assert(document.activeElement.id === kind + '-url', 'Adding a social post must focus its URL.');
+        const added = await addTestComponent(form.querySelector(`[data-component-add="${kind}"]`));
+        assert(added === section && document.activeElement === added.querySelector('[data-social-post-field="url"]'), 'Adding a social post must focus its URL.');
         set(section.querySelector('[data-social-post-field="url"]'), 'https://evil.test/post/123');
         set(section.querySelector('[data-social-post-field="description"]'), description);
         form.requestSubmit();
@@ -92,6 +70,29 @@
         await undoTestComponent(form.querySelector(`[data-component-undo="${kind}"]`));
         assert(form.elements[field].value === copy, 'Undo must restore the full component.');
         assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Editor must fit the viewport.');
+      }
+      // Old recovery data still uses provider-specific field names. Those
+      // sections share the single picker choice and accept every platform.
+      for (const [legacyKind, legacyField, legacyURL] of [...platforms, ['x-post', 'xPost', 'https://x.com/user/status/123']]) {
+        const legacy = form.querySelector(`[data-post-component="${legacyKind}"]`);
+        form.elements[legacyField].value = JSON.stringify({url: legacyURL, description});
+        form.elements[legacyField].dispatchEvent(new Event('change', {bubbles: true}));
+        assert(!legacy.hidden && !form.querySelector('[data-component-add="social-post"]').hidden, 'Recovered social posts must use the single picker choice.');
+        set(legacy.querySelector('[data-social-post-field="url"]'), platformURL);
+        assert(JSON.parse(form.elements[legacyField].value).url === platformURL, 'Legacy editors must allow platform changes.');
+        await removeTestComponent(legacy.querySelector('[data-component-remove]'));
+        const replacement = await addTestComponent(form.querySelector('[data-component-add="social-post"]'));
+        const replacementURL = replacement.querySelector('[data-social-post-field="url"]');
+        assert(document.activeElement === replacementURL, 'Adding another social post must focus its own URL.');
+        set(replacementURL, platformURL);
+        set(replacement.querySelector('[data-social-post-field="description"]'), 'Replacement context for ' + legacyKind);
+        const source = replacement.querySelector('textarea[name]');
+        const replacementValue = source.value;
+        await undoTestComponent(form.querySelector(`[data-component-undo="${legacyKind}"]`));
+        assert(!legacy.hidden && !replacement.hidden && source.value === replacementValue &&
+          JSON.parse(form.elements[legacyField].value).description === description, 'Undo must restore the legacy component alongside the new Social media component.');
+        await removeTestComponent(replacement.querySelector('[data-component-remove]'));
+        await removeTestComponent(legacy.querySelector('[data-component-remove]'));
       }
       const last = form.querySelector('[data-post-component="social-post"]');
       await addTestComponent(form.querySelector('[data-component-add="video"]'));
