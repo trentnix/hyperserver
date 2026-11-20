@@ -27,7 +27,7 @@
         await wait(() => document.querySelector('#post-form .CodeMirror') && document.querySelector('[data-album-upload]') && !document.querySelector('.album-editor-controls').hidden);
         if (addAlbum && document.querySelector('[data-album-editor]').hidden) {
           document.querySelector('[data-component-picker] summary').click();
-          document.querySelector('[data-component-add="photo-album"]').click();
+          await addTestComponent(document.querySelector('[data-component-add="photo-album"]'));
         }
         return document.querySelector('#post-form');
       };
@@ -48,8 +48,8 @@
       publication.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
       assert(!componentPicker.open && document.activeElement === publication, 'Escape after leaving the picker must not reopen it or move focus.');
       addComponent.click();
-      componentPicker.querySelector('[data-component-add="photo-album"]').click();
-      assert(!form.querySelector('[data-album-editor]').hidden && componentPicker.querySelector('[data-component-add="photo-album"]').hidden && !form.elements.album.value && document.activeElement === form.querySelector('[data-album-upload]'), 'Adding an album must reveal its controls and focus Upload without changing post content.');
+      await addTestComponent(componentPicker.querySelector('[data-component-add="photo-album"]'));
+      assert(!form.querySelector('[data-album-editor]').hidden && !componentPicker.querySelector('[data-component-add="photo-album"]').hidden && !form.elements.album.value && document.activeElement === form.querySelector('[data-album-upload]'), 'Adding an album must reveal its controls and focus Upload without changing post content.');
       const choosePhotoAction = selector => {
         const action = form.querySelector(selector);
         assert(!action.closest('details') && action.getBoundingClientRect().height >= 44, 'Upload and Library must remain visible as touch-sized buttons.');
@@ -196,20 +196,25 @@
       assert(document.activeElement === form.querySelector('[data-album-browse]'), 'Closing the library must return focus to the Library button.');
       assert(form.querySelector('[data-album-count]').textContent === '3 photos', 'The heading must show the album size.');
       const beforeComponentRemoval = form.elements.album.value;
-      form.querySelector('[data-component-remove]').click();
-      assert(form.querySelector('[data-album-editor]').hidden && !form.elements.album.value && !form.querySelector('[data-component-picker]').hidden && !form.querySelector('[data-component-recovery]').hidden, 'Removing an album must clear its submitted content and offer Undo beside the component picker.');
+      await removeTestComponent(form.querySelector('[data-component-remove]'));
+      assert(form.querySelector('[data-album-editor]').hidden && !form.elements.album.value && !form.querySelector('[data-component-picker]').hidden && form.querySelector('[data-component-undo]'), 'Removing an album must clear its submitted content and offer Undo.');
       assert(document.activeElement === form.querySelector('[data-component-picker] summary'), 'Removing a component must return focus to Add component.');
-      form.querySelector('[data-component-undo]').click();
-      assert(!form.querySelector('[data-album-editor]').hidden && form.elements.album.value === beforeComponentRemoval && form.querySelectorAll('[data-album-index]').length === 3 && form.querySelector('[data-component-recovery]').hidden, 'Undo must restore the full album, including photo order and captions.');
-      form.querySelector('[data-component-add="photo-album"]').click();
-      assert(form.elements.album.value === beforeComponentRemoval, 'Adding an already-present component must not replace its contents.');
-      form.querySelector('[data-component-remove]').click();
-      componentPicker.querySelector('summary').click();
-      componentPicker.querySelector('[data-component-add="photo-album"]').click();
-      assert(!form.querySelector('[data-album-editor]').hidden && !form.elements.album.value && !form.querySelectorAll('[data-album-index]').length && form.querySelector('[data-component-recovery]').hidden, 'Adding a component after removal must create an empty album and clear the previous removal recovery.');
-      form.querySelector('[data-component-remove]').click();
-      form.querySelector('[data-component-undo]').click();
-      assert(!form.elements.album.value && !form.querySelectorAll('[data-album-index]').length, 'Undo for a new empty album must not resurrect the earlier album.');
+      await undoTestComponent(form.querySelector('[data-component-undo]'));
+      assert(!form.querySelector('[data-album-editor]').hidden && form.elements.album.value === beforeComponentRemoval && form.querySelectorAll('[data-album-index]').length === 3 && !form.querySelector('[data-component-undo]'), 'Undo must restore the full album, including photo order and captions.');
+      const secondAlbum = await addTestComponent(form.querySelector('[data-component-add="photo-album"]'));
+      assert(form.elements.album.value === beforeComponentRemoval && !secondAlbum.querySelector('textarea[name]').value,
+        'A second photo album must start empty and preserve the first album.');
+      await removeTestComponent(secondAlbum.querySelector('[data-component-remove]'));
+      await removeTestComponent(form.querySelector('[data-component-remove]'));
+      const replacement = await addTestComponent(componentPicker.querySelector('[data-component-add="photo-album"]'));
+      assert(replacement.dataset.componentId && !replacement.querySelector('textarea[name]').value &&
+        form.querySelector('[data-component-undo]').dataset.componentUndo === 'photo-album',
+      'A replacement album must start empty and keep the original album available to Undo.');
+      closeComponentSettings(form);
+      form.querySelector('.CodeMirror').CodeMirror.undo();
+      form.querySelector('.CodeMirror').CodeMirror.undo();
+      assert(form.elements.album.value === beforeComponentRemoval, 'Undo must restore the original album after discarding the replacement.');
+      componentRowIn(form, 'photo-album').querySelector('[data-component-edit]').click();
       form.elements.album.value = beforeComponentRemoval;
       form.elements.album.dispatchEvent(new Event('change', {bubbles: true}));
       const validAlbum = form.elements.album.value;
@@ -329,8 +334,8 @@
       loadCapacity(50);
       assert(capacity.textContent === 'Album full (50 photos)' && form.querySelector('[data-album-upload]').disabled && form.querySelector('[data-album-browse]').disabled && !form.querySelector('[data-album-reorder]').disabled, 'Full albums must disable adding photos while keeping reordering available.');
       const fullAlbum = form.elements.album.value;
-      form.querySelector('[data-component-remove]').click();
-      form.querySelector('[data-component-undo]').click();
+      await removeTestComponent(form.querySelector('[data-component-remove]'));
+      await undoTestComponent(form.querySelector('[data-component-undo]'));
       assert(form.elements.album.value === fullAlbum && document.activeElement === form.querySelector('[data-album-reorder]'), 'Restoring a full album must preserve its photos and focus an enabled action.');
       form.querySelector('[data-album-remove]').click();
       assert(!form.querySelector('[data-album-upload]').disabled && !form.querySelector('[data-album-browse]').disabled && capacity.textContent === '1 space left', 'Removing a photo must immediately reopen album capacity.');
@@ -436,6 +441,7 @@
       let orderDialog = document.querySelector('.album-order-dialog');
       assert(orderDialog?.matches(':modal') && orderDialog.contains(document.activeElement), 'Reordering needs a modal dialog with focus inside it.');
       const orderList = orderDialog.querySelector('ol');
+      const usesGrid = innerWidth >= 360;
       const longCaptionPreview = orderList.children[2].querySelector('.album-order-caption');
       const captionPreviewText = longCaptionPreview.querySelector('span');
       const captionStyle = getComputedStyle(captionPreviewText);
@@ -458,7 +464,7 @@
       const captionCardBounds = captionDetail.closest('li').getBoundingClientRect();
       assert(fullCaptionBounds.left >= captionCardBounds.left && fullCaptionBounds.right <= captionCardBounds.right && fullCaptionBounds.top >= captionCardBounds.top && fullCaptionBounds.bottom <= captionCardBounds.bottom && captionDetail.querySelector('p').clientHeight > 20, 'Expanded text must stay readable inside its photo card.');
       assert(captionDetail.querySelector('button').getBoundingClientRect().height >= 44, 'Show less must provide a full touch target.');
-      if (innerWidth >= 700) assert(fullCaptionBounds.bottom <= longCaptionPreview.closest('li').querySelector('.album-order-controls').getBoundingClientRect().top, 'Expanded grid captions must leave move controls uncovered.');
+      if (usesGrid) assert(fullCaptionBounds.bottom <= longCaptionPreview.closest('li').querySelector('.album-order-controls').getBoundingClientRect().top, 'Expanded grid captions must leave move controls uncovered.');
       captionDetail.querySelector('p').scrollTop = 80;
       assert(captionDetail.querySelector('p').scrollTop > 0, 'Long expanded captions must scroll without enlarging their card.');
       orderList.dispatchEvent(new Event('scroll'));
@@ -484,9 +490,10 @@
       const up = firstPhoto.querySelector('[data-album-move=up]');
       const down = firstPhoto.querySelector('[data-album-move=down]');
       assert(up.disabled && !down.disabled && orderList.lastElementChild.querySelector('[data-album-move=down]').disabled, 'Move controls must reflect the start and end of the album.');
+      const moveSize = innerWidth >= 700 ? 48 : 44;
       for (const button of orderDialog.querySelectorAll('[data-album-move]')) {
         const bounds = button.getBoundingClientRect();
-        assert(Math.abs(bounds.width - 48) < 1 && Math.abs(bounds.height - 48) < 1 && button.getAttribute('aria-label').startsWith('Move photo '), 'Move buttons must keep compact 48-pixel touch targets.');
+        assert(Math.abs(bounds.width - moveSize) < 1 && Math.abs(bounds.height - moveSize) < 1 && button.getAttribute('aria-label').startsWith('Move photo '), 'Move buttons must preserve their touch targets.');
         assert(getComputedStyle(button).backgroundColor !== 'rgba(0, 0, 0, 0)' && getComputedStyle(button).borderTopWidth === '1px', 'Move controls must look like visible buttons, including when disabled.');
       }
       for (const card of orderList.children) {
@@ -504,9 +511,13 @@
       }
       const firstOrderBounds = firstPhoto.getBoundingClientRect();
       const secondOrderBounds = orderList.children[1].getBoundingClientRect();
-      if (innerWidth >= 700) {
-        assert(Math.abs(firstOrderBounds.top - secondOrderBounds.top) < 1 && secondOrderBounds.left > firstOrderBounds.right, 'Wide reorder dialogs must use a grid in reading order.');
-        assert(firstPhoto.querySelector('img').getBoundingClientRect().width >= 200 && down.title === 'Move forward', 'Grid photos must be large and move controls must describe album order.');
+      if (usesGrid) {
+        assert(Math.abs(firstOrderBounds.top - secondOrderBounds.top) < 1 && secondOrderBounds.left > firstOrderBounds.right, 'Reorder cards must follow the grid in reading order.');
+        if (innerWidth < 700) {
+          const thirdOrderBounds = orderList.children[2].getBoundingClientRect();
+          assert(thirdOrderBounds.left === firstOrderBounds.left && thirdOrderBounds.top > firstOrderBounds.bottom, 'Phone-sized dialogs must show two photo cards per row.');
+        }
+        assert(firstPhoto.querySelector('img').getBoundingClientRect().width >= (innerWidth >= 700 ? 200 : 110) && down.title === 'Move forward', 'Grid photos must be large and move controls must describe album order.');
         for (const card of orderList.children) {
           const previewText = card.querySelector('.album-order-caption > span');
           if (previewText) {
@@ -558,7 +569,7 @@
       assert(document.querySelector('.album-drop-marker:not([hidden])') && orderList.firstElementChild === firstPhoto, 'Dragging must show an insertion marker without rearranging cards before release.');
       const insertion = document.querySelector('.album-drop-marker');
       assert(['none', 'normal'].includes(getComputedStyle(insertion, '::before').content) && ['none', 'normal'].includes(getComputedStyle(insertion, '::after').content), 'Insertion cues must not have decorative endpoint dots.');
-      if (innerWidth >= 700) {
+      if (usesGrid) {
         const cue = insertion.getBoundingClientRect();
         const targetCard = orderList.children[1].getBoundingClientRect();
         const targetPhoto = orderList.children[1].querySelector('img').getBoundingClientRect();
@@ -604,23 +615,28 @@
       openAlbumOrder(layoutPaths.map((path, index) => ({path, caption: index === 1 ? '' : 'Short caption'})), () => { throw new Error('Cancel must not apply a layout fixture.'); }, reorder);
       const compactOrderDialog = document.querySelector('.album-order-dialog');
       assert([...compactOrderDialog.querySelectorAll('.album-order-caption')].every(caption => caption.tagName === 'P' && caption.tabIndex === -1 && !caption.hasAttribute('aria-expanded')), 'Short and absent captions must stay plain text without extra controls or tab stops.');
-      if (innerWidth >= 700) {
+      if (usesGrid) {
         const compactCards = [...compactOrderDialog.querySelectorAll('li')];
-        const controlsTop = compactCards[0].querySelector('.album-order-controls').getBoundingClientRect().top;
+        const controlTops = new Map();
         assert(compactCards.every(card => {
           const image = card.querySelector('img').getBoundingClientRect();
           const controls = card.querySelector('.album-order-controls').getBoundingClientRect();
-          return controls.top - image.bottom <= 33 && controls.top >= image.bottom && Math.abs(controls.top - controlsTop) < 1;
+          const top = card.getBoundingClientRect().top;
+          if (!controlTops.has(top)) controlTops.set(top, controls.top);
+          return controls.top - image.bottom <= 33 && controls.top >= image.bottom && Math.abs(controls.top - controlTops.get(top)) < 1;
         }), 'Short and missing captions must keep move buttons aligned and close to the photos.');
       }
       compactOrderDialog.querySelector('[data-album-order-cancel]').click();
       await wait(() => !compactOrderDialog.isConnected);
       // Reuse available uploads to exercise a full album without changing the post.
-      openAlbumOrder(Array.from({length: 50}, (_,index) => ({path: layoutPaths[index % layoutPaths.length], caption: 'Photo layout fixture ' + index})), () => { throw new Error('Cancel must not apply a layout fixture.'); }, reorder);
+      openAlbumOrder(Array.from({length: 50}, (_, index) => ({path: layoutPaths[index % layoutPaths.length], caption: ''})), () => { throw new Error('Cancel must not apply a layout fixture.'); }, reorder);
       const fullAlbumDialog = document.querySelector('.album-order-dialog');
       const fullAlbumList = fullAlbumDialog.querySelector('ol');
       assert(fullAlbumList.scrollHeight > fullAlbumList.clientHeight && fullAlbumList.clientHeight > 0, 'Large albums must scroll inside a bounded dialog.');
-      if (innerWidth >= 700) {
+      if (usesGrid) {
+        const firstImage = fullAlbumList.querySelector('img').getBoundingClientRect();
+        const firstControls = fullAlbumList.querySelector('.album-order-controls').getBoundingClientRect();
+        assert(firstControls.top - firstImage.bottom <= 5, 'Albums without captions must keep their controls directly below the photos.');
         const moving = fullAlbumList.firstElementChild;
         const handle = moving.querySelector('[data-album-drag]');
         const start = handle.getBoundingClientRect();
@@ -773,6 +789,7 @@
       recoveredPhoto.closest('li').querySelector('[data-album-remove]').click();
       assert(form.elements.album.value === orderedBeforeUndo, 'Restoring and removing a photo must preserve the current order of other photos.');
       const expected = form.elements.album.value;
+      const expectedBody = form.elements.content.value;
       sessionStorage.setItem('album-content', expected);
       assert(form.elements.album.hidden, 'Enhanced editor should show photo controls.');
       assert(form.scrollWidth <= form.clientWidth + 1, 'Album editor overflows the viewport.');
@@ -800,7 +817,7 @@
       form.querySelector('[data-draft-restore]').click();
       await wait(() => form.querySelectorAll('[data-album-index]').length === 3);
       assert(form.elements.album.value === expected, 'Recovery changed album content.');
-      assert(form.querySelector('.CodeMirror').CodeMirror.getValue() === 'Writing above the album.', 'Recovery lost the body.');
+      assert(form.querySelector('.CodeMirror').CodeMirror.getValue() === expectedBody && expectedBody.includes('Writing above the album.'), 'Recovery lost the body or album placement.');
       form.querySelector('[name=published][value=on]').checked = true;
       sessionStorage.setItem('album-stage', 'view');
       form.requestSubmit();
@@ -813,7 +830,7 @@
       assert(editSavedPost, 'A saved post must offer its editor.');
       await htmx.ajax('GET', editSavedPost.getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
       await wait(() => document.querySelector('[data-album-list]')?.children.length === 3);
-      assert(!document.querySelector('[data-album-editor]').hidden && document.querySelector('[data-component-add="photo-album"]').hidden, 'Editing a saved album must show its component automatically and exclude a duplicate choice.');
+      assert(!document.querySelector('[data-album-editor]').hidden && !document.querySelector('[data-component-add="photo-album"]').hidden, 'Editing a saved album must show its component and keep Add available.');
       await htmx.ajax('GET', savedPostURL, {target: '#article-content', swap: 'innerHTML'});
       await wait(() => document.querySelector('.photo-album-grid'));
       sessionStorage.setItem('album-component-saved-check', '1');

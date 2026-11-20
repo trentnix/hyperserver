@@ -1,6 +1,6 @@
 # Social media
 
-Choose **Add component → Social media** and paste a public post URL. The URL determines the platform. An optional description appears above the post. An optional screenshot appears while loading or if embedding fails. No API credentials are required. One Social media component is allowed per post.
+Choose **Add component → Social media** and paste a public post URL. The URL determines the platform. An optional description appears above the post. An optional screenshot appears while loading or if embedding fails. No API credentials are required.
 
 The editor previews the post when the URL loses focus and previews saved components when opened. Changing the URL clears the old preview. Description edits do not reload the provider. Previewing does not save or change the component. Descriptions allow 1,000 characters, URLs 2,048 bytes, and screenshots follow the [image limits](media.md#upload-and-reuse). See [shared component behavior](components.md).
 

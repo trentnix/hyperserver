@@ -11,18 +11,30 @@
   <label for="post-summary">Summary</label><textarea id="post-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
   {{ template "blog.tagField" .Data }}
   {{ template "blog.previewImage" .Data.PreviewField }}
-  {{ template "blog.markdownFields" .Data }}
   {{ $components := .Data.ComponentEditors }}
-  <div class="post-components" data-post-components>
-  <input type="hidden" name="componentOrder" value="{{ .Data.ComponentOrderJSON }}">
-  {{ range $components }}{{ renderPartial .Template .Data }}{{ end }}
+  <label id="markdown-label" for="post-content">Content</label>
   <details class="component-picker" data-component-picker hidden>
     <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add component</summary>
     <div class="component-picker-options">
-      {{ range $components }}{{ if not .AliasFor }}<button type="button" data-component-add="{{ .Kind }}">{{ renderPartial .Icon . }}<span><strong>{{ .Name }}</strong><small>{{ .Summary }}</small></span></button>{{ end }}{{ end }}
+      {{ range $components }}{{ if not .AliasFor }}<button type="button" class="no-disable" data-component-add="{{ .Kind }}">{{ renderPartial .Icon . }}<span><strong>{{ .Name }}</strong><small>{{ .Summary }}</small></span></button>{{ end }}{{ end }}
     </div>
   </details>
-  {{ range $components }}<div class="album-removal-recovery" data-component-recovery="{{ .Kind }}" role="status" hidden>{{ .Name }} removed.<button type="button" class="text-button" data-component-undo="{{ .Kind }}">Undo</button></div>{{ end }}
+  <p class="component-placement-status" role="status" data-component-placement-status></p>
+  {{ template "blog.markdownFields" .Data }}
+  <div class="post-components" data-post-components>
+  <input type="hidden" name="componentOrder" value="{{ .Data.ComponentOrderJSON }}">
+  {{ range $id, $source := .Data.ExtraComponents }}<textarea name="{{ $id }}" data-component-instance hidden>{{ $source }}</textarea>{{ end }}
+  <template data-component-dialog-template>
+    <dialog class="component-dialog">
+      <div class="component-dialog-body"></div>
+      <footer><button type="button" data-component-done>Done</button></footer>
+    </dialog>
+  </template>
+  {{ range $components }}{{ renderPartial .Template .Data }}{{ end }}
+  <div data-component-removal-status role="status"></div>
+  <template data-component-removal-template>
+    <div class="album-removal-recovery component-removal-notice"><span><span data-removed-component></span> removed.</span><button type="button" class="text-button" data-component-undo>Undo</button></div>
+  </template>
   </div>
   {{ with .Data.SeriesEditor }}{{ template "blog.seriesPanel" . }}{{ end }}
   <div class="publication-options" role="radiogroup" aria-label="Publication">
@@ -102,6 +114,7 @@
   <p class="form-hint">Changes take effect when you save.</p>
   <div id="editor-errors" class="form-error" role="alert">{{ if .Data.Error }}{{ template "blog.postError" . }}{{ end }}</div>
   <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}{{ .Data.ReturnURL }}{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top showTarget:window"{{ end }}>Cancel</a></div>
+  <p class="component-placement-status" data-component-save-status role="status"></p>
   <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
   </div>
 </form>

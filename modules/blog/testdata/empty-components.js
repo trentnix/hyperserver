@@ -26,7 +26,7 @@
       form.elements.slug.value = 'empty-component-review';
       form.noValidate = true; // Also exercise server validation when native checks are bypassed.
       for (const [kind, field] of [['photo-album', 'album'], ['file-downloads', 'downloads'], ['pdf-preview', 'pdf'], ['link-preview', 'link'], ['video', 'video'], ['audio', 'audio'], ['event', 'event'], ['social-post', 'socialPost'], ['image-comparison', 'comparison']]) {
-        form.querySelector(`[data-component-add="${kind}"]`).click();
+        await addTestComponent(form.querySelector(`[data-component-add="${kind}"]`));
         const section = form.querySelector(`[data-post-component="${kind}"]`);
         const required = form.querySelector('.CodeMirror').CodeMirror.getInputField().getAttribute('aria-required');
         assert(required !== 'true', 'The empty component must get its own error rather than requiring unrelated Markdown.');
@@ -35,7 +35,7 @@
         assert(form.elements.namedItem(field).getAttribute('aria-invalid') === 'true' && section.contains(document.activeElement), 'The error must identify and focus the empty component: ' + kind);
         assert(!section.hidden && form.elements.componentOrder.value === JSON.stringify([kind]), 'A rejected save must retain the added component: ' + kind);
         assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Component errors must fit the viewport.');
-        section.querySelector('[data-component-remove]').click();
+        await removeTestComponent(section.querySelector('[data-component-remove]'));
         assert(section.hidden && !section.querySelector('[data-component-error]:not([hidden])'), 'Removing the component must clear its inline error.');
         assert(!form.querySelector('#editor-errors').textContent.trim(), 'Removing the component must clear its summary error.');
       }
@@ -45,7 +45,9 @@
       form.elements.audio.dispatchEvent(new Event('input', {bubbles: true}));
       assert(summary.textContent === 'Keep the title error.', 'Correcting audio must preserve unrelated errors.');
       form.elements.title.dispatchEvent(new Event('input', {bubbles: true}));
-      form.querySelector('[data-component-add="audio"]').click();
+      const replacement = await addTestComponent(form.querySelector('[data-component-add="audio"]'));
+      assert(replacement.dataset.componentId, 'The replacement audio component must keep a separate ID.');
+      sessionStorage.setItem('empty-component-id', replacement.dataset.componentId);
       sessionStorage.setItem('empty-component-stage', 'ordinary');
       form.removeAttribute('hx-post');
       form.setAttribute('hx-boost', 'false');
@@ -53,11 +55,13 @@
       form.requestSubmit();
       return;
     }
-    const section = form.querySelector('[data-audio-editor]');
+    const id = sessionStorage.getItem('empty-component-id');
+    const section = componentEditor(form, id);
     await wait(() => section.querySelector('[data-component-error]:not([hidden])'));
-    assert(!section.hidden && form.elements.componentOrder.value === '["audio"]' && !form.elements.audio.value, 'An ordinary rejected save must preserve the empty audio component.');
+    assert(!section.hidden && form.elements.componentOrder.value === JSON.stringify([id]) &&
+      !form.elements.namedItem(id).value, 'An ordinary rejected save must preserve the empty replacement audio component.');
     assert(section.querySelector('[data-component-error]').textContent === 'Choose an MP3 or remove the audio component.', 'The inline error must be concise and omit unrelated help text.');
-    section.querySelector('[data-component-remove]').click();
+    await removeTestComponent(section.querySelector('[data-component-remove]'));
     form.querySelector('.CodeMirror').CodeMirror.setValue('Save after removing the empty component.');
     form.querySelector('[name="published"][value="on"]').checked = true;
     sessionStorage.setItem('empty-component-stage', 'saved');

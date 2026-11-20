@@ -26,9 +26,9 @@ func downloadsDefinition() componentDefinition {
 		Renderer: downloadsRenderer{},
 		EditorData: func(source string, _ bool) any {
 			return fileEditor{Source: source,
-				Kind: "file-downloads", Field: "downloads", Name: "File downloads", Accept: ".pdf,.zip,.txt,.mp3", MaxFiles: maxPostDownloads,
+				Kind: "file-downloads", Field: "downloads", Name: "File downloads", Accept: ".pdf,.zip,.txt,.mp3", MaxFiles: maxComponentDownloads,
 				Help:   "Attach files readers can download.",
-				Limits: "Up to 20 files per post. PDF, ZIP, UTF-8 text, or MP3, up to 32 MiB per file. File storage: 1 GiB per site.",
+				Limits: "Up to 20 files. PDF, ZIP, UTF-8 text, or MP3, up to 32 MiB per file. File storage: 1 GiB per site.",
 			}
 		},
 	}
@@ -91,8 +91,8 @@ func parseDownloads(source string) ([]postDownload, error) {
 }
 
 func validateDownloads(entries []postDownload) error {
-	if len(entries) > maxPostDownloads {
-		return contentError("Choose at most 20 file downloads per post.")
+	if len(entries) > maxComponentDownloads {
+		return contentError("Choose at most 20 files for this component.")
 	}
 	seen := make(map[string]bool)
 	for _, entry := range entries {

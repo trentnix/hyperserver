@@ -53,7 +53,7 @@
     form.elements.title.value = 'Embed review';
     form.elements.slug.value = 'embed-review';
     form.querySelector('[data-component-picker] summary').click();
-    form.querySelector('[data-component-add=embed]').click();
+    await addTestComponent(form.querySelector('[data-component-add=embed]'));
     assert(!section.hidden && document.activeElement === urlField, 'Adding an embed must focus its URL.');
     const urlRect = urlField.getBoundingClientRect();
     const titleRect = titleField.getBoundingClientRect();
@@ -101,8 +101,8 @@
     assert(!preview.hidden && frame.contentDocument === frameDocument && inner.contentWindow === provider, 'Editing the description must preserve the running preview.');
     button.click();
     assert(preview.hidden && !frame.hasAttribute('src'), 'Hide preview must close and unload the frame.');
-    section.querySelector('[data-component-remove]').click();
-    form.querySelector('[data-component-undo=embed]').click();
+    await removeTestComponent(section.querySelector('[data-component-remove]'));
+    await undoTestComponent(form.querySelector('[data-component-undo=embed]'));
     assert(!section.hidden && urlField.value === url && titleField.value === title && descriptionField.value === description && preview.hidden, 'Undo must restore the fields with the preview closed.');
     assert(document.documentElement.scrollWidth <= innerWidth + 1, 'The editor must fit at narrow widths.');
     form.querySelector('[name=published][value=on]').checked = true;

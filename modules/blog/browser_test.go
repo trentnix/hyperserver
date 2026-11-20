@@ -566,12 +566,34 @@ func TestBrowserAlbum(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check photo albums")
 	}
-	for _, width := range []string{"320", "390", "600", "768", "1100", "3440"} {
+	for _, width := range []string{"320", "360", "390", "455", "600", "768", "1100", "3440"} {
 		t.Run(width, func(t *testing.T) {
 			testBrowser(t, browser, width, browserScenario{
 				scriptFile: "testdata/album.js",
 				startPath:  "/login",
 				setup:      albumBrowserHarness,
+			})
+		})
+	}
+}
+
+func TestBrowserNarrowComponentDialogs(t *testing.T) {
+	browser := os.Getenv("HS_TEST_FIREFOX")
+	if browser == "" {
+		t.Skip("set HS_TEST_FIREFOX=firefox to check component dialogs below the page minimum width")
+	}
+	for _, width := range []string{"240", "320"} {
+		t.Run(width, func(t *testing.T) {
+			testBrowser(t, browser, width, browserScenario{
+				scriptFile: "testdata/narrow-component-dialogs.js", startPath: "/post/create", authenticated: true,
+				setup: func(t *testing.T) *harness {
+					h := registeredBrowserHarness(t)
+					h.login(t)
+					mediaUpload(t, h.blog, "Narrow dialog first photo")
+					mediaUpload(t, h.blog, "Narrow dialog second photo")
+					testDownload(t, h, "Narrow dialog download.txt", "Review file selection")
+					return h
+				},
 			})
 		})
 	}

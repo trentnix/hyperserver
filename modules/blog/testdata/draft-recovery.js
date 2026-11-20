@@ -194,6 +194,90 @@
       assert(Object.keys(localStorage).filter(key => key.includes(':/post:') && !key.includes('other-account')).length === 0, 'Successful save retained its own recovery copy.');
       assert((await fetch('/post/s/recovered-post', {credentials: 'omit'})).status === 404, 'Recovery published a private post.');
 
+      const editURL = document.querySelector('a[href^="/post/update/"]').getAttribute('href');
+      await htmx.ajax('GET', editURL, '#article-content');
+      const editor = await ready();
+      change(editor, 'title', 'An abandoned edit');
+      await saved(editor);
+      const key = copies(editor)[0];
+      const copy = localStorage.getItem(key);
+      localStorage.setItem(key + '-older', copy);
+      localStorage.setItem(key + '-changed', copy);
+      const unrelated = 'hyperserver.blog.draft.v1:' + editor.dataset.draftOwner + ':/post/other:copy';
+      localStorage.setItem(unrelated, copy);
+      consent = true;
+      await htmx.ajax('GET', editURL, '#article-content');
+      await wait(() => !editor.isConnected);
+      const reopened = await ready();
+      assert(!reopened.querySelector('[data-draft-recovery]').hidden, 'An existing post must offer its older copies before saving.');
+      reopened.noValidate = true;
+      change(reopened, 'title', '');
+      reopened.requestSubmit();
+      await wait(() => reopened.querySelector('#editor-errors').textContent.includes('title'));
+      assert(localStorage.getItem(key) && localStorage.getItem(key + '-older'), 'A rejected save must keep earlier copies.');
+      change(reopened, 'title', 'Save over earlier recovery');
+      sessionStorage.setItem('recovery-stage', 'existing-post-saved');
+      sessionStorage.setItem('existing-editor', editURL);
+      sessionStorage.setItem('existing-recovery', key);
+      sessionStorage.setItem('unrelated-recovery', unrelated);
+      const rememberedCopy = JSON.parse(copy);
+      const newerCopy = JSON.stringify({...rememberedCopy, saved: Date.now(), fields: {...rememberedCopy.fields, content: 'Written in another editor during the save.'}});
+      document.addEventListener('htmx:before:response', event => {
+        const {ctx} = event.detail;
+        if (ctx.sourceElement === reopened && ctx.response.headers.get('HX-Trigger') === 'blog:content-saved') {
+          localStorage.setItem(key + '-new', newerCopy);
+          localStorage.setItem(key + '-changed', newerCopy);
+        }
+      }, {capture: true, once: true});
+      reopened.requestSubmit();
+      return;
+    }
+    if (stage === 'existing-post-saved') {
+      const postEditURL = sessionStorage.getItem('existing-editor');
+      const key = sessionStorage.getItem('existing-recovery');
+      const unrelated = sessionStorage.getItem('unrelated-recovery');
+      assert(!localStorage.getItem(key) && !localStorage.getItem(key + '-older'), 'A confirmed save must remove all earlier browser copies of this post.');
+      for (const suffix of ['-new', '-changed']) {
+        assert(JSON.parse(localStorage.getItem(key + suffix))?.fields.content === 'Written in another editor during the save.', 'Save must preserve recovery copies created or changed after its request started.');
+        localStorage.removeItem(key + suffix);
+      }
+      assert(localStorage.getItem(unrelated), 'Saving one post must leave another post’s recovery copy available.');
+      await htmx.ajax('GET', postEditURL, '#article-content');
+      const reopened = await ready();
+      assert(reopened.querySelector('[data-draft-recovery]').hidden && copies(reopened).length === 0, 'The saved post must reopen without a recovery prompt.');
+
+      const peer = document.createElement('iframe');
+      peer.src = postEditURL + '?draft-peer=1';
+      document.body.append(peer);
+      await wait(() => peer.contentDocument?.querySelector('[data-draft-status]:not([hidden])'));
+      const peerForm = peer.contentDocument.querySelector('#post-form');
+      change(peerForm, 'title', 'A recovery copy from another editor');
+      await saved(peerForm);
+      const peerKey = copies(peerForm)[0];
+      const peerCopy = JSON.parse(localStorage.getItem(peerKey));
+      localStorage.setItem(peerKey + '-older', JSON.stringify({...peerCopy, saved: peerCopy.saved - 1000}));
+      await htmx.ajax('GET', postEditURL, '#article-content');
+      const discard = await ready();
+      assert(!discard.querySelector('[data-draft-recovery]').hidden, 'The editor must offer earlier copies for this post.');
+      consent = true;
+      discard.querySelector('[data-draft-discard]').click();
+      await Promise.resolve();
+      assert(copies(discard).length === 0 && discard.querySelector('[data-draft-recovery]').hidden, 'Discard must remove all the offered copies of an existing post.');
+      assert(localStorage.getItem(unrelated), 'Discard must preserve recovery for other posts.');
+      assert(peerForm.elements.title.value === 'A recovery copy from another editor', 'Discard must leave the open editor’s text intact.');
+      const peerWindow = peer.contentWindow;
+      peerWindow.dispatchEvent(new peerWindow.Event('beforeunload', {cancelable: true}));
+      assert(copies(discard).length === 0, 'Leaving another editor must not recreate a discarded copy without new edits.');
+      await htmx.ajax('GET', postEditURL, '#article-content');
+      const withoutRecovery = await ready();
+      assert(withoutRecovery.querySelector('[data-draft-recovery]').hidden, 'A discarded older copy must not reappear on reopening.');
+      change(peerForm, 'title', 'Written after discard');
+      await saved(peerForm);
+      assert(localStorage.getItem(peerKey), 'New edits must create a fresh recovery copy after discard.');
+      peer.remove();
+      localStorage.removeItem(peerKey);
+      localStorage.removeItem(unrelated);
+
       const about = new DOMParser().parseFromString(await (await fetch('/about')).text(), 'text/html');
       const editURL = about.querySelector('a[href^="/pages/update/"]').getAttribute('href');
       await htmx.ajax('GET', editURL, '#article-content');

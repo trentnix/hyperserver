@@ -79,8 +79,9 @@ document.addEventListener('htmx:after:swap', event => {
   window.scrollTo({left: position.x, top: position.y, behavior: 'instant'});
 });
 function initialize(root) {
-  if (root.matches?.('dialog:not([open])')) root.showModal();
-  root.querySelectorAll('dialog:not([open])').forEach(dialog => dialog.showModal());
+  const selector = 'dialog[data-admin-dialog]:not([open])';
+  if (root.matches?.(selector)) root.showModal();
+  root.querySelectorAll(selector).forEach(dialog => dialog.showModal());
 }
 document.addEventListener('htmx:after:process', event => initialize(event.target));
 document.addEventListener('click', event => {

@@ -19,7 +19,7 @@
       assert(section.hidden && section.querySelector('[data-comparison-controls]').disabled, 'An unused comparison must not block Save.');
       form.elements.title.value = 'Comparison review'; form.elements.slug.value = 'comparison-review';
       form.querySelector('[data-component-picker] summary').click();
-      form.querySelector('[data-component-add="image-comparison"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="image-comparison"]'));
       assert(!section.hidden && document.activeElement.id === 'comparison-title', 'Adding a comparison must focus its first field.');
       assert(section.querySelector('#comparison-before-label').placeholder === 'Before' && section.querySelector('#comparison-after-label').placeholder === 'After', 'Label fields must show the defaults.');
       const choose = async (side, index) => {
@@ -47,16 +47,22 @@
       set(section.querySelector('#comparison-after-label'), afterLabel);
       set(section.querySelector('#comparison-title'), 'Before <markup> & after');
       set(section.querySelector('#comparison-caption'), caption);
+      form.querySelector('.tool-preview').click();
+      await wait(() => form.querySelector('.editor-preview .comparison-ready'));
+      const preview = form.querySelector('.editor-preview .comparison-ready');
+      set(preview.querySelector('input[type="range"]'), '25');
+      assert(preview.querySelector('.comparison-stage').style.getPropertyValue('--comparison-position') === '25%', 'The comparison must be interactive in the post preview.');
+      form.querySelector('.tool-preview').click();
       const saved = form.elements.comparison.value;
-      section.querySelector('[data-component-remove]').click();
+      await removeTestComponent(section.querySelector('[data-component-remove]'));
       assert(section.hidden && !form.elements.comparison.value, 'Remove must clear comparison source.');
-      form.querySelector('[data-component-undo="image-comparison"]').click();
+      await undoTestComponent(form.querySelector('[data-component-undo="image-comparison"]'));
       assert(form.elements.comparison.value === saved && section.querySelector('#comparison-caption').value === caption, 'Undo must restore both images and their text.');
       form.querySelector('[data-component-picker] summary').click();
-      form.querySelector('[data-component-add="video"]').click();
-      section.querySelector('[data-component-move="down"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="video"]'));
+      await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["video","image-comparison"]', 'Comparisons must use shared component ordering.');
-      form.querySelector('[data-video-editor] [data-component-remove]').click();
+      await removeTestComponent(form.querySelector('[data-video-editor] [data-component-remove]'));
       assert(!form.elements.content.required, 'A comparison-only post must be allowed.');
       form.querySelector('[name="published"][value="on"]').checked = true;
       form.dispatchEvent(new Event('input', {bubbles: true}));

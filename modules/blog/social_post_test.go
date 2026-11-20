@@ -1,7 +1,6 @@
 package blog
 
 import (
-	"errors"
 	"html"
 	"net/http"
 	"net/http/httptest"
@@ -333,7 +332,7 @@ func TestLegacySocialPostEditor(t *testing.T) {
 	}
 }
 
-func TestSocialPostChoiceConflicts(t *testing.T) {
+func TestSocialPostChoicesCoexist(t *testing.T) {
 	cases := append(socialPostCases(), struct {
 		provider socialProvider
 		url      string
@@ -346,26 +345,8 @@ func TestSocialPostChoiceConflicts(t *testing.T) {
 				t.Run(test.provider.Name, func(t *testing.T) {
 					canonical := componentJSON(postSocialPost{URL: "https://www.threads.com/@example/post/C1234567890", Description: "Replacement context."})
 					legacy := componentJSON(postSocialPost{URL: test.url, Description: "Original context."})
-					slug := "choice-conflict-" + test.provider.Kind
+					slug := "social-choices-" + test.provider.Kind
 					fields := url.Values{"title": {"Keep both inputs"}, "slug": {slug}, "content": {"Keep this writing."}, "socialPost": {canonical}, test.provider.Field: {legacy}, "componentOrder": {componentJSON([]string{test.provider.Kind, "social-post"})}}
-					response := h.request("POST", "/post", fields, hx)
-					requireStatus(t, response, http.StatusUnprocessableEntity)
-					if !strings.Contains(response.Body.String(), `data-error-fields="socialPost"`) || !strings.Contains(response.Body.String(), "Keep one social media component.") {
-						t.Fatal("a conflicting save must identify the shared choice", response.Body.String())
-					}
-					if !hx {
-						body := html.UnescapeString(response.Body.String())
-						for _, input := range []string{canonical, legacy, "Keep this writing."} {
-							if !strings.Contains(body, input) {
-								t.Fatal("the rejected save lost submitted input", input)
-							}
-						}
-					}
-					if _, err := h.blog.posts.GetBySlug(t.Context(), slug, true); !errors.Is(err, errNotFound) {
-						t.Fatal("a conflicting component was saved", err)
-					}
-					fields.Set(test.provider.Field, "")
-					fields.Set("componentOrder", `["social-post"]`)
 					status := http.StatusSeeOther
 					if hx {
 						status = http.StatusOK
@@ -376,8 +357,9 @@ func TestSocialPostChoiceConflicts(t *testing.T) {
 						t.Fatal(err)
 					}
 					_, components, err := splitPostComponents(saved.Markdown)
-					if err != nil || !slices.Equal(components.Order(), []string{"social-post"}) || components.Components[0].Content.EditorSource() != canonical {
-						t.Fatal("removing the old choice must save the replacement intact", saved, err)
+					if err != nil || !slices.Equal(components.Order(), []string{test.provider.Kind, "social-post"}) ||
+						components.Components[0].Content.EditorSource() != legacy || components.Components[1].Content.EditorSource() != canonical {
+						t.Fatal("both original and unified instances must save intact", saved, err)
 					}
 				})
 			}

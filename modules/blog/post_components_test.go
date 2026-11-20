@@ -168,7 +168,7 @@ func TestComponentOrderCompatibility(t *testing.T) {
 
 func TestUnknownOrderedComponentsPreserved(t *testing.T) {
 	for _, envelope := range []string{
-		`{"version":3,"components":[]}`,
+		`{"version":99,"components":[]}`,
 		`{"version":2,"components":[{"type":"video","url":"keep this source"}]}`,
 		`{"version":2,"components":[{"type":"photo-album","photos":[{"id":"invalid"}]}]}`,
 		`{"version":2,"components":[{"type":"file-downloads","files":[],"extra":"keep"}]}`,

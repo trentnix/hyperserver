@@ -27,7 +27,7 @@
     assert(!document.querySelector('.tool-library, [data-media-browse]'), 'Poster can browse the shared library.');
     assert(document.querySelector('[data-album-editor]').hidden, 'An empty post must not show an album editor to Posters.');
     document.querySelector('[data-component-picker] summary').click();
-    document.querySelector('[data-component-add="photo-album"]').click();
+    await addTestComponent(document.querySelector('[data-component-add="photo-album"]'));
     assert(!document.querySelector('[data-album-editor]').hidden && !document.querySelector('[data-album-browse]'), 'Posters must be able to add an album without gaining access to the shared library.');
     const button = document.querySelector('[data-image-upload]');
     await wait(() => button.getBoundingClientRect().height > 0);

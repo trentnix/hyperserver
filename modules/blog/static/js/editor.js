@@ -113,16 +113,30 @@ function initialize(root) {
       },
       chooseImage: openMediaLibrary,
       preview(markdown, preview) {
+        // EasyMDE replaces preview markup itself, which bypasses HTMX cleanup.
+        preview.dispatchEvent(new Event('htmx:before:cleanup', {bubbles: true}));
         previewRequest?.abort();
+        // EasyMDE also calls previewRender when the author closes Preview.
+        if (!textarea.form.querySelector('.tool-preview.active')) return '';
         previewRequest = new AbortController();
         const request = previewRequest;
+        const body = new URLSearchParams({content: markdown});
+        for (const field of textarea.form.querySelectorAll('[name="componentOrder"], [data-post-component] textarea[name]:enabled')) {
+          body.set(field.name, field.value);
+        }
         fetch('/post/preview', {
-          method: 'POST', body: new URLSearchParams({content: markdown}), signal: request.signal
+          method: 'POST', body, signal: request.signal
         }).then(async response => {
           const html = await response.text();
+          if (request.signal.aborted || !textarea.isConnected) return;
+          if (response.status === 422) {
+            preview.textContent = html.trim();
+            return;
+          }
           if (!response.ok) throw new Error('Unable to preview this content.');
           // The server uses the same safe Markdown renderer as published posts.
-          if (!request.signal.aborted && textarea.isConnected) preview.innerHTML = html;
+          preview.innerHTML = html;
+          window.htmx?.process(preview);
         }).catch(error => {
           if (!request.signal.aborted && textarea.isConnected && error.name !== 'AbortError') preview.textContent = 'Unable to preview this content.';
         });

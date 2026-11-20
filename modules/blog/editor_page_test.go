@@ -208,8 +208,8 @@ func TestEditorPages(t *testing.T) {
 						t.Fatalf("%s missing %s", path, want)
 					}
 				}
-				if strings.Contains(body, "<dialog") || strings.Contains(body, "reader-search-form") || strings.Contains(body, "data-close-dialog") {
-					t.Fatalf("%s rendered dialog controls or reader search", path)
+				if strings.Contains(body, "data-admin-dialog") || strings.Contains(body, "reader-search-form") || strings.Contains(body, "data-close-dialog") {
+					t.Fatalf("%s rendered management dialog controls or reader search", path)
 				}
 				for _, field := range []struct{ id, help, text string }{
 					{kind + "-slug", "slug-help", "Custom slugs use lowercase letters"},

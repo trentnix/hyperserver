@@ -23,8 +23,6 @@
     await wait(() => document.querySelector('[data-album-browse]') && !document.querySelector('.album-editor-controls').hidden);
     await document.fonts.ready;
     const form = document.querySelector('#post-form');
-    form.querySelector('[data-component-picker] summary').click();
-    form.querySelector('[data-component-add="photo-album"]').click();
     form.elements.title.value = 'Unsaved landscape post';
     const browserFetch = window.fetch;
     let failBrowse = false;
@@ -36,6 +34,11 @@
     };
     const {openMediaLibrary} = await import('/assets/js/media.js');
     for (const multiple of [false, true, 'full']) {
+      if (multiple === true) {
+        form.querySelector('[data-component-picker] summary').click();
+        await addTestComponent(form.querySelector('[data-component-add="photo-album"]'));
+        assert(form.querySelector('[data-album-editor]').closest('dialog').matches(':modal'), 'Photo selection must open from the album settings dialog.');
+      }
       const opener = form.querySelector(multiple ? '[data-album-browse]' : '[data-media-browse]');
       opener.focus();
       if (multiple === 'full') openMediaLibrary(() => {}, {multiple: true, limit: 1});

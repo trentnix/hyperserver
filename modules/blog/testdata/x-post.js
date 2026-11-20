@@ -16,7 +16,7 @@
       const section = form.querySelector('[data-post-component="social-post"]');
       assert(section.hidden && section.querySelector('fieldset').disabled, 'An unused component must not block Save.');
       form.elements.title.value = 'X post component review'; form.elements.slug.value = 'x-post-component-review';
-      form.querySelector('[data-component-add="social-post"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="social-post"]'));
       assert(!section.hidden && document.activeElement.id === 'social-post-url', 'Adding an X post must focus its URL.');
       set(form.querySelector('#social-post-url'), 'https://evil.test/user/status/123');
       set(form.querySelector('#social-post-description'), description);
@@ -44,14 +44,14 @@
       await wait(() => !form.dataset.uploading && picker.querySelector('[data-image-status]').textContent.includes('uploaded'));
       sessionStorage.setItem('x-post-image', JSON.parse(form.elements.socialPost.value).imageID);
       const original = form.elements.socialPost.value;
-      section.querySelector('[data-component-remove]').click();
+      await removeTestComponent(section.querySelector('[data-component-remove]'));
       assert(section.hidden && !form.elements.socialPost.value && section.querySelector('fieldset').disabled, 'Removal must clear and disable fields.');
-      form.querySelector('[data-component-undo="social-post"]').click();
+      await undoTestComponent(form.querySelector('[data-component-undo="social-post"]'));
       assert(form.elements.socialPost.value === original && form.querySelector('#social-post-description').value === description, 'Undo must restore the whole component.');
-      form.querySelector('[data-component-add="video"]').click();
-      section.querySelector('[data-component-move="down"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="video"]'));
+      await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["video","social-post"]', 'X posts must use shared ordering.');
-      form.querySelector('[data-video-editor] [data-component-remove]').click();
+      await removeTestComponent(form.querySelector('[data-video-editor] [data-component-remove]'));
       form.querySelector('[name="published"][value="on"]').checked = true;
       form.dispatchEvent(new Event('input', {bubbles: true}));
       await wait(() => Object.keys(localStorage).some(key => key.startsWith('hyperserver.blog.draft.v1:') && localStorage.getItem(key).includes('560070183650213889')));

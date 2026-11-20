@@ -1,6 +1,6 @@
 import {openMediaLibrary, uploadImage, runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 import {openAlbumOrder} from './album-order.js';
-import {registerComponent} from './post-components.js';
+import {initializeComponentPanels, registerComponent} from './post-components.js';
 
 const editors = new WeakMap();
 const photoLine = /^!\[((?:\\.|[^\]\\])*)\]\((\/images\/[a-f0-9]{64}\.(?:png|jpeg|gif))\)$/;
@@ -9,7 +9,7 @@ const escaped = caption => caption.replace(/[\\\[\]]/g, '\\$&');
 function initialize(root) {
   root.querySelectorAll('[data-album-editor]').forEach(section => {
     if (editors.has(section)) return;
-    const source = section.querySelector('[name="album"]');
+    const source = section.querySelector('textarea[name]');
     const form = source.form;
     const list = section.querySelector('[data-album-list]');
     const status = section.querySelector('[data-album-status]');
@@ -320,6 +320,7 @@ function initialize(root) {
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
     registerComponent(section, {
+      label: () => photos.find(photo => photo.caption.trim())?.caption,
       normalize: value => value.split(/\r?\n/).filter(line => line.trim()).join('\n'),
       snapshot: () => ({source: source.value, removed: [...removed]}),
       clear: () => { source.value = ''; read(); },
@@ -331,5 +332,4 @@ function initialize(root) {
   });
 }
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

@@ -64,7 +64,7 @@
 {{ end }}
 
 {{ define "blog.pageDelete" }}
-{{ if and .IsHtmx (not .Data.Error) }}<dialog aria-labelledby="delete-title">{{ end }}
+{{ if and .IsHtmx (not .Data.Error) }}<dialog data-admin-dialog aria-labelledby="delete-title">{{ end }}
 <section id="page-delete-confirmation" class="confirmation-panel">
 {{ if .Data.Error }}
 <h1 id="delete-title">Cannot delete page</h1>

@@ -18,7 +18,7 @@
       form.elements.title.value = 'PDF preview review';
       form.elements.slug.value = 'pdf-preview-review';
       form.querySelector('[data-component-picker] summary').click();
-      form.querySelector('[data-component-add="pdf-preview"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="pdf-preview"]'));
       assert(!section.hidden && document.activeElement === section.querySelector('[data-download-upload]'), 'Adding a PDF must reveal its editor and focus Upload.');
       const upload = section.querySelector('[data-download-files]');
       assert(!upload.multiple && upload.accept === '.pdf', 'The PDF component must accept one PDF.');
@@ -33,9 +33,21 @@
       assert(section.querySelector('[data-pdf-document] a').href.endsWith('?preview=1') && section.querySelector('[data-download-upload-label]').textContent === 'Replace PDF', 'The selected PDF needs an Open link and a replacement action.');
       const firstOption = section.querySelector('input[type="checkbox"]');
       assert(firstOption?.checked && firstOption.closest('label').textContent === 'Show download link', 'Existing PDFs must show a clearly labeled download option, checked by default.');
-      const presentation = [...section.querySelectorAll('input[type=checkbox]')].find(input => input.closest('label').textContent === 'Presentation mode');
+      const presentation = section.querySelector('.pdf-editor-presentation-option input');
       assert(presentation && !presentation.checked, 'Existing PDFs must default to the native viewer.');
-      if (presentationMode) presentation.click();
+      const presentationTitle = document.getElementById(presentation.getAttribute('aria-labelledby'));
+      const presentationHint = document.getElementById(presentation.getAttribute('aria-describedby'));
+      const titleBounds = presentationTitle.getBoundingClientRect();
+      const hintBounds = presentationHint.getBoundingClientRect();
+      const presentationBounds = presentation.closest('label').getBoundingClientRect();
+      assert(presentationTitle.textContent === 'Presentation mode' && Math.abs(hintBounds.left - titleBounds.left) < 1 &&
+        hintBounds.top >= titleBounds.bottom && hintBounds.top - titleBounds.bottom < 8 &&
+        hintBounds.bottom <= presentationBounds.bottom && presentationBounds.height >= 44,
+        'The presentation hint must sit directly below its title within the same touch target.');
+      if (presentationMode) {
+        presentationHint.click();
+        assert(presentation.checked, 'The presentation hint must toggle its own checkbox.');
+      }
       const authorDescription = section.querySelector('[data-downloads-list] textarea');
       authorDescription.value = 'An author-written description to retain when replacing the PDF.';
       authorDescription.dispatchEvent(new Event('input', {bubbles: true}));
@@ -85,7 +97,7 @@
       assert(JSON.parse(form.elements.pdf.value)[0].hideDownload === true, 'Unchecking the option must save the preference.');
       assert(!section.querySelector('[data-download-upload]').disabled && !section.querySelector('[data-download-browse]').disabled && JSON.parse(form.elements.pdf.value).length === 1, 'A single PDF must remain replaceable.');
       form.querySelector('[data-component-picker] summary').click();
-      form.querySelector('[data-component-add="file-downloads"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="file-downloads"]'));
       const downloads = form.querySelector('[data-post-component="file-downloads"]');
       downloads.querySelector('[data-download-browse]').click();
       await wait(() => document.querySelector('.download-library input[type="checkbox"]'));
@@ -94,10 +106,10 @@
       document.querySelector('.download-library .form-actions button:last-child').click();
       const ids = [...form.querySelectorAll('[id]')].map(node => node.id);
       assert(new Set(ids).size === ids.length, 'The same file in two components must not duplicate field IDs.');
-      section.querySelector('[data-component-move="down"]').click();
+      await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["file-downloads","pdf-preview"]', 'The PDF component must participate in ordering.');
-      section.querySelector('[data-component-remove]').click();
-      form.querySelector('[data-component-undo="pdf-preview"]').click();
+      await removeTestComponent(section.querySelector('[data-component-remove]'));
+      await undoTestComponent(form.querySelector('[data-component-undo="pdf-preview"]'));
       assert(form.elements.componentOrder.value === '["file-downloads","pdf-preview"]' && form.elements.pdf.value.includes('two pages'), 'Component Undo must restore PDF details and position.');
       assert(!section.querySelector('input[type="checkbox"]').checked && !downloads.querySelector('input[type="checkbox"]'), 'Component Undo must retain the setting without adding the option to file downloads.');
       form.querySelector('[name="published"][value="on"]').checked = true;
@@ -175,7 +187,7 @@
       await wait(() => document.querySelector('[data-post-component="pdf-preview"] input'));
       assert(document.querySelector('#post-form').elements.pdf.value.includes('two pages'), 'Reopening the editor must retain the PDF fields.');
       assert(!document.querySelector('[data-post-component="pdf-preview"] input[type="checkbox"]').checked, 'Reopening the editor must retain the download setting.');
-      const restoredPresentation = [...document.querySelectorAll('[data-post-component="pdf-preview"] input[type=checkbox]')].find(input => input.closest('label').textContent === 'Presentation mode');
+      const restoredPresentation = document.querySelector('.pdf-editor-presentation-option input');
       assert(restoredPresentation.checked === presentationMode, 'Reopening the editor must retain the presentation setting.');
       if (oldCanvas) assert(oldCanvas.width === 0, 'HTMX navigation must release the previous presentation canvas.');
       await report('PASS');

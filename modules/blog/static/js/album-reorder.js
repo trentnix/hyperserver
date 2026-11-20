@@ -60,9 +60,12 @@ export function enableAlbumReordering(list, {move, announce, dropped, disabled, 
       marker.style.width = '2px';
       marker.style.height = Math.max(0, bottom - top) + 'px';
     } else {
-      marker.style.left = box.left + 4 + 'px';
-      marker.style.top = (after ? box.bottom + 2 : box.top - 5) + 'px';
-      marker.style.width = box.width - 8 + 'px';
+      const left = Math.max(bounds.left + 4, box.left + 4);
+      const right = Math.min(bounds.right - 4, box.right - 4);
+      const top = Math.max(bounds.top + 4, Math.min(bounds.bottom - 6, after ? box.bottom + 2 : box.top - 5));
+      marker.style.left = left + 'px';
+      marker.style.top = top + 'px';
+      marker.style.width = Math.max(0, right - left) + 'px';
       marker.style.height = '2px';
     }
     marker.hidden = false;

@@ -189,8 +189,7 @@ func (m *module) writingMedia(ctx context.Context, source, path, preview string)
 		return nil, writingFieldError{err, "content"}
 	}
 	for _, component := range components.Components {
-		definition, _ := postComponentCatalog.find(component.Type)
-		field := definition.Field
+		field := postComponentCatalog.field(component)
 		for _, entry := range component.Content.Media() {
 			if entry.Bytes == nil {
 				continue

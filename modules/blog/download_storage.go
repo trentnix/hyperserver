@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	maxDownloadBytes   = 32 * 1024 * 1024
-	maxDownloadStorage = 1024 * 1024 * 1024
-	maxPostDownloads   = 20
+	maxDownloadBytes      = 32 * 1024 * 1024
+	maxDownloadStorage    = 1024 * 1024 * 1024
+	maxComponentDownloads = 20
 )
 
 // downloadStore stores immutable attachments separately from generated images.

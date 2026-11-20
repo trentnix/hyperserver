@@ -1,5 +1,5 @@
 {{ define "blog.revisionDelete" }}
-{{ if .IsHtmx }}<dialog aria-labelledby="revision-delete-title">{{ end }}
+{{ if .IsHtmx }}<dialog data-admin-dialog aria-labelledby="revision-delete-title">{{ end }}
 <section class="confirmation-panel">
   <h1 id="revision-delete-title">Delete revision?</h1>
   <p>This cannot be undone. The current content will not change.</p>

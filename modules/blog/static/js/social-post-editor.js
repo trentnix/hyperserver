@@ -1,4 +1,4 @@
-import {registerComponent, jsonComponentValue} from './post-components.js';
+import {initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {markField} from './forms.js';
 import './media.js';
 
@@ -145,17 +145,15 @@ function initialize(root) {
       if (event.target.contains?.(section)) { request?.abort(); lifetime.abort(); }
     }, {signal: lifetime.signal});
     registerComponent(section, {
+      label: () => url.value.replace(/^https?:\/\/(?:www\.)?/i, ''),
       normalize: value => jsonComponentValue(value, {strings: ['description', 'imageID']}),
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy; read(); },
-      beforeMove: clearPreview,
-      afterMove: () => loadPreview(),
       focus: () => (source.hidden ? fields[0] : source).focus()
     });
     read();
   }
 }
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

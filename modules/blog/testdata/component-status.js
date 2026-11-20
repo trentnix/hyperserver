@@ -18,9 +18,9 @@
     const stage = sessionStorage.getItem('component-status-stage');
     if (!stage) {
       const newForm = document.querySelector('#post-form');
-      newForm.querySelector('[data-component-add="video"]').click();
+      await addTestComponent(newForm.querySelector('[data-component-add="video"]'));
       assert(!badge(newForm.querySelector('[data-video-editor]')).hidden, 'An empty newly added component must be marked unsaved.');
-      newForm.querySelector('[data-video-editor] [data-component-remove]').click();
+      await removeTestComponent(newForm.querySelector('[data-video-editor] [data-component-remove]'));
       assert(dirty().length === 0, 'Removing a new empty component must clear its indicator.');
       await open(paths.editor);
       let form = document.querySelector('#post-form');
@@ -31,6 +31,7 @@
       assert(dirty().length === 0, 'Post fields must not mark unchanged components unsaved.');
       set(form.elements.title, 'Component status');
       for (const section of sections) {
+        form.querySelector('[data-component-edit="' + section.dataset.postComponent + '"]').click();
         const input = section.querySelector('[data-album-caption], [data-downloads-list] input, [data-link-controls] input, #video-title, #audio-title');
         const saved = input.value;
         set(input, saved + ' edited');
@@ -39,9 +40,10 @@
         assert(label.width > 0 && label.left >= 0 && label.right <= innerWidth, 'The component indicator must fit the viewport.');
         set(input, saved);
         assert(dirty().length === 0, 'Restoring saved values must clear the indicator: ' + section.dataset.postComponent);
-        section.querySelector('[data-component-remove]').click();
-        form.querySelector('[data-component-undo="' + section.dataset.postComponent + '"]').click();
+        await removeTestComponent(section.querySelector('[data-component-remove]'));
+        await undoTestComponent(form.querySelector('[data-component-undo="' + section.dataset.postComponent + '"]'));
         assert(dirty().length === 0, 'Undoing removal must restore the saved component and position.');
+        section.closest('dialog').querySelector('[data-component-done]').click();
       }
       for (const name of ['video', 'pdf', 'audio']) {
         const source = form.elements.namedItem(name);
@@ -57,19 +59,22 @@
         assert(dirty().length === 0 && form.querySelector('[data-draft-status]').textContent === 'No unsaved changes.', 'Restoring valid source must clear the indicator: ' + name);
       }
       const pdf = form.querySelector('.pdf-editor');
+      componentRowIn(form, 'pdf-preview').querySelector('[data-component-edit]').click();
       pdf.querySelector('input[type="checkbox"]').click();
       assert(!badge(pdf).hidden, 'Changing the download option must mark the PDF unsaved.');
       pdf.querySelector('input[type="checkbox"]').click();
       assert(dirty().length === 0, 'Restoring the download option must clear the PDF indicator.');
+      closeComponentSettings(form);
       const album = form.querySelector('[data-album-editor]');
+      componentRowIn(form, 'photo-album').querySelector('[data-component-edit]').click();
       album.querySelector('[data-album-remove]').click();
       assert(!badge(album).hidden, 'Removing a photo must mark the album unsaved.');
       album.querySelector('[data-album-undo]').click();
       assert(dirty().length === 0, 'Undoing photo removal must clear the album indicator.');
       const first = form.querySelector('[data-post-component]');
-      first.querySelector('[data-component-move="down"]').click();
-      assert(dirty().length === 2, 'Changed component positions must be marked unsaved.');
-      first.querySelector('[data-component-move="up"]').click();
+      await moveTestComponent(first, 'down');
+      assert(dirty().length === 2, 'Reordering must mark both components as unsaved.');
+      await moveTestComponent(first, 'up');
       assert(dirty().length === 0, 'Restoring component order must clear the indicators.');
       await open(paths.history);
       form = document.querySelector('#post-form');

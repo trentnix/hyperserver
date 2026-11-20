@@ -19,7 +19,7 @@
       const section = form.querySelector('[data-audio-editor]');
       assert(section.hidden && section.querySelector('fieldset').disabled, 'Unused audio must not block validation.');
       form.elements.title.value = 'Audio component review'; form.elements.slug.value = 'audio-component-review';
-      form.querySelector('[data-component-add="audio"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="audio"]'));
       assert(!section.hidden && document.activeElement === section.querySelector('[data-audio-upload]'), 'Adding audio must focus Upload MP3.');
       form.noValidate = true;
       form.requestSubmit();
@@ -58,14 +58,14 @@
       section.querySelector('[data-audio-recovery] button').click();
       assert(section.querySelector('[data-audio-name]').textContent === originalName, 'Undo must restore the selected filename.');
       assert(form.elements.audio.value === original, 'Undo replacement must restore the full audio source.');
-      section.querySelector('[data-component-remove]').click();
+      await removeTestComponent(section.querySelector('[data-component-remove]'));
       assert(section.hidden && !form.elements.audio.value && section.querySelector('fieldset').disabled, 'Removal must clear and disable audio fields.');
-      form.querySelector('[data-component-undo="audio"]').click();
+      await undoTestComponent(form.querySelector('[data-component-undo="audio"]'));
       assert(form.elements.audio.value === original && form.querySelector('#audio-transcript').value === transcript, 'Component Undo must restore all details.');
-      form.querySelector('[data-component-add="video"]').click();
-      section.querySelector('[data-component-move="down"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="video"]'));
+      await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["video","audio"]', 'Audio must use shared component ordering.');
-      form.querySelector('[data-video-editor] [data-component-remove]').click();
+      await removeTestComponent(form.querySelector('[data-video-editor] [data-component-remove]'));
       assert(!form.elements.content.required, 'An audio-only post must be allowed.');
       form.querySelector('[name="published"][value="on"]').checked = true;
       form.dispatchEvent(new Event('input', {bubbles: true}));

@@ -371,6 +371,14 @@ func (m *module) preview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Markdown must be valid UTF-8.", http.StatusUnprocessableEntity)
 		return
 	}
+	if r.PostForm.Has("componentOrder") {
+		var err error
+		text, err = joinPostComponents(text, componentForm(r.PostForm))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+	}
 	html, err := m.renderWriting(r.Context(), text, "")
 	if err != nil {
 		http.Error(w, "Unable to preview the post.", http.StatusInternalServerError)

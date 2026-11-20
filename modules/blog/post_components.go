@@ -17,8 +17,8 @@ import (
 
 const unsupportedComponents = contentError("This post contains an unsupported component. Its source is preserved in Markdown. Update or remove it before saving.")
 
-// Components stay in each immutable writing revision. Version 2 records their
-// display order. The reader also accepts the original version 1 envelope.
+// Components stay in each writing revision. Version 2 records their display
+// order. Version 3 adds placement markers. Version 4 supports instance IDs.
 type postComponents struct {
 	Version    int             `json:"version"`
 	Components []postComponent `json:"components"`
@@ -27,7 +27,7 @@ type postComponents struct {
 func (p postComponents) Order() []string {
 	order := make([]string, 0, len(p.Components))
 	for _, component := range p.Components {
-		order = append(order, component.Type)
+		order = append(order, component.key())
 	}
 	return order
 }
@@ -87,7 +87,7 @@ func (catalog componentCatalog) parse(source string) (postComponents, error) {
 				raw = append(raw, data)
 			}
 		}
-	case 2:
+	case 2, 3, 4:
 		var envelope struct {
 			Version    int               `json:"version"`
 			Components []json.RawMessage `json:"components"`
@@ -99,7 +99,7 @@ func (catalog componentCatalog) parse(source string) (postComponents, error) {
 	default:
 		return postComponents{}, unsupportedComponents
 	}
-	result := postComponents{Version: 2}
+	result := postComponents{Version: max(2, header.Version)}
 	seen := make(map[string]bool)
 	for _, entry := range raw {
 		var fields map[string]json.RawMessage
@@ -111,7 +111,17 @@ func (catalog componentCatalog) parse(source string) (postComponents, error) {
 			return result, unsupportedComponents
 		}
 		definition, ok := catalog.find(kind)
-		if !ok || seen[kind] || len(fields) != 2 || fields[definition.Payload] == nil {
+		component := postComponent{Type: kind, payload: definition.Payload}
+		if header.Version == 4 && fields["id"] != nil {
+			if err := json.Unmarshal(fields["id"], &component.ID); err != nil || !strings.HasPrefix(component.ID, kind+":") {
+				return result, unsupportedComponents
+			}
+			if _, ok := catalog.instance(component.ID); !ok {
+				return result, unsupportedComponents
+			}
+			delete(fields, "id")
+		}
+		if !ok || seen[component.key()] || len(fields) != 2 || fields[definition.Payload] == nil {
 			return result, unsupportedComponents
 		}
 		content, err := definition.decode(string(fields[definition.Payload]))
@@ -125,8 +135,9 @@ func (catalog componentCatalog) parse(source string) (postComponents, error) {
 		if content == nil || content.Empty() {
 			return result, unsupportedComponents
 		}
-		seen[kind] = true
-		result.Components = append(result.Components, postComponent{Type: kind, payload: definition.Payload, Content: content})
+		seen[component.key()] = true
+		component.Content = content
+		result.Components = append(result.Components, component)
 	}
 	return result, nil
 }
@@ -143,7 +154,7 @@ func (catalog componentCatalog) order(source string) ([]string, error) {
 	}
 	seen := make(map[string]bool)
 	for _, kind := range order {
-		if _, ok := catalog.find(kind); !ok || seen[kind] {
+		if _, ok := catalog.instance(kind); !ok || seen[kind] {
 			return nil, contentError("Choose each component only once.")
 		}
 		seen[kind] = true
@@ -194,58 +205,62 @@ func (catalog componentCatalog) join(body string, input componentInput) (string,
 		return body, writingFieldError{err, "content"}
 	}
 	selected := make(map[string]postComponent)
-	for _, definition := range catalog {
-		content, err := definition.Parse(input[definition.Field])
-		if err != nil {
-			if len(validationFields(err)) > 0 {
-				return body, err
-			}
-			return body, writingFieldError{err, definition.Field}
-		}
-		if content != nil && !content.Empty() {
-			selected[definition.Kind] = postComponent{Type: definition.Kind, payload: definition.Payload, Content: content}
-		}
-	}
-	// Older envelopes can contain several provider-specific records. Keep those
-	// editable, but never add the canonical choice beside one of its aliases.
-	for _, definition := range catalog {
-		if _, alias := selected[definition.Kind]; definition.AliasFor == "" || !alias {
-			continue
-		}
-		if _, canonical := selected[definition.AliasFor]; canonical {
-			choice, _ := catalog.find(definition.AliasFor)
-			return body, writingFieldError{contentError("Keep one " + strings.ToLower(choice.Name) + " component. Remove the other before saving."), choice.Field}
-		}
-	}
 	order, err := catalog.order(input["componentOrder"])
 	if err != nil {
 		return body, writingFieldError{err, "componentOrder"}
 	}
 	// An explicit order also records added components that have no content yet.
-	for _, kind := range order {
-		if _, ok := selected[kind]; !ok {
-			definition, _ := catalog.find(kind)
-			return body, writingFieldError{contentError(definition.EmptyMessage), definition.Field}
+	for _, id := range order {
+		component, err := catalog.submittedComponent(id, input)
+		if err != nil {
+			return body, err
 		}
+		if component.Content == nil || component.Content.Empty() {
+			definition, _ := catalog.instance(id)
+			return body, writingFieldError{contentError(definition.EmptyMessage), catalog.field(component)}
+		}
+		selected[id] = component
+	}
+	for field, value := range input {
+		if strings.Contains(field, ":") && strings.TrimSpace(value) != "" && selected[field].ID == "" {
+			return body, writingFieldError{contentError("The component is missing from the order. Reload the editor and try again."), "componentOrder"}
+		}
+	}
+	for _, definition := range catalog {
+		if _, ok := selected[definition.Kind]; ok {
+			continue
+		}
+		component, err := catalog.submittedComponent(definition.Kind, input)
+		if err != nil {
+			return body, err
+		}
+		if component.Content != nil && !component.Content.Empty() {
+			selected[definition.Kind] = component
+			order = append(order, definition.Kind)
+		}
+	}
+	placed, err := validateComponentPlacements(body, selected)
+	if err != nil {
+		return body, err
 	}
 	if len(selected) == 0 {
 		return body, nil
 	}
-	if len(selected) == 1 {
+	if !placed && len(selected) == 1 {
 		if _, ok := selected["photo-album"]; ok {
 			return joinPostAlbum(body, input["album"])
 		}
 	}
-	for _, definition := range catalog {
-		if !slices.Contains(order, definition.Kind) {
-			order = append(order, definition.Kind)
-		}
-	}
 	components := postComponents{Version: 2}
-	for _, kind := range order {
-		if component, ok := selected[kind]; ok {
-			components.Components = append(components.Components, component)
+	if placed {
+		components.Version = 3
+	}
+	for _, id := range order {
+		component := selected[id]
+		if component.ID != "" {
+			components.Version = 4
 		}
+		components.Components = append(components.Components, component)
 	}
 	data, err := json.Marshal(components)
 	if err != nil {
@@ -257,6 +272,28 @@ func (catalog componentCatalog) join(body string, input componentInput) (string,
 		return body, writingFieldError{contentError("Close any unfinished code or HTML blocks before adding components."), "content"}
 	}
 	return combined, nil
+}
+
+func (catalog componentCatalog) submittedComponent(id string, input componentInput) (postComponent, error) {
+	definition, _ := catalog.instance(id)
+	component := postComponent{Type: definition.Kind, payload: definition.Payload}
+	field := definition.Field
+	if id != definition.Kind {
+		component.ID = id
+		field = id
+	}
+	value, err := definition.Parse(input[field])
+	if err != nil {
+		fields := validationFields(err)
+		if len(fields) == 0 {
+			return component, writingFieldError{err, field}
+		}
+		if component.ID != "" {
+			return component, writingFieldError{err, field}
+		}
+	}
+	component.Content = value
+	return component, err
 }
 
 func (p editorPage) DownloadsJSON() string { return p.componentSource("downloads") }
@@ -275,6 +312,7 @@ func (p editorPage) EditorComponents() []string {
 	if err != nil {
 		order = nil
 	}
+	order = slices.DeleteFunc(order, func(id string) bool { return strings.Contains(id, ":") })
 	for _, definition := range postComponentCatalog {
 		kind := definition.Kind
 		if !slices.Contains(order, kind) {
@@ -294,7 +332,21 @@ func (catalog componentCatalog) searchText(source string) string {
 		return source
 	}
 	var text strings.Builder
-	text.WriteString(body)
+	if components.Version >= 3 {
+		data := []byte(body)
+		document := parsePlacementMarkdown(data)
+		start := 0
+		for node := document.FirstChild(); node != nil; node = node.NextSibling() {
+			if componentMarker(node, data) != "" {
+				line := node.Lines().At(0)
+				text.WriteString(body[start:line.Start])
+				start = line.Stop
+			}
+		}
+		text.WriteString(body[start:])
+	} else {
+		text.WriteString(body)
+	}
 	for _, component := range components.Components {
 		text.WriteString(component.Content.SearchText())
 	}
@@ -304,16 +356,34 @@ func (catalog componentCatalog) searchText(source string) string {
 type componentsTransformer struct{ catalog componentCatalog }
 
 func (transformer componentsTransformer) Transform(document *ast.Document, reader text.Reader, _ parser.Context) {
-	block := finalComponentsBlock(document, reader.Source())
+	source := reader.Source()
+	block := finalComponentsBlock(document, source)
 	if block == nil {
 		return
 	}
-	components, err := transformer.catalog.parse(string(block.Lines().Value(reader.Source())))
+	components, err := transformer.catalog.parse(string(block.Lines().Value(source)))
 	if err != nil {
 		return
 	}
+	pending := make(map[string]postComponent, len(components.Components))
 	for _, component := range components.Components {
-		document.InsertBefore(document, block, component.Content.Node())
+		pending[component.key()] = component
+	}
+	if components.Version >= 3 {
+		for node := document.FirstChild(); node != nil && node != block; {
+			next := node.NextSibling()
+			id := componentMarker(node, source)
+			if component, ok := pending[id]; ok {
+				document.ReplaceChild(document, node, component.Content.Node())
+				delete(pending, id)
+			}
+			node = next
+		}
+	}
+	for _, component := range components.Components {
+		if _, ok := pending[component.key()]; ok {
+			document.InsertBefore(document, block, component.Content.Node())
+		}
 	}
 	document.RemoveChild(document, block)
 }

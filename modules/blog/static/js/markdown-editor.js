@@ -1,3 +1,5 @@
+import {componentPlacement} from './component-placement.js';
+
 // EasyMDE stays behind this blog-local boundary. The textarea remains the form
 // field. Every editor change synchronizes it before notifying application code.
 const editors = new WeakMap();
@@ -59,11 +61,16 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
   if (label) label.htmlFor = input.id;
   editor.codemirror.setOption('extraKeys', {...editor.codemirror.getOption('extraKeys'), Tab: false, 'Shift-Tab': false});
 
+  const showSource = () => { if (editor.isPreviewActive()) editor.togglePreview(); };
+  const picker = textarea.form.querySelector('[data-component-picker]');
+  if (picker) editor.gui.toolbar.append(picker);
   const changed = () => {
     textarea.value = editor.value();
     textarea.dispatchEvent(new Event('input', {bubbles: true}));
   };
   const api = {
+    placement: textarea.form.elements.componentOrder ? componentPlacement(editor.codemirror) : null,
+    showSource,
     getMarkdown: () => destroyed ? textarea.value : editor.value(),
     setMarkdown(markdown) {
       if (!destroyed) editor.value(markdown);
@@ -72,7 +79,10 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
       if (!destroyed && textarea.isConnected) editor.codemirror.replaceSelection(`![](${path})`);
     },
     focus() {
-      if (!destroyed && textarea.isConnected) editor.codemirror.focus();
+      if (!destroyed && textarea.isConnected) {
+        showSource();
+        editor.codemirror.focus();
+      }
     },
     setRequired(value) {
       if (destroyed) return;
@@ -90,7 +100,9 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      api.placement?.destroy();
       onDestroy();
+      if (picker) textarea.before(picker);
       editor.codemirror.off('change', changed);
       editor.cleanup();
       editor.toTextArea();
@@ -102,5 +114,6 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
   editors.set(textarea, api);
   api.syncValidation();
   editor.codemirror.on('change', changed);
+  textarea.dispatchEvent(new Event('blog:markdown-editor', {bubbles: true}));
   return api;
 }

@@ -53,6 +53,11 @@ func testBrowser(t *testing.T, browser, width string, scenario browserScenario) 
 	if scenario.prepareScript != nil {
 		script = scenario.prepareScript(t, h, script)
 	}
+	actions, err := os.ReadFile("testdata/component-actions.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script = append(actions, script...)
 	var routes map[string]http.HandlerFunc
 	if scenario.routes != nil {
 		routes = scenario.routes(h)

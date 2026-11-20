@@ -1,4 +1,4 @@
-import {registerComponent, jsonComponentValue} from './post-components.js';
+import {componentDOMID, initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {openMediaLibrary, uploadImage, runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 import {markField} from './forms.js';
 
@@ -28,7 +28,7 @@ function initialize(root) {
   root.querySelectorAll('[data-link-editor]').forEach(section => {
     if (initialized.has(section)) return;
     initialized.add(section);
-    const source = section.querySelector('[name="link"]');
+    const source = section.querySelector('textarea[name]');
     const form = source.form;
     const controls = section.querySelector('[data-link-controls]');
     const status = section.querySelector('[data-link-status]');
@@ -39,7 +39,7 @@ function initialize(root) {
     for (const [key, title, limit] of [['url', 'URL', 2048], ['title', 'Title', 240], ['description', 'Description (optional)', 1000], ['siteName', 'Site name (optional)', 200]]) {
       const label = element('label', title);
       const input = element(key === 'description' ? 'textarea' : 'input');
-      input.id = 'link-' + key;
+      input.id = componentDOMID(section, 'link-' + key);
       input.maxLength = limit;
       if (key === 'url') input.type = 'url';
       if (key === 'description') input.rows = 2;
@@ -191,6 +191,7 @@ function initialize(root) {
 
     source.addEventListener('change', read);
     registerComponent(section, {
+      label: () => fields.title.value,
       normalize: value => jsonComponentValue(value, {strings: ['description', 'siteName', 'imageID'], flags: ['hideImage']}),
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
@@ -204,5 +205,4 @@ function initialize(root) {
   });
 }
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

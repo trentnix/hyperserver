@@ -99,6 +99,7 @@
       await htmx.ajax('GET', edit.getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
       await wait(() => document.querySelector('[data-event-editor] textarea[name=event]')?.hidden);
       const editor = document.querySelector('[data-event-editor]');
+      document.querySelector('[data-component-edit=event]').click();
       assert(editor.querySelector('#event-zone').value === 'America/Chicago' && editor.querySelector('#event-end-time').value === '20:00' && !editor.querySelector('#event-all-day').checked && editor.querySelector('[data-component-unsaved]').hidden, 'Reopening must preserve the event without marking it unsaved.');
       assert(!editor.querySelector('[data-image-preview]').hidden && editor.querySelector('#event-image-alt').value === image.alt, 'Reopening must show the saved image and description.');
       assert(editor.querySelector('#event-map-url').value === mapURL, 'Reopening must preserve the saved map link.');
@@ -130,7 +131,7 @@
     form.elements.title.value = 'Event review';
     form.elements.slug.value = 'event-review';
     form.querySelector('[data-component-picker] summary').click();
-    form.querySelector('[data-component-add=event]').click();
+    await addTestComponent(form.querySelector('[data-component-add=event]'));
     assert(!editor.hidden && document.activeElement === editor.querySelector('#event-title'), 'Adding an event must focus its name.');
     const set = (field, value) => {
       const input = editor.querySelector(`[data-event-field="${field}"]`);
@@ -229,8 +230,8 @@
     set('imageAlt', 'The observatory at night');
     const saved = form.elements.event.value;
     allDay.click();
-    editor.querySelector('[data-component-remove]').click();
-    form.querySelector('[data-component-undo=event]').click();
+    await removeTestComponent(editor.querySelector('[data-component-remove]'));
+    await undoTestComponent(form.querySelector('[data-component-undo=event]'));
     assert(allDay.checked, 'Undo must restore the saved All day setting.');
     allDay.click();
     assert(form.elements.event.value === saved && editor.querySelector('#event-zone').value === 'America/Chicago', 'Undo must also restore the disabled times and time zone.');

@@ -36,7 +36,7 @@ export function openMediaLibrary(select, {multiple = false, excluded = [], limit
     reviewToggle = controls.querySelector('[data-media-show-selected]');
     clearSelection = controls.querySelector('[data-media-clear-selection]');
     confirm = controls.querySelector('[data-media-add-selected]');
-    dialog.append(controls);
+    dialog.querySelector('.media-browser-layout').append(controls);
     reviewToggle.addEventListener('click', () => {
       if (choosing) return;
       if (!showingSelected) browseScroll = results.scrollTop;
@@ -462,4 +462,5 @@ function initialize(root) {
   root.querySelectorAll('.image-upload-controls').forEach(controls => { controls.hidden = false; });
 }
 document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
+document.addEventListener('blog:component-panel', event => initialize(event.target));
 initialize(document);

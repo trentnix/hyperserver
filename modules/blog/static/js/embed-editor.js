@@ -1,4 +1,4 @@
-import {registerComponent, jsonComponentValue} from './post-components.js';
+import {componentElement, initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {markField} from './forms.js';
 
 const initialized = new WeakSet();
@@ -7,14 +7,14 @@ function initialize(root) {
   for (const section of root.querySelectorAll('[data-embed-editor]')) {
     if (initialized.has(section)) continue;
     initialized.add(section);
-    const source = section.querySelector('[name=embed]');
+    const source = section.querySelector('textarea[name]');
     const label = section.querySelector('[data-embed-source-label]');
     const fields = section.querySelector('[data-component-fields]');
-    const url = fields.querySelector('#embed-url');
-    const title = fields.querySelector('#embed-title');
-    const description = fields.querySelector('#embed-description');
+    const url = componentElement(section, 'embed-url');
+    const title = componentElement(section, 'embed-title');
+    const description = componentElement(section, 'embed-description');
     const button = fields.querySelector('[data-embed-preview-button]');
-    const preview = fields.querySelector('#embed-editor-preview');
+    const preview = componentElement(section, 'embed-editor-preview');
     const status = preview.querySelector('[data-embed-preview-status]');
     const link = preview.querySelector('[data-embed-preview-link]');
     const frame = preview.querySelector('iframe');
@@ -141,6 +141,7 @@ function initialize(root) {
     source.addEventListener('change', read);
     source.addEventListener('blog:field-validation', syncError);
     registerComponent(section, {
+      label: () => title.value,
       normalize: value => jsonComponentValue(value, {strings: ['description']}),
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
@@ -151,5 +152,4 @@ function initialize(root) {
   }
 }
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

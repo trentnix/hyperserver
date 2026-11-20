@@ -1,4 +1,4 @@
-import {registerComponent, jsonComponentValue} from './post-components.js';
+import {initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 import {requestFiles, validEntry, openFileLibrary, sizeLabel} from './file-picker.js';
 
@@ -19,7 +19,7 @@ function initialize(root) {
   for (const section of root.querySelectorAll('[data-audio-editor]')) {
     if (initialized.has(section)) continue;
     initialized.add(section);
-    const source = section.querySelector('[name="audio"]');
+    const source = section.querySelector('textarea[name]');
     const form = source.form;
     const controls = section.querySelector('[data-audio-controls]');
     const fields = section.querySelector('[data-audio-fields]');
@@ -43,7 +43,10 @@ function initialize(root) {
       // Resolve presentation metadata once, without changing the component source.
       filenameRequest ??= requestFiles('/post/files', {signal: lifetime.signal}).then(entries => {
         for (const entry of entries || []) if (validEntry(entry)) filenames.set(entry.id, entry.label);
-        if (section.isConnected) render();
+        if (section.isConnected) {
+          render();
+          source.dispatchEvent(new Event('blog:component-label', {bubbles: true}));
+        }
       }).catch(() => {});
     }
 
@@ -164,6 +167,7 @@ function initialize(root) {
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
     registerComponent(section, {
+      label: () => value?.title?.trim() || filenames.get(value?.id),
       normalize: value => jsonComponentValue(value, {strings: ['title', 'description', 'transcript'], flags: ['hideDownload']}),
       snapshot: () => ({source: source.value, previous}),
       clear: () => { source.value = ''; read(); },
@@ -177,5 +181,4 @@ function initialize(root) {
   }
 }
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

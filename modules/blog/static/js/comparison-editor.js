@@ -1,4 +1,4 @@
-import {registerComponent, jsonComponentValue} from './post-components.js';
+import {initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import './media.js';
 import {markField} from './forms.js';
 
@@ -10,7 +10,7 @@ function initialize(root) {
   for (const section of root.querySelectorAll('[data-comparison-editor]')) {
     if (initialized.has(section)) continue;
     initialized.add(section);
-    const source = section.querySelector('[name="comparison"]');
+    const source = section.querySelector('textarea[name]');
     const label = section.querySelector('[data-comparison-source-label]');
     const controls = section.querySelector('[data-comparison-controls]');
     const fields = [...controls.querySelectorAll('[data-comparison-field]')];
@@ -59,6 +59,7 @@ function initialize(root) {
     source.form.addEventListener('blog:uploads-finished', previews);
     source.addEventListener('change', read);
     registerComponent(section, {
+      label: () => fields.find(field => field.dataset.comparisonField === 'title').value,
       normalize: value => jsonComponentValue(value, {strings: ['beforeAlt', 'afterAlt', 'beforeLabel', 'afterLabel', 'title', 'caption']}),
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
@@ -69,5 +70,4 @@ function initialize(root) {
   }
 }
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

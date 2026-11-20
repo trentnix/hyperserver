@@ -53,9 +53,13 @@ export async function openFileLibrary(existing, add, status, form, {maxFiles, ex
   const feedback = element('p', 'Loading files…', 'form-hint');
   feedback.setAttribute('role', 'status');
   const list = element('ul', '', 'download-library-list');
-  const actions = element('div', '', 'form-actions');
+  const actions = element('footer', '', 'form-actions');
   actions.append(close, confirm);
-  dialog.append(title, searchLabel, feedback, list, actions);
+  const body = element('div', '', 'download-library-body');
+  const fields = element('div', '', 'download-library-fields');
+  fields.append(searchLabel, feedback, list);
+  body.append(fields);
+  dialog.append(title, body, actions);
   document.body.append(dialog);
   const controller = new AbortController();
   const selected = new Map();
@@ -73,7 +77,7 @@ export async function openFileLibrary(existing, add, status, form, {maxFiles, ex
     for (const row of list.children) row.hidden = !row.textContent.toLowerCase().includes(search.value.trim().toLowerCase());
   });
   dialog.showModal();
-  search.focus();
+  search.focus({preventScroll: true});
   try {
     const files = await requestFiles('/post/files', {signal: controller.signal});
     if (!dialog.isConnected) return;

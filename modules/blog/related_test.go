@@ -22,6 +22,36 @@ func relatedSource(t *testing.T, value postRelated) string {
 	return source
 }
 
+func TestRepeatedRelatedPosts(t *testing.T) {
+	h := registeredBrowserHarness(t)
+	ctx := t.Context()
+	var ids []string
+	for i := range maxRelatedPosts + 1 {
+		number := strconv.Itoa(i)
+		post, err := savePostFixture(h.blog.posts, ctx, Post{Slug: "other-post-" + number, Title: "Other post " + number, Markdown: "Body"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, post.ID)
+	}
+	extra := "related-posts:" + strings.Repeat("1", 32)
+	source, err := joinPostComponents("Body", componentInput{
+		"related":        componentJSON(postRelated{Title: "First group", Posts: ids[:maxRelatedPosts]}),
+		extra:            componentJSON(postRelated{Title: "Second group", Posts: ids[maxRelatedPosts:]}),
+		"componentOrder": componentJSON([]string{"related-posts", extra}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := h.blog.renderWriting(ctx, source, "")
+	first, second, found := strings.Cut(string(output), `aria-label="Second group"`)
+	if err != nil || !found || !strings.Contains(first, `href="/post/s/other-post-0"`) ||
+		strings.Contains(first, `href="/post/s/other-post-12"`) || !strings.Contains(second, `href="/post/s/other-post-12"`) ||
+		strings.Contains(second, `href="/post/s/other-post-0"`) {
+		t.Fatalf("related links must render in their own component: %s, %v", output, err)
+	}
+}
+
 func TestRelatedComponent(t *testing.T) {
 	id := strings.Repeat("A", 26)
 	value := postRelated{Title: `More <script> & reading`, Posts: []string{id}}

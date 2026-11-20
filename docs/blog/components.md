@@ -1,8 +1,10 @@
 # Post components
 
-Choose **Add component** below a post's Markdown editor. Components appear below the body in the order you add them. Move them with the heading's arrow buttons. Save the post to apply changes. A post can consist entirely of components.
+Choose **Add component** from the Content toolbar. The component goes at the cursor or at the end when you have not set a cursor. If the cursor is inside a paragraph, list, or code block, the component goes after that block. Edit the settings in the dialog and choose **Done** to return to the post. Choose **Edit** on the component row to reopen its settings. You can add the same type more than once. Labels use the title, filename, or another detail when available. Each label stays with its component as you move it.
 
-An added component must contain valid content. Fill it in or remove it before saving. A rejected save preserves your edits. Removal offers Undo and does not delete uploads. Unsaved indicators, browser recovery, and revision history apply to every component. Page editors do not expose components yet.
+Drag the **Move** handle to reposition a component in the writing or in the list below it. Choose **Move** to show **Up** and **Down** for moving one block or row at a time. The Content editor’s Undo and Redo include component additions, removals, and moves. A post can consist entirely of components.
+
+An added component must contain valid content. Fill it in or remove it before saving. A rejected save preserves your edits. The latest removal offers **Undo** for a few seconds. Earlier removals remain in the editor’s Undo history. Removing a component keeps its uploads. Unsaved indicators, browser recovery, and revision history apply to every component. Page editors do not expose components yet.
 
 | Component | Content |
 | --- | --- |
@@ -70,7 +72,7 @@ Choose **Before & after**. Add an optional title and caption, then choose two di
 
 Readers drag the divider to compare. Tab focuses its handle. Arrow keys adjust it, and Home/End reveal either image completely. Images fit a shared 4:3 frame without cropping. Other proportions leave empty space. Without JavaScript, in feeds, and in historical previews, both labeled images appear side by side.
 
-Each image follows the [image limits](media.md#upload-and-reuse). Labels allow 80 characters, the title 240, the caption 1,000, and each image description 500. Long labels truncate to one line. One comparison is allowed per post.
+Each image follows the [image limits](media.md#upload-and-reuse). Labels allow 80 characters, the title 240, the caption 1,000, and each image description 500. Long labels truncate to one line.
 
 ## Link preview
 
@@ -82,7 +84,7 @@ Fetching requires an Admin or Poster session and same-origin protection. Link pr
 
 The fetcher reads UTF-8 Open Graph or HTML title/description metadata. It ignores embed HTML, document base URLs, and `og:url`. Relative image URLs resolve against the fetched page. Imported thumbnails use the [image pipeline](media.md#upload-and-reuse). If importing fails, text remains usable. Sites requiring login or JavaScript may need manual details.
 
-One preview is allowed per post. Titles allow 240 characters, descriptions 1,000, site names 200, and URLs 2,048 bytes. Search includes the saved title, description, and site name.
+Titles allow 240 characters, descriptions 1,000, site names 200, and URLs 2,048 bytes. Search includes the saved title, description, and site name.
 
 ## Video
 
@@ -94,7 +96,7 @@ YouTube accepts watch, `youtu.be`, Shorts, live, and embed links. Vimeo accepts 
 
 Readers see the provider's preview and controls. Autoplay is disabled. The iframe loads near the viewport and contacts the provider before Play. It also works without the blog's JavaScript. Provider restrictions can prevent embedding. Saving does not check availability.
 
-One video is allowed per post. Titles allow 240 characters, captions 1,000, and URLs 2,048 bytes. Text is fetched only at the author's request and saved with the post. Feeds use a viewing link with authored details. Search includes the title and caption. Video files remain with the provider.
+Titles allow 240 characters, captions 1,000, and URLs 2,048 bytes. Text is fetched only at the author's request and saved with the post. Feeds use a viewing link with authored details. Search includes the title and caption. Video files remain with the provider.
 
 ## Embed
 

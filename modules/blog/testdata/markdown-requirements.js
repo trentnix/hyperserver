@@ -42,7 +42,7 @@
       assert(document.activeElement === body, 'Native validation must focus the visible textarea.');
     }
     form.querySelector('[data-component-picker] summary').click();
-    form.querySelector('[data-component-add="file-downloads"]').click();
+    await addTestComponent(form.querySelector('[data-component-add="file-downloads"]'));
     const section = form.querySelector('[data-post-component="file-downloads"]');
     check(false);
     form.requestSubmit();
@@ -51,14 +51,14 @@
     form.elements.downloads.value = JSON.stringify(savedFile);
     form.elements.downloads.dispatchEvent(new Event('change', {bubbles: true}));
     check(false);
-    section.querySelector('[data-component-remove]').click();
+    await removeTestComponent(section.querySelector('[data-component-remove]'));
     check(true);
-    form.querySelector('[data-component-undo="file-downloads"]').click();
+    await undoTestComponent(form.querySelector('[data-component-undo="file-downloads"]'));
     check(false);
     if (enhanced) {
       editor.destroy();
       assert(!body.required && !getMarkdownEditor(body), 'Destroy must restore the latest component-dependent requirement.');
-      section.querySelector('[data-component-remove]').click();
+      await removeTestComponent(section.querySelector('[data-component-remove]'));
       assert(body.required, 'Removing the last component after teardown must restore native validation.');
     } else {
       form.elements.slug.value = 'component-only-native';

@@ -6,10 +6,6 @@
 
 {{ define "blog.componentActions" }}
 <div class="component-actions">
-  <div class="component-order-controls" data-component-order-controls hidden>
-    <button type="button" class="text-button" data-component-move="up" aria-label="Move {{ . }} up" title="Move {{ . }} up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg></button>
-    <button type="button" class="text-button" data-component-move="down" aria-label="Move {{ . }} down" title="Move {{ . }} down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg></button>
-  </div>
   <button type="button" class="text-button component-remove" data-component-remove aria-label="Remove {{ . }}" hidden>Remove</button>
 </div>
 {{ end }}

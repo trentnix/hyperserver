@@ -1,9 +1,11 @@
 package blog
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
@@ -65,6 +67,19 @@ func (catalog componentCatalog) find(kind string) (componentDefinition, bool) {
 	return componentDefinition{}, false
 }
 
+func (catalog componentCatalog) instance(id string) (componentDefinition, bool) {
+	kind, suffix, extra := strings.Cut(id, ":")
+	if extra {
+		if len(suffix) != 32 || suffix != strings.ToLower(suffix) {
+			return componentDefinition{}, false
+		}
+		if _, err := hex.DecodeString(suffix); err != nil {
+			return componentDefinition{}, false
+		}
+	}
+	return catalog.find(kind)
+}
+
 func componentJSON(value any) string {
 	data, _ := json.Marshal(value)
 	return string(data)
@@ -73,16 +88,36 @@ func componentJSON(value any) string {
 // A decoded component keeps its typed content. Only its definition knows the
 // envelope key, so another component never expands a shared tagged union.
 type postComponent struct {
+	ID      string
 	Type    string
 	payload string
 	Content componentContent
+}
+
+func (component postComponent) key() string {
+	if component.ID != "" {
+		return component.ID
+	}
+	return component.Type
+}
+
+func (catalog componentCatalog) field(component postComponent) string {
+	if component.ID != "" {
+		return component.ID
+	}
+	definition, _ := catalog.find(component.Type)
+	return definition.Field
 }
 
 func (component postComponent) MarshalJSON() ([]byte, error) {
 	if component.payload == "" || component.Content == nil || component.Content.Empty() {
 		return nil, fmt.Errorf("cannot encode an empty component")
 	}
-	return json.Marshal(map[string]any{"type": component.Type, component.payload: component.Content})
+	fields := map[string]any{"type": component.Type, component.payload: component.Content}
+	if component.ID != "" {
+		fields["id"] = component.ID
+	}
+	return json.Marshal(fields)
 }
 
 func (definition componentDefinition) decode(source string) (componentContent, error) {
@@ -106,6 +141,13 @@ func (catalog componentCatalog) form(values url.Values) componentInput {
 	}
 	if values.Has("componentOrder") {
 		input["componentOrder"] = values.Get("componentOrder")
+	}
+	for field := range values {
+		if strings.Contains(field, ":") {
+			if _, ok := catalog.instance(field); ok {
+				input[field] = values.Get(field)
+			}
+		}
 	}
 	return input
 }
@@ -131,14 +173,24 @@ func (p editorPage) componentFields() map[string]string {
 		result[definition.Field] = ""
 	}
 	for _, component := range components.Components {
-		definition, _ := postComponentCatalog.find(component.Type)
-		result[definition.Field] = component.Content.EditorSource()
+		result[postComponentCatalog.field(component)] = component.Content.EditorSource()
 	}
 	for field, source := range p.ComponentInputs {
 		result[field] = source
 	}
 	result["componentOrder"] = p.ComponentOrderJSON()
 	return result
+}
+
+func (p editorPage) ExtraComponents() map[string]string {
+	fields := p.componentFields()
+	extra := make(map[string]string)
+	for field, value := range fields {
+		if strings.Contains(field, ":") {
+			extra[field] = value
+		}
+	}
+	return extra
 }
 
 type componentEditor struct {

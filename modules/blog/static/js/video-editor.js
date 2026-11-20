@@ -1,4 +1,4 @@
-import {registerComponent, jsonComponentValue} from './post-components.js';
+import {initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {markField} from './forms.js';
 import {runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 
@@ -13,7 +13,7 @@ function initialize(root) {
   for (const section of root.querySelectorAll('[data-video-editor]')) {
     if (initialized.has(section)) continue;
     initialized.add(section);
-    const source = section.querySelector('[name="video"]');
+    const source = section.querySelector('textarea[name]');
     const controls = section.querySelector('[data-video-controls]');
     const label = section.querySelector('[data-video-source-label]');
     const status = section.querySelector('[data-video-status]');
@@ -98,6 +98,7 @@ function initialize(root) {
     }
     source.addEventListener('change', read);
     registerComponent(section, {
+      label: () => title.value,
       normalize: value => jsonComponentValue(value, {strings: ['title', 'caption']}),
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
@@ -111,5 +112,4 @@ function initialize(root) {
   }
 }
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

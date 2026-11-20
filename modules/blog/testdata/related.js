@@ -37,7 +37,7 @@
     }
     await wait(() => document.querySelector('#post-form .CodeMirror') && document.querySelector('[name="related"]').hidden);
     const form = document.querySelector('#post-form');
-    form.querySelector('[data-component-add="related-posts"]').click();
+    await addTestComponent(form.querySelector('[data-component-add="related-posts"]'));
     const section = form.querySelector('[data-related-editor]');
     const source = form.elements.related;
     const results = section.querySelector('[data-post-picker-results]');
@@ -96,9 +96,9 @@
     await wait(() => status.textContent === 'No matching posts.');
     assert(rows().length === 3, 'Searching must preserve selected posts.');
     const savedSource = source.value;
-    section.querySelector('[data-component-remove]').click();
+    await removeTestComponent(section.querySelector('[data-component-remove]'));
     assert(section.hidden && !source.value, 'Removal must clear component source.');
-    form.querySelector('[data-component-undo="related-posts"]').click();
+    await undoTestComponent(form.querySelector('[data-component-undo="related-posts"]'));
     await wait(() => rows().length === 3 && !results.hasAttribute('aria-busy'));
     assert(!section.hidden && source.value === savedSource, 'Undo must restore every selected ID and the heading.');
     const nativeFetch = window.fetch;

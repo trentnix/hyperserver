@@ -1,4 +1,4 @@
-import {registerComponent, jsonComponentValue} from './post-components.js';
+import {componentElement, initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {markField} from './forms.js';
 import './media.js';
 
@@ -121,9 +121,9 @@ function initialize(root) {
     const controls = section.querySelector('[data-component-fields]');
     const fields = new Map([...controls.querySelectorAll('[data-event-field]')].map(input => [input.dataset.eventField, input]));
     const zone = fields.get('timeZone');
-    const zoneTrigger = section.querySelector('#event-zone-change');
-    const zoneName = section.querySelector('#event-zone-name');
-    const allDay = section.querySelector('#event-all-day');
+    const zoneTrigger = componentElement(section, 'event-zone-change');
+    const zoneName = componentElement(section, 'event-zone-name');
+    const allDay = componentElement(section, 'event-all-day');
     const defaultZone = source.form.dataset.timeZone || 'UTC';
     const picker = section.querySelector('[data-image-picker]');
     const selectedImage = fields.get('imageID');
@@ -235,6 +235,7 @@ function initialize(root) {
     source.addEventListener('change', read);
     source.addEventListener('blog:field-validation', syncError);
     registerComponent(section, {
+      label: () => fields.get('title').value,
       normalize: comparableEvent,
       snapshot: () => ({source: source.value, times: timedFields.map(key => fields.get(key).value)}),
       clear: () => { source.value = ''; read(); },
@@ -251,5 +252,4 @@ function initialize(root) {
   }
 }
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

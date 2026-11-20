@@ -43,31 +43,26 @@
         const legacy = form.querySelector(`[data-post-component="${legacyKind}"]`);
         form.elements[legacyField].value = JSON.stringify({url: legacyURL, description});
         form.elements[legacyField].dispatchEvent(new Event('change', {bubbles: true}));
-        assert(!legacy.hidden && form.querySelector('[data-component-add="social-post"]').hidden, 'Recovered social posts must use the single picker choice.');
+        assert(!legacy.hidden && !form.querySelector('[data-component-add="social-post"]').hidden, 'Recovered social posts must use the single picker choice.');
         set(legacy.querySelector('[data-social-post-field="url"]'), platformURL);
         assert(JSON.parse(form.elements[legacyField].value).url === platformURL, 'Legacy editors must allow platform changes.');
-        legacy.querySelector('[data-component-remove]').click();
+        await removeTestComponent(legacy.querySelector('[data-component-remove]'));
         assert(!form.querySelector('[data-component-add="social-post"]').hidden, 'Removing a legacy component must restore the unified picker choice.');
-        form.querySelector('[data-component-add="social-post"]').click();
+        await addTestComponent(form.querySelector('[data-component-add="social-post"]'));
         const replacement = form.querySelector('[data-post-component="social-post"]');
         set(replacement.querySelector('[data-social-post-field="url"]'), platformURL);
         set(replacement.querySelector('[data-social-post-field="description"]'), 'Replacement context for ' + legacyKind);
         const replacementSource = form.elements.socialPost.value;
-        form.querySelector(`[data-component-undo="${legacyKind}"]`).click();
-        assert(!legacy.hidden && replacement.hidden && !form.elements.socialPost.value && JSON.parse(form.elements[legacyField].value).description === description, 'Undo must restore the legacy component without a second Social media editor.');
-        form.querySelector('[data-component-undo="social-post"]').click();
-        assert(legacy.hidden && !replacement.hidden && !form.elements[legacyField].value && form.elements.socialPost.value === replacementSource, 'The replacement must remain available through Undo without losing its input.');
-        form.querySelector('[data-component-add="social-post"]').click();
-        assert(form.elements.componentOrder.value === '["social-post"]', 'A hidden Add button must not add a second choice.');
-        replacement.querySelector('[data-component-remove]').click();
-        form.querySelector(`[data-component-undo="${legacyKind}"]`).click();
-        assert(!legacy.hidden && form.querySelector('[data-component-add="social-post"]').hidden && JSON.parse(form.elements[legacyField].value).url === platformURL, 'Both versions must remain recoverable after replacing and removing a social component.');
-        legacy.querySelector('[data-component-remove]').click();
+        await undoTestComponent(form.querySelector(`[data-component-undo="${legacyKind}"]`));
+        assert(!legacy.hidden && !replacement.hidden && form.elements.socialPost.value === replacementSource &&
+          JSON.parse(form.elements[legacyField].value).description === description, 'Undo must restore the legacy component alongside the new Social media component.');
+        await removeTestComponent(replacement.querySelector('[data-component-remove]'));
+        await removeTestComponent(legacy.querySelector('[data-component-remove]'));
       }
       for (const [kind, field, url] of cases) {
         const section = form.querySelector(`[data-post-component="${kind}"]`);
         assert(section.hidden && section.querySelector('fieldset').disabled, 'Unused editors must stay disabled.');
-        form.querySelector(`[data-component-add="${kind}"]`).click();
+        await addTestComponent(form.querySelector(`[data-component-add="${kind}"]`));
         assert(document.activeElement.id === kind + '-url', 'Adding a social post must focus its URL.');
         set(section.querySelector('[data-social-post-field="url"]'), 'https://evil.test/post/123');
         set(section.querySelector('[data-social-post-field="description"]'), description);
@@ -92,16 +87,16 @@
         document.querySelector('.media-browser [data-media-select]').click();
         await wait(() => !document.querySelector('.media-browser'));
         const copy = form.elements[field].value;
-        section.querySelector('[data-component-remove]').click();
+        await removeTestComponent(section.querySelector('[data-component-remove]'));
         assert(section.hidden && !form.elements[field].value, 'Removal must clear the source.');
-        form.querySelector(`[data-component-undo="${kind}"]`).click();
+        await undoTestComponent(form.querySelector(`[data-component-undo="${kind}"]`));
         assert(form.elements[field].value === copy, 'Undo must restore the full component.');
         assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Editor must fit the viewport.');
       }
       const last = form.querySelector('[data-post-component="social-post"]');
-      form.querySelector('[data-component-add="video"]').click();
+      await addTestComponent(form.querySelector('[data-component-add="video"]'));
       set(form.querySelector('#video-url'), 'https://youtu.be/M7lc1UVf-VE');
-      last.querySelector('[data-component-move="down"]').click();
+      await moveTestComponent(last, 'down');
       assert(form.elements.componentOrder.value === '["video","social-post"]', 'Social posts must use shared ordering.');
       form.querySelector('[name="published"][value="on"]').checked = true;
       form.dispatchEvent(new Event('input', {bubbles: true}));

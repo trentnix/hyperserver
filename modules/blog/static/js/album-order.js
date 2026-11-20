@@ -4,7 +4,7 @@ import {enableAlbumReordering} from './album-reorder.js';
 export function openAlbumOrder(photos, apply, opener = document.activeElement) {
   if (document.querySelector('.album-order-dialog')) return;
   const ordered = [...photos];
-  const grid = matchMedia('(min-width: 700px)');
+  const grid = matchMedia('(min-width: 360px)');
   const dialog = document.querySelector('#album-order-template').content.firstElementChild.cloneNode(true);
   dialog.style.setProperty('--album-order-width', Math.min(960, photos.length * 320 + 24) + 'px');
   const help = dialog.querySelector('#album-order-instructions');

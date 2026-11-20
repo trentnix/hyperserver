@@ -75,14 +75,16 @@ func (value *postRelated) PostReferences() []string { return value.Posts }
 
 // Only public targets enter the request-owned renderer. Media extraction uses
 // the pure renderer, which omits unresolved links without reading the database.
-func (value *postRelated) ResolveReader(ctx context.Context, posts postLinkReader, postID string) (renderer.NodeRenderer, error) {
-	targets, err := posts.PublicPostLinks(ctx, value.Posts)
-	if err != nil {
-		return nil, err
-	}
-	reader := relatedRenderer{posts: make(map[string]Post, len(targets)), exclude: postID}
-	for _, target := range targets {
-		reader.posts[target.ID] = target
+func resolveRelatedReader(ctx context.Context, posts postLinkReader, postID string, ids []string) (renderer.NodeRenderer, error) {
+	reader := relatedRenderer{posts: make(map[string]Post, len(ids)), exclude: postID}
+	for batch := range slices.Chunk(ids, maxRelatedPosts) {
+		targets, err := posts.PublicPostLinks(ctx, batch)
+		if err != nil {
+			return nil, err
+		}
+		for _, target := range targets {
+			reader.posts[target.ID] = target
+		}
 	}
 	return reader, nil
 }
@@ -129,6 +131,10 @@ func (reader relatedRenderer) RegisterFuncs(register renderer.NodeRendererFuncRe
 
 func postReferences(source string) []string {
 	_, components, _ := splitPostComponents(source)
+	return componentPostReferences(components)
+}
+
+func componentPostReferences(components postComponents) []string {
 	var ids []string
 	for _, component := range components.Components {
 		if references, ok := component.Content.(interface{ PostReferences() []string }); ok {
@@ -158,10 +164,9 @@ func (m *module) validatePostReferences(ctx context.Context, post Post) error {
 		if !ok {
 			continue
 		}
-		definition, _ := postComponentCatalog.find(component.Type)
 		for _, id := range references.PostReferences() {
 			if id == post.ID {
-				return writingFieldError{contentError("A post cannot link to itself in related posts."), definition.Field}
+				return writingFieldError{contentError("A post cannot link to itself in related posts."), postComponentCatalog.field(component)}
 			}
 			if slices.Contains(previous, id) {
 				continue
@@ -178,7 +183,7 @@ func (m *module) validatePostReferences(ctx context.Context, post Post) error {
 				return err
 			}
 			if err != nil || !m.canEditPost(ctx, target) {
-				return writingFieldError{contentError("A selected post is unavailable. Remove it or choose another post."), definition.Field}
+				return writingFieldError{contentError("A selected post is unavailable. Remove it or choose another post."), postComponentCatalog.field(component)}
 			}
 		}
 	}

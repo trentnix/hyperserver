@@ -1,6 +1,6 @@
 import {runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
 import {markField} from './forms.js';
-import {registerComponent, jsonComponentValue} from './post-components.js';
+import {initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {requestFiles, validEntry, openFileLibrary, sizeLabel} from './file-picker.js';
 
 const initialized = new WeakSet();
@@ -28,7 +28,7 @@ function initialize(root) {
     const maxFiles = Number(section.dataset.maxFiles);
     const pdfOnly = section.dataset.postComponent === 'pdf-preview';
     const accepts = entry => validEntry(entry) && (!pdfOnly || entry.id.endsWith('.pdf'));
-    const limitMessage = pdfOnly ? 'Choose one PDF for the preview.' : 'Choose at most 20 files per post.';
+    const limitMessage = pdfOnly ? 'Choose one PDF for the preview.' : 'Choose at most 20 files for this component.';
     const form = source.form;
     const list = section.querySelector('[data-downloads-list]');
     const status = section.querySelector('[data-downloads-status]');
@@ -99,22 +99,25 @@ function initialize(root) {
           });
           option.append(showDownload, document.createTextNode('Show download link'));
 
-          const mode = element('div', '', 'pdf-editor-presentation-option');
-          const presentationOption = element('label', '', 'file-download-option');
+          const presentationOption = element('label', '', 'file-download-option pdf-editor-presentation-option');
+          const copy = element('span');
+          const presentationTitle = element('span', 'Presentation mode');
+          presentationTitle.id = source.id + '-presentation-title';
           const hint = element('small', 'One page at a time, with Previous and Next buttons.', 'form-hint');
           hint.id = source.id + '-presentation-help';
           const presentation = element('input');
           presentation.type = 'checkbox';
           presentation.checked = Boolean(entry.presentation);
+          presentation.setAttribute('aria-labelledby', presentationTitle.id);
           presentation.setAttribute('aria-describedby', hint.id);
           presentation.addEventListener('change', () => {
             if (presentation.checked) entry.presentation = true;
             else delete entry.presentation;
             serialize();
           });
-          presentationOption.append(presentation, document.createTextNode('Presentation mode'));
-          mode.append(presentationOption, hint);
-          options.append(option, mode);
+          copy.append(presentationTitle, hint);
+          presentationOption.append(presentation, copy);
+          options.append(option, presentationOption);
           fields.append(options);
           item.append(fields);
           return item;
@@ -250,6 +253,7 @@ function initialize(root) {
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
     registerComponent(section, {
+      label: () => entries[0]?.label,
       normalize: value => jsonComponentValue(value, {strings: ['description'], flags: ['hideDownload', 'presentation'], empty: '[]'}),
       snapshot: () => ({source: source.value, removed: [...removed]}),
       clear: () => { source.value = ''; read(); },
@@ -261,5 +265,4 @@ function initialize(root) {
 }
 
 
-document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
-initialize(document);
+initializeComponentPanels(initialize);

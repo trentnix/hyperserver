@@ -144,7 +144,7 @@
       await wait(() => document.querySelector('.CodeMirror') && document.querySelector('[data-draft-status]:not([hidden])'));
       const form = document.querySelector('form[data-draft-owner]');
       const editor = form.querySelector('.CodeMirror').CodeMirror;
-      assert(!document.querySelector('dialog') && location.pathname === target.editor, 'Loaded writing must open the ordinary editor page.');
+      assert(!document.querySelector('dialog[open]') && location.pathname === target.editor, 'Loaded writing must open the ordinary editor page.');
       assert(form.elements.title.value === 'Original title' && editor.getValue() === '# Original body', 'Old content was not loaded.');
       const published = form.elements.published;
       assert(form.elements.slug.value === 'history' && (published.type === 'checkbox' ? published.checked : published.value === 'on') && form.elements.version.value === '2', 'Loading changed current settings or edit version.');

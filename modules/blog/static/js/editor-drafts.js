@@ -1,5 +1,5 @@
 import {getMarkdownEditor} from './markdown-editor.js';
-import {componentValue} from './post-components.js';
+import {componentValue, restoreComponentInstances} from './post-components.js';
 
 // Recovery copies belong to this browser, not the published content. Each editor
 // instance owns a key so separate tabs never overwrite one another's writing.
@@ -8,9 +8,10 @@ import {componentValue} from './post-components.js';
   const prefix = 'hyperserver.blog.draft.v1:';
   const lifetime = 7 * 24 * 60 * 60 * 1000;
   const maxLength = 1024 * 1024;
+  const instances = form => [...form.querySelectorAll('[data-component-id] textarea[name]:enabled')];
 
   function snapshot(state) {
-    return Object.fromEntries(state.fields.filter(field => field.type !== 'radio' || field.checked)
+    return Object.fromEntries([...state.fields, ...instances(state.form)].filter(field => field.type !== 'radio' || field.checked)
       .map(field => [field.name, field.type === 'checkbox' ? field.checked : getMarkdownEditor(field)?.getMarkdown() ?? field.value]));
   }
   const encoded = state => JSON.stringify(snapshot(state));
@@ -18,7 +19,8 @@ import {componentValue} from './post-components.js';
     if (!state.baseline) return true;
     const before = JSON.parse(state.baseline);
     const after = snapshot(state);
-    for (const source of state.componentSources) {
+    for (const source of [...state.componentSources, ...instances(state.form)]) {
+      if (!Object.hasOwn(before, source.name)) continue;
       before[source.name] = componentValue(source, before[source.name] || '');
       after[source.name] = componentValue(source, after[source.name] || '');
     }
@@ -50,17 +52,49 @@ import {componentValue} from './post-components.js';
     return true;
   }
 
+  function dismissRecovery(state) {
+    state.recovery = null;
+    state.recoveryCopies = [];
+    state.form.querySelector('[data-draft-recovery]').hidden = true;
+  }
+
+  function copiesBeforeSave(state) {
+    // The create editor can hold recovery copies for several new items.
+    if (!state.existing) return [...state.sources];
+    return Object.keys(localStorage)
+      .filter(key => key !== state.key && key.startsWith(state.scope))
+      .map(key => ({key, raw: localStorage.getItem(key)}))
+      .filter(copy => copy.raw !== null);
+  }
+
+  function clearSavedCopies(state, copies) {
+    copies.forEach(removeCopy);
+    state.sources = [];
+    dismissRecovery(state);
+  }
+
   function persist(state) {
     clearTimeout(state.timer);
     try {
       if (!dirty(state)) {
         localStorage.removeItem(state.key);
+        state.lastCopy = null;
         setStatus(state, 'No unsaved changes.');
         return;
       }
-      const raw = JSON.stringify({saved: Date.now(), baseline: state.baseline, fields: snapshot(state)});
+      const copy = {saved: Date.now(), baseline: state.baseline, fields: snapshot(state)};
+      const previous = state.lastCopy;
+      // A save or discard in another editor may have cleared this copy. A
+      // passive save on navigation must not put the same copy back.
+      if (previous && previous.baseline === copy.baseline && localStorage.getItem(state.key) === null &&
+          JSON.stringify(previous.fields) === JSON.stringify(copy.fields)) {
+        setStatus(state, 'Unsaved changes.');
+        return;
+      }
+      const raw = JSON.stringify(copy);
       if (raw.length > maxLength) throw new Error('Recovery copy too large');
       localStorage.setItem(state.key, raw);
+      state.lastCopy = copy;
       setStatus(state, 'Saved locally. Use Save to apply changes.');
     } catch {
       storageFailure(state);
@@ -102,6 +136,8 @@ import {componentValue} from './post-components.js';
       }
       copies.sort((a, b) => b.data.saved - a.data.saved);
       state.recovery = copies[0];
+      state.recoveryCopies = state.existing ? copies : copies.slice(0, 1);
+      state.form.querySelector('[data-draft-discard]').textContent = state.recoveryCopies.length > 1 ? 'Discard copies' : 'Discard copy';
       state.form.querySelector('[data-draft-recovery]').hidden = !state.recovery;
       if (state.recovery) {
         const data = state.recovery.data;
@@ -123,8 +159,9 @@ import {componentValue} from './post-components.js';
       const scope = ownerPrefix + new URL(form.action).pathname + ':';
       const state = {
         form, ownerPrefix, scope, key: scope + crypto.randomUUID(), sources: [],
-        fields: [...form.querySelectorAll('input[name], textarea[name], select[name]')].filter(field => field.type !== 'file' && field.name !== 'version'),
-        componentSources: [...form.querySelectorAll('[data-post-component] textarea[name], [data-post-picker-source]')],
+        existing: Number(form.elements.version.value) > 0,
+        fields: [...form.querySelectorAll('input[name], textarea[name], select[name]')].filter(field => field.type !== 'file' && field.name !== 'version' && !field.closest('[data-component-id]')),
+        componentSources: [...form.querySelectorAll('[data-post-component] textarea[name], [data-post-picker-source]')].filter(field => !field.closest('[data-component-id]')),
         status: form.querySelector('[data-draft-status]')
       };
       // Rejected ordinary submissions contain unsaved input, not a server baseline.
@@ -135,9 +172,9 @@ import {componentValue} from './post-components.js';
         const baseline = snapshot(state);
         for (const [name, value] of Object.entries(JSON.parse(form.dataset.currentContent))) {
           // Match the browser's input and textarea normalization without changing the editor.
-          const field = form.elements.namedItem(name).cloneNode();
-          field.value = value;
-          baseline[name] = field.value;
+          const field = form.elements.namedItem(name)?.cloneNode();
+          if (field) field.value = value;
+          baseline[name] = field?.value ?? value;
         }
         state.baseline = JSON.stringify(baseline);
       }
@@ -169,9 +206,14 @@ import {componentValue} from './post-components.js';
         changed();
         persist(state);
       });
-      function restoreCopy() {
-        if (!active(state) || !state.recovery) return;
-        const copy = state.recovery;
+      function restoreCopy(copy) {
+        if (!active(state) || state.recovery !== copy) return;
+        try {
+          if (localStorage.getItem(copy.key) !== copy.raw) {
+            offerRecovery(state);
+            return;
+          }
+        } catch { /* A cached copy can still be restored if storage is unavailable. */ }
         const keepPublication = unavailablePublication(state, copy);
         for (const field of state.fields) {
           // Fields added after this copy was saved keep their current settings.
@@ -182,40 +224,51 @@ import {componentValue} from './post-components.js';
           else if (field.type === 'radio') field.checked = field.value === copy.data.fields[field.name];
           else field.value = copy.data.fields[field.name];
         }
-        getMarkdownEditor(form.elements.content)?.setMarkdown(form.elements.content.value);
+        const editor = getMarkdownEditor(form.elements.content);
+        editor?.setMarkdown(form.elements.content.value);
+        editor?.placement?.resetHistory();
+        restoreComponentInstances(form, copy.data.fields);
         state.componentSources.forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));
         form.elements.componentOrder?.dispatchEvent(new Event('change', {bubbles: true}));
         form.querySelectorAll('[data-image-value]').forEach(field => field.dispatchEvent(new Event('change', {bubbles: true})));
         state.sources.push(copy);
         form.dispatchEvent(new Event('input', {bubbles: true}));
         persist(state);
-        state.recovery = null;
-        form.querySelector('[data-draft-recovery]').hidden = true;
+        dismissRecovery(state);
         if (!state.status.classList.contains('draft-status--error')) {
           setStatus(state, 'Copy restored. Save to apply changes.');
         }
       }
       form.querySelector('[data-draft-restore]').addEventListener('click', () => {
-        if (!state.recovery) return;
+        const copy = state.recovery;
+        if (!copy) return;
         if (dirty(state)) {
-          window.blogConfirm({title: 'Replace your current edits?', message: 'Restoring this browser copy replaces the fields in this editor. Saved content stays unchanged until you save.', action: 'Restore copy', cancel: 'Keep editing'}, restoreCopy);
-        } else restoreCopy();
+          window.blogConfirm({title: 'Replace your current edits?', message: 'Restoring this browser copy replaces the fields in this editor. Saved content stays unchanged until you save.', action: 'Restore copy', cancel: 'Keep editing'}, () => restoreCopy(copy));
+        } else restoreCopy(copy);
       });
       form.querySelector('[data-draft-discard]').addEventListener('click', () => {
         const copy = state.recovery;
         if (!copy) return;
-        window.blogConfirm({title: 'Discard this browser copy?', message: 'This removes the selected recovery copy from this browser. Your current edits and saved content will not change.', action: 'Discard copy', cancel: 'Keep copy'}, () => {
+        const copies = state.recoveryCopies;
+        const many = copies.length > 1;
+        const confirmation = many
+          ? {title: 'Discard recovery copies?', message: 'Remove the available recovery copies for this item from this browser.', action: 'Discard copies', cancel: 'Keep copies'}
+          : {title: 'Discard this browser copy?', message: 'Remove this recovery copy from this browser.', action: 'Discard copy', cancel: 'Keep copy'};
+        window.blogConfirm(confirmation, () => {
           if (!active(state) || state.recovery !== copy) return;
           try {
-            if (!removeCopy(copy)) {
+            const changed = copies.filter(candidate => !removeCopy(candidate));
+            if (changed.length) {
               offerRecovery(state);
-              setStatus(state, 'This copy changed in another tab and was not discarded.', true);
+              setStatus(state, many ? 'Some copies changed in another tab and are still available.' : 'This copy changed in another tab and is still available.', true);
               return;
             }
-            state.recovery = null;
-            form.querySelector('[data-draft-recovery]').hidden = true;
-            setStatus(state, 'Browser copy discarded.');
-          } catch { setStatus(state, 'Browser copy could not be discarded. Try again.', true); }
+            dismissRecovery(state);
+            setStatus(state, many ? 'Browser copies discarded.' : 'Browser copy discarded.');
+          } catch {
+            offerRecovery(state);
+            setStatus(state, many ? 'Some browser copies could not be discarded. Try again.' : 'Browser copy could not be discarded. Try again.', true);
+          }
         });
       });
     });
@@ -301,10 +354,15 @@ import {componentValue} from './post-components.js';
       states.delete(state.form);
     }
   });
+  const submissions = new WeakMap();
   document.addEventListener('htmx:before:request', event => {
-    const state = states.get(event.detail.ctx.sourceElement);
+    const {ctx} = event.detail;
+    const state = states.get(ctx.sourceElement);
     if (state) {
-      state.submitted = encoded(state);
+      const submission = {baseline: encoded(state)};
+      try { submission.copies = copiesBeforeSave(state); }
+      catch { /* Saving can proceed when browser storage is unavailable. */ }
+      submissions.set(ctx, submission);
       persist(state);
     }
   });
@@ -314,14 +372,15 @@ import {componentValue} from './post-components.js';
     const {ctx} = event.detail;
     if (!ctx.response.raw.ok || ctx.response.headers.get('HX-Trigger') !== 'blog:content-saved') return;
     const state = states.get(ctx.sourceElement);
-    if (!state || !state.submitted) return;
-    state.baseline = state.submitted;
+    const submitted = submissions.get(ctx);
+    if (!state || !submitted) return;
+    state.baseline = submitted.baseline;
     publishBaseline(state);
-    try {
-      state.sources.forEach(removeCopy);
-      state.sources = [];
-    } catch { storageFailure(state); }
     persist(state);
+    try {
+      if (!submitted.copies) throw new Error('Recovery storage is unavailable');
+      clearSavedCopies(state, submitted.copies);
+    } catch { setStatus(state, 'Older recovery copies could not be cleared.', true); }
   });
   document.addEventListener('htmx:finally:request', () => states.forEach(state => { state.approved = null; }));
   document.addEventListener('DOMContentLoaded', initialize);

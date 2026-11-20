@@ -57,16 +57,12 @@ func (m *module) renderWriting(ctx context.Context, source, postID string) (temp
 	if len(m.embedOrigins) > 0 {
 		readers = append(readers, embedRenderer{origins: m.embedOrigins})
 	}
-	for _, component := range components.Components {
-		if resolver, ok := component.Content.(interface {
-			ResolveReader(context.Context, postLinkReader, string) (renderer.NodeRenderer, error)
-		}); ok {
-			reader, err := resolver.ResolveReader(ctx, m.posts, postID)
-			if err != nil {
-				return "", err
-			}
-			readers = append(readers, reader)
+	if ids := componentPostReferences(components); len(ids) > 0 {
+		reader, err := resolveRelatedReader(ctx, m.posts, postID, ids)
+		if err != nil {
+			return "", err
 		}
+		readers = append(readers, reader)
 	}
 	return markdownComponents(source, postComponentCatalog, readers...)
 }
