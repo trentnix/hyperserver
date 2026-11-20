@@ -16,7 +16,7 @@ RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/web ./cmd/web && \
 FROM build AS migrationtools
 RUN GOBIN=/out go install -tags sqlite3 github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
 
-FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS runtime
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS runtime
 ARG VERSION=development
 ARG COMMIT=unknown
 LABEL org.opencontainers.image.version=$VERSION org.opencontainers.image.revision=$COMMIT
