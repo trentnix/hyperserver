@@ -72,6 +72,7 @@ func (m *module) buildFeed(ctx context.Context, origin *url.URL) ([]byte, error)
 	}
 	profile := m.profile.Current()
 	channel := feedChannel{Title: profile.Name, Link: origin.String(), Description: profile.Bio}
+	catalog := postComponentCatalog.forFeed()
 	for _, p := range posts {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -80,7 +81,7 @@ func (m *module) buildFeed(ctx context.Context, origin *url.URL) ([]byte, error)
 		link.Path = "/post/s/" + p.Slug
 		guid := *origin
 		guid.Path = "/post/id/" + p.ID
-		body, err := m.renderWriting(ctx, p.Markdown, p.ID)
+		body, err := m.renderWritingWithCatalog(ctx, p.Markdown, p.ID, catalog)
 		if err != nil {
 			return nil, err
 		}

@@ -14,6 +14,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | [Audio](#audio) | One MP3 with an optional transcript. |
 | [Event](#event) | An all-day or timed event with an optional location and details link. |
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
+| [Expandable details](#expandable-details) | A titled section readers can open inline. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
 | [Video](#video) | A YouTube or Vimeo player. |
 | [Embed](#embed) | An interactive page or widget from an approved site. |
@@ -73,6 +74,12 @@ Choose **Before & after**. Add an optional title and caption, then choose two di
 Readers drag the divider to compare. Tab focuses its handle. Arrow keys adjust it, and Home/End reveal either image completely. Images fit a shared 4:3 frame without cropping. Other proportions leave empty space. Without JavaScript, in feeds, and in historical previews, both labeled images appear side by side.
 
 Each image follows the [image limits](media.md#upload-and-reuse). Labels allow 80 characters, the title 240, the caption 1,000, and each image description 500. Long labels truncate to one line.
+
+## Expandable details
+
+Enter a title and Markdown body. The post shows the title by default. Readers can select it to open or close the details. RSS shows the full body. Search includes the title and body.
+
+Titles allow 240 characters and bodies allow 20,000. The body supports Markdown links, images, and code blocks. Add other components separately through the Content toolbar.
 
 ## Link preview
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/yuin/goldmark/ast"
@@ -21,6 +22,7 @@ type componentDefinition struct {
 	Decode                               func(string) (componentContent, error)
 	AliasFor                             string // Original stored kinds share the canonical component choice.
 	Renderer                             renderer.NodeRenderer
+	FeedRenderer                         renderer.NodeRenderer
 	EditorData                           func(source string, noLibrary bool) any
 }
 
@@ -55,7 +57,18 @@ var postComponentCatalog = componentCatalog{
 	legacySocialPostDefinition(threadsProvider()),
 	legacySocialPostDefinition(facebookProvider()),
 	comparisonDefinition(),
+	detailsDefinition(),
 	relatedDefinition(),
+}
+
+func (catalog componentCatalog) forFeed() componentCatalog {
+	feed := slices.Clone(catalog)
+	for i, definition := range feed {
+		if definition.FeedRenderer != nil {
+			feed[i].Renderer = definition.FeedRenderer
+		}
+	}
+	return feed
 }
 
 func (catalog componentCatalog) find(kind string) (componentDefinition, bool) {

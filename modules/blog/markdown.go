@@ -46,12 +46,16 @@ func markdownComponents(source string, catalog componentCatalog, overrides ...re
 	return template.HTML(out.String()), nil
 }
 
+func (m *module) renderWriting(ctx context.Context, source, postID string) (template.HTML, error) {
+	return m.renderWritingWithCatalog(ctx, source, postID, postComponentCatalog)
+}
+
 // Components can resolve public post references for this render. Pure Markdown
 // rendering stays independent of storage for media extraction and other callers.
-func (m *module) renderWriting(ctx context.Context, source, postID string) (template.HTML, error) {
-	_, components, err := splitPostComponents(source)
+func (m *module) renderWritingWithCatalog(ctx context.Context, source, postID string, catalog componentCatalog) (template.HTML, error) {
+	_, components, err := catalog.split(source)
 	if err != nil {
-		return markdown(source)
+		return markdownComponents(source, catalog)
 	}
 	var readers []renderer.NodeRenderer
 	if len(m.embedOrigins) > 0 {
@@ -64,7 +68,7 @@ func (m *module) renderWriting(ctx context.Context, source, postID string) (temp
 		}
 		readers = append(readers, reader)
 	}
-	return markdownComponents(source, postComponentCatalog, readers...)
+	return markdownComponents(source, catalog, readers...)
 }
 
 // markdownAt renders content for previews and feeds, resolving relative links

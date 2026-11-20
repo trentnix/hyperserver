@@ -57,7 +57,8 @@ func TestComponentCatalogExtension(t *testing.T) {
 			}
 			return note, nil
 		},
-		Renderer: catalogNoteRenderer{},
+		Renderer:     catalogNoteRenderer{tag: "aside"},
+		FeedRenderer: catalogNoteRenderer{tag: "p"},
 	}
 	catalog := append(slices.Clone(postComponentCatalog), definition)
 	input := catalog.form(url.Values{"note": {`{"text":"A <new> component"}`}, "componentOrder": {`["test-note"]`}})
@@ -93,6 +94,10 @@ func TestComponentCatalogExtension(t *testing.T) {
 
 	if got := catalog.searchText(source); got != "Body\nA <new> component" {
 		t.Fatal("search bypassed the definition", got)
+	}
+	feed, err := markdownComponents(source, catalog.forFeed())
+	if err != nil || !strings.Contains(string(feed), "<p>A &lt;new&gt; component</p>") {
+		t.Fatal("feed bypassed the definition", feed, err)
 	}
 	rendered, err := markdownComponents(source, catalog)
 	if err != nil || !strings.Contains(string(rendered), "<aside>A &lt;new&gt; component</aside>") {
@@ -137,12 +142,12 @@ func (node *catalogNoteNode) Dump(source []byte, level int) {
 	ast.DumpHelper(node, source, level, nil, nil)
 }
 
-type catalogNoteRenderer struct{}
+type catalogNoteRenderer struct{ tag string }
 
-func (catalogNoteRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer) {
+func (r catalogNoteRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer) {
 	register.Register(catalogNoteKind, func(writer util.BufWriter, _ []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering {
-			_, err := fmt.Fprintf(writer, "<aside>%s</aside>", html.EscapeString(node.(*catalogNoteNode).Value))
+			_, err := fmt.Fprintf(writer, "<%s>%s</%s>", r.tag, html.EscapeString(node.(*catalogNoteNode).Value), r.tag)
 			return ast.WalkSkipChildren, err
 		}
 		return ast.WalkContinue, nil

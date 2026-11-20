@@ -15,6 +15,8 @@ The definition names the kind, form field, JSON payload key, editor template, ic
 
 Shared code discovers form fields, preserves rejected input, prepares templates, builds picker entries, and registers reader renderers from the catalog. The catalog also generates `/assets/js/component-editors.js` with ordinary module imports. Each editor loads before draft recovery initializes.
 
+A component can supply a `FeedRenderer` for RSS. The feed uses the component's ordinary `Renderer` by default.
+
 A component can select a provider internally, as [Social media](social-posts.md) does from its URL. Legacy definitions preserve existing envelopes without adding picker entries.
 
 ## Content contract
