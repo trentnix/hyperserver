@@ -129,11 +129,16 @@
     set(title(second), longTitle);
     const longRow = componentRowIn(form, id);
     const longLabel = longRow.querySelector('strong');
-    const shortLabel = longLabel.getBoundingClientRect().width;
+    const labelBox = longLabel.getBoundingClientRect();
+    const longRowBox = longRow.getBoundingClientRect();
     const editButton = longRow.querySelector('[data-component-edit]');
-    assert(shortLabel < longLabel.scrollWidth && longLabel.title === 'Embed · ' + longTitle &&
+    const actionsBox = editButton.parentElement.getBoundingClientRect();
+    assert(labelBox.width < longLabel.scrollWidth && longLabel.title === 'Embed · ' + longTitle &&
       editButton.getBoundingClientRect().right <= cm.getWrapperElement().getBoundingClientRect().right,
       'A long title must truncate while preserving the full label and the Edit button.');
+    assert(labelBox.top - longRowBox.top >= 5 && actionsBox.top - labelBox.bottom >= 2 &&
+      longRowBox.bottom - actionsBox.bottom >= 5 && actionsBox.right <= longRowBox.right,
+      'A wrapped component must leave room above the title, between rows, and below the actions.');
     set(title(second), 'Second chart');
     closeComponentSettings(form);
     assert(first !== second && id !== instance(first) && title(first).value === 'First chart', 'Each same-type component needs separate fields.');
@@ -151,15 +156,31 @@
     key(document.activeElement, 'z', {metaKey: true, shiftKey: true});
     assert(cm.getValue() !== original, 'Redo must work from the component row.');
     key(document.activeElement, 'z', {ctrlKey: true});
-    await removeTestComponent(second.querySelector('[data-component-remove]'));
-    assert(order().join() === 'embed' && !cm.getValue().includes(marker(id)) && title(first).value === 'First chart',
-      'Removing the second embed must leave the first intact.');
+    const secondRow = () => componentRowIn(form, id);
+    const remove = secondRow().querySelector('[data-component-remove-row]');
+    const removeBox = remove.getBoundingClientRect();
+    const moveBox = secondRow().querySelector('[data-component-place]').getBoundingClientRect();
+    const editorRight = cm.getWrapperElement().getBoundingClientRect().right;
+    assert(remove.getAttribute('aria-label') === 'Remove Embed · Second chart' &&
+      removeBox.width >= 44 && removeBox.height >= 44 && removeBox.top === moveBox.top &&
+      Math.round(removeBox.left - moveBox.right) >= 16 &&
+      removeBox.right <= editorRight + 1,
+      'The Remove button must identify its component, stay alongside Move, and fit with touch spacing. ' +
+      JSON.stringify({removeBox, moveBox, editorRight, label: remove.getAttribute('aria-label')}));
+    remove.focus();
+    remove.click();
+    await wait(() => second.hidden, 'direct removal');
+    assert(order().join() === 'embed' && !cm.getValue().includes(marker(id)) && title(first).value === 'First chart' &&
+      !form.querySelector('.component-dialog[open]') && componentRowIn(form, instance(first)).contains(document.activeElement),
+      'Removing the second embed from its row must keep the first intact and focus its row.');
     const undo = form.querySelector('[data-component-undo="' + id + '"]');
     assert(undo.parentElement.querySelector('span').textContent === 'Embed · Second chart removed.' &&
       undo.getAttribute('aria-label') === 'Undo removal of Embed · Second chart', 'Removal and Undo must identify the instance by title.');
-    await undoTestComponent(undo);
-    assert(cm.getValue() === original && title(second).value === 'Second chart', 'Undo removal must restore the same instance and position.');
-    closeComponentSettings(form);
+    undo.click();
+    await wait(secondRow, 'restored inline row');
+    assert(cm.getValue() === original && title(second).value === 'Second chart' &&
+      secondRow().contains(document.activeElement) && !form.querySelector('.component-dialog[open]'),
+      'Undo must restore the inline row, position, and settings and focus the restored row.');
 
     const firstID = instance(first);
     const adjacent = 'Opening.\n\n' + marker(firstID) + '\n' + marker(id) + '\n\nClosing.';
@@ -190,6 +211,15 @@
       trailing(id).getBoundingClientRect().right <= form.getBoundingClientRect().right + 1,
     'A long title must truncate in the list below Content without widening the page.');
     set(title(second), 'Second chart');
+    const trailingRemove = trailing(firstID).querySelector('[data-component-remove-row]');
+    trailingRemove.focus();
+    trailingRemove.click();
+    await wait(() => !trailing(firstID), 'direct removal below Content');
+    assert(cm.getValue() === writing && order().join() === id && trailing(id).contains(document.activeElement),
+      'Removing a row below Content must keep the prose intact and focus the next row.');
+    key(document.activeElement, 'z', {ctrlKey: true});
+    assert(trailing(firstID) && order().join() === [firstID, id].join(),
+      'Keyboard Undo must also restore a row removed below Content.');
     await removeBoth();
     cm.undo();
     cm.undo();

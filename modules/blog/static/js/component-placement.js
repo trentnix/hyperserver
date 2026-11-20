@@ -10,6 +10,7 @@ export function nameComponentRow(row, name) {
   title.textContent = title.title = name;
   row.querySelector('[data-component-edit]').setAttribute('aria-label', 'Edit ' + name);
   row.querySelector('[data-component-place]').setAttribute('aria-label', 'Move ' + name);
+  row.querySelector('[data-component-remove-row]').setAttribute('aria-label', 'Remove ' + name);
   for (const button of row.querySelectorAll('[data-component-shift]')) {
     button.setAttribute('aria-label', 'Move ' + name + ' ' + button.dataset.componentShift);
   }
@@ -32,11 +33,16 @@ export function componentRow(type, name) {
   };
   const move = action('Move', 'componentPlace', type);
   move.setAttribute('aria-expanded', 'false');
+  const remove = action('Remove', 'componentRemoveRow', type);
+  remove.classList.add('component-remove');
+  const actions = document.createElement('span');
+  actions.className = 'component-row-actions';
+  actions.append(action('Edit', 'componentEdit', type), move, remove);
   const steps = document.createElement('span');
   steps.className = 'component-move-steps';
   steps.hidden = true;
   steps.append(action('Up', 'componentShift', 'up'), action('Down', 'componentShift', 'down'));
-  row.append(title, action('Edit', 'componentEdit', type), move, steps);
+  row.append(title, actions, steps);
   nameComponentRow(row, name);
   return row;
 }

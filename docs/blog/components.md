@@ -4,7 +4,9 @@ Choose **Add component** from the Content toolbar. The component goes at the cur
 
 Drag the **Move** handle to reposition a component in the writing or in the list below it. Choose **Move** to show **Up** and **Down** for moving one block or row at a time. The Content editor’s Undo and Redo include component additions, removals, and moves. A post can consist entirely of components.
 
-An added component must contain valid content. Fill it in or remove it before saving. A rejected save preserves your edits. The latest removal offers **Undo** for a few seconds. Earlier removals remain in the editor’s Undo history. Removing a component keeps its uploads. Unsaved indicators, browser recovery, and revision history apply to every component. Page editors do not expose components yet.
+Choose **Remove** on the component row. The latest removal offers **Undo** for a few seconds. Earlier removals remain in the editor’s Undo history. Removing a component keeps its uploads.
+
+An added component must contain valid content. Fill it in or remove it before saving. A rejected save preserves your edits. Unsaved indicators, browser recovery, and revision history apply to every component. Page editors do not expose components yet.
 
 | Component | Content |
 | --- | --- |

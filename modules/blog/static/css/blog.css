@@ -1070,14 +1070,20 @@ html:has(.album-viewer-single[open]) { scrollbar-gutter: auto; }
   .editor-confirmation button { min-height: 44px; }
 }
 .CodeMirror { font-size: 16px; }
-.component-marker { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0 8px; max-width: 100%; margin-block: 3px; padding: 0 8px 0 12px; border: 1px solid #d0d9e4; border-radius: 8px; background: #f3f6fa; color: #334762; font: 14px 'Source Sans 3', sans-serif; white-space: normal; }
-.component-marker > strong { max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.component-marker { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; max-width: 100%; margin-block: 3px; padding: 4px 10px; border: 1px solid #d0d9e4; border-radius: 8px; background: #f3f6fa; color: #334762; font: 14px 'Source Sans 3', sans-serif; white-space: normal; }
+.component-marker > strong { max-width: 100%; min-width: 0; padding-block: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.component-row-actions { display: inline-flex; flex: none; gap: 8px; }
+.component-row-actions .text-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.component-row-actions .component-remove { margin-inline-start: 8px; }
+.component-row-actions :is([data-component-edit], [data-component-drag], [data-component-remove-row])::before { content: ''; flex: 0 0 12px; height: 12px; }
+.component-row-actions [data-component-edit]::before { background: linear-gradient(to bottom left, currentColor 24%, transparent 24% 33%, currentColor 33%); clip-path: polygon(11% 69%, 74% 6%, 94% 26%, 31% 89%, 7% 93%); }
+.component-row-actions [data-component-drag] { cursor: grab; touch-action: none; }
+.component-row-actions [data-component-drag]::before { height: 15px; background: radial-gradient(circle, currentColor 1px, transparent 1.25px) center / 6px 5px; }
+.component-row-actions [data-component-remove-row]::before { background: linear-gradient(45deg, transparent 44%, currentColor 44% 56%, transparent 56%) center / 10px 10px no-repeat, linear-gradient(-45deg, transparent 44%, currentColor 44% 56%, transparent 56%) center / 10px 10px no-repeat; }
 .component-end-list { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; }
 .component-end-row { margin-block: 8px; }
 .component-marker .text-button { min-width: 44px; min-height: 44px; padding-inline: 4px; }
 .component-move-steps:not([hidden]) { display: inline-flex; gap: 8px; }
-.component-marker [data-component-drag] { display: inline-flex; align-items: center; gap: 4px; cursor: grab; touch-action: none; }
-.component-marker [data-component-drag]::before { content: ''; width: 10px; height: 15px; background: radial-gradient(circle, currentColor 1px, transparent 1.5px) 0 0 / 5px 5px; }
 .component-dragging, .component-dragging .component-marker [data-component-drag] { cursor: grabbing; }
 .component-marker-dragging { opacity: .5; }
 .component-drop-cue { position: fixed; z-index: 12; height: 2px; border-radius: 1px; background: #496996; pointer-events: none; }

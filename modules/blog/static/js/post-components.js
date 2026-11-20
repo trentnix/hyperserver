@@ -294,7 +294,7 @@ function createEditor(root) {
     }
   }
 
-  function removeComponent(type, layout, write) {
+  function removeComponent(type, layout, write, fromRow) {
     const line = layout.markers[type];
     const removals = [...removed];
     // Keep inline removals ordered when deleting a line merges two gaps.
@@ -303,7 +303,7 @@ function createEditor(root) {
     const detail = componentDetail(type);
     const label = rowFor(type)?.getAttribute('aria-label') ?? (detail ? `${name} · ${detail}` : name);
     const edit = write.remove(type);
-    const item = {detail, label, value: callbacks.snapshot(), position: edit?.position, separator: edit?.separator};
+    const item = {detail, label, fromRow, value: callbacks.snapshot(), position: edit?.position, separator: edit?.separator};
     removals.splice(next < 0 ? removals.length : next, 0, [type, item]);
     removed = new Map(removals);
     if (line !== undefined) order = order.filter(id => id !== type);
@@ -423,11 +423,13 @@ function createEditor(root) {
   function renderMoveControls() {
     const layout = currentLayout?.source === content.value ? currentLayout : null;
     const targets = moving ? moveTargets(moving.type, layout) : {};
+    const uploading = Boolean(form.dataset.uploading);
     for (const type of activeOrder()) {
       const row = rowFor(type);
       if (!row) continue;
       const open = type === moving?.type;
       row.querySelector('[data-component-place]').setAttribute('aria-expanded', String(open));
+      row.querySelector('[data-component-remove-row]').disabled = uploading;
       const steps = row.querySelector('.component-move-steps');
       if (steps.hidden === open) {
         steps.hidden = !open;
@@ -435,7 +437,7 @@ function createEditor(root) {
       }
       if (!open) continue;
       for (const direction of ['up', 'down']) {
-        row.querySelector('[data-component-shift=' + direction + ']').disabled = !targets[direction] || Boolean(form.dataset.uploading);
+        row.querySelector('[data-component-shift=' + direction + ']').disabled = !targets[direction] || uploading;
       }
     }
   }
@@ -577,8 +579,27 @@ function createEditor(root) {
     return withComponentLayout('Restoring the component…', 'The editor changed. Try restoring the component again.', layout => {
       applyLayout(layout);
       commit(layout, [type], write => restoreComponent(type, item, layout, write), {reorder: true});
-      editSettings(type);
+      if (item.fromRow) focusRow(type);
+      else editSettings(type);
     }, () => removed.get(type) === item);
+  }
+
+  function requestRemoval(button) {
+    const fromRow = button.hasAttribute('data-component-remove-row');
+    const type = fromRow ? button.dataset.componentRemoveRow : sectionID(button.closest('[data-post-component]'));
+    const session = editing;
+    const valid = () => isActive(type) && editing === session && (fromRow ? !session : session?.type === type);
+    if (!valid()) return;
+    return withComponentLayout('Removing the component…', 'The editor changed. Try removing the component again.', layout => {
+      applyLayout(layout);
+      const visibleOrder = fromRow ? [...anchors.keys(), ...trailing()] : [];
+      const index = visibleOrder.indexOf(type);
+      const neighbor = visibleOrder[index + 1] ?? visibleOrder[index - 1];
+      commit(layout, [type], write => removeComponent(type, layout, write, fromRow));
+      if (neighbor) focusRow(neighbor);
+      else pickerSummary.focus();
+      showRemovalNotice(type);
+    }, valid);
   }
 
   function commitMove(type, layout, target) {
@@ -614,7 +635,7 @@ function createEditor(root) {
     const edit = event.target.closest('[data-component-edit]');
     const move = event.target.closest('[data-component-place]');
     const step = event.target.closest('[data-component-shift]');
-    const remove = event.target.closest('[data-component-remove]');
+    const remove = event.target.closest('[data-component-remove], [data-component-remove-row]');
     if (add) await addComponent(add.dataset.componentAdd);
     else if (undo) await undoRemoval(undo.dataset.componentUndo);
     else if (edit) {
@@ -642,17 +663,7 @@ function createEditor(root) {
       } else if (!pendingAction) status.textContent = '';
     } else if (step) {
       await moveComponent(step.closest('[data-component-row]').dataset.componentRow, step.dataset.componentShift);
-    } else if (remove) {
-      const type = sectionID(remove.closest('[data-post-component]'));
-      const session = editing;
-      if (session?.type !== type) return;
-      await withComponentLayout('Removing the component…', 'The editor changed. Try removing the component again.', layout => {
-        applyLayout(layout);
-        commit(layout, [type], write => removeComponent(type, layout, write));
-        pickerSummary.focus();
-        showRemovalNotice(type);
-      }, () => editing === session);
-    }
+    } else if (remove) await requestRemoval(remove);
   });
 
   form.addEventListener('keydown', event => {
