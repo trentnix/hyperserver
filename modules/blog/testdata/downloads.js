@@ -87,6 +87,7 @@
       document.querySelector('.media-browser [data-media-select]').click();
       document.querySelector('[data-media-add-selected]').click();
       await wait(() => form.elements.album.value && !document.querySelector('.media-browser'));
+      closeComponentSettings(form);
       const order = () => rows(form);
       assert(order() === 'file-downloads,photo-album' && form.elements.componentOrder.value === '["file-downloads","photo-album"]', 'Components must appear in the order they were added.');
       await moveTestComponent(section, 'down');
@@ -98,9 +99,9 @@
       assert(order() === 'file-downloads,photo-album' && form.elements.downloads.value === saved, 'Undo must restore the component at its original position.');
       await removeTestComponent(section.querySelector('[data-component-remove]'));
       const replacement = await addTestComponent(form.querySelector('[data-component-add="file-downloads"]'));
+      closeComponentSettings(form);
       assert(replacement.dataset.componentId && order() === 'photo-album,' + replacement.dataset.componentId &&
         !replacement.querySelector('textarea[name]').value, 'A replacement must create a separate empty component at the end.');
-      closeComponentSettings(form);
       form.querySelector('.CodeMirror').CodeMirror.undo();
       await undoTestComponent(form.querySelector('[data-component-undo="file-downloads"]'));
       assert(order() === 'file-downloads,photo-album' && form.elements.downloads.value === saved,

@@ -59,10 +59,9 @@
       const type = add.dataset.componentAdd;
       await addTestComponent(add);
       const section = componentEditor(form, type);
-      assert(section.getBoundingClientRect().width >= minimum && section.scrollWidth <= section.clientWidth + 1,
-        type + ' must fit its fields within the minimum editor width.');
-      if (narrow) checkScroll(body, done);
-      else assert(visibleIn(done, settings), 'Done must fit at the page minimum width.');
+      assert((narrow ? section.getBoundingClientRect().width >= minimum : section.getBoundingClientRect().width <= body.clientWidth + 1) &&
+        section.scrollWidth <= section.clientWidth + 1, type + ' must fit its fields, accounting for the dialog scrollbar.');
+      checkScroll(body, done);
       if (type === 'photo-album') {
         const browse = section.querySelector('[data-album-browse]');
         browse.focus();

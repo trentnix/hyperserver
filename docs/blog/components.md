@@ -1,6 +1,6 @@
 # Post components
 
-Choose **Add component** from the Content toolbar. The component goes at the cursor or at the end when you have not set a cursor. If the cursor is inside a paragraph, list, or code block, the component goes after that block. Edit the settings in the dialog and choose **Done** to return to the post. Choose **Edit** on the component row to reopen its settings. You can add the same type more than once. Labels use the title, filename, or another detail when available. Each label stays with its component as you move it.
+Choose **Add component** from the Content toolbar. Edit its settings and choose **Done** to add it at the cursor, or at the end if you have not set a cursor. If the cursor is inside a paragraph, list, or code block, the component goes after that block. Choose **Edit** on the component row to reopen its settings. **Cancel** discards changes made since you opened the dialog. You can add the same type more than once. Labels use the title, filename, or another detail when available.
 
 Drag the **Move** handle to reposition a component in the writing or in the list below it. Choose **Move** to show **Up** and **Down** for moving one block or row at a time. The Content editor’s Undo and Redo include component additions, removals, and moves. A post can consist entirely of components.
 
@@ -17,6 +17,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | [Event](#event) | An all-day or timed event with an optional location and details link. |
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
 | [Expandable details](#expandable-details) | A titled section readers can open inline. |
+| [Callout](#callout) | A highlighted Markdown note. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
 | [Video](#video) | A YouTube or Vimeo player. |
 | [Embed](#embed) | An interactive page or widget from an approved site. |
@@ -82,6 +83,10 @@ Each image follows the [image limits](media.md#upload-and-reuse). Labels allow 8
 Enter a title and Markdown body. The post shows the title by default. Readers can select it to open or close the details. RSS shows the full body. Search includes the title and body.
 
 Titles allow 240 characters and bodies allow 20,000. The body supports Markdown links, images, and code blocks. Add other components separately through the Content toolbar.
+
+## Callout
+
+Enter Markdown text and an optional heading. Each callout defaults to Parchment. Choose blue-gray Slate for a neutral note, red-orange Caution for a warning, or green Success for good news. Use the heading or text to convey the message. The full text appears inline and in RSS. Search includes the heading and text.
 
 ## Link preview
 

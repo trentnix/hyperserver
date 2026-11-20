@@ -27,7 +27,7 @@
   <template data-component-dialog-template>
     <dialog class="component-dialog">
       <div class="component-dialog-body"></div>
-      <footer><button type="button" data-component-done>Done</button></footer>
+      <footer><button type="button" class="button-secondary" data-component-cancel>Cancel</button><button type="button" data-component-done>Done</button></footer>
     </dialog>
   </template>
   {{ range $components }}{{ renderPartial .Template .Data }}{{ end }}

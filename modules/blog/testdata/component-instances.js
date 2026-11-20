@@ -116,8 +116,8 @@
     const second = await addEmbed();
     const id = instance(second);
     const reference = '#' + id.split(':')[1].slice(0, 6);
-    await wait(() => rowName(id) === 'Embed ' + reference, 'an untitled instance reference');
     closeComponentSettings(form);
+    await wait(() => rowName(id) === 'Embed ' + reference, 'an untitled instance reference');
     form.requestSubmit();
     await wait(() => second.matches('.component-panel-active') && document.activeElement === second.querySelector('[id^=embed-url]'),
       'native validation of the second embed');

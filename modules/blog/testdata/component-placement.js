@@ -60,19 +60,31 @@
     const settings = form.querySelector('[data-embed-editor]');
     const dialog = settings.closest('dialog');
     const done = dialog.querySelector('[data-component-done]');
-    assert(!tool.classList.contains('active') && cm.getValue().trimEnd().endsWith(marker), 'Adding from Preview must return to Content and use its end when no cursor was set.');
+    const cancel = dialog.querySelector('[data-component-cancel]');
+    assert(!tool.classList.contains('active') && cm.getValue() === initial, 'Opening settings from Preview must return to Content without placing the component.');
     const bounds = dialog.getBoundingClientRect();
     const footer = done.getBoundingClientRect();
+    const body = dialog.querySelector('.component-dialog-body');
+    const cancelBounds = cancel.getBoundingClientRect();
     assert(dialog.matches(':modal') && bounds.left >= 0 && bounds.right <= document.documentElement.clientWidth &&
-      footer.left >= bounds.left && footer.right <= bounds.right && footer.bottom <= innerHeight, 'The entire Done button must fit in the dialog.');
+      cancelBounds.left >= bounds.left && cancelBounds.right < footer.left && footer.right <= bounds.right &&
+      footer.bottom <= innerHeight, 'Cancel and Done must fit in the dialog.');
     if (innerWidth < 280) {
-      const body = dialog.querySelector('.component-dialog-body');
       assert(body.scrollWidth >= pageWidth - 26 && body.scrollWidth > body.clientWidth, 'The form must retain the editor minimum width inside the dialog.');
       body.scrollLeft = body.scrollWidth;
       assert(body.scrollLeft > 0 && done.getBoundingClientRect().right === footer.right, 'Scrolling across the form must keep Done in view.');
       await report('PASS');
       return;
     }
+    assert(body.scrollWidth === body.clientWidth, 'The dialog must fit its fields at the supported page width.');
+    set(form.querySelector('#embed-title'), 'Discard this addition');
+    cancel.click();
+    assert(!dialog.open && document.activeElement === picker.querySelector('summary') &&
+      cm.getValue() === initial && form.elements.componentOrder.value === '[]' && !form.elements.embed.value,
+      'Canceling a new component must restore the original Markdown, order, and focus.');
+    await addTestComponent(picker.querySelector('[data-component-add=embed]'));
+    done.click();
+    assert(cm.getValue().trimEnd().endsWith(marker), 'Done must place a component at the end when no cursor was set.');
     await removeTestComponent(settings.querySelector('[data-component-remove]'));
     cm.undo();
     cm.undo();
@@ -81,23 +93,26 @@
     cm.focus();
     cm.setCursor({line: 3, ch: 4});
     await addTestComponent(picker.querySelector('[data-component-add=embed]'));
-    await wait(widget);
-    assert(cm.getValue() === initial.replace('Conclusion.', marker + '\nConclusion.'), 'Insertion inside a list must place the component after the full list.');
     assert(document.activeElement === form.querySelector('#embed-url'), 'Adding must open the component settings.');
     assert(settings.matches('.component-panel-active'), 'Adding after an undone addition must reuse the inactive settings panel.');
     done.click();
+    await wait(widget);
+    assert(cm.getValue() === initial.replace('Conclusion.', marker + '\nConclusion.'), 'Insertion inside a list must place the component after the full list.');
     assert(!dialog.open && document.activeElement === widget().querySelector('[data-component-edit]'), 'Done must return focus to the inline component.');
     form.requestSubmit();
     await wait(() => document.activeElement === form.querySelector('#embed-url'));
     assert(dialog.matches(':modal'), 'Native validation must reopen the settings and focus the invalid field.');
     set(form.querySelector('#embed-url'), 'https://widgets.example.test/demo');
     set(form.querySelector('#embed-title'), 'Interactive chart');
-    dialog.dispatchEvent(new Event('cancel', {cancelable: true}));
-    assert(!dialog.open && form.querySelector('#embed-title').value === 'Interactive chart', 'Escape must close the dialog and keep edits in the post.');
+    done.click();
 
     widget().querySelector('[data-component-edit]').click();
     assert(document.activeElement === form.querySelector('#embed-url'), 'Edit must focus the existing settings.');
-    done.click();
+    set(form.querySelector('#embed-title'), 'Discard this edit');
+    dialog.dispatchEvent(new Event('cancel', {cancelable: true}));
+    assert(!dialog.open && form.querySelector('#embed-title').value === 'Interactive chart' &&
+      document.activeElement === widget().querySelector('[data-component-edit]'),
+      'Escape must discard edits from the current dialog and retain earlier edits in the post.');
     widget().querySelector('[data-component-place]').click();
     await wait(() => moveUp() && moveDown());
     assert(!form.querySelector('dialog[open]') && !widget().querySelector('.component-move-steps').hidden, 'Move must reveal controls on the component row.');

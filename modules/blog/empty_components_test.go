@@ -20,6 +20,7 @@ func TestEmptyComponentsCannotBeSaved(t *testing.T) {
 				{"related-posts", "related"},
 				{"embed", "embed"},
 				{"expandable-details", "details"},
+				{"callout", "callout"},
 				{"link-preview", "link"}, {"video", "video"}, {"audio", "audio"}, {"social-post", "socialPost"}, {"x-post", "xPost"}, {"bluesky-post", "blueskyPost"}, {"threads-post", "threadsPost"}, {"facebook-post", "facebookPost"}, {"image-comparison", "comparison"},
 			} {
 				t.Run(component.kind, func(t *testing.T) {

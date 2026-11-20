@@ -46,16 +46,19 @@
     form.requestSubmit();
     assert(!saveAttempted && order() === '[]' && cm.getValue() === html, 'Save must wait until Add has a placement.');
     resumeLayout();
-    delayLayout(source => source.includes(marker));
-    await waitForComponent(() => pending, 'layout refresh after Add');
-    const placed = new FormData(form);
-    assert(placed.get('content') === html + '\n\n' + marker + '\n' && placed.get('componentOrder') === '["embed"]' &&
-      section.matches('.component-dialog:modal .component-panel-active'), 'Add must publish its marker, form fields, and settings together.');
-    resumeLayout();
+    await waitForComponent(() => section.matches('.component-dialog:modal .component-panel-active'), 'new component settings');
+    assert(order() === '[]' && cm.getValue() === html && !new FormData(form).has('embed'),
+      'A new component must stay out of the post form until Done.');
     const url = 'https://widgets.example.test/demo';
     set(form.querySelector('#embed-url'), url);
     set(form.querySelector('#embed-title'), 'Chart');
+    delayLayout(source => source.includes(marker));
     closeComponentSettings(form);
+    await waitForComponent(() => pending, 'layout refresh after Done');
+    const placed = new FormData(form);
+    assert(placed.get('content') === html + '\n\n' + marker + '\n' && placed.get('componentOrder') === '["embed"]' &&
+      JSON.parse(placed.get('embed')).title === 'Chart', 'Done must publish the marker, form fields, and settings together.');
+    resumeLayout();
     cm.undo();
     assert(cm.getValue() === html && order() === '[]' && section.hidden && !form.elements.embed.value, 'Undo must deactivate an added component.');
     cm.redo();

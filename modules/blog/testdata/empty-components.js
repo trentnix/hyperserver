@@ -27,6 +27,7 @@
       form.noValidate = true; // Also exercise server validation when native checks are bypassed.
       for (const [kind, field] of [['photo-album', 'album'], ['file-downloads', 'downloads'], ['pdf-preview', 'pdf'], ['link-preview', 'link'], ['video', 'video'], ['audio', 'audio'], ['event', 'event'], ['social-post', 'socialPost'], ['image-comparison', 'comparison']]) {
         await addTestComponent(form.querySelector(`[data-component-add="${kind}"]`));
+        closeComponentSettings(form);
         const section = form.querySelector(`[data-post-component="${kind}"]`);
         const required = form.querySelector('.CodeMirror').CodeMirror.getInputField().getAttribute('aria-required');
         assert(required !== 'true', 'The empty component must get its own error rather than requiring unrelated Markdown.');

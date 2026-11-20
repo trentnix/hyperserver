@@ -44,6 +44,8 @@
     form.querySelector('[data-component-picker] summary').click();
     await addTestComponent(form.querySelector('[data-component-add="file-downloads"]'));
     const section = form.querySelector('[data-post-component="file-downloads"]');
+    check(true);
+    closeComponentSettings(form);
     check(false);
     form.requestSubmit();
     await wait(() => section.querySelector('[data-component-error]:not([hidden])')?.textContent.includes('remove'));

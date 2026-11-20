@@ -32,6 +32,7 @@ async function addTestComponent(button) {
 async function removeTestComponent(button) {
   const form = button.form;
   const section = button.closest('[data-post-component]');
+  if (section.hasAttribute('data-component-pending')) closeComponentSettings(form);
   if (!section.matches('.component-dialog:modal .component-panel-active')) {
     closeComponentSettings(form);
     const type = section.dataset.componentId || section.dataset.postComponent;

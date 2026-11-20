@@ -12,7 +12,8 @@ import {componentValue, restoreComponentInstances} from './post-components.js';
 
   function snapshot(state) {
     return Object.fromEntries([...state.fields, ...instances(state.form)].filter(field => field.type !== 'radio' || field.checked)
-      .map(field => [field.name, field.type === 'checkbox' ? field.checked : getMarkdownEditor(field)?.getMarkdown() ?? field.value]));
+      .map(field => [field.name, field.closest('[data-component-pending]') ? '' :
+        field.type === 'checkbox' ? field.checked : getMarkdownEditor(field)?.getMarkdown() ?? field.value]));
   }
   const encoded = state => JSON.stringify(snapshot(state));
   function dirty(state) {

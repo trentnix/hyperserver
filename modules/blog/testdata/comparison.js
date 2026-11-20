@@ -47,6 +47,7 @@
       set(section.querySelector('#comparison-after-label'), afterLabel);
       set(section.querySelector('#comparison-title'), 'Before <markup> & after');
       set(section.querySelector('#comparison-caption'), caption);
+      closeComponentSettings(form);
       form.querySelector('.tool-preview').click();
       await wait(() => form.querySelector('.editor-preview .comparison-ready'));
       const preview = form.querySelector('.editor-preview .comparison-ready');

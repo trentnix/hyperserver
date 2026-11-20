@@ -22,16 +22,12 @@
     }
     window.blogConfirm = (_, proceed) => proceed();
     if (stage === 'edit') {
-      const openEditor = async (addAlbum = true) => {
+      const openEditor = async () => {
         await htmx.ajax('GET', '/post/create', {target: '#article-content', swap: 'innerHTML'});
         await wait(() => document.querySelector('#post-form .CodeMirror') && document.querySelector('[data-album-upload]') && !document.querySelector('.album-editor-controls').hidden);
-        if (addAlbum && document.querySelector('[data-album-editor]').hidden) {
-          document.querySelector('[data-component-picker] summary').click();
-          await addTestComponent(document.querySelector('[data-component-add="photo-album"]'));
-        }
         return document.querySelector('#post-form');
       };
-      let form = await openEditor(false);
+      let form = await openEditor();
       const componentPicker = form.querySelector('[data-component-picker]');
       const addComponent = componentPicker.querySelector('summary');
       assert(form.querySelector('[data-album-editor]').hidden && addComponent.getBoundingClientRect().height >= 44 && !form.elements.album.value, 'Posts without an album must show only a touch-sized Add component control.');
@@ -47,6 +43,7 @@
       assert(!componentPicker.open && document.activeElement === publication, 'Leaving the picker by keyboard must close its choices without moving focus.');
       publication.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
       assert(!componentPicker.open && document.activeElement === publication, 'Escape after leaving the picker must not reopen it or move focus.');
+      form.querySelector('.CodeMirror').CodeMirror.setValue('Writing above the album.');
       addComponent.click();
       await addTestComponent(componentPicker.querySelector('[data-component-add="photo-album"]'));
       assert(!form.querySelector('[data-album-editor]').hidden && !componentPicker.querySelector('[data-component-add="photo-album"]').hidden && !form.elements.album.value && document.activeElement === form.querySelector('[data-album-upload]'), 'Adding an album must reveal its controls and focus Upload without changing post content.');
@@ -66,7 +63,6 @@
       assert(filePickerOpened === 1, 'The device button must open the file picker once.');
       form.elements.title.value = 'Photo album';
       form.elements.slug.value = 'photo-album';
-      form.querySelector('.CodeMirror').CodeMirror.setValue('Writing above the album.');
       choosePhotoAction('[data-album-browse]');
       await wait(() => document.querySelector('.media-browser [data-media-select]'));
       const library = document.querySelector('.media-browser');
@@ -788,12 +784,14 @@
       assert(recoveredPhoto && form.querySelectorAll('[data-album-index]').length === 4, 'Undo must restore a removed photo after uploads and reordering.');
       recoveredPhoto.closest('li').querySelector('[data-album-remove]').click();
       assert(form.elements.album.value === orderedBeforeUndo, 'Restoring and removing a photo must preserve the current order of other photos.');
+      closeComponentSettings(form);
       const expected = form.elements.album.value;
       const expectedBody = form.elements.content.value;
       sessionStorage.setItem('album-content', expected);
       assert(form.elements.album.hidden, 'Enhanced editor should show photo controls.');
       assert(form.scrollWidth <= form.clientWidth + 1, 'Album editor overflows the viewport.');
       await new Promise(resolve => setTimeout(resolve, 650));
+      componentRowIn(form, 'photo-album').querySelector('[data-component-edit]').click();
       form.querySelector('[data-album-browse]').focus();
       form.querySelector('[data-album-browse]').click();
       const abandonedLibrary = document.querySelector('.media-browser');
@@ -807,6 +805,7 @@
       form.querySelector('[data-draft-restore]').click();
       await wait(() => form.querySelectorAll('[data-album-index]').length === 3);
       assert(form.elements.album.value === expected, 'Abandoning the chooser must not change the recovered album.');
+      componentRowIn(form, 'photo-album').querySelector('[data-component-edit]').click();
       form.querySelector('[data-album-reorder]').click();
       const abandonedOrder = document.querySelector('.album-order-dialog');
       abandonedOrder.querySelector('[data-album-move=down]').click();

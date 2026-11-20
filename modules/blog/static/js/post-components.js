@@ -1,4 +1,5 @@
 import {componentRow, hasComponentMarkers, nameComponentRow} from './component-placement.js';
+import {markField} from './forms.js';
 import {getMarkdownEditor} from './markdown-editor.js';
 
 const editors = new WeakMap();
@@ -162,25 +163,55 @@ function createEditor(root) {
     rowFor(type)?.querySelector(selector)?.focus();
   }
 
-  function closeSettings(restoreFocus = false) {
+  function closeSettings({discard = false} = {}) {
     if (!editing || form.dataset.uploading) return;
-    const {type} = editing;
+    const {type, snapshot, addition} = editing;
+    const {section, source, callbacks} = instances.get(type);
+    // Let a focused field serialize its final input before ending the session.
+    if (dialog.contains(document.activeElement)) document.activeElement.blur();
     editing = undefined;
     cancelInactiveAction();
     dialog.close();
-    instances.get(type).section.classList.remove('component-panel-active');
-    if (!restoreFocus) return;
+    section.classList.remove('component-panel-active');
+    const previous = source.value;
+    if (addition) {
+      delete section.dataset.componentPending;
+      if (discard) {
+        callbacks.restore(snapshot);
+        render();
+      } else {
+        const {layout, line} = addition;
+        commit(layout, [type], write => {
+          order.push(type);
+          if (line !== null) write.place(type, line);
+        }, {beforeSettings: [{type, value: snapshot}]});
+      }
+    } else if (discard) {
+      callbacks.restore(snapshot);
+      if (source.value !== previous) source.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+    if (discard) {
+      for (const control of section.querySelectorAll('[data-error-description]')) {
+        const message = document.getElementById(control.dataset.errorDescription);
+        if (message?.hasAttribute('data-field-error') && (addition || control.validity?.valid)) markField(control, false);
+      }
+    }
     if (isActive(type)) focusRow(type);
     else pickerSummary.focus();
   }
 
-  function editSettings(type) {
-    if (!isActive(type) || form.dataset.uploading) return;
+  function editSettings(type, addition) {
+    if (form.dataset.uploading || editing?.addition && editing.type !== type) return;
+    if (!addition && editing?.type !== type && !isActive(type)) return;
     editor()?.showSource();
     if (editing?.type !== type) {
       if (editing) instances.get(editing.type).section.classList.remove('component-panel-active');
-      editing = {type};
-      const {section} = instances.get(type);
+      const {section, callbacks} = instances.get(type);
+      editing = {type, snapshot: callbacks.snapshot(), addition};
+      if (addition) {
+        section.dataset.componentPending = '';
+        render();
+      }
       section.classList.add('component-panel-active');
       dialog.setAttribute('aria-labelledby', section.getAttribute('aria-labelledby'));
       dialogBody.scrollTo(0, 0);
@@ -189,10 +220,11 @@ function createEditor(root) {
     instances.get(type).callbacks?.focus();
   }
 
-  dialog.querySelector('[data-component-done]').addEventListener('click', () => closeSettings(true));
+  dialog.querySelector('[data-component-cancel]').addEventListener('click', () => closeSettings({discard: true}));
+  dialog.querySelector('[data-component-done]').addEventListener('click', () => closeSettings());
   dialog.addEventListener('cancel', event => {
     event.preventDefault();
-    closeSettings(true);
+    closeSettings({discard: true});
   });
   dialog.addEventListener('keydown', event => {
     // Component fields share the post form. Enter in a text field must not
@@ -235,7 +267,7 @@ function createEditor(root) {
       const moved = savedLayout && (line !== undefined || oldLine !== undefined
         ? currentLayout?.blocks.indexOf(line) !== savedLayout.blocks.indexOf(oldLine)
         : unplaced.indexOf(type) !== savedTrailing.indexOf(type));
-      const changed = !baseline || moved || isActive(type) !== savedOrder.includes(type) ||
+      const changed = section.hasAttribute('data-component-pending') || !baseline || moved || isActive(type) !== savedOrder.includes(type) ||
         componentValue(source, source.value) !== componentValue(source, baseline[source.name] || '');
       section.querySelector('[data-component-unsaved]').hidden = section.hidden || !changed;
     }
@@ -365,7 +397,7 @@ function createEditor(root) {
 
   // A placement edit publishes its Markdown and the matching form fields in
   // one operation. A follow-up layout request only refines the next destinations.
-  function commit(layout, types, edit, {reorder = false} = {}) {
+  function commit(layout, types, edit, {reorder = false, beforeSettings} = {}) {
     editor()?.showSource();
     const publish = (next, sort) => {
       content.value = next.source;
@@ -381,6 +413,7 @@ function createEditor(root) {
     }
 
     const before = componentState(types, layout);
+    if (beforeSettings) before.settings = beforeSettings;
     let after;
     controller.transact(layout, write => {
       edit(write);
@@ -444,19 +477,20 @@ function createEditor(root) {
 
   function render() {
     const unplaced = trailing();
-    if (editing && !isActive(editing.type)) closeSettings(true);
+    if (editing && !editing.addition && !isActive(editing.type)) closeSettings();
     const undo = removalStatus.querySelector('[data-component-undo]');
     if (undo && !removed.has(undo.dataset.componentUndo)) removalStatus.replaceChildren();
     for (const [type, {section, source, row}] of instances) {
+      const pending = section.hasAttribute('data-component-pending');
       const active = isActive(type);
-      section.hidden = !active;
+      section.hidden = !active && !pending;
       row.hidden = !unplaced.includes(type);
       const handle = row.querySelector('[data-component-place]');
       handle.toggleAttribute('data-component-drag', Boolean(placement()));
       handle.title = placement() ? 'Drag or show move controls' : '';
-      section.querySelectorAll('[data-component-fields]').forEach(fields => { fields.disabled = !active || fields.hidden; });
-      if (section.dataset.componentId) source.disabled = !active;
-      section.querySelector('[data-component-remove]').hidden = false;
+      section.querySelectorAll('[data-component-fields]').forEach(fields => { fields.disabled = section.hidden || fields.hidden; });
+      source.disabled = pending || Boolean(section.dataset.componentId) && !active;
+      section.querySelector('[data-component-remove]').hidden = pending;
       section.querySelector('[data-component-remove]').disabled = Boolean(form.dataset.uploading);
     }
     let next = endRows.firstElementChild;
@@ -565,11 +599,7 @@ function createEditor(root) {
         });
         const id = sameKind || removed.has(type) ? type + ':' + crypto.randomUUID().replaceAll('-', '') : type;
         if (id !== type && !mount(id, '')) return;
-        commit(layout, [id], write => {
-          order.push(id);
-          if (line !== null && layout.markers[id] === undefined) write.place(id, line);
-        });
-        editSettings(id);
+        editSettings(id, {layout, line});
       });
   }
 
@@ -709,7 +739,10 @@ function createEditor(root) {
   form.addEventListener('blog:markdown-editor', refreshLayout);
   form.addEventListener('submit', event => {
     cancelInactiveAction();
-    if (!pendingAction) return;
+    if (!pendingAction) {
+      if (editing?.addition) closeSettings();
+      return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
     saveStatus.textContent = 'Wait for the component edit to finish, then save.';
@@ -733,13 +766,14 @@ function createEditor(root) {
     try { order = JSON.parse(field.value || '[]'); } catch { order = []; }
     if (!Array.isArray(order) || order.some(type => !instances.has(type)) || new Set(order).size !== order.length) order = [];
     for (const [type, {section, source}] of instances) {
-      if (!section.dataset.componentId && source.value.trim() && !order.includes(type)) order.push(type);
+      if (!section.dataset.componentId && !section.hasAttribute('data-component-pending') && source.value.trim() && !order.includes(type)) order.push(type);
     }
     render();
     refreshLayout();
   }
 
   root.addEventListener('change', event => {
+    if (event.target.closest('[data-component-pending]')) return;
     if (event.target === field || event.target.matches('[data-post-component] textarea[name]')) {
       for (const type of removed.keys()) forgetRemoval(type);
       sync();
@@ -747,7 +781,7 @@ function createEditor(root) {
   });
   root.addEventListener('input', event => {
     const section = event.target.closest('[data-post-component]');
-    if (section && event.target.matches('textarea[name]')) {
+    if (section && !section.hasAttribute('data-component-pending') && event.target.matches('textarea[name]')) {
       if (event.target.value.trim() && !order.includes(sectionID(section))) {
         order.push(sectionID(section));
         refreshLayout();

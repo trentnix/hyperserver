@@ -21,7 +21,7 @@ func detailsDefinition() componentDefinition {
 	return componentDefinition{
 		Kind: "expandable-details", Field: "details", Payload: "details",
 		Name: "Expandable details", Summary: "Markdown readers can expand", EmptyMessage: "Enter a title and details or remove the component.",
-		TemplateFile: "templates/components/details.html", Template: "blog.detailsEditor", Icon: "blog.detailsIcon", Script: "details-editor.js",
+		TemplateFile: "templates/components/details.html", Template: "blog.detailsEditor", Icon: "blog.detailsIcon", Script: "markdown-component-editor.js",
 		Parse:        func(source string) (componentContent, error) { return parseDetails(source) },
 		Renderer:     detailsRenderer{},
 		FeedRenderer: detailsRenderer{expanded: true},

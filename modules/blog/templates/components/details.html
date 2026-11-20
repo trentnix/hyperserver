@@ -1,13 +1,13 @@
 {{ define "blog.detailsEditor" }}
-  <section class="details-editor" data-details-editor data-post-component="expandable-details" aria-labelledby="details-editor-title">
+  <section class="markdown-component-editor" data-post-component="expandable-details" aria-labelledby="details-editor-title">
     <div class="album-editor-heading"><div class="component-heading"><h2 id="details-editor-title">Expandable details</h2>{{ template "blog.componentStatus" }}</div>{{ template "blog.componentActions" "expandable details" }}</div>
-    <label for="post-details" data-details-source-label>Expandable details (JSON)</label>
+    <label for="post-details">Expandable details (JSON)</label>
     <textarea id="post-details" name="details" rows="3">{{ .Source }}</textarea>
     <fieldset data-component-fields hidden disabled>
       <label for="details-title">Title</label>
-      <input id="details-title" maxlength="240" required>
+      <input id="details-title" maxlength="240" required data-markdown-value="title">
       <label for="details-body">Details</label>
-      <textarea id="details-body" rows="6" maxlength="20000" required aria-describedby="details-body-help"></textarea>
+      <textarea id="details-body" rows="6" maxlength="20000" required data-markdown-value="body" data-empty-message="Enter details." aria-describedby="details-body-help"></textarea>
       <small id="details-body-help" class="form-hint">Markdown supported. Readers can expand this text.</small>
     </fieldset>
   </section>

@@ -657,6 +657,7 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 .post-components { margin-block: 24px; }
 .component-heading { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .component-unsaved { display: inline-flex; align-items: center; gap: 6px; color: #795720; font-size: 13px; line-height: 1.5; white-space: nowrap; }
+.post-components [data-component-unsaved][hidden] { display: inline-flex; visibility: hidden; }
 .component-unsaved::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #a7782b; }
 [data-video-status] { min-height: 1.5em; margin-top: 12px; font-size: 14px; line-height: 1.5; }
 .related-posts { margin: 32px 0; padding: 20px 24px; border-radius: 18px; background: #f4f6f9; }
@@ -784,10 +785,13 @@ dialog::backdrop { background: rgb(20 25 35 / 55%); }
 dialog.component-dialog { width: 840px; max-width: calc(100% - 24px); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; border-color: #dce1e7; border-radius: 16px; box-shadow: 0 24px 80px #15223833; }
 .component-dialog[open] { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .component-dialog-body { overflow: auto; overscroll-behavior: contain; }
-.component-dialog-body > section { min-width: calc(var(--min-page-width) - 26px); padding: clamp(12px, 3vw, 24px); }
+.component-dialog-body > section { padding: clamp(12px, 3vw, 24px); }
+@media (width < 320px) {
+  .component-dialog-body > section { min-width: calc(var(--min-page-width) - 26px); }
+}
 .component-dialog-body > section:not(.component-panel-active) { display: none; }
-.component-dialog > footer { display: flex; justify-content: flex-end; padding: 10px clamp(12px, 3vw, 24px); border-top: 1px solid #e0e5ec; background: #fff; }
-.component-dialog > footer button { min-height: 44px; }
+.component-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px clamp(12px, 3vw, 24px); border-top: 1px solid #e0e5ec; background: #fff; }
+.component-dialog > footer button { min-width: 86px; min-height: 44px; }
 .downloads-editor h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.2em; }
 .downloads-editor h2 span { color: var(--muted); font-size: 14px; font-weight: 400; }
 :is(.album-editor, .downloads-editor) > .form-hint:not(.album-limits, .downloads-limits) { margin: 8px 0 18px; font-size: 14px; }
@@ -1228,11 +1232,11 @@ html:has(.album-viewer-single[open]) { scrollbar-gutter: auto; }
 .web-embed > p { margin: 8px 0 0; overflow-wrap: anywhere; }
 .web-embed-frame { overflow: hidden; border: 1px solid #dce2e9; border-radius: 14px; background: #fff; }
 .web-embed-frame iframe { display: block; width: 100%; min-height: 280px; aspect-ratio: 16 / 10; border: 0; }
-:is(.embed-editor, .details-editor) h2 { margin: 0; font-size: 1.2em; }
-:is(.embed-editor, .details-editor) fieldset { min-width: 0; margin: 12px 0 0; padding: 0; border: 0; }
-:is(.embed-editor, .details-editor) fieldset > label, .embed-editor-description-label { margin: 12px 0 4px; }
-:is(.embed-editor, .details-editor) fieldset > label:first-child { margin-top: 0; }
-:is(.embed-editor, .details-editor) fieldset > input { min-height: 44px; }
+:is(.embed-editor, .markdown-component-editor) h2 { margin: 0; font-size: 1.2em; }
+:is(.embed-editor, .markdown-component-editor) fieldset { min-width: 0; margin: 12px 0 0; padding: 0; border: 0; }
+:is(.embed-editor, .markdown-component-editor) fieldset > label, .embed-editor-description-label { margin: 12px 0 4px; }
+:is(.embed-editor, .markdown-component-editor) fieldset > label:first-child { margin-top: 0; }
+:is(.embed-editor, .markdown-component-editor) fieldset > input { min-height: 44px; }
 .embed-editor-description-label { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
 .embed-editor-description-label label { margin: 0; }
 .embed-editor [data-embed-preview-button] { margin-top: 12px; min-height: 44px; padding-inline: 14px; border-radius: 24px; font-size: 14px; font-weight: 600; }
@@ -1247,8 +1251,29 @@ html:has(.album-viewer-single[open]) { scrollbar-gutter: auto; }
 .expandable-details-body { padding: 4px 16px 16px; }
 .expandable-details-body > :first-child { margin-top: 0; }
 .expandable-details-body > :last-child { margin-bottom: 0; }
+.post-callout { margin-block: 24px; padding: 14px 18px; border: 1px solid #d6ba88; border-inline-start: 5px solid #926128; border-radius: 5px; background: #fffbf0; color: #332920; font-size: .93em; line-height: 1.55; overflow-wrap: anywhere; }
+.post-callout > :first-child, .post-callout-heading + * { margin-top: 0; }
+.post-callout > :last-child { margin-bottom: 0; }
+.post-callout-heading { margin: 0 0 6px; color: var(--callout-heading, #604522); line-height: 1.4; }
+.post-callout[data-callout-style="slate"],
+.callout-style-picker:has(option[value="slate"]:checked) > .callout-style-preview {
+  --callout-heading: #334762;
+  border-color: #d9e2ec; border-inline-start: 3px solid #849db6; border-radius: 8px; background: #eff4f8; color: #212529;
+}
+.post-callout[data-callout-style="caution"],
+.callout-style-picker:has(option[value="caution"]:checked) > .callout-style-preview {
+  --callout-heading: #a72b13;
+  border-color: #f6ae97; border-inline-start-color: #e74420; background: #ffebe3;
+}
+.post-callout[data-callout-style="success"],
+.callout-style-picker:has(option[value="success"]:checked) > .callout-style-preview {
+  --callout-heading: #265736;
+  border-color: #b6d4bf; border-inline-start-color: #397549; background: #edf7ef;
+}
+.callout-style-picker { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.callout-style-picker > select { width: min(10rem, 100%); min-height: 44px; }
+.callout-style-preview { display: grid; place-items: center; min-width: 60px; margin: 0; padding: 0 10px; }
 .event-editor h2 { margin: 0; font-size: 1.2em; }
-.post-components .event-editor .component-unsaved[hidden] { display: inline-flex; visibility: hidden; }
 .event-editor fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .event-editor > fieldset { margin-top: 12px; }
 .event-editor > fieldset > label:first-child { margin-top: 0; }

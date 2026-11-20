@@ -58,6 +58,7 @@ var postComponentCatalog = componentCatalog{
 	legacySocialPostDefinition(facebookProvider()),
 	comparisonDefinition(),
 	detailsDefinition(),
+	calloutDefinition(),
 	relatedDefinition(),
 }
 

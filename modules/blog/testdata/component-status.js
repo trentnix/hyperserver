@@ -30,12 +30,27 @@
       set(form.elements.title, form.elements.title.value + ' edited');
       assert(dirty().length === 0, 'Post fields must not mark unchanged components unsaved.');
       set(form.elements.title, 'Component status');
+      const video = form.querySelector('[data-video-editor]');
+      componentRowIn(form, 'video').querySelector('[data-component-edit]').click();
+      const videoURL = video.querySelector('[data-video-field=url]');
+      const savedURL = videoURL.value;
+      set(videoURL, 'invalid url');
+      video.querySelector('[data-video-fetch]').click();
+      assert(videoURL.getAttribute('aria-invalid') === 'true', 'Fetching must show the URL validation error.');
+      video.closest('dialog').querySelector('[data-component-cancel]').click();
+      componentRowIn(form, 'video').querySelector('[data-component-edit]').click();
+      assert(videoURL.value === savedURL && videoURL.validity.valid && !videoURL.hasAttribute('aria-invalid') &&
+        !document.getElementById(videoURL.id + '-error'), 'Cancel must clear the validation error from the discarded URL.');
+      closeComponentSettings(form);
       for (const section of sections) {
         form.querySelector('[data-component-edit="' + section.dataset.postComponent + '"]').click();
         const input = section.querySelector('[data-album-caption], [data-downloads-list] input, [data-link-controls] input, #video-title, #audio-title');
         const saved = input.value;
+        const title = section.querySelector('.component-heading h2');
+        const top = title.getBoundingClientRect().top;
         set(input, saved + ' edited');
         assert(!badge(section).hidden && dirty().length === 1, 'Only the edited component should be marked: ' + section.dataset.postComponent);
+        assert(title.getBoundingClientRect().top === top, 'The unsaved indicator must keep the component title in place.');
         const label = badge(section).getBoundingClientRect();
         assert(label.width > 0 && label.left >= 0 && label.right <= innerWidth, 'The component indicator must fit the viewport.');
         set(input, saved);
