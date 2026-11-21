@@ -97,7 +97,7 @@ func (m *module) buildFeed(ctx context.Context, origin *url.URL) ([]byte, error)
 			}
 			body += series
 		}
-		body, err = markdownURLs(body, &link)
+		body, err = prepareFeedHTML(body, &link)
 		if err != nil {
 			return nil, err
 		}

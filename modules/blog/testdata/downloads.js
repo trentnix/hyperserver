@@ -60,18 +60,35 @@
       assert(JSON.parse(form.elements.downloads.value).length === 1 && !section.querySelector('[data-downloads-recovery]').hidden, 'Removing a file must offer Undo.');
       section.querySelector('[data-download-undo]').click();
       assert(JSON.parse(form.elements.downloads.value).length === 2, 'Undo must restore the file.');
+      const fetchOriginal = window.fetch;
+      window.fetch = (url, options) => url === '/post/files'
+        ? Promise.resolve(new Response('', {status: 401})) : fetchOriginal(url, options);
       section.querySelector('[data-download-browse]').click();
-      await wait(() => document.querySelector('.download-library input[type="checkbox"]'));
       const library = document.querySelector('.download-library');
-      const choices = [...library.querySelectorAll('li')];
-      assert(choices.filter(row => row.querySelector('input').disabled).length === 2, 'Already attached files must be marked and unavailable for duplicate selection.');
       const search = library.querySelector('input[type="search"]');
+      await wait(() => library.querySelector('[data-upload-retry]'));
+      const retry = library.querySelector('[data-upload-retry]');
+      assert(retry.textContent === 'Retry loading files', 'Library recovery must name the action it retries.');
       search.value = 'Library guide';
-      search.dispatchEvent(new Event('input', {bubbles: true}));
+      window.fetch = fetchOriginal;
+      retry.click();
+      assert(library.open, 'Retry must keep the file library open.');
+      await wait(() => library.querySelector('input[type="checkbox"]'));
+      assert(search.value === 'Library guide' && library.querySelectorAll('li:not([hidden])').length === 1,
+        'Retry must reload files and preserve the current search.');
+      const choices = [...library.querySelectorAll('li')];
+      const attached = choices.filter(row => row.querySelector('input').disabled);
+      assert(attached.length === 2 && attached.every(row => row.querySelector('small').textContent === 'Already added'),
+        'Files already attached to this component must be marked and unavailable for duplicate selection.');
       const choice = choices.find(row => row.textContent.includes('Library guide'));
       assert(!choice.hidden && choices.filter(row => !row.hidden).length === 1, 'Library search must filter names.');
       choice.querySelector('input').click();
-      library.querySelector('.form-actions button:last-child').click();
+      const confirm = library.querySelector('.form-actions button:last-child');
+      search.value = 'No file has this name';
+      search.dispatchEvent(new Event('input', {bubbles: true}));
+      assert(library.querySelector('[role="status"]').textContent === 'No matching files.' && !confirm.disabled,
+        'An unmatched search must explain the empty list and preserve selections.');
+      confirm.click();
       await wait(() => !document.querySelector('.download-library'));
       assert(!document.querySelector('.download-library') && JSON.parse(form.elements.downloads.value).length === 3, 'Library selection must add files and close the picker.');
       const saved = form.elements.downloads.value;

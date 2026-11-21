@@ -33,8 +33,8 @@ func TestLinkComponent(t *testing.T) {
 		if err != nil || body != "Body" || components.Link() == nil || *components.Link() != link {
 			t.Fatal("link did not round trip", components, err)
 		}
-		page := editorPage{Post: Post{Markdown: source}}
-		if page.LinkJSON() != linkSource(t, link) {
+		page := newComponentEditorForm(source, nil)
+		if page.fields["link"] != linkSource(t, link) {
 			t.Fatal("editor discarded the link")
 		}
 		rendered, err := markdown(source)

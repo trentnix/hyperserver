@@ -1,8 +1,8 @@
-# Developing post components
+# Developing content components
 
 The blog owns components. Each component supplies its content rules, reader rendering, editor template, and editor script. The framework does not need to know component types.
 
-Components stay in the post's Markdown revision. The final `post-components` fence stores a versioned JSON envelope. A component can have a placement marker in the body. This boundary requires no database changes.
+Components stay in the Markdown revision for each post or page. The final `post-components` fence stores a versioned JSON envelope. A component can have a placement marker in the body. This boundary requires no database changes.
 
 ## Add a component
 

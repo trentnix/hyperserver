@@ -144,48 +144,71 @@ func componentPostReferences(components postComponents) []string {
 	return ids
 }
 
-// Existing references survive unpublication and deletion. New references must
-// point to public content or private content the author can edit.
-func (m *module) validatePostReferences(ctx context.Context, post Post) error {
-	_, components, err := splitPostComponents(post.Markdown)
+// References in the current or selected revision survive unpublication and
+// deletion. New references must point to public content or editable posts.
+func (m *module) validatePostReferences(ctx context.Context, source, kind, id string, revisionID int64) error {
+	_, components, err := splitPostComponents(source)
 	if err != nil {
 		return writingFieldError{err, "content"}
 	}
-	var previous []string
-	if post.ID != "" && len(postReferences(post.Markdown)) > 0 {
-		current, err := m.posts.GetByID(ctx, post.ID, true)
-		if err != nil {
-			return err
-		}
-		previous = postReferences(current.Markdown)
+	if len(componentPostReferences(components)) == 0 {
+		return nil
+	}
+	savedIDs, err := m.currentPostReferences(ctx, kind, id)
+	if err != nil {
+		return err
 	}
 	for _, component := range components.Components {
 		references, ok := component.Content.(interface{ PostReferences() []string })
 		if !ok {
 			continue
 		}
-		for _, id := range references.PostReferences() {
-			if id == post.ID {
+		for _, targetID := range references.PostReferences() {
+			if kind == "post" && targetID == id {
 				return writingFieldError{contentError("A post cannot link to itself in related posts."), postComponentCatalog.field(component)}
 			}
-			if slices.Contains(previous, id) {
+			if slices.Contains(savedIDs, targetID) {
 				continue
 			}
-			_, err := m.posts.GetByID(ctx, id, false)
+			_, err := m.posts.GetByID(ctx, targetID, false)
 			if err == nil {
 				continue
 			}
 			if !errors.Is(err, errNotFound) {
 				return err
 			}
-			target, err := m.posts.GetByID(ctx, id, true)
+			target, err := m.posts.GetByID(ctx, targetID, true)
 			if err != nil && !errors.Is(err, errNotFound) {
 				return err
 			}
-			if err != nil || !m.canEditPost(ctx, target) {
+			if err == nil && m.canEditPost(ctx, target) {
+				continue
+			}
+			if revisionID > 0 {
+				previous, err := m.history.GetRevision(ctx, kind, id, revisionID)
+				if err == nil {
+					savedIDs = append(savedIDs, postReferences(previous.Markdown)...)
+				} else if !errors.Is(err, errNotFound) {
+					return err
+				}
+				revisionID = 0
+			}
+			if !slices.Contains(savedIDs, targetID) {
 				return writingFieldError{contentError("A selected post is unavailable. Remove it or choose another post."), postComponentCatalog.field(component)}
 			}
 		}
 	}
 	return nil
+}
+
+func (m *module) currentPostReferences(ctx context.Context, kind, id string) ([]string, error) {
+	if id == "" {
+		return nil, nil
+	}
+	if kind == "post" {
+		current, err := m.posts.GetByID(ctx, id, true)
+		return postReferences(current.Markdown), err
+	}
+	current, err := m.pageStore.GetPageByID(ctx, id, true)
+	return postReferences(current.Markdown), err
 }

@@ -1,6 +1,6 @@
 {{ define "blog.pageEditor" }}
 <section class="info-page editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit page{{ else }}New page{{ end }}</h1>
-<form id="page-form" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
+<form id="page-form" data-time-zone="{{ .Data.TimeZone }}" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/pages{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   <input type="hidden" name="version" value="{{ .Data.Version }}">
   <input type="hidden" name="returnTo" value="{{ .Data.ReturnURL }}">
   {{ template "blog.revisionNotice" . }}
@@ -16,20 +16,18 @@
   </select>
   <p class="form-hint">Navigation shows top-level pages and their immediate children. Draft parents hide subpages.</p>
   <label for="page-summary">Short description</label><textarea id="page-summary" name="summary" maxlength="2000" rows="2">{{ .Data.Summary }}</textarea>
+  {{ template "blog.previewImage" .Data.PreviewField }}
+  {{ template "blog.contentEditor" .Data.ContentEditor }}
   {{ template "blog.tagField" .Data }}
   <label for="page-order">Display order (optional)</label><input id="page-order" name="displayOrder" inputmode="numeric" pattern="[0-9]+" value="{{ .Data.DisplayOrderText }}" aria-describedby="order-help">
   <small id="order-help" class="form-hint">0–1,000,000, lowest first. Leave blank for newest updated.</small>
-  {{ template "blog.previewImage" .Data.PreviewField }}
-  <label id="markdown-label" for="post-content">Content</label><textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help">{{ .Data.Markdown }}</textarea>
-  {{ template "blog.markdownHelp" .Data }}
   <div class="publication-options" role="radiogroup" aria-label="Publication">
     <label><input type="radio" name="published" value=""{{ if not .Data.Published }} checked{{ end }}><span>Draft</span></label>
     <label><input type="radio" name="published" value="on"{{ if .Data.Published }} checked{{ end }}><span>Publish</span></label>
   </div>
   <p class="form-hint">Changes take effect when you save.</p>
   <div id="editor-errors" class="form-error" role="alert">{{ if .Data.Error }}{{ template "blog.formError" . }}{{ end }}</div>
-  <div class="form-actions">{{ template "blog.saveContent" .Data }}<a class="button-secondary" href="{{ if .Data.HistoryURL }}{{ .Data.HistoryURL }}{{ else }}{{ .Data.ReturnURL }}{{ end }}" {{ if .Data.HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top showTarget:window"{{ end }}>Cancel</a></div>
-  <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
+  {{ template "blog.editorActions" .Data }}
 </form></section>
 {{ end }}
 

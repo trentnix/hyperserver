@@ -56,8 +56,8 @@ func TestRelatedComponent(t *testing.T) {
 	id := strings.Repeat("A", 26)
 	value := postRelated{Title: `More <script> & reading`, Posts: []string{id}}
 	source := relatedSource(t, value)
-	page := editorPage{Post: Post{Markdown: source}}
-	if page.componentSource("related") != componentJSON(value) || !strings.Contains(searchableWriting(source), value.Title) || strings.Contains(searchableWriting(source), id) {
+	page := newComponentEditorForm(source, nil)
+	if page.fields["related"] != componentJSON(value) || !strings.Contains(searchableWriting(source), value.Title) || strings.Contains(searchableWriting(source), id) {
 		t.Fatal("component must preserve its content and index authored text only")
 	}
 	if refs, err := contentMediaReferences(source, "/post/s/example", ""); err != nil || len(refs) != 0 {

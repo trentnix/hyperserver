@@ -78,8 +78,6 @@ func (p postComponents) Link() *postLink {
 	return nil
 }
 
-func (p editorPage) LinkJSON() string { return p.componentSource("link") }
-
 type linkNode struct {
 	ast.BaseBlock
 	Link postLink

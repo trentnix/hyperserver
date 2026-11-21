@@ -74,7 +74,7 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 		currentVersion = p.Version
 		p.Title, p.Summary, p.Markdown, p.PreviewImage, p.Tags = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage, selected.Tags
 		save = func() error {
-			_, err := m.persistPost(ctx, p)
+			_, err := m.persistPostWithSeries(ctx, p, nil, selected.ID)
 			return err
 		}
 	case "page":
@@ -89,7 +89,7 @@ func (m *module) restoreRevisionContent(ctx context.Context, kind, id string, ve
 		currentVersion = p.Version
 		p.Title, p.Summary, p.Markdown, p.PreviewImage, p.Tags = selected.Title, selected.Summary, selected.Markdown, selected.PreviewImage, selected.Tags
 		save = func() error {
-			_, err := m.persistPage(ctx, p)
+			_, err := m.persistPageRevision(ctx, p, selected.ID)
 			return err
 		}
 	default:

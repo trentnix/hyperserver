@@ -157,7 +157,7 @@ func TestAlbumAuthoringAndVisibility(t *testing.T) {
 				t.Fatal("draft album did not protect upload", err)
 			}
 			editor := h.request("GET", "/post/update/"+post.ID, nil, hx).Body.String()
-			if !strings.Contains(editor, `required>Post body</textarea>`) || !strings.Contains(editor, line+"\n</textarea>") {
+			if !strings.Contains(editor, `>Post body</textarea>`) || !strings.Contains(editor, line+"\n</textarea>") {
 				t.Fatal("editor must separate the body from the album", editor)
 			}
 			post, err = setPostPublication(h.blog.posts, t.Context(), post.ID, true)
@@ -206,7 +206,7 @@ func TestAlbumFormErrors(t *testing.T) {
 			for _, album := range []string{line, "invalid album"} {
 				w := h.request("POST", "/post", url.Values{"title": {""}, "content": {"Keep writing"}, "album": {album}}, hx)
 				requireStatus(t, w, http.StatusUnprocessableEntity)
-				if !hx && (!strings.Contains(w.Body.String(), album+"</textarea>") || !strings.Contains(w.Body.String(), `required>Keep writing</textarea>`)) {
+				if !hx && (!strings.Contains(w.Body.String(), album+"</textarea>") || !strings.Contains(w.Body.String(), `>Keep writing</textarea>`)) {
 					t.Fatal("ordinary validation lost submitted writing or album", w.Body.String())
 				}
 			}

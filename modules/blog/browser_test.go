@@ -65,11 +65,16 @@ func TestBrowserLayout(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check responsive layout")
 	}
-	for _, width := range []string{"280", "320", "767", "768", "1679", "1680", "1920", "3440"} {
-		t.Run(width, func(t *testing.T) {
-			testBrowser(t, browser, width, browserScenario{
+	for _, viewport := range []struct {
+		width  string
+		height int
+	}{{"280", 1000}, {"320", 1000}, {"767", 1000}, {"768", 1000}, {"1679", 1000}, {"1680", 1000},
+		{"1920", 1000}, {"2100", 900}, {"2560", 900}, {"2880", 900}, {"3200", 900}, {"3440", 1280}} {
+		t.Run(viewport.width, func(t *testing.T) {
+			testBrowser(t, browser, viewport.width, browserScenario{
 				scriptFile: "testdata/browser.js",
-				startPath:  "/login?test-layout=1&test-width=" + width,
+				startPath:  "/login?test-layout=1&test-width=" + viewport.width,
+				height:     viewport.height,
 			})
 		})
 	}

@@ -49,6 +49,12 @@ type editorPage struct {
 	SeriesEditor               *seriesEditorData
 }
 
+func (p editorPage) ContentEditor() componentEditorForm {
+	editor := newComponentEditorForm(p.Markdown, p.ComponentInputs)
+	editor.RequireBody, editor.noLibrary = true, p.NoLibrary
+	return editor
+}
+
 // PreviewField configures the shared image picker for post sharing.
 func (p editorPage) PreviewField() previewImageField {
 	return previewImageField{
@@ -222,7 +228,7 @@ func (m *module) save(w http.ResponseWriter, r *http.Request) {
 		m.editorError(w, r, p, err.Error(), http.StatusUnprocessableEntity, "series")
 		return
 	}
-	saved, err := m.writePostWithSeries(r.Context(), p, update)
+	saved, err := m.writePostWithSeries(r.Context(), p, update, editorRevision(r, "post", p.ID).RevisionID)
 	if errors.Is(err, errAccessDenied) && slices.Contains(validationFields(err), "series") {
 		m.editorError(w, r, p, "You don't have permission to change this series or one of its posts.", http.StatusForbidden, "series")
 		return
@@ -303,7 +309,7 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 				data.SaveActions = publication.SaveActions
 				data.PublishedSlug, data.CanSchedule = publication.PublishedSlug, publication.CanSchedule
 				data.ScheduledSlug, data.ScheduledAt = publication.ScheduledSlug, publication.ScheduledAt
-				baseline, _ := json.Marshal(publication.componentFields())
+				baseline, _ := json.Marshal(publication.ContentEditor().baseline())
 				data.CurrentContent = string(baseline)
 			}
 		}
@@ -381,7 +387,7 @@ func (m *module) preview(w http.ResponseWriter, r *http.Request) {
 	}
 	html, err := m.renderWriting(r.Context(), text, "")
 	if err != nil {
-		http.Error(w, "Unable to preview the post.", http.StatusInternalServerError)
+		http.Error(w, "Unable to preview this content.", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

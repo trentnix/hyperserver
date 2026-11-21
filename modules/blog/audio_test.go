@@ -86,7 +86,7 @@ func TestAudioComponent(t *testing.T) {
 		if err != nil || body != "Body" || components.Audio() == nil || *components.Audio() != audio || !slices.Equal(components.Order(), []string{"audio", "video"}) {
 			t.Fatal("audio did not round trip", components, err)
 		}
-		if got := (editorPage{Post: Post{Markdown: source}}).AudioJSON(); got != audioJSON(t, audio) {
+		if got := newComponentEditorForm(source, nil).fields["audio"]; got != audioJSON(t, audio) {
 			t.Fatal("editor lost audio details", got)
 		}
 		rendered, err := markdown(source)

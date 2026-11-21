@@ -191,8 +191,6 @@ func (p postComponents) Video() *postVideo {
 	return nil
 }
 
-func (p editorPage) VideoJSON() string { return p.componentSource("video") }
-
 type videoNode struct {
 	ast.BaseBlock
 	Video postVideo

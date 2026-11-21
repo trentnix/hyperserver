@@ -84,18 +84,23 @@ func markdownAt(source string, base *url.URL) (template.HTML, error) {
 	if err != nil {
 		return "", err
 	}
-	return markdownURLs(rendered, base)
+	return prepareFeedHTML(rendered, base)
 }
 
-func (m *module) renderWritingAt(ctx context.Context, source, postID string, base *url.URL) (template.HTML, error) {
+// prepareFeedHTML resolves feed links against the published post, including fragment-only links.
+func prepareFeedHTML(rendered template.HTML, postURL *url.URL) (template.HTML, error) {
+	return markdownURLs(rendered, postURL, false)
+}
+
+func (m *module) renderRevisionWriting(ctx context.Context, source, postID string, base *url.URL) (template.HTML, error) {
 	rendered, err := m.renderWriting(ctx, source, postID)
 	if err != nil {
 		return "", err
 	}
-	return markdownURLs(rendered, base)
+	return markdownURLs(rendered, base, true)
 }
 
-func markdownURLs(rendered template.HTML, base *url.URL) (template.HTML, error) {
+func markdownURLs(rendered template.HTML, base *url.URL, keepLocalFragments bool) (template.HTML, error) {
 	tokens := html.NewTokenizer(strings.NewReader(string(rendered)))
 	var out strings.Builder
 	readerOnly := 0
@@ -153,6 +158,9 @@ func markdownURLs(rendered template.HTML, base *url.URL) (template.HTML, error) 
 			}
 			for i, attr := range token.Attr {
 				if attr.Val == "" || !(token.Data == "a" && attr.Key == "href" || token.Data == "img" && attr.Key == "src") {
+					continue
+				}
+				if keepLocalFragments && token.Data == "a" && strings.HasPrefix(attr.Val, "#") {
 					continue
 				}
 				ref, err := url.Parse(attr.Val)

@@ -21,7 +21,7 @@ type postCallout struct {
 func calloutDefinition() componentDefinition {
 	return componentDefinition{
 		Kind: "callout", Field: "callout", Payload: "callout",
-		Name: "Callout", Summary: "Highlight a note in the post", EmptyMessage: "Enter callout text or remove the component.",
+		Name: "Callout", Summary: "Highlight a note", EmptyMessage: "Enter callout text or remove the component.",
 		TemplateFile: "templates/components/callout.html", Template: "blog.calloutEditor", Icon: "blog.calloutIcon", Script: "markdown-component-editor.js",
 		Parse:    func(source string) (componentContent, error) { return parseCallout(source) },
 		Renderer: calloutRenderer{},

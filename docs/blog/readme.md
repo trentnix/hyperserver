@@ -48,7 +48,7 @@ With `multiUser: false`, invitations and invited registration stop. Existing use
 ## Guides
 
 - [Writing and site content](content.md): publication, pages, profile, history, recovery, and navigation.
-- [Post components](components.md): albums, downloads, PDF, audio, comparisons, links, video, social media, and related posts.
+- [Content components](components.md) for posts and pages.
 - [Images](media.md): uploads, galleries, privacy, cleanup, and optimization.
 - [Series](series.md): shared reading order and conflict handling.
 - [Backup and recovery](backup.md): offline archives and staged recovery.
@@ -63,7 +63,7 @@ The [layout](../../modules/blog/templates/layout.html) composes named components
 
 Writing operations require the authenticated actor and enforce roles and post ownership. New posts belong to that actor. HTTP guards also protect editors and history. Direct database writes bypass access, reference tracking, and cache invalidation.
 
-Posts, pages, and profiles store revisions separately from current identity and publication settings. Current rows point to selected revisions. Post ownership belongs to the current row. Shared `blog_media` metadata and revision references track uploads for posts and pages. Page component controls are not implemented. Series use `blog_collections` and `blog_collection_content`, separate from Markdown components.
+Posts, pages, and profiles store revisions separately from current identity and publication settings. Current rows point to selected revisions. Post ownership belongs to the current row. Posts and pages share the component editor, `blog_media` metadata, and revision references for uploads. Series use `blog_collections` and `blog_collection_content`, separate from Markdown components.
 
 ## Database migrations
 

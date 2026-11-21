@@ -162,7 +162,7 @@ function initialize(root) {
       photos.push(...selected.map(path => ({path, caption: ''})));
       serialize();
       render();
-      if (!form.dataset.uploading) setMediaStatus(status, `${selected.length} ${selected.length === 1 ? 'photo added' : 'photos added'}. Save the post to apply changes.`);
+      if (!form.dataset.uploading) setMediaStatus(status, `${selected.length} ${selected.length === 1 ? 'photo added' : 'photos added'}. Save to apply changes.`);
     }
 
     async function upload(files) {
@@ -208,7 +208,7 @@ function initialize(root) {
       const added = photos.length - before;
       if (failed.length === 0) {
         const duplicate = files.length - added;
-        setMediaStatus(status, added === 0 ? 'Those photos are already in the album.' : `${added} ${added === 1 ? 'photo added' : 'photos added'}.${duplicate ? ' Other selected photos are already in the album.' : ''} Save the post to apply changes.`);
+        setMediaStatus(status, added === 0 ? 'Those photos are already in the album.' : `${added} ${added === 1 ? 'photo added' : 'photos added'}.${duplicate ? ' Other selected photos are already in the album.' : ''} Save to apply changes.`);
         return;
       }
       // Keep successful uploads and retry only failed or unattempted files.
@@ -272,7 +272,7 @@ function initialize(root) {
           photos = ordered;
           serialize();
           render();
-          setMediaStatus(status, 'Photo order updated. Save the post to apply changes.');
+          setMediaStatus(status, 'Photo order updated. Save to apply changes.');
         }, section.querySelector('[data-album-reorder]'));
         return;
       }
@@ -298,7 +298,7 @@ function initialize(root) {
         const item = list.children[index];
         const focus = item?.querySelector('[data-album-remove]');
         focus?.focus();
-        setMediaStatus(status, 'Photo restored. Save the post to apply changes.');
+        setMediaStatus(status, 'Photo restored. Save to apply changes.');
         return;
       }
       const button = event.target.closest('[data-album-remove]');

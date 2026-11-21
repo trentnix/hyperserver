@@ -75,7 +75,7 @@ func TestVideoComponent(t *testing.T) {
 	if err != nil || body != "Body" || components.Video() == nil || *components.Video() != video || components.Order()[0] != "video" {
 		t.Fatal("video did not round trip", components, err)
 	}
-	if got := (editorPage{Post: Post{Markdown: source}}).VideoJSON(); got != videoJSON(t, video) {
+	if got := newComponentEditorForm(source, nil).fields["video"]; got != videoJSON(t, video) {
 		t.Fatal("editor lost saved video details", got)
 	}
 	rendered, err := markdown(source)

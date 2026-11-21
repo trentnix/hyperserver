@@ -82,9 +82,9 @@ func TestPDFDownloadLink(t *testing.T) {
 			if !hidden && strings.Contains(source, "hideDownload") {
 				t.Fatal("default must use the original saved format")
 			}
-			page := editorPage{Post: Post{Markdown: source}}
-			if page.PDFJSON() != downloadSource(t, file) {
-				t.Fatal("editor discarded the download link setting", page.PDFJSON())
+			page := newComponentEditorForm(source, nil)
+			if page.fields["pdf"] != downloadSource(t, file) {
+				t.Fatal("editor discarded the download link setting", page.fields["pdf"])
 			}
 			rendered, err := markdown(source)
 			if err != nil || strings.Contains(string(rendered), " download ") == hidden || !strings.Contains(string(rendered), ">Open PDF</a>") || !strings.Contains(string(rendered), "<iframe") {
@@ -126,8 +126,8 @@ func TestPDFPresentation(t *testing.T) {
 			if !enabled && strings.Contains(source, "presentation") {
 				t.Fatal("existing PDFs must keep their saved format")
 			}
-			page := editorPage{Post: Post{Markdown: source}}
-			if page.PDFJSON() != downloadSource(t, file) {
+			page := newComponentEditorForm(source, nil)
+			if page.fields["pdf"] != downloadSource(t, file) {
 				t.Fatal("editor lost the presentation setting")
 			}
 			rendered, err := markdown(source)

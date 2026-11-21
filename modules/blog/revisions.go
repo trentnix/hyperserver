@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -98,15 +99,9 @@ func (m *module) selectRevision(r *http.Request, kind, id, contentPath string, c
 	selection.MissingImages = len(missing) > 0
 	fields := map[string]string{
 		"title": current.Title, "summary": current.Summary,
-		"content": current.Markdown, "previewImage": current.PreviewImage, "tags": current.Tags,
+		"previewImage": current.PreviewImage, "tags": current.Tags,
 	}
-	if kind == "post" {
-		currentEditor := editorPage{Post: Post{Markdown: current.Markdown}}
-		fields["content"] = currentEditor.BodyMarkdown()
-		for name, value := range currentEditor.componentFields() {
-			fields[name] = value
-		}
-	}
+	maps.Copy(fields, newComponentEditorForm(current.Markdown, nil).baseline())
 	baseline, err := json.Marshal(fields)
 	selection.LoadedRevision, selection.CurrentContent = &selected, string(baseline)
 	return selection, err
@@ -198,7 +193,7 @@ func (m *module) renderRevisions(w http.ResponseWriter, r *http.Request, message
 		if kind == "post" {
 			postID = id
 		}
-		data.HTML, err = m.renderWritingAt(r.Context(), data.Selected.Markdown, postID, &url.URL{Path: previewPath})
+		data.HTML, err = m.renderRevisionWriting(r.Context(), data.Selected.Markdown, postID, &url.URL{Path: previewPath})
 	}
 	if err == nil {
 		var missing map[string]bool

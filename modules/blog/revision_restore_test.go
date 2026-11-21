@@ -35,6 +35,84 @@ func TestRevisionEquivalentTags(t *testing.T) {
 	}
 }
 
+func TestRestoreSavedRelatedPostReferences(t *testing.T) {
+	h := registeredBrowserHarness(t)
+	h.login(t)
+	ctx := t.Context()
+	target, err := h.blog.persistPost(ctx, Post{Title: "Related post", Markdown: "A related article."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := pageFields("related-history-review", true)
+	fields.Set("componentOrder", `["related-posts"]`)
+	savedRelated := componentJSON(postRelated{Posts: []string{target.ID}})
+	fields.Set("related", savedRelated)
+	requireStatus(t, h.request(http.MethodPost, "/pages", fields, false), http.StatusSeeOther)
+	page, err := h.blog.pageStore.GetPageBySlug(ctx, fields.Get("slug"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	versions, err := h.blog.history.ListRevisions(ctx, "page", page.ID)
+	if err != nil || len(versions) != 1 {
+		t.Fatalf("expected one page revision, got %d, %v", len(versions), err)
+	}
+	editor := "/pages/" + page.ID
+	query := "?revision=" + strconv.FormatInt(versions[0].ID, 10)
+	plain := pageFields(page.Slug, true)
+	requireStatus(t, h.submitEditor(t, editor, plain, false), http.StatusSeeOther)
+	if err := h.blog.posts.Delete(ctx, target.ID); err != nil {
+		t.Fatal(err)
+	}
+	setVersion := func() {
+		t.Helper()
+		current, err := h.blog.pageStore.GetPageByID(ctx, page.ID, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fields.Set("version", strconv.FormatInt(current.Version, 10))
+	}
+	setVersion()
+	requireStatus(t, h.request(http.MethodPost, editor, fields, true), http.StatusUnprocessableEntity)
+	fields.Set("related", componentJSON(postRelated{Posts: []string{target.ID, strings.Repeat("A", 26)}}))
+	requireStatus(t, h.request(http.MethodPost, editor+query, fields, true), http.StatusUnprocessableEntity)
+	fields.Set("related", savedRelated)
+	restore := "/history/page/" + page.ID + "/restore" + query
+	requireStatus(t, h.request(http.MethodPost, restore, url.Values{"version": {fields.Get("version")}}, false), http.StatusSeeOther)
+	requireStatus(t, h.submitEditor(t, editor, plain, false), http.StatusSeeOther)
+	setVersion()
+	requireStatus(t, h.request(http.MethodPost, editor+query, fields, true), http.StatusOK)
+	current, err := h.blog.pageStore.GetPageByID(ctx, page.ID, true)
+	if ids := postReferences(current.Markdown); err != nil || len(ids) != 1 || ids[0] != target.ID {
+		t.Fatalf("historical reference was not retained: %v, %v", ids, err)
+	}
+	reader := h.request(http.MethodGet, page.URL(), nil, false)
+	requireStatus(t, reader, http.StatusOK)
+	if strings.Contains(reader.Body.String(), `class="related-posts"`) {
+		t.Fatal("deleted targets must remain hidden after restore")
+	}
+
+	// Another editor can delete the source revision while its editor is open.
+	if err := h.blog.history.DeleteRevision(ctx, "page", page.ID, versions[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	available, err := h.blog.persistPost(ctx, Post{Title: "Available related post", Markdown: "A link that needs no revision."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields.Set("related", componentJSON(postRelated{Posts: []string{available.ID}}))
+	fields.Set("content", "Writing saved after the original revision was deleted.")
+	setVersion()
+	requireStatus(t, h.request(http.MethodPost, editor+query, fields, false), http.StatusSeeOther)
+	fields.Set("related", savedRelated)
+	fields.Set("content", "Keep this edit while I correct the related post.")
+	setVersion()
+	rejected := h.request(http.MethodPost, editor+query, fields, false)
+	requireStatus(t, rejected, http.StatusUnprocessableEntity)
+	if body := rejected.Body.String(); !strings.Contains(body, `data-error-fields="related"`) || !strings.Contains(body, fields.Get("content")) {
+		t.Fatal("an unverifiable reference must leave the submitted content in the editor")
+	}
+}
+
 // Imported tag ordering must not offer a restore that normalization would undo.
 func TestRestoreRevisionEquivalentTags(t *testing.T) {
 	for _, kind := range []string{"post", "page"} {

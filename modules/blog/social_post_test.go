@@ -250,8 +250,8 @@ func TestUnifiedSocialPost(t *testing.T) {
 			if err != nil || !strings.Contains(string(reader), "Open on "+test.provider.Name) {
 				t.Fatal("the URL must choose the correct reader", reader, err)
 			}
-			page := editorPage{Post: Post{Markdown: source}}
-			if page.componentFields()["socialPost"] != input["socialPost"] {
+			page := newComponentEditorForm(source, nil)
+			if page.fields["socialPost"] != input["socialPost"] {
 				t.Fatal("reopening lost the unified source")
 			}
 		})

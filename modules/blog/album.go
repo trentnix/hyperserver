@@ -104,15 +104,6 @@ func joinPostAlbum(body, source string) (string, error) {
 	return combined, nil
 }
 
-func (p editorPage) BodyMarkdown() string {
-	body, _, _ := splitPostComponents(p.Markdown)
-	return body
-}
-
-func (p pageContent) BodyMarkdown() string { return p.Markdown }
-
-func (p editorPage) AlbumMarkdown() string { return p.componentSource("album") }
-
 var albumKind = ast.NewNodeKind("PhotoAlbum")
 
 type albumNode struct {

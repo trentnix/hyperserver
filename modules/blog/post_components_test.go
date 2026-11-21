@@ -19,11 +19,11 @@ func TestPostComponentsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page := editorPage{Post: Post{Markdown: source}}
-	if page.BodyMarkdown() != "Writing before components" || strings.TrimSpace(page.AlbumMarkdown()) != album {
-		t.Fatal("component source changed", page.BodyMarkdown(), page.AlbumMarkdown())
+	page := newComponentEditorForm(source, nil)
+	if page.BodyMarkdown != "Writing before components" || strings.TrimSpace(page.fields["album"]) != album {
+		t.Fatal("component source changed", page.BodyMarkdown, page.fields["album"])
 	}
-	files, err := parseDownloads(page.DownloadsJSON())
+	files, err := parseDownloads(page.fields["downloads"])
 	if err != nil || len(files) != 1 || files[0] != file {
 		t.Fatal("download changed", files, err)
 	}
@@ -39,7 +39,7 @@ func TestPostComponentsRoundTrip(t *testing.T) {
 		t.Fatal("component reference extraction", refs, err)
 	}
 	// Removing downloads converts the album back to the existing readable format.
-	legacy, err := joinPostComponents(page.BodyMarkdown(), componentInput{"album": page.AlbumMarkdown()})
+	legacy, err := joinPostComponents(page.BodyMarkdown, componentInput{"album": page.fields["album"]})
 	if err != nil || !strings.Contains(legacy, "```photo-album") || strings.Contains(legacy, "post-components") {
 		t.Fatal("legacy album regression", legacy, err)
 	}
@@ -127,12 +127,12 @@ func TestComponentOrderCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldSource := "Body\n\n```post-components\n" + string(legacy) + "\n```\n"
-	page := editorPage{Post: Post{Markdown: oldSource}}
+	page := newComponentEditorForm(oldSource, nil)
 	if page.ComponentOrderJSON() != `["photo-album","file-downloads"]` {
 		t.Fatal("legacy order changed", page.ComponentOrderJSON())
 	}
 	for _, order := range []string{`["file-downloads","photo-album"]`, `["photo-album","file-downloads"]`, ""} {
-		source, err := joinPostComponents(page.BodyMarkdown(), componentInput{"album": page.AlbumMarkdown(), "downloads": page.DownloadsJSON(), "componentOrder": order})
+		source, err := joinPostComponents(page.BodyMarkdown, componentInput{"album": page.fields["album"], "downloads": page.fields["downloads"], "componentOrder": order})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,14 +153,14 @@ func TestComponentOrderCompatibility(t *testing.T) {
 		if (strings.Index(search, file.Label) < strings.Index(search, photo.Caption)) != (files < album) {
 			t.Fatal("search text order differs from reader order")
 		}
-		reopened := editorPage{Post: Post{Markdown: source}}
+		reopened := newComponentEditorForm(source, nil)
 		editors := reopened.EditorComponents()
 		if len(editors) != len(postComponentCatalog) || !slices.Equal(editors[:len(components.Order())], components.Order()) {
 			t.Fatal("editor order differs from reader")
 		}
 	}
 	for _, order := range []string{`["unknown"]`, `["photo-album","photo-album"]`, `{"type":"photo-album"}`, `[1]`, `[] trailing`} {
-		if _, err := joinPostComponents("Body", componentInput{"album": page.AlbumMarkdown(), "downloads": page.DownloadsJSON(), "componentOrder": order}); err == nil {
+		if _, err := joinPostComponents("Body", componentInput{"album": page.fields["album"], "downloads": page.fields["downloads"], "componentOrder": order}); err == nil {
 			t.Fatal("invalid order accepted", order)
 		}
 	}
@@ -174,8 +174,8 @@ func TestUnknownOrderedComponentsPreserved(t *testing.T) {
 		`{"version":2,"components":[{"type":"file-downloads","files":[],"extra":"keep"}]}`,
 	} {
 		source := "```post-components\n" + envelope + "\n```\n"
-		page := editorPage{Post: Post{Markdown: source}}
-		if page.BodyMarkdown() != source || page.AlbumMarkdown() != "" || page.DownloadsJSON() != "" {
+		page := newComponentEditorForm(source, nil)
+		if page.BodyMarkdown != source || page.fields["album"] != "" || page.fields["downloads"] != "" {
 			t.Fatal("unsupported component source was discarded")
 		}
 		if _, err := joinPostComponents(source, componentInput{}); err == nil {
@@ -196,8 +196,8 @@ func TestPostComponentsMalformedAndNested(t *testing.T) {
 		"```post-components\n{\"version\":1,\"extra\":true}\n```\n",
 		"```photo-album\nmalformed legacy photo source\n```\n",
 	} {
-		page := editorPage{Post: Post{Markdown: source}}
-		if page.BodyMarkdown() != source || page.DownloadsJSON() != "" || page.AlbumMarkdown() != "" {
+		page := newComponentEditorForm(source, nil)
+		if page.BodyMarkdown != source || page.fields["downloads"] != "" || page.fields["album"] != "" {
 			t.Fatal("unsupported data discarded")
 		}
 		if _, err := joinPostComponents(source, componentInput{}); err == nil {

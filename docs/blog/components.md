@@ -1,12 +1,12 @@
-# Post components
+# Content components
 
-Choose **Add component** from the Content toolbar. Edit its settings and choose **Done** to add it at the cursor, or at the end if you have not set a cursor. If the cursor is inside a paragraph, list, or code block, the component goes after that block. Choose **Edit** on the component row to reopen its settings. **Cancel** discards changes made since you opened the dialog. You can add the same type more than once. Labels use the title, filename, or another detail when available.
+Choose **Add component** from the Content toolbar when editing a post or page. Edit its settings and choose **Done** to add it at the cursor, or at the end if you have not set a cursor. If the cursor is inside a paragraph, list, or code block, the component goes after that block. Choose **Edit** on the component row to reopen its settings. **Cancel** discards changes made since you opened the dialog. You can add the same type more than once. Labels use the title, filename, or another detail when available.
 
-Drag the **Move** handle to reposition a component in the writing or in the list below it. Choose **Move** to show **Up** and **Down** for moving one block or row at a time. The Content editor’s Undo and Redo include component additions, removals, and moves. A post can consist entirely of components.
+Drag the **Move** handle to reposition a component in the writing or in the list below it. Choose **Move** to show **Up** and **Down** for moving one block or row at a time. The Content editor’s Undo and Redo include component additions, removals, and moves. Posts and pages can consist entirely of components.
 
 Choose **Remove** on the component row. The latest removal offers **Undo** for a few seconds. Earlier removals remain in the editor’s Undo history. Removing a component keeps its uploads.
 
-An added component must contain valid content. Fill it in or remove it before saving. A rejected save preserves your edits. Unsaved indicators, browser recovery, and revision history apply to every component. Page editors do not expose components yet.
+An added component must contain valid content. Fill it in or remove it before saving. A rejected save preserves your edits. Unsaved indicators, browser recovery, and revision history apply to every component.
 
 | Component | Content |
 | --- | --- |
@@ -18,12 +18,12 @@ An added component must contain valid content. Fill it in or remove it before sa
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
 | [Expandable details](#expandable-details) | A titled section readers can open inline. |
 | [Callout](#callout) | A highlighted Markdown note. |
-| [Table of Contents](#table-of-contents) | Jump links to the post's headings. |
+| [Table of Contents](#table-of-contents) | Jump links to headings in the content. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
 | [Video](#video) | A YouTube or Vimeo player. |
 | [Embed](#embed) | An interactive page or widget from an approved site. |
 | [Social media](social-posts.md) | A public post, with its platform detected from the URL. |
-| [Related posts](#related-posts) | An ordered list of links shown only on this post. |
+| [Related posts](#related-posts) | An ordered list of links to posts. |
 
 [Series](series.md) provide shared navigation across member posts and are managed separately. For registration, rendering, and saved formats, see [developing components](component-development.md).
 
@@ -91,7 +91,7 @@ Enter Markdown text and an optional heading. Each callout defaults to Parchment.
 
 ## Table of Contents
 
-Choose **Add component → Table of Contents**. H2 and H3 are selected by default. Choose the heading levels to include, then select **Done**. The outline nests headings under the nearest included parent and appears when at least two headings in the post body match. On viewports at least 1,680 pixels wide and 21:9 or wider, the first Table of Contents appears in a sticky rail to the right of the article.
+Choose **Add component → Table of Contents**. H2 and H3 are selected by default. Choose the heading levels to include, then select **Done**. The outline nests headings under the nearest included parent and appears when at least two headings in the body match. On viewports at least 1,680 pixels wide and 21:9 or wider, the first Table of Contents appears in a sticky rail to the right of the content. Pages with **Preview blocks** keep the outline inline.
 
 ## Link preview
 
@@ -127,7 +127,7 @@ Set `embedOrigins` in `modules/blog/config.yaml` to a list of exact HTTPS origin
 
 Type a title to search for posts, then select up to 12 results. Results stay open so you can add several at once. Click outside, press Escape, or clear the search to dismiss them. Arrange the links with the arrow buttons. An optional heading replaces “Related posts.”
 
-Links appear only on the source post. Selecting a target neither changes it nor creates a reciprocal link. Readers see current titles and URLs for published targets. Draft, future scheduled, and deleted targets remain referenced but hidden. Republishing restores their links in the same positions.
+Links appear on the post or page where you add the component. Readers see current titles and URLs for published targets. Draft, future scheduled, and deleted targets remain referenced but hidden, including when you restore a saved version. Republishing restores their links in the same positions.
 
 If no target is public, the component disappears. Feeds and historical previews use the same visibility rules.
 

@@ -214,7 +214,7 @@ func TestDownloadLifecycle(t *testing.T) {
 				t.Fatal("references missing", usage, err)
 			}
 			editor := h.request("GET", "/post/update/"+post.ID, nil, false).Body.String()
-			if strings.Contains(editor, `required>\n\n`+"```post-components") || !strings.Contains(editor, "Keep photo") || !strings.Contains(editor, "Guide résumé.txt") {
+			if strings.Contains(editor, "```post-components") || !strings.Contains(editor, "Keep photo") || !strings.Contains(editor, "Guide résumé.txt") {
 				t.Fatal("components not editable separately")
 			}
 			post, err = setPostPublication(h.blog.posts, t.Context(), post.ID, true)

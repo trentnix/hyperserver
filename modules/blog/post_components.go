@@ -15,7 +15,7 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-const unsupportedComponents = contentError("This post contains an unsupported component. Its source is preserved in Markdown. Update or remove it before saving.")
+const unsupportedComponents = contentError("An unsupported component is preserved in the Markdown. Update or remove it before saving.")
 
 // Components stay in each writing revision. Version 2 records their display
 // order. Version 3 adds placement markers. Version 4 supports instance IDs.
@@ -294,32 +294,6 @@ func (catalog componentCatalog) submittedComponent(id string, input componentInp
 	}
 	component.Content = value
 	return component, err
-}
-
-func (p editorPage) DownloadsJSON() string { return p.componentSource("downloads") }
-
-func (p editorPage) ComponentOrderJSON() string {
-	if source, ok := p.ComponentInputs["componentOrder"]; ok {
-		return source
-	}
-	_, components, _ := splitPostComponents(p.Markdown)
-	data, _ := json.Marshal(components.Order())
-	return string(data)
-}
-
-func (p editorPage) EditorComponents() []string {
-	order, err := parseComponentOrder(p.ComponentOrderJSON())
-	if err != nil {
-		order = nil
-	}
-	order = slices.DeleteFunc(order, func(id string) bool { return strings.Contains(id, ":") })
-	for _, definition := range postComponentCatalog {
-		kind := definition.Kind
-		if !slices.Contains(order, kind) {
-			order = append(order, kind)
-		}
-	}
-	return order
 }
 
 // searchableWriting includes human component text without leaking the envelope's

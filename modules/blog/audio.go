@@ -62,8 +62,6 @@ func (p postComponents) Audio() *postAudio {
 	return nil
 }
 
-func (p editorPage) AudioJSON() string { return p.componentSource("audio") }
-
 type audioNode struct {
 	ast.BaseBlock
 	Audio postAudio

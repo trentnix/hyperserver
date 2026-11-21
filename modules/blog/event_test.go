@@ -46,8 +46,8 @@ func TestEventComponent(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			editor := editorPage{Post: Post{Markdown: source}}
-			if got := editor.componentSource("event"); got != componentJSON(tc.event) {
+			editor := newComponentEditorForm(source, nil)
+			if got := editor.fields["event"]; got != componentJSON(tc.event) {
 				t.Fatalf("event did not round trip: %s", got)
 			}
 			html, err := markdown(source)
@@ -98,7 +98,7 @@ func TestSavedEventWithChangedTimeZoneRules(t *testing.T) {
 		}
 	}
 	event.StartTime = "02:30"
-	if got := (editorPage{Post: Post{Markdown: source}}).componentSource("event"); got != componentJSON(event) {
+	if got := newComponentEditorForm(source, nil).fields["event"]; got != componentJSON(event) {
 		t.Fatalf("the editor must preserve the saved wall time: %s", got)
 	}
 	if _, err := parseEvent(componentJSON(event)); err == nil || strings.Join(validationFields(err), " ") != "event event.startTime" {
@@ -164,7 +164,7 @@ func TestEventMapLinkFromWebsite(t *testing.T) {
 			if tc.wantMap {
 				event.MapURL, event.URL = event.URL, ""
 			}
-			if got := (editorPage{Post: Post{Markdown: source}}).componentSource("event"); got != componentJSON(event) {
+			if got := newComponentEditorForm(source, nil).fields["event"]; got != componentJSON(event) {
 				t.Fatalf("unexpected Event editor source: %s", got)
 			}
 			rendered, err := markdown(source)

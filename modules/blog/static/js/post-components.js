@@ -80,6 +80,7 @@ function createEditor(root) {
   const pickerSummary = picker.querySelector('summary');
   const status = form.querySelector('[data-component-placement-status]');
   const saveStatus = form.querySelector('[data-component-save-status]');
+  const fallback = form.querySelector('[data-component-fallback]');
   const dialog = root.querySelector('[data-component-dialog-template]').content.firstElementChild.cloneNode(true);
   const dialogBody = dialog.querySelector('.component-dialog-body');
   const endRows = document.createElement('div');
@@ -99,6 +100,7 @@ function createEditor(root) {
 
   const editor = () => getMarkdownEditor(content);
   const placement = () => editor()?.placement;
+  const canChangePlacement = () => Boolean(placement()) || !hasComponentMarkers(content.value);
   // Removed rows below the writing keep their place in the sequence until
   // Undo or a new editor replaces that sequence.
   const activeOrder = () => order.filter(id => !removed.has(id));
@@ -228,8 +230,8 @@ function createEditor(root) {
     closeSettings({discard: true});
   });
   dialog.addEventListener('keydown', event => {
-    // Component fields share the post form. Enter in a text field must not
-    // implicitly save the post while the dialog is open.
+    // Component fields share the editor form. Enter in a text field must not
+    // implicitly save while the dialog is open.
     if (event.key === 'Enter' && !event.isComposing && event.target.matches('input:not([type]), input:is([type=text], [type=url], [type=search], [type=number])')) {
       event.preventDefault();
     }
@@ -399,6 +401,8 @@ function createEditor(root) {
   // A placement edit publishes its Markdown and the matching form fields in
   // one operation. A follow-up layout request only refines the next destinations.
   function commit(layout, types, edit, {reorder = false, beforeSettings} = {}) {
+    const controller = placement();
+    if (!canChangePlacement()) return;
     editor()?.showSource();
     const publish = (next, sort) => {
       content.value = next.source;
@@ -406,7 +410,6 @@ function createEditor(root) {
       if (sort) order = [...anchors.keys(), ...order.filter(id => !anchors.has(id))];
       changed(types);
     };
-    const controller = placement();
     if (!controller) {
       edit({place() {}, remove() {}});
       publish(layout, reorder);
@@ -477,6 +480,11 @@ function createEditor(root) {
   }
 
   function render() {
+    const canPlace = Boolean(placement());
+    const canChange = canChangePlacement();
+    fallback.hidden = canChange;
+    removalStatus.hidden = !canChange;
+    if (!canChange) moving = undefined;
     const unplaced = trailing();
     if (editing && !editing.addition && !isActive(editing.type)) closeSettings();
     const undo = removalStatus.querySelector('[data-component-undo]');
@@ -487,11 +495,13 @@ function createEditor(root) {
       section.hidden = !active && !pending;
       row.hidden = !unplaced.includes(type);
       const handle = row.querySelector('[data-component-place]');
-      handle.toggleAttribute('data-component-drag', Boolean(placement()));
-      handle.title = placement() ? 'Drag or show move controls' : '';
+      handle.hidden = !canChange;
+      handle.toggleAttribute('data-component-drag', canPlace);
+      handle.title = canPlace ? 'Drag or show move controls' : '';
+      row.querySelector('[data-component-remove-row]').hidden = !canChange;
       section.querySelectorAll('[data-component-fields]').forEach(fields => { fields.disabled = section.hidden || fields.hidden; });
       source.disabled = pending || Boolean(section.dataset.componentId) && !active;
-      section.querySelector('[data-component-remove]').hidden = pending;
+      section.querySelector('[data-component-remove]').hidden = pending || !canChange;
       section.querySelector('[data-component-remove]').disabled = Boolean(form.dataset.uploading);
     }
     let next = endRows.firstElementChild;
@@ -500,10 +510,10 @@ function createEditor(root) {
       if (row !== next) endRows.insertBefore(row, next);
       next = row.nextElementSibling;
     }
-    picker.hidden = !picker.querySelector('[data-component-add]:not([hidden])');
+    picker.hidden = !canChange || !picker.querySelector('[data-component-add]:not([hidden])');
     const active = activeOrder();
     field.value = JSON.stringify(active);
-    const required = active.length === 0;
+    const required = root.hasAttribute('data-content-required') && active.length === 0;
     if (editor()) editor().setRequired(required);
     else content.required = required;
     if (currentLayout?.source === content.value) placement()?.refresh(anchors, id => instances.get(id).name);
@@ -518,8 +528,8 @@ function createEditor(root) {
     for (const type of types) instances.get(type).source.dispatchEvent(new Event('input', {bubbles: true}));
   }
 
-  // Only apply an answer to the source it describes. Components without a
-  // marker still work if the Markdown editor is unavailable.
+  // Only apply an answer to the source it describes. Without a placement
+  // controller, changes are safe only for writing without inline markers.
   async function readLayout(source = content.value, isCurrent = () => true) {
     const controller = placement();
     if (!controller) return {source, markers: {}, blocks: [], drops: [], end: null};
@@ -667,6 +677,7 @@ function createEditor(root) {
     const move = event.target.closest('[data-component-place]');
     const step = event.target.closest('[data-component-shift]');
     const remove = event.target.closest('[data-component-remove], [data-component-remove-row]');
+    if ((add || undo || move || step || remove) && !canChangePlacement()) return;
     if (add) await addComponent(add.dataset.componentAdd);
     else if (undo) await undoRemoval(undo.dataset.componentUndo);
     else if (edit) {

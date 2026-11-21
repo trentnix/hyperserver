@@ -50,7 +50,7 @@ export async function openFileLibrary(existing, add, status, form, {maxFiles, ex
   const search = element('input');
   search.type = 'search';
   searchLabel.append(search);
-  const feedback = element('p', 'Loading files…', 'form-hint');
+  const feedback = element('p', '', 'form-hint');
   feedback.setAttribute('role', 'status');
   const list = element('ul', '', 'download-library-list');
   const actions = element('footer', '', 'form-actions');
@@ -63,6 +63,7 @@ export async function openFileLibrary(existing, add, status, form, {maxFiles, ex
   document.body.append(dialog);
   const controller = new AbortController();
   const selected = new Map();
+  const selectionSummary = () => selected.size ? `${selected.size} ${selected.size === 1 ? 'file' : 'files'} selected` : '';
   const room = single ? 1 : maxFiles - existing.length;
   document.addEventListener('htmx:before:cleanup', event => { if (event.target.contains?.(form)) dialog.close(); }, {signal: controller.signal});
   document.addEventListener('htmx:after:swap', () => { if (!form.isConnected) dialog.close(); }, {signal: controller.signal});
@@ -70,43 +71,61 @@ export async function openFileLibrary(existing, add, status, form, {maxFiles, ex
   dialog.addEventListener('close', () => { controller.abort(); dialog.remove(); if (opener?.isConnected) opener.focus(); }, {once: true});
   confirm.addEventListener('click', () => {
     if (!form.isConnected || form.dataset.uploading) return;
-    try { add([...selected.values()]); dialog.close(); setMediaStatus(status, single ? `${kind} selected.` : 'Files added. Save the post to apply changes.'); }
+    try { add([...selected.values()]); dialog.close(); setMediaStatus(status, single ? `${kind} selected.` : 'Files added. Save to apply changes.'); }
     catch (error) { feedback.textContent = error.message; }
   });
-  search.addEventListener('input', () => {
-    for (const row of list.children) row.hidden = !row.textContent.toLowerCase().includes(search.value.trim().toLowerCase());
-  });
+  function filterChoices() {
+    const query = search.value.trim().toLowerCase();
+    let hasMatches = false;
+    for (const row of list.children) {
+      row.hidden = !row.textContent.toLowerCase().includes(query);
+      hasMatches ||= !row.hidden;
+    }
+    if (list.childElementCount) feedback.textContent = hasMatches ? selectionSummary() : 'No matching files.';
+  }
+  search.addEventListener('input', filterChoices);
   dialog.showModal();
   search.focus({preventScroll: true});
-  try {
-    const files = await requestFiles('/post/files', {signal: controller.signal});
-    if (!dialog.isConnected) return;
-    if (files !== null && (!Array.isArray(files) || !files.every(validEntry))) throw new Error('Unable to read files.');
-    const choices = (files || []).filter(entry => !single || entry.id.endsWith('.' + extension));
-    feedback.textContent = choices.length ? (single ? `Choose ${kind === 'MP3' ? 'an' : 'a'} ${kind} for your post.` : 'Choose files to offer as downloads.') : (single ? `No uploaded ${kind} files. Upload one from the post editor.` : 'No uploaded files. Upload files from the post editor.');
-    for (const entry of choices) {
-      const row = element('li');
-      const label = element('label');
-      const check = element('input');
-      check.type = single ? 'radio' : 'checkbox';
-      check.name = 'download-library-choice';
-      check.disabled = existing.some(current => current.id === entry.id);
-      const name = element('span', entry.label);
-      name.append(element('small', check.disabled ? (single ? `Current ${kind}` : 'Added to this post') : entry.id.split('.').pop().toUpperCase() + ' · ' + sizeLabel(entry.size)));
-      label.append(check, name);
-      row.append(label);
-      list.append(row);
-      check.addEventListener('change', () => {
-        if (single) selected.clear();
-        if (check.checked && selected.size >= room) { check.checked = false; feedback.textContent = 'Post limit reached. Deselect a file to choose another.'; return; }
-        if (check.checked) selected.set(entry.id, {...entry}); else selected.delete(entry.id);
-        confirm.disabled = !selected.size;
-        confirm.textContent = single ? singleAction : selected.size ? `Add ${selected.size} ${selected.size === 1 ? 'file' : 'files'}` : 'Add files';
-        feedback.textContent = `${selected.size} ${selected.size === 1 ? 'file' : 'files'} selected`;
-      });
+  await load();
+
+  async function load() {
+    setMediaStatus(feedback, 'Loading files…');
+    try {
+      const files = await requestFiles('/post/files', {signal: controller.signal});
+      if (!dialog.open) return;
+      if (files !== null && (!Array.isArray(files) || !files.every(validEntry))) throw new Error('Unable to read files.');
+      const choices = (files || []).filter(entry => !single || entry.id.endsWith('.' + extension));
+      feedback.textContent = choices.length ? '' : single ? `No ${kind} files in the library.` : 'No files in the library.';
+      for (const entry of choices) {
+        const row = element('li');
+        const label = element('label');
+        const check = element('input');
+        check.type = single ? 'radio' : 'checkbox';
+        check.name = 'download-library-choice';
+        check.disabled = existing.some(current => current.id === entry.id);
+        const name = element('span', entry.label);
+        name.append(element('small', check.disabled ? (single ? `Current ${kind}` : 'Already added') : entry.id.split('.').pop().toUpperCase() + ' · ' + sizeLabel(entry.size)));
+        label.append(check, name);
+        row.append(label);
+        list.append(row);
+        check.addEventListener('change', () => {
+          if (single) selected.clear();
+          if (check.checked && selected.size >= room) { check.checked = false; feedback.textContent = `This component can hold ${maxFiles} files. Deselect a file to choose another.`; return; }
+          if (check.checked) selected.set(entry.id, {...entry}); else selected.delete(entry.id);
+          confirm.disabled = !selected.size;
+          confirm.textContent = single ? singleAction : selected.size ? `Add ${selected.size} ${selected.size === 1 ? 'file' : 'files'}` : 'Add files';
+          feedback.textContent = selectionSummary();
+        });
+      }
+      filterChoices();
+    } catch (error) {
+      if (error.name !== 'AbortError' && dialog.open) {
+        showUploadFailure(feedback, error, () => {
+          search.focus({preventScroll: true});
+          load();
+        }, 'Your edits are unchanged.', 'Retry loading files');
+      }
     }
-  } catch (error) {
-    if (error.name !== 'AbortError' && dialog.isConnected) showUploadFailure(feedback, error, () => { dialog.close(); openFileLibrary(existing, add, status, form, {maxFiles, extension}); }, 'Your edits are unchanged.');
   }
 }
 

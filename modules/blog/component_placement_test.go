@@ -191,7 +191,7 @@ func TestRepeatedComponents(t *testing.T) {
 		strings.Index(string(output), "Middle.") >= strings.Index(string(output), "Second chart") {
 		t.Fatalf("rendered components at the wrong locations: %s, %v", output, err)
 	}
-	extras := (editorPage{Post: Post{Markdown: source}}).ExtraComponents()
+	extras := newComponentEditorForm(source, nil).ExtraComponents()
 	if extras[extra] != input[extra] || len(extras) != 1 {
 		t.Fatalf("editor lost instance data: %+v", extras)
 	}

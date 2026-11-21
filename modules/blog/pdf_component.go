@@ -6,7 +6,7 @@ type pdfContent []postDownload
 
 func pdfDefinition() componentDefinition {
 	return componentDefinition{
-		Kind: "pdf-preview", Field: "pdf", Payload: "files", Name: "PDF preview", Summary: "A document readers can view in the post",
+		Kind: "pdf-preview", Field: "pdf", Payload: "files", Name: "PDF preview", Summary: "Show a PDF inline",
 		EmptyMessage: "Choose a PDF or remove the PDF preview.",
 		TemplateFile: "templates/components/downloads.html", Template: "blog.fileEditor", Icon: "blog.pdfIcon", Script: "downloads-editor.js",
 		Parse: func(source string) (componentContent, error) {
@@ -20,7 +20,7 @@ func pdfDefinition() componentDefinition {
 		EditorData: func(source string, _ bool) any {
 			return fileEditor{Source: source,
 				Kind: "pdf-preview", Field: "pdf", Name: "PDF preview", Accept: ".pdf", MaxFiles: 1,
-				Help:   "Readers can view the PDF directly in the post.",
+				Help:   "Readers can view the PDF without leaving the page.",
 				Limits: "One PDF, up to 32 MiB. Shares the site's 1 GiB file storage.",
 			}
 		},

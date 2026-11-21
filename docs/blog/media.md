@@ -12,7 +12,7 @@ The server processes one image upload at a time. Editors queue uploads and block
 
 ## Add an album
 
-Choose **Add component → Photo album**, then **Upload** or **Library**. Removing a photo or album offers Undo without deleting uploaded bytes. Save the post to apply changes. Albums hold at most 50 photos with captions of 500 characters each. See [shared component behavior](components.md).
+Choose **Add component → Photo album**, then **Upload** or **Library**. Removing a photo or album offers Undo and keeps the upload. Save the post or page to apply changes. Albums hold up to 50 photos, with captions up to 500 characters. See [shared component behavior](components.md).
 
 Select a photo to preview its unsaved caption and position. Press Enter or click outside a caption to finish editing. Pasted line breaks become spaces. Undo retains up to 50 removed photos during the editor session. Adding a removed photo again clears that undo entry. At capacity, Upload, Library, and Undo stay disabled until space is available.
 

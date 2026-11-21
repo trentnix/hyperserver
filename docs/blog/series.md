@@ -1,6 +1,6 @@
 # Series
 
-A series is a shared, ordered collection of posts. It is separate from Markdown components. Each post can belong to one series. Related posts remain independent links stored in a source post's Markdown.
+A series is a shared, ordered collection of posts. It is separate from Markdown components. Each post can belong to one series. Related posts are independent links stored with the post or page where you add them.
 
 Open **Series** above the post’s publication and save controls. If the post has no series, choose **Create a series** to enter a name or **Find a series** to search existing series. Leaving the section untouched keeps the post unassigned. The post’s save action applies post and series changes together. A new post can create or join a series with its first save.
 

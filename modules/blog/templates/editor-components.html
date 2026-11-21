@@ -10,11 +10,6 @@
   <small id="tags-help" class="form-hint">Search keywords, separated by commas. Up to 20 tags, 50 characters each.</small>
 {{ end }}
 
-{{ define "blog.markdownFields" }}
-  <textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help" required>{{ .BodyMarkdown }}</textarea>
-  {{ template "blog.markdownHelp" . }}
-{{ end }}
-
 {{ define "blog.slugHelp" }}
   <small id="slug-help" class="form-hint">Leave blank to generate from the title, adding a number if needed. Custom slugs use lowercase letters, digits, and hyphens.{{ if .PublishedSlug }} Changing or clearing this slug can break existing links.{{ end }}</small>
 {{ end }}
@@ -54,13 +49,20 @@
           <div class="preview-image-actions"><button type="button" class="button-secondary" data-image-upload aria-describedby="{{ .InputID }}-help">Upload image</button>{{ if not .NoLibrary }}<button type="button" class="button-secondary" data-media-browse>Browse library</button>{{ end }}</div>
           <input id="{{ .InputID }}" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" hidden>
         </div>
+        <p id="{{ .InputID }}-help" class="preview-image-help form-hint">PNG, JPEG, or GIF images up to 8 MiB and 20 million pixels stay private unless used in public content.</p>
         <p class="form-hint">{{ .Help }}</p>
         <p data-image-status role="status"></p>
       </div>
     </div>
-    <p id="{{ .InputID }}-help" class="preview-image-help form-hint">PNG, JPEG, or GIF images up to 8 MiB and 20 million pixels stay private unless used in public content.</p>
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
   </fieldset>
 {{ end }}
 
-{{ define "blog.saveContent" }}<button type="submit" data-publication-save data-draft-label="{{ .SaveActions.Draft }}" data-publish-label="{{ .SaveActions.Publish }}" data-schedule-label="{{ .SaveActions.Schedule }}">{{ .SaveActions.Label .Publication }}</button>{{ end }}
+{{ define "blog.editorActions" }}
+  <div class="form-actions">
+    <button type="submit" data-publication-save data-draft-label="{{ .SaveActions.Draft }}" data-publish-label="{{ .SaveActions.Publish }}" data-schedule-label="{{ .SaveActions.Schedule }}">{{ .SaveActions.Label .Publication }}</button>
+    <a class="button-secondary" href="{{ if .HistoryURL }}{{ .HistoryURL }}{{ else }}{{ .ReturnURL }}{{ end }}" {{ if .HistoryURL }}hx-boost="false"{{ else }}hx-boost="true" hx-target="#article-content" hx-swap="innerHTML show:top showTarget:window"{{ end }}>Cancel</a>
+  </div>
+  <p class="component-placement-status" data-component-save-status role="status"></p>
+  <p class="draft-status" data-draft-status role="status" hidden>No unsaved changes.</p>
+{{ end }}

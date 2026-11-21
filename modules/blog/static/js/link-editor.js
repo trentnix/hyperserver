@@ -88,7 +88,7 @@ function initialize(root) {
           link.imageID = path.split('/').pop();
           link.hideImage = false;
           serialize(); render();
-          setMediaStatus(status, 'Image added. Save the post to apply changes.');
+          setMediaStatus(status, 'Image added. Save to apply changes.');
         } catch (error) { if (section.isConnected) showUploadFailure(status, error, () => uploadButton.click()); }
       });
     });
@@ -178,7 +178,7 @@ function initialize(root) {
           if (source.value !== before) { setMediaStatus(status, 'Your details changed while the preview loaded. Fetch again to replace them.'); return; }
           link = result.link;
           serialize(); read();
-          setMediaStatus(status, result.warning || 'Preview ready. Edit the details or save the post.');
+          setMediaStatus(status, result.warning || 'Preview ready. Edit the details or save.');
         } catch (error) {
           if (section.isConnected && !active.signal.aborted) {
             showUploadFailure(status, error, fetchPreview);

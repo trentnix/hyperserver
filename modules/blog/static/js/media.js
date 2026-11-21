@@ -340,7 +340,7 @@ export function setMediaStatus(status, message, failed = false) {
 
 // Authentication happens in another tab so neither unsaved fields nor the
 // selected File leave this page. Retrying is always an explicit user action.
-export function showUploadFailure(status, error, retry, preserved = 'Your edits are unchanged.') {
+export function showUploadFailure(status, error, retry, preserved = 'Your edits are unchanged.', retryLabel = 'Retry upload') {
   setMediaStatus(status, error.message + ' ' + preserved, true);
   const verify = error.code === 'verification_required';
   if (error.code !== 'authentication_required' && !verify) return;
@@ -357,7 +357,7 @@ export function showUploadFailure(status, error, retry, preserved = 'Your edits 
   button.type = 'button';
   button.className = 'button-secondary';
   button.dataset.uploadRetry = '';
-  button.textContent = 'Retry upload';
+  button.textContent = retryLabel;
   button.addEventListener('click', retry);
   actions.append(link, button);
   status.append(actions);

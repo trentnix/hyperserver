@@ -184,11 +184,21 @@ document.removeEventListener = function(type, callback, options) {
       } else {
         assert(getComputedStyle(sidebar).position === 'sticky', 'Desktop sidebar must stay visible while reading.');
         const sidebarBounds = sidebar.getBoundingClientRect();
+        const referenceWidth = Math.max(1680, innerHeight * 21 / 9);
+        const inset = Math.max(0, Math.min((innerWidth - innerHeight * 3) * 1.1, (innerWidth - referenceWidth) / 2));
+        const headerBounds = header.getBoundingClientRect();
+        const layout = getComputedStyle(document.querySelector('.site-layout'));
+        assert(Math.abs(parseFloat(layout.paddingLeft) - inset) < 1 && Math.abs(parseFloat(layout.paddingRight) - inset) < 1,
+          'The layout must ease in equal side buffers between 3:1 and 32:9.');
         assert(sidebar.contains(archiveNav), 'Desktop archive must remain inside the sidebar.');
         assert(Math.abs(sidebarBounds.left) < 1 && Math.abs(sidebarBounds.right - article.left) < 1, 'Sidebar must fill the entire left section.');
-        assert(Math.abs(header.getBoundingClientRect().width - sidebar.clientWidth) < 1, 'Header must use the available sidebar width.');
-        assert(header.getBoundingClientRect().right - bio.right >= 59, 'Ultrawide profile text needs a 60px right gutter separating it from the main content.');
-        assert(Math.abs(archive.width - sidebar.clientWidth) < 1, 'Navigation must use the available sidebar width.');
+        assert(Math.abs(headerBounds.left - inset) < 1 && Math.abs(headerBounds.right - sidebarBounds.left - sidebar.clientWidth) < 1,
+          'The header must keep its full width on 21:9 displays and move inward with the side buffer.');
+        assert(headerBounds.right - bio.right >= 59, 'Ultrawide profile text needs a 60px right gutter separating it from the main content.');
+        assert(Math.abs(archive.left - headerBounds.left) < 1 && Math.abs(archive.right - headerBounds.right) < 1,
+          'Recent Posts must move with the header.');
+        if (inset > 1) assert(document.elementFromPoint(1, 1) === sidebar && getComputedStyle(sidebar).backgroundColor === 'rgb(243, 244, 248)',
+          'The sidebar background must continue to the left edge.');
       }
       if (new URLSearchParams(location.search).has('test-layout')) {
         // Exercise natural sizes, linked images, and text sharing an image paragraph.

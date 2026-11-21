@@ -407,7 +407,7 @@ func TestPostAndSeriesSaveAtomic(t *testing.T) {
 				}
 				update.Posts = append(update.Posts, other.ID)
 			}
-			_, err = h.blog.writePostWithSeries(ctx, post, update)
+			_, err = h.blog.writePostWithSeries(ctx, post, update, 0)
 			stored, readErr := h.blog.posts.GetByID(t.Context(), first.ID, true)
 			series, seriesErr := h.blog.series.GetSeries(t.Context(), value.ID)
 			history, historyErr := h.blog.history.ListRevisions(t.Context(), "post", first.ID)
@@ -428,7 +428,7 @@ func TestPostAndSeriesSaveAtomic(t *testing.T) {
 func TestNewPostAndSeriesSave(t *testing.T) {
 	h := registeredBrowserHarness(t)
 	ctx := adminWritingContext(t.Context())
-	post, err := h.blog.writePostWithSeries(ctx, Post{Title: "New member", Markdown: "Body"}, &seriesUpdate{Series: Series{Title: "New series"}, Posts: []string{}})
+	post, err := h.blog.writePostWithSeries(ctx, Post{Title: "New member", Markdown: "Body"}, &seriesUpdate{Series: Series{Title: "New series"}, Posts: []string{}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +436,7 @@ func TestNewPostAndSeriesSave(t *testing.T) {
 	if err != nil || value == nil || len(value.Posts) != 1 || value.Posts[0].ID != post.ID {
 		t.Fatal("a new post was not included in its new series", err)
 	}
-	next, err := h.blog.writePostWithSeries(ctx, Post{Title: "Joined member", Markdown: "Body"}, &seriesUpdate{Series: *value, Posts: []string{post.ID}})
+	next, err := h.blog.writePostWithSeries(ctx, Post{Title: "Joined member", Markdown: "Body"}, &seriesUpdate{Series: *value, Posts: []string{post.ID}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,13 +446,13 @@ func TestNewPostAndSeriesSave(t *testing.T) {
 	}
 	changed := *value
 	changed.Title = "Renamed series"
-	saved, err := h.blog.writePostWithSeries(ctx, next, &seriesUpdate{Series: changed, Posts: []string{post.ID, next.ID}})
+	saved, err := h.blog.writePostWithSeries(ctx, next, &seriesUpdate{Series: changed, Posts: []string{post.ID, next.ID}}, 0)
 	if err != nil || saved.Version != next.Version {
 		t.Fatal("series-only edits changed the post version", err)
 	}
 	stale := *value
 	stale.Title = "A rejected series"
-	if _, err := h.blog.writePostWithSeries(ctx, Post{Title: "Rejected member", Markdown: "Body"}, &seriesUpdate{Series: stale, Posts: []string{post.ID, next.ID}}); !errors.Is(err, errEditConflict) {
+	if _, err := h.blog.writePostWithSeries(ctx, Post{Title: "Rejected member", Markdown: "Body"}, &seriesUpdate{Series: stale, Posts: []string{post.ID, next.ID}}, 0); !errors.Is(err, errEditConflict) {
 		t.Fatal("a stale series allowed creating a post", err)
 	}
 	if _, err := h.blog.posts.GetBySlug(t.Context(), "rejected-member", true); !errors.Is(err, errNotFound) {

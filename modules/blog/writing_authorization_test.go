@@ -102,7 +102,7 @@ func TestWritingAuthorization(t *testing.T) {
 				}
 			}
 			t.Run("new page", func(t *testing.T) {
-				_, err := h.blog.writePage(ctx, Page{Title: "New page", Slug: "new-page", ChildrenDisplay: "hidden"})
+				_, err := h.blog.writePage(ctx, Page{Title: "New page", Slug: "new-page", ChildrenDisplay: "hidden"}, 0)
 				check(t, err, actor.admin)
 				if !actor.admin {
 					if _, err := h.blog.pageStore.GetPageBySlug(t.Context(), "new-page", true); !errors.Is(err, errNotFound) {
@@ -136,7 +136,7 @@ func TestWritingAuthorization(t *testing.T) {
 						} else {
 							edited.Markdown = "Edited"
 						}
-						_, err = h.blog.writePage(ctx, edited)
+						_, err = h.blog.writePage(ctx, edited, 0)
 					}
 					check(t, err, actor.admin)
 					stored, err := h.blog.pageStore.GetPageByID(t.Context(), p.ID, true)
@@ -200,7 +200,7 @@ func TestWritingAuthorizationFailure(t *testing.T) {
 		call func() error
 	}{
 		{"post", func() error { _, err := m.writePost(ctx, Post{}); return err }},
-		{"page", func() error { _, err := m.writePage(ctx, Page{}); return err }},
+		{"page", func() error { _, err := m.writePage(ctx, Page{}, 0); return err }},
 		{"profile", func() error { return m.writeProfile(ctx, Profile{}) }},
 	} {
 		t.Run(operation.name, func(t *testing.T) {

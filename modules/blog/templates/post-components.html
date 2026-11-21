@@ -1,5 +1,36 @@
+{{ define "blog.contentEditor" }}
+  <label id="markdown-label" for="post-content">Content</label>
+  <details class="component-picker" data-component-picker hidden>
+    <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add component</summary>
+    <div class="component-picker-options">
+      {{ range .ComponentChoices }}<button type="button" class="no-disable" data-component-add="{{ .Kind }}">{{ renderPartial .Icon . }}<span><strong>{{ .Name }}</strong><small>{{ .Summary }}</small></span></button>{{ end }}
+    </div>
+  </details>
+  <p class="component-placement-status" role="status" data-component-placement-status></p>
+  <textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help"{{ if and .RequireBody (not .HasComponents) }} required{{ end }}>{{ .BodyMarkdown }}</textarea>
+  {{ template "blog.markdownHelp" . }}
+  <p class="form-hint" data-component-fallback hidden>The full editor didn’t load. You can edit existing component settings. Reload to add, move, or remove components.</p>
+  <div class="post-components" data-post-components{{ if .RequireBody }} data-content-required{{ end }}>
+  <input type="hidden" name="componentOrder" value="{{ .ComponentOrderJSON }}">
+  {{ range $id, $source := .ExtraComponents }}<textarea name="{{ $id }}" data-component-instance hidden>{{ $source }}</textarea>{{ end }}
+  <template data-component-dialog-template>
+    <dialog class="component-dialog">
+      <div class="component-dialog-body"></div>
+      <footer><button type="button" class="button-secondary" data-component-cancel>Cancel</button><button type="button" data-component-done>Done</button></footer>
+    </dialog>
+  </template>
+  <div hidden>
+    {{ range .ComponentEditors }}{{ renderPartial .Template .Data }}{{ end }}
+  </div>
+  <div data-component-removal-status role="status"></div>
+  <template data-component-removal-template>
+    <div class="album-removal-recovery component-removal-notice"><span><span data-removed-component></span> removed.</span><button type="button" class="text-button" data-component-undo>Undo</button></div>
+  </template>
+  </div>
+{{ end }}
+
 {{ define "blog.componentStatus" }}
-<span class="component-unsaved" data-component-unsaved title="Save the post to apply these changes." hidden>Unsaved changes</span>
+<span class="component-unsaved" data-component-unsaved title="Save to apply these changes." hidden>Unsaved changes</span>
 {{ end }}
 
 {{ define "blog.uploadIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 16v4h16v-4"/></svg>{{ end }}

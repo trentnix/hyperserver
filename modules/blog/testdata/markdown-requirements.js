@@ -60,6 +60,13 @@
     if (enhanced) {
       editor.destroy();
       assert(!body.required && !getMarkdownEditor(body), 'Destroy must restore the latest component-dependent requirement.');
+      const fallback = form.querySelector('[data-component-fallback]');
+      await wait(() => !fallback.hidden);
+      assert(body.value.includes('<!-- hyperserver:component file-downloads -->') &&
+        section.querySelector('[data-component-remove]').hidden, 'Teardown must preserve inline components and hide unsafe removal.');
+      body.value = '';
+      body.dispatchEvent(new Event('input', {bubbles: true}));
+      await wait(() => fallback.hidden && !section.querySelector('[data-component-remove]').hidden);
       await removeTestComponent(section.querySelector('[data-component-remove]'));
       assert(body.required, 'Removing the last component after teardown must restore native validation.');
     } else {

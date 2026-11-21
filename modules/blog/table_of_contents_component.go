@@ -22,7 +22,7 @@ type postTableOfContents struct {
 func tableOfContentsDefinition() componentDefinition {
 	return componentDefinition{
 		Kind: "table-of-contents", Field: "tableOfContents", Payload: "tableOfContents",
-		Name: "Table of Contents", Summary: "Jump links from post headings", EmptyMessage: "Add the table of contents again or remove it.",
+		Name: "Table of Contents", Summary: "Jump links to headings", EmptyMessage: "Add the table of contents again or remove it.",
 		TemplateFile: "templates/components/table-of-contents.html", Template: "blog.tableOfContentsEditor",
 		Icon: "blog.tableOfContentsIcon", Script: "table-of-contents-editor.js",
 		Parse:             parseTableOfContents,

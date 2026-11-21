@@ -50,7 +50,7 @@ Historical images do not become public merely because history references them. I
 
 ## Unsaved writing
 
-Post components show **Unsaved changes** beside their heading when their content or position differs from the saved post. Adding a component also shows the indicator. Saving the post or restoring the saved values clears it. Fetched details and restored browser copies remain unsaved until you save the post.
+Components show **Unsaved changes** when their settings or position differ from the saved post or page. Saving or returning a component to its saved values clears the indicator.
 
 With JavaScript enabled, post and page editors save browser recovery copies after a half-second pause and when leaving. Reopen the editor to restore a copy. **Discard copies** clears the available copies of an existing post or page from this browser. A successful save clears copies that existed when it started and stayed unchanged. Saving a new item clears the copies used to create it.
 

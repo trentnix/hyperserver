@@ -36,10 +36,10 @@ func validationFields(err error) []string {
 
 // writePost authorizes the actor before validating and saving writing.
 func (m *module) writePost(ctx context.Context, p Post) (Post, error) {
-	return m.writePostWithSeries(ctx, p, nil)
+	return m.writePostWithSeries(ctx, p, nil, 0)
 }
 
-func (m *module) writePostWithSeries(ctx context.Context, p Post, update *seriesUpdate) (Post, error) {
+func (m *module) writePostWithSeries(ctx context.Context, p Post, update *seriesUpdate, revisionID int64) (Post, error) {
 	p, err := m.authorizePostWrite(ctx, p)
 	if err != nil {
 		return p, err
@@ -48,7 +48,7 @@ func (m *module) writePostWithSeries(ctx context.Context, p Post, update *series
 	if err != nil {
 		return p, err
 	}
-	return m.persistPostWithSeries(ctx, p, update)
+	return m.persistPostWithSeries(ctx, p, update, revisionID)
 }
 
 func (m *module) authorizePostWrite(ctx context.Context, p Post) (Post, error) {
@@ -78,10 +78,10 @@ func (m *module) authorizePostWrite(ctx context.Context, p Post) (Post, error) {
 // persistPost validates and saves authorized writing or trusted test fixtures.
 // The repository saves content, references, and history atomically.
 func (m *module) persistPost(ctx context.Context, p Post) (Post, error) {
-	return m.persistPostWithSeries(ctx, p, nil)
+	return m.persistPostWithSeries(ctx, p, nil, 0)
 }
 
-func (m *module) persistPostWithSeries(ctx context.Context, p Post, update *seriesUpdate) (Post, error) {
+func (m *module) persistPostWithSeries(ctx context.Context, p Post, update *seriesUpdate, revisionID int64) (Post, error) {
 	var err error
 	p.Tags, err = normalizeTags(p.Tags)
 	if err != nil {
@@ -97,7 +97,7 @@ func (m *module) persistPostWithSeries(ctx context.Context, p Post, update *seri
 	if p.ID != "" && p.Version < 1 {
 		return p, errEditConflict
 	}
-	if err := m.validatePostReferences(ctx, p); err != nil {
+	if err := m.validatePostReferences(ctx, p.Markdown, "post", p.ID, revisionID); err != nil {
 		return p, err
 	}
 	m.mediaMu.RLock()
@@ -127,15 +127,19 @@ func (m *module) persistPostWithSeries(ctx context.Context, p Post, update *seri
 
 // writePage validates writing and protects its media from concurrent cleanup.
 // The repository enforces page-tree constraints within the save transaction.
-func (m *module) writePage(ctx context.Context, p Page) (Page, error) {
+func (m *module) writePage(ctx context.Context, p Page, revisionID int64) (Page, error) {
 	if err := m.authorizeAdminWrite(ctx); err != nil {
 		return p, err
 	}
-	return m.persistPage(ctx, p)
+	return m.persistPageRevision(ctx, p, revisionID)
 }
 
 // persistPage validates and saves authorized writing or trusted test fixtures.
 func (m *module) persistPage(ctx context.Context, p Page) (Page, error) {
+	return m.persistPageRevision(ctx, p, 0)
+}
+
+func (m *module) persistPageRevision(ctx context.Context, p Page, revisionID int64) (Page, error) {
 	var err error
 	p.Tags, err = normalizeTags(p.Tags)
 	if err != nil {
@@ -150,6 +154,9 @@ func (m *module) persistPage(ctx context.Context, p Page) (Page, error) {
 	}
 	if p.ID != "" && p.Version < 1 {
 		return p, errEditConflict
+	}
+	if err := m.validatePostReferences(ctx, p.Markdown, "page", p.ID, revisionID); err != nil {
+		return p, err
 	}
 	m.mediaMu.RLock()
 	defer m.mediaMu.RUnlock()

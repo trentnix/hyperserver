@@ -176,13 +176,11 @@
       } else {
         assert(frame.getBoundingClientRect().width === 160, 'Desktop editor preview should remain a compact thumbnail.');
       }
-      const defaultHint = preview.querySelector('.preview-image-controls .form-hint').textContent;
+      const defaultHint = preview.querySelector('.preview-image-controls .form-hint:not(.preview-image-help)').textContent;
       assert(stage === 'post' ? defaultHint === 'By default, the preview uses the first suitable image in the post, or the site portrait if none is available.' : defaultHint.startsWith('Use default image '), 'Default-image guidance must describe the correct fallback for the content type.');
       const help = preview.querySelector('.preview-image-help');
       assert(!help.closest('details') && help.getBoundingClientRect().height > 0, 'Image requirements and privacy must be visible without expanding a disclosure.');
       assert(help.tagName === 'P' && help.textContent === 'PNG, JPEG, or GIF images up to 8 MiB and 20 million pixels stay private unless used in public content.', 'Visible help must combine limits and privacy in one sentence.');
-      const helpStyle = getComputedStyle(help);
-      assert(helpStyle.marginTop === helpStyle.paddingTop && parseInt(helpStyle.marginTop) >= 16, 'Divider spacing must be balanced above and below.');
       const upload = preview.querySelector('input[type=file]');
       const uploadButton = preview.querySelector('[data-image-upload]');
       assert(uploadButton.textContent === 'Upload image' && uploadButton.getAttribute('aria-describedby') === help.id, 'Upload button must name its action and describe requirements.');
@@ -190,6 +188,8 @@
       assert(getComputedStyle(upload).display === 'none', 'Native file control must not consume editor space.');
       const uploadBounds = uploadButton.getBoundingClientRect();
       const browseBounds = browse.getBoundingClientRect();
+      const helpBounds = help.getBoundingClientRect();
+      assert(help.closest('.preview-image-controls') && Math.abs(helpBounds.left - uploadBounds.left) < 1 && helpBounds.top - uploadBounds.bottom < 16 && helpBounds.top >= uploadBounds.bottom, 'Image requirements must sit directly below the upload controls.');
       assert(Math.abs(uploadBounds.width - browseBounds.width) < 1 && uploadBounds.height === browseBounds.height && uploadBounds.top === browseBounds.top, 'Upload and Browse must be equal-sized buttons on the same row.');
       const uploadStyle = getComputedStyle(uploadButton);
       for (const button of [uploadButton, browse]) {

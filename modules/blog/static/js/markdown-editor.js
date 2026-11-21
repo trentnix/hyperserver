@@ -109,6 +109,7 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
       textarea.required = required;
       if (label) label.htmlFor = labelFor;
       editors.delete(textarea);
+      textarea.dispatchEvent(new Event('blog:markdown-editor', {bubbles: true}));
     }
   };
   editors.set(textarea, api);

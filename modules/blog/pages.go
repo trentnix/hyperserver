@@ -2,6 +2,7 @@ package blog
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
@@ -24,6 +25,8 @@ type pageContent struct {
 	HTML             template.HTML
 	Error            string
 	ErrorFields      string
+	ComponentInputs  componentInput
+	TimeZone         string
 	Parent           *Page
 	Children         []Page
 	Parents          []Page
@@ -33,6 +36,10 @@ type pageContent struct {
 	SaveActions      publicationActions
 	EditURL          string
 	ReturnURL        string
+}
+
+func (p pageContent) ContentEditor() componentEditorForm {
+	return newComponentEditorForm(p.Markdown, p.ComponentInputs)
 }
 
 // Publication supplies the page editor's selected radio value.
@@ -245,7 +252,15 @@ func (m *module) savePage(w http.ResponseWriter, r *http.Request) {
 		m.renderPageEditor(w, r, p, message, http.StatusUnprocessableEntity, field)
 		return
 	}
-	saved, err := m.writePage(r.Context(), p)
+	if input := componentForm(r.PostForm); len(input) > 0 {
+		var err error
+		p.Markdown, err = joinPostComponents(p.Markdown, input)
+		if err != nil {
+			m.renderPageEditor(w, r, p, err.Error(), http.StatusUnprocessableEntity, validationFields(err)...)
+			return
+		}
+	}
+	saved, err := m.writePage(r.Context(), p, editorRevision(r, "page", p.ID).RevisionID)
 	if errors.Is(err, errAccessDenied) {
 		m.app.ContentManager.HandleError(w, r, err.Error(), nil, http.StatusForbidden)
 		return
@@ -304,18 +319,23 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 		// Keep invalid input available for correction, not just parsed numbers.
 		data.DisplayOrderText = r.PostForm.Get("displayOrder")
 		data.Slug = strings.TrimSpace(r.PostForm.Get("slug"))
+		data.ComponentInputs = componentForm(r.PostForm)
 	}
 	page := m.views["pageEditor"].Content(r, data)
 	if page.IsHtmx() && status >= 400 {
 		page = m.views["formError"].Content(r, data)
 	} else {
 		data.TagSuggestions = m.tagSuggestions(r)
+		data.TimeZone = m.siteTimeZone().String()
 		stored := p
 		if r.Method == http.MethodPost && p.ID != "" {
 			var err error
 			stored, err = m.pageStore.GetPageByID(r.Context(), p.ID, true)
 			if err != nil {
 				logger.LogRequestError(r, err)
+			} else {
+				baseline, _ := json.Marshal(newComponentEditorForm(stored.Markdown, nil).baseline())
+				data.CurrentContent = string(baseline)
 			}
 		}
 		if stored.EverPublished {

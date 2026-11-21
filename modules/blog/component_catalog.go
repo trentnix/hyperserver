@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -169,40 +170,39 @@ func (catalog componentCatalog) form(values url.Values) componentInput {
 	return input
 }
 
-func (p editorPage) componentSource(field string) string {
-	if source, ok := p.ComponentInputs[field]; ok {
-		return source
-	}
-	_, components, _ := splitPostComponents(p.Markdown)
-	for _, component := range components.Components {
-		definition, _ := postComponentCatalog.find(component.Type)
-		if definition.Field == field {
-			return component.Content.EditorSource()
-		}
-	}
-	return ""
+type componentEditorForm struct {
+	BodyMarkdown  string
+	RequireBody   bool
+	HasComponents bool
+	noLibrary     bool
+	fields        componentInput
 }
 
-func (p editorPage) componentFields() map[string]string {
-	result := make(map[string]string, len(postComponentCatalog)+1)
-	_, components, _ := splitPostComponents(p.Markdown)
+func newComponentEditorForm(source string, input componentInput) componentEditorForm {
+	body, components, _ := splitPostComponents(source)
+	fields := make(componentInput, len(postComponentCatalog)+1)
 	for _, definition := range postComponentCatalog {
-		result[definition.Field] = ""
+		fields[definition.Field] = ""
 	}
 	for _, component := range components.Components {
-		result[postComponentCatalog.field(component)] = component.Content.EditorSource()
+		fields[postComponentCatalog.field(component)] = component.Content.EditorSource()
 	}
-	for field, source := range p.ComponentInputs {
-		result[field] = source
-	}
-	result["componentOrder"] = p.ComponentOrderJSON()
-	return result
+	fields["componentOrder"] = componentJSON(components.Order())
+	maps.Copy(fields, input)
+	return componentEditorForm{BodyMarkdown: body, HasComponents: len(components.Components) > 0, fields: fields}
 }
 
-func (p editorPage) ExtraComponents() map[string]string {
-	fields := p.componentFields()
+func (p componentEditorForm) baseline() componentInput {
+	fields := maps.Clone(p.fields)
+	fields["content"] = p.BodyMarkdown
+	return fields
+}
+
+func (p componentEditorForm) ComponentOrderJSON() string { return p.fields["componentOrder"] }
+
+func (p componentEditorForm) ExtraComponents() map[string]string {
 	extra := make(map[string]string)
-	for field, value := range fields {
+	for field, value := range p.fields {
 		if strings.Contains(field, ":") {
 			extra[field] = value
 		}
@@ -220,7 +220,7 @@ type componentEditorData struct {
 	NoLibrary bool
 }
 
-func (editorPage) ComponentChoices() []componentDefinition {
+func (componentEditorForm) ComponentChoices() []componentDefinition {
 	choices := make([]componentDefinition, 0, len(postComponentCatalog))
 	for _, definition := range postComponentCatalog {
 		if definition.AliasFor == "" {
@@ -233,15 +233,28 @@ func (editorPage) ComponentChoices() []componentDefinition {
 	return choices
 }
 
-func (p editorPage) ComponentEditors() []componentEditor {
+func (p componentEditorForm) EditorComponents() []string {
+	order, err := parseComponentOrder(p.ComponentOrderJSON())
+	if err != nil {
+		order = nil
+	}
+	order = slices.DeleteFunc(order, func(id string) bool { return strings.Contains(id, ":") })
+	for _, definition := range postComponentCatalog {
+		if !slices.Contains(order, definition.Kind) {
+			order = append(order, definition.Kind)
+		}
+	}
+	return order
+}
+
+func (p componentEditorForm) ComponentEditors() []componentEditor {
 	result := make([]componentEditor, 0, len(postComponentCatalog))
-	sources := p.componentFields()
 	for _, kind := range p.EditorComponents() {
 		definition, _ := postComponentCatalog.find(kind)
-		source := sources[definition.Field]
-		var data any = componentEditorData{Source: source, NoLibrary: p.NoLibrary}
+		source := p.fields[definition.Field]
+		var data any = componentEditorData{Source: source, NoLibrary: p.noLibrary}
 		if definition.EditorData != nil {
-			data = definition.EditorData(source, p.NoLibrary)
+			data = definition.EditorData(source, p.noLibrary)
 		}
 		result = append(result, componentEditor{componentDefinition: definition, Data: data})
 	}

@@ -148,7 +148,7 @@ function initialize(root) {
           serialize(); render();
           const next = list.children[Math.min(index, entries.length - 1)];
           (next?.querySelector('input') || section.querySelector('[data-download-upload]')).focus();
-          setMediaStatus(status, 'File removed. Save the post to apply changes.');
+          setMediaStatus(status, 'File removed. Save to apply changes.');
         });
         actions.append(remove);
         item.append(badge, fields, actions);
@@ -221,7 +221,7 @@ function initialize(root) {
             }
           }
         }
-        if (!failed.length) { setMediaStatus(status, pdfOnly ? 'PDF ready. Save the post to apply changes.' : 'Files added. Save the post to apply changes.'); return; }
+        if (!failed.length) { setMediaStatus(status, pdfOnly ? 'PDF ready. Save to apply changes.' : 'Files added. Save to apply changes.'); return; }
         const retry = () => upload(failed);
         showUploadFailure(status, lastError, retry, pdfOnly ? 'Your edits are preserved.' : 'Files already added and your edits are preserved.');
         status.append(element('p', 'Not added: ' + failed.map(file => file.name).join(', ')));
@@ -248,7 +248,7 @@ function initialize(root) {
       else entries.splice(Math.min(value.index, entries.length), 0, value.entry);
       serialize(); render();
       if (pdfOnly) list.querySelector('input')?.focus();
-      setMediaStatus(status, pdfOnly ? 'PDF restored. Save the post to apply changes.' : 'File restored. Save the post to apply changes.');
+      setMediaStatus(status, pdfOnly ? 'PDF restored. Save to apply changes.' : 'File restored. Save to apply changes.');
     });
     form.addEventListener('blog:uploads-finished', render);
     source.addEventListener('change', read);
