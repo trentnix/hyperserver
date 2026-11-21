@@ -103,8 +103,10 @@
       if (innerWidth >= 1680) {
         const sidebar = document.querySelector('.site-sidebar').getBoundingClientRect();
         const content = document.querySelector('.article-column').getBoundingClientRect();
+        const layout = document.querySelector('.site-layout');
+        const contentRight = layout.getBoundingClientRect().right - parseFloat(getComputedStyle(layout).paddingRight);
         assert(Math.abs(content.left - sidebar.right) < 1, 'Projects must begin beside the sidebar.');
-        assert(Math.abs(content.right - document.documentElement.getBoundingClientRect().right) < 1, 'Projects must use the remaining ultrawide width.');
+        assert(Math.abs(content.right - contentRight) < 1, 'Projects must fill the remaining width inside the ultrawide layout.');
         const page = document.querySelector('.page-blocks').getBoundingClientRect();
         const grid = document.querySelector('.page-grid').getBoundingClientRect();
         assert(Math.abs(grid.width - page.width * .9) < 1, 'Ultrawide cards must use 90% of the available content width.');
