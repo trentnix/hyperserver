@@ -1,0 +1,24 @@
+{{ define "blog.tableOfContentsEditor" }}
+  <section class="table-of-contents-editor" data-post-component="table-of-contents" aria-labelledby="table-of-contents-editor-title">
+    <div class="album-editor-heading">
+      <div class="component-heading"><h2 id="table-of-contents-editor-title" tabindex="-1">Table of Contents</h2>{{ template "blog.componentStatus" }}</div>
+      {{ template "blog.componentActions" "table of contents" }}
+    </div>
+    <label for="post-table-of-contents">Table of Contents (JSON)</label>
+    <textarea id="post-table-of-contents" name="tableOfContents" rows="3">{{ .Source }}</textarea>
+    <fieldset data-component-fields data-toc-levels hidden disabled aria-describedby="toc-levels-help">
+      <legend>Heading levels</legend>
+      <div class="toc-heading-levels">
+        <label><input type="checkbox" value="1"> H1</label>
+        <label><input type="checkbox" value="2"> H2</label>
+        <label><input type="checkbox" value="3"> H3</label>
+        <label><input type="checkbox" value="4"> H4</label>
+        <label><input type="checkbox" value="5"> H5</label>
+        <label><input type="checkbox" value="6"> H6</label>
+      </div>
+      <p id="toc-levels-help" class="form-hint" data-toc-levels-help>The outline appears when at least two headings match.</p>
+    </fieldset>
+  </section>
+{{ end }}
+
+{{ define "blog.tableOfContentsIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg>{{ end }}

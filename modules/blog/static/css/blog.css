@@ -1273,6 +1273,35 @@ html:has(.album-viewer-single[open]) { scrollbar-gutter: auto; }
 .callout-style-picker { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .callout-style-picker > select { width: min(10rem, 100%); min-height: 44px; }
 .callout-style-preview { display: grid; place-items: center; min-width: 60px; margin: 0; padding: 0 10px; }
+.table-of-contents-editor h2 { margin: 0; font-size: 1.2em; }
+.table-of-contents-editor fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.table-of-contents-editor legend { margin-bottom: 6px; padding: 0; font-weight: 600; }
+.table-of-contents-editor .form-hint { margin: 8px 0 0; }
+.toc-heading-levels { display: flex; flex-wrap: wrap; gap: 8px; }
+.toc-heading-levels label { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 0 12px; border: 1px solid #d3dce5; border-radius: 8px; font-weight: 400; cursor: pointer; }
+.toc-heading-levels label:has(input:checked) { border-color: #9db0c4; background: #eff4f8; }
+.toc-heading-levels input { margin: 0; accent-color: #405671; }
+.post-toc { margin-block: 24px; padding: 12px 16px; border-inline-start: 2px solid #d3dce5; font-size: .9em; }
+.post-toc strong { color: #354c6a; }
+.post-toc ul { margin: 6px 0 0; padding-inline-start: 0; list-style: none; }
+.post-toc ul ul { margin-block-start: 2px; padding-inline-start: 16px; }
+.post-toc li + li { margin-block-start: 4px; }
+.post-toc a { color: #354c6a; text-underline-offset: .18em; }
+.post-body :is(h1, h2, h3, h4, h5, h6)[id^="section-"] { scroll-margin-block-start: 24px; }
+@media (min-width: 1680px) and (min-aspect-ratio: 21/9) {
+  .post-body > .post-toc:not(.post-toc ~ .post-toc) {
+    --toc-width: clamp(180px, 15vw, 260px);
+    position: sticky;
+    inset-block-start: 24px;
+    float: inline-end;
+    width: var(--toc-width);
+    max-block-size: calc(100dvh - 48px);
+    margin-block: 0;
+    margin-inline-end: calc(-1 * (var(--toc-width) + var(--content-padding) + 24px));
+    overflow: auto;
+    background: #fff;
+  }
+}
 .event-editor h2 { margin: 0; font-size: 1.2em; }
 .event-editor fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .event-editor > fieldset { margin-top: 12px; }

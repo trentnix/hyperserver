@@ -18,6 +18,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
 | [Expandable details](#expandable-details) | A titled section readers can open inline. |
 | [Callout](#callout) | A highlighted Markdown note. |
+| [Table of Contents](#table-of-contents) | Jump links to the post's headings. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
 | [Video](#video) | A YouTube or Vimeo player. |
 | [Embed](#embed) | An interactive page or widget from an approved site. |
@@ -87,6 +88,10 @@ Titles allow 240 characters and bodies allow 20,000. The body supports Markdown 
 ## Callout
 
 Enter Markdown text and an optional heading. Each callout defaults to Parchment. Choose blue-gray Slate for a neutral note, red-orange Caution for a warning, or green Success for good news. Use the heading or text to convey the message. The full text appears inline and in RSS. Search includes the heading and text.
+
+## Table of Contents
+
+Choose **Add component → Table of Contents**. H2 and H3 are selected by default. Choose the heading levels to include, then select **Done**. The outline nests headings under the nearest included parent and appears when at least two headings in the post body match. On viewports at least 1,680 pixels wide and 21:9 or wider, the first Table of Contents appears in a sticky rail to the right of the article.
 
 ## Link preview
 

@@ -17,6 +17,8 @@ Shared code discovers form fields, preserves rejected input, prepares templates,
 
 A component can supply a `FeedRenderer` for RSS. The feed uses the component's ordinary `Renderer` by default.
 
+A component can supply `TransformDocument` when rendering requires the surrounding Markdown. The transformer runs after the component nodes are placed. Table of Contents uses it to collect headings and assign their link targets.
+
 A component can select a provider internally, as [Social media](social-posts.md) does from its URL. Legacy definitions preserve existing envelopes without adding picker entries.
 
 ## Content contract

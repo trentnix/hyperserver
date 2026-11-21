@@ -36,6 +36,11 @@ func markdownComponents(source string, catalog componentCatalog, overrides ...re
 	if _, supported := catalog.find("photo-album"); supported {
 		transformers = append(transformers, util.Prioritized(albumTransformer{}, 100))
 	}
+	for index, definition := range catalog {
+		if definition.TransformDocument != nil {
+			transformers = append(transformers, util.Prioritized(definition.TransformDocument, 120+index))
+		}
+	}
 	engine := goldmark.New(
 		goldmark.WithParserOptions(parser.WithASTTransformers(transformers...)),
 		goldmark.WithRendererOptions(renderer.WithNodeRenderers(renderers...)),

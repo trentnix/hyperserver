@@ -211,6 +211,7 @@ function createEditor(root) {
       if (addition) {
         section.dataset.componentPending = '';
         render();
+        callbacks.add?.();
       }
       section.classList.add('component-panel-active');
       dialog.setAttribute('aria-labelledby', section.getAttribute('aria-labelledby'));

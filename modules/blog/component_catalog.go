@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 )
 
@@ -23,6 +24,7 @@ type componentDefinition struct {
 	AliasFor                             string // Original stored kinds share the canonical component choice.
 	Renderer                             renderer.NodeRenderer
 	FeedRenderer                         renderer.NodeRenderer
+	TransformDocument                    parser.ASTTransformer
 	EditorData                           func(source string, noLibrary bool) any
 }
 
@@ -59,6 +61,7 @@ var postComponentCatalog = componentCatalog{
 	comparisonDefinition(),
 	detailsDefinition(),
 	calloutDefinition(),
+	tableOfContentsDefinition(),
 	relatedDefinition(),
 }
 
