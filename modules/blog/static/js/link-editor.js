@@ -1,5 +1,5 @@
 import {componentDOMID, initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
-import {openMediaLibrary, uploadImage, runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
+import {openMediaLibrary, uploadImage, runFormUpload, setMediaStatus, showUploadFailure, uploadStorageFull, updateUploadStorage} from './media.js';
 import {markField} from './forms.js';
 
 const initialized = new WeakSet();
@@ -58,7 +58,9 @@ function initialize(root) {
     const fetchButton = button('Fetch preview', () => {
       if (!fields.url.reportValidity()) return;
       if (link.title || link.description || link.siteName || link.imageID) {
-        window.blogConfirm({title: 'Replace preview details?', message: 'Fetching again replaces the title, description, site name, and image. Your post text stays as it is.', action: 'Replace details', cancel: 'Keep editing'}, fetchPreview);
+        const message = uploadStorageFull(form) ? 'Fetching again replaces the title, description, and site name. Your image and post text stay as they are.' :
+          'Fetching again replaces the title, description, site name, and image. Your post text stays as it is.';
+        window.blogConfirm({title: 'Replace preview details?', message, action: 'Replace details', cancel: 'Keep editing'}, fetchPreview);
       } else fetchPreview();
     });
     fetchButton.dataset.linkFetch = '';
@@ -77,13 +79,15 @@ function initialize(root) {
     uploadInput.accept = 'image/png,image/jpeg,image/gif';
     uploadInput.hidden = true;
     const uploadButton = button('Upload image', () => uploadInput.click());
+    uploadButton.dataset.linkUpload = '';
+    uploadButton.disabled = uploadInput.disabled = uploadStorageFull(form);
     uploadInput.addEventListener('change', () => {
       const file = uploadInput.files[0];
       uploadInput.value = '';
-      if (!file) return;
+      if (!file || uploadStorageFull(form)) return;
       runFormUpload(form, async () => {
         try {
-          const path = await uploadImage(file);
+          const path = await uploadImage(file, form);
           if (!section.isConnected) return;
           link.imageID = path.split('/').pop();
           link.hideImage = false;
@@ -169,16 +173,25 @@ function initialize(root) {
       await runFormUpload(form, async () => {
         setMediaStatus(status, 'Fetching preview…');
         try {
-          const response = await fetch('/post/link-preview', {method: 'POST', body: new URLSearchParams({url}), signal: active.signal, redirect: 'error'});
+          const body = new URLSearchParams({url});
+          const metadataOnly = uploadStorageFull(form);
+          if (metadataOnly) body.set('image', 'false');
+          const response = await fetch('/post/link-preview', {method: 'POST', body, signal: active.signal, redirect: 'error'});
+          updateUploadStorage(form, response);
           if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('Unable to fetch this preview. You can enter the details yourself.');
           const result = await response.json();
           if (!response.ok) throw Object.assign(new Error(result.error || 'Unable to fetch this preview.'), {code: result.code});
           if (!validSource(result.link) || new URL(result.link.url).href !== new URL(url).href) throw new Error('Unable to read the preview. You can enter the details yourself.');
           if (!section.isConnected || active.signal.aborted) return;
           if (source.value !== before) { setMediaStatus(status, 'Your details changed while the preview loaded. Fetch again to replace them.'); return; }
+          const keepImage = !result.link.imageID && link.imageID && (metadataOnly || result.warning);
+          if (keepImage) {
+            result.link.imageID = link.imageID;
+            result.link.hideImage = link.hideImage;
+          }
           link = result.link;
           serialize(); read();
-          setMediaStatus(status, result.warning || 'Preview ready. Edit the details or save.');
+          setMediaStatus(status, keepImage && result.warning ? 'Preview details refreshed. Your existing image was kept.' : result.warning || 'Preview ready. Edit the details or save.');
         } catch (error) {
           if (section.isConnected && !active.signal.aborted) {
             showUploadFailure(status, error, fetchPreview);

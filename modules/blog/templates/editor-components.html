@@ -49,6 +49,7 @@
           <div class="preview-image-actions"><button type="button" class="button-secondary" data-image-upload aria-describedby="{{ .InputID }}-help">Upload image</button>{{ if not .NoLibrary }}<button type="button" class="button-secondary" data-media-browse>Browse library</button>{{ end }}</div>
           <input id="{{ .InputID }}" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload a preview image" hidden>
         </div>
+        {{ template "blog.uploadStorageNotice" }}
         <p id="{{ .InputID }}-help" class="preview-image-help form-hint">PNG, JPEG, or GIF images up to 8 MiB and 20 million pixels stay private unless used in public content.</p>
         <p class="form-hint">{{ .Help }}</p>
         <p data-image-status role="status"></p>
@@ -57,6 +58,8 @@
     <noscript><p>Enable JavaScript to upload or remove the preview image.</p></noscript>
   </fieldset>
 {{ end }}
+
+{{ define "blog.uploadStorageNotice" }}<p class="form-error upload-storage-notice">Upload storage is full. Free up space before uploading.</p>{{ end }}
 
 {{ define "blog.editorActions" }}
   <div class="form-actions">

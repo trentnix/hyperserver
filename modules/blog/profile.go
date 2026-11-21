@@ -107,12 +107,13 @@ type profileRepository interface {
 // profileEditorData retains submitted content and any save or validation error.
 type profileEditorData struct {
 	Profile
-	Error          string
-	ErrorFields    string
-	LoadedRevision *ProfileRevision
-	HasHistory     bool
-	InitialProfile bool
-	MissingImages  map[string]bool
+	Error             string
+	ErrorFields       string
+	LoadedRevision    *ProfileRevision
+	HasHistory        bool
+	InitialProfile    bool
+	MissingImages     map[string]bool
+	UploadStorageFull bool
 }
 
 // profileImageField supplies one image picker without repeating its template.
@@ -291,6 +292,7 @@ func (m *module) renderProfileEditor(w http.ResponseWriter, r *http.Request, p P
 			return
 		}
 		data.MissingImages = missing
+		data.UploadStorageFull = m.uploadStorageFull(r)
 		page = view.Content(r, data)
 	}
 	page.Title, page.ResponseStatusCode = "Site Profile", status

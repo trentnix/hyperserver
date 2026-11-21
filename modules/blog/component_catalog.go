@@ -26,7 +26,7 @@ type componentDefinition struct {
 	Renderer                             renderer.NodeRenderer
 	FeedRenderer                         renderer.NodeRenderer
 	TransformDocument                    parser.ASTTransformer
-	EditorData                           func(source string, noLibrary bool) any
+	EditorData                           func(componentEditorData) any
 }
 
 type componentContent interface {
@@ -171,11 +171,12 @@ func (catalog componentCatalog) form(values url.Values) componentInput {
 }
 
 type componentEditorForm struct {
-	BodyMarkdown  string
-	RequireBody   bool
-	HasComponents bool
-	noLibrary     bool
-	fields        componentInput
+	BodyMarkdown     string
+	RequireBody      bool
+	HasComponents    bool
+	noLibrary        bool
+	fileStorageLimit string
+	fields           componentInput
 }
 
 func newComponentEditorForm(source string, input componentInput) componentEditorForm {
@@ -216,8 +217,8 @@ type componentEditor struct {
 }
 
 type componentEditorData struct {
-	Source    string
-	NoLibrary bool
+	Source, FileStorageLimit string
+	NoLibrary                bool
 }
 
 func (componentEditorForm) ComponentChoices() []componentDefinition {
@@ -251,10 +252,10 @@ func (p componentEditorForm) ComponentEditors() []componentEditor {
 	result := make([]componentEditor, 0, len(postComponentCatalog))
 	for _, kind := range p.EditorComponents() {
 		definition, _ := postComponentCatalog.find(kind)
-		source := p.fields[definition.Field]
-		var data any = componentEditorData{Source: source, NoLibrary: p.noLibrary}
+		fields := componentEditorData{Source: p.fields[definition.Field], FileStorageLimit: p.fileStorageLimit, NoLibrary: p.noLibrary}
+		var data any = fields
 		if definition.EditorData != nil {
-			data = definition.EditorData(source, p.noLibrary)
+			data = definition.EditorData(fields)
 		}
 		result = append(result, componentEditor{componentDefinition: definition, Data: data})
 	}

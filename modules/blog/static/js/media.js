@@ -292,6 +292,16 @@ export function openMediaLibrary(select, {multiple = false, excluded = [], limit
 
 const uploads = new WeakMap();
 
+export const uploadStorageFull = form => form.hasAttribute('data-upload-storage-full');
+
+export function updateUploadStorage(form, response) {
+  if (response.headers.get('Upload-Storage-Full') === 'true') form.setAttribute('data-upload-storage-full', '');
+}
+
+function disableStorageUploads(root) {
+  root.querySelectorAll('[data-upload-storage-full] :is(input[type="file"], .tool-image, [data-image-upload], [data-album-upload], [data-audio-upload], [data-download-upload], [data-link-upload])').forEach(control => { control.disabled = true; });
+}
+
 // Keep Save blocked until every queued upload has finished. One request at a
 // time also respects the server's image-processing limit for this form.
 export function runFormUpload(form, action) {
@@ -311,16 +321,18 @@ export function runFormUpload(form, action) {
     uploads.delete(form);
     delete form.dataset.uploading;
     state.controls.forEach(control => { control.disabled = false; });
+    disableStorageUploads(form);
     form.dispatchEvent(new Event('blog:uploads-finished'));
   });
 }
 
 // The library and profile controls use the same validated upload endpoint as the editor.
-export async function uploadImage(file) {
+export async function uploadImage(file, form) {
   if (file.size > 8 * 1024 * 1024) throw Object.assign(new Error('Choose an image of at most 8 MiB.'), {status: 413});
   const data = new FormData();
   data.append('image', file);
   const response = await fetch('/post/images/upload', {method: 'POST', body: data, redirect: 'error'});
+  updateUploadStorage(form, response);
   if (response.status === 401) {
     throw Object.assign(new Error("You're signed out. Sign in again to upload this image."), {code: 'authentication_required'});
   }
@@ -426,7 +438,7 @@ document.addEventListener('change', event => {
 async function uploadPickerImage(picker, file) {
   const input = picker.querySelector('input[type="file"]');
   const form = input.form;
-  if (!picker.isConnected || form.dataset.uploading) return;
+  if (!picker.isConnected || form.dataset.uploading || uploadStorageFull(form)) return;
   const status = picker.querySelector('[data-image-status]');
   if (file.size > 8 * 1024 * 1024) {
     setMediaStatus(status, 'Choose an image of at most 8 MiB. The current image is unchanged.', true);
@@ -436,7 +448,7 @@ async function uploadPickerImage(picker, file) {
   setMediaStatus(status, 'Uploading image…');
   await runFormUpload(form, async () => {
     try {
-      const path = await uploadImage(file);
+      const path = await uploadImage(file, form);
       if (!picker.isConnected) return;
       picker.querySelector('[data-image-value]').value = path.slice((picker.dataset.imagePrefix || '').length);
       picker.querySelector('[data-image-value]').dispatchEvent(new Event('input', {bubbles: true}));
@@ -460,6 +472,7 @@ document.addEventListener('submit', event => {
 
 function initialize(root) {
   root.querySelectorAll('.image-upload-controls').forEach(controls => { controls.hidden = false; });
+  disableStorageUploads(root);
 }
 document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
 document.addEventListener('blog:component-panel', event => initialize(event.target));

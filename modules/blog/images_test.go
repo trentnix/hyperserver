@@ -10,7 +10,9 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -70,30 +72,7 @@ func testPNG(t *testing.T) []byte {
 func TestMediaUploadForms(t *testing.T) {
 	h := newHarness(t)
 	request := func(data []byte, hx bool) *httptest.ResponseRecorder {
-		var body bytes.Buffer
-		writer := multipart.NewWriter(&body)
-		part, err := writer.CreateFormFile("image", "picture.png")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := part.Write(data); err != nil {
-			t.Fatal(err)
-		}
-		if err := writer.Close(); err != nil {
-			t.Fatal(err)
-		}
-		r := httptest.NewRequest(http.MethodPost, "/media/upload", &body)
-		r.Header.Set("Content-Type", writer.FormDataContentType())
-		if hx {
-			r.Header.Set("HX-Request", "true")
-			r.Header.Set("HX-Target", "div#library-upload-status")
-		}
-		for _, cookie := range h.cookies {
-			r.AddCookie(cookie)
-		}
-		w := httptest.NewRecorder()
-		h.app.Handler.ServeHTTP(w, r)
-		return w
+		return requestImageUpload(t, h, "/media/upload", data, hx)
 	}
 	requireStatus(t, request(testPNG(t), false), http.StatusForbidden)
 	h.register(t)
@@ -116,7 +95,11 @@ func TestMediaUploadForms(t *testing.T) {
 		if !strings.HasPrefix(path, "/media/") || response.Header().Get("Cache-Control") != "no-store" {
 			t.Fatal("upload must navigate to private image details", response.Header())
 		}
-		requireStatus(t, h.request("GET", path, nil, false), http.StatusOK)
+		detail := h.request("GET", path, nil, false)
+		requireStatus(t, detail, http.StatusOK)
+		if !strings.Contains(detail.Body.String(), "Image uploaded. Labels and tags are optional.") {
+			t.Fatal("image details must acknowledge the completed upload")
+		}
 	}
 	h.blog.images = failingImageStore{}
 	failed := request(testPNG(t), true)
@@ -126,11 +109,119 @@ func TestMediaUploadForms(t *testing.T) {
 	}
 }
 
+func requestImageUpload(t *testing.T, h *harness, path string, data []byte, hx bool) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("image", "picture.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, path, &body)
+	r.Header.Set("Content-Type", writer.FormDataContentType())
+	if hx {
+		r.Header.Set("HX-Request", "true")
+		r.Header.Set("HX-Target", "div#library-upload-status")
+	}
+	for _, cookie := range h.cookies {
+		r.AddCookie(cookie)
+	}
+	w := httptest.NewRecorder()
+	h.app.Handler.ServeHTTP(w, r)
+	for _, cookie := range w.Result().Cookies() {
+		h.cookies[cookie.Name] = cookie
+	}
+	return w
+}
+
+func TestSharedUploadQuota(t *testing.T) {
+	h := usersHarness(t)
+	h.blog.settings.FileStorageLimitMiB = 1
+	data := testPNG(t)
+	store := h.blog.downloads.(*fileDownloadStore)
+	file, err := store.root.OpenFile(strings.Repeat("f", 64)+".pdf", os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := h.blog.fileStorageLimit()
+	// The original fits, but its bundle also contains the generated copies.
+	err = file.Truncate(limit - int64(len(data)))
+	if closeErr := file.Close(); err != nil || closeErr != nil {
+		t.Fatal(err, closeErr)
+	}
+	for _, path := range []string{"/media/upload", "/post/images/upload"} {
+		for _, hx := range []bool{false, true} {
+			w := requestImageUpload(t, h, path, data, hx)
+			requireStatus(t, w, http.StatusUnprocessableEntity)
+			if w.Header().Get("Upload-Storage-Full") != "" {
+				t.Fatal("a large image must not report full storage if a smaller upload may fit")
+			}
+			if !strings.Contains(w.Body.String(), "Upload storage has") {
+				t.Fatal("missing quota feedback", w.Body)
+			}
+		}
+	}
+	id := imageUploadID(testImageUpload("image/png", data))
+	metadata, err := h.blog.mediaMetadata.GetMediaMetadata(t.Context(), id)
+	if err != nil || metadata.Version != 0 {
+		t.Fatal("rejected upload reserved metadata", metadata, err)
+	}
+	if _, err := h.blog.images.Open(t.Context(), id); !errors.Is(err, errNotFound) {
+		t.Fatal("rejected upload published an image", err)
+	}
+	if err := store.root.Remove(strings.Repeat("f", 64) + ".pdf"); err != nil {
+		t.Fatal(err)
+	}
+	requireStatus(t, requestImageUpload(t, h, "/post/images/upload", data, false), http.StatusOK)
+	files, err := h.blog.media.List(t.Context())
+	if err != nil || len(files) != 1 || files[0].Size <= int64(len(data)) {
+		t.Fatal("expected a stored image bundle", files, err)
+	}
+	remaining := int(limit - files[0].Size)
+	requireStatus(t, uploadTestDownload(t, h, "oversized.txt", bytes.Repeat([]byte("x"), remaining+1)), http.StatusUnprocessableEntity)
+	requireStatus(t, uploadTestDownload(t, h, "exact-fit.txt", bytes.Repeat([]byte("x"), remaining)), http.StatusOK)
+	requireStatus(t, requestImageUpload(t, h, "/post/images/upload", data, false), http.StatusOK)
+}
+
+func TestConcurrentUploadsShareQuota(t *testing.T) {
+	h := usersHarness(t)
+	h.blog.settings.FileStorageLimitMiB = 1
+	image := testPNG(t)
+	file := bytes.Repeat([]byte("x"), int(h.blog.fileStorageLimit()))
+	var imageResponse, fileResponse *httptest.ResponseRecorder
+	start := make(chan struct{})
+	var uploads sync.WaitGroup
+	uploads.Go(func() {
+		<-start
+		imageResponse = requestImageUpload(t, h, "/post/images/upload", image, false)
+	})
+	uploads.Go(func() {
+		<-start
+		fileResponse = uploadTestDownload(t, h, "full-size.txt", file)
+	})
+	close(start)
+	uploads.Wait()
+	statuses := [2]int{imageResponse.Code, fileResponse.Code}
+	if statuses != [2]int{http.StatusOK, http.StatusUnprocessableEntity} && statuses != [2]int{http.StatusUnprocessableEntity, http.StatusOK} {
+		t.Fatalf("exactly one upload must fit, got statuses %v", statuses)
+	}
+	files, err := h.blog.media.List(t.Context())
+	if err != nil || len(files) != 1 || fileStorageUsed(files) > h.blog.fileStorageLimit() {
+		t.Fatal("concurrent uploads must stay within the shared limit", files, err)
+	}
+}
+
 // TestImageHTTPResponses exercises the public route, including standard file response semantics.
 func TestImageHTTPResponses(t *testing.T) {
 	h := newHarness(t)
 	data := testPNG(t)
-	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", data))
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", data), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +295,7 @@ func TestImageHTTPResponses(t *testing.T) {
 
 type failingImageStore struct{}
 
-func (failingImageStore) Put(context.Context, imageUpload) (string, error) {
+func (failingImageStore) Put(context.Context, imageUpload, func(int64) error) (string, error) {
 	return "", errors.New("private image storage failure")
 }
 
@@ -261,7 +352,7 @@ func TestImageUploadMetadataFailure(t *testing.T) {
 	h.verify(t)
 	h.login(t)
 	data := testPNG(t)
-	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", data))
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", data), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

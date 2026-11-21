@@ -8,6 +8,7 @@
   </details>
   <p class="component-placement-status" role="status" data-component-placement-status></p>
   <textarea id="post-content" name="content" rows="16" aria-describedby="markdown-help"{{ if and .RequireBody (not .HasComponents) }} required{{ end }}>{{ .BodyMarkdown }}</textarea>
+  {{ template "blog.uploadStorageNotice" }}
   {{ template "blog.markdownHelp" . }}
   <p class="form-hint" data-component-fallback hidden>The full editor didn’t load. You can edit existing component settings. Reload to add, move, or remove components.</p>
   <div class="post-components" data-post-components{{ if .RequireBody }} data-content-required{{ end }}>

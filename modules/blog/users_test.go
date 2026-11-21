@@ -177,7 +177,7 @@ func TestInvitationWithoutRequiredVerification(t *testing.T) {
 func TestPosterContentPermissions(t *testing.T) {
 	h := usersHarness(t)
 	adminCookies := h.cookies
-	imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
+	imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

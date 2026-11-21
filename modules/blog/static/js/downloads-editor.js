@@ -1,4 +1,4 @@
-import {runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
+import {runFormUpload, setMediaStatus, showUploadFailure, uploadStorageFull} from './media.js';
 import {markField} from './forms.js';
 import {initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {requestFiles, validEntry, openFileLibrary, sizeLabel} from './file-picker.js';
@@ -28,8 +28,12 @@ function initialize(root) {
     const maxFiles = Number(section.dataset.maxFiles);
     const pdfOnly = section.dataset.postComponent === 'pdf-preview';
     const accepts = entry => validEntry(entry) && (!pdfOnly || entry.id.endsWith('.pdf'));
-    const limitMessage = pdfOnly ? 'Choose one PDF for the preview.' : 'Choose at most 20 files for this component.';
+    const limitMessage = pdfOnly ? 'Choose one PDF for the viewer.' : 'Choose at most 20 files for this component.';
     const form = source.form;
+    const input = section.querySelector('[data-download-files]');
+    input.disabled = uploadStorageFull(form);
+    const uploadButton = section.querySelector('[data-download-upload]');
+    const browseButton = section.querySelector('[data-download-browse]');
     const list = section.querySelector('[data-downloads-list]');
     const status = section.querySelector('[data-downloads-status]');
     const recovery = section.querySelector('[data-downloads-recovery]');
@@ -46,8 +50,8 @@ function initialize(root) {
       const busy = Boolean(form.dataset.uploading);
       const count = section.querySelector('[data-downloads-count]');
       if (count) count.textContent = entries.length ? `${entries.length} ${entries.length === 1 ? 'file' : 'files'}` : '';
-      section.querySelector('[data-download-upload]').disabled = busy || !pdfOnly && entries.length >= maxFiles;
-      section.querySelector('[data-download-browse]').disabled = busy || !pdfOnly && entries.length >= maxFiles;
+      browseButton.disabled = busy || !pdfOnly && entries.length >= maxFiles;
+      uploadButton.disabled = uploadStorageFull(form) || browseButton.disabled;
       if (pdfOnly) {
         pdfRow.hidden = false;
         const metadata = pdfRow.querySelector('[data-pdf-document]');
@@ -147,7 +151,7 @@ function initialize(root) {
           removed.push({entry: entries.splice(index, 1)[0], index});
           serialize(); render();
           const next = list.children[Math.min(index, entries.length - 1)];
-          (next?.querySelector('input') || section.querySelector('[data-download-upload]')).focus();
+          (next?.querySelector('input') || (uploadButton.disabled ? browseButton : uploadButton)).focus();
           setMediaStatus(status, 'File removed. Save to apply changes.');
         });
         actions.append(remove);
@@ -196,20 +200,24 @@ function initialize(root) {
     }
 
     async function upload(files) {
-      if (!section.isConnected || form.dataset.uploading) return;
+      if (!section.isConnected || form.dataset.uploading || uploadStorageFull(form)) return;
       if (files.length + (pdfOnly ? 0 : entries.length) > maxFiles) { setMediaStatus(status, limitMessage, true); return; }
       await runFormUpload(form, async () => {
         const failed = [];
         let lastError;
         for (let index = 0; index < files.length; index++) {
           if (!section.isConnected) return;
+          if (uploadStorageFull(form)) {
+            failed.push(...files.slice(index));
+            break;
+          }
           setMediaStatus(status, `Uploading ${index + 1} of ${files.length}: ${files[index].name}`);
           try {
             if (pdfOnly && !files[index].name.toLowerCase().endsWith('.pdf')) throw new Error('Choose a PDF file.');
             if (files[index].size > 33554432) throw new Error('Choose a file of at most 32 MiB.');
             const data = new FormData();
             data.append('file', files[index]);
-            const entry = await requestFiles('/post/files/upload', {method: 'POST', body: data});
+            const entry = await requestFiles('/post/files/upload', {method: 'POST', body: data}, form);
             if (!section.isConnected) return;
             add([entry]);
           } catch (error) {
@@ -222,6 +230,10 @@ function initialize(root) {
           }
         }
         if (!failed.length) { setMediaStatus(status, pdfOnly ? 'PDF ready. Save to apply changes.' : 'Files added. Save to apply changes.'); return; }
+        if (uploadStorageFull(form)) {
+          setMediaStatus(status, 'Not added: ' + failed.map(file => file.name).join(', '));
+          return;
+        }
         const retry = () => upload(failed);
         showUploadFailure(status, lastError, retry, pdfOnly ? 'Your edits are preserved.' : 'Files already added and your edits are preserved.');
         status.append(element('p', 'Not added: ' + failed.map(file => file.name).join(', ')));
@@ -234,13 +246,13 @@ function initialize(root) {
       });
     }
 
-    section.querySelector('[data-download-upload]').addEventListener('click', () => section.querySelector('[data-download-files]').click());
-    section.querySelector('[data-download-files]').addEventListener('change', event => {
+    uploadButton.addEventListener('click', () => input.click());
+    input.addEventListener('change', event => {
       const files = [...event.target.files];
       event.target.value = '';
       if (files.length) upload(files);
     });
-    section.querySelector('[data-download-browse]').addEventListener('click', () => openFileLibrary(entries, add, status, form, {maxFiles, extension: pdfOnly ? 'pdf' : ''}));
+    browseButton.addEventListener('click', () => openFileLibrary(entries, add, status, form, {maxFiles, extension: pdfOnly ? 'pdf' : ''}));
     section.querySelector('[data-download-undo]').addEventListener('click', () => {
       if (form.dataset.uploading || !removed.length || !pdfOnly && entries.length >= maxFiles) return;
       const value = removed.pop();
@@ -258,7 +270,7 @@ function initialize(root) {
       snapshot: () => ({source: source.value, removed: [...removed]}),
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy.source; read(); removed = copy.removed; render(); },
-      focus: () => (source.hidden ? section.querySelector('[data-download-upload]') : source).focus()
+      focus: () => (source.hidden ? (uploadButton.disabled ? browseButton : uploadButton) : source).focus()
     });
     read();
   });

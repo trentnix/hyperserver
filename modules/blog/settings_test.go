@@ -84,3 +84,44 @@ func TestInvalidSiteTimeZone(t *testing.T) {
 		})
 	}
 }
+
+func TestFileStorageLimitSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name, setting string
+		want          int64
+		invalid       bool
+	}{
+		{name: "omitted", want: 1024},
+		{name: "configured", setting: "fileStorageLimitMiB: 1536\n", want: 1536},
+		{name: "zero", setting: "fileStorageLimitMiB: 0\n", invalid: true},
+		{name: "negative", setting: "fileStorageLimitMiB: -1\n", invalid: true},
+		{name: "fraction", setting: "fileStorageLimitMiB: 1.5\n", invalid: true},
+		{name: "null", setting: "fileStorageLimitMiB: null\n", invalid: true},
+		{name: "overflow in bytes", setting: "fileStorageLimitMiB: 8796093022208\n", invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			descriptor, err := (&Site{}).Configure(assemblyApplication())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := descriptor.New().(*module)
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte("adminEmail: admin@example.com\nrecentPostCount: 10\n"+tc.setting), 0600); err != nil {
+				t.Fatal(err)
+			}
+			_, err = config.LoadModuleFile(path, m.Configuration())
+			if tc.invalid {
+				if err == nil {
+					err = m.Init(t.Context(), nil)
+					if err == nil || !strings.Contains(err.Error(), "blog.fileStorageLimitMiB") {
+						t.Fatalf("expected a file storage limit error, got %v", err)
+					}
+				} else if !strings.Contains(err.Error(), "line 3: module configuration: invalid value") {
+					t.Fatalf("expected a YAML validation error on the quota line, got %v", err)
+				}
+			} else if err != nil || m.settings.FileStorageLimitMiB != tc.want {
+				t.Fatalf("fileStorageLimitMiB=%d, want %d, error=%v", m.settings.FileStorageLimitMiB, tc.want, err)
+			}
+		})
+	}
+}

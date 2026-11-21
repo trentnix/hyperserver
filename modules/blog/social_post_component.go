@@ -89,11 +89,11 @@ func socialPostProvider(raw string) (socialProvider, error) {
 	return provider, err
 }
 
-func (provider socialProvider) editorData(source string, noLibrary bool) any {
+func (provider socialProvider) editorData(data componentEditorData) any {
 	return struct {
 		componentEditorData
 		socialProvider
-	}{componentEditorData{source, noLibrary}, provider}
+	}{data, provider}
 }
 
 type postSocialPost struct {

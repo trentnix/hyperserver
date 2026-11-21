@@ -6,6 +6,7 @@
     <textarea id="post-audio" name="audio" rows="3" aria-describedby="audio-help">{{ .Source }}</textarea>
     <div class="audio-file-row" data-audio-controls hidden>
       <div class="audio-file-actions"><button type="button" data-audio-upload>Upload MP3</button><button type="button" class="button-secondary" data-audio-browse>Library</button></div>
+      {{ template "blog.uploadStorageNotice" }}
       <p class="audio-file-info form-hint"><span data-audio-name></span><span data-audio-size></span></p>
       <input type="file" accept=".mp3,audio/mpeg" data-audio-file hidden>
       <audio controls preload="none" aria-label="Preview audio" hidden></audio>
@@ -17,7 +18,7 @@
       <p class="form-hint" id="audio-transcript-help">Markdown supported. Readers can expand the transcript below the player.</p>
       <label class="file-download-option"><input type="checkbox" data-audio-download checked>Show download link</label>
     </fieldset>
-    <p class="form-hint downloads-limits">One MP3, up to 32 MiB. Shares the site's 1 GiB file storage.</p>
+    <p class="form-hint downloads-limits">One MP3, up to 32 MiB.{{ template "blog.fileStorageLimit" .FileStorageLimit }}</p>
     <div data-audio-status role="status"></div>
     <div class="album-removal-recovery" data-audio-recovery role="status" hidden><span>MP3 replaced.</span><button type="button" class="text-button">Undo</button></div>
   </section>

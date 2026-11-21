@@ -1,4 +1,4 @@
-import {openMediaLibrary, uploadImage, runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
+import {openMediaLibrary, uploadImage, runFormUpload, setMediaStatus, showUploadFailure, uploadStorageFull} from './media.js';
 import {openAlbumOrder} from './album-order.js';
 import {initializeComponentPanels, registerComponent} from './post-components.js';
 
@@ -11,6 +11,9 @@ function initialize(root) {
     if (editors.has(section)) return;
     const source = section.querySelector('textarea[name]');
     const form = source.form;
+    const uploadButton = section.querySelector('[data-album-upload]');
+    const input = section.querySelector('[data-album-files]');
+    const browseButton = section.querySelector('[data-album-browse]');
     const list = section.querySelector('[data-album-list]');
     const status = section.querySelector('[data-album-status]');
     const progress = section.querySelector('[data-album-upload-progress]');
@@ -64,7 +67,9 @@ function initialize(root) {
     function render() {
       section.querySelector('[data-component-remove]').disabled = Boolean(form.dataset.uploading);
       const remaining = 50 - photos.length;
-      for (const control of section.querySelectorAll('[data-album-upload], [data-album-browse], [data-album-files]')) control.disabled = Boolean(form.dataset.uploading) || remaining === 0;
+      const cannotAdd = Boolean(form.dataset.uploading) || remaining === 0;
+      uploadButton.disabled = input.disabled = cannotAdd || uploadStorageFull(form);
+      if (browseButton) browseButton.disabled = cannotAdd;
       const capacity = section.querySelector('[data-album-capacity]');
       capacity.hidden = remaining > 10;
       capacity.textContent = remaining === 0 ? 'Album full (50 photos)' : `${remaining} ${remaining === 1 ? 'space' : 'spaces'} left`;
@@ -166,7 +171,7 @@ function initialize(root) {
     }
 
     async function upload(files) {
-      if (!section.isConnected || form.dataset.uploading) return;
+      if (!section.isConnected || form.dataset.uploading || uploadStorageFull(form)) return;
       if (photos.length + files.length > 50) {
         const remaining = 50 - photos.length;
         setMediaStatus(status, remaining ? `You can add ${remaining} more ${remaining === 1 ? 'photo' : 'photos'}. Choose fewer files.` : 'The album is full. Remove a photo before adding more.', true);
@@ -181,11 +186,15 @@ function initialize(root) {
         await runFormUpload(form, async () => {
           for (let index = 0; index < files.length; index++) {
             if (!section.isConnected) return;
+            if (uploadStorageFull(form)) {
+              interrupted = files.slice(index);
+              break;
+            }
             const file = files[index];
             progress.textContent = `Uploading ${index + 1} of ${files.length}…`;
             progress.title = file.name;
             try {
-              const path = await uploadImage(file);
+              const path = await uploadImage(file, form);
               if (!section.isConnected) return;
               add([path]);
             } catch (error) {
@@ -206,13 +215,17 @@ function initialize(root) {
       }
       if (!section.isConnected) return;
       const added = photos.length - before;
-      if (failed.length === 0) {
+      if (failed.length === 0 && !interrupted?.length) {
         const duplicate = files.length - added;
         setMediaStatus(status, added === 0 ? 'Those photos are already in the album.' : `${added} ${added === 1 ? 'photo added' : 'photos added'}.${duplicate ? ' Other selected photos are already in the album.' : ''} Save to apply changes.`);
         return;
       }
       // Keep successful uploads and retry only failed or unattempted files.
       const remaining = [...failed.map(result => result.file), ...(interrupted || [])];
+      if (uploadStorageFull(form)) {
+        setMediaStatus(status, `${added} added to the album. ${remaining.length} not uploaded.`);
+        return;
+      }
       const retry = () => upload(remaining);
       const error = failed.find(result => ['authentication_required', 'verification_required'].includes(result.error.code))?.error || failed[0].error;
       showUploadFailure(status, {...error, message: `${added} ${added === 1 ? 'photo added' : 'photos added'}. ${remaining.length} not uploaded.`}, retry, 'Photos already added are kept.');
@@ -276,7 +289,7 @@ function initialize(root) {
         }, section.querySelector('[data-album-reorder]'));
         return;
       }
-      if (event.target.closest('[data-album-upload]')) section.querySelector('[data-album-files]').click();
+      if (event.target.closest('[data-album-upload]')) input.click();
       if (event.target.closest('[data-album-browse]')) {
         if (photos.length >= 50) {
           setMediaStatus(status, 'Remove a photo before adding more. Albums hold up to 50 photos.', true);
@@ -325,7 +338,7 @@ function initialize(root) {
       snapshot: () => ({source: source.value, removed: [...removed]}),
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy.source; read(); removed = copy.removed; updateRecovery(); },
-      focus: () => (source.hidden ? section.querySelector('[data-album-upload]:not(:disabled), [data-album-reorder]:not(:disabled)') : source).focus()
+      focus: () => (source.hidden ? section.querySelector('[data-album-upload]:enabled, [data-album-browse]:enabled, [data-album-reorder]:enabled') : source)?.focus()
     });
     editors.set(section, true);
     read();

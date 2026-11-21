@@ -357,12 +357,20 @@ func (m *module) fetchPreview(w http.ResponseWriter, r *http.Request, video bool
 		return
 	}
 	if imageURL != "" && r.PostForm.Get("image") != "false" {
-		ref, err := url.Parse(imageURL)
-		if err == nil {
-			link.ImageID, err = m.importLinkImage(ctx, final.ResolveReference(ref).String(), permission)
-		}
-		if err != nil {
-			warning = "The preview image couldn't be imported. The card can be saved without it."
+		if m.uploadStorageFull(r) {
+			reportFullUploadStorage(w, true)
+			warning = "Upload storage is full. You can save the link preview without an image."
+		} else {
+			ref, err := url.Parse(imageURL)
+			if err == nil {
+				link.ImageID, err = m.importLinkImage(ctx, w, final.ResolveReference(ref).String(), permission)
+			}
+			var quota uploadQuotaError
+			if errors.As(err, &quota) {
+				warning = "The preview image exceeds the available storage. You can save the link preview without it."
+			} else if err != nil {
+				warning = "The preview image couldn't be imported. The card can be saved without it."
+			}
 		}
 	}
 	writeJSON(w, r, http.StatusOK, struct {
@@ -371,7 +379,7 @@ func (m *module) fetchPreview(w http.ResponseWriter, r *http.Request, video bool
 	}{link, warning})
 }
 
-func (m *module) importLinkImage(ctx context.Context, raw string, permission role) (string, error) {
+func (m *module) importLinkImage(ctx context.Context, w http.ResponseWriter, raw string, permission role) (string, error) {
 	select {
 	case m.imageProcessing <- struct{}{}:
 		defer func() { <-m.imageProcessing }()
@@ -383,6 +391,6 @@ func (m *module) importLinkImage(ctx context.Context, raw string, permission rol
 		return "", err
 	}
 	// The processing pipeline checks bytes, decoded dimensions, and image format.
-	id, _, err := m.storeImageData(ctx, data, path.Base(final.Path), permission)
+	id, _, err := m.storeImageData(ctx, w, data, path.Base(final.Path), permission)
 	return id, err
 }

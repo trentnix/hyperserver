@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/services/flash"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
@@ -21,13 +22,17 @@ const mediaPageSize = 24
 
 // SizeLabel formats total stored bytes for the media cards, not the download size.
 func (f mediaFile) SizeLabel() string {
+	return mediaSizeLabel(f.Size)
+}
+
+func mediaSizeLabel(size int64) string {
 	switch {
-	case f.Size >= 1024*1024:
-		return fmt.Sprintf("%.1f MiB", float64(f.Size)/(1024*1024))
-	case f.Size >= 1024:
-		return fmt.Sprintf("%.1f KiB", float64(f.Size)/1024)
+	case size >= 1024*1024:
+		return fmt.Sprintf("%.1f MiB", float64(size)/(1024*1024))
+	case size >= 1024:
+		return fmt.Sprintf("%.1f KiB", float64(size)/1024)
 	default:
-		return fmt.Sprintf("%d B", f.Size)
+		return fmt.Sprintf("%d B", size)
 	}
 }
 
@@ -115,8 +120,15 @@ func (m *module) saveMediaMetadata(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		m.storageError(w, r, err)
 	} else {
-		util.RedirectToURL(w, r, "/media/"+id)
+		redirectToMediaDetail(w, r, id, "Image details saved")
 	}
+}
+
+func redirectToMediaDetail(w http.ResponseWriter, r *http.Request, id, message string) {
+	if err := flash.AddSuccessNotification(w, r, message); err != nil {
+		logger.LogRequestError(r, err)
+	}
+	util.RedirectToURL(w, r, "/media/"+id)
 }
 
 // mediaTagSuggestions excludes writing tags and metadata left behind by deleted uploads.
@@ -154,13 +166,16 @@ type mediaLibraryItem struct {
 
 // mediaLibraryPage describes a bounded page of existing uploads, not their public visibility.
 type mediaLibraryPage struct {
-	Files          []mediaLibraryItem
-	Page, Pages    int
-	Previous, Next string
-	Picking        bool
-	Query          mediaQuery
-	Total          int
-	ClearURL       string
+	Files                                                   []mediaLibraryItem
+	Page, Pages                                             int
+	Previous, Next                                          string
+	Picking                                                 bool
+	Query                                                   mediaQuery
+	Total                                                   int
+	ClearURL                                                string
+	FileStorageUsed, FileStorageLimit, FileStorageAvailable string
+	FileStorageOverLimit                                    string
+	FileStorageFull                                         bool
 }
 
 // mediaQuery uses literal text, not SQL wildcards or a search expression language.
@@ -238,11 +253,17 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	files, err := m.imageFiles(r.Context())
+	files, err := m.media.List(r.Context())
 	if err != nil {
 		m.storageError(w, r, err)
 		return
 	}
+	picking := values.Get("pick") == "1"
+	var usedBytes int64
+	if !picking {
+		usedBytes = fileStorageUsed(files)
+	}
+	files = slices.DeleteFunc(files, func(file mediaFile) bool { return !validImageID(file.ID) })
 	var metadata map[string]mediaMetadata
 	if query.Search != "" {
 		metadata, err = m.mediaMetadata.ListMediaMetadata(r.Context())
@@ -280,9 +301,19 @@ func (m *module) mediaLibrary(w http.ResponseWriter, r *http.Request) {
 			matches = append(matches, group...)
 		}
 	}
-	data := mediaLibraryPage{Page: number, Pages: max(1, (len(matches)+mediaPageSize-1)/mediaPageSize), Picking: values.Get("pick") == "1", Query: query, Total: len(matches), ClearURL: "/media"}
+	data := mediaLibraryPage{Page: number, Pages: max(1, (len(matches)+mediaPageSize-1)/mediaPageSize), Picking: picking, Query: query, Total: len(matches), ClearURL: "/media"}
 	if data.Picking {
 		data.ClearURL += "?pick=1"
+	} else {
+		limit := m.fileStorageLimit()
+		data.FileStorageUsed = fileStorageSizeLabel(usedBytes)
+		data.FileStorageLimit = fileStorageSizeLabel(limit)
+		data.FileStorageFull = usedBytes >= limit
+		if usedBytes > limit {
+			data.FileStorageOverLimit = fileStorageSizeLabel(usedBytes - limit)
+		} else {
+			data.FileStorageAvailable = fileStorageSizeLabel(limit - usedBytes)
+		}
 	}
 	if number > data.Pages {
 		m.storageError(w, r, errNotFound)

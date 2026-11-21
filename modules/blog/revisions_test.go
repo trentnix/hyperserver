@@ -160,7 +160,7 @@ func TestRevisionHTTP(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			h := newHarness(t)
 			store := h.blog.posts.(*sqliteRepository)
-			imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
+			imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)), nil)
 			if err != nil {
 				t.Fatal(err)
 			}

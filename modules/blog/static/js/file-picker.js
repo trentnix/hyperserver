@@ -1,4 +1,4 @@
-import {showUploadFailure, setMediaStatus} from './media.js';
+import {showUploadFailure, setMediaStatus, updateUploadStorage} from './media.js';
 
 const validID = /^[a-f0-9]{64}\.(pdf|zip|txt|mp3)$/;
 export const sizeLabel = size => size >= 1048576 ? (size / 1048576).toFixed(1) + ' MiB' : size >= 1024 ? (size / 1024).toFixed(1) + ' KiB' : size + ' B';
@@ -17,8 +17,9 @@ function button(text, label) {
   return node;
 }
 
-export async function requestFiles(path, options) {
+export async function requestFiles(path, options, form) {
   const response = await fetch(path, {...options, redirect: 'error'});
+  if (form) updateUploadStorage(form, response);
   if (response.status === 401) throw Object.assign(new Error('Sign in again to upload or choose files.'), {code: 'authentication_required'});
   if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('Unable to load files. Try again.');
   const result = await response.json();

@@ -3,7 +3,6 @@ package blog
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/trentnix/hyperserver/auth"
 	"github.com/trentnix/hyperserver/pkg/application"
@@ -43,6 +42,6 @@ func (s *Site) Configure(app *application.Application) (handlers.Descriptor, err
 	s.content = app.ContentManager
 	accounts := app.Accounts
 	return handlers.Descriptor{Name: "blog", Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}, New: func() handlers.Handler {
-		return &module{settings: &Settings{InviteExpiration: 7 * 24 * time.Hour, RSSPostLimit: defaultRSSPostLimit}, access: &s.access, profile: &s.profile, accounts: accounts, mail: app.Mail, site: s}
+		return &module{settings: defaultSettings(), access: &s.access, profile: &s.profile, accounts: accounts, mail: app.Mail, site: s}
 	}}, nil
 }

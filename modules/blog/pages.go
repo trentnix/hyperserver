@@ -21,25 +21,29 @@ import (
 type pageContent struct {
 	Page
 	revisionSelection
-	HasHistory       bool
-	HTML             template.HTML
-	Error            string
-	ErrorFields      string
-	ComponentInputs  componentInput
-	TimeZone         string
-	Parent           *Page
-	Children         []Page
-	Parents          []Page
-	DisplayOrderText string
-	PublishedSlug    string
-	TagSuggestions   []string
-	SaveActions      publicationActions
-	EditURL          string
-	ReturnURL        string
+	HasHistory        bool
+	HTML              template.HTML
+	Error             string
+	ErrorFields       string
+	ComponentInputs   componentInput
+	TimeZone          string
+	fileStorageLimit  string
+	UploadStorageFull bool
+	Parent            *Page
+	Children          []Page
+	Parents           []Page
+	DisplayOrderText  string
+	PublishedSlug     string
+	TagSuggestions    []string
+	SaveActions       publicationActions
+	EditURL           string
+	ReturnURL         string
 }
 
 func (p pageContent) ContentEditor() componentEditorForm {
-	return newComponentEditorForm(p.Markdown, p.ComponentInputs)
+	editor := newComponentEditorForm(p.Markdown, p.ComponentInputs)
+	editor.fileStorageLimit = p.fileStorageLimit
+	return editor
 }
 
 // Publication supplies the page editor's selected radio value.
@@ -327,6 +331,8 @@ func (m *module) renderPageEditor(w http.ResponseWriter, r *http.Request, p Page
 	} else {
 		data.TagSuggestions = m.tagSuggestions(r)
 		data.TimeZone = m.siteTimeZone().String()
+		data.fileStorageLimit = m.fileStorageLimitLabel()
+		data.UploadStorageFull = m.uploadStorageFull(r)
 		stored := p
 		if r.Method == http.MethodPost && p.ID != "" {
 			var err error

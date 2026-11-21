@@ -24,11 +24,11 @@ func downloadsDefinition() componentDefinition {
 			return downloadsContent(files), err
 		},
 		Renderer: downloadsRenderer{},
-		EditorData: func(source string, _ bool) any {
-			return fileEditor{Source: source,
+		EditorData: func(data componentEditorData) any {
+			return fileEditor{componentEditorData: data,
 				Kind: "file-downloads", Field: "downloads", Name: "File downloads", Accept: ".pdf,.zip,.txt,.mp3", MaxFiles: maxComponentDownloads,
 				Help:   "Attach files readers can download.",
-				Limits: "Up to 20 files. PDF, ZIP, UTF-8 text, or MP3, up to 32 MiB per file. File storage: 1 GiB per site.",
+				Limits: "Up to 20 files. PDF, ZIP, UTF-8 text, or MP3, up to 32 MiB per file.",
 			}
 		},
 	}
@@ -56,8 +56,9 @@ func (p postComponents) Downloads() []postDownload {
 
 // File components share upload, library, and field editing behavior.
 type fileEditor struct {
-	Kind, Field, Name, Source, Accept, Help, Limits string
-	MaxFiles                                        int
+	componentEditorData
+	Kind, Field, Name, Accept, Help, Limits string
+	MaxFiles                                int
 }
 
 type postDownload struct {

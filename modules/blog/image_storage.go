@@ -17,7 +17,7 @@ import (
 
 // imageStore stores validated uploads under immutable IDs, independently of posts.
 type imageStore interface {
-	Put(context.Context, imageUpload) (string, error)
+	Put(context.Context, imageUpload, func(size int64) error) (string, error)
 	// Open returns errNotFound for an unknown ID. The caller closes Content.
 	Open(context.Context, string) (storedMedia, error)
 	OpenVariant(context.Context, string, imageVariant) (storedMedia, error)
@@ -66,11 +66,11 @@ func openImageStore(directory, workingDirectory string) (*fileImageStore, error)
 // Close releases the directory handle, not the uploaded files.
 func (s *fileImageStore) Close() error { return s.root.Close() }
 
-// Put atomically publishes one upload, including its original and generated copies.
+// Put atomically publishes one upload after the caller accepts the bundle size.
 // ZIP's uncompressed entries keep the files together while allowing seekable reads.
 // The original's hash preserves identity across re-uploads and optimization changes.
-func (s *fileImageStore) Put(ctx context.Context, upload imageUpload) (string, error) {
-	return s.put(ctx, upload, time.Time{})
+func (s *fileImageStore) Put(ctx context.Context, upload imageUpload, beforePublish func(int64) error) (string, error) {
+	return s.put(ctx, upload, time.Time{}, beforePublish)
 }
 
 // imageUploadID lets upload authorization and storage use the same content key.
@@ -80,7 +80,7 @@ func imageUploadID(upload imageUpload) string {
 }
 
 // put lets offline regeneration preserve upload dates while ordinary uploads get a new version.
-func (s *fileImageStore) put(ctx context.Context, upload imageUpload, modified time.Time) (string, error) {
+func (s *fileImageStore) put(ctx context.Context, upload imageUpload, modified time.Time, beforePublish func(int64) error) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -119,6 +119,15 @@ func (s *fileImageStore) put(ctx context.Context, upload imageUpload, modified t
 	}
 	if err := archive.Close(); err != nil {
 		return "", err
+	}
+	if beforePublish != nil {
+		info, err := file.Stat()
+		if err != nil {
+			return "", err
+		}
+		if err := beforePublish(info.Size()); err != nil {
+			return "", err
+		}
 	}
 	if !modified.IsZero() {
 		if err := s.root.Chtimes(temporary, modified, modified); err != nil {

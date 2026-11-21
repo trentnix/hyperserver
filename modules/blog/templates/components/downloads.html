@@ -7,16 +7,19 @@
     {{ if eq .Kind "pdf-preview" }}<div class="pdf-document-row" data-pdf-document-row hidden>
       {{ template "blog.fileControls" . }}
       <div class="pdf-document-meta" data-pdf-document hidden><a target="_blank" rel="noopener" hx-boost="false" aria-label="Open PDF in a new tab">Open PDF</a><span data-pdf-size></span></div>
-      <p class="form-hint downloads-limits">{{ .Limits }}</p>
-    </div>{{ else }}{{ template "blog.fileControls" . }}{{ end }}
+      {{ template "blog.uploadStorageNotice" }}
+      <p class="form-hint downloads-limits">{{ .Limits }}{{ template "blog.fileStorageLimit" .FileStorageLimit }}</p>
+    </div>{{ else }}{{ template "blog.fileControls" . }}{{ template "blog.uploadStorageNotice" }}{{ end }}
     <label for="post-{{ .Field }}" data-downloads-source-label>{{ .Name }} (JSON)</label>
     <textarea id="post-{{ .Field }}" name="{{ .Field }}" rows="3" aria-describedby="{{ .Field }}-help">{{ .Source }}</textarea>
     {{ if eq .Kind "pdf-preview" }}<div class="pdf-editor-fields" data-downloads-list></div>{{ else }}<ol class="downloads-editor-list" data-downloads-list></ol>
-    <p class="form-hint downloads-limits">{{ .Limits }}</p>{{ end }}
+    <p class="form-hint downloads-limits">{{ .Limits }}{{ template "blog.fileStorageLimit" .FileStorageLimit }}</p>{{ end }}
     <div data-downloads-status role="status"></div>
     <div class="album-removal-recovery" data-downloads-recovery role="status" hidden><span>File removed.</span><button type="button" class="text-button" data-download-undo>Undo</button></div>
   </section>
 {{ end }}
+
+{{ define "blog.fileStorageLimit" }}{{ with . }} Shared upload limit is {{ . }}.{{ end }}{{ end }}
 
 {{ define "blog.downloadsIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M12 11v7m-3-3 3 3 3-3"/></svg>{{ end }}
 

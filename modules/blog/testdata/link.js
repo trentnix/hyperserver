@@ -40,6 +40,23 @@
       set(section.querySelector('#link-description'), 'A manually edited description.\nA second line remains readable.');
       section.querySelector('input[type="checkbox"]').click();
       assert(JSON.parse(form.elements.link.value).hideImage && !section.querySelector('.link-preview-card img'), 'The image toggle must change the saved setting and preview.');
+      const imageID = JSON.parse(form.elements.link.value).imageID;
+      const fetchOriginal = window.fetch;
+      window.fetch = (path, options) => {
+        if (path !== '/post/link-preview') return fetchOriginal(path, options);
+        assert(!options.body.has('image'), 'The editor should still request an image before it learns storage is full.');
+        return Promise.resolve(new Response(JSON.stringify({
+          link: {url: options.body.get('url'), title, description: 'A manually edited description.\nA second line remains readable.'},
+          warning: 'Upload storage is full.'
+        }), {headers: {'Content-Type': 'application/json', 'Upload-Storage-Full': 'true'}}));
+      };
+      section.querySelector('[data-link-fetch]').click();
+      document.querySelector('[data-confirm-accept]').click();
+      await wait(() => !form.dataset.uploading && section.querySelector('[data-link-status]').textContent.includes('existing image was kept'));
+      window.fetch = fetchOriginal;
+      const refreshed = JSON.parse(form.elements.link.value);
+      assert(refreshed.imageID === imageID && refreshed.hideImage && section.querySelector('[data-link-upload]').disabled,
+        'A storage warning from a refresh must keep the existing image and its visibility setting.');
       const saved = form.elements.link.value;
       await removeTestComponent(section.querySelector('[data-component-remove]'));
       assert(section.hidden && section.querySelector('fieldset').disabled && !form.elements.link.value, 'Removing a link must clear its source and disable hidden required fields.');

@@ -28,6 +28,7 @@
             <button type="button" class="text-button" data-image-reset>Clear</button>
             <input type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload fallback image" aria-describedby="{{ .Kind }}-image-help" hidden>
           </div>
+          {{ template "blog.uploadStorageNotice" }}
           <p data-image-status role="status"></p>
           <p class="form-hint">PNG, JPEG, or GIF. Up to 8 MiB and 20 megapixels.</p>
         </fieldset>

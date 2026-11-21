@@ -70,6 +70,6 @@ func optimizeStoredImage(ctx context.Context, store *fileImageStore, id string) 
 	if upload.MediaType != original.MediaType {
 		return errors.New("original no longer matches its image type")
 	}
-	_, err = store.put(ctx, upload, original.Modified)
+	_, err = store.put(ctx, upload, original.Modified, nil)
 	return err
 }

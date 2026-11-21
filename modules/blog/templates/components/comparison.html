@@ -7,6 +7,7 @@
     <fieldset data-comparison-controls data-component-fields hidden disabled>
       <label for="comparison-title">Title (optional)</label><input id="comparison-title" data-comparison-field="title" maxlength="240">
       <label for="comparison-caption">Caption (optional)</label><textarea id="comparison-caption" data-comparison-field="caption" rows="2" maxlength="1000"></textarea>
+      {{ template "blog.uploadStorageNotice" }}
       <div class="comparison-editor-images">
         {{ range $side := .Sides }}
         <fieldset class="comparison-image-picker" data-image-picker data-image-prefix="/images/" data-comparison-side="{{ $side }}">

@@ -4,7 +4,9 @@
 
 Admins use **Media** to upload and browse images. **Browse library** beside a preview/profile image and **Choose existing image** in the Markdown toolbar reuse uploads. Posters can upload in their post editor and reuse public images or images in their own saved posts. For other file types, see [File downloads](components.md#file-downloads).
 
-Uploads accept PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels per file. The original is retained. Display and thumbnail copies have maximum edges of 2,048 and 480 pixels, without enlarging smaller images.
+Uploads accept PNG, JPEG, or GIF, up to 8 MiB and 20 million pixels per file. The original is retained. Display and thumbnail copies have maximum edges of 2,048 and 480 pixels, without enlarging smaller images. All three count toward the site's [shared upload limit](components.md#file-downloads).
+
+The limit applies to images added through Media, Markdown, post and page previews, Site Profile, albums, comparisons, events, social media fallbacks, and link previews. It also applies when the server imports a thumbnail for a link preview. You can still use existing uploads from the library when storage is full.
 
 JPEG uses quality 85. JPEG/PNG processing applies EXIF orientation and removes metadata. PNG preserves transparency. GIF retains its original animation and metadata. Animated PNG is rejected.
 
@@ -68,4 +70,4 @@ Save editors before cleanup. Unsaved references and browser recovery copies are 
 
 Build `go build -o /tmp/optimize-images ./cmd/optimize-images` from the repository root. Back up uploads and stop the blog. Run `/tmp/optimize-images` from the application's configuration directory.
 
-The optimizer preserves originals, URLs, and dates, replacing each bundle atomically. Failed files remain unchanged. Rerunning is safe. Legacy uploads are not served publicly until processed. See [backup and recovery](backup.md).
+The optimizer preserves originals, URLs, and dates, replacing each bundle atomically. Failed files remain unchanged. Rerunning is safe. Reprocessing can change how much space the bundles use. The blog counts their new sizes when it next checks the upload limit. Legacy uploads are not served publicly until processed. See [backup and recovery](backup.md).

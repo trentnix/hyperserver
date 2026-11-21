@@ -12,7 +12,6 @@ import (
 	"github.com/trentnix/hyperserver/pkg/imaging"
 	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/services/user"
-	"github.com/trentnix/hyperserver/pkg/util"
 )
 
 const maxImageBytes = 8 * 1024 * 1024
@@ -89,7 +88,7 @@ func (m *module) upload(w http.ResponseWriter, r *http.Request) {
 func (m *module) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	id, status, err := m.storeUpload(w, r, roleAdmin)
 	if err == nil {
-		util.RedirectToURL(w, r, "/media/"+id)
+		redirectToMediaDetail(w, r, id, "Image uploaded. Labels and tags are optional.")
 		return
 	}
 	data := formErrorMessage{Error: err.Error()}
@@ -143,11 +142,11 @@ func (m *module) storeUpload(w http.ResponseWriter, r *http.Request, permission 
 	if err != nil || len(data) > maxImageBytes {
 		return "", http.StatusUnprocessableEntity, errors.New("Unable to read the image, or it exceeds 8 MiB.")
 	}
-	return m.storeImageData(r.Context(), data, files[0].Filename, permission)
+	return m.storeImageData(r.Context(), w, data, files[0].Filename, permission)
 }
 
 // Callers hold an imageProcessing slot while decoding and storing image bytes.
-func (m *module) storeImageData(ctx context.Context, data []byte, filename string, permission role) (string, int, error) {
+func (m *module) storeImageData(ctx context.Context, w http.ResponseWriter, data []byte, filename string, permission role) (string, int, error) {
 	account := user.GetUserFromContext(ctx)
 	if account == nil || !permission.valid() {
 		return "", http.StatusForbidden, errors.New("You don't have permission to upload images.")
@@ -156,8 +155,8 @@ func (m *module) storeImageData(ctx context.Context, data []byte, filename strin
 	if err != nil {
 		return "", http.StatusUnprocessableEntity, err
 	}
-	m.mediaMu.RLock()
-	defer m.mediaMu.RUnlock()
+	m.mediaMu.Lock()
+	defer m.mediaMu.Unlock()
 	id := imageUploadID(upload)
 	if permission == rolePoster {
 		metadata, err := m.mediaMetadata.GetMediaMetadata(ctx, id)
@@ -188,32 +187,40 @@ func (m *module) storeImageData(ctx context.Context, data []byte, filename strin
 			return "", http.StatusConflict, errors.New("This image is already stored privately under another account. Ask an admin to make it available in your post.")
 		}
 	}
-	// Record ownership first so a failed file write can be retried by its uploader.
 	size := int64(len(upload.Original))
 	metadata := mediaMetadata{
 		Filename: uploadFilename(filename), UploadedBy: account.ID,
 		ContentType: upload.MediaType, Checksum: id[:64], SizeBytes: &size,
 	}
-	if err := m.mediaMetadata.RememberMedia(ctx, id, metadata); err != nil {
-		if log := logger.Get(ctx); log != nil {
-			log.ErrorContext(ctx, "Unable to store image", "error", err)
+	var storageFull bool
+	storedID, err := m.images.Put(ctx, upload, func(bundleSize int64) error {
+		var err error
+		storageFull, err = m.checkUploadQuota(ctx, id, bundleSize)
+		if err != nil {
+			return err
 		}
-		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
-	}
-	id, err = m.images.Put(ctx, upload)
+		// Reserve ownership before publishing the bundle.
+		return m.mediaMetadata.RememberMedia(ctx, id, metadata)
+	})
 	if err != nil {
+		var quota uploadQuotaError
+		if errors.As(err, &quota) {
+			reportFullUploadStorage(w, storageFull)
+			return "", http.StatusUnprocessableEntity, err
+		}
 		if log := logger.Get(ctx); log != nil {
 			log.ErrorContext(ctx, "Unable to store image", "error", err)
 		}
-		return "", http.StatusInternalServerError, errors.New("Unable to save the image.")
+		return "", http.StatusInternalServerError, errors.New("Unable to save the image. Retry the upload.")
 	}
-	if err := m.mediaMetadata.RecordMediaUpload(ctx, id, time.Now()); err != nil {
+	reportFullUploadStorage(w, storageFull)
+	if err := m.mediaMetadata.RecordMediaUpload(ctx, storedID, time.Now()); err != nil {
 		if log := logger.Get(ctx); log != nil {
 			log.ErrorContext(ctx, "Unable to store image", "error", err)
 		}
 		return "", http.StatusInternalServerError, errors.New("Unable to save the image details. Retry the upload.")
 	}
-	return id, http.StatusOK, nil
+	return storedID, http.StatusOK, nil
 }
 
 // image checks visibility before serving bytes or conditional responses. Private

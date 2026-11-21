@@ -386,6 +386,7 @@
     }
     if (stage === 'uploaded') {
       assert(location.pathname.startsWith('/media/') && document.querySelector('h1').textContent === 'Image details', 'Upload must open its details.');
+      assert(document.querySelector('#notifications').textContent.includes('Image uploaded. Labels and tags are optional.'), 'Upload must confirm the image is already stored.');
       assert(document.body.textContent.includes('Not used by saved posts'), 'New upload should show no saved uses.');
       const image = document.querySelector('.media-detail-preview img');
       await wait(() => image.complete);
@@ -439,6 +440,7 @@
       return;
     }
     if (stage === 'renamed') {
+      assert(document.querySelector('#notifications').textContent.includes('Image details saved'), 'Saving image details must confirm success.');
       assert(document.querySelector('[name=label]').value === 'Été 100%_photo', 'Renaming lost the label.');
       const tags = document.querySelector('[name=tags]');
       assert(tags.value === 'landscape, summer', 'Media tags were not normalized.');

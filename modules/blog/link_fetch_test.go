@@ -14,9 +14,11 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -335,6 +337,64 @@ func TestLinkFetchEndpoint(t *testing.T) {
 		h.request("POST", "/post/link-preview", fields, false)
 	}
 	requireStatus(t, h.request("POST", "/post/link-preview", fields, false), http.StatusTooManyRequests)
+}
+
+func TestLinkThumbnailRespectsUploadQuota(t *testing.T) {
+	h := usersHarness(t)
+	h.blog.settings.FileStorageLimitMiB = 1
+	image := sampleLinkImage(t)
+	var imageRequests atomic.Int64
+	h.blog.linkClient = linkTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/image.png" {
+			imageRequests.Add(1)
+			w.Header().Set("Content-Type", "image/png")
+			w.Write(image)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, `<title>Article</title><meta property="og:image" content="/image.png">`)
+	}))
+	store := h.blog.downloads.(*fileDownloadStore)
+	file, err := store.root.OpenFile(strings.Repeat("f", 64)+".pdf", os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	for _, tc := range []struct {
+		name, warning string
+		remaining     int64
+		imageRequests int64
+	}{
+		{"full", "Upload storage is full", 0, 0},
+		{"bundle does not fit", "The preview image exceeds the available storage", int64(len(image)), 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := file.Truncate(h.blog.fileStorageLimit() - tc.remaining); err != nil {
+				t.Fatal(err)
+			}
+			imageRequests.Store(0)
+			fields := url.Values{"url": {"http://example.test/article"}}
+			response := h.request(http.MethodPost, "/post/link-preview", fields, false)
+			requireStatus(t, response, http.StatusOK)
+			if (response.Header().Get("Upload-Storage-Full") == "true") != (tc.remaining == 0) {
+				t.Fatal("the preview must identify full storage separately from a thumbnail that does not fit")
+			}
+			var result struct {
+				Link    postLink
+				Warning string
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil || result.Link.Title != "Article" || result.Link.ImageID != "" || !strings.Contains(result.Warning, tc.warning) {
+				t.Fatal("expected link metadata and quota feedback without an image", response.Body.String(), err)
+			}
+			if got := imageRequests.Load(); got != tc.imageRequests {
+				t.Fatalf("expected %d image requests, got %d", tc.imageRequests, got)
+			}
+		})
+	}
+	files, err := h.blog.imageFiles(t.Context())
+	if err != nil || len(files) != 0 {
+		t.Fatal("quota rejection must not store a thumbnail", files, err)
+	}
 }
 
 func TestLinkPosterImports(t *testing.T) {

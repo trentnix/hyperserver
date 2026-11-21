@@ -1,4 +1,5 @@
 import {componentPlacement} from './component-placement.js';
+import {uploadStorageFull} from './media.js';
 
 // EasyMDE stays behind this blog-local boundary. The textarea remains the form
 // field. Every editor change synchronizes it before notifying application code.
@@ -16,6 +17,7 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
   const label = textarea.labels[0];
   const labelFor = label?.htmlFor;
   let destroyed = false;
+  const storageFull = uploadStorageFull(textarea.form);
   const editor = new EasyMDE({
     element: textarea,
     minHeight: '450px',
@@ -23,9 +25,10 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
     spellChecker: false,
     forceSync: true,
     status: false,
-    uploadImage: true,
+    uploadImage: !storageFull,
     imageUploadEndpoint: '/post/images/upload',
     imageUploadFunction(file, onSuccess) {
+      if (uploadStorageFull(textarea.form)) return;
       const status = document.createElement('p');
       status.setAttribute('role', 'status');
       editor.codemirror.getWrapperElement().after(status);
@@ -51,6 +54,10 @@ export function createMarkdownEditor(textarea, {upload, chooseImage, preview, on
     ].filter(item => textarea.form.dataset.mediaLibrary !== 'false' || item.name !== 'media-library'),
     previewRender: preview
   });
+  if (storageFull) {
+    editor.gui.toolbar.querySelector('.tool-image').disabled = true;
+    editor.gui.toolbar.querySelector('.imageInput').disabled = true;
+  }
   // Native textarea validation cannot focus a field hidden by the editor.
   // The server remains authoritative. Mirror semantics onto the keyboard input.
   textarea.required = false;

@@ -11,7 +11,7 @@ import (
 
 func validatePDFPreview(files []postDownload) error {
 	if len(files) > 1 || len(files) == 1 && downloadType(files[0].ID) != "application/pdf" {
-		return contentError("Choose one uploaded PDF for the preview.")
+		return contentError("Choose one uploaded PDF.")
 	}
 	return nil
 }
@@ -35,7 +35,7 @@ func (pdfRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer) {
 		}
 		file := node.(*pdfNode).File
 		label := html.EscapeString(file.Label)
-		fmt.Fprintf(writer, `<section class="pdf-preview" aria-label="PDF preview"><h2>PDF</h2><div class="pdf-preview-heading"><div><h3>%s</h3><span class="file-download-meta">PDF · %s</span></div><nav aria-label="PDF actions"><a href="/files/%s?preview=1" target="_blank" rel="noopener" aria-label="Open PDF in a new tab" hx-boost="false">Open PDF</a>`, label, file.SizeLabel(), file.ID)
+		fmt.Fprintf(writer, `<section class="pdf-preview" aria-label="%s"><h2>PDF</h2><div class="pdf-preview-heading"><div><h3>%s</h3><span class="file-download-meta">PDF · %s</span></div><nav aria-label="PDF actions"><a href="/files/%s?preview=1" target="_blank" rel="noopener" aria-label="Open PDF in a new tab" hx-boost="false">Open PDF</a>`, pdfViewerName, label, file.SizeLabel(), file.ID)
 		if !file.HideDownload {
 			fmt.Fprintf(writer, `<a href="/files/%s" download hx-boost="false">Download</a>`, file.ID)
 		}

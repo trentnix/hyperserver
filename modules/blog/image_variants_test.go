@@ -72,7 +72,7 @@ func TestImageMalformedBundle(t *testing.T) {
 func TestImageVariantAccess(t *testing.T) {
 	h := newHarness(t)
 	upload := imageUpload{MediaType: "image/png", Original: []byte("original-private"), Display: []byte("display-public"), Thumbnail: []byte("thumbnail-public")}
-	id, err := h.blog.images.Put(t.Context(), upload)
+	id, err := h.blog.images.Put(t.Context(), upload, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestImageRegenerationCacheValidation(t *testing.T) {
 	store := h.blog.images.(*fileImageStore)
 	upload := imageUpload{MediaType: "image/png", Original: []byte("original"), Display: []byte("old display"), Thumbnail: []byte("old thumbnail")}
 	uploaded := time.Unix(1000, 0)
-	id, err := store.put(t.Context(), upload, uploaded)
+	id, err := store.put(t.Context(), upload, uploaded, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestImageRegenerationCacheValidation(t *testing.T) {
 		oldETags[variant] = w.Header().Get("ETag")
 	}
 	upload.Display, upload.Thumbnail = []byte("new display"), []byte("new thumbnail")
-	if _, err := store.put(t.Context(), upload, uploaded); err != nil {
+	if _, err := store.put(t.Context(), upload, uploaded, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, variant := range []string{"display", "thumbnail"} {
@@ -242,12 +242,12 @@ func (c *cancelDuringWrite) Err() error {
 func TestImageAtomicCopies(t *testing.T) {
 	s := newTestImageStore(t)
 	upload := imageUpload{MediaType: "image/png", Original: []byte("original"), Display: []byte("display"), Thumbnail: []byte("thumbnail")}
-	id, err := s.Put(t.Context(), upload)
+	id, err := s.Put(t.Context(), upload, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	upload.Display = []byte("replacement")
-	if _, err := s.Put(&cancelDuringWrite{Context: t.Context()}, upload); !errors.Is(err, context.Canceled) {
+	if _, err := s.Put(&cancelDuringWrite{Context: t.Context()}, upload, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("write cancellation: %v", err)
 	}
 	stored, err := s.Open(t.Context(), id)
@@ -273,7 +273,7 @@ func TestImageAtomicCopies(t *testing.T) {
 		case "thumbnail":
 			incomplete.Thumbnail = nil
 		}
-		if _, err := s.Put(t.Context(), incomplete); err == nil {
+		if _, err := s.Put(t.Context(), incomplete, nil); err == nil {
 			t.Fatal("incomplete upload accepted")
 		}
 	}

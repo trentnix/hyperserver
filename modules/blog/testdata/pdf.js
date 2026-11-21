@@ -18,7 +18,10 @@
       form.elements.title.value = 'PDF preview review';
       form.elements.slug.value = 'pdf-preview-review';
       form.querySelector('[data-component-picker] summary').click();
-      await addTestComponent(form.querySelector('[data-component-add="pdf-preview"]'));
+      const choice = form.querySelector('[data-component-add="pdf-preview"]');
+      assert(choice.querySelector('strong').textContent === 'PDF viewer' && choice.querySelector('small').textContent === 'Display a PDF readers can browse on the page.', 'The component picker must describe the PDF viewer.');
+      await addTestComponent(choice);
+      assert(section.querySelector('h2').textContent === 'PDF viewer', 'The editor must use the PDF viewer name.');
       assert(!section.hidden && document.activeElement === section.querySelector('[data-download-upload]'), 'Adding a PDF must reveal its editor and focus Upload.');
       const upload = section.querySelector('[data-download-files]');
       assert(!upload.multiple && upload.accept === '.pdf', 'The PDF component must accept one PDF.');
@@ -133,6 +136,7 @@
     if (stage === 'view') {
       await wait(() => document.querySelector('.pdf-preview'));
       const section = document.querySelector('.pdf-preview');
+      assert(section.getAttribute('aria-label') === 'PDF viewer', 'The reader must identify the PDF viewer.');
       assert(section.textContent.includes('two pages'), 'The saved description must render.');
       assert(document.documentElement.scrollWidth <= innerWidth + 1, 'PDF content must fit the viewport.');
       assert(document.querySelector('.file-downloads').compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING, 'PDF order must survive saving.');

@@ -1,5 +1,5 @@
 import {initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
-import {runFormUpload, setMediaStatus, showUploadFailure} from './media.js';
+import {runFormUpload, setMediaStatus, showUploadFailure, uploadStorageFull} from './media.js';
 import {requestFiles, validEntry, openFileLibrary, sizeLabel} from './file-picker.js';
 
 const initialized = new WeakSet();
@@ -27,6 +27,7 @@ function initialize(root) {
     const uploadButton = section.querySelector('[data-audio-upload]');
     const browseButton = section.querySelector('[data-audio-browse]');
     const input = section.querySelector('[data-audio-file]');
+    input.disabled = uploadStorageFull(form);
     const player = section.querySelector('audio');
     const recovery = section.querySelector('[data-audio-recovery]');
     const texts = [...fields.querySelectorAll('[data-audio-field]')];
@@ -58,7 +59,8 @@ function initialize(root) {
     function render() {
       if (!source.hidden) return;
       const busy = Boolean(form.dataset.uploading);
-      uploadButton.disabled = browseButton.disabled = busy;
+      uploadButton.disabled = busy || uploadStorageFull(form);
+      browseButton.disabled = busy;
       section.querySelector('[data-component-remove]').disabled = busy;
       uploadButton.textContent = value ? 'Replace MP3' : 'Upload MP3';
       fields.hidden = !value;
@@ -116,14 +118,14 @@ function initialize(root) {
     }
 
     async function upload(file) {
-      if (!section.isConnected || form.dataset.uploading) return;
+      if (!section.isConnected || form.dataset.uploading || uploadStorageFull(form)) return;
       await runFormUpload(form, async () => {
         setMediaStatus(status, 'Uploading MP3…');
         try {
           if (!file.name.toLowerCase().endsWith('.mp3') || file.size > 33554432) throw new Error('Choose an MP3 of at most 32 MiB.');
           const body = new FormData();
           body.append('file', file);
-          const entry = await requestFiles('/post/files/upload', {method: 'POST', body});
+          const entry = await requestFiles('/post/files/upload', {method: 'POST', body}, form);
           if (!section.isConnected) return;
           add([entry]);
           setMediaStatus(status, 'MP3 uploaded.');
@@ -172,7 +174,7 @@ function initialize(root) {
       snapshot: () => ({source: source.value, previous}),
       clear: () => { source.value = ''; read(); },
       restore: copy => { source.value = copy.source; read(); previous = copy.previous; render(); },
-      focus: () => (source.hidden ? uploadButton : source).focus()
+      focus: () => (source.hidden ? (uploadButton.disabled ? browseButton : uploadButton) : source).focus()
     });
     document.addEventListener('htmx:before:cleanup', event => {
       if (event.target.contains?.(form)) { player.pause(); lifetime.abort(); }

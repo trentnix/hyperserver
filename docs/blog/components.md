@@ -12,7 +12,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | --- | --- |
 | [Photo album](media.md#add-an-album) | Up to 50 photos with captions and a full-screen viewer. |
 | [File downloads](#file-downloads) | Up to 20 PDF, ZIP, UTF-8 text, or MP3 attachments. |
-| [PDF preview](#pdf-preview) | One PDF in the browser's viewer or a page-by-page presentation. |
+| [PDF viewer](#pdf-viewer) | One PDF in the browser's viewer or a page-by-page presentation. |
 | [Audio](#audio) | One MP3 with an optional transcript. |
 | [Event](#event) | An all-day or timed event with an optional location and details link. |
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
@@ -31,7 +31,9 @@ An added component must contain valid content. Fill it in or remove it before sa
 
 Use **Upload** to add files or **Library** to reuse uploads. Edit display names and optional descriptions, then arrange the files with the arrow buttons. Downloads keep their original filenames. Upload batches block Save until they finish. Retry attempts only failed or unprocessed files.
 
-Files must use `.pdf`, `.zip`, `.txt`, or `.mp3` extensions. Each file can be at most 32 MiB. File storage totals at most 1 GiB per site, shared by downloads, PDF previews, and audio. Images have separate limits. A reverse proxy must allow at least 34 MiB for `/post/files/upload`, for example Nginx `client_max_body_size 34m;`.
+Files must use `.pdf`, `.zip`, `.txt`, or `.mp3` extensions. Each file can be at most 32 MiB. A reverse proxy must allow at least 34 MiB for `/post/files/upload`, for example Nginx `client_max_body_size 34m;`.
+
+Images, downloads, PDFs, and audio share a 1 GiB default storage limit. Set `fileStorageLimitMiB` in `modules/blog/config.yaml` to a positive whole number of MiB and restart the blog to change it. **Media** shows used and available storage. Lowering the limit preserves stored uploads. If an upload needs more space than is available, free space or raise the limit.
 
 The server validates file contents rather than trusting the submitted MIME type. It checks PDF signatures and trailers, ZIP structure, UTF-8 text, and MP3 frames. Archives are never extracted. Validation does not scan for malware. Ordinary downloads use attachment responses with `nosniff` and support HEAD, ranges, resume, and cache revalidation.
 
@@ -39,17 +41,17 @@ Admins can access every file. Posters can access their uploads, files used by an
 
 Files live under `uploadsDirectory/files`, identified by SHA-256 hashes and validated extensions. Display names never become storage paths. [Media cleanup](media.md#clean-up-uploads) and [backups](backup.md) cover these files. Unsaved editors and browser recovery copies cannot protect an upload from cleanup.
 
-## PDF preview
+## PDF viewer
 
 Upload or choose one PDF, then edit its display name and optional description. **Open PDF** opens the file in a separate tab. **Replace PDF** and **Library** replace the document while preserving its details and display settings. Canceling or failing to replace keeps the current file.
 
-The browser's PDF viewer is the default. Clear **Show download link** to hide the component's Download link. The browser may still offer downloading. This setting controls the link's visibility. The same PDF can appear in a preview and File downloads without storing another copy.
+The browser's PDF viewer is the default. Clear **Show download link** to hide the component's Download link. The browser may still offer downloading. This setting controls the link's visibility. The PDF viewer and File downloads can use the same stored PDF.
 
 Enable **Presentation mode** to show one page at a time, with Previous/Next controls, a page indicator, and fullscreen where supported. Focus the presentation to use Left/Right, Page Up/Page Down, or Home/End. Pages fit without cropping, and portrait pages use more vertical space on narrow screens.
 
 Mozilla PDF.js renders presentations locally in the browser. If rendering fails or JavaScript is unavailable, the ordinary viewer or **Open PDF** remains available.
 
-PDF previews use the file limits and access rules above. `/files/{id}?preview=1` permits inline same-origin viewing after access checks. Ordinary pages and attachments retain their framing restrictions. Feeds and historical previews show links and descriptions. Search indexes the display name and description, not text inside the PDF.
+The PDF viewer uses the file limits and access rules above. `/files/{id}?preview=1` permits inline same-origin viewing after access checks. Ordinary pages and attachments retain their framing restrictions. Feeds and historical previews show links and descriptions. Search indexes the display name and description, not text inside the PDF.
 
 ## Audio
 

@@ -257,7 +257,7 @@ func TestOverlappingAssetsInitializationFailure(t *testing.T) {
 	if m.access.emailKey != "" || m.close != nil || m.localAssets != nil || m.images != nil || m.posts != nil {
 		t.Fatal("failed initialization published storage or access")
 	}
-	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)), nil)
 	if err != nil {
 		t.Fatal("failed initialization affected another application's uploads", err)
 	}

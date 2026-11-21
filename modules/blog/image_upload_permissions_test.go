@@ -26,12 +26,19 @@ type countedImageWrites struct {
 	storedAt time.Time
 }
 
-func (s *countedImageWrites) Put(ctx context.Context, upload imageUpload) (string, error) {
-	s.writes++
-	if s.fail {
-		return "", errors.New("image write failed")
-	}
-	id, err := s.imageStore.Put(ctx, upload)
+func (s *countedImageWrites) Put(ctx context.Context, upload imageUpload, beforePublish func(int64) error) (string, error) {
+	id, err := s.imageStore.Put(ctx, upload, func(size int64) error {
+		if beforePublish != nil {
+			if err := beforePublish(size); err != nil {
+				return err
+			}
+		}
+		s.writes++
+		if s.fail {
+			return errors.New("image write failed")
+		}
+		return nil
+	})
 	if err == nil {
 		s.storedAt = time.Now()
 	}
@@ -54,7 +61,7 @@ func TestPosterHistoricalImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
+	imageID, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +108,7 @@ func TestPublicReuseDoesNotGrantOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)))
+	id, err := h.blog.images.Put(t.Context(), testImageUpload("image/png", testPNG(t)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

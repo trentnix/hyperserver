@@ -2,12 +2,14 @@ package blog
 
 import "github.com/yuin/goldmark/ast"
 
+const pdfViewerName = "PDF viewer"
+
 type pdfContent []postDownload
 
 func pdfDefinition() componentDefinition {
 	return componentDefinition{
-		Kind: "pdf-preview", Field: "pdf", Payload: "files", Name: "PDF preview", Summary: "Show a PDF inline",
-		EmptyMessage: "Choose a PDF or remove the PDF preview.",
+		Kind: "pdf-preview", Field: "pdf", Payload: "files", Name: pdfViewerName, Summary: "Display a PDF readers can browse on the page.",
+		EmptyMessage: "Choose a PDF or remove the " + pdfViewerName + ".",
 		TemplateFile: "templates/components/downloads.html", Template: "blog.fileEditor", Icon: "blog.pdfIcon", Script: "downloads-editor.js",
 		Parse: func(source string) (componentContent, error) {
 			files, err := parseDownloads(source)
@@ -17,11 +19,11 @@ func pdfDefinition() componentDefinition {
 			return pdfContent(files), err
 		},
 		Renderer: pdfRenderer{},
-		EditorData: func(source string, _ bool) any {
-			return fileEditor{Source: source,
-				Kind: "pdf-preview", Field: "pdf", Name: "PDF preview", Accept: ".pdf", MaxFiles: 1,
+		EditorData: func(data componentEditorData) any {
+			return fileEditor{componentEditorData: data,
+				Kind: "pdf-preview", Field: "pdf", Name: pdfViewerName, Accept: ".pdf", MaxFiles: 1,
 				Help:   "Readers can view the PDF without leaving the page.",
-				Limits: "One PDF, up to 32 MiB. Shares the site's 1 GiB file storage.",
+				Limits: "One PDF, up to 32 MiB.",
 			}
 		},
 	}

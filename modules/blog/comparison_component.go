@@ -28,11 +28,11 @@ func comparisonDefinition() componentDefinition {
 		Name: "Before & after", Summary: "Two images with a draggable comparison", EmptyMessage: "Choose both images or remove the before and after component.",
 		TemplateFile: "templates/components/comparison.html", Template: "blog.comparisonEditor", Icon: "blog.comparisonIcon", Script: "comparison-editor.js",
 		Parse: func(source string) (componentContent, error) { return parseComparison(source) }, Renderer: comparisonRenderer{},
-		EditorData: func(source string, noLibrary bool) any {
+		EditorData: func(data componentEditorData) any {
 			return struct {
 				componentEditorData
 				Sides []string
-			}{componentEditorData{Source: source, NoLibrary: noLibrary}, []string{"before", "after"}}
+			}{data, []string{"before", "after"}}
 		},
 	}
 }

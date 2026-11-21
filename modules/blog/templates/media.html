@@ -2,12 +2,13 @@
 <section class="page-manager media-library" data-media-library hx-boost:inherited="false"{{ if .Data.Picking }} hx-target:inherited="#media-results" hx-swap:inherited="innerHTML show:none settle:0" hx-sync:inherited="#media-results:replace"{{ end }}>
   {{ if not .Data.Picking }}
   <header class="page-manager-heading"><h1>Media</h1><a class="button-primary page-create media-cleanup-link" href="/media/unused">Clean up uploads</a></header>
+  <p class="{{ if .Data.FileStorageOverLimit }}form-error{{ else }}form-hint{{ end }}" data-file-storage><strong>Storage for images, downloads, PDFs, and audio</strong> · {{ .Data.FileStorageUsed }} of {{ .Data.FileStorageLimit }} used · {{ if .Data.FileStorageOverLimit }}{{ .Data.FileStorageOverLimit }} over the limit{{ else }}{{ .Data.FileStorageAvailable }} available{{ end }}</p>
   <form class="media-upload" data-media-upload method="post" action="/media/upload" enctype="multipart/form-data" hx-post="/media/upload" hx-encoding="multipart/form-data" hx-target="#library-upload-status" hx-swap="innerHTML" hx-disable="findAll input, findAll button" hx-sync="this:drop">
-    <details>
+    <details{{ if .Data.FileStorageFull }} open{{ end }}>
       <summary>Upload image</summary>
       <div class="media-upload-fields">
-        <p id="library-upload-help" class="form-hint">PNG, JPEG, or GIF, up to 8 MiB. Private until used in published content or the site profile.</p>
-        <div class="form-actions"><input id="library-upload" name="image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Image file" aria-describedby="library-upload-help" required><button type="submit">Upload image</button></div>
+        <p id="library-upload-help" class="{{ if .Data.FileStorageFull }}form-error{{ else }}form-hint{{ end }}">{{ if .Data.FileStorageFull }}Upload storage is full. Free up space to upload an image.{{ else }}PNG, JPEG, or GIF, up to 8 MiB. Private until used in published content or the site profile.{{ end }}</p>
+        <div class="form-actions"><input id="library-upload" name="image" type="file" accept="image/png,image/jpeg,image/gif" aria-label="Image file" aria-describedby="library-upload-help" required{{ if .Data.FileStorageFull }} disabled{{ end }}><button type="submit"{{ if .Data.FileStorageFull }} disabled{{ end }}>Upload image</button></div>
         <div id="library-upload-status" role="status" data-upload-status></div>
       </div>
     </details>

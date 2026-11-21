@@ -41,6 +41,8 @@ type editorPage struct {
 	ScheduledAt                int64
 	Publication                string
 	TimeZone, ScheduleZone     string
+	fileStorageLimit           string
+	UploadStorageFull          bool
 	ScheduleDate, ScheduleTime string
 	CanSchedule                bool
 	SaveActions                publicationActions
@@ -52,6 +54,7 @@ type editorPage struct {
 func (p editorPage) ContentEditor() componentEditorForm {
 	editor := newComponentEditorForm(p.Markdown, p.ComponentInputs)
 	editor.RequireBody, editor.noLibrary = true, p.NoLibrary
+	editor.fileStorageLimit = p.fileStorageLimit
 	return editor
 }
 
@@ -152,6 +155,8 @@ func (m *module) editor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := m.postEditorData(p)
+	data.fileStorageLimit = m.fileStorageLimitLabel()
+	data.UploadStorageFull = m.uploadStorageFull(r)
 	data.ReturnURL = editorReturnURL(r, "/post/manage")
 	data.NoLibrary = m.requestRole(r) == rolePoster
 	data.TagSuggestions = m.tagSuggestions(r)
@@ -293,6 +298,8 @@ func (m *module) editorError(w http.ResponseWriter, r *http.Request, p Post, mes
 	if page.IsHtmx() {
 		page = m.views["postError"].Content(r, data)
 	} else {
+		data.fileStorageLimit = m.fileStorageLimitLabel()
+		data.UploadStorageFull = m.uploadStorageFull(r)
 		data.TagSuggestions = m.tagSuggestions(r)
 		var seriesError error
 		data.SeriesEditor, seriesError = m.loadSeriesEditor(r, p.ID, "")

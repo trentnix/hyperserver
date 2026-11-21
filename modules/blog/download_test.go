@@ -293,7 +293,7 @@ func TestDownloadStorageLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := file.Truncate(maxDownloadStorage); err != nil {
+	if err := file.Truncate(h.blog.fileStorageLimit()); err != nil {
 		file.Close()
 		t.Fatal(err)
 	}
@@ -317,6 +317,99 @@ func TestDownloadStorageLimit(t *testing.T) {
 	}
 	registeredPoster(t, h)
 	requireStatus(t, uploadTestDownload(t, h, "unowned.txt", data), http.StatusConflict)
+}
+
+func TestConfiguredFileStorageLimit(t *testing.T) {
+	h := usersHarness(t)
+	h.blog.settings.FileStorageLimitMiB = 2
+	for _, path := range []string{"/post/create", "/pages/create"} {
+		w := h.request(http.MethodGet, path, nil, false)
+		requireStatus(t, w, http.StatusOK)
+		if strings.Count(w.Body.String(), "Shared upload limit is 2 MiB.") != 3 {
+			t.Fatalf("downloads, PDFs, and audio must show the configured limit on %s", path)
+		}
+	}
+	assertUsage := func(want, class string, full bool) {
+		t.Helper()
+		w := h.request(http.MethodGet, "/media", nil, false)
+		requireStatus(t, w, http.StatusOK)
+		if !strings.Contains(w.Body.String(), want) {
+			t.Fatalf("Media must show %q", want)
+		}
+		if !strings.Contains(w.Body.String(), `class="`+class+`" data-file-storage`) {
+			t.Fatalf("Media storage summary must use %q styling", class)
+		}
+		controls := `required><button type="submit">Upload image`
+		if full {
+			controls = `required disabled><button type="submit" disabled>Upload image`
+		}
+		if !strings.Contains(w.Body.String(), controls) {
+			t.Fatalf("unexpected upload controls when storage full is %t", full)
+		}
+		if strings.Contains(w.Body.String(), "<details open>") != full ||
+			strings.Contains(w.Body.String(), `id="library-upload-help" class="form-error">Upload storage is full. Free up space to upload an image.`) != full {
+			t.Fatalf("unexpected upload explanation when storage full is %t", full)
+		}
+	}
+	assertUsage("0 B of 2 MiB used · 2 MiB available", "form-hint", false)
+	picker := h.request(http.MethodGet, "/media?pick=1", nil, false)
+	requireStatus(t, picker, http.StatusOK)
+	if strings.Contains(picker.Body.String(), "data-file-storage") {
+		t.Fatal("the image picker must omit the file storage summary")
+	}
+	store := h.blog.downloads.(*fileDownloadStore)
+	id := strings.Repeat("c", 64) + ".pdf"
+	file, err := store.root.OpenFile(id, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("exact fit")
+	err = file.Truncate(h.blog.fileStorageLimit() - int64(len(data)))
+	if closeErr := file.Close(); err != nil || closeErr != nil {
+		t.Fatal(err, closeErr)
+	}
+	full := uploadTestDownload(t, h, "exact-fit.txt", data)
+	requireStatus(t, full, http.StatusOK)
+	if full.Header().Get("Upload-Storage-Full") != "true" {
+		t.Fatal("an exact-fit upload must report full storage")
+	}
+	assertUsage("2 MiB of 2 MiB used · 0 B available", "form-hint", true)
+	h.blog.settings.FileStorageLimitMiB = 1
+	assertUsage("2 MiB of 1 MiB used · 1 MiB over the limit", "form-error", true)
+	requireStatus(t, uploadTestDownload(t, h, "duplicate.txt", data), http.StatusOK)
+	w := uploadTestDownload(t, h, "new.txt", []byte("new bytes"))
+	requireStatus(t, w, http.StatusUnprocessableEntity)
+	if w.Header().Get("Upload-Storage-Full") != "true" {
+		t.Fatal("a rejection at the limit must report full storage")
+	}
+	if !strings.Contains(w.Body.String(), "0 B of 1 MiB available") {
+		t.Fatal("the rejection must show the configured limit and available space")
+	}
+	requireStatus(t, uploadTestDownload(t, h, "empty.txt", nil), http.StatusUnprocessableEntity)
+	info, err := store.root.Stat(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.blog.removeMedia(t.Context(), id, info.ModTime().UnixNano(), false); err != nil {
+		t.Fatal(err)
+	}
+	assertUsage("9 B of 1 MiB used", "form-hint", false)
+	requireStatus(t, uploadTestDownload(t, h, "new.txt", []byte("new bytes")), http.StatusOK)
+	requireStatus(t, uploadTestDownload(t, h, "empty.txt", nil), http.StatusOK)
+}
+
+type unreadableDownloadStore struct{ downloadStore }
+
+func (unreadableDownloadStore) Open(context.Context, string) (*os.File, error) {
+	return nil, os.ErrPermission
+}
+
+func TestDuplicateDownloadMustBeReadable(t *testing.T) {
+	h := usersHarness(t)
+	const data = "existing bytes"
+	testDownload(t, h, "existing.txt", data)
+	h.blog.downloads = unreadableDownloadStore{h.blog.downloads}
+	requireStatus(t, uploadTestDownload(t, h, "duplicate.txt", []byte(data)), http.StatusInternalServerError)
 }
 
 func TestDownloadAccessAndReuse(t *testing.T) {

@@ -16,11 +16,12 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/trentnix/hyperserver/pkg/routing"
 )
 
 const (
-	maxDownloadBytes      = 32 * 1024 * 1024
-	maxDownloadStorage    = 1024 * 1024 * 1024
+	maxDownloadBytes      = 32 * routing.MiB
 	maxComponentDownloads = 20
 )
 

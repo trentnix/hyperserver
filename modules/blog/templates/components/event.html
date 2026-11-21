@@ -37,6 +37,7 @@
           <button type="button" class="text-button" data-image-reset hidden>Clear</button>
           <input type="file" accept="image/png,image/jpeg,image/gif" aria-label="Upload event image" hidden>
         </div>
+        {{ template "blog.uploadStorageNotice" }}
         <div data-event-image-description hidden>
           <label for="event-image-alt">Image description (optional)</label><input id="event-image-alt" data-event-field="imageAlt" maxlength="500">
         </div>

@@ -18,6 +18,8 @@ assetsDirectory: ""
 recentPostCount: 10
 # Maximum RSS entries. Defaults to 50. Use 0 for all published posts. Restart after changing.
 rssPostLimit: 50
+# Site-wide storage for image bundles, downloads, PDFs, and audio. Use a positive MiB value. Restart after changing.
+fileStorageLimitMiB: 1024
 # Private image bundles, served through access checks. Keep outside public file roots and back up with the database.
 uploadsDirectory: uploads
 storage:

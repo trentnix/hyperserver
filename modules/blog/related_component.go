@@ -29,8 +29,8 @@ func relatedDefinition() componentDefinition {
 		Name: "Related content", Summary: "Links to other posts and pages", EmptyMessage: "Choose a post or page or remove the related content component.",
 		TemplateFile: "templates/components/related.html", Template: "blog.relatedEditor", Icon: "blog.relatedIcon", Script: "related-editor.js",
 		Parse: func(source string) (componentContent, error) { return parseRelated(source) }, Renderer: relatedRenderer{},
-		EditorData: func(source string, _ bool) any {
-			return postPickerData{ID: "post-related", Name: "related", Source: source, TitleLabel: "Heading", MaxPosts: maxRelatedLinks, OptionalTitle: true, IncludePages: true}
+		EditorData: func(data componentEditorData) any {
+			return postPickerData{ID: "post-related", Name: "related", Source: data.Source, TitleLabel: "Heading", MaxPosts: maxRelatedLinks, OptionalTitle: true, IncludePages: true}
 		},
 	}
 }

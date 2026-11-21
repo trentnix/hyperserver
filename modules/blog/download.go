@@ -147,7 +147,7 @@ func (m *module) uploadDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer m.downloadUploadMu.Unlock()
-	entry, status, err := m.storeDownload(r, account.ID, permission)
+	entry, status, err := m.storeDownload(w, r, account.ID, permission)
 	if err != nil {
 		writeJSON(w, r, status, map[string]string{"error": err.Error()})
 		return
@@ -155,7 +155,7 @@ func (m *module) uploadDownload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, entry)
 }
 
-func (m *module) storeDownload(r *http.Request, accountID string, permission role) (postDownload, int, error) {
+func (m *module) storeDownload(w http.ResponseWriter, r *http.Request, accountID string, permission role) (postDownload, int, error) {
 	failed := func(err error) (postDownload, int, error) {
 		logger.LogRequestError(r, err)
 		return postDownload{}, http.StatusInternalServerError, errors.New("Unable to save the file. Retry the upload.")
@@ -190,23 +190,22 @@ func (m *module) storeDownload(r *http.Request, accountID string, permission rol
 		return postDownload{}, http.StatusUnprocessableEntity, err
 	}
 	id := downloadID(data, extension)
-	m.mediaMu.RLock()
-	defer m.mediaMu.RUnlock()
+	m.mediaMu.Lock()
+	defer m.mediaMu.Unlock()
 	metadata, err := m.mediaMetadata.GetMediaMetadata(r.Context(), id)
 	if err != nil {
 		return failed(err)
 	}
-	allowed := permission == roleAdmin || metadata.UploadedBy == accountID
-	if !allowed && metadata.Version == 0 {
-		stored, err := m.downloads.Open(r.Context(), id)
-		if errors.Is(err, errNotFound) {
-			allowed = true
-		} else if err != nil {
+	stored, err := m.downloads.Open(r.Context(), id)
+	exists := err == nil
+	if exists {
+		if err := stored.Close(); err != nil {
 			return failed(err)
-		} else {
-			stored.Close()
 		}
+	} else if !errors.Is(err, errNotFound) {
+		return failed(err)
 	}
+	allowed := permission == roleAdmin || metadata.UploadedBy == accountID || metadata.Version == 0 && !exists
 	if !allowed {
 		allowed, err := m.publicMedia(r.Context(), id)
 		if err == nil && !allowed {
@@ -219,28 +218,29 @@ func (m *module) storeDownload(r *http.Request, accountID string, permission rol
 			return postDownload{}, http.StatusConflict, contentError("This file belongs to another account. Ask an admin to add it to your post.")
 		}
 	}
-	filesOnDisk, err := m.media.List(r.Context())
-	if err != nil {
-		return failed(err)
-	}
-	var total int64
-	exists := false
-	for _, stored := range filesOnDisk {
-		if validDownloadID(stored.ID) {
-			total += stored.Size
-			exists = exists || stored.ID == id
+	size := int64(len(data))
+	var storageFull bool
+	if !exists {
+		var err error
+		storageFull, err = m.checkUploadQuota(r.Context(), id, size)
+		if err != nil {
+			var quota uploadQuotaError
+			if errors.As(err, &quota) {
+				reportFullUploadStorage(w, storageFull)
+				return postDownload{}, http.StatusUnprocessableEntity, err
+			}
+			return failed(err)
 		}
 	}
-	if !exists && total+int64(len(data)) > maxDownloadStorage {
-		return postDownload{}, http.StatusUnprocessableEntity, contentError("File storage is full (1 GiB). Ask an admin to clean up unused uploads.")
-	}
 	name := uploadFilename(files[0].Filename)
-	size := int64(len(data))
 	if err := m.mediaMetadata.RememberMedia(r.Context(), id, mediaMetadata{Filename: name, UploadedBy: accountID, ContentType: downloadType(id), SizeBytes: &size, Checksum: id[:64]}); err != nil {
 		return failed(err)
 	}
-	if _, err := m.downloads.Put(r.Context(), data, extension); err != nil {
-		return failed(err)
+	if !exists {
+		if _, err := m.downloads.Put(r.Context(), data, extension); err != nil {
+			return failed(err)
+		}
+		reportFullUploadStorage(w, storageFull)
 	}
 	if err := m.mediaMetadata.RecordMediaUpload(r.Context(), id, time.Now()); err != nil {
 		return failed(err)

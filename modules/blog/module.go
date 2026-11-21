@@ -7,6 +7,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/trentnix/hyperserver/pkg/components/content"
 	"github.com/trentnix/hyperserver/pkg/components/form"
 	"github.com/trentnix/hyperserver/pkg/handlers"
+	"github.com/trentnix/hyperserver/pkg/routing"
 	"github.com/trentnix/hyperserver/pkg/server"
 	"github.com/trentnix/hyperserver/pkg/services/messaging"
 	"github.com/trentnix/hyperserver/pkg/services/user"
@@ -25,7 +27,14 @@ import (
 //go:embed templates static
 var blogModuleFS embed.FS
 
-const defaultRSSPostLimit = 50
+const (
+	defaultRSSPostLimit        = 50
+	defaultFileStorageLimitMiB = 1024
+)
+
+func defaultSettings() *Settings {
+	return &Settings{InviteExpiration: 7 * 24 * time.Hour, RSSPostLimit: defaultRSSPostLimit, FileStorageLimitMiB: defaultFileStorageLimitMiB}
+}
 
 // Settings is loaded from modules/blog/config.yaml during module initialization.
 type Settings struct {
@@ -44,6 +53,8 @@ type Settings struct {
 
 	// RSSPostLimit limits feed entries. Zero includes all published posts.
 	RSSPostLimit int `yaml:"rssPostLimit"`
+	// FileStorageLimitMiB caps image bundles, downloads, PDFs, and audio stored by the site.
+	FileStorageLimitMiB int64 `yaml:"fileStorageLimitMiB"`
 
 	// UploadsDirectory holds uploaded images and files, relative to the application configuration directory.
 	UploadsDirectory string `yaml:"uploadsDirectory"`
@@ -58,16 +69,16 @@ type Settings struct {
 	} `yaml:"storage"`
 }
 
-// UnmarshalYAML rejects fractional RSS limits instead of letting YAML truncate them.
+// UnmarshalYAML rejects fractional limits instead of letting YAML truncate them.
 // The callback preserves the caller's strict field validation.
 func (s *Settings) UnmarshalYAML(unmarshal func(any) error) error {
 	var fields map[string]yaml.Node
 	if err := unmarshal(&fields); err != nil {
 		return err
 	}
-	if value, ok := fields["rssPostLimit"]; ok {
-		if value.ShortTag() != "!!int" {
-			return fmt.Errorf("yaml: line %d: blog.rssPostLimit must be an integer", value.Line)
+	for _, key := range []string{"rssPostLimit", "fileStorageLimitMiB"} {
+		if value, ok := fields[key]; ok && value.ShortTag() != "!!int" {
+			return fmt.Errorf("yaml: line %d: blog.%s must be an integer", value.Line, key)
 		}
 	}
 	type plain Settings
@@ -160,7 +171,7 @@ type module struct {
 // init registers the factory without opening storage or creating runtime state.
 func init() {
 	handlers.Register(handlers.Descriptor{Name: "blog", Requires: []handlers.Requirement{{Capability: auth.ManagerCapability}}, New: func() handlers.Handler {
-		return &module{settings: &Settings{InviteExpiration: 7 * 24 * time.Hour, RSSPostLimit: defaultRSSPostLimit}}
+		return &module{settings: defaultSettings()}
 	}})
 }
 
@@ -190,6 +201,9 @@ func (m *module) Init(ctx context.Context, app *server.ApplicationServer) (err e
 	}
 	if m.settings.RSSPostLimit < 0 {
 		return errors.New("blog.rssPostLimit must be zero or greater")
+	}
+	if m.settings.FileStorageLimitMiB < 1 || m.settings.FileStorageLimitMiB > math.MaxInt64/routing.MiB {
+		return errors.New("blog.fileStorageLimitMiB must be a positive integer that fits in bytes")
 	}
 	m.location = time.UTC
 	if m.settings.TimeZone != "" {

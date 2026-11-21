@@ -1,4 +1,4 @@
-import {openMediaLibrary, uploadImage, runFormUpload, showUploadFailure, setMediaStatus} from './media.js';
+import {openMediaLibrary, uploadImage, runFormUpload, showUploadFailure, setMediaStatus, uploadStorageFull} from './media.js';
 import {markField} from './forms.js';
 import {createMarkdownEditor, getMarkdownEditor} from './markdown-editor.js';
 
@@ -95,12 +95,16 @@ function initialize(root) {
     createMarkdownEditor(textarea, {
       upload(file, onSuccess, status) {
         const attempt = () => {
-          if (!textarea.isConnected) return;
+          if (!textarea.isConnected || uploadStorageFull(textarea.form)) return;
           setMediaStatus(status, 'Waiting to upload ' + file.name + '…');
           return runFormUpload(textarea.form, async () => {
+            if (uploadStorageFull(textarea.form)) {
+              setMediaStatus(status, 'Image not uploaded: ' + file.name, true);
+              return;
+            }
             setMediaStatus(status, 'Uploading ' + file.name + '…');
             try {
-              const path = await uploadImage(file);
+              const path = await uploadImage(file, textarea.form);
               if (!textarea.isConnected) return;
               onSuccess(path);
               status.remove();

@@ -5,6 +5,7 @@
     <label for="post-link" data-link-source-label>Link preview (JSON)</label>
     <textarea id="post-link" name="link" rows="3" aria-describedby="link-help">{{ .Source }}</textarea>
     <fieldset data-link-controls data-component-fields hidden disabled></fieldset>
+    {{ template "blog.uploadStorageNotice" }}
     <div data-link-status role="status"></div>
   </section>
 {{ end }}

@@ -13,6 +13,7 @@
       <span class="album-capacity" data-album-capacity role="status" hidden></span>
       <input type="file" data-album-files accept="image/png,image/jpeg,image/gif" multiple hidden>
     </div>
+    {{ template "blog.uploadStorageNotice" }}
     <label for="post-album" data-album-source-label>Album photos (one Markdown image per line)</label>
     <textarea id="post-album" name="album" rows="3" aria-describedby="album-help">{{ .Source }}</textarea>
     <ol class="album-editor-photos" data-album-list></ol>

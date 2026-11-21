@@ -3,13 +3,85 @@ package blog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
 
 	"github.com/trentnix/hyperserver/pkg/components/form"
+	"github.com/trentnix/hyperserver/pkg/routing"
+	"github.com/trentnix/hyperserver/pkg/services/logger"
 	"github.com/trentnix/hyperserver/pkg/util"
 )
+
+func (m *module) fileStorageLimit() int64 { return m.settings.FileStorageLimitMiB * routing.MiB }
+
+func (m *module) fileStorageLimitLabel() string { return fileStorageSizeLabel(m.fileStorageLimit()) }
+
+func fileStorageSizeLabel(size int64) string {
+	const gib = 1024 * routing.MiB
+	switch {
+	case size >= gib && size%gib == 0:
+		return fmt.Sprintf("%d GiB", size/gib)
+	case size >= routing.MiB && size%routing.MiB == 0:
+		return fmt.Sprintf("%d MiB", size/routing.MiB)
+	default:
+		return mediaSizeLabel(size)
+	}
+}
+
+func fileStorageUsed(files []mediaFile) int64 {
+	var used int64
+	for _, file := range files {
+		used += file.Size
+	}
+	return used
+}
+
+func (m *module) uploadStorageFull(r *http.Request) bool {
+	files, err := m.media.List(r.Context())
+	if err != nil {
+		logger.LogRequestError(r, err)
+		return false
+	}
+	return fileStorageUsed(files) >= m.fileStorageLimit()
+}
+
+type uploadQuotaError struct{ remaining, limit int64 }
+
+func (e uploadQuotaError) Error() string {
+	return fmt.Sprintf("Upload storage has %s of %s available. Reuse an existing upload or free up space before uploading.",
+		fileStorageSizeLabel(e.remaining), fileStorageSizeLabel(e.limit))
+}
+
+// checkUploadQuota accounts for all stored uploads. The caller holds mediaMu
+// exclusively from the check until publication so another upload cannot use the same space.
+func (m *module) checkUploadQuota(ctx context.Context, id string, size int64) (full bool, err error) {
+	files, err := m.media.List(ctx)
+	if err != nil {
+		return false, err
+	}
+	replacing := false
+	for _, file := range files {
+		if file.ID == id {
+			size -= file.Size
+			replacing = true
+			break
+		}
+	}
+	limit := m.fileStorageLimit()
+	remaining := limit - fileStorageUsed(files)
+	if size > max(0, remaining) || remaining <= 0 && !replacing {
+		return remaining <= 0, uploadQuotaError{remaining: max(0, remaining), limit: limit}
+	}
+	return size >= remaining, nil
+}
+
+func reportFullUploadStorage(w http.ResponseWriter, full bool) {
+	if full {
+		w.Header().Set("Upload-Storage-Full", "true")
+	}
+}
 
 // mediaPage separates unused uploads from those retained only by history.
 type mediaPage struct {

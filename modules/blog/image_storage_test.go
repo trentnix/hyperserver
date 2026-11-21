@@ -40,12 +40,12 @@ func TestFileImagePersistence(t *testing.T) {
 	data := []byte("validated image bytes")
 	ids := make(map[string]string)
 	for _, media := range []string{"image/png", "image/jpeg", "image/gif"} {
-		id, err := store.Put(t.Context(), testImageUpload(media, data))
+		id, err := store.Put(t.Context(), testImageUpload(media, data), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		ids[media] = id
-		if again, err := store.Put(t.Context(), testImageUpload(media, data)); err != nil || again != id {
+		if again, err := store.Put(t.Context(), testImageUpload(media, data), nil); err != nil || again != id {
 			t.Fatalf("duplicate upload: %q, %v", again, err)
 		}
 		saved, err := store.OpenVariant(t.Context(), id, originalImage)
@@ -78,7 +78,7 @@ func TestFileImagePersistence(t *testing.T) {
 			t.Fatalf("reopened image: %+v, %v", stored, err)
 		}
 	}
-	changed, err := reopened.Put(t.Context(), testImageUpload("image/png", []byte("different content")))
+	changed, err := reopened.Put(t.Context(), testImageUpload("image/png", []byte("different content")), nil)
 	if err != nil || changed == ids["image/png"] {
 		t.Fatalf("changed bytes reused URL: %q, %v", changed, err)
 	}
@@ -88,14 +88,14 @@ func TestFileImagePersistence(t *testing.T) {
 func TestFileImageConcurrentAccess(t *testing.T) {
 	store := newTestImageStore(t)
 	data := bytes.Repeat([]byte("image"), 10000)
-	id, err := store.Put(t.Context(), testImageUpload("image/png", data))
+	id, err := store.Put(t.Context(), testImageUpload("image/png", data), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
 	for range 20 {
 		wg.Go(func() {
-			if got, err := store.Put(t.Context(), testImageUpload("image/png", data)); err != nil || got != id {
+			if got, err := store.Put(t.Context(), testImageUpload("image/png", data), nil); err != nil || got != id {
 				t.Errorf("concurrent upload: %q, %v", got, err)
 			}
 		})
@@ -168,13 +168,13 @@ func TestFileImageFailures(t *testing.T) {
 	store := newTestImageStore(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := store.Put(ctx, imageUpload{MediaType: "image/png"}); !errors.Is(err, context.Canceled) {
+	if _, err := store.Put(ctx, imageUpload{MediaType: "image/png"}, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled write: %v", err)
 	}
 	if _, err := store.Open(ctx, strings.Repeat("a", 64)+".png"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled read: %v", err)
 	}
-	if _, err := store.Put(t.Context(), imageUpload{MediaType: "text/html"}); err == nil {
+	if _, err := store.Put(t.Context(), imageUpload{MediaType: "text/html"}, nil); err == nil {
 		t.Fatal("unsupported media type accepted")
 	}
 	data := []byte("validated bytes")
@@ -183,7 +183,7 @@ func TestFileImageFailures(t *testing.T) {
 	if err := store.root.Mkdir(id, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Put(t.Context(), testImageUpload("image/png", data)); err == nil {
+	if _, err := store.Put(t.Context(), testImageUpload("image/png", data), nil); err == nil {
 		t.Fatal("publication failure ignored")
 	}
 	entries, err := os.ReadDir(store.root.Name())
@@ -193,7 +193,7 @@ func TestFileImageFailures(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Put(t.Context(), testImageUpload("image/png", data)); err == nil {
+	if _, err := store.Put(t.Context(), testImageUpload("image/png", data), nil); err == nil {
 		t.Fatal("write to closed storage succeeded")
 	}
 	if _, err := store.Open(t.Context(), id); err == nil {
@@ -205,7 +205,7 @@ func TestFileImageFailures(t *testing.T) {
 func TestModuleImageStorageLifecycle(t *testing.T) {
 	h := newHarness(t)
 	images := h.blog.images.(*fileImageStore)
-	id, err := images.Put(t.Context(), testImageUpload("image/png", []byte("validated bytes")))
+	id, err := images.Put(t.Context(), testImageUpload("image/png", []byte("validated bytes")), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
