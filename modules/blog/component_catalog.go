@@ -217,6 +217,19 @@ type componentEditorData struct {
 	NoLibrary bool
 }
 
+func (editorPage) ComponentChoices() []componentDefinition {
+	choices := make([]componentDefinition, 0, len(postComponentCatalog))
+	for _, definition := range postComponentCatalog {
+		if definition.AliasFor == "" {
+			choices = append(choices, definition)
+		}
+	}
+	slices.SortStableFunc(choices, func(a, b componentDefinition) int {
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+	return choices
+}
+
 func (p editorPage) ComponentEditors() []componentEditor {
 	result := make([]componentEditor, 0, len(postComponentCatalog))
 	sources := p.componentFields()

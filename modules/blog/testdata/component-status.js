@@ -10,6 +10,11 @@
   const set = (input, value) => { input.value = value; input.dispatchEvent(new Event('input', {bubbles: true})); };
   const badge = section => section.querySelector('[data-component-unsaved]');
   const dirty = () => [...document.querySelectorAll('[data-component-unsaved]:not([hidden])')];
+  const checkChoices = form => {
+    const labels = [...form.querySelectorAll('[data-component-add] strong')].map(label => label.textContent);
+    assert(labels.length > 0 && labels.every((label, index) => index === 0 || labels[index - 1].localeCompare(label, 'en') <= 0),
+      'The component menu must list choices alphabetically by their labels.');
+  };
   const open = async path => {
     await htmx.ajax('GET', path, {target: '#article-content', swap: 'innerHTML'});
     await wait(() => document.querySelector('#post-form .CodeMirror') && !document.querySelector('[data-draft-status]').hidden);
@@ -18,12 +23,14 @@
     const stage = sessionStorage.getItem('component-status-stage');
     if (!stage) {
       const newForm = document.querySelector('#post-form');
+      checkChoices(newForm);
       await addTestComponent(newForm.querySelector('[data-component-add="video"]'));
       assert(!badge(newForm.querySelector('[data-video-editor]')).hidden, 'An empty newly added component must be marked unsaved.');
       await removeTestComponent(newForm.querySelector('[data-video-editor] [data-component-remove]'));
       assert(dirty().length === 0, 'Removing a new empty component must clear its indicator.');
       await open(paths.editor);
       let form = document.querySelector('#post-form');
+      checkChoices(form);
       const order = JSON.parse(form.elements.componentOrder.value);
       const sections = [...form.querySelectorAll('[data-post-component]')].filter(section => !section.hidden);
       assert(sections.length === order.length && sections.every((section, index) => section.dataset.postComponent === order[index]) && dirty().length === 0, 'Saved components must appear in order without unsaved indicators. Unused editors must stay hidden.');

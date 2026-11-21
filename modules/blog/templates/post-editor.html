@@ -16,7 +16,7 @@
   <details class="component-picker" data-component-picker hidden>
     <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add component</summary>
     <div class="component-picker-options">
-      {{ range $components }}{{ if not .AliasFor }}<button type="button" class="no-disable" data-component-add="{{ .Kind }}">{{ renderPartial .Icon . }}<span><strong>{{ .Name }}</strong><small>{{ .Summary }}</small></span></button>{{ end }}{{ end }}
+      {{ range .Data.ComponentChoices }}<button type="button" class="no-disable" data-component-add="{{ .Kind }}">{{ renderPartial .Icon . }}<span><strong>{{ .Name }}</strong><small>{{ .Summary }}</small></span></button>{{ end }}
     </div>
   </details>
   <p class="component-placement-status" role="status" data-component-placement-status></p>
