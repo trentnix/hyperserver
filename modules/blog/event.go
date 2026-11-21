@@ -18,9 +18,10 @@ func eventDefinition() componentDefinition {
 		Kind: "event", Field: "event", Payload: "event",
 		Name: "Event", Summary: "A date, time, and location", EmptyMessage: "Enter an event name and start date or remove the event.",
 		TemplateFile: "templates/components/event.html", Template: "blog.eventEditor", Icon: "blog.eventIcon", Script: "event-editor.js",
-		Parse:    func(source string) (componentContent, error) { return parseEvent(source) },
-		Decode:   func(source string) (componentContent, error) { return readEvent(source, true) },
-		Renderer: eventRenderer{},
+		Parse:        func(source string) (componentContent, error) { return parseEvent(source) },
+		Decode:       func(source string) (componentContent, error) { return readEvent(source, true) },
+		Renderer:     eventRenderer{},
+		FeedRenderer: eventRenderer{feed: true},
 	}
 }
 
@@ -216,9 +217,9 @@ var eventKind = ast.NewNodeKind("Event")
 func (*eventNode) Kind() ast.NodeKind              { return eventKind }
 func (n *eventNode) Dump(source []byte, level int) { ast.DumpHelper(n, source, level, nil, nil) }
 
-type eventRenderer struct{}
+type eventRenderer struct{ feed bool }
 
-func (eventRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer) {
+func (r eventRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer) {
 	register.Register(eventKind, func(w util.BufWriter, _ []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
@@ -240,13 +241,20 @@ func (eventRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer)
 		if event.Location != "" {
 			fmt.Fprintf(w, `<p class="event-location">%s</p>`, html.EscapeString(event.Location))
 		}
-		if event.MapURL != "" || event.URL != "" {
+		var calendar string
+		if !r.feed {
+			calendar = event.calendar(time.Now())
+		}
+		if event.MapURL != "" || event.URL != "" || calendar != "" {
 			w.WriteString(`<div class="event-links">`)
 			if event.MapURL != "" {
 				fmt.Fprintf(w, `<a class="event-link event-map-link" href="%s" target="_blank" rel="noopener" hx-boost="false" aria-label="View map for %s (opens in a new tab)">View map</a>`, html.EscapeString(event.MapURL), html.EscapeString(event.Location))
 			}
 			if event.URL != "" {
 				fmt.Fprintf(w, `<a class="event-link" href="%s" hx-boost="false" aria-label="Event details for %s">Event details</a>`, html.EscapeString(event.URL), html.EscapeString(event.Title))
+			}
+			if calendar != "" {
+				event.writeCalendarLink(w, calendar)
 			}
 			w.WriteString("</div>")
 		}
@@ -256,37 +264,51 @@ func (eventRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer)
 }
 
 func (e *postEvent) writeSchedule(w util.BufWriter) {
+	const date = "Monday, Jan 2, 2006"
 	hasEnd := !e.end.IsZero() && !e.end.Equal(e.start)
+	if e.allDay() {
+		fmt.Fprintf(w, `<time datetime="%s">%s</time>`, e.start.Format(time.DateOnly), e.start.Format(date))
+		if hasEnd {
+			fmt.Fprintf(w, ` – <time datetime="%s">%s</time>`, e.end.Format(time.DateOnly), e.end.Format(date))
+		}
+		w.WriteString("<br>All day")
+		return
+	}
+
+	w.WriteString(e.start.Format(date))
+	if hasEnd && e.start.Format(time.DateOnly) != e.end.Format(time.DateOnly) {
+		w.WriteString(" – " + e.end.Format(date))
+	}
+	w.WriteString("<br>")
 	_, startOffset := e.start.Zone()
 	_, endOffset := e.end.Zone()
-	e.writeTime(w, e.start, false, !hasEnd || startOffset != endOffset)
+	e.writeTime(w, e.start, !hasEnd || startOffset != endOffset)
 	if hasEnd {
 		w.WriteString(" – ")
-		e.writeTime(w, e.end, e.start.Format(time.DateOnly) == e.end.Format(time.DateOnly), true)
+		e.writeTime(w, e.end, true)
 	}
-	if e.allDay() {
-		w.WriteString(" · All day")
-	} else if e.wallTime {
+	if e.wallTime {
 		fmt.Fprintf(w, " · %s", html.EscapeString(e.TimeZone))
 	}
 }
 
-func (e *postEvent) writeTime(w util.BufWriter, at time.Time, timeOnly, showOffset bool) {
-	const date = "Mon, Jan 2, 2006"
-	display, machine := date, time.DateOnly
-	if !e.allDay() {
-		display, machine = "3:04 PM", time.RFC3339
-		if !timeOnly {
-			display = date + " · " + display
-		}
-		if e.wallTime {
-			machine = "2006-01-02T15:04:05"
-		} else if showOffset {
-			display += " UTC"
-			if _, offset := at.Zone(); offset != 0 {
-				display += "-07:00"
-			}
+func (e *postEvent) writeTime(w util.BufWriter, at time.Time, showOffset bool) {
+	display := "3:04 PM"
+	machine := at.Format(time.RFC3339)
+	_, offset := at.Zone()
+	if offset%60 != 0 {
+		// HTML time offsets allow hours and minutes only.
+		machine = at.UTC().Format(time.RFC3339)
+	}
+	if e.wallTime {
+		machine = at.Format("2006-01-02T15:04:05")
+	} else if showOffset {
+		display += " UTC"
+		if offset%60 != 0 {
+			display += "-07:00:00"
+		} else if offset != 0 {
+			display += "-07:00"
 		}
 	}
-	fmt.Fprintf(w, `<time datetime="%s">%s</time>`, html.EscapeString(at.Format(machine)), html.EscapeString(at.Format(display)))
+	fmt.Fprintf(w, `<time datetime="%s">%s</time>`, machine, at.Format(display))
 }

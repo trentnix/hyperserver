@@ -19,7 +19,7 @@ func TestEventComponent(t *testing.T) {
 			event: postEvent{Title: "Talk <one>", StartDate: "2027-01-12", StartTime: "18:30", EndTime: "20:00",
 				TimeZone: "America/Chicago", Location: "<Community hall>", MapURL: "https://maps.example/?pin=hall&zoom=16",
 				URL: "https://example.com/event?x=1&y=2", ImageID: imageID, ImageAlt: "The hall <at night>"},
-			want: []string{`<h2>Talk &lt;one&gt;</h2>`, "2027-01-12T18:30:00-06:00", "2027-01-12T20:00:00-06:00", "6:30 PM</time>", "8:00 PM UTC-06:00", "&lt;Community hall&gt;", "https://example.com/event?x=1&amp;y=2",
+			want: []string{`<h2>Talk &lt;one&gt;</h2>`, `Tuesday, Jan 12, 2027<br><time datetime="2027-01-12T18:30:00-06:00">6:30 PM</time>`, "2027-01-12T20:00:00-06:00", "8:00 PM UTC-06:00", "&lt;Community hall&gt;", "https://example.com/event?x=1&amp;y=2",
 				`href="https://maps.example/?pin=hall&amp;zoom=16" target="_blank" rel="noopener" hx-boost="false" aria-label="View map for &lt;Community hall&gt; (opens in a new tab)">View map</a>`,
 				`href="/images/` + imageID + `" data-view-image hx-boost="false" aria-label="View event image. The hall &lt;at night&gt;"`,
 				`src="/images/` + imageID + `" alt="The hall &lt;at night&gt;"`},
@@ -28,12 +28,17 @@ func TestEventComponent(t *testing.T) {
 			name: "offset changes across event",
 			event: postEvent{Title: "Overnight event", StartDate: "2027-03-13", StartTime: "22:00",
 				EndDate: "2027-03-14", EndTime: "04:00", TimeZone: "America/Chicago"},
-			want: []string{"10:00 PM UTC-06:00", "4:00 AM UTC-05:00"},
+			want: []string{"Saturday, Mar 13, 2027 – Sunday, Mar 14, 2027<br>", "10:00 PM UTC-06:00", "4:00 AM UTC-05:00"},
+		},
+		{
+			name:  "historical offset with seconds",
+			event: postEvent{Title: "Historical event", StartDate: "1900-01-01", StartTime: "09:00", TimeZone: "Europe/Paris"},
+			want:  []string{`Monday, Jan 1, 1900<br><time datetime="1900-01-01T08:50:39Z">9:00 AM UTC+00:09:21</time>`},
 		},
 		{
 			name:  "all day",
 			event: postEvent{Title: "Open studio", StartDate: "2027-04-16", EndDate: "2027-04-18", AllDay: &allDay},
-			want:  []string{`datetime="2027-04-16"`, `datetime="2027-04-18"`, "All day"},
+			want:  []string{`<time datetime="2027-04-16">Friday, Apr 16, 2027</time> – <time datetime="2027-04-18">Sunday, Apr 18, 2027</time><br>All day`},
 		},
 		{
 			name:  "legacy all day",
@@ -59,9 +64,19 @@ func TestEventComponent(t *testing.T) {
 					t.Fatalf("missing %q in %s", fragment, html)
 				}
 			}
-			feed, err := markdownAt(source, &url.URL{Scheme: "https", Host: "blog.example", Path: "/post/s/event"})
+			if !strings.Contains(string(html), `class="event-link event-calendar-link"`) {
+				t.Fatalf("event card did not offer a calendar download: %s", html)
+			}
+			feed, err := markdownComponents(source, postComponentCatalog.forFeed())
+			if err != nil {
+				t.Fatal(err)
+			}
+			feed, err = prepareFeedHTML(feed, &url.URL{Scheme: "https", Host: "blog.example", Path: "/post/s/event"})
 			if err != nil || !strings.Contains(string(feed), tc.event.StartDate) {
 				t.Fatalf("expected event dates in feed: %s, %v", feed, err)
+			}
+			if strings.Contains(string(feed), "data:text/calendar") {
+				t.Fatal("feeds must omit the browser download link")
 			}
 			if tc.event.ImageID != "" {
 				for _, attr := range []string{"href", "src"} {
@@ -96,6 +111,9 @@ func TestSavedEventWithChangedTimeZoneRules(t *testing.T) {
 		if !strings.Contains(string(rendered), fragment) {
 			t.Fatalf("missing %q in %s", fragment, rendered)
 		}
+	}
+	if strings.Contains(string(rendered), "data:text/calendar") {
+		t.Fatal("a saved clock time that no longer resolves must omit the calendar download")
 	}
 	event.StartTime = "02:30"
 	if got := newComponentEditorForm(source, nil).fields["event"]; got != componentJSON(event) {

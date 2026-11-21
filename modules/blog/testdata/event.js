@@ -16,11 +16,21 @@
       const event = document.querySelector('.event-component');
       const dates = [...event.querySelectorAll('time')].map(time => time.dateTime);
       assert(dates.join(' ') === '2027-01-12T18:30:00-06:00 2027-01-12T20:00:00-06:00', 'Published times must use the chosen time zone and date.');
+      const schedule = event.querySelector('.event-when');
+      assert(schedule.firstChild.textContent === 'Tuesday, Jan 12, 2027' && schedule.querySelector('br + time'),
+        'The schedule must spell out the weekday and start the time on a new line.');
       const venue = event.querySelector('.event-location');
       const [map, details] = event.querySelectorAll('.event-links .event-link');
       assert(venue.textContent === 'Community hall' && details.href === 'https://example.com/talk', 'Readers need the location and details link.');
       assert(map.href === mapURL && map.textContent === 'View map', 'Readers need a link to the saved map.');
       assert(map.target === '_blank' && map.relList.contains('noopener'), 'View map must open in a new tab.');
+      const calendar = event.querySelector('.event-calendar-link');
+      const calendarURL = 'data:text/calendar;charset=utf-8;base64,';
+      assert(calendar?.textContent === 'Add to calendar' && calendar.download === 'evening-talk.ics' &&
+        calendar.href.startsWith(calendarURL) && calendar.getAttribute('hx-boost') === 'false', 'The calendar action must be a native .ics download.');
+      const calendarText = atob(calendar.href.slice(calendarURL.length));
+      assert(calendarText.includes('\r\nDTSTART:20270113T003000Z\r\nDTEND:20270113T020000Z\r\n') &&
+        calendar.getBoundingClientRect().height >= 44, 'The calendar download must match the saved times and have a touch-sized target.');
       const mapBox = map.getBoundingClientRect();
       const mapGap = mapBox.top - venue.getBoundingClientRect().bottom;
       assert(mapGap >= 0 && mapGap <= 11 && mapBox.height >= 36 && mapBox.height < details.getBoundingClientRect().height, 'View map must be a compact button close below the venue.');
@@ -31,13 +41,41 @@
       assert(imageLink?.href === image.src && !imageLink.target, 'The image must link directly to the uncropped image as a fallback.');
       assert(imageLink.getAttribute('aria-label').includes(image.alt) && imageLink.querySelector('.event-image-hint').getBoundingClientRect().width > 0, 'The image link must retain its description and show an expand icon.');
       const imageBox = image.getBoundingClientRect();
-      const contentBox = event.querySelector('.event-content').getBoundingClientRect();
-      if (innerWidth < 768) {
-        const cardBox = event.getBoundingClientRect();
-        assert(Math.abs(imageBox.width - cardBox.width + 2) <= 1 && imageBox.height <= 260 && getComputedStyle(image).objectFit === 'cover', 'A stacked image must fill the width of the card and stay within the banner height.');
+      const panel = image.closest('.event-image');
+      const imagePanel = panel.getBoundingClientRect();
+      const cardBox = event.getBoundingClientRect();
+      const content = event.querySelector('.event-content');
+      const contentBox = content.getBoundingClientRect();
+      const tile = event.querySelector('.event-date');
+      const date = tile.getBoundingClientRect();
+      const daySize = parseFloat(getComputedStyle(tile.querySelector('strong')).fontSize);
+      assert(date.width >= 72 && date.height >= 72 && daySize >= 34, 'The date tile and day numeral must read clearly at each width.');
+      assert(Math.abs((date.top - contentBox.top) - (date.left - contentBox.left)) <= 1,
+        'The date tile must have matching top and left insets.');
+      assert(['left', 'top', 'right', 'bottom'].every(edge => Math.abs(imageBox[edge] - imagePanel[edge]) <= 1) &&
+        getComputedStyle(image).objectFit === 'cover', 'The photo must fill its panel without a surrounding mat.');
+      if (innerWidth <= 768) {
+        assert(Math.abs(imageBox.width - cardBox.width + 2) <= 1 && imageBox.height <= 260, 'A stacked image must fill the width of the card and stay within the banner height.');
         assert(imageBox.bottom <= contentBox.top, 'A stacked image must sit above the event details.');
       } else {
-        assert(imageBox.left >= contentBox.right && getComputedStyle(image).objectFit === 'contain', 'A wide card must show the image within its side panel.');
+        assert(imageBox.left >= contentBox.right && Math.abs(imageBox.width / cardBox.width - .4) < .02 &&
+          Math.abs(imageBox.height - cardBox.height + 2) <= 1, 'On wide cards, the photo must fill the full-height side panel.');
+        event.style.width = '400px';
+        assert(image.getBoundingClientRect().bottom <= content.getBoundingClientRect().top,
+          'A narrow card must stack its photo even on a wide viewport.');
+        const narrowTile = tile.getBoundingClientRect();
+        assert(schedule.getBoundingClientRect().top >= narrowTile.bottom && narrowTile.width < date.width,
+          'A narrow card must use a compact date tile and give the schedule room below it.');
+        event.style.removeProperty('width');
+        panel.remove();
+        assert(Math.abs(content.getBoundingClientRect().width - cardBox.width + 2) <= 1,
+          'Text must fill the card when there is no photo.');
+        event.prepend(panel);
+      }
+      if (innerWidth < 480) {
+        const scheduleBox = schedule.getBoundingClientRect();
+        assert(scheduleBox.top >= date.bottom && Math.abs(scheduleBox.left - date.left) <= 1,
+          'A narrow card must give the schedule and actions the full width below the date and title.');
       }
       assert(document.documentElement.scrollWidth <= innerWidth + 1, 'The event card must fit the viewport.');
       imageLink.focus();
@@ -239,5 +277,5 @@
     form.querySelector('[name=published][value=on]').checked = true;
     sessionStorage.setItem('event-saved', 'true');
     form.requestSubmit();
-  } catch (error) { await report(error.stack || String(error)); }
+  } catch (error) { await report(error.message + '\n' + (error.stack || '')); }
 })();

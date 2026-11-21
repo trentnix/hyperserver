@@ -67,7 +67,9 @@ Enter a name and start date. Select **All day** to disable the times and time zo
 
 For a timed event, enter a start time. New events use the [site time zone](content.md#posts) by default. To change the event's time zone, search by city or region. An end time without an end date uses the start date. If the event ends on another day, enter both the end date and end time. If a clock change repeats a time, enter it in UTC.
 
-Timed events show their UTC offset. If a time-zone rule change makes a saved time invalid, the card shows the entered local time and zone.
+Timed events show their UTC offset. If a time-zone rule change makes a saved time invalid, the card shows the entered local time and zone. Update the event time to restore the calendar download.
+
+**Add to calendar** downloads an `.ics` file for import into a calendar app. The file captures the event as it appears at download time. All-day events include every displayed date.
 
 You can add a place or describe where to join online. For a physical venue, paste a map share link in **Map link** to show **View map** below the location. Use **Event website** for more information or registration. You can upload an image or choose one from the library. If the image conveys information, add an image description. Event dates are independent of the post's publication date.
 

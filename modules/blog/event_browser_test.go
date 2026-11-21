@@ -10,7 +10,7 @@ func TestBrowserEvent(t *testing.T) {
 	if browser == "" {
 		t.Skip("set HS_TEST_FIREFOX=firefox to check event components")
 	}
-	for _, width := range []string{"320", "680", "1100"} {
+	for _, width := range []string{"320", "680", "767", "768", "1100", "2560"} {
 		t.Run(width, func(t *testing.T) {
 			testBrowser(t, browser, width, browserScenario{
 				scriptFile: "testdata/event.js", startPath: "/post/create", authenticated: true,
