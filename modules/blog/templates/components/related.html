@@ -1,7 +1,7 @@
 {{ define "blog.relatedEditor" }}
   <section class="related-editor post-picker-editor" data-related-editor data-post-component="related-posts" aria-labelledby="related-editor-title">
-    <div class="album-editor-heading"><div class="component-heading"><h2 id="related-editor-title">Related posts</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentActions" "related posts" }}</div></div>
-    <p class="form-hint" id="post-related-help">Choose up to 12 posts. Only published posts appear to readers.</p>
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="related-editor-title">Related content</h2>{{ template "blog.componentStatus" }}</div><div class="album-editor-actions">{{ template "blog.componentActions" "related content" }}</div></div>
+    <p class="form-hint" id="post-related-help">Link to up to 12 posts or pages. Readers see public links only.</p>
     {{ template "blog.postPicker" . }}
   </section>
 {{ end }}

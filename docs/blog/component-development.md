@@ -35,7 +35,7 @@ The content type supplies:
 
 Reader rendering must escape authored text. Raw HTML remains disabled in Markdown. Media authorization, storage, quotas, and cleanup stay shared.
 
-Content with post references supplies `PostReferences` for save validation and rendering. The application resolves public link metadata for all related-post components through `postLinkReader`. Pure Markdown rendering performs no lookup and omits unresolved links. See [related posts](components.md#related-posts).
+Content with related links supplies `RelatedReferences` for save validation and rendering. The application resolves public titles and URLs when it renders the writing. Pure Markdown rendering omits unresolved links. See [related content](components.md#related-content).
 
 ## Editor contract
 
@@ -43,7 +43,7 @@ Use `initializeComponentPanels` to initialize sections when the page loads or wh
 
 Supply a `label` callback to identify an instance by its title, filename, or another detail in the editor. The editor adds a short reference when repeated instances need distinct labels.
 
-Related posts and the Series section in the post editor share `post-picker.js` and the `blog.postPicker` partial. The picker owns search, selection, and movement. Its consumer owns validation, saving, and the serialized value. [Series](series.md) use shared relational metadata and do not belong to the component catalog.
+Related content and the Series section share `post-picker.js` and the `blog.postPicker` partial. Related content accepts posts and pages. Series accepts posts. Each consumer validates and saves its selection. [Series](series.md) uses shared relational metadata outside the component catalog.
 
 The shared controller owns placement, removal, Undo, field errors, and unsaved indicators. It opens component settings in one dialog and keeps each component's fields mounted when its row moves. Goldmark supplies both the visible marker positions and valid destinations. Each instance has its own panel and form field. Use the panel as the scope for selectors and use the shared ID helpers for generated field IDs. Draft recovery includes the source for each active instance. A new component must not add another type switch or field list to those paths.
 

@@ -1,12 +1,12 @@
 # Series
 
-A series is a shared, ordered collection of posts. It is separate from Markdown components. Each post can belong to one series. Related posts are independent links stored with the post or page where you add them.
+A series is a shared, ordered collection of posts. It is separate from Markdown components. Each post can belong to one series. Related content links are stored with the post or page where you add them.
 
 Open **Series** above the post’s publication and save controls. If the post has no series, choose **Create a series** to enter a name or **Find a series** to search existing series. Leaving the section untouched keeps the post unassigned. The post’s save action applies post and series changes together. A new post can create or join a series with its first save.
 
 Series search matches series names and member post titles, tags, summaries, and text. Results show the series name, post count, and matching member titles. Only series you can manage with room for another post appear. No series list loads before you search. After creating or choosing a series, search for posts and arrange their order. Every member uses the same series data.
 
-The series editor uses the same post picker as Related posts. It supports up to 100 posts, movement buttons, and multiple selections from one search. Removing a post from the list removes its membership when saved. Saving an empty series removes the series. Authors can manage their own series and posts. Admins can manage all series.
+The series editor supports up to 100 posts, movement buttons, and multiple selections from one search. Removing a post from the list removes its membership when saved. Saving an empty series removes the series. Authors can manage their own series and posts. Admins can manage all series.
 
 Series edits show an unsaved indicator and share the post’s browser recovery copy. Saving waits while series details load. If you leave the series unchanged, saving the post leaves shared series data alone, even when another editor has changed its name, order, or membership.
 

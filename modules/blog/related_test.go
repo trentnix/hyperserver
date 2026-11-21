@@ -26,7 +26,7 @@ func TestRepeatedRelatedPosts(t *testing.T) {
 	h := registeredBrowserHarness(t)
 	ctx := t.Context()
 	var ids []string
-	for i := range maxRelatedPosts + 1 {
+	for i := range maxRelatedLinks + 1 {
 		number := strconv.Itoa(i)
 		post, err := savePostFixture(h.blog.posts, ctx, Post{Slug: "other-post-" + number, Title: "Other post " + number, Markdown: "Body"})
 		if err != nil {
@@ -36,8 +36,8 @@ func TestRepeatedRelatedPosts(t *testing.T) {
 	}
 	extra := "related-posts:" + strings.Repeat("1", 32)
 	source, err := joinPostComponents("Body", componentInput{
-		"related":        componentJSON(postRelated{Title: "First group", Posts: ids[:maxRelatedPosts]}),
-		extra:            componentJSON(postRelated{Title: "Second group", Posts: ids[maxRelatedPosts:]}),
+		"related":        componentJSON(postRelated{Title: "First group", Posts: ids[:maxRelatedLinks]}),
+		extra:            componentJSON(postRelated{Title: "Second group", Posts: ids[maxRelatedLinks:]}),
 		"componentOrder": componentJSON([]string{"related-posts", extra}),
 	})
 	if err != nil {
@@ -68,24 +68,113 @@ func TestRelatedComponent(t *testing.T) {
 			t.Fatalf("accepted invalid component: %s", invalid)
 		}
 	}
+	for _, invalid := range []postRelated{
+		{Posts: []string{id}, Links: []string{relatedPagePrefix + id}},
+		{Posts: []string{relatedPagePrefix + id}},
+		{Links: []string{"post:" + id}},
+		{Links: []string{relatedPagePrefix + id, relatedPagePrefix + id}},
+	} {
+		if _, err := parseRelated(componentJSON(invalid)); err == nil {
+			t.Fatalf("accepted invalid related links: %+v", invalid)
+		}
+	}
 	bounded := postRelated{}
-	for i := range maxRelatedPosts + 1 {
+	for i := range maxRelatedLinks + 1 {
 		bounded.Posts = append(bounded.Posts, strings.Repeat(string(rune('A'+i)), 26))
 	}
 	if _, err := parseRelated(componentJSON(bounded)); err == nil {
 		t.Fatal("accepted more than 12 posts")
 	}
-	bounded.Posts = bounded.Posts[:maxRelatedPosts]
+	bounded.Posts = bounded.Posts[:maxRelatedLinks]
 	if _, err := parseRelated(componentJSON(bounded)); err != nil {
 		t.Fatal("rejected the selection limit", err)
 	}
-	reader := relatedRenderer{posts: map[string]Post{id: {ID: id, Slug: "target", Title: `A <b>title</b>`}}}
+	reader := relatedRenderer{links: map[string]relatedLink{id: {title: `A <b>title</b>`, path: "/post/s/target"}}}
 	rendered, err := markdownComponents(source, postComponentCatalog, reader)
 	if err != nil || !strings.Contains(string(rendered), "A &lt;b&gt;title&lt;/b&gt;") || strings.Contains(string(rendered), "<script>") || strings.Contains(string(rendered), "<b>") {
 		t.Fatal("unsafe link rendering", rendered, err)
 	}
 	if rendered, err := markdown(source); err != nil || strings.Contains(string(rendered), "related-posts") {
 		t.Fatal("pure rendering must omit unresolved references", rendered, err)
+	}
+}
+
+func TestRelatedPageLinksFollowPublication(t *testing.T) {
+	h := registeredBrowserHarness(t)
+	h.login(t)
+	ctx := t.Context()
+	save := func(page Page) Page {
+		t.Helper()
+		page.ChildrenDisplay = "hidden"
+		updated, err := h.blog.persistPage(ctx, page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return updated
+	}
+	parent := save(Page{Title: "Parent", Published: true})
+	child := save(Page{Title: "Related guide", ParentID: parent.ID, Published: true})
+	post, err := h.blog.persistPost(ctx, Post{Title: "Related article", Markdown: "Body"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := pageFields("related-links-source", true)
+	fields.Set("componentOrder", `["related-posts"]`)
+	fields.Set("related", componentJSON(postRelated{Links: []string{relatedPagePrefix + child.ID, post.ID}}))
+	requireStatus(t, h.request(http.MethodPost, "/pages", fields, true), http.StatusOK)
+	source, err := h.blog.pageStore.GetPageBySlug(ctx, "related-links-source", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.blog.persistPost(ctx, Post{Title: "Post linking to a page", Markdown: source.Markdown}); err != nil {
+		t.Fatal(err)
+	}
+	check := func(visible bool) {
+		t.Helper()
+		for _, path := range []string{source.URL(), "/post/s/post-linking-to-a-page", "/rss"} {
+			w := h.request(http.MethodGet, path, nil, false)
+			requireStatus(t, w, http.StatusOK)
+			body := w.Body.String()
+			base := ""
+			if path == "/rss" {
+				base = "https://blog.example"
+			}
+			if strings.Contains(body, base+child.URL()) != visible {
+				t.Fatalf("incorrect visibility for %s in %s", child.URL(), path)
+			}
+			if path != "/rss" && visible && !strings.Contains(body, `<li><a href="`+child.URL()+`">`+child.Title+`</a></li><li><a href="/post/s/related-article">Related article</a></li>`) {
+				t.Fatalf("related order or title changed on %s", path)
+			}
+		}
+	}
+	check(true)
+	child.Title, child.Slug = "Renamed guide", "renamed-guide"
+	child = save(child)
+	check(true)
+	if rss := h.request(http.MethodGet, "/rss", nil, false).Body.String(); strings.Contains(rss, "/page/related-guide") {
+		t.Fatal("feed retained an old page slug")
+	}
+	parent.Published = false
+	parent = save(parent)
+	check(false)
+	source.Summary = "Edit with a hidden link."
+	source = save(source)
+	parent.Published = true
+	save(parent)
+	check(true)
+	requireStatus(t, h.request(http.MethodPost, "/pages/delete/"+child.ID, nil, false), http.StatusSeeOther)
+	check(false)
+	source.Summary = "Edit with a deleted link."
+	source = save(source)
+	if got := relatedReferences(source.Markdown); !slices.Equal(got, []string{relatedPagePrefix + child.ID, post.ID}) {
+		t.Fatalf("page link changed after deletion: %v", got)
+	}
+	fields.Set("version", strconv.FormatInt(source.Version, 10))
+	fields.Set("related", componentJSON(postRelated{Links: []string{relatedPagePrefix + source.ID}}))
+	w := h.request(http.MethodPost, "/pages/"+source.ID, fields, true)
+	requireStatus(t, w, http.StatusUnprocessableEntity)
+	if !strings.Contains(w.Body.String(), `data-error-fields="related"`) {
+		t.Fatal("self-link validation must identify the related component")
 	}
 }
 
@@ -138,7 +227,7 @@ func TestRelatedVisibilityAndCurrentLinks(t *testing.T) {
 	}
 	source.Summary = "Source can still be edited."
 	source, err = h.blog.persistPost(ctx, source)
-	if err != nil || !slices.Contains(postReferences(source.Markdown), second.ID) {
+	if err != nil || !slices.Contains(relatedReferences(source.Markdown), second.ID) {
 		t.Fatal("editing source must preserve a hidden target", err)
 	}
 	second.Draft = false
@@ -155,7 +244,7 @@ func TestRelatedVisibilityAndCurrentLinks(t *testing.T) {
 		t.Fatal("a component with no public targets must disappear")
 	}
 	source.Summary = "Deleted references remain stored."
-	if saved, err := h.blog.persistPost(ctx, source); err != nil || len(postReferences(saved.Markdown)) != 2 {
+	if saved, err := h.blog.persistPost(ctx, source); err != nil || len(relatedReferences(saved.Markdown)) != 2 {
 		t.Fatal("deleted targets must not prevent source edits or lose references", err)
 	}
 }
@@ -226,15 +315,37 @@ func TestRelatedPrivateChoicesAndReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	adminCookies := h.cookies
 	poster := registeredPoster(t, h)
 	own, err := h.blog.persistPost(t.Context(), Post{Title: "My private target", Markdown: "Body", Draft: true, AuthorID: poster.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
+	save := func(page Page) Page {
+		t.Helper()
+		page, err := savePageFixture(h.blog.pageStore, t.Context(), page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return page
+	}
+	parent := save(Page{Title: "Page choice parent", Slug: "private-parent"})
+	child := save(Page{Title: "Page choice child", Slug: "private-child", ParentID: parent.ID, Published: true})
+	public := save(Page{Title: "Page choice public", Slug: "public-page", Published: true})
+	query := "/post/related?" + url.Values{"q": {"Page choice"}, "ids": {relatedPagePrefix + child.ID}}.Encode()
+	response := h.request(http.MethodGet, query, nil, false)
+	requireStatus(t, response, http.StatusOK)
+	var result struct{ Choices, Selected []relatedChoice }
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil || len(result.Selected) != 0 ||
+		len(result.Choices) != 1 || result.Choices[0].ID != relatedPagePrefix+public.ID || strings.Contains(response.Body.String(), child.Title) {
+		t.Fatalf("poster must see only public pages: %+v, %v", result, err)
+	}
+	fields := url.Values{"title": {"Link to a hidden page"}, "componentOrder": {`["related-posts"]`}, "related": {componentJSON(postRelated{Links: []string{relatedPagePrefix + child.ID}})}}
+	requireStatus(t, h.request(http.MethodPost, "/post", fields, false), http.StatusUnprocessableEntity)
 	w := h.request("GET", "/post/related?q=does-not-match&ids="+private.ID+","+own.ID, nil, false)
 	requireStatus(t, w, http.StatusOK)
-	var choices struct{ Posts, Selected []relatedChoice }
-	if err := json.Unmarshal(w.Body.Bytes(), &choices); err != nil || len(choices.Selected) != 1 || choices.Selected[0].ID != own.ID || len(choices.Posts) != 0 || strings.Contains(w.Body.String(), private.Title) || w.Header().Get("Cache-Control") != "no-store" {
+	var choices struct{ Choices, Selected []relatedChoice }
+	if err := json.Unmarshal(w.Body.Bytes(), &choices); err != nil || len(choices.Selected) != 1 || choices.Selected[0].ID != own.ID || len(choices.Choices) != 0 || strings.Contains(w.Body.String(), private.Title) || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("picker leaked private metadata or lost a selection during search", err)
 	}
 	for _, test := range []struct {
@@ -247,6 +358,14 @@ func TestRelatedPrivateChoicesAndReferences(t *testing.T) {
 	for _, query := range []string{"ids=bad", "exclude=bad", "q=" + strings.Repeat("x", 241)} {
 		requireStatus(t, h.request("GET", "/post/related?"+query, nil, false), http.StatusBadRequest)
 	}
+	h.cookies = adminCookies
+	response = h.request(http.MethodGet, query, nil, false)
+	requireStatus(t, response, http.StatusOK)
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil || len(result.Selected) != 1 ||
+		result.Selected[0].State != "Hidden" || result.Selected[0].Kind != "Page" || len(result.Choices) != 2 || result.Choices[0].State != "Draft" {
+		t.Fatalf("admin must see draft and hidden statuses: %+v, %v", result, err)
+	}
+	requireStatus(t, h.request(http.MethodPost, "/post", fields, false), http.StatusSeeOther)
 	h.cookies = nil
 	if w := h.request("GET", "/post/related", nil, false); w.Code == http.StatusOK || strings.Contains(w.Body.String(), own.Title) {
 		t.Fatal("anonymous picker access exposed posts")
@@ -290,7 +409,7 @@ func TestRelatedSchedulingAndFailures(t *testing.T) {
 		t.Fatal("renderer concealed a storage failure")
 	}
 	h.login(t)
-	w := h.request("GET", "/post/related", nil, false)
+	w := h.request("GET", "/post/related?q=target", nil, false)
 	requireStatus(t, w, http.StatusInternalServerError)
 }
 
@@ -322,10 +441,58 @@ func TestRelatedChoicesRequireSearch(t *testing.T) {
 		w := h.request("GET", "/post/related"+test.query, nil, false)
 		requireStatus(t, w, http.StatusOK)
 		var choices struct {
-			Posts, Selected []relatedChoice
+			Choices, Selected []relatedChoice
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &choices); err != nil || len(choices.Posts) != test.posts || len(choices.Selected) != test.selected {
+		if err := json.Unmarshal(w.Body.Bytes(), &choices); err != nil || len(choices.Choices) != test.posts || len(choices.Selected) != test.selected {
 			t.Fatalf("unexpected choices for %q: %+v, %v", test.query, choices, err)
 		}
 	}
+}
+
+func TestRelatedChoicesPrioritizeExactTitle(t *testing.T) {
+	h := registeredBrowserHarness(t)
+	h.login(t)
+	for i := range 31 {
+		if _, err := h.blog.persistPost(t.Context(), Post{Title: "A guide " + strconv.Itoa(i), Markdown: "Body"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Title: "Guide", Slug: "guide", Published: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := h.request(http.MethodGet, "/post/related?q=GUIDE", nil, false)
+	requireStatus(t, w, http.StatusOK)
+	var result struct{ Choices []relatedChoice }
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || len(result.Choices) != 30 || result.Choices[0].ID != relatedPagePrefix+page.ID {
+		t.Fatalf("the exact page title must lead the capped matches: %+v, %v", result, err)
+	}
+}
+
+func TestRelatedSelectionResolvesOnlySelectedKinds(t *testing.T) {
+	h := registeredBrowserHarness(t)
+	h.login(t)
+	post, err := h.blog.persistPost(t.Context(), Post{Title: "Related target", Markdown: "Body"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Title: "Page target", Slug: "page-target", Published: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(id string) {
+		t.Helper()
+		w := h.request(http.MethodGet, "/post/related?"+url.Values{"ids": {id}}.Encode(), nil, false)
+		requireStatus(t, w, http.StatusOK)
+		var result struct{ Selected []relatedChoice }
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || len(result.Selected) != 1 || result.Selected[0].ID != id {
+			t.Fatalf("selection must resolve independently: %+v, %v", result, err)
+		}
+	}
+	pageStore := h.blog.pageStore
+	h.blog.pageStore = unavailablePages{}
+	check(post.ID)
+	h.blog.pageStore = pageStore
+	h.blog.posts = failedRelatedPosts{h.blog.posts}
+	check(relatedPagePrefix + page.ID)
 }

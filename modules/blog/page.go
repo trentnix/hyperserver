@@ -57,6 +57,8 @@ type pageRepository interface {
 	SearchPages(context.Context, string) ([]Page, error)
 	GetPageBySlug(context.Context, string, bool) (Page, error)
 	GetPageByID(context.Context, string, bool) (Page, error)
+	// PublicPageLinks resolves selected IDs without loading page bodies.
+	PublicPageLinks(context.Context, []string) ([]Page, error)
 	// SavePage retains EverPublished once published, regardless of caller-supplied history.
 	// Updates require the current Version or return errEditConflict. Content changes
 	// append a revision in the same transaction as the save and image references.

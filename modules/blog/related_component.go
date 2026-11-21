@@ -14,21 +14,23 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-const maxRelatedPosts = 12
+const maxRelatedLinks = 12
+const relatedPagePrefix = "page:"
 
 type postRelated struct {
 	Title string   `json:"title,omitempty"`
-	Posts []string `json:"posts"`
+	Posts []string `json:"posts,omitempty"` // Existing post-only components.
+	Links []string `json:"links,omitempty"` // In order. Page IDs carry the page: prefix.
 }
 
 func relatedDefinition() componentDefinition {
 	return componentDefinition{
 		Kind: "related-posts", Field: "related", Payload: "related",
-		Name: "Related posts", Summary: "Links to other posts", EmptyMessage: "Choose a post or remove the related posts component.",
+		Name: "Related content", Summary: "Links to other posts and pages", EmptyMessage: "Choose a post or page or remove the related content component.",
 		TemplateFile: "templates/components/related.html", Template: "blog.relatedEditor", Icon: "blog.relatedIcon", Script: "related-editor.js",
 		Parse: func(source string) (componentContent, error) { return parseRelated(source) }, Renderer: relatedRenderer{},
 		EditorData: func(source string, _ bool) any {
-			return postPickerData{ID: "post-related", Name: "related", Source: source, TitleLabel: "Heading", MaxPosts: maxRelatedPosts, OptionalTitle: true}
+			return postPickerData{ID: "post-related", Name: "related", Source: source, TitleLabel: "Heading", MaxPosts: maxRelatedLinks, OptionalTitle: true, IncludePages: true}
 		},
 	}
 }
@@ -39,18 +41,22 @@ func parseRelated(source string) (*postRelated, error) {
 	}
 	var value *postRelated
 	if err := decodeComponentJSON(source, &value); err != nil || value == nil || !utf8.ValidString(source) {
-		return nil, contentError("Unable to read the related posts. Check their source before saving.")
+		return nil, contentError("Unable to read the related links. Check their source before saving.")
 	}
-	if len(value.Posts) < 1 || len(value.Posts) > maxRelatedPosts {
-		return nil, contentError("Choose between 1 and 12 posts.")
+	if value.Posts != nil && value.Links != nil {
+		return nil, contentError("Use a single list of related links.")
+	}
+	refs := value.RelatedReferences()
+	if len(refs) < 1 || len(refs) > maxRelatedLinks {
+		return nil, contentError("Choose between 1 and 12 links.")
 	}
 	if utf8.RuneCountInString(value.Title) > 240 {
-		return nil, contentError("Keep the related posts heading within 240 characters.")
+		return nil, contentError("Keep the related content heading within 240 characters.")
 	}
-	seen := make(map[string]bool, len(value.Posts))
-	for _, id := range value.Posts {
-		if !validRelatedID(id) || seen[id] {
-			return nil, contentError("Choose each post only once using a valid post ID.")
+	seen := make(map[string]bool, len(refs))
+	for _, id := range refs {
+		if !validRelatedLink(id) || value.Posts != nil && !validRelatedID(id) || seen[id] {
+			return nil, contentError("Choose each post or page once using a valid ID.")
 		}
 		seen[id] = true
 	}
@@ -61,29 +67,66 @@ func validRelatedID(id string) bool {
 	return len(id) == 26 && strings.Trim(id, "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") == ""
 }
 
-func (value *postRelated) Empty() bool { return value == nil || len(value.Posts) == 0 }
+func validRelatedLink(id string) bool {
+	return validRelatedID(strings.TrimPrefix(id, relatedPagePrefix))
+}
+
+func relatedContentID(kind, id string) string {
+	if kind == "page" && id != "" {
+		return relatedPagePrefix + id
+	}
+	return id
+}
+
+func (value *postRelated) RelatedReferences() []string {
+	if value.Links != nil {
+		return value.Links
+	}
+	return value.Posts
+}
+
+func (value *postRelated) Empty() bool { return value == nil || len(value.RelatedReferences()) == 0 }
 func (value *postRelated) EditorSource() string {
 	if value == nil {
 		return ""
 	}
 	return componentJSON(value)
 }
-func (value *postRelated) SearchText() string       { return "\n" + value.Title }
-func (*postRelated) Media() []componentMedia        { return nil }
-func (value *postRelated) Node() ast.Node           { return &relatedNode{Related: *value} }
-func (value *postRelated) PostReferences() []string { return value.Posts }
+func (value *postRelated) SearchText() string { return "\n" + value.Title }
+func (*postRelated) Media() []componentMedia  { return nil }
+func (value *postRelated) Node() ast.Node     { return &relatedNode{Related: *value} }
 
 // Only public targets enter the request-owned renderer. Media extraction uses
 // the pure renderer, which omits unresolved links without reading the database.
-func resolveRelatedReader(ctx context.Context, posts postLinkReader, postID string, ids []string) (renderer.NodeRenderer, error) {
-	reader := relatedRenderer{posts: make(map[string]Post, len(ids)), exclude: postID}
-	for batch := range slices.Chunk(ids, maxRelatedPosts) {
-		targets, err := posts.PublicPostLinks(ctx, batch)
+func (m *module) resolveRelatedReader(ctx context.Context, exclude string, ids []string) (renderer.NodeRenderer, error) {
+	reader := relatedRenderer{links: make(map[string]relatedLink, len(ids))}
+	var postIDs, pageIDs []string
+	for _, id := range ids {
+		if id == exclude {
+			continue
+		}
+		if pageID, ok := strings.CutPrefix(id, relatedPagePrefix); ok {
+			pageIDs = append(pageIDs, pageID)
+		} else {
+			postIDs = append(postIDs, id)
+		}
+	}
+	for batch := range slices.Chunk(postIDs, maxRelatedLinks) {
+		targets, err := m.posts.PublicPostLinks(ctx, batch)
 		if err != nil {
 			return nil, err
 		}
 		for _, target := range targets {
-			reader.posts[target.ID] = target
+			reader.links[target.ID] = relatedLink{target.Title, "/post/s/" + target.Slug}
+		}
+	}
+	for batch := range slices.Chunk(pageIDs, maxRelatedLinks) {
+		targets, err := m.pageStore.PublicPageLinks(ctx, batch)
+		if err != nil {
+			return nil, err
+		}
+		for _, target := range targets {
+			reader.links[relatedPagePrefix+target.ID] = relatedLink{target.Title, target.URL()}
 		}
 	}
 	return reader, nil
@@ -99,10 +142,9 @@ var relatedKind = ast.NewNodeKind("RelatedPosts")
 func (*relatedNode) Kind() ast.NodeKind              { return relatedKind }
 func (n *relatedNode) Dump(source []byte, level int) { ast.DumpHelper(n, source, level, nil, nil) }
 
-type relatedRenderer struct {
-	posts   map[string]Post
-	exclude string
-}
+type relatedLink struct{ title, path string }
+
+type relatedRenderer struct{ links map[string]relatedLink }
 
 func (reader relatedRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer) {
 	register.Register(relatedKind, func(writer util.BufWriter, _ []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -111,17 +153,15 @@ func (reader relatedRenderer) RegisterFuncs(register renderer.NodeRendererFuncRe
 		}
 		value := node.(*relatedNode).Related
 		var links strings.Builder
-		for _, id := range value.Posts {
-			post, found := reader.posts[id]
-			if !found || id == reader.exclude {
-				continue
+		for _, id := range value.RelatedReferences() {
+			if link, found := reader.links[id]; found {
+				fmt.Fprintf(&links, `<li><a href="%s">%s</a></li>`, html.EscapeString(link.path), html.EscapeString(link.title))
 			}
-			fmt.Fprintf(&links, `<li><a href="/post/s/%s">%s</a></li>`, html.EscapeString(post.Slug), html.EscapeString(post.Title))
 		}
 		if links.Len() > 0 {
 			title := strings.TrimSpace(value.Title)
 			if title == "" {
-				title = "Related posts"
+				title = "Related content"
 			}
 			fmt.Fprintf(writer, `<nav class="related-posts" aria-label="%s"><h3>%s</h3><ul>%s</ul></nav>`, html.EscapeString(title), html.EscapeString(title), links.String())
 		}
@@ -129,86 +169,89 @@ func (reader relatedRenderer) RegisterFuncs(register renderer.NodeRendererFuncRe
 	})
 }
 
-func postReferences(source string) []string {
+func relatedReferences(source string) []string {
 	_, components, _ := splitPostComponents(source)
-	return componentPostReferences(components)
+	return componentRelatedReferences(components)
 }
 
-func componentPostReferences(components postComponents) []string {
+type relatedReferencesProvider interface{ RelatedReferences() []string }
+
+func componentRelatedReferences(components postComponents) []string {
 	var ids []string
+	seen := make(map[string]bool)
 	for _, component := range components.Components {
-		if references, ok := component.Content.(interface{ PostReferences() []string }); ok {
-			ids = append(ids, references.PostReferences()...)
+		if references, ok := component.Content.(relatedReferencesProvider); ok {
+			for _, id := range references.RelatedReferences() {
+				if !seen[id] {
+					ids = append(ids, id)
+					seen[id] = true
+				}
+			}
 		}
 	}
 	return ids
 }
 
 // References in the current or selected revision survive unpublication and
-// deletion. New references must point to public content or editable posts.
-func (m *module) validatePostReferences(ctx context.Context, source, kind, id string, revisionID int64) error {
+// deletion. New references must point to public content or content the writer can edit.
+func (m *module) validateRelatedReferences(ctx context.Context, source, kind, id string, revisionID int64) error {
 	_, components, err := splitPostComponents(source)
 	if err != nil {
 		return writingFieldError{err, "content"}
 	}
-	if len(componentPostReferences(components)) == 0 {
-		return nil
-	}
-	savedIDs, err := m.currentPostReferences(ctx, kind, id)
-	if err != nil {
-		return err
-	}
+	var savedIDs []string
+	loaded := false
 	for _, component := range components.Components {
-		references, ok := component.Content.(interface{ PostReferences() []string })
+		references, ok := component.Content.(relatedReferencesProvider)
 		if !ok {
 			continue
 		}
-		for _, targetID := range references.PostReferences() {
-			if kind == "post" && targetID == id {
-				return writingFieldError{contentError("A post cannot link to itself in related posts."), postComponentCatalog.field(component)}
+		if !loaded {
+			savedIDs, err = m.currentRelatedReferences(ctx, kind, id)
+			if err != nil {
+				return err
+			}
+			loaded = true
+		}
+		for _, targetID := range references.RelatedReferences() {
+			if targetID == relatedContentID(kind, id) {
+				return writingFieldError{contentError("Related content cannot link back to the same post or page."), postComponentCatalog.field(component)}
 			}
 			if slices.Contains(savedIDs, targetID) {
 				continue
 			}
-			_, err := m.posts.GetByID(ctx, targetID, false)
-			if err == nil {
-				continue
-			}
-			if !errors.Is(err, errNotFound) {
+			available, err := m.canSelectRelatedLink(ctx, targetID)
+			if err != nil {
 				return err
 			}
-			target, err := m.posts.GetByID(ctx, targetID, true)
-			if err != nil && !errors.Is(err, errNotFound) {
-				return err
-			}
-			if err == nil && m.canEditPost(ctx, target) {
+			if available {
 				continue
 			}
 			if revisionID > 0 {
 				previous, err := m.history.GetRevision(ctx, kind, id, revisionID)
 				if err == nil {
-					savedIDs = append(savedIDs, postReferences(previous.Markdown)...)
+					savedIDs = append(savedIDs, relatedReferences(previous.Markdown)...)
 				} else if !errors.Is(err, errNotFound) {
 					return err
 				}
 				revisionID = 0
 			}
 			if !slices.Contains(savedIDs, targetID) {
-				return writingFieldError{contentError("A selected post is unavailable. Remove it or choose another post."), postComponentCatalog.field(component)}
+				return writingFieldError{contentError("A selected link is unavailable. Remove it or choose another post or page."), postComponentCatalog.field(component)}
 			}
 		}
 	}
 	return nil
 }
 
-func (m *module) currentPostReferences(ctx context.Context, kind, id string) ([]string, error) {
+func (m *module) currentRelatedReferences(ctx context.Context, kind, id string) ([]string, error) {
 	if id == "" {
 		return nil, nil
 	}
 	if kind == "post" {
 		current, err := m.posts.GetByID(ctx, id, true)
-		return postReferences(current.Markdown), err
+		return relatedReferences(current.Markdown), err
 	}
 	current, err := m.pageStore.GetPageByID(ctx, id, true)
-	return postReferences(current.Markdown), err
+	return relatedReferences(current.Markdown), err
 }

@@ -16,6 +16,7 @@
       await wait(() => document.querySelector('.post-body .related-posts'));
       const navigation = document.querySelector('.post-body .related-posts');
       assert(navigation.querySelector('h3').textContent === 'Keep reading' && navigation.querySelectorAll('li').length === 2 && !navigation.textContent.includes('Private draft'), 'Readers must see the heading and public targets only.');
+      assert(navigation.querySelector('li:first-child a').pathname === '/page/second-target-page' && navigation.querySelector('li:nth-child(2) a').pathname.startsWith('/post/s/'), 'Mixed links must use their current URLs and keep the chosen order.');
       const edit = document.querySelector('a[href^="/post/update/"]');
       await htmx.ajax('GET', edit.getAttribute('href'), {target: '#article-content', swap: 'innerHTML'});
       await wait(() => document.querySelector('[data-post-picker-selections]')?.children.length === 3 && !document.querySelector('[data-post-picker-results]').hasAttribute('aria-busy'));
@@ -45,6 +46,16 @@
     const search = section.querySelector('[data-post-picker-search]');
     const status = section.querySelector('[data-post-picker-status]');
     const heading = section.querySelector('[data-post-picker-title]');
+    const dialogBody = section.closest('.component-dialog-body');
+    const checkSearchFeedback = feedback => {
+      const viewport = dialogBody.getBoundingClientRect();
+      const box = feedback.getBoundingClientRect();
+      const field = search.getBoundingClientRect();
+      assert(field.top >= viewport.top && box.top >= field.bottom && box.bottom <= viewport.bottom + 1,
+        'The search field and feedback must fit above the dialog footer.');
+      assert(feedback.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)),
+        'Search feedback must be visible and reachable by pointer.');
+    };
     const labelRect = heading.labels[0].getBoundingClientRect();
     const headingRect = heading.getBoundingClientRect();
     assert(labelRect.bottom < headingRect.top && labelRect.left === headingRect.left && headingRect.width === search.getBoundingClientRect().width, 'The heading label must sit above an input aligned with the search field.');
@@ -57,15 +68,15 @@
     form.requestSubmit();
     await wait(() => source.getAttribute('aria-invalid') === 'true');
     assert(section.contains(document.activeElement), 'An empty selection must focus its component.');
-    for (const title of ['A long target', 'Second target', 'Private draft target']) {
+    for (const title of ['A long target', 'Second target page', 'Private draft target']) {
       search.focus();
-      const top = section.querySelector('.post-picker-selected-panel').getBoundingClientRect().top;
       set(search, title);
       await wait(() => !results.hidden && [...results.children].some(button => button.textContent.startsWith(title)));
-      if (rows().length) assert(section.querySelector('.post-picker-selected-panel').getBoundingClientRect().top === top, 'Search suggestions must overlay the selected list without moving it.');
+      checkSearchFeedback(results.firstElementChild);
       assert(search.getAttribute('aria-expanded') === 'true', 'Search must announce its open suggestions.');
-      search.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
-      assert(results.hidden && search.getAttribute('aria-expanded') === 'false', 'Escape must dismiss suggestions.');
+      const escape = () => search.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
+      assert(!escape() && results.hidden && search.getAttribute('aria-expanded') === 'false', 'Escape must dismiss suggestions before closing the dialog.');
+      assert(escape(), 'Escape must reach the dialog when the search is closed.');
       set(search, title);
       await wait(() => !results.hidden && results.children.length > 0);
       search.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true}));
@@ -73,10 +84,11 @@
       search.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
       await wait(() => rows().some(row => row.textContent.includes(title)) && !results.hasAttribute('aria-busy'));
       assert(!results.hidden && search.value === title && search.getAttribute('aria-expanded') === 'true', 'Adding a post must preserve the query and keep suggestions open.');
-      assert(results.firstElementChild.getAttribute('aria-selected') === 'true' && results.firstElementChild.querySelector('small').textContent === 'Added', 'Added posts must be marked in the results.');
+      assert(results.firstElementChild.getAttribute('aria-selected') === 'true' && results.firstElementChild.querySelector('small').textContent.endsWith(' · Added'), 'Added posts must be marked in the results.');
     }
-    assert(JSON.parse(source.value).posts.length === 3 && source.getAttribute('aria-invalid') !== 'true', 'Selection must update source and clear its error.');
-    assert(rows()[2].querySelector('small').textContent === 'Draft', 'Draft targets need a concise publication hint.');
+    assert(JSON.parse(source.value).links.length === 3 && source.getAttribute('aria-invalid') !== 'true', 'Selection must update source and clear its error.');
+    assert(rows()[0].querySelector('small').textContent === 'Post' && rows()[1].querySelector('small').textContent === 'Page', 'Posts and pages must be easy to distinguish in the selection.');
+    assert(rows()[2].querySelector('small').textContent === 'Post · Draft', 'Draft targets need a concise publication hint.');
     assert(section.querySelector('[data-post-picker-count]').textContent === '3' && !section.querySelector('.post-picker-selected-panel').hidden, 'The selected-post heading must show the current count.');
     for (const row of rows()) {
       const stacked = row.querySelector('.post-picker-selection-actions').getBoundingClientRect().top >= row.querySelector('.post-picker-selection-details').getBoundingClientRect().bottom;
@@ -87,13 +99,14 @@
       assert(title.getBoundingClientRect().width >= 150, 'Titles need enough room to read beside movement and removal controls.');
     }
     assert(section.querySelector('.post-picker-search-panel').getBoundingClientRect().bottom <= section.querySelector('.post-picker-selected-panel').getBoundingClientRect().top, 'Search and selected posts must form one column at every width.');
-    const original = JSON.parse(source.value).posts;
+    const original = JSON.parse(source.value).links;
     rows()[0].querySelectorAll('button')[1].click();
-    assert(JSON.parse(source.value).posts[1] === original[0] && document.activeElement.closest('[data-post-picker-id]').dataset.postPickerId === original[0], 'Movement must preserve focus and author order.');
+    assert(JSON.parse(source.value).links[1] === original[0] && document.activeElement.closest('[data-post-picker-id]').dataset.postPickerId === original[0], 'Movement must preserve focus and author order.');
     set(section.querySelector('[data-post-picker-title]'), 'Keep reading');
     search.focus();
     set(search, 'no such title');
-    await wait(() => status.textContent === 'No matching posts.');
+    await wait(() => status.textContent === 'No matching posts or pages.');
+    checkSearchFeedback(status);
     assert(rows().length === 3, 'Searching must preserve selected posts.');
     const savedSource = source.value;
     await removeTestComponent(section.querySelector('[data-component-remove]'));
@@ -110,10 +123,10 @@
       }, {once: true});
     }) : nativeFetch(url, options);
     source.dispatchEvent(new Event('change', {bubbles: true}));
-    assert(rows().every(row => row.querySelector('strong').textContent === 'Selected post'), 'The delayed lookup must leave metadata pending for this check.');
-    set(search, 'Second target');
+    assert(rows().every(row => row.querySelector('strong').textContent === 'Selected link'), 'The delayed lookup must leave metadata pending for this check.');
+    set(search, 'Second target page');
     set(search, '');
-    await wait(() => rows().every(row => row.querySelector('strong').textContent !== 'Selected post') && !results.hasAttribute('aria-busy'));
+    await wait(() => rows().every(row => row.querySelector('strong').textContent !== 'Selected link') && !results.hasAttribute('aria-busy'));
     assert(source.value === savedSource && results.hidden, 'Clearing an interrupted search must resolve selected titles without changing selections or showing suggestions.');
     window.fetch = nativeFetch;
     search.focus();
@@ -131,7 +144,7 @@
       choice.click();
       assert(!results.hidden && search.value === 'Capacity' && document.activeElement === search, 'Clicking results must keep the query, suggestions, and keyboard focus ready for another selection.');
       assert(choices.every((choice, index) => results.children[index] === choice && choice.offsetTop === positions[index]), 'Adding posts must preserve every result row and its position.');
-      assert(choice.getAttribute('aria-selected') === 'true' && choice.getAttribute('aria-disabled') === 'true' && choice.querySelector('small').textContent === 'Added', 'An added result must show its selected state and prevent duplicate selection.');
+      assert(choice.getAttribute('aria-selected') === 'true' && choice.getAttribute('aria-disabled') === 'true' && choice.querySelector('small').textContent.endsWith(' · Added'), 'An added result must show its selected state and prevent duplicate selection.');
     }
     choices[0].focus();
     choices[0].click();
@@ -155,18 +168,43 @@
     section.querySelector('[data-post-picker-title]').focus();
     await wait(() => !results.hasAttribute('aria-busy'));
     assert(!limit.hidden && search.disabled, 'Dismissing suggestions or leaving search must preserve the selection-limit explanation.');
+    window.fetch = (url, options) => String(url).startsWith('/post/related?') ? Promise.resolve(new Response('Unavailable', {status: 503})) : nativeFetch(url, options);
+    source.dispatchEvent(new Event('change', {bubbles: true}));
+    await wait(() => status.querySelector('button'));
+    window.fetch = nativeFetch;
+    status.querySelector('button').click();
+    await wait(() => rows().every(row => row.querySelector('strong').textContent !== 'Selected link'));
+    assert(rows().length === 12 && search.disabled && status.textContent === '', 'Retry must resolve all selected links when the search field is disabled.');
     rows()[0].querySelector('button:last-child').click();
     assert(!search.disabled && limit.hidden && !search.getAttribute('aria-describedby').includes(limit.id), 'Removing a selection must reenable search and remove the limit explanation from its accessible description.');
     source.value = savedSource;
     source.dispatchEvent(new Event('change', {bubbles: true}));
     await wait(() => !results.hasAttribute('aria-busy'));
+    search.focus();
     window.fetch = (url, options) => String(url).startsWith('/post/related?') ? Promise.resolve(new Response('Unavailable', {status: 503})) : nativeFetch(url, options);
     set(search, 'failure');
-    await wait(() => status.textContent.includes('Unable to load posts.'));
+    await wait(() => status.textContent.includes('Unable to load posts and pages.'));
     assert(source.value === savedSource && rows().length === 3, 'A failed search must preserve source and selections.');
+    checkSearchFeedback(status);
+    search.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true, cancelable: true}));
+    const retry = status.querySelector('button');
+    assert(retry, 'Tab must leave Retry available as the next keyboard action.');
+    retry.focus();
+    assert(document.activeElement === retry, 'Retry must be focusable.');
     window.fetch = nativeFetch;
-    status.querySelector('button').click();
-    await wait(() => status.textContent === 'No matching posts.');
+    retry.click();
+    await wait(() => status.textContent === 'No matching posts or pages.');
+    let finishDismissedSearch;
+    window.fetch = (url, options) => String(url).startsWith('/post/related?') ? new Promise(resolve => {
+      finishDismissedSearch = () => resolve(new Response('Unavailable', {status: 503}));
+    }) : nativeFetch(url, options);
+    set(search, 'dismiss this search');
+    await wait(() => finishDismissedSearch);
+    search.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
+    finishDismissedSearch();
+    await wait(() => !results.hasAttribute('aria-busy'));
+    assert(status.textContent === '', 'A failed request must not reopen search feedback after Escape.');
+    window.fetch = nativeFetch;
     source.value = '{"posts":[false]}';
     source.dispatchEvent(new Event('change', {bubbles: true}));
     assert(!source.hidden && section.querySelector('[data-post-picker-controls]').disabled, 'Invalid source must remain repairable without enhancement.');

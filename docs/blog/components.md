@@ -23,7 +23,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | [Video](#video) | A YouTube or Vimeo player. |
 | [Embed](#embed) | An interactive page or widget from an approved site. |
 | [Social media](social-posts.md) | A public post, with its platform detected from the URL. |
-| [Related posts](#related-posts) | An ordered list of links to posts. |
+| [Related content](#related-content) | An ordered list of links to posts and pages. |
 
 [Series](series.md) provide shared navigation across member posts and are managed separately. For registration, rendering, and saved formats, see [developing components](component-development.md).
 
@@ -125,12 +125,12 @@ Paste the provider’s HTTPS embed URL and enter a title that describes the cont
 
 Set `embedOrigins` in `modules/blog/config.yaml` to a list of exact HTTPS origins, such as `https://charts.example.com`, then restart the blog. The list starts empty. A URL whose origin is absent from the list appears as a link. Providers must permit framing and work within a sandbox.
 
-## Related posts
+## Related content
 
-Type a title to search for posts, then select up to 12 results. Results stay open so you can add several at once. Click outside, press Escape, or clear the search to dismiss them. Arrange the links with the arrow buttons. An optional heading replaces “Related posts.”
+Search by title and select up to 12 posts and pages. Results stay open so you can add several at once. Click outside, press Escape, or clear the search to dismiss them. Arrange the links with the arrow buttons. An optional heading replaces “Related content.”
 
-Links appear on the post or page where you add the component. Readers see current titles and URLs for published targets. Draft, future scheduled, and deleted targets remain referenced but hidden, including when you restore a saved version. Republishing restores their links in the same positions.
+Links appear on the post or page where you add the component. Readers see current titles and URLs for public targets. Drafts, scheduled posts, pages under draft parents, and deleted targets stay hidden. A target that becomes public again returns to its place in the list.
 
 If no target is public, the component disappears. Feeds and historical previews use the same visibility rules.
 
-Authors can select public posts and private posts they can edit. Private titles remain hidden from other authors. Existing unavailable references stay saved. New missing or inaccessible targets, duplicates, self-links, and empty components fail validation. The component stores stable post IDs, not copied titles or URLs.
+Authors can select public content and private posts they can edit. Admins can also select draft pages and pages under draft parents. Saved selections survive later changes in visibility or deletion, including when you restore a saved version. New missing or inaccessible targets, duplicates, self-links, and empty components fail validation. Selections use stable IDs.

@@ -527,6 +527,9 @@ func (unavailablePages) GetPageBySlug(context.Context, string, bool) (Page, erro
 func (unavailablePages) GetPageByID(context.Context, string, bool) (Page, error) {
 	return Page{}, errors.New("private storage failure")
 }
+func (unavailablePages) PublicPageLinks(context.Context, []string) ([]Page, error) {
+	return nil, errors.New("private storage failure")
+}
 func (unavailablePages) SavePage(context.Context, Page, []string) (Page, error) {
 	return Page{}, errors.New("private storage failure")
 }

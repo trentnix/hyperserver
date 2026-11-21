@@ -7,8 +7,9 @@ function initialize(root) {
     if (initialized.has(section)) continue;
     initialized.add(section);
     const source = section.querySelector('textarea[name]');
-    const exclude = /^\/post\/([^/]+)$/.exec(new URL(source.form.action).pathname)?.[1] || '';
-    const picker = createPostPicker(section, {source, exclude});
+    const match = /^\/(post|pages)\/([^/]+)$/.exec(new URL(source.form.action).pathname);
+    const exclude = match ? (match[1] === 'pages' ? 'page:' : '') + match[2] : '';
+    const picker = createPostPicker(section, {source, exclude, includePages: true});
     registerComponent(section, {
       ...picker,
       label: () => section.querySelector('[data-post-picker-title]').value,

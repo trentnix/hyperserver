@@ -35,7 +35,7 @@ func TestRevisionEquivalentTags(t *testing.T) {
 	}
 }
 
-func TestRestoreSavedRelatedPostReferences(t *testing.T) {
+func TestRestoreSavedRelatedReferences(t *testing.T) {
 	h := registeredBrowserHarness(t)
 	h.login(t)
 	ctx := t.Context()
@@ -43,9 +43,14 @@ func TestRestoreSavedRelatedPostReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	targetPage, err := savePageFixture(h.blog.pageStore, ctx, Page{Title: "Related page", Slug: "related-page-target", Published: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	links := []string{relatedPagePrefix + targetPage.ID, target.ID}
 	fields := pageFields("related-history-review", true)
 	fields.Set("componentOrder", `["related-posts"]`)
-	savedRelated := componentJSON(postRelated{Posts: []string{target.ID}})
+	savedRelated := componentJSON(postRelated{Links: links})
 	fields.Set("related", savedRelated)
 	requireStatus(t, h.request(http.MethodPost, "/pages", fields, false), http.StatusSeeOther)
 	page, err := h.blog.pageStore.GetPageBySlug(ctx, fields.Get("slug"), true)
@@ -63,6 +68,9 @@ func TestRestoreSavedRelatedPostReferences(t *testing.T) {
 	if err := h.blog.posts.Delete(ctx, target.ID); err != nil {
 		t.Fatal(err)
 	}
+	if err := h.blog.pageStore.DeletePage(ctx, targetPage.ID); err != nil {
+		t.Fatal(err)
+	}
 	setVersion := func() {
 		t.Helper()
 		current, err := h.blog.pageStore.GetPageByID(ctx, page.ID, true)
@@ -73,7 +81,7 @@ func TestRestoreSavedRelatedPostReferences(t *testing.T) {
 	}
 	setVersion()
 	requireStatus(t, h.request(http.MethodPost, editor, fields, true), http.StatusUnprocessableEntity)
-	fields.Set("related", componentJSON(postRelated{Posts: []string{target.ID, strings.Repeat("A", 26)}}))
+	fields.Set("related", componentJSON(postRelated{Links: append(links, strings.Repeat("A", 26))}))
 	requireStatus(t, h.request(http.MethodPost, editor+query, fields, true), http.StatusUnprocessableEntity)
 	fields.Set("related", savedRelated)
 	restore := "/history/page/" + page.ID + "/restore" + query
@@ -82,7 +90,7 @@ func TestRestoreSavedRelatedPostReferences(t *testing.T) {
 	setVersion()
 	requireStatus(t, h.request(http.MethodPost, editor+query, fields, true), http.StatusOK)
 	current, err := h.blog.pageStore.GetPageByID(ctx, page.ID, true)
-	if ids := postReferences(current.Markdown); err != nil || len(ids) != 1 || ids[0] != target.ID {
+	if ids := relatedReferences(current.Markdown); err != nil || !reflect.DeepEqual(ids, links) {
 		t.Fatalf("historical reference was not retained: %v, %v", ids, err)
 	}
 	reader := h.request(http.MethodGet, page.URL(), nil, false)

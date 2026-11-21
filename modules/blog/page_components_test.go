@@ -111,7 +111,7 @@ func TestPageRelatedPostValidation(t *testing.T) {
 	fields.Set("related", componentJSON(postRelated{Posts: []string{strings.Repeat("A", 26)}}))
 	response := h.request(http.MethodPost, "/pages", fields, true)
 	requireStatus(t, response, http.StatusUnprocessableEntity)
-	if !strings.Contains(response.Body.String(), `data-error-fields="related"`) || !strings.Contains(response.Body.String(), "A selected post is unavailable") {
+	if !strings.Contains(response.Body.String(), `data-error-fields="related"`) || !strings.Contains(response.Body.String(), "A selected link is unavailable") {
 		t.Fatal("a new page reference must resolve to a valid post")
 	}
 }

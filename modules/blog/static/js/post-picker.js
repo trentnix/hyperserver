@@ -2,7 +2,7 @@ import {markField} from './forms.js';
 
 const validID = id => typeof id === 'string' && /^[A-Z2-7]{26}$/.test(id);
 
-export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/post/related", exclude = "", parameters = () => ({})}) {
+export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/post/related", exclude = "", includePages = false, parameters = () => ({})}) {
   const sourceLabel = section.querySelector('[data-post-picker-source-label]');
   const controls = section.querySelector('[data-post-picker-controls]');
   const title = section.querySelector('[data-post-picker-title]');
@@ -14,10 +14,14 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
   const results = section.querySelector('[data-post-picker-results]');
   const status = section.querySelector('[data-post-picker-status]');
   const limit = section.querySelector('[data-post-picker-limit]');
-  limit.textContent = `${maxPosts} posts selected. Remove one to choose another.`;
+  const item = includePages ? 'link' : 'post';
+  const items = item + 's';
+  const validLink = id => validID(id) || (includePages && typeof id === 'string' && id.startsWith('page:') && validID(id.slice(5)));
+  const choiceLabel = (target, state) => [includePages && target?.kind, state].filter(Boolean).join(' · ');
+  limit.textContent = `${maxPosts} ${items} selected. Remove one to choose another.`;
   const lifetime = new AbortController();
   const targets = new Map();
-  let posts = [], request, timer, resolved = false, suggesting = false, activeOption = -1;
+  let selectedIDs = [], field = 'posts', request, timer, resolved = false, suggesting = false, activeOption = -1;
 
   function closeSuggestions() {
     suggesting = false;
@@ -36,18 +40,31 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
     options[index].scrollIntoView({block: 'nearest'});
   }
 
+  // The dialog footer sits outside its scrollable body. Make space for the
+  // results or message while keeping the focused search field in view.
+  function revealSearchFeedback(feedback) {
+    const body = section.closest('.component-dialog-body');
+    if (!body || document.activeElement !== search) return;
+    const viewport = body.getBoundingClientRect();
+    const overflow = feedback.getBoundingClientRect().bottom + 8 - viewport.bottom;
+    const room = search.getBoundingClientRect().top - viewport.top - 8;
+    if (overflow > 0 && room > 0) body.scrollTop += Math.min(overflow, room);
+  }
+
   function serialize() {
-    source.value = posts.length || title.value ? JSON.stringify({title: title.value, posts}) : '';
+    const key = includePages && selectedIDs.some(id => id.startsWith('page:')) ? 'links' : field;
+    source.value = selectedIDs.length || title.value ? JSON.stringify({title: title.value, [key]: selectedIDs}) : '';
     markField(source, false);
     source.dispatchEvent(new Event('input', {bubbles: true}));
   }
 
   function updateChoice(button, post) {
-    const added = posts.includes(post.id);
+    const added = selectedIDs.includes(post.id);
+    const description = choiceLabel(post, post.state);
     button.setAttribute('aria-selected', String(added));
     button.setAttribute('aria-disabled', String(added));
-    button.setAttribute('aria-label', `${added ? 'Added' : 'Add'} ${post.title}${post.state ? ` (${post.state})` : ''}`);
-    button.querySelector('small').textContent = added ? 'Added' : post.state || '';
+    button.setAttribute('aria-label', `${added ? 'Added' : 'Add'} ${post.title}${description ? ` (${description})` : ''}`);
+    button.querySelector('small').textContent = choiceLabel(post, added ? 'Added' : post.state);
     button.querySelector('path').setAttribute('d', added ? 'm5 12 4 4L19 6' : 'M12 5v14M5 12h14');
   }
 
@@ -68,52 +85,55 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
     const focusedID = focusedRow?.dataset.postPickerId;
     const focusedControl = focusedRow ? [...focusedRow.querySelectorAll('button')].indexOf(document.activeElement) : -1;
     selections.replaceChildren();
-    count.textContent = posts.length;
-    selectedPanel.hidden = posts.length === 0;
-    posts.forEach((id, index) => {
+    count.textContent = selectedIDs.length;
+    selectedPanel.hidden = selectedIDs.length === 0;
+    selectedIDs.forEach((id, index) => {
       const target = targets.get(id);
       const row = document.createElement('li');
       row.dataset.postPickerId = id;
       const details = document.createElement('div');
       details.className = 'post-picker-selection-details';
       const name = document.createElement('strong');
-      name.textContent = target?.title || (resolved ? 'Post unavailable' : 'Selected post');
+      name.textContent = target?.title || (resolved ? `${includePages ? 'Link' : 'Post'} unavailable` : `Selected ${item}`);
       name.title = name.textContent;
       details.append(name);
-      if ((!target && resolved) || target?.state) {
+      const stateLabel = target?.state || (!target && resolved ? 'Unavailable' : '');
+      if (stateLabel || (includePages && target?.kind)) {
         const state = document.createElement('small');
-        state.textContent = target?.state || 'Unavailable';
-        state.title = 'Hidden from readers';
-        state.dataset.state = target?.state?.toLowerCase() || 'unavailable';
+        state.textContent = choiceLabel(target, stateLabel);
+        if (stateLabel) {
+          state.title = 'Hidden from readers';
+          state.dataset.state = stateLabel.toLowerCase();
+        }
         details.append(state);
       }
       const actions = document.createElement('div');
       actions.className = 'post-picker-selection-actions';
       for (const [offset, direction, path] of [[-1, 'up', 'm6 14 6-6 6 6'], [1, 'down', 'm6 10 6 6 6-6']]) {
-        const move = action(`Move ${target?.title || 'post'} ${direction}`, path, () => {
-          [posts[index], posts[index + offset]] = [posts[index + offset], posts[index]];
+        const move = action(`Move ${target?.title || item} ${direction}`, path, () => {
+          [selectedIDs[index], selectedIDs[index + offset]] = [selectedIDs[index + offset], selectedIDs[index]];
           serialize();
           renderSelections();
           const buttons = [...selections.children[index + offset].querySelectorAll('button')];
           (buttons.find(button => button.title.endsWith(direction) && !button.disabled) || buttons.find(button => !button.disabled)).focus();
         });
-        move.disabled = index + offset < 0 || index + offset >= posts.length;
+        move.disabled = index + offset < 0 || index + offset >= selectedIDs.length;
         actions.append(move);
       }
-      actions.append(action(`Remove ${target?.title || 'post'}`, 'm7 7 10 10M7 17 17 7', () => {
-        posts.splice(index, 1);
+      actions.append(action(`Remove ${target?.title || item}`, 'm7 7 10 10M7 17 17 7', () => {
+        selectedIDs.splice(index, 1);
         serialize();
         renderSelections();
-        (selections.children[Math.min(index, posts.length - 1)]?.querySelector('button:last-child') || search).focus();
+        (selections.children[Math.min(index, selectedIDs.length - 1)]?.querySelector('button:last-child') || search).focus();
         loadChoices();
       }));
       row.append(details, actions);
       selections.append(row);
     });
-    search.disabled = posts.length >= maxPosts;
+    search.disabled = selectedIDs.length >= maxPosts;
     limit.hidden = !search.disabled;
     search.setAttribute('aria-describedby', `${source.id}-help ${status.id}` + (search.disabled ? ` ${limit.id}` : ''));
-    if (posts.length >= maxPosts) closeSuggestions();
+    if (search.disabled) closeSuggestions();
     if (focusedID) {
       const row = [...selections.children].find(row => row.dataset.postPickerId === focusedID);
       const control = row?.querySelectorAll('button')[focusedControl];
@@ -125,36 +145,41 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
     clearTimeout(timer);
     request?.abort();
     request = undefined;
+    results.removeAttribute('aria-busy');
     if (section.hidden || controls.hidden || !section.isConnected) return;
-    const query = search.value.trim();
+    const query = search.disabled ? '' : search.value.trim();
+    const searching = Boolean(query && suggesting);
     results.replaceChildren();
     results.hidden = true;
     activeOption = -1;
     search.setAttribute('aria-expanded', 'false');
     search.removeAttribute('aria-activedescendant');
     status.textContent = '';
-    if (!query && posts.length === 0) return;
+    if (!query && selectedIDs.length === 0) return;
     request = new AbortController();
     const active = request;
-    const params = new URLSearchParams({q: query, ids: posts.join(','), exclude, ...parameters()});
+    const params = new URLSearchParams({q: query, ids: selectedIDs.join(','), exclude, ...parameters()});
     results.setAttribute('aria-busy', 'true');
-    status.textContent = '';
     const loading = setTimeout(() => {
-      if (request === active && section.isConnected && !section.hidden && query && suggesting) status.textContent = 'Finding posts…';
+      if (request === active && section.isConnected && !section.hidden && query && suggesting) {
+        status.textContent = `Finding ${includePages ? 'posts and pages' : 'posts'}…`;
+        revealSearchFeedback(status);
+      }
     }, 200);
     const timeout = setTimeout(() => active.abort(), 10000);
     try {
       const response = await fetch(searchURL + '?' + params, {signal: active.signal, redirect: 'error'});
       if (!response.ok || !(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error();
       const value = await response.json();
-      if (!Array.isArray(value.posts) || !Array.isArray(value.selected) || [...value.posts, ...value.selected].some(post => !validID(post.id) || typeof post.title !== 'string')) throw new Error();
+      const options = includePages ? value.choices : value.posts;
+      if (!Array.isArray(options) || !Array.isArray(value.selected) || [...options, ...value.selected].some(post => !validLink(post.id) || typeof post.title !== 'string')) throw new Error();
       if (request !== active || !section.isConnected || section.hidden) return;
       targets.clear();
-      for (const post of [...value.posts, ...value.selected]) targets.set(post.id, post);
+      for (const post of [...options, ...value.selected]) targets.set(post.id, post);
       resolved = true;
       renderSelections();
       results.replaceChildren();
-      for (const post of value.posts) {
+      for (const post of options) {
         const button = document.createElement('button');
         button.type = 'button';
         button.id = source.id + '-option-' + post.id;
@@ -164,7 +189,6 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
         const name = document.createElement('span');
         name.textContent = post.title;
         const state = document.createElement('small');
-        state.textContent = post.state || '';
         button.append(name, state);
         const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         icon.setAttribute('viewBox', '0 0 24 24');
@@ -173,9 +197,9 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
         button.append(icon);
         updateChoice(button, post);
         button.addEventListener('click', () => {
-          if (posts.length >= maxPosts) return;
-          if (posts.includes(post.id)) { search.focus({preventScroll: true}); return; }
-          posts.push(post.id);
+          if (selectedIDs.length >= maxPosts) return;
+          if (selectedIDs.includes(post.id)) { search.focus({preventScroll: true}); return; }
+          selectedIDs.push(post.id);
           serialize();
           renderSelections();
           updateChoice(button, post);
@@ -187,24 +211,32 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
         });
         results.append(button);
       }
-      const open = suggesting && query && posts.length < maxPosts && value.posts.length > 0 && document.activeElement === search;
+      const open = suggesting && query && selectedIDs.length < maxPosts && options.length > 0 && document.activeElement === search;
       results.hidden = !open;
       search.setAttribute('aria-expanded', String(Boolean(open)));
-      status.textContent = query && suggesting && !value.posts.length ? 'No matching posts.' : '';
+      status.textContent = query && suggesting && !options.length ? `No matching ${includePages ? 'posts or pages' : 'posts'}.` : '';
+      if (open) revealSearchFeedback(results);
+      else if (status.textContent) revealSearchFeedback(status);
     } catch {
-      if (request !== active || !section.isConnected || section.hidden) return;
+      if (request !== active || !section.isConnected || section.hidden || searching && !suggesting) return;
       results.replaceChildren();
-      status.textContent = 'Unable to load posts. ';
+      status.textContent = `Unable to load ${includePages ? 'posts and pages' : 'posts'}. `;
       const retry = document.createElement('button');
       retry.type = 'button';
       retry.className = 'text-button';
       retry.textContent = 'Retry';
       retry.addEventListener('click', () => {
+        if (search.disabled) {
+          title.focus();
+          loadChoices();
+          return;
+        }
         const focused = document.activeElement === search;
         search.focus();
         if (focused || !search.value.trim()) loadChoices();
       });
       status.append(retry);
+      revealSearchFeedback(status);
     } finally {
       clearTimeout(loading);
       clearTimeout(timeout);
@@ -216,18 +248,23 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
     request?.abort();
     request = undefined;
     clearTimeout(timer);
-    let value;
+    let value, ids, selectionField;
     try {
       value = source.value.trim() ? JSON.parse(source.value) : {posts: []};
-      if (!value || Array.isArray(value) || !Array.isArray(value.posts) || !value.posts.every(validID) || value.posts.length > maxPosts || new Set(value.posts).size !== value.posts.length || Object.keys(value).some(key => key !== 'posts' && (key !== 'title' || typeof value.title !== 'string'))) throw new Error();
+      selectionField = includePages && value?.links != null ? 'links' : 'posts';
+      ids = value?.[selectionField];
+      const valid = selectionField === 'links' ? validLink : validID;
+      if (!Array.isArray(ids) || !ids.every(valid) || ids.length > maxPosts || new Set(ids).size !== ids.length ||
+          Object.keys(value).some(key => key !== selectionField && (key !== 'title' || typeof value.title !== 'string'))) throw new Error();
     } catch {
       source.hidden = sourceLabel.hidden = false;
       controls.hidden = controls.disabled = true;
       controls.after(status);
-      status.textContent = 'The post selection source is invalid. Correct it before saving.';
+      status.textContent = `The ${item} selection source is invalid. Correct it before saving.`;
       return;
     }
-    posts = value.posts;
+    selectedIDs = ids;
+    field = selectionField;
     resolved = false;
     targets.clear();
     title.value = value.title || '';
@@ -254,14 +291,23 @@ export function createPostPicker(section, {source, maxPosts = 12, searchURL = "/
     suggesting = Boolean(search.value.trim());
     status.textContent = '';
     if (!suggesting) {
-      if (posts.length && !resolved) loadChoices();
+      if (selectedIDs.length && !resolved) loadChoices();
       return;
     }
     timer = setTimeout(loadChoices, 200);
   });
   search.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { event.preventDefault(); closeSuggestions(); return; }
-    if (event.key === 'Tab') { closeSuggestions(); return; }
+    if (event.key === 'Escape') {
+      if (suggesting || !results.hidden || status.textContent) {
+        event.preventDefault();
+        closeSuggestions();
+      }
+      return;
+    }
+    if (event.key === 'Tab') {
+      if (event.shiftKey || !status.querySelector('button')) closeSuggestions();
+      return;
+    }
     if (['ArrowDown', 'ArrowUp'].includes(event.key) && !results.hidden && results.children.length) {
       event.preventDefault();
       const options = [...results.children];

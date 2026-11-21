@@ -51,13 +51,13 @@ func markdownComponents(source string, catalog componentCatalog, overrides ...re
 	return template.HTML(out.String()), nil
 }
 
-func (m *module) renderWriting(ctx context.Context, source, postID string) (template.HTML, error) {
-	return m.renderWritingWithCatalog(ctx, source, postID, postComponentCatalog)
+func (m *module) renderWriting(ctx context.Context, source, exclude string) (template.HTML, error) {
+	return m.renderWritingWithCatalog(ctx, source, exclude, postComponentCatalog)
 }
 
-// Components can resolve public post references for this render. Pure Markdown
+// Components can resolve public content references for this render. Pure Markdown
 // rendering stays independent of storage for media extraction and other callers.
-func (m *module) renderWritingWithCatalog(ctx context.Context, source, postID string, catalog componentCatalog) (template.HTML, error) {
+func (m *module) renderWritingWithCatalog(ctx context.Context, source, exclude string, catalog componentCatalog) (template.HTML, error) {
 	_, components, err := catalog.split(source)
 	if err != nil {
 		return markdownComponents(source, catalog)
@@ -66,8 +66,8 @@ func (m *module) renderWritingWithCatalog(ctx context.Context, source, postID st
 	if len(m.embedOrigins) > 0 {
 		readers = append(readers, embedRenderer{origins: m.embedOrigins})
 	}
-	if ids := componentPostReferences(components); len(ids) > 0 {
-		reader, err := resolveRelatedReader(ctx, m.posts, postID, ids)
+	if ids := componentRelatedReferences(components); len(ids) > 0 {
+		reader, err := m.resolveRelatedReader(ctx, exclude, ids)
 		if err != nil {
 			return "", err
 		}
@@ -92,8 +92,8 @@ func prepareFeedHTML(rendered template.HTML, postURL *url.URL) (template.HTML, e
 	return markdownURLs(rendered, postURL, false)
 }
 
-func (m *module) renderRevisionWriting(ctx context.Context, source, postID string, base *url.URL) (template.HTML, error) {
-	rendered, err := m.renderWriting(ctx, source, postID)
+func (m *module) renderRevisionWriting(ctx context.Context, source, exclude string, base *url.URL) (template.HTML, error) {
+	rendered, err := m.renderWriting(ctx, source, exclude)
 	if err != nil {
 		return "", err
 	}

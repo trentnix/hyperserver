@@ -151,7 +151,7 @@ func (m *module) page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	html, err := m.renderWriting(r.Context(), p.Markdown, "")
+	html, err := m.renderWriting(r.Context(), p.Markdown, relatedContentID("page", p.ID))
 	if err != nil {
 		m.app.ContentManager.HandleError(w, r, "Unable to display this page.", err, http.StatusInternalServerError)
 		return
@@ -411,5 +411,6 @@ func (m *module) deletePage(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
+	m.feed.invalidate()
 	m.finishContentDelete(w, r, "page", "/pages")
 }

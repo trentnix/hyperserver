@@ -1,20 +1,20 @@
 {{ define "blog.postPicker" }}
-<label for="{{ .ID }}" data-post-picker-source-label>Post selection (JSON)</label>
+<label for="{{ .ID }}" data-post-picker-source-label>{{ if .IncludePages }}Link{{ else }}Post{{ end }} selection (JSON)</label>
 <textarea id="{{ .ID }}" name="{{ .Name }}" rows="3" aria-describedby="{{ .ID }}-help" data-post-picker-source>{{ .Source }}</textarea>
 <fieldset data-post-picker-controls data-component-fields hidden disabled>
-  <div class="post-picker-heading-field"><label for="{{ .ID }}-title">{{ .TitleLabel }}{{ if .OptionalTitle }} <span>(optional)</span>{{ end }}</label><input id="{{ .ID }}-title" maxlength="240"{{ if .OptionalTitle }} placeholder="Related posts"{{ else }} required{{ end }} data-post-picker-title></div>
+  <div class="post-picker-heading-field"><label for="{{ .ID }}-title">{{ .TitleLabel }}{{ if .OptionalTitle }} <span>(optional)</span>{{ end }}</label><input id="{{ .ID }}-title" maxlength="240"{{ if .OptionalTitle }} placeholder="Related content"{{ else }} required{{ end }} data-post-picker-title></div>
   <div class="post-picker-layout">
     <div class="post-picker-search-panel">
-      <label for="{{ .ID }}-search">Add a post</label>
+      <label for="{{ .ID }}-search">{{ if .IncludePages }}Add a post or page{{ else }}Add a post{{ end }}</label>
       <div class="post-picker-search-field">
-        <input id="{{ .ID }}-search" type="search" maxlength="240" placeholder="Start typing a post title…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-describedby="{{ .ID }}-help {{ .ID }}-status" data-post-picker-search aria-controls="{{ .ID }}-results">
-        <div class="post-picker-results" id="{{ .ID }}-results" data-post-picker-results role="listbox" aria-multiselectable="true" aria-label="Matching posts" hidden></div>
+        <input id="{{ .ID }}-search" type="search" maxlength="240" placeholder="{{ if .IncludePages }}Search by title…{{ else }}Start typing a post title…{{ end }}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-describedby="{{ .ID }}-help {{ .ID }}-status" data-post-picker-search aria-controls="{{ .ID }}-results">
+        <div class="post-picker-results" id="{{ .ID }}-results" data-post-picker-results role="listbox" aria-multiselectable="true" aria-label="{{ if .IncludePages }}Matching posts and pages{{ else }}Matching posts{{ end }}" hidden></div>
       </div>
-      <p class="form-hint" id="{{ .ID }}-limit" data-post-picker-limit hidden>{{ .MaxPosts }} posts selected. Remove one to choose another.</p>
+      <p class="form-hint" id="{{ .ID }}-limit" data-post-picker-limit hidden>{{ .MaxPosts }} {{ if .IncludePages }}links{{ else }}posts{{ end }} selected. Remove one to choose another.</p>
     </div>
     <div class="post-picker-selected-panel" hidden>
-      <div class="post-picker-list-heading">Selected posts <span data-post-picker-count>0</span></div>
-      <ul class="post-picker-selections" data-post-picker-selections aria-label="Selected posts"></ul>
+      <div class="post-picker-list-heading">Selected {{ if .IncludePages }}links{{ else }}posts{{ end }} <span data-post-picker-count>0</span></div>
+      <ul class="post-picker-selections" data-post-picker-selections aria-label="Selected {{ if .IncludePages }}links{{ else }}posts{{ end }}"></ul>
     </div>
   </div>
 </fieldset>

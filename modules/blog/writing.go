@@ -97,7 +97,7 @@ func (m *module) persistPostWithSeries(ctx context.Context, p Post, update *seri
 	if p.ID != "" && p.Version < 1 {
 		return p, errEditConflict
 	}
-	if err := m.validatePostReferences(ctx, p.Markdown, "post", p.ID, revisionID); err != nil {
+	if err := m.validateRelatedReferences(ctx, p.Markdown, "post", p.ID, revisionID); err != nil {
 		return p, err
 	}
 	m.mediaMu.RLock()
@@ -155,7 +155,7 @@ func (m *module) persistPageRevision(ctx context.Context, p Page, revisionID int
 	if p.ID != "" && p.Version < 1 {
 		return p, errEditConflict
 	}
-	if err := m.validatePostReferences(ctx, p.Markdown, "page", p.ID, revisionID); err != nil {
+	if err := m.validateRelatedReferences(ctx, p.Markdown, "page", p.ID, revisionID); err != nil {
 		return p, err
 	}
 	m.mediaMu.RLock()
@@ -170,6 +170,10 @@ func (m *module) persistPageRevision(ctx context.Context, p Page, revisionID int
 		if generated && errors.Is(err, errPageSlugTaken) {
 			p.Slug = numberedSlug(base, suffix)
 			continue
+		}
+		if err == nil && saved.Version != p.Version {
+			// Posts in the feed can link to pages, including descendants of this page.
+			m.feed.invalidate()
 		}
 		return saved, err
 	}
