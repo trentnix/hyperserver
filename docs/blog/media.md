@@ -14,6 +14,8 @@ The server processes one image upload at a time. Editors queue uploads and block
 
 Select an unlinked Markdown image in a post or page to enlarge it. Tap the enlarged image, choose **Collapse image**, or press Escape to return to the article. Images with a Markdown link still follow that link.
 
+In the Content editor, click the thumbnail or picture icon beside an image's Markdown to open its size settings. **Automatic** uses the available width. **Limit height** caps the height at 65% of the viewport height and keeps the cap between 240 and 560 pixels. Under **Custom**, enter a maximum width, height, or both. Use **Preview** to check the result and **Edit Markdown** to return to the editor. The editor folds the size marker into the thumbnail and saves it with the image in Markdown, for example `{size=custom max-height=480}![Tall diagram](/images/diagram.png)`.
+
 ## Add an album
 
 Choose **Add component → Photo album**, then **Upload** or **Library**. Removing a photo or album offers Undo and keeps the upload. Save the post or page to apply changes. Albums hold up to 50 photos, with captions up to 500 characters. See [shared component behavior](components.md).

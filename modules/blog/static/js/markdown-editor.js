@@ -1,5 +1,6 @@
 import {componentPlacement} from './component-placement.js';
 import {registerFieldEditor} from './forms.js';
+import {addMarkdownImageSettings} from './markdown-image-size.js';
 import {uploadStorageFull} from './media.js';
 
 // EasyMDE stays behind this blog-local boundary. The textarea remains the form
@@ -39,7 +40,7 @@ export function createMarkdownEditor(textarea, {compact = false, upload, chooseI
     spellChecker: false,
     forceSync: true,
     status: false,
-    shortcuts: compact ? {togglePreview: null, toggleSideBySide: null, toggleFullScreen: null} : undefined,
+    shortcuts: {toggleSideBySide: null, ...(compact && {togglePreview: null, toggleFullScreen: null})},
     uploadImage: !compact && !storageFull,
     imageUploadEndpoint: '/post/images/upload',
     imageUploadFunction(file, onSuccess) {
@@ -68,16 +69,31 @@ export function createMarkdownEditor(textarea, {compact = false, upload, chooseI
         {name: 'upload-image', action: EasyMDE.drawUploadedImage, className: 'tool-image', title: 'Upload image'},
         {name: 'media-library', action: () => chooseImage(path => api.insertImage(path)), className: 'tool-library', title: 'Choose existing image'},
         '|',
-        {name: 'preview', action: EasyMDE.togglePreview, className: 'tool-preview', title: 'Preview'}
+        {name: 'preview', action: EasyMDE.togglePreview, className: 'tool-preview', title: 'Preview', noDisable: true}
       ])
     ].filter(item => form.dataset.mediaLibrary !== 'false' || item.name !== 'media-library'),
-    previewRender: preview
+    previewRender: compact ? undefined : (markdown, pane) => {
+      const active = previewButton.classList.contains('active');
+      previewButton.textContent = previewButton.title = active ? 'Edit Markdown' : 'Preview';
+      editor.codemirror.setOption('readOnly', active ? 'nocursor' : false);
+      input.inert = active;
+      if (active) previewButton.focus({preventScroll: true});
+      return preview(markdown, pane, active);
+    }
   }));
+  const previewButton = editor.gui.toolbar.querySelector('.tool-preview');
+  if (!compact) {
+    previewButton.textContent = 'Preview';
+    previewButton.removeAttribute('aria-label');
+    previewButton.tabIndex = 0;
+  }
   if (storageFull) {
     editor.gui.toolbar.querySelector('.tool-image').disabled = true;
     editor.gui.toolbar.querySelector('.imageInput').disabled = true;
   }
   const container = editor.codemirror.getWrapperElement().parentElement;
+  const imageSettings = !compact && form.querySelector('[data-markdown-image-size-dialog]');
+  const removeImageSettings = imageSettings ? addMarkdownImageSettings(editor.codemirror, imageSettings) : null;
   if (compact) container.classList.add('compact-markdown-editor');
   // Component validation redirects focus to the visible editor. Content has
   // its own validation flow. Mirror semantics onto each editor's keyboard input.
@@ -160,6 +176,7 @@ export function createMarkdownEditor(textarea, {compact = false, upload, chooseI
       unregisterField?.();
       if (needsLabelFocus) label?.removeEventListener('click', api.focus);
       onDestroy?.();
+      removeImageSettings?.();
       if (picker) textarea.before(picker);
       editor.codemirror.off('change', changed);
       editor.cleanup();

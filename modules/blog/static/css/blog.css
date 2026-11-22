@@ -202,7 +202,11 @@ body { margin: 0; min-width: var(--min-page-width); font-size: 16px; background:
 h1 { font-size: 1.8em; line-height: 1.2; margin: 0; }
 h2, h3 { line-height: 1.3; }
 .post-heading time { display: block; color: #696d74; font-size: .7em; }
-.post-body img { display: block; max-width: 100%; height: auto; padding: 10px 0; margin: 0 auto; }
+.post-body img, .editor-preview img[data-markdown-image] { display: block; max-width: 100%; height: auto; padding: 10px 0; margin: 0 auto; }
+:is(.post-body, .editor-preview) img[data-markdown-image-size] { max-width: min(100%, var(--markdown-image-max-width, 100%)); max-height: var(--markdown-image-max-height, none); padding: 0; margin-block: 10px; }
+img[data-markdown-image-size="compact"] { --markdown-image-max-width: 360px; }
+img[data-markdown-image-size="medium"] { --markdown-image-max-width: 640px; }
+img[data-markdown-image-size="limit-height"] { --markdown-image-max-height: clamp(240px, 65svh, 560px); }
 .markdown-image-link { position: relative; display: block; width: max-content; max-width: 100%; margin-inline: auto; cursor: zoom-in; }
 .markdown-image-link:focus-visible { outline-offset: -3px; }
 :where(.page-content, footer) a { color: #000064; text-decoration: underline; }
@@ -243,6 +247,7 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 @media (max-width: 1679px) {
   /* Let article images use the text gutters without enlarging small images. */
   .post-body > p :is(img:not(.markdown-image-link > img), .markdown-image-link) { max-width: calc(100% + 2 * var(--content-padding)); margin-inline: 0; position: relative; left: 50%; transform: translateX(-50%); }
+  .post-body > p img[data-markdown-image-size]:not(.markdown-image-link > img) { max-width: min(calc(100% + 2 * var(--content-padding)), var(--markdown-image-max-width, 100% + 2 * var(--content-padding))); }
 }
 @media (max-width: 767px) {
   .page-content { --content-padding: 20px; }
@@ -805,6 +810,21 @@ dialog.component-dialog { width: 840px; max-width: calc(100% - 24px); max-height
 .component-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px clamp(12px, 3vw, 24px); border-top: 1px solid #e0e5ec; background: #fff; }
 .component-dialog > footer button { min-width: 86px; min-height: 44px; }
 .component-dialog [data-component-done][aria-busy="true"] { cursor: progress; opacity: .65; }
+dialog.markdown-image-dialog { width: 440px; }
+.markdown-image-dialog-fields { min-width: calc(var(--min-page-width) - 26px); padding: clamp(12px, 3vw, 24px); }
+.markdown-image-dialog h2 { font-size: 1.25em; }
+.markdown-image-dialog-name { margin: 4px 0 0; color: var(--muted); font-size: .9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.markdown-image-presets { min-width: 0; margin: 16px 0 0; padding: 0; border: 1px solid #d6dce4; border-radius: 8px; }
+.markdown-image-presets > label { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 6px 10px; font-size: .9em; cursor: pointer; }
+.markdown-image-presets > label:first-child { border-radius: 7px 7px 0 0; }
+.markdown-image-presets > label:has(+ [hidden]) { border-radius: 0 0 7px 7px; }
+.markdown-image-presets > label + label { border-top: 1px solid #d6dce4; }
+.markdown-image-presets > label:has(:checked), .markdown-image-dimensions { background: #edf2f8; }
+.markdown-image-presets input[type="radio"] { flex: none; margin: 0; }
+.markdown-image-presets small { margin-inline-start: auto; color: var(--muted); font-weight: 400; text-align: end; }
+.markdown-image-dimensions:not([hidden]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 2px 10px 10px; border-radius: 0 0 7px 7px; }
+.markdown-image-dimensions label { margin: 0 0 4px; font-size: .82em; }
+.markdown-image-dimensions input { min-width: 0; }
 .downloads-editor h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.2em; }
 .downloads-editor h2 span { color: var(--muted); font-size: 14px; font-weight: 400; }
 :is(.album-editor, .downloads-editor) > .form-hint:not(.album-limits, .downloads-limits) { margin: 8px 0 18px; font-size: 14px; }
@@ -1037,12 +1057,18 @@ dialog.album-viewer { position: fixed; inset: 0; width: 100%; height: 100dvh; ma
 .album-viewer button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 44px; min-height: 44px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #fff; }
 .album-viewer button:hover:not(:disabled), .album-viewer button[aria-pressed="true"] { background: #ffffff1c; }
 .album-viewer button:focus-visible { outline: 2px solid #a8caff; outline-offset: -2px; }
-.album-viewer-single[open] { grid-template-rows: minmax(0, 1fr) auto; }
-.album-viewer-single > .album-viewer-tools { justify-content: flex-end; gap: 8px; padding: 8px 12px 12px; }
-.album-viewer-single > .album-viewer-tools button { border-color: #c8d5e5; border-radius: 50%; background: #fff; color: #405b78; }
+.album-viewer-single[open] { --single-image-inset: 12px; --single-image-tools-bottom: 10px; grid-template-rows: var(--single-image-inset) minmax(0, 1fr) var(--single-image-inset); }
+.album-viewer-single > .album-viewer-tools { position: absolute; z-index: 3; right: 12px; bottom: var(--single-image-tools-bottom); gap: 8px; pointer-events: none; }
+@media (max-height: 480px) { .album-viewer-single[open] { --single-image-inset: 8px; --single-image-tools-bottom: 4px; } }
+.album-viewer-single[open]:has(> .album-viewer-with-captions) { --single-image-inset: calc(44px + 2 * var(--single-image-tools-bottom)); }
+.album-viewer-single > figure { grid-row: 2; }
+.album-viewer-single > .album-viewer-tools button { border-color: #c8d5e5; border-radius: 50%; background: #fff; color: #405b78; pointer-events: auto; }
 .album-viewer-single > .album-viewer-tools button:is(:hover:not(:disabled), [aria-pressed="true"]) { background: #dce8f5; }
 .album-viewer-single > .album-viewer-tools button:focus-visible { outline-color: #395b88; }
 .album-viewer-single > .album-viewer-tools button:disabled { opacity: .4; }
+@media (prefers-reduced-motion: no-preference) { .album-viewer-single > .album-viewer-tools { transition: opacity .16s ease; } }
+.album-viewer-tools[data-idle]:not(:hover, :has(:focus-visible)) { opacity: 0; }
+.album-viewer-tools[data-idle]:not(:hover, :has(:focus-visible)) button { pointer-events: none; }
 .album-viewer figure { --album-caption-space: 0px; position: relative; min-height: 0; min-width: 0; margin: 0; overflow: hidden; }
 .album-viewer .album-viewer-with-captions { --album-caption-space: 76px; }
 .album-viewer-image-frame { position: absolute; inset: 0 12px var(--album-caption-space); overflow: hidden; touch-action: none; user-select: none; }
@@ -1087,6 +1113,14 @@ html:has(.album-viewer-single[open]) { scrollbar-gutter: auto; }
   .editor-confirmation button { min-height: 44px; }
 }
 .CodeMirror { font-size: 16px; }
+.markdown-image-size-button { position: relative; display: inline-grid; place-items: center; width: 40px; height: 34px; margin-inline-end: 6px; padding: 0; border: 1px solid #cad4e2; border-radius: 6px; background: #f3f6fa; color: #334762; vertical-align: middle; }
+.markdown-image-size-button:hover { background: #e5edf6; }
+.markdown-image-size-button[data-image-sized] { border-color: #617b9d; }
+.markdown-image-size-button::before { content: ''; width: 18px; height: 18px; background: currentColor; mask: url('../lib/lucide/images.svg') center / contain no-repeat; }
+.markdown-image-size-button img:not([hidden]) { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 5px; object-fit: cover; }
+.markdown-image-size-button::after { content: '⤢'; position: absolute; inset: auto 1px 1px auto; display: grid; place-items: center; width: 15px; height: 13px; border-radius: 3px; background: #26384d; color: #fff; font: 700 11px/1 sans-serif; }
+.CodeMirror:has(> .editor-preview-active) .markdown-image-size-button { visibility: hidden; }
+@media (pointer: coarse) { .markdown-image-size-button { width: 44px; height: 44px; } }
 .component-marker { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; max-width: 100%; margin-block: 3px; padding: 4px 10px; border: 1px solid #d0d9e4; border-radius: 8px; background: #f3f6fa; color: #334762; font: 14px 'Source Sans 3', sans-serif; white-space: normal; }
 .component-marker > strong { max-width: 100%; min-width: 0; padding-block: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .component-row-actions { display: inline-flex; flex: none; gap: 8px; }
@@ -1116,7 +1150,7 @@ html:has(.album-viewer-single[open]) { scrollbar-gutter: auto; }
 .editor-toolbar .tool-link { --tool-icon: url('../lib/lucide/link.svg'); }
 .editor-toolbar .tool-image { --tool-icon: url('../lib/lucide/image-up.svg'); }
 .editor-toolbar .tool-library { --tool-icon: url('../lib/lucide/images.svg'); }
-.editor-toolbar .tool-preview::before { content: '◉'; }
+.editor-toolbar .tool-preview { width: auto; min-height: 44px; padding-inline: 8px; font: inherit; font-size: 14px; white-space: nowrap; }
 
 @media (max-width: 767px) { dialog { padding: 20px; } }
 
@@ -1436,6 +1470,7 @@ form .compact-markdown-editor .CodeMirror:focus-within { outline: none; }
 .event-image img, .post-body .event-image img { display: block; width: 100%; height: 100%; margin: 0; padding: 0; object-fit: cover; }
 .event-image-hint, .markdown-image-hint { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #182333b3; color: #fff; }
 .markdown-image-hint { bottom: 18px; max-width: calc(100% - 16px); max-height: calc(100% - 26px); overflow: hidden; }
+.markdown-image-link:has(> img[data-markdown-image-size]) .markdown-image-hint { bottom: 8px; max-height: calc(100% - 16px); }
 :is(.event-image a, .markdown-image-link):is(:hover, :focus-visible) :is(.event-image-hint, .markdown-image-hint) { background: #182333; }
 .event-details { min-width: 0; overflow-wrap: anywhere; }
 .event-details h2 { margin: 0; color: #273849; font-size: clamp(1.25rem, 2.5vw, 1.5rem); line-height: 1.2; }

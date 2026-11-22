@@ -16,6 +16,34 @@
 
 {{ define "blog.markdownHelp" }}
   <small id="markdown-help" class="form-hint">Supports Markdown up to 256 KiB. Image uploads use the same limits as preview images.</small>
+  <template data-markdown-image-size-dialog>
+    <dialog class="component-dialog markdown-image-dialog" aria-labelledby="markdown-image-size-title">
+      <div class="component-dialog-body">
+        <div class="markdown-image-dialog-fields">
+          <h2 id="markdown-image-size-title">Image size</h2>
+          <p class="markdown-image-dialog-name" data-image-size-name hidden></p>
+          <form id="markdown-image-size-form" method="dialog">
+            <fieldset class="markdown-image-presets" aria-label="Size preset">
+              <label><input type="radio" name="preset" value=""> <span>Automatic</span><small>Uses available width</small></label>
+              <label><input type="radio" name="preset" value="compact"> <span>Compact</span><small>360 px max width</small></label>
+              <label><input type="radio" name="preset" value="medium"> <span>Medium</span><small>640 px max width</small></label>
+              <label><input type="radio" name="preset" value="limit-height"> <span>Limit height</span><small>240–560 px height cap</small></label>
+              <label><input type="radio" name="preset" value="custom"> <span>Custom</span><small>Set either limit or both</small></label>
+              <div class="markdown-image-dimensions" data-image-dimensions hidden>
+                <div><label for="markdown-image-width">Max width (px)</label><input id="markdown-image-width" name="width" type="number" min="1" max="4096" step="1" inputmode="numeric" placeholder="Automatic"></div>
+                <div><label for="markdown-image-height">Max height (px)</label><input id="markdown-image-height" name="height" type="number" min="1" max="4096" step="1" inputmode="numeric" placeholder="Automatic"></div>
+              </div>
+            </fieldset>
+            <p class="form-error" role="alert" data-image-size-status hidden></p>
+          </form>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="button-secondary" data-image-size-cancel>Cancel</button>
+        <button type="submit" form="markdown-image-size-form">Apply</button>
+      </footer>
+    </dialog>
+  </template>
 {{ end }}
 
 {{ define "blog.draftRecovery" }}

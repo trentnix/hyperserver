@@ -114,12 +114,12 @@ function initialize(root) {
         attempt();
       },
       chooseImage: openMediaLibrary,
-      preview(markdown, preview) {
+      preview(markdown, preview, active) {
         // EasyMDE replaces preview markup itself, which bypasses HTMX cleanup.
         preview.dispatchEvent(new Event('htmx:before:cleanup', {bubbles: true}));
         previewRequest?.abort();
         // EasyMDE also calls previewRender when the author closes Preview.
-        if (!textarea.form.querySelector('.tool-preview.active')) return '';
+        if (!active) return '';
         previewRequest = new AbortController();
         const request = previewRequest;
         const body = new URLSearchParams({content: markdown});

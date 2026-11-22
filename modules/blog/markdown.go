@@ -6,6 +6,8 @@ import (
 	"html/template"
 	"io"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -19,16 +21,87 @@ import (
 
 const maxMarkdownBytes = 256 * 1024
 
-// Identify Markdown images without changing Goldmark's escaping or link rendering.
+var imageSizeMarker = regexp.MustCompile(`^\{size=(compact|medium|limit-height|custom)(?: max-width=([1-9][0-9]{0,3}))?(?: max-height=([1-9][0-9]{0,3}))?\}$`)
+
+func applyMarkdownImageSize(image *ast.Image, source []byte) {
+	previous, ok := image.PreviousSibling().(*ast.Text)
+	position := image.Pos()
+	if !ok || previous.Segment.Stop != position {
+		return
+	}
+	const maxMarkerLength = len("{size=custom max-width=4096 max-height=4096}")
+	start := max(previous.Segment.Start, position-maxMarkerLength)
+	marker := bytes.LastIndex(source[start:position], []byte("{size="))
+	if marker < 0 {
+		return
+	}
+	start += marker
+	if (start-len(bytes.TrimRight(source[:start], `\`)))%2 != 0 {
+		return
+	}
+	match := imageSizeMarker.FindStringSubmatch(string(source[start:position]))
+	if match == nil || (match[1] == "custom") != (match[2] != "" || match[3] != "") {
+		return
+	}
+	if match[1] == "custom" {
+		width, _ := strconv.Atoi(match[2])
+		height, _ := strconv.Atoi(match[3])
+		if width > 4096 || height > 4096 {
+			return
+		}
+		// Only validated decimal integers can reach the CSS declarations.
+		var style strings.Builder
+		if width > 0 {
+			style.WriteString("--markdown-image-max-width:" + match[2] + "px;")
+		}
+		if height > 0 {
+			style.WriteString("--markdown-image-max-height:" + match[3] + "px;")
+		}
+		image.SetAttributeString("style", style.String())
+	}
+	image.SetAttributeString("data-markdown-image-size", match[1])
+	previous.Segment.Stop = start
+	if previous.Segment.IsEmpty() {
+		image.Parent().RemoveChild(image.Parent(), previous)
+	}
+}
+
+// Apply the explicit image size while leaving escaping and links to Goldmark.
 type markdownImages struct{}
 
-func (markdownImages) Transform(document *ast.Document, _ text.Reader, _ parser.Context) {
+func (markdownImages) Transform(document *ast.Document, reader text.Reader, _ parser.Context) {
+	source := reader.Source()
 	_ = ast.Walk(document, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		if entering && node.Kind() == ast.KindImage {
-			node.SetAttributeString("data-markdown-image", "")
+		if image, ok := node.(*ast.Image); entering && ok {
+			image.SetAttributeString("data-markdown-image", "")
+			applyMarkdownImageSize(image, source)
 		}
 		return ast.WalkContinue, nil
 	})
+}
+
+// The editor needs image offsets and safe image markup. It can find both
+// without rendering the post or resolving its components.
+func markdownImagePreview(source string) (template.HTML, error) {
+	data := []byte(source)
+	document := goldmark.DefaultParser().Parse(text.NewReader(data))
+	var images []*ast.Image
+	_ = ast.Walk(document, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if image, ok := node.(*ast.Image); entering && ok {
+			image.SetAttributeString("data-markdown-image", strconv.Itoa(image.Pos()))
+			applyMarkdownImageSize(image, data)
+			images = append(images, image)
+			return ast.WalkSkipChildren, nil
+		}
+		return ast.WalkContinue, nil
+	})
+	preview := ast.NewDocument()
+	for _, image := range images {
+		preview.AppendChild(preview, image)
+	}
+	var out bytes.Buffer
+	err := goldmark.DefaultRenderer().Render(&out, data, preview)
+	return template.HTML(out.String()), err
 }
 
 // Component fields use plain Markdown without the document's component transformers.

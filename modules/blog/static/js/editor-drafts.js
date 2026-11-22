@@ -301,7 +301,7 @@ import {componentValue, restoreComponentInstances} from './post-components.js';
     }
   }, true);
   document.addEventListener('submit', event => {
-    if (event.target.matches('.media-browser [data-media-filters]')) return;
+    if (event.target.method === 'dialog' || event.target.matches('.media-browser [data-media-filters]')) return;
     const state = states.get(event.target);
     if (state) {
       persist(state);

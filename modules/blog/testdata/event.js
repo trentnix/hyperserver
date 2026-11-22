@@ -94,8 +94,10 @@
       const viewerBox = viewer.getBoundingClientRect();
       const collapseBox = collapse.getBoundingClientRect();
       assert(viewerBox.width === innerWidth && viewerBox.height === innerHeight, 'The event image viewer must cover the viewport.');
-      assert(viewer.querySelector('header').hidden && point.top === viewerBox.top, 'The image must use the space above it without a top toolbar.');
-      assert(collapseBox.top >= point.bottom && viewerBox.bottom - collapseBox.bottom <= 16 && viewerBox.right - collapseBox.right <= 16 && collapseBox.width >= 44 && collapseBox.height >= 44, 'The collapse button must be reachable at the lower right, below the image.');
+      assert(viewer.querySelector('header').hidden && point.top > viewerBox.top &&
+        Math.abs(point.top - viewerBox.top - (viewerBox.bottom - point.bottom)) < 1,
+        'The single-image viewer must balance its margins without adding a top toolbar.');
+      assert(viewerBox.bottom - collapseBox.bottom <= 16 && viewerBox.right - collapseBox.right <= 16 && collapseBox.width >= 44 && collapseBox.height >= 44, 'The collapse button must be reachable at the lower right.');
       const pointer = (target, type, id, offset = 0, pointerType = 'touch') => {
         target.dispatchEvent(new PointerEvent(type, {pointerType, pointerId: id, button: 0, clientX: point.x + point.width / 2 + offset, clientY: point.y + point.height / 2, bubbles: true}));
       };

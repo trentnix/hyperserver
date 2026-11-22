@@ -18,6 +18,26 @@ function enableMarkdownImageLinks(root) {
 document.addEventListener('htmx:after:process', event => enableMarkdownImageLinks(event.target.parentElement || event.target));
 enableMarkdownImageLinks(document);
 
+function fadeImageTools(dialog, tools, openEvent) {
+  let mouse = openEvent.pointerType === 'mouse' || (!openEvent.pointerType && openEvent.detail > 0 && matchMedia('(pointer: fine)').matches);
+  let timer;
+  function reveal(withMouse = mouse) {
+    mouse = withMouse;
+    clearTimeout(timer);
+    tools.removeAttribute('data-idle');
+    if (mouse) timer = setTimeout(() => {
+      if (!dialog.querySelector('[data-album-image]').hidden) tools.setAttribute('data-idle', '');
+    }, 3000);
+  }
+  const pointer = event => reveal(event.pointerType === 'mouse');
+  dialog.addEventListener('pointermove', pointer);
+  dialog.addEventListener('pointerdown', pointer);
+  dialog.addEventListener('keydown', () => reveal(false));
+  dialog.addEventListener('wheel', () => reveal(), {passive: true});
+  dialog.addEventListener('close', () => clearTimeout(timer), {once: true});
+  return reveal;
+}
+
 // Real image links remain usable without JavaScript. The native dialog traps
 // focus. The viewer owns presentation only, not album content or persistence.
 (() => {
@@ -55,9 +75,12 @@ enableMarkdownImageLinks(document);
     close.addEventListener('click', () => dialog.close());
     function label(button, text) { button.setAttribute('aria-label', text); button.title = text; }
     const singleImage = photos.length === 1;
+    let revealTools;
     if (singleImage) {
       dialog.classList.add('album-viewer-single');
-      dialog.append(header.querySelector('.album-viewer-tools'));
+      const tools = header.querySelector('.album-viewer-tools');
+      dialog.append(tools);
+      revealTools = fadeImageTools(dialog, tools, event);
       header.hidden = true;
       captionToggle.hidden = !opener.dataset.caption;
       const icon = close.querySelector('path');
@@ -230,6 +253,7 @@ enableMarkdownImageLinks(document);
         presentation();
         loading = false;
         zoom.disabled = false;
+        revealTools?.();
         clearLoadingMessage();
         frame.removeAttribute('aria-busy');
         // Only adjacent photos are prefetched. The browser owns its image cache.

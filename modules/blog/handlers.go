@@ -384,21 +384,26 @@ func (m *module) preview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Markdown must be valid UTF-8.", http.StatusUnprocessableEntity)
 		return
 	}
-	if r.PostForm.Has("componentOrder") {
-		var err error
-		text, err = joinPostComponents(text, componentForm(r.PostForm))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-			return
+	var rendered template.HTML
+	var err error
+	if r.PostForm.Has("imageSettings") {
+		rendered, err = markdownImagePreview(text)
+	} else {
+		if r.PostForm.Has("componentOrder") {
+			text, err = joinPostComponents(text, componentForm(r.PostForm))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+				return
+			}
 		}
+		rendered, err = m.renderWriting(r.Context(), text, "")
 	}
-	html, err := m.renderWriting(r.Context(), text, "")
 	if err != nil {
 		http.Error(w, "Unable to preview this content.", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write([]byte(html)); err != nil {
+	if _, err := w.Write([]byte(rendered)); err != nil {
 		logger.LogRequestError(r, err)
 	}
 }
