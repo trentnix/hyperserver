@@ -1,5 +1,23 @@
 import {enableAlbumGestures} from './album-gestures.js';
 
+function enableMarkdownImageLinks(root) {
+  const template = document.querySelector('#markdown-image-link-template');
+  if (!template || typeof HTMLDialogElement === 'undefined') return;
+  for (const image of root.querySelectorAll('.post-body img[data-markdown-image]')) {
+    const src = image.getAttribute('src');
+    if (!src?.trim() || !/^https?:\/\//.test(image.src) || image.closest('a')) continue;
+    const link = template.content.firstElementChild.cloneNode(true);
+    const description = image.alt.trim();
+    link.href = src;
+    link.setAttribute('aria-label', description ? `Enlarge image: ${description}` : 'Enlarge image');
+    image.replaceWith(link);
+    link.prepend(image);
+  }
+}
+
+document.addEventListener('htmx:after:process', event => enableMarkdownImageLinks(event.target.parentElement || event.target));
+enableMarkdownImageLinks(document);
+
 // Real image links remain usable without JavaScript. The native dialog traps
 // focus. The viewer owns presentation only, not album content or persistence.
 (() => {

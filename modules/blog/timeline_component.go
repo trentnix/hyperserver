@@ -8,7 +8,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
@@ -164,7 +163,7 @@ func (timelineRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegister
 				item.Date, item.dateLabel, html.EscapeString(item.Title))
 			if item.Detail != "" {
 				w.WriteString(`<div class="timeline-detail">`)
-				if err := goldmark.Convert([]byte(item.Detail), w); err != nil {
+				if err := writeComponentMarkdown([]byte(item.Detail), w); err != nil {
 					return ast.WalkStop, err
 				}
 				w.WriteString(`</div>`)

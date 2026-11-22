@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
@@ -83,7 +82,7 @@ func (calloutRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegistere
 		if callout.Title != "" {
 			fmt.Fprintf(w, `<p class="post-callout-heading"><strong>%s</strong></p>`, html.EscapeString(callout.Title))
 		}
-		if err := goldmark.New().Convert([]byte(callout.Body), w); err != nil {
+		if err := writeComponentMarkdown([]byte(callout.Body), w); err != nil {
 			return ast.WalkStop, err
 		}
 		w.WriteString(`</div>`)

@@ -203,6 +203,8 @@ h1 { font-size: 1.8em; line-height: 1.2; margin: 0; }
 h2, h3 { line-height: 1.3; }
 .post-heading time { display: block; color: #696d74; font-size: .7em; }
 .post-body img { display: block; max-width: 100%; height: auto; padding: 10px 0; margin: 0 auto; }
+.markdown-image-link { position: relative; display: block; width: max-content; max-width: 100%; margin-inline: auto; cursor: zoom-in; }
+.markdown-image-link:focus-visible { outline-offset: -3px; }
 :where(.page-content, footer) a { color: #000064; text-decoration: underline; }
 :where(.page-content) a:hover { color: #245b85; }
 pre { overflow-x: auto; background: var(--surface); padding: 20px; font-size: .8em; }
@@ -240,7 +242,7 @@ blockquote { border-left: 3px solid #a0a3ac; margin-left: 0; padding-left: 24px;
 @media (min-width: 1680px) { .page-content { font-size: 1.2em; line-height: 1.5; } }
 @media (max-width: 1679px) {
   /* Let article images use the text gutters without enlarging small images. */
-  .post-body > p img { max-width: calc(100% + 2 * var(--content-padding)); margin-inline: 0; position: relative; left: 50%; transform: translateX(-50%); }
+  .post-body > p :is(img:not(.markdown-image-link > img), .markdown-image-link) { max-width: calc(100% + 2 * var(--content-padding)); margin-inline: 0; position: relative; left: 50%; transform: translateX(-50%); }
 }
 @media (max-width: 767px) {
   .page-content { --content-padding: 20px; }
@@ -1432,8 +1434,9 @@ form .compact-markdown-editor .CodeMirror:focus-within { outline: none; }
 .event-image a { position: absolute; inset: 0; display: block; }
 .event-image a:focus-visible { outline-offset: -3px; }
 .event-image img, .post-body .event-image img { display: block; width: 100%; height: 100%; margin: 0; padding: 0; object-fit: cover; }
-.event-image-hint { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #182333b3; color: #fff; }
-.event-image a:is(:hover, :focus-visible) .event-image-hint { background: #182333; }
+.event-image-hint, .markdown-image-hint { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #182333b3; color: #fff; }
+.markdown-image-hint { bottom: 18px; max-width: calc(100% - 16px); max-height: calc(100% - 26px); overflow: hidden; }
+:is(.event-image a, .markdown-image-link):is(:hover, :focus-visible) :is(.event-image-hint, .markdown-image-hint) { background: #182333; }
 .event-details { min-width: 0; overflow-wrap: anywhere; }
 .event-details h2 { margin: 0; color: #273849; font-size: clamp(1.25rem, 2.5vw, 1.5rem); line-height: 1.2; }
 .event-details .event-when { margin: 6px 0 0; color: #405b78; font-size: .9em; font-weight: 600; }

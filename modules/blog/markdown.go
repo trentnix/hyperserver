@@ -9,13 +9,32 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 	"golang.org/x/net/html"
 )
 
 const maxMarkdownBytes = 256 * 1024
+
+// Identify Markdown images without changing Goldmark's escaping or link rendering.
+type markdownImages struct{}
+
+func (markdownImages) Transform(document *ast.Document, _ text.Reader, _ parser.Context) {
+	_ = ast.Walk(document, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering && node.Kind() == ast.KindImage {
+			node.SetAttributeString("data-markdown-image", "")
+		}
+		return ast.WalkContinue, nil
+	})
+}
+
+// Component fields use plain Markdown without the document's component transformers.
+var writeComponentMarkdown = goldmark.New(goldmark.WithParserOptions(parser.WithASTTransformers(
+	util.Prioritized(markdownImages{}, 100),
+))).Convert
 
 // markdown is the trust boundary for rendered blog content. Goldmark omits raw
 // HTML and unsafe URL schemes. Previews and published pages use the same renderer.
@@ -32,7 +51,10 @@ func markdownComponents(source string, catalog componentCatalog, overrides ...re
 	for _, override := range overrides {
 		renderers = append(renderers, util.Prioritized(override, 0))
 	}
-	transformers := []util.PrioritizedValue{util.Prioritized(componentsTransformer{catalog: catalog}, 110)}
+	transformers := []util.PrioritizedValue{
+		util.Prioritized(markdownImages{}, 90),
+		util.Prioritized(componentsTransformer{catalog: catalog}, 110),
+	}
 	if _, supported := catalog.find("photo-album"); supported {
 		transformers = append(transformers, util.Prioritized(albumTransformer{}, 100))
 	}

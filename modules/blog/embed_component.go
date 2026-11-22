@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/trentnix/hyperserver/pkg/services/logger"
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
@@ -139,7 +138,7 @@ func (reader embedRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegi
 		if e.Description != "" {
 			w.WriteString(`<div class="web-embed-description">`)
 			// Plain Goldmark omits raw HTML and does not render nested components.
-			if err := goldmark.New().Convert([]byte(e.Description), w); err != nil {
+			if err := writeComponentMarkdown([]byte(e.Description), w); err != nil {
 				return ast.WalkStop, err
 			}
 			w.WriteString(`</div>`)

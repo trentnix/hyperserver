@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
@@ -101,7 +100,7 @@ func (audioRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegisterer)
 			writer.WriteString(`<details class="audio-transcript"><summary>Transcript</summary><div>`)
 			// Use plain Goldmark, without component transformers. A transcript
 			// cannot recursively embed components or introduce raw HTML.
-			if err := goldmark.New().Convert([]byte(audio.Transcript), writer); err != nil {
+			if err := writeComponentMarkdown([]byte(audio.Transcript), writer); err != nil {
 				return ast.WalkStop, err
 			}
 			writer.WriteString(`</div></details>`)

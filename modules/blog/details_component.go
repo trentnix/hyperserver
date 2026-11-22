@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
@@ -77,7 +76,7 @@ func (r detailsRenderer) RegisterFuncs(register renderer.NodeRendererFuncRegiste
 			fmt.Fprintf(w, `<details class="expandable-details"><summary>%s</summary><div class="expandable-details-body">`, title)
 		}
 		// Plain Markdown keeps nested component fences as code and omits raw HTML.
-		if err := goldmark.New().Convert([]byte(details.Body), w); err != nil {
+		if err := writeComponentMarkdown([]byte(details.Body), w); err != nil {
 			return ast.WalkStop, err
 		}
 		w.WriteString(`</div>`)

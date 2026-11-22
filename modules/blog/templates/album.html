@@ -26,6 +26,11 @@
     <nav class="album-viewer-thumbnails" id="album-viewer-thumbnails" aria-label="Choose a photo"></nav>
   </dialog>
 </template>
+<template id="markdown-image-link-template">
+  <a class="markdown-image-link" data-view-image hx-boost="false" aria-haspopup="dialog">
+    <span class="markdown-image-hint" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></span>
+  </a>
+</template>
 {{ if .LayoutData.Writer }}
 <template id="album-order-template">
   <dialog class="album-order-dialog" aria-labelledby="album-order-title" aria-describedby="album-order-instructions">

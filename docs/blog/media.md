@@ -12,6 +12,8 @@ JPEG uses quality 85. JPEG/PNG processing applies EXIF orientation and removes m
 
 The server processes one image upload at a time. Editors queue uploads and block Save until their batch finishes. Failures preserve successful uploads. Other editors can receive a retry response. The optional [imaging package](../../pkg/imaging/image.go) handles processing. The blog owns limits, storage, and permissions.
 
+Select an unlinked Markdown image in a post or page to enlarge it. Tap the enlarged image, choose **Collapse image**, or press Escape to return to the article. Images with a Markdown link still follow that link.
+
 ## Add an album
 
 Choose **Add component → Photo album**, then **Upload** or **Library**. Removing a photo or album offers Undo and keeps the upload. Save the post or page to apply changes. Albums hold up to 50 photos, with captions up to 500 characters. See [shared component behavior](components.md).
