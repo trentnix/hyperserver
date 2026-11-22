@@ -48,8 +48,12 @@
     panel = await addTestComponent(picker);
     assert(selected(panel) === '2,3' && panel.querySelector('textarea[name]').hidden,
       'Cancel must discard level changes, and the heading controls must stand in for JSON.');
-    for (const value of [1, 3, 4]) panel.querySelector(`input[value="${value}"]`).click();
-    closeComponentSettings(form);
+    for (const value of [2, 3]) panel.querySelector(`input[value="${value}"]`).click();
+    await closeComponentSettings(form);
+    assert(panel.closest('dialog').open && panel.querySelector('[data-component-settings-error]')?.textContent === 'Choose at least one heading level.',
+      'Done must require at least one heading level.');
+    for (const value of [1, 2, 4]) panel.querySelector(`input[value="${value}"]`).click();
+    await closeComponentSettings(form);
     assert(form.elements.tableOfContents.value === '{"levels":[1,2,4]}' && form.elements.content.value.indexOf('hyperserver:component') <
       form.elements.content.value.indexOf('# Before leaving'), 'Done must keep the heading levels and place the outline at the selected location.');
     await waitForComponent(() => componentRowIn(form, 'table-of-contents'), 'table of contents row');

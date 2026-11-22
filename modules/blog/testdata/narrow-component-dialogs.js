@@ -158,6 +158,21 @@
           await close(library, cancel, browse);
         }
       }
+      const file = extension => [{id: 'a'.repeat(64) + '.' + extension, label: 'Example', size: 200}];
+      const defaults = {
+        'action-link': {label: 'Open the project', url: '/projects'},
+        'audio': {id: 'a'.repeat(64) + '.mp3', size: 200},
+        'callout': {body: 'Example note'},
+        'embed': {title: 'Example embed', url: 'https://example.test/'},
+        'event': {title: 'Example event', startDate: '2026-12-05'},
+        'expandable-details': {title: 'Example details', body: 'Details'},
+        'file-downloads': file('txt'),
+        'image-comparison': {beforeID: 'a'.repeat(64) + '.png', afterID: 'b'.repeat(64) + '.png'},
+        'pdf-preview': file('pdf'),
+        'related-posts': {links: ['A'.repeat(26)]},
+        'social-post': {url: 'https://x.com/user/status/123'}
+      };
+      if (defaults[type]) setTestComponentSource(section, defaults[type]);
       const duplicate = await addTestComponent(add);
       const source = duplicate.querySelector('textarea[name]');
       const ids = [...form.querySelectorAll('[id]')].map(node => node.id);

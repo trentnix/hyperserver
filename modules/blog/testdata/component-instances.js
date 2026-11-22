@@ -42,7 +42,7 @@
         await wait(() => rowName(id) === 'Embed · ' + label, 'saved title as the editor label');
         const panel = await open(id);
         assert(panel.matches('.component-panel-active') && title(panel).value === label, 'Reopening must focus the correct instance and restore its title.');
-        closeComponentSettings(form);
+        await closeComponentSettings(form);
       }
       const second = await open(ids[1]);
       set(title(second), 'First chart');
@@ -74,7 +74,7 @@
       assert(!ids.includes(instance(replacement)) && !title(replacement).value &&
         form.querySelector('[data-component-undo]').dataset.componentUndo === ids[0],
       'Adding a replacement must preserve the original component’s Undo action and use a distinct instance ID.');
-      closeComponentSettings(form);
+      replacement.closest('dialog').querySelector('[data-component-cancel]').click();
       await undoTestComponent(form.querySelector('[data-component-undo]'));
       assert(title(first).value === 'First chart' && !title(replacement).value,
         'Undo must restore the removed instance independently of the replacement’s settings.');
@@ -87,7 +87,8 @@
       cm.setValue('Other prose.');
       const unrelated = await addEmbed();
       set(title(unrelated), 'Unrelated chart');
-      closeComponentSettings(form);
+      set(unrelated.querySelector('[id^=embed-url]'), 'https://widgets.example.test/unrelated');
+      await closeComponentSettings(form);
       form.querySelector('[data-draft-restore]').click();
       document.querySelector('[data-confirm-accept]')?.click();
       const ids = JSON.parse(sessionStorage.getItem('review-component-ids'));
@@ -110,21 +111,21 @@
     const first = await addEmbed();
     set(first.querySelector('[id^=embed-url]'), 'https://widgets.example.test/first');
     set(title(first), 'First chart');
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     cm.focus();
     cm.setCursor({line: 5, ch: 0});
     const second = await addEmbed();
     const id = instance(second);
     const reference = '#' + id.split(':')[1].slice(0, 6);
-    closeComponentSettings(form);
-    await wait(() => rowName(id) === 'Embed ' + reference, 'an untitled instance reference');
-    form.requestSubmit();
+    await closeComponentSettings(form);
     await wait(() => second.matches('.component-panel-active') && document.activeElement === second.querySelector('[id^=embed-url]'),
-      'native validation of the second embed');
+      'Done validation of the second embed');
     set(second.querySelector('[id^=embed-url]'), 'https://widgets.example.test/second');
     set(title(second), 'First chart');
+    await closeComponentSettings(form);
     assert(rowName(id) === `Embed ${reference} · First chart` && rowName(instance(first)) === 'Embed · First chart',
       'Matching titles must have distinct labels.');
+    await open(id);
     const longTitle = 'W'.repeat(220);
     set(title(second), longTitle);
     const longRow = componentRowIn(form, id);
@@ -140,7 +141,7 @@
       longRowBox.bottom - actionsBox.bottom >= 5 && actionsBox.right <= longRowBox.right,
       'A wrapped component must leave room above the title, between rows, and below the actions.');
     set(title(second), 'Second chart');
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     assert(first !== second && id !== instance(first) && title(first).value === 'First chart', 'Each same-type component needs separate fields.');
     await wait(() => rowName(id) === 'Embed · Second chart', 'title as the editor label');
     const original = cm.getValue();
@@ -191,7 +192,7 @@
     await wait(() => componentRowIn(form, id)?.closest('.CodeMirror'), 'adjacent components');
     await removeBoth();
     await undoTestComponent(form.querySelector('[data-component-undo="' + id + '"]'));
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     assert(order().join() === id && !form.querySelector('[data-component-undo]'),
       'Undoing the latest removal must clear its notice without resurfacing the earlier one.');
     cm.undo();

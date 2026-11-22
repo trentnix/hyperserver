@@ -25,20 +25,18 @@
       form.elements.title.value = 'Empty component review';
       form.elements.slug.value = 'empty-component-review';
       form.noValidate = true; // Also exercise server validation when native checks are bypassed.
-      for (const [kind, field] of [['photo-album', 'album'], ['file-downloads', 'downloads'], ['pdf-preview', 'pdf'], ['link-preview', 'link'], ['video', 'video'], ['audio', 'audio'], ['event', 'event'], ['social-post', 'socialPost'], ['image-comparison', 'comparison']]) {
-        await addTestComponent(form.querySelector(`[data-component-add="${kind}"]`));
-        closeComponentSettings(form);
-        const section = form.querySelector(`[data-post-component="${kind}"]`);
-        const required = form.querySelector('.CodeMirror').CodeMirror.getInputField().getAttribute('aria-required');
-        assert(required !== 'true', 'The empty component must get its own error rather than requiring unrelated Markdown.');
-        form.requestSubmit();
-        await wait(() => section.querySelector('[data-component-error]:not([hidden])')?.textContent.includes('remove'));
-        assert(form.elements.namedItem(field).getAttribute('aria-invalid') === 'true' && section.contains(document.activeElement), 'The error must identify and focus the empty component: ' + kind);
-        assert(!section.hidden && form.elements.componentOrder.value === JSON.stringify([kind]), 'A rejected save must retain the added component: ' + kind);
+      for (const add of form.querySelectorAll('[data-component-add]')) {
+        const kind = add.dataset.componentAdd;
+        if (kind === 'table-of-contents') continue; // Its default heading levels are valid.
+        const section = await addTestComponent(add);
+        await closeComponentSettings(form);
+        assert(section.closest('dialog').open && section.querySelector('.field-error:not([hidden])') && section.contains(document.activeElement),
+          'Done must identify and focus the empty component: ' + kind);
+        assert(section.hasAttribute('data-component-pending') && form.elements.componentOrder.value === '[]',
+          'A rejected Done must preserve the draft settings without adding the component: ' + kind);
         assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Component errors must fit the viewport.');
-        await removeTestComponent(section.querySelector('[data-component-remove]'));
-        assert(section.hidden && !section.querySelector('[data-component-error]:not([hidden])'), 'Removing the component must clear its inline error.');
-        assert(!form.querySelector('#editor-errors').textContent.trim(), 'Removing the component must clear its summary error.');
+        section.closest('dialog').querySelector('[data-component-cancel]').click();
+        assert(section.hidden && !section.querySelector('.field-error:not([hidden])'), 'Cancel must clear dialog validation errors.');
       }
       const summary = form.querySelector('#editor-errors');
       summary.innerHTML = '<p data-error-fields="title">Keep the title error.</p><p data-error-fields="audio">Clear the audio error.</p>';
@@ -46,6 +44,12 @@
       form.elements.audio.dispatchEvent(new Event('input', {bubbles: true}));
       assert(summary.textContent === 'Keep the title error.', 'Correcting audio must preserve unrelated errors.');
       form.elements.title.dispatchEvent(new Event('input', {bubbles: true}));
+      const original = await addTestComponent(form.querySelector('[data-component-add="audio"]'));
+      const originalSource = original.querySelector('textarea[name]');
+      originalSource.value = JSON.stringify({id: 'a'.repeat(64) + '.mp3', size: 200});
+      originalSource.dispatchEvent(new Event('change', {bubbles: true}));
+      await closeComponentSettings(form);
+      await removeTestComponent(original.querySelector('[data-component-remove]'));
       const replacement = await addTestComponent(form.querySelector('[data-component-add="audio"]'));
       assert(replacement.dataset.componentId, 'The replacement audio component must keep a separate ID.');
       sessionStorage.setItem('empty-component-id', replacement.dataset.componentId);

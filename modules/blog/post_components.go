@@ -211,13 +211,9 @@ func (catalog componentCatalog) join(body string, input componentInput) (string,
 	}
 	// An explicit order also records added components that have no content yet.
 	for _, id := range order {
-		component, err := catalog.submittedComponent(id, input)
+		component, err := catalog.requiredComponent(id, input)
 		if err != nil {
 			return body, err
-		}
-		if component.Content == nil || component.Content.Empty() {
-			definition, _ := catalog.instance(id)
-			return body, writingFieldError{contentError(definition.EmptyMessage), catalog.field(component)}
 		}
 		selected[id] = component
 	}
@@ -272,6 +268,15 @@ func (catalog componentCatalog) join(body string, input componentInput) (string,
 		return body, writingFieldError{contentError("Close any unfinished code or HTML blocks before adding components."), "content"}
 	}
 	return combined, nil
+}
+
+func (catalog componentCatalog) requiredComponent(id string, input componentInput) (postComponent, error) {
+	component, err := catalog.submittedComponent(id, input)
+	if err == nil && (component.Content == nil || component.Content.Empty()) {
+		definition, _ := catalog.instance(id)
+		err = writingFieldError{contentError(definition.EmptyMessage), catalog.field(component)}
+	}
+	return component, err
 }
 
 func (catalog componentCatalog) submittedComponent(id string, input componentInput) (postComponent, error) {

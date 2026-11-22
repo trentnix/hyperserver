@@ -21,19 +21,26 @@ type postLink struct {
 	HideImage   bool   `json:"hideImage,omitempty"`
 }
 
-// linkURL validates destinations without resolving DNS. Only the metadata fetcher
-// makes network requests, with separate address checks at connection time.
-func linkURL(raw string) (*url.URL, error) {
+func webLinkURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil || len(raw) > 2048 || !utf8.ValidString(raw) || u == nil || u.Opaque != "" || u.User != nil || u.Hostname() == "" ||
 		(u.Scheme != "http" && u.Scheme != "https") || strings.ContainsAny(u.Host, "\\%") {
 		return nil, contentError("Enter a complete http:// or https:// URL without a username or password.")
 	}
-	if port := u.Port(); port != "" && !(u.Scheme == "http" && port == "80" || u.Scheme == "https" && port == "443") {
-		return nil, contentError("Use a URL with the standard HTTP or HTTPS port.")
-	}
 	if strings.HasSuffix(u.Host, ":") || strings.ContainsAny(u.Hostname(), " \t\r\n") {
 		return nil, contentError("Enter a valid destination hostname.")
+	}
+	return u, nil
+}
+
+// linkURL accepts standard web ports for destinations that may be fetched or embedded.
+func linkURL(raw string) (*url.URL, error) {
+	u, err := webLinkURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	if port := u.Port(); port != "" && !(u.Scheme == "http" && port == "80" || u.Scheme == "https" && port == "443") {
+		return nil, contentError("Use a URL with the standard HTTP or HTTPS port.")
 	}
 	return u, nil
 }

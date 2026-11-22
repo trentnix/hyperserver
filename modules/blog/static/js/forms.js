@@ -23,12 +23,7 @@ export function markField(control, invalid, description = '') {
   control.dispatchEvent(new CustomEvent('blog:field-validation', {bubbles: true}));
 }
 
-const invalidForms = new WeakSet();
-document.addEventListener('invalid', event => {
-  const input = event.target;
-  const form = input.form;
-  if (!form || !input.id) return;
-  event.preventDefault();
+export function showFieldValidationError(input) {
   const id = input.id + '-error';
   let message = document.getElementById(id);
   if (!message) {
@@ -41,6 +36,15 @@ document.addEventListener('invalid', event => {
   const required = {title: 'Enter a title.', name: 'Enter a name.', email: 'Enter your email.', password: 'Enter your password.', passwordMatch: 'Confirm your password.', publishDate: 'Choose a publication date.', publishTime: 'Enter a publication time.', image: 'Choose an image.'};
   message.textContent = input.validity.valueMissing ? required[input.name] || input.validationMessage : input.validationMessage;
   markField(input, true, id);
+}
+
+const invalidForms = new WeakSet();
+document.addEventListener('invalid', event => {
+  const input = event.target;
+  const form = input.form;
+  if (!form || !input.id) return;
+  event.preventDefault();
+  showFieldValidationError(input);
   if (!invalidForms.has(form)) {
     invalidForms.add(form);
     queueMicrotask(() => {

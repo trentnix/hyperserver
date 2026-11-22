@@ -45,13 +45,13 @@
     await addTestComponent(form.querySelector('[data-component-add="file-downloads"]'));
     const section = form.querySelector('[data-post-component="file-downloads"]');
     check(true);
-    closeComponentSettings(form);
-    check(false);
-    form.requestSubmit();
-    await wait(() => section.querySelector('[data-component-error]:not([hidden])')?.textContent.includes('remove'));
-    assert(!section.hidden, 'An empty added component must remain available for correction or removal.');
+    await closeComponentSettings(form);
+    check(true);
+    assert(section.closest('dialog').open && section.querySelector('[data-component-settings-error]'),
+      'An empty component must stay in settings for correction.');
     form.elements.downloads.value = JSON.stringify(savedFile);
     form.elements.downloads.dispatchEvent(new Event('change', {bubbles: true}));
+    await closeComponentSettings(form);
     check(false);
     await removeTestComponent(section.querySelector('[data-component-remove]'));
     check(true);

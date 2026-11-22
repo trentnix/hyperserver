@@ -110,6 +110,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.Handle("POST /post/delete/{id}", m.requirePostOwner(m.delete))
 	routes.HandleWithBodyLimit("POST /post/preview", m.requireWriter(m.preview), routing.MiB)
 	routes.HandleWithBodyLimit("POST /post/component-position", m.requireWriter(m.postComponentPosition), routing.MiB)
+	routes.HandleWithBodyLimit("POST /post/component-settings", m.requireWriter(m.validateComponentSettings), routing.MiB)
 	routes.HandleWithBodyLimit("POST /post/images/upload", http.HandlerFunc(m.upload), 10*routing.MiB)
 	routes.HandleFunc("GET "+authReturnURL, m.requireSetup(m.continueSetup))
 	routes.HandleFunc("/", m.requireSetup(m.app.ContentManager.HandleNotFound))

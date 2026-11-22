@@ -206,8 +206,7 @@
       assert(replacement.dataset.componentId && !replacement.querySelector('textarea[name]').value &&
         form.querySelector('[data-component-undo]').dataset.componentUndo === 'photo-album',
       'A replacement album must start empty and keep the original album available to Undo.');
-      closeComponentSettings(form);
-      form.querySelector('.CodeMirror').CodeMirror.undo();
+      replacement.closest('dialog').querySelector('[data-component-cancel]').click();
       form.querySelector('.CodeMirror').CodeMirror.undo();
       assert(form.elements.album.value === beforeComponentRemoval, 'Undo must restore the original album after discarding the replacement.');
       componentRowIn(form, 'photo-album').querySelector('[data-component-edit]').click();
@@ -784,7 +783,7 @@
       assert(recoveredPhoto && form.querySelectorAll('[data-album-index]').length === 4, 'Undo must restore a removed photo after uploads and reordering.');
       recoveredPhoto.closest('li').querySelector('[data-album-remove]').click();
       assert(form.elements.album.value === orderedBeforeUndo, 'Restoring and removing a photo must preserve the current order of other photos.');
-      closeComponentSettings(form);
+      await closeComponentSettings(form);
       const expected = form.elements.album.value;
       const expectedBody = form.elements.content.value;
       sessionStorage.setItem('album-content', expected);

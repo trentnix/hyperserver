@@ -48,7 +48,7 @@
       componentRowIn(form, 'video').querySelector('[data-component-edit]').click();
       assert(videoURL.value === savedURL && videoURL.validity.valid && !videoURL.hasAttribute('aria-invalid') &&
         !document.getElementById(videoURL.id + '-error'), 'Cancel must clear the validation error from the discarded URL.');
-      closeComponentSettings(form);
+      await closeComponentSettings(form);
       for (const section of sections) {
         form.querySelector('[data-component-edit="' + section.dataset.postComponent + '"]').click();
         const input = section.querySelector('[data-album-caption], [data-downloads-list] input, [data-link-controls] input, #video-title, #audio-title');
@@ -65,7 +65,7 @@
         await removeTestComponent(section.querySelector('[data-component-remove]'));
         await undoTestComponent(form.querySelector('[data-component-undo="' + section.dataset.postComponent + '"]'));
         assert(dirty().length === 0, 'Undoing removal must restore the saved component and position.');
-        section.closest('dialog').querySelector('[data-component-done]').click();
+        await closeComponentSettings(form);
       }
       for (const name of ['video', 'pdf', 'audio']) {
         const source = form.elements.namedItem(name);
@@ -86,7 +86,7 @@
       assert(!badge(pdf).hidden, 'Changing the download option must mark the PDF unsaved.');
       pdf.querySelector('input[type="checkbox"]').click();
       assert(dirty().length === 0, 'Restoring the download option must clear the PDF indicator.');
-      closeComponentSettings(form);
+      await closeComponentSettings(form);
       const album = form.querySelector('[data-album-editor]');
       componentRowIn(form, 'photo-album').querySelector('[data-component-edit]').click();
       album.querySelector('[data-album-remove]').click();

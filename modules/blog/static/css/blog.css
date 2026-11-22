@@ -802,6 +802,7 @@ dialog.component-dialog { width: 840px; max-width: calc(100% - 24px); max-height
 .component-dialog-body > section:not(.component-panel-active) { display: none; }
 .component-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px clamp(12px, 3vw, 24px); border-top: 1px solid #e0e5ec; background: #fff; }
 .component-dialog > footer button { min-width: 86px; min-height: 44px; }
+.component-dialog [data-component-done][aria-busy="true"] { cursor: progress; opacity: .65; }
 .downloads-editor h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.2em; }
 .downloads-editor h2 span { color: var(--muted); font-size: 14px; font-weight: 400; }
 :is(.album-editor, .downloads-editor) > .form-hint:not(.album-limits, .downloads-limits) { margin: 8px 0 18px; font-size: 14px; }
@@ -1242,11 +1243,14 @@ html:has(.album-viewer-single[open]) { scrollbar-gutter: auto; }
 .web-embed > p { margin: 8px 0 0; overflow-wrap: anywhere; }
 .web-embed-frame { overflow: hidden; border: 1px solid #dce2e9; border-radius: 14px; background: #fff; }
 .web-embed-frame iframe { display: block; width: 100%; min-height: 280px; aspect-ratio: 16 / 10; border: 0; }
-:is(.embed-editor, .markdown-component-editor) h2 { margin: 0; font-size: 1.2em; }
-:is(.embed-editor, .markdown-component-editor) fieldset { min-width: 0; margin: 12px 0 0; padding: 0; border: 0; }
-:is(.embed-editor, .markdown-component-editor) fieldset > label, .embed-editor-description-label { margin: 12px 0 4px; }
-:is(.embed-editor, .markdown-component-editor) fieldset > label:first-child { margin-top: 0; }
-:is(.embed-editor, .markdown-component-editor) fieldset > input { min-height: 44px; }
+.post-action-link { margin-block: 18px; }
+.post-action-link > .button-primary { gap: 8px; min-height: 44px; max-width: 100%; padding: 9px 16px; border-radius: 5px; font-size: .9em; font-weight: 600; overflow-wrap: anywhere; }
+.post-action-link svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+:is(.embed-editor, .markdown-component-editor, .action-link-editor) h2 { margin: 0; font-size: 1.2em; }
+:is(.embed-editor, .markdown-component-editor, .action-link-editor) fieldset { min-width: 0; margin: 12px 0 0; padding: 0; border: 0; }
+:is(.embed-editor, .markdown-component-editor, .action-link-editor) fieldset > label, .embed-editor-description-label { margin: 12px 0 4px; }
+:is(.embed-editor, .markdown-component-editor, .action-link-editor) fieldset > label:first-child { margin-top: 0; }
+:is(.embed-editor, .markdown-component-editor, .action-link-editor) fieldset > input { min-height: 44px; }
 .embed-editor-description-label { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
 .embed-editor-description-label label { margin: 0; }
 .embed-editor [data-embed-preview-button] { margin-top: 12px; min-height: 44px; padding-inline: 14px; border-radius: 24px; font-size: 14px; font-weight: 600; }

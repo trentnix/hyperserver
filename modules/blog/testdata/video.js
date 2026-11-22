@@ -96,7 +96,7 @@
       await undoTestComponent(form.querySelector('[data-component-undo="video"]'));
       assert(form.elements.video.value === saved && form.querySelector('#video-title').value === title, 'Undo must restore the unsaved video.');
       form.querySelector('[data-component-picker] summary').click();
-      await addTestComponent(form.querySelector('[data-component-add="link-preview"]'));
+      setTestComponentSource(await addTestComponent(form.querySelector('[data-component-add="link-preview"]')), {url: 'https://example.test/', title: 'Example link'});
       await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["link-preview","video"]', 'Video must use the shared component ordering.');
       await removeTestComponent(form.querySelector('[data-post-component="link-preview"] [data-component-remove]'));

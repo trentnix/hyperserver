@@ -62,7 +62,7 @@
       assert(section.hidden && !form.elements.audio.value && section.querySelector('fieldset').disabled, 'Removal must clear and disable audio fields.');
       await undoTestComponent(form.querySelector('[data-component-undo="audio"]'));
       assert(form.elements.audio.value === original && form.querySelector('#audio-transcript').value === transcript, 'Component Undo must restore all details.');
-      await addTestComponent(form.querySelector('[data-component-add="video"]'));
+      setTestComponentSource(await addTestComponent(form.querySelector('[data-component-add="video"]')), {url: 'https://youtu.be/M7lc1UVf-VE'});
       await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["video","audio"]', 'Audio must use shared component ordering.');
       await removeTestComponent(form.querySelector('[data-video-editor] [data-component-remove]'));

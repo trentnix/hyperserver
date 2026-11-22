@@ -47,7 +47,7 @@
       set(section.querySelector('#comparison-after-label'), afterLabel);
       set(section.querySelector('#comparison-title'), 'Before <markup> & after');
       set(section.querySelector('#comparison-caption'), caption);
-      closeComponentSettings(form);
+      await closeComponentSettings(form);
       form.querySelector('.tool-preview').click();
       await wait(() => form.querySelector('.editor-preview .comparison-ready'));
       const preview = form.querySelector('.editor-preview .comparison-ready');
@@ -60,7 +60,7 @@
       await undoTestComponent(form.querySelector('[data-component-undo="image-comparison"]'));
       assert(form.elements.comparison.value === saved && section.querySelector('#comparison-caption').value === caption, 'Undo must restore both images and their text.');
       form.querySelector('[data-component-picker] summary').click();
-      await addTestComponent(form.querySelector('[data-component-add="video"]'));
+      setTestComponentSource(await addTestComponent(form.querySelector('[data-component-add="video"]')), {url: 'https://youtu.be/M7lc1UVf-VE'});
       await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["video","image-comparison"]', 'Comparisons must use shared component ordering.');
       await removeTestComponent(form.querySelector('[data-video-editor] [data-component-remove]'));

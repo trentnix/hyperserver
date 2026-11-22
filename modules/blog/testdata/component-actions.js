@@ -6,8 +6,11 @@ async function waitForComponent(condition, description) {
   }
 }
 
-function closeComponentSettings(form) {
-  form.querySelector('.component-dialog[open] [data-component-done]')?.click();
+async function closeComponentSettings(form) {
+  const done = form.querySelector('.component-dialog[open] [data-component-done]');
+  if (!done) return;
+  done.click();
+  await waitForComponent(() => !done.hasAttribute('aria-busy'), 'component settings validation');
 }
 
 function componentEditor(form, type) {
@@ -18,9 +21,15 @@ function componentRowIn(form, type) {
   return form.querySelector('[data-component-row="' + type + '"]:not([hidden])');
 }
 
+function setTestComponentSource(section, value) {
+  const source = section.querySelector('textarea[name]');
+  source.value = typeof value === 'string' ? value : JSON.stringify(value);
+  source.dispatchEvent(new Event('change', {bubbles: true}));
+}
+
 async function addTestComponent(button) {
   const form = button.form;
-  closeComponentSettings(form);
+  await closeComponentSettings(form);
   const picker = button.closest('details');
   if (!picker.open) picker.querySelector('summary').click();
   button.click();
@@ -32,9 +41,15 @@ async function addTestComponent(button) {
 async function removeTestComponent(button) {
   const form = button.form;
   const section = button.closest('[data-post-component]');
-  if (section.hasAttribute('data-component-pending')) closeComponentSettings(form);
+  if (section.hasAttribute('data-component-pending')) {
+    await closeComponentSettings(form);
+    if (section.hasAttribute('data-component-pending')) {
+      section.closest('dialog').querySelector('[data-component-cancel]').click();
+      return;
+    }
+  }
   if (!section.matches('.component-dialog:modal .component-panel-active')) {
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     const type = section.dataset.componentId || section.dataset.postComponent;
     await waitForComponent(() => componentRowIn(form, type), 'component row');
     componentRowIn(form, type).querySelector('[data-component-edit]').click();
@@ -45,14 +60,14 @@ async function removeTestComponent(button) {
 
 async function undoTestComponent(button) {
   const form = button.form;
-  closeComponentSettings(form);
+  await closeComponentSettings(form);
   button.click();
   await waitForComponent(() => componentEditor(form, button.dataset.componentUndo).matches('.component-dialog:modal .component-panel-active'), 'restored component settings');
 }
 
 async function moveTestComponent(section, direction) {
   const form = section.closest('form');
-  closeComponentSettings(form);
+  await closeComponentSettings(form);
   const type = section.dataset.componentId || section.dataset.postComponent;
   const row = () => componentRowIn(form, type);
   await waitForComponent(row, 'component row');

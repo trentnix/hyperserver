@@ -86,7 +86,7 @@
           'Cancel must clear dialog edits and return focus to the component.');
         componentRowIn(form, id).querySelector('[data-component-edit]').click();
         assert(text.value === body && select.value === style, 'Reopening must show the original text and style after Cancel.');
-        closeComponentSettings(form);
+        await closeComponentSettings(form);
       }
       sessionStorage.removeItem('callout-ids');
       sessionStorage.removeItem('details-published');
@@ -117,7 +117,7 @@
       assert(!panel.querySelector('fieldset').disabled, 'Adding the component must enable its required fields.');
       set(name, title);
       set(body, bodies[index]);
-      closeComponentSettings(form);
+      await closeComponentSettings(form);
     }
     const calloutPicker = form.querySelector('[data-component-add="callout"]');
     const ids = [];
@@ -138,7 +138,7 @@
         'The callout preview must fit beside the style selector with room for the focus ring.');
       set(text, body);
       ids.push(panel.dataset.componentId || panel.dataset.postComponent);
-      closeComponentSettings(form);
+      await closeComponentSettings(form);
     }
     sessionStorage.setItem('callout-ids', JSON.stringify(ids));
     form.querySelector('[name=published][value=on]').checked = true;

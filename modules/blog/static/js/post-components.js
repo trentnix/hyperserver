@@ -1,5 +1,5 @@
 import {componentRow, hasComponentMarkers, nameComponentRow} from './component-placement.js';
-import {markField} from './forms.js';
+import {markField, showFieldValidationError} from './forms.js';
 import {getMarkdownEditor} from './markdown-editor.js';
 
 const editors = new WeakMap();
@@ -83,6 +83,7 @@ function createEditor(root) {
   const fallback = form.querySelector('[data-component-fallback]');
   const dialog = root.querySelector('[data-component-dialog-template]').content.firstElementChild.cloneNode(true);
   const dialogBody = dialog.querySelector('.component-dialog-body');
+  const done = dialog.querySelector('[data-component-done]');
   const endRows = document.createElement('div');
   endRows.className = 'component-end-list';
   const panels = root.querySelectorAll('[data-post-component]');
@@ -165,12 +166,20 @@ function createEditor(root) {
     rowFor(type)?.querySelector(selector)?.focus();
   }
 
+  function clearSettingsFeedback(session, section) {
+    session.validation?.abort();
+    done.removeAttribute('aria-busy');
+    done.removeAttribute('aria-disabled');
+    section.querySelector('[data-component-settings-error]')?.remove();
+  }
+
   function closeSettings({discard = false} = {}) {
     if (!editing || form.dataset.uploading) return;
     const {type, snapshot, addition} = editing;
     const {section, source, callbacks} = instances.get(type);
     // Let a focused field serialize its final input before ending the session.
     if (dialog.contains(document.activeElement)) document.activeElement.blur();
+    clearSettingsFeedback(editing, section);
     editing = undefined;
     cancelInactiveAction();
     dialog.close();
@@ -202,12 +211,79 @@ function createEditor(root) {
     else pickerSummary.focus();
   }
 
+  async function finishSettings() {
+    const session = editing;
+    if (!session || session.validation || form.dataset.uploading) return;
+    const {section, source} = instances.get(session.type);
+    if (document.activeElement !== done && dialog.contains(document.activeElement)) document.activeElement.blur();
+    section.querySelector('[data-component-settings-error]')?.remove();
+    const invalid = [...section.querySelectorAll('input, select, textarea')].filter(control => control.willValidate && !control.validity.valid);
+    if (invalid.length) {
+      for (const control of invalid) {
+        if (control.id) showFieldValidationError(control);
+        else control.reportValidity();
+      }
+      invalid[0].focus();
+      return;
+    }
+
+    function showError(text, focus = true) {
+      const message = document.createElement('p');
+      message.className = 'field-error';
+      message.dataset.componentSettingsError = '';
+      message.setAttribute('role', 'alert');
+      message.tabIndex = -1;
+      message.textContent = text;
+      section.querySelector('.album-editor-heading').after(message);
+      if (focus) message.focus();
+    }
+
+    const controller = new AbortController();
+    const value = source.value;
+    session.validation = controller;
+    done.setAttribute('aria-busy', 'true');
+    done.setAttribute('aria-disabled', 'true');
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    let valid = false;
+    let error;
+    try {
+      const response = await fetch('/post/component-settings', {
+        method: 'POST', body: new URLSearchParams({id: session.type, source: value}), signal: controller.signal, redirect: 'error'
+      });
+      valid = response.status === 204;
+      if (!valid) error = (await response.json()).error;
+    } catch {
+      error = 'Could not check the component. Try again.';
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (editing !== session || !form.isConnected) return;
+    session.validation = undefined;
+    clearSettingsFeedback(session, section);
+    // An input method can commit text on blur after the request was sent.
+    if (valid && source.value === value && !form.dataset.uploading && section.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    if (editing !== session || !form.isConnected) return;
+    if (source.value !== value || form.dataset.uploading) {
+      showError('The component changed while checking. Choose Done again.', !section.contains(document.activeElement));
+    } else if (valid) {
+      closeSettings();
+    } else {
+      showError(error || 'Could not check the component. Try again.');
+    }
+  }
+
   function editSettings(type, addition) {
     if (form.dataset.uploading || editing?.addition && editing.type !== type) return;
     if (!addition && editing?.type !== type && !isActive(type)) return;
     editor()?.showSource();
     if (editing?.type !== type) {
-      if (editing) instances.get(editing.type).section.classList.remove('component-panel-active');
+      if (editing) {
+        const previous = instances.get(editing.type).section;
+        clearSettingsFeedback(editing, previous);
+        previous.classList.remove('component-panel-active');
+      }
       const {section, callbacks} = instances.get(type);
       editing = {type, snapshot: callbacks.snapshot(), addition};
       if (addition) {
@@ -224,7 +300,12 @@ function createEditor(root) {
   }
 
   dialog.querySelector('[data-component-cancel]').addEventListener('click', () => closeSettings({discard: true}));
-  dialog.querySelector('[data-component-done]').addEventListener('click', () => closeSettings());
+  done.addEventListener('click', finishSettings);
+  dialog.addEventListener('input', event => {
+    const control = event.target;
+    control.closest('[data-post-component]')?.querySelector('[data-component-settings-error]')?.remove();
+    if (control.validity?.valid && control.dataset.errorDescription === control.id + '-error') markField(control, false);
+  });
   dialog.addEventListener('cancel', event => {
     event.preventDefault();
     closeSettings({discard: true});
@@ -751,13 +832,13 @@ function createEditor(root) {
   form.addEventListener('blog:markdown-editor', refreshLayout);
   form.addEventListener('submit', event => {
     cancelInactiveAction();
-    if (!pendingAction) {
+    if (!pendingAction && !editing?.validation) {
       if (editing?.addition) closeSettings();
       return;
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    saveStatus.textContent = 'Wait for the component edit to finish, then save.';
+    if (pendingAction) saveStatus.textContent = 'Wait for the component edit to finish, then save.';
   }, true);
   form.addEventListener('invalid', event => {
     const section = event.target.closest('[data-post-component]');

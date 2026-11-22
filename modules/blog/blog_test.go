@@ -910,7 +910,7 @@ func TestSaveFailurePreservesDraft(t *testing.T) {
 
 func TestPublishingAuthorizationAndCSRF(t *testing.T) {
 	h := newHarness(t)
-	paths := []string{"/post", "/post/example", "/post/delete/example", "/post/preview", "/post/images/upload"}
+	paths := []string{"/post", "/post/example", "/post/delete/example", "/post/preview", "/post/component-settings", "/post/images/upload"}
 	for _, path := range paths {
 		status := http.StatusForbidden
 		if path == "/post/images/upload" {

@@ -83,7 +83,9 @@
       cm.getValue() === initial && form.elements.componentOrder.value === '[]' && !form.elements.embed.value,
       'Canceling a new component must restore the original Markdown, order, and focus.');
     await addTestComponent(picker.querySelector('[data-component-add=embed]'));
-    done.click();
+    set(form.querySelector('#embed-url'), 'https://widgets.example.test/demo');
+    set(form.querySelector('#embed-title'), 'Interactive chart');
+    await closeComponentSettings(form);
     assert(cm.getValue().trimEnd().endsWith(marker), 'Done must place a component at the end when no cursor was set.');
     await removeTestComponent(settings.querySelector('[data-component-remove]'));
     cm.undo();
@@ -95,17 +97,14 @@
     await addTestComponent(picker.querySelector('[data-component-add=embed]'));
     assert(document.activeElement === form.querySelector('#embed-url'), 'Adding must open the component settings.');
     assert(settings.matches('.component-panel-active'), 'Adding after an undone addition must reuse the inactive settings panel.');
-    done.click();
+    await closeComponentSettings(form);
+    assert(dialog.open && document.activeElement === form.querySelector('#embed-url'), 'Done must focus the invalid field in the open dialog.');
+    set(form.querySelector('#embed-url'), 'https://widgets.example.test/demo');
+    set(form.querySelector('#embed-title'), 'Interactive chart');
+    await closeComponentSettings(form);
     await wait(widget);
     assert(cm.getValue() === initial.replace('Conclusion.', marker + '\nConclusion.'), 'Insertion inside a list must place the component after the full list.');
     assert(!dialog.open && document.activeElement === widget().querySelector('[data-component-edit]'), 'Done must return focus to the inline component.');
-    form.requestSubmit();
-    await wait(() => document.activeElement === form.querySelector('#embed-url'));
-    assert(dialog.matches(':modal'), 'Native validation must reopen the settings and focus the invalid field.');
-    set(form.querySelector('#embed-url'), 'https://widgets.example.test/demo');
-    set(form.querySelector('#embed-title'), 'Interactive chart');
-    done.click();
-
     widget().querySelector('[data-component-edit]').click();
     assert(document.activeElement === form.querySelector('#embed-url'), 'Edit must focus the existing settings.');
     set(form.querySelector('#embed-title'), 'Discard this edit');
@@ -202,7 +201,7 @@
     assert(cm.getValue() === moved && form.querySelector('#embed-title').value === 'Interactive chart', 'Undo must restore the original position and settings.');
 
     const commentExamples = '<!-- Opening comment\n' + marker + '\n\n<div>\n' + marker + '\n</div>\n\n```md\n' + marker + '\n```\n\n';
-    done.click();
+    await closeComponentSettings(form);
     cm.setValue(commentExamples + moved);
     await wait(widget);
     widget().querySelector('[data-component-edit]').click();
@@ -210,7 +209,7 @@
     assert(cm.getValue() === commentExamples + initial, 'Move and Remove must handle placements as blocks, preserving comments in HTML or code examples.');
     await undoTestComponent(form.querySelector('[data-component-undo=embed]'));
     assert(cm.getValue() === commentExamples + moved, 'Undo must restore the real placement outside the examples.');
-    done.click();
+    await closeComponentSettings(form);
     cm.setValue('<div>\n\n' + marker + '\n\nConclusion.');
     await wait(widget);
     assert(widget().dataset.componentRow === 'embed', 'A marker after a blank HTML block boundary must get a control.');
@@ -229,7 +228,7 @@
     assert(cm.getValue() === 'First paragraph.\n\nSecond paragraph.', 'Removing the component must preserve the paragraph boundary.');
     await undoTestComponent(form.querySelector('[data-component-undo=embed]'));
     assert(cm.getValue() === tight, 'Undo from the removal notice must replace its temporary separator.');
-    done.click();
+    await closeComponentSettings(form);
     cm.setValue(moved);
     await wait(widget);
 

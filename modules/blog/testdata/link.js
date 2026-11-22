@@ -63,7 +63,7 @@
       await undoTestComponent(form.querySelector('[data-component-undo="link-preview"]'));
       assert(form.elements.link.value === saved && section.querySelector('#link-title').value === title && !section.querySelector('input[type="checkbox"]').checked, 'Undo must restore the edited card and image preference.');
       form.querySelector('[data-component-picker] summary').click();
-      await addTestComponent(form.querySelector('[data-component-add="pdf-preview"]'));
+      setTestComponentSource(await addTestComponent(form.querySelector('[data-component-add="pdf-preview"]')), [{id: 'a'.repeat(64) + '.pdf', label: 'Example PDF', size: 200}]);
       await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["pdf-preview","link-preview"]', 'Links must use the shared component order.');
       await removeTestComponent(form.querySelector('[data-post-component="pdf-preview"] [data-component-remove]'));

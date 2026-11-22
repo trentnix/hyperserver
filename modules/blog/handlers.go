@@ -403,6 +403,28 @@ func (m *module) preview(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (m *module) validateComponentSettings(w http.ResponseWriter, r *http.Request) {
+	if err := form.ParseWithOptions(r, form.ParseOptions{MaxFieldBytes: maxMarkdownBytes}); err != nil {
+		writeJSON(w, r, err.StatusCode, map[string]string{"error": err.Message})
+		return
+	}
+	id := r.PostForm.Get("id")
+	definition, ok := postComponentCatalog.instance(id)
+	if !ok {
+		writeJSON(w, r, http.StatusBadRequest, map[string]string{"error": "Unknown component. Reopen the editor and try again."})
+		return
+	}
+	field := id
+	if id == definition.Kind {
+		field = definition.Field
+	}
+	if _, err := postComponentCatalog.requiredComponent(id, componentInput{field: r.PostForm.Get("source")}); err != nil {
+		writeJSON(w, r, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // storageError maps missing records to 404 and keeps other storage details out
 // of the public error response.
 func (m *module) storageError(w http.ResponseWriter, r *http.Request, err error) {

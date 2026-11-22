@@ -6,7 +6,7 @@ Drag the **Move** handle to reposition a component in the writing or in the list
 
 Choose **Remove** on the component row. The latest removal offers **Undo** for a few seconds. Earlier removals remain in the editor’s Undo history. Removing a component keeps its uploads.
 
-An added component must contain valid content. Fill it in or remove it before saving. A rejected save preserves your edits. Unsaved indicators, browser recovery, and revision history apply to every component.
+**Done** checks the component settings. If something needs correction, the dialog stays open and keeps your edits. Saving also checks the complete post or page, including its media and related-content references. Unsaved indicators, browser recovery, and revision history apply to every component.
 
 | Component | Content |
 | --- | --- |
@@ -20,6 +20,7 @@ An added component must contain valid content. Fill it in or remove it before sa
 | [Callout](#callout) | A highlighted Markdown note. |
 | [Table of Contents](#table-of-contents) | Jump links to headings in the content. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
+| [Action link](#action-link) | A button with a label you write and a destination URL. |
 | [Video](#video) | A YouTube or Vimeo player. |
 | [Embed](#embed) | An interactive page or widget from an approved site. |
 | [Social media](social-posts.md) | A public post, with its platform detected from the URL. |
@@ -108,6 +109,10 @@ Fetching requires an Admin or Poster session and same-origin protection. Link pr
 The fetcher reads UTF-8 Open Graph or HTML title/description metadata. It ignores embed HTML, document base URLs, and `og:url`. Relative image URLs resolve against the fetched page. Imported thumbnails use the [image pipeline](media.md#upload-and-reuse). If importing fails, text remains usable. Sites requiring login or JavaScript may need manual details.
 
 Titles allow 240 characters, descriptions 1,000, site names 200, and URLs 2,048 bytes. Search includes the saved title, description, and site name.
+
+## Action link
+
+Enter a **Button label** such as “View the project” and a **Destination URL**. A site path such as `/page/projects` opens in the same tab. A full HTTP or HTTPS URL opens in a new tab. The button appears wherever you position the component. RSS shows a text link.
 
 ## Video
 

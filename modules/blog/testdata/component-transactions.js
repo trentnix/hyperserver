@@ -53,7 +53,7 @@
     set(form.querySelector('#embed-url'), url);
     set(form.querySelector('#embed-title'), 'Chart');
     delayLayout(source => source.includes(marker));
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     await waitForComponent(() => pending, 'layout refresh after Done');
     const placed = new FormData(form);
     assert(placed.get('content') === html + '\n\n' + marker + '\n' && placed.get('componentOrder') === '["embed"]' &&
@@ -121,7 +121,7 @@
     row().querySelector('[data-component-edit]').click();
     section.querySelector('[data-component-remove]').click();
     await waitForComponent(() => pending, 'layout for pending removal');
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     row().querySelector('[data-component-edit]').click();
     const title = section.querySelector('#embed-title');
     set(title, 'New title after reopening');
@@ -129,7 +129,7 @@
     await new Promise(resolve => setTimeout(resolve, 30));
     assert(section.matches('.component-panel-active') && title.value === 'New title after reopening',
       'A delayed Remove must expire when its settings dialog closes.');
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
 
     cm.setValue('Before the unfinished block.\n\n```md\nUnfinished example.');
     cm.setCursor({line: 0, ch: 0});
@@ -175,7 +175,7 @@
     await removeTestComponent(componentEditor(form, 'video').querySelector('[data-component-remove]'));
     await moveTestComponent(section, 'up');
     await undoTestComponent(form.querySelector('[data-component-undo=video]'));
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     assert(row()?.closest('.CodeMirror') && !third.hidden &&
       JSON.stringify([...form.querySelectorAll('.component-end-row:not([hidden])')].map(row => row.dataset.componentRow)) === '["video","link-preview"]',
     'Moving an earlier row into Content must keep the removed row before its original following sibling.');
@@ -192,6 +192,72 @@
     await resumeLayout();
     assert(!form.querySelector('.component-dialog[open]') && cm.getValue() === pendingAddSource + ' More writing.',
       'An outdated Add must keep the current writing and explain how to retry.');
+
+    await waitForComponent(row, 'component row after the writing changes');
+    row().querySelector('[data-component-edit]').click();
+    const dialog = section.closest('dialog');
+    const done = dialog.querySelector('[data-component-done]');
+    const cancel = dialog.querySelector('[data-component-cancel]');
+    const cancelLeft = cancel.getBoundingClientRect().left;
+    let finishCheck;
+    let checkSignal;
+    const holdCheck = () => {
+      finishCheck = undefined;
+      window.fetch = (path, options) => {
+        if (path !== '/post/component-settings') return fetchOriginal(path, options);
+        checkSignal = options.signal;
+        return new Promise(resolve => { finishCheck = () => resolve(new Response(null, {status: 204})); });
+      };
+    };
+    holdCheck();
+    done.click();
+    await waitForComponent(() => finishCheck && done.getAttribute('aria-busy') === 'true', 'pending settings validation');
+    assert(cancel.getBoundingClientRect().left === cancelLeft && done.textContent === 'Done',
+      'Checking settings must keep both footer buttons in place.');
+    title.focus();
+    set(title, 'Edited while checking');
+    finishCheck();
+    await waitForComponent(() => section.querySelector('[data-component-settings-error]'), 'outdated settings response');
+    assert(dialog.open && title.value === 'Edited while checking' && document.activeElement === title,
+      'A response for old settings must keep the newer edits and leave focus in the field.');
+
+    holdCheck();
+    done.click();
+    await waitForComponent(() => finishCheck, 'settings validation before switching panels');
+    const {markField} = await import('/assets/js/forms.js');
+    markField(form.elements.link, true);
+    await waitForComponent(() => third.matches('.component-panel-active'), 'another component receives a save error');
+    assert(checkSignal.aborted && !done.hasAttribute('aria-busy'), 'Switching panels must end the old panel’s pending check.');
+    finishCheck();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert(third.matches('.component-panel-active') && dialog.open, 'A late response must leave the new panel open.');
+    markField(form.elements.link, false);
+    cancel.click();
+    row().querySelector('[data-component-edit]').click();
+
+    holdCheck();
+    done.click();
+    await waitForComponent(() => finishCheck, 'pending check before final input');
+    title.focus();
+    title.addEventListener('blur', () => set(title, 'Final input on blur'), {once: true});
+    finishCheck();
+    await waitForComponent(() => section.querySelector('[data-component-settings-error]'), 'last input is checked again');
+    assert(dialog.open && title.value === 'Final input on blur', 'Done must keep edits that are committed on blur.');
+
+    const setTimeoutOriginal = window.setTimeout;
+    window.setTimeout = (callback, delay, ...args) => setTimeoutOriginal(callback, delay === 10000 ? 10 : delay, ...args);
+    window.fetch = (path, options) => path === '/post/component-settings'
+      ? new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), {once: true}))
+      : fetchOriginal(path, options);
+    done.click();
+    window.setTimeout = setTimeoutOriginal;
+    await waitForComponent(() => section.querySelector('[data-component-settings-error]')?.textContent.includes('Try again'),
+      'retry after a validation timeout');
+    assert(dialog.open && !done.hasAttribute('aria-busy') && title.value === 'Final input on blur',
+      'A stalled check must let the author retry without losing their settings.');
+    window.fetch = fetchOriginal;
+    await closeComponentSettings(form);
+    assert(!dialog.open && JSON.parse(form.elements.embed.value).title === 'Final input on blur', 'Retrying Done must keep and validate the newer settings.');
     await report('PASS');
   } catch (error) { await report(error.message + '\n' + error.stack); }
 })();

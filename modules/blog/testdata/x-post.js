@@ -48,7 +48,7 @@
       assert(section.hidden && !form.elements.socialPost.value && section.querySelector('fieldset').disabled, 'Removal must clear and disable fields.');
       await undoTestComponent(form.querySelector('[data-component-undo="social-post"]'));
       assert(form.elements.socialPost.value === original && form.querySelector('#social-post-description').value === description, 'Undo must restore the whole component.');
-      await addTestComponent(form.querySelector('[data-component-add="video"]'));
+      setTestComponentSource(await addTestComponent(form.querySelector('[data-component-add="video"]')), {url: 'https://youtu.be/M7lc1UVf-VE'});
       await moveTestComponent(section, 'down');
       assert(form.elements.componentOrder.value === '["video","social-post"]', 'X posts must use shared ordering.');
       await removeTestComponent(form.querySelector('[data-video-editor] [data-component-remove]'));

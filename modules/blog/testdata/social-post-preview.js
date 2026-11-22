@@ -69,7 +69,7 @@
     const frameDocument = loaded.contentWindow;
     let reloaded = false;
     loaded.addEventListener('load', () => { reloaded = true; });
-    await addTestComponent(form.querySelector('[data-component-add="video"]'));
+    setTestComponentSource(await addTestComponent(form.querySelector('[data-component-add="video"]')), {url: 'https://youtu.be/M7lc1UVf-VE'});
     assert(form.querySelector('[data-post-component="video"]').closest('dialog') === dialog, 'Different components must share the same settings dialog.');
     await moveTestComponent(editor, 'down');
     componentRowIn(form, 'social-post').querySelector('[data-component-edit]').click();
@@ -118,7 +118,7 @@
     url.focus(); set(url, 'not a URL'); description.focus();
     await pause();
     assert(preview.hidden && !frame(), 'An invalid or empty URL must not contact a provider.');
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     const navigation = htmx.ajax('GET', data.EditURL, {target: '#article-content', swap: 'innerHTML'});
     await wait(() => document.querySelector('[data-confirm-accept]'));
     document.querySelector('[data-confirm-accept]').click();

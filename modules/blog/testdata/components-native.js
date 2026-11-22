@@ -27,7 +27,7 @@
         if (!panel.closest('dialog').open || panel.querySelector('[data-component-remove]').getClientRects().length) {
           throw new Error('Existing settings must stay editable without offering removal.');
         }
-        closeComponentSettings(form);
+        await closeComponentSettings(form);
       }
       form.elements.title.value = savedTitle;
       if (!form.checkValidity()) throw new Error('The native form must allow saving when a component supplies the content.');

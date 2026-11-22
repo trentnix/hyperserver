@@ -53,14 +53,14 @@
     assert(!submitted && showedWait, 'Save must explain why it waits for a page component.');
     assert(!saveStatus.textContent, 'Save feedback must clear when placement finishes.');
     fill(callout.querySelector('[data-markdown-value="body"]'), 'Read the **worksheet**.');
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     await moveTestComponent(callout, 'down');
     assert(cm.getValue().indexOf('## Main steps') < cm.getValue().indexOf('hyperserver:component callout'),
       'A page component must move between Markdown blocks.');
     const details = await addTestComponent(form.querySelector('[data-component-add="expandable-details"]'));
     fill(details.querySelector('[data-markdown-value="title"]'), 'Extra steps');
     fill(details.querySelector('[data-markdown-value="body"]'), 'Check the **result**.');
-    closeComponentSettings(form);
+    await closeComponentSettings(form);
     form.querySelector('.tool-preview').click();
     await waitForComponent(() => form.querySelector('.editor-preview .expandable-details'), 'page component preview');
     assert(form.querySelector('.editor-preview .post-callout'), 'Preview must include both page components.');

@@ -104,7 +104,7 @@
       document.querySelector('.media-browser [data-media-select]').click();
       document.querySelector('[data-media-add-selected]').click();
       await wait(() => form.elements.album.value && !document.querySelector('.media-browser'));
-      closeComponentSettings(form);
+      await closeComponentSettings(form);
       const order = () => rows(form);
       assert(order() === 'file-downloads,photo-album' && form.elements.componentOrder.value === '["file-downloads","photo-album"]', 'Components must appear in the order they were added.');
       await moveTestComponent(section, 'down');
@@ -116,14 +116,14 @@
       assert(order() === 'file-downloads,photo-album' && form.elements.downloads.value === saved, 'Undo must restore the component at its original position.');
       await removeTestComponent(section.querySelector('[data-component-remove]'));
       const replacement = await addTestComponent(form.querySelector('[data-component-add="file-downloads"]'));
-      closeComponentSettings(form);
-      assert(replacement.dataset.componentId && order() === 'photo-album,' + replacement.dataset.componentId &&
-        !replacement.querySelector('textarea[name]').value, 'A replacement must create a separate empty component at the end.');
-      form.querySelector('.CodeMirror').CodeMirror.undo();
+      await closeComponentSettings(form);
+      assert(replacement.dataset.componentId && order() === 'photo-album' && replacement.closest('dialog').open,
+        'An empty replacement must stay in the dialog without adding it to the post.');
+      replacement.closest('dialog').querySelector('[data-component-cancel]').click();
       await undoTestComponent(form.querySelector('[data-component-undo="file-downloads"]'));
       assert(order() === 'file-downloads,photo-album' && form.elements.downloads.value === saved,
         'Discarding the replacement must keep the original component’s Undo available.');
-      closeComponentSettings(form);
+      await closeComponentSettings(form);
       sessionStorage.setItem('component-order', form.elements.componentOrder.value);
       sessionStorage.setItem('component-body', form.elements.content.value.trimEnd());
       form.dispatchEvent(new Event('input', {bubbles: true}));

@@ -50,6 +50,7 @@ var postComponentCatalog = componentCatalog{
 	downloadsDefinition(),
 	pdfDefinition(),
 	linkDefinition(),
+	actionLinkDefinition(),
 	videoDefinition(),
 	embedDefinition(),
 	audioDefinition(),

@@ -1,0 +1,16 @@
+{{ define "blog.actionLinkEditor" }}
+  <section class="action-link-editor" data-post-component="action-link" aria-labelledby="action-link-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="action-link-editor-title">Action link</h2>{{ template "blog.componentStatus" }}</div>{{ template "blog.componentActions" "action link" }}</div>
+    <label for="post-action-link">Action link (JSON)</label>
+    <textarea id="post-action-link" name="actionLink" rows="3">{{ .Source }}</textarea>
+    <fieldset data-component-fields hidden disabled>
+      <label for="action-link-label">Button label</label>
+      <input id="action-link-label" maxlength="240" required data-action-link-label>
+      <label for="action-link-url">Destination URL</label>
+      <input id="action-link-url" inputmode="url" autocomplete="url" maxlength="2048" required data-action-link-url aria-describedby="action-link-url-help">
+      <small id="action-link-url-help" class="form-hint">Site paths like /page/projects open in the same tab. Full web URLs open in a new tab.</small>
+    </fieldset>
+  </section>
+{{ end }}
+
+{{ define "blog.actionLinkIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M9 15l6-6h-5m5 0v5"/></svg>{{ end }}
