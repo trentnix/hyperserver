@@ -21,6 +21,7 @@
       form.elements.title.value = 'Audio component review'; form.elements.slug.value = 'audio-component-review';
       await addTestComponent(form.querySelector('[data-component-add="audio"]'));
       assert(!section.hidden && document.activeElement === section.querySelector('[data-audio-upload]'), 'Adding audio must focus Upload MP3.');
+      assert(!section.querySelector('.compact-markdown-editor'), 'Wait for an MP3 before opening the transcript editor.');
       form.noValidate = true;
       form.requestSubmit();
       await wait(() => section.querySelector('[data-component-error]:not([hidden])'));
@@ -35,7 +36,10 @@
       assert(!form.querySelector('#editor-errors').textContent.trim() && !section.querySelector('[data-component-error]:not([hidden])'), 'Choosing a valid MP3 must clear both error messages.');
       set(form.querySelector('#audio-title'), title);
       set(form.querySelector('#audio-description'), description);
-      set(form.querySelector('#audio-transcript'), transcript);
+      const transcriptEditor = section.querySelector('.compact-markdown-editor .CodeMirror').CodeMirror;
+      assert(!form.querySelector('#audio-description').nextElementSibling.classList.contains('compact-markdown-editor'),
+        'Only the transcript supports Markdown.');
+      transcriptEditor.setValue(transcript);
       section.querySelector('[data-audio-download]').click();
       assert(JSON.parse(form.elements.audio.value).hideDownload && !section.querySelector('[data-component-unsaved]').hidden, 'The download preference must be saved and marked unsaved.');
       const original = form.elements.audio.value;
@@ -45,7 +49,7 @@
       const transfer = new DataTransfer(); transfer.items.add(file());
       upload.files = transfer.files; upload.dispatchEvent(new Event('change', {bubbles: true}));
       await wait(() => !form.dataset.uploading && section.querySelector('[data-audio-status]').textContent === 'MP3 uploaded.');
-      assert(form.querySelector('#audio-title').value === title && form.querySelector('#audio-transcript').value === transcript, 'Replacement uploads must preserve authored fields.');
+      assert(form.querySelector('#audio-title').value === title && transcriptEditor.getValue() === transcript, 'Replacement uploads must preserve authored fields.');
       originalName = section.querySelector('[data-audio-name]').textContent;
       // Use a different valid recording ID to exercise replacement and Undo.
       const second = new DataTransfer();

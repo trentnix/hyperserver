@@ -170,7 +170,8 @@
         'image-comparison': {beforeID: 'a'.repeat(64) + '.png', afterID: 'b'.repeat(64) + '.png'},
         'pdf-preview': file('pdf'),
         'related-posts': {links: ['A'.repeat(26)]},
-        'social-post': {url: 'https://x.com/user/status/123'}
+        'social-post': {url: 'https://x.com/user/status/123'},
+        'timeline': {milestones: [{date: '2026', title: 'Example milestone', detail: 'Markdown **detail**'}]}
       };
       if (defaults[type]) setTestComponentSource(section, defaults[type]);
       const duplicate = await addTestComponent(add);

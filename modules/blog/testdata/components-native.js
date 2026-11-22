@@ -27,6 +27,10 @@
         if (!panel.closest('dialog').open || panel.querySelector('[data-component-remove]').getClientRects().length) {
           throw new Error('Existing settings must stay editable without offering removal.');
         }
+        const text = panel.querySelector('[data-compact-markdown]');
+        if (!text.getClientRects().length || text.value !== 'Keep this callout.') {
+          throw new Error('The Markdown field must remain a usable textarea without EasyMDE.');
+        }
         await closeComponentSettings(form);
       }
       form.elements.title.value = savedTitle;

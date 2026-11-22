@@ -1,6 +1,7 @@
 import {initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
 import {runFormUpload, setMediaStatus, showUploadFailure, uploadStorageFull} from './media.js';
 import {requestFiles, validEntry, openFileLibrary, sizeLabel} from './file-picker.js';
+import {refreshCompactMarkdownEditors} from './markdown-editor.js';
 
 const initialized = new WeakSet();
 
@@ -65,6 +66,7 @@ function initialize(root) {
       uploadButton.textContent = value ? 'Replace MP3' : 'Upload MP3';
       fields.hidden = !value;
       fields.disabled = !value || section.hidden;
+      refreshCompactMarkdownEditors(fields);
       recovery.hidden = !previous;
       recovery.querySelector('button').disabled = busy;
       const url = value ? '/files/' + value.id + '?preview=1' : '';
@@ -90,6 +92,7 @@ function initialize(root) {
       } catch {
         source.hidden = section.querySelector('[data-audio-source-label]').hidden = false;
         controls.hidden = fields.hidden = fields.disabled = true;
+        refreshCompactMarkdownEditors(fields);
         player.pause();
         player.removeAttribute('src');
         player.load();

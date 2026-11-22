@@ -1,5 +1,6 @@
 import {initializeComponentPanels, jsonComponentValue, registerComponent} from './post-components.js';
 import {markField} from './forms.js';
+import {refreshCompactMarkdownEditors} from './markdown-editor.js';
 
 const initialized = new WeakSet();
 
@@ -33,12 +34,15 @@ function initialize(root) {
       source.hidden = label.hidden = valid;
       fields.hidden = !valid;
       fields.disabled = !valid || section.hidden;
-      if (!valid) return;
-      for (const [key, input] of inputs) input.value = value[key] ?? '';
-      validate();
+      if (valid) {
+        for (const [key, input] of inputs) input.value = value[key] ?? '';
+        validate();
+      }
+      refreshCompactMarkdownEditors(section);
     }
 
     fields.addEventListener('input', event => {
+      if (inputs.get(event.target.dataset.markdownValue) !== event.target) return;
       if (event.target.hasAttribute('aria-invalid')) markField(event.target, false);
       validate();
       const values = [...inputs].map(([key, input]) => [key, input.value]);

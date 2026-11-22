@@ -1,3 +1,14 @@
+const fieldEditors = new WeakMap();
+
+export function registerFieldEditor(input, editor) {
+  fieldEditors.set(input, editor);
+  return () => fieldEditors.delete(input);
+}
+
+export function focusField(input) {
+  (fieldEditors.get(input) || input)?.focus();
+}
+
 // Applications own error presentation. Native constraints still block invalid saves.
 export function markField(control, invalid, description = '') {
   const controls = control.type === 'radio' ? [...control.form.elements].filter(input => input.name === control.name) :
@@ -31,7 +42,7 @@ export function showFieldValidationError(input) {
     message.id = id;
     message.className = 'field-error';
     message.dataset.fieldError = input.name;
-    (input.closest('.post-time-field') || input).after(message);
+    (input.closest('.post-time-field') || fieldEditors.get(input)?.container || input).after(message);
   }
   const required = {title: 'Enter a title.', name: 'Enter a name.', email: 'Enter your email.', password: 'Enter your password.', passwordMatch: 'Confirm your password.', publishDate: 'Choose a publication date.', publishTime: 'Enter a publication time.', image: 'Choose an image.'};
   message.textContent = input.validity.valueMissing ? required[input.name] || input.validationMessage : input.validationMessage;
@@ -49,7 +60,7 @@ document.addEventListener('invalid', event => {
     invalidForms.add(form);
     queueMicrotask(() => {
       invalidForms.delete(form);
-      if (form.isConnected) form.querySelector('input:invalid, textarea:invalid, select:invalid')?.focus();
+      if (form.isConnected) focusField(form.querySelector('input:invalid, textarea:invalid, select:invalid'));
     });
   }
 }, true);

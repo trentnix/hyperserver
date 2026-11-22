@@ -65,6 +65,7 @@ var postComponentCatalog = componentCatalog{
 	calloutDefinition(),
 	tableOfContentsDefinition(),
 	relatedDefinition(),
+	timelineDefinition(),
 }
 
 func (catalog componentCatalog) forFeed() componentCatalog {

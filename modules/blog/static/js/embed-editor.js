@@ -1,5 +1,6 @@
 import {componentElement, initializeComponentPanels, registerComponent, jsonComponentValue} from './post-components.js';
-import {markField} from './forms.js';
+import {focusField, markField} from './forms.js';
+import {refreshCompactMarkdownEditors} from './markdown-editor.js';
 
 const initialized = new WeakSet();
 
@@ -78,6 +79,7 @@ function initialize(root) {
       source.hidden = label.hidden = valid;
       fields.hidden = !valid;
       fields.disabled = !valid || section.hidden;
+      refreshCompactMarkdownEditors(section);
       validateFields();
       syncError();
     }
@@ -146,7 +148,7 @@ function initialize(root) {
       snapshot: () => source.value,
       clear: () => { source.value = ''; read(); },
       restore: value => { source.value = value; read(); },
-      focus: () => (source.hidden ? errorField || url : source).focus()
+      focus: () => focusField(source.hidden ? errorField || url : source)
     });
     read();
   }

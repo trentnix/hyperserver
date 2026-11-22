@@ -2,8 +2,6 @@ import {openMediaLibrary, uploadImage, runFormUpload, showUploadFailure, setMedi
 import {markField} from './forms.js';
 import {createMarkdownEditor, getMarkdownEditor} from './markdown-editor.js';
 
-document.addEventListener('blog:field-validation', event => getMarkdownEditor(event.target)?.syncValidation());
-
 // Native suggestions replace the last comma-separated tag, keeping earlier tags.
 // Without JavaScript, the same field still accepts ordinary comma-separated input.
 const tagChoices = new WeakMap();
@@ -173,10 +171,5 @@ document.addEventListener('submit', event => {
     });
   }
 }, true);
-document.addEventListener('htmx:before:cleanup', event => {
-  const textarea = event.target.querySelector('#post-content');
-  getMarkdownEditor(textarea)?.destroy();
-});
-
 document.addEventListener('htmx:after:process', event => initialize(event.target.parentElement || event.target));
 initialize(document);

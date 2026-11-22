@@ -1,0 +1,62 @@
+{{ define "blog.timelineEditor" }}
+  <section class="timeline-editor" data-post-component="timeline" aria-labelledby="timeline-editor-title">
+    <div class="album-editor-heading"><div class="component-heading"><h2 id="timeline-editor-title">Timeline</h2>{{ template "blog.componentStatus" }}</div>{{ template "blog.componentActions" "timeline" }}</div>
+    <label for="post-timeline">Timeline (JSON)</label>
+    <textarea id="post-timeline" name="timeline" rows="5">{{ .Source }}</textarea>
+    <fieldset data-component-fields hidden disabled>
+      <div class="timeline-editor-settings">
+        <div>
+          <label for="timeline-heading">Heading <span class="form-hint">(optional)</span></label>
+          <input id="timeline-heading" maxlength="240" placeholder="Project milestones" data-timeline-heading>
+        </div>
+        <div>
+          <label for="timeline-style">Color</label>
+          <div class="timeline-style-picker">
+            <select id="timeline-style" data-timeline-style-picker>
+              <option value="">Slate</option>
+              <option value="white">White</option>
+              <option value="parchment">Parchment</option>
+              <option value="forest">Forest</option>
+              <option value="brick">Brick</option>
+            </select>
+            <div class="post-timeline timeline-style-preview" aria-hidden="true">
+              <ol class="timeline-milestones">
+                <li><time datetime="2024">2024</time></li>
+                <li><time datetime="2025">2025</time></li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="timeline-editor-milestones">
+        <h3 id="timeline-milestones-title">Milestones</h3>
+        <p id="timeline-date-help" class="form-hint" data-timeline-date-help>Dates can use a year, month, or day (2025, 2025-10, or 2025-10-18).</p>
+        <ol class="timeline-editor-list" aria-labelledby="timeline-milestones-title" role="list"></ol>
+        <button type="button" class="button-secondary" data-timeline-add>Add milestone</button>
+        <p class="form-hint" data-timeline-limit hidden>Up to {{ .MaxMilestones }} milestones. Remove one to add another.</p>
+      </div>
+    </fieldset>
+    <template data-timeline-row data-max-milestones="{{ .MaxMilestones }}">
+      <li>
+        <div class="timeline-milestone-fields">
+          <div>
+            <label data-timeline-label="date">Date</label>
+            <input data-timeline-field="date" maxlength="10" autocomplete="off" required>
+          </div>
+          <div>
+            <label data-timeline-label="title">Title</label>
+            <input data-timeline-field="title" maxlength="240" required>
+          </div>
+          <button type="button" class="text-button" data-timeline-remove><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M7 17 17 7"/></svg></button>
+        </div>
+        <button type="button" class="text-button" data-timeline-add-detail>Add detail</button>
+        <div class="timeline-detail-field" hidden>
+          <label data-timeline-label="detail">Detail <span class="form-hint">(Markdown)</span></label>
+          <textarea data-timeline-field="detail" maxlength="{{ .MaxDetail }}" rows="3" data-compact-markdown></textarea>
+        </div>
+      </li>
+    </template>
+  </section>
+{{ end }}
+
+{{ define "blog.timelineIcon" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14m5-14h9m-9 7h6m-6 7h9"/><circle cx="6" cy="5" r="1.3"/><circle cx="6" cy="12" r="1.3"/><circle cx="6" cy="19" r="1.3"/></svg>{{ end }}

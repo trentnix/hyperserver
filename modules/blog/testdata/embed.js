@@ -57,7 +57,8 @@
     assert(!section.hidden && document.activeElement === urlField, 'Adding an embed must focus its URL.');
     const urlRect = urlField.getBoundingClientRect();
     const titleRect = titleField.getBoundingClientRect();
-    const descriptionRect = descriptionField.getBoundingClientRect();
+    const descriptionEditor = section.querySelector('.compact-markdown-editor');
+    const descriptionRect = descriptionEditor.getBoundingClientRect();
     const buttonRect = button.getBoundingClientRect();
     assert(titleRect.top > urlRect.bottom && descriptionRect.top > titleRect.bottom && buttonRect.top > descriptionRect.bottom, 'Fields and Preview must stack in reading order at every viewport width.');
     assert(buttonRect.height >= 44, 'Preview must retain a touch-sized button.');
@@ -97,7 +98,7 @@
     set(titleField, 'Revised preview title');
     assert(!preview.hidden && frame.src === frameSource && frame.contentDocument === frameDocument && inner.contentWindow === provider && frame.title === titleField.value && inner.title === titleField.value, 'A title edit must update the labels and preserve the running frame.');
     set(titleField, title);
-    set(descriptionField, description);
+    section.querySelector('.compact-markdown-editor .CodeMirror').CodeMirror.setValue(description);
     assert(!preview.hidden && frame.contentDocument === frameDocument && inner.contentWindow === provider, 'Editing the description must preserve the running preview.');
     button.click();
     assert(preview.hidden && !frame.hasAttribute('src'), 'Hide preview must close and unload the frame.');

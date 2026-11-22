@@ -1,6 +1,6 @@
 import {componentRow, hasComponentMarkers, nameComponentRow} from './component-placement.js';
-import {markField, showFieldValidationError} from './forms.js';
-import {getMarkdownEditor} from './markdown-editor.js';
+import {focusField, markField, showFieldValidationError} from './forms.js';
+import {destroyMarkdownEditors, getMarkdownEditor, refreshCompactMarkdownEditors} from './markdown-editor.js';
 
 const editors = new WeakMap();
 
@@ -179,6 +179,7 @@ function createEditor(root) {
     const {section, source, callbacks} = instances.get(type);
     // Let a focused field serialize its final input before ending the session.
     if (dialog.contains(document.activeElement)) document.activeElement.blur();
+    destroyMarkdownEditors(section);
     clearSettingsFeedback(editing, section);
     editing = undefined;
     cancelInactiveAction();
@@ -223,7 +224,7 @@ function createEditor(root) {
         if (control.id) showFieldValidationError(control);
         else control.reportValidity();
       }
-      invalid[0].focus();
+      focusField(invalid[0]);
       return;
     }
 
@@ -281,6 +282,7 @@ function createEditor(root) {
     if (editing?.type !== type) {
       if (editing) {
         const previous = instances.get(editing.type).section;
+        destroyMarkdownEditors(previous);
         clearSettingsFeedback(editing, previous);
         previous.classList.remove('component-panel-active');
       }
@@ -295,6 +297,7 @@ function createEditor(root) {
       dialog.setAttribute('aria-labelledby', section.getAttribute('aria-labelledby'));
       dialogBody.scrollTo(0, 0);
       if (!dialog.open) dialog.showModal();
+      refreshCompactMarkdownEditors(section);
     }
     instances.get(type).callbacks?.focus();
   }

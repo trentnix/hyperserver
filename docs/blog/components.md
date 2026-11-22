@@ -8,6 +8,8 @@ Choose **Remove** on the component row. The latest removal offers **Undo** for a
 
 **Done** checks the component settings. If something needs correction, the dialog stays open and keeps your edits. Saving also checks the complete post or page, including its media and related-content references. Unsaved indicators, browser recovery, and revision history apply to every component.
 
+Fields that support Markdown have a formatting toolbar for headings, lists, links, and code blocks.
+
 | Component | Content |
 | --- | --- |
 | [Photo album](media.md#add-an-album) | Up to 50 photos with captions and a full-screen viewer. |
@@ -18,6 +20,7 @@ Choose **Remove** on the component row. The latest removal offers **Undo** for a
 | [Image comparison](#image-comparison) | Two images with a draggable divider. |
 | [Expandable details](#expandable-details) | A titled section readers can open inline. |
 | [Callout](#callout) | A highlighted Markdown note. |
+| [Timeline](#timeline) | Dated milestones in chronological order. |
 | [Table of Contents](#table-of-contents) | Jump links to headings in the content. |
 | [Link preview](#link-preview) | An editable card linking to another site. |
 | [Action link](#action-link) | A button with a label you write and a destination URL. |
@@ -93,6 +96,14 @@ Titles allow 240 characters and bodies allow 20,000. The body supports Markdown 
 ## Callout
 
 Enter Markdown text and an optional heading. Each callout defaults to Parchment. Choose blue-gray Slate for a neutral note, red-orange Caution for a warning, or green Success for good news. Use the heading or text to convey the message. The full text appears inline and in RSS. Search includes the heading and text.
+
+## Timeline
+
+Add up to 20 milestones with a date and title. Enter a year such as `2025`, a month such as `2025-10`, or a day such as `2025-10-18`. Each date appears at the precision you entered. You can give the timeline a heading and use **Add detail** to write Markdown for a milestone.
+
+Choose a **Color** to preview how the timeline will look. Slate is the default. White, Parchment, Forest, and Brick are also available.
+
+Readers see the oldest milestones first. A year entry comes before its months, and a month entry comes before its days. Milestones with identical dates keep the order you entered. The timeline also appears in RSS.
 
 ## Table of Contents
 

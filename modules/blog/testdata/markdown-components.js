@@ -58,34 +58,37 @@
         await waitForComponent(() => componentRowIn(form, id), 'saved callout row');
         componentRowIn(form, id).querySelector('[data-component-edit]').click();
         const panel = componentEditor(form, id);
-        assert(panel.querySelector('select').value === style && panel.querySelector('fieldset textarea').value === body &&
+        const markdown = panel.querySelector('.compact-markdown-editor .CodeMirror').CodeMirror;
+        assert(panel.querySelector('select').value === style && markdown.getValue() === body &&
           !panel.querySelector('[data-component-unsaved]:not([hidden])'), 'Reopening must preserve the callout text and style and show it as saved.');
         assert(getComputedStyle(panel.querySelector('.callout-style-preview')).backgroundColor === background,
           'Reopening must show the saved palette in the preview.');
         const title = panel.querySelector('h2');
         const status = panel.querySelector('[data-component-unsaved]');
-        const text = panel.querySelector('fieldset textarea');
-        const titleTop = title.getBoundingClientRect().top;
-        const textTop = text.getBoundingClientRect().top;
-        set(text, body + ' Edited.');
-        assert(!status.hidden && title.getBoundingClientRect().top === titleTop && text.getBoundingClientRect().top === textTop,
+        const text = panel.querySelector('.compact-markdown-editor');
+        const topInPanel = element => element.getBoundingClientRect().top - panel.getBoundingClientRect().top;
+        const titleTop = topInPanel(title);
+        const textTop = topInPanel(text);
+        markdown.setValue(body + ' Edited.');
+        assert(!status.hidden && topInPanel(title) === titleTop && topInPanel(text) === textTop,
           'Showing unsaved changes must keep the callout title and fields in place.');
-        set(text, body);
-        assert(status.hidden && title.getBoundingClientRect().top === titleTop && text.getBoundingClientRect().top === textTop,
+        markdown.setValue(body);
+        assert(status.hidden && topInPanel(title) === titleTop && topInPanel(text) === textTop,
           'Clearing unsaved changes must keep the callout title and fields in place.');
         const select = panel.querySelector('select');
         set(select, style === 'slate' ? 'success' : 'slate');
         const pending = body + ' Discard this edit.';
-        text.focus();
-        set(text, pending);
+        markdown.focus();
+        markdown.setValue(pending);
         // Some input methods can commit their final text when the field loses focus.
-        text.addEventListener('blur', () => set(text, pending + ' Final input.'), {once: true});
+        markdown.getInputField().addEventListener('blur', () => markdown.setValue(pending + ' Final input.'), {once: true});
         panel.closest('dialog').querySelector('[data-component-cancel]').click();
-        assert(!panel.closest('dialog').open && status.hidden &&
+        assert(!panel.closest('dialog').open && !panel.querySelector('.compact-markdown-editor') && status.hidden &&
           document.activeElement === componentRowIn(form, id).querySelector('[data-component-edit]'),
           'Cancel must clear dialog edits and return focus to the component.');
         componentRowIn(form, id).querySelector('[data-component-edit]').click();
-        assert(text.value === body && select.value === style, 'Reopening must show the original text and style after Cancel.');
+        assert(panel.querySelector('.CodeMirror').CodeMirror.getValue() === body && select.value === style,
+          'Reopening must show the original text and style after Cancel.');
         await closeComponentSettings(form);
       }
       sessionStorage.removeItem('callout-ids');
@@ -102,7 +105,7 @@
     cm.replaceRange('Redo this paragraph.', {line: 0, ch: 0}, undefined, '+input');
     cm.undo();
     const canceled = await addTestComponent(form.querySelector('[data-component-add="callout"]'));
-    set(canceled.querySelector('fieldset textarea'), 'Discard this callout.');
+    canceled.querySelector('.CodeMirror').CodeMirror.setValue('Discard this callout.');
     canceled.closest('dialog').querySelector('[data-component-cancel]').click();
     cm.redo();
     assert(cm.getValue() === 'Redo this paragraph.' && form.elements.componentOrder.value === '[]' && !form.elements.callout.value,
@@ -113,10 +116,24 @@
       const panel = await addTestComponent(picker);
       const name = panel.querySelector('input');
       const body = panel.querySelector('fieldset textarea');
-      assert(document.activeElement === name && body.labels[0].textContent === 'Details', 'The dialog must focus Title and label the Markdown field.');
+      const markdown = panel.querySelector('.compact-markdown-editor .CodeMirror').CodeMirror;
+      const input = markdown.getInputField();
+      const label = document.getElementById(input.getAttribute('aria-labelledby'));
+      assert(document.activeElement === name && label.textContent === 'Details', 'The dialog must focus Title and label the Markdown field.');
+      label.click();
+      assert(document.activeElement === input, 'Selecting the label must focus the Markdown editor.');
       assert(!panel.querySelector('fieldset').disabled, 'Adding the component must enable its required fields.');
       set(name, title);
-      set(body, bodies[index]);
+      await closeComponentSettings(form);
+      const error = document.getElementById(body.id + '-error');
+      assert(document.activeElement === input && input.getAttribute('aria-invalid') === 'true' && input.getAttribute('aria-required') === 'true' &&
+        input.getAttribute('aria-describedby').split(' ').includes(error.id) && error.previousElementSibling.classList.contains('compact-markdown-editor'),
+        'Done must focus the visible Markdown editor and show its validation error below it.');
+      markdown.setValue(bodies[index].replaceAll('**', ''));
+      markdown.setSelection({line: 0, ch: index === 0 ? 6 : 7}, {line: 0, ch: index === 0 ? 17 : 18});
+      panel.querySelector('.tool-bold').click();
+      assert(markdown.getValue() === bodies[index] && !input.hasAttribute('aria-invalid') && !error.isConnected,
+        'Formatting must apply Markdown and editing must clear validation.');
       await closeComponentSettings(form);
     }
     const calloutPicker = form.querySelector('[data-component-add="callout"]');
@@ -136,7 +153,7 @@
       const previewBox = preview.getBoundingClientRect();
       assert(previewBox.left - selectBox.right >= 16 && selectBox.top === previewBox.top && previewBox.right <= innerWidth,
         'The callout preview must fit beside the style selector with room for the focus ring.');
-      set(text, body);
+      panel.querySelector('.CodeMirror').CodeMirror.setValue(body);
       ids.push(panel.dataset.componentId || panel.dataset.postComponent);
       await closeComponentSettings(form);
     }
