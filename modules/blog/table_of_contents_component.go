@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"html"
 	"slices"
-	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
@@ -106,33 +104,17 @@ func (tableOfContentsTransformer) Transform(document *ast.Document, reader text.
 	}
 
 	var headings []tableOfContentsHeading
-	used := make(map[string]bool)
-	nextSuffix := make(map[string]int)
 	for node := document.FirstChild(); node != nil; node = node.NextSibling() {
 		heading, ok := node.(*ast.Heading)
 		if !ok {
 			continue
 		}
-		label := tableOfContentsLabel(heading, reader.Source())
-		if label == "" {
-			continue
+		attribute, _ := heading.AttributeString("id")
+		if id, ok := attribute.([]byte); ok {
+			headings = append(headings, tableOfContentsHeading{
+				label: markdownHeadingLabel(heading, reader.Source()), id: string(id), level: heading.Level,
+			})
 		}
-		words := strings.FieldsFunc(strings.ToLower(label), func(r rune) bool {
-			return !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsMark(r)
-		})
-		slug := strings.Join(words, "-")
-		if slug == "" {
-			slug = "heading"
-		}
-		base := "section-" + slug
-		id := base
-		for used[id] {
-			nextSuffix[base]++
-			id = base + "-" + strconv.Itoa(nextSuffix[base]+1)
-		}
-		used[id] = true
-		heading.SetAttributeString("id", []byte(id))
-		headings = append(headings, tableOfContentsHeading{label: label, id: id, level: heading.Level})
 	}
 
 	entriesByLevels := make(map[[7]bool][]*tableOfContentsEntry)
@@ -171,32 +153,6 @@ func tableOfContentsEntries(headings []tableOfContentsHeading, levels [7]bool) [
 		return nil
 	}
 	return entries
-}
-
-func tableOfContentsLabel(heading *ast.Heading, source []byte) string {
-	var label strings.Builder
-	ast.Walk(heading, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-		switch value := node.(type) {
-		case *ast.Text:
-			text := value.Value(source)
-			if value.Parent().Kind() != ast.KindCodeSpan {
-				text = util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(text)))
-			}
-			label.Write(text)
-			if value.HardLineBreak() || value.SoftLineBreak() {
-				label.WriteByte(' ')
-			}
-		case *ast.String:
-			label.Write(value.Value)
-		case *ast.AutoLink:
-			label.Write(value.Label(source))
-		}
-		return ast.WalkContinue, nil
-	})
-	return strings.Join(strings.Fields(label.String()), " ")
 }
 
 type tableOfContentsRenderer struct{}

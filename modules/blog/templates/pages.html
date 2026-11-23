@@ -11,7 +11,7 @@
     <a class="action-delete" href="/pages/delete/{{ .Data.ID }}" hx-get="/pages/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
   </div></details>
 </div>{{ end }}
-<div class="post-body">{{ .Data.HTML }}</div>
+<div class="post-body" data-reading-url="{{ .Data.URL }}">{{ .Data.HTML }}</div>
 {{ if ne .Data.ChildrenDisplay "hidden" }}
 <div class="{{ if eq .Data.ChildrenDisplay "blocks" }}page-grid{{ else }}page-preview-list{{ end }}" hx-boost:inherited="true" hx-target:inherited="#article-content" hx-swap:inherited="innerHTML show:top showTarget:window" hx-sync:inherited="#article-content:replace">
 {{ range .Data.Children }}<a class="page-card" href="{{ .URL }}">

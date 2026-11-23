@@ -17,6 +17,7 @@
   <script src="/assets/lib/htmx/htmx.min.js" defer></script>
   <script src="/assets/js/htmx-errors.js" defer></script>
   <script src="/assets/js/blog.js" defer></script>
+  <script type="module" src="/assets/js/reading-tools.js"></script>
   <script type="module" src="/assets/js/album.js"></script>
   <script type="module" src="/assets/js/x-post.js"></script>
   <script type="module" src="/assets/js/social-post.js"></script>
@@ -39,6 +40,7 @@
   </div>
   {{ end }}
   <div id="notifications" data-request-errors>{{ template "blog.notifications" . }}</div>
+  <span class="reading-copy-status" role="status"></span>
   {{ template "blog.dialogs" . }}
 </body>
 </html>

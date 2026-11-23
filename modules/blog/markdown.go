@@ -127,6 +127,7 @@ func markdownComponents(source string, catalog componentCatalog, overrides ...re
 	transformers := []util.PrioritizedValue{
 		util.Prioritized(markdownImages{}, 90),
 		util.Prioritized(componentsTransformer{catalog: catalog}, 110),
+		util.Prioritized(markdownHeadingIDs{}, 115),
 	}
 	if _, supported := catalog.find("photo-album"); supported {
 		transformers = append(transformers, util.Prioritized(albumTransformer{}, 100))

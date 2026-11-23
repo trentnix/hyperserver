@@ -11,7 +11,7 @@
     <a class="action-delete" href="/post/delete/{{ .Data.ID }}" hx-get="/post/delete/{{ .Data.ID }}" hx-target="#dialog-host">Delete</a>
   </div></details>
 </div>{{ if .Data.Draft }}<div id="publish-error"></div>{{ end }}{{ end }}
-<div class="post-body">{{ .Data.HTML }}</div>
+<div class="post-body" data-reading-url="/post/s/{{ .Data.Slug }}">{{ .Data.HTML }}</div>
 {{ template "blog.seriesLinks" .Data.Series }}
 {{ end }}
 

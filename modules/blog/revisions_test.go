@@ -239,7 +239,7 @@ func TestRevisionHTTP(t *testing.T) {
 				if strings.Count(body, `<span class="revision-latest">Latest saved</span>`) != 1 {
 					t.Fatal("earlier version must not be labeled current")
 				}
-				for _, want := range []string{"Earlier &lt;title&gt;", "<h1>Earlier body</h1>", "&lt;script&gt;alert(1)&lt;/script&gt;", "Markdown source", `href="` + editorURL + "?revision=" + first + `"`, "Edit this version", "/images/" + imageID, "Back to " + kind} {
+				for _, want := range []string{"Earlier &lt;title&gt;", `<h1 id="section-earlier-body">Earlier body</h1>`, "&lt;script&gt;alert(1)&lt;/script&gt;", "Markdown source", `href="` + editorURL + "?revision=" + first + `"`, "Edit this version", "/images/" + imageID, "Back to " + kind} {
 					if !strings.Contains(body, want) {
 						t.Fatal("history preview missing", want)
 					}
