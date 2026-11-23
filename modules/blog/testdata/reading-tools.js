@@ -22,10 +22,12 @@
       const firstLineCenter = codeBounds.top + parseFloat(style.paddingTop) + parseFloat(style.lineHeight) / 2;
       const bounds = button.getBoundingClientRect();
       assert(Math.abs(bounds.top + bounds.height / 2 - firstLineCenter) < 1, 'Copy must align with the first line of code.');
+      assert(Math.abs((bounds.top - codeBounds.top) - (codeBounds.right - bounds.right)) < 1, 'Copy should have equal top and right insets.');
       assert(Math.abs(codeBounds.width - pre.parentElement.getBoundingClientRect().width) < 1, 'The scroll area should span the full block.');
       const cover = getComputedStyle(pre.parentElement, '::after');
       assert(cover.pointerEvents === 'none' && Math.abs(parseFloat(cover.height) - parseFloat(style.lineHeight)) < 1,
         'The copy control should cover only the first line at the edge and leave the scroll area interactive.');
+      assert(Math.abs(parseFloat(cover.width) - (codeBounds.right - bounds.left)) < 1, 'The cover should extend from the button to the edge.');
       assert(button.querySelector('svg[aria-hidden="true"]') && button.getAttribute('aria-label') === 'Copy code' && !button.textContent.trim(),
         'Copy should use an icon and retain its accessible name.');
     }
