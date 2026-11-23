@@ -99,6 +99,7 @@ func (m *module) Routes(routes *routing.Routes) error {
 	routes.HandleFunc("GET /projects", m.requireSetup(m.page))
 	routes.HandleFunc("GET /project/s/{slug}", m.requireSetup(m.page)) // Retain published project links.
 	routes.Handle("GET /post/create", m.requirePostOwner(m.editor))
+	routes.HandleWithBodyLimit("POST /post/markdown-import", m.requireWriter(m.prepareMarkdownImport), maxMarkdownBytes)
 	routes.Handle("GET /post/manage", m.requireWriter(m.managePosts))
 	routes.Handle("GET /post/update/{id}", m.requirePostOwner(m.editor))
 	routes.Handle("GET /post/series/{id}", m.requirePostOwner(m.seriesEditor))

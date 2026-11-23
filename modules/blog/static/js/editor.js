@@ -1,6 +1,7 @@
 import {openMediaLibrary, uploadImage, runFormUpload, showUploadFailure, setMediaStatus, uploadStorageFull} from './media.js';
 import {markField} from './forms.js';
 import {createMarkdownEditor, getMarkdownEditor} from './markdown-editor.js';
+import {initializeMarkdownImport} from './markdown-import.js';
 
 // Native suggestions replace the last comma-separated tag, keeping earlier tags.
 // Without JavaScript, the same field still accepts ordinary comma-separated input.
@@ -87,6 +88,7 @@ function initialize(root) {
   root.querySelectorAll('#post-form, #page-form').forEach(updatePublication);
   root.querySelectorAll('#post-form, #page-form').forEach(updateSlugPlaceholder);
   root.querySelectorAll('input[name="tags"]').forEach(updateTagSuggestions);
+  root.querySelectorAll('[data-markdown-import]').forEach(initializeMarkdownImport);
   const textarea = root.querySelector('#post-content');
   if (textarea && !getMarkdownEditor(textarea)) {
     let previewRequest;

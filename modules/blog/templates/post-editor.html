@@ -1,5 +1,19 @@
 {{ define "blog.editor" }}
-<section class="info-page editor-panel"><h1 id="editor-title">{{ if .Data.ID }}Edit post{{ else }}New post{{ end }}</h1>
+<section class="info-page editor-panel">
+{{ if .Data.ID }}<h1 id="editor-title">Edit post</h1>{{ else }}
+  <div class="markdown-import-heading">
+    <h1 id="editor-title">New post</h1>
+    <div data-markdown-import-actions hidden>
+      <button type="button" class="button-secondary" data-markdown-import-open>Import</button>
+      <details class="action-menu markdown-import-menu">
+        <summary>More</summary>
+        <div class="action-menu-items">
+          <button type="button" class="text-button" data-markdown-import-open>Import</button>
+        </div>
+      </details>
+    </div>
+  </div>
+{{ end }}
 <form id="post-form"{{ if .Data.UploadStorageFull }} data-upload-storage-full{{ end }} data-time-zone="{{ .Data.TimeZone }}" data-media-library="{{ if .Data.NoLibrary }}false{{ else }}true{{ end }}" data-draft-owner="{{ .LayoutData.EditorOwner }}"{{ if .Data.Error }} data-unsaved{{ end }}{{ if .Data.CurrentContent }} data-current-content="{{ .Data.CurrentContent }}"{{ end }} method="post" action="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-post="/post{{ if .Data.ID }}/{{ .Data.ID }}{{ end }}{{ if .Data.RevisionID }}?revision={{ .Data.RevisionID }}{{ end }}" hx-target="#editor-errors" hx-swap="innerHTML">
   <input type="hidden" name="version" value="{{ .Data.Version }}">
   <input type="hidden" name="returnTo" value="{{ .Data.ReturnURL }}">
@@ -92,6 +106,37 @@
   {{ template "blog.editorActions" .Data }}
   </div>
 </form>
+{{ if not .Data.ID }}
+  <dialog class="component-dialog markdown-import-dialog" aria-labelledby="markdown-import-title" data-markdown-import>
+    <div class="component-dialog-body">
+      <form id="markdown-import-form" method="dialog">
+        <h2 id="markdown-import-title">Import Markdown</h2>
+        <div class="markdown-import-selection" data-markdown-import-selection hidden>
+          <div>
+            <strong data-markdown-import-name></strong>
+            <small data-markdown-import-image-count aria-live="polite" hidden></small>
+          </div>
+          <button type="button" class="text-button" data-markdown-import-change>Change</button>
+        </div>
+        <div data-markdown-import-status role="status"></div>
+        <div class="markdown-import-picker" data-markdown-import-picker>
+          <p data-markdown-import-prompt>Choose a folder to import.</p>
+          <div class="markdown-import-choices">
+            <button type="button" class="button-secondary" data-markdown-import-pick-folder>Choose folder</button>
+            <button type="button" class="text-button" data-markdown-import-pick-file>Choose file</button>
+          </div>
+          <p class="form-hint">Include one Markdown file and only the local images it references.</p>
+        </div>
+        <input type="file" id="markdown-import-folder" webkitdirectory hidden>
+        <input type="file" id="markdown-import-source" accept=".md,.markdown,text/markdown" hidden>
+      </form>
+    </div>
+    <footer>
+      <button type="button" class="button-secondary" data-markdown-import-cancel>Cancel</button>
+      <button type="submit" form="markdown-import-form" data-markdown-import-submit disabled>Open draft</button>
+    </footer>
+  </dialog>
+{{ end }}
 </section>
 {{ end }}
 

@@ -28,6 +28,11 @@ export function restoreComponentInstances(form, fields) {
   if (root) editors.get(root)?.restoreInstances(fields);
 }
 
+export function clearPostComponents(form) {
+  const root = form.querySelector('[data-post-components]');
+  editors.get(root)?.clear();
+}
+
 export function componentValue(source, value) {
   return comparisons.get(source)?.(value) ?? value;
 }
@@ -905,6 +910,16 @@ function createEditor(root) {
   });
   sync();
   return {
+    clear() {
+      if (pendingAction) finishAction(pendingAction);
+      for (const id of removed.keys()) forgetRemoval(id);
+      order = [];
+      moving = undefined;
+      status.textContent = '';
+      for (const {callbacks} of instances.values()) callbacks.clear();
+      changed([]);
+      refreshLayout();
+    },
     register(type, callbacks) {
       const instance = instances.get(type);
       instance.callbacks = callbacks;

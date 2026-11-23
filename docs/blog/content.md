@@ -4,6 +4,10 @@
 
 Use **Posts → New post** to write a title and Markdown body. Choose **Draft**, **Publish**, or **Schedule** before saving. Scheduling is available only for never-published posts. Choose **Draft** to unpublish or cancel a schedule.
 
+In a new post, choose **Import**. On phones, it’s under **More**. Choose or drop a folder containing exactly one Markdown file and the local images it references. Keep the image paths relative to the Markdown file. If any file is missing or extra, choose a corrected folder. You can choose a Markdown file by itself if it references no local images. Import accepts UTF-8 Markdown up to 256 KiB and PNG, JPEG, or GIF images. It preserves image sizes, alt text, and authored links. If the file contains HyperServer component data or placement markers, remove them before importing.
+
+Choose **Open draft**. If import would replace unsaved post content, components, or the publication setting, it asks before uploading. Import keeps the other fields and uses the file name as the title if the title is blank. Review the result, then choose **Save draft**. If import fails, the picker appears with the attempted folder or file and the reason. If an upload fails or you cancel after uploads begin, completed uploads remain stored.
+
 Set `timeZone` in `modules/blog/config.yaml` to an IANA name such as `America/Chicago`, then restart the blog. The default is `UTC`. The setting applies to scheduling, publication dates, and new Events. Events can use a different time zone. A change to the setting preserves the publication time of existing schedules and the time zone of saved Events.
 
 Republishing keeps the original publication date. Canceling before a scheduled time clears that date. Scheduled content becomes public at the saved time without a background worker, so the server clock must be accurate.
