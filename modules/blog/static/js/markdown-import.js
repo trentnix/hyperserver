@@ -200,7 +200,7 @@ export function initializeMarkdownImport(dialog) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Unable to read the Markdown file.');
       if (signal.aborted || !dialog.open || !dialog.isConnected) return;
-      if (!folderName && result.length) throw new Error('This file references local images. Choose the folder containing the Markdown and its images.');
+      if (!folderName && result.length) throw new Error('This file uses local images. Use Choose folder to import the file and images together.');
       const matches = matchImages(result, entries, document);
       if (matches.size && uploadStorageFull(editorForm)) throw new Error(storageFullMessage);
       session.label = label;

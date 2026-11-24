@@ -174,7 +174,7 @@
     const picture = await image('photo.png', 'article/photo.png', '#432fa5');
     const missing = '![Photo](assets/photo.png)';
     select(source, fromMarkdown(missing, 'missing.md'));
-    await rejectSelection('missing.md', 'This file references local images');
+    await rejectSelection('missing.md', 'This file uses local images. Use Choose folder to import the file and images together.');
     select(folder, fromMarkdown(missing, 'missing.md', 'article/missing.md'), picture);
     await rejectSelection('article', 'Missing image: assets/photo.png');
     select(folder, fromMarkdown('![Photo](../shared/photo.png)', 'outside.md', 'article/outside.md'), picture);
