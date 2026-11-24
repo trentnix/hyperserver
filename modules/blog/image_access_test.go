@@ -132,15 +132,13 @@ func TestPageImageAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(http.StatusNotFound)
-	for _, field := range []string{"portrait", "favicon", "background"} {
+	for _, field := range []string{"portrait", "favicon"} {
 		p := Profile{Name: "Profile", Version: h.blog.profile.Current().Version}
 		switch field {
 		case "portrait":
 			p.ImageURL = "/images/" + id
 		case "favicon":
 			p.FaviconURL = "https://blog.example/images/" + id + "?v=1"
-		case "background":
-			p.BackgroundURL = "/images/" + id + "#crop"
 		}
 		if err := h.blog.persistProfile(t.Context(), p); err != nil {
 			t.Fatal(err)
@@ -151,6 +149,24 @@ func TestPageImageAccess(t *testing.T) {
 		}
 		check(http.StatusNotFound)
 	}
+}
+
+func TestFormerProfileBackgroundIsPrivate(t *testing.T) {
+	h := newHarness(t)
+	image := mediaUpload(t, h.blog, "Former background")
+	path := "/images/" + image.ID
+	h.register(t)
+	h.verify(t)
+	h.login(t)
+	fields := profileFields("Updated profile")
+	fields.Set("backgroundURL", path)
+	requireStatus(t, h.request("POST", "/profile", fields, false), http.StatusSeeOther)
+	used, err := h.blog.profileStore.(*sqliteRepository).ReferencedMedia(t.Context(), image.ID)
+	if err != nil || len(used) != 0 {
+		t.Fatalf("former background usage = %v, error = %v", used, err)
+	}
+	requireStatus(t, h.request("POST", "/auth/logout", nil, false), http.StatusSeeOther)
+	requireStatus(t, h.request("GET", path, nil, false), http.StatusNotFound)
 }
 
 // TestImageReferenceParsing grants access for rendered references only. Escaping,
@@ -262,7 +278,7 @@ func TestImageReferenceDefaultPorts(t *testing.T) {
 				t.Fatal(err)
 			}
 			profile := h.blog.profile.Current()
-			for _, field := range []*string{&profile.ImageURL, &profile.FaviconURL, &profile.BackgroundURL} {
+			for _, field := range []*string{&profile.ImageURL, &profile.FaviconURL} {
 				*field = ref
 				profile.Version = h.blog.profile.Current().Version
 				if err := h.blog.persistProfile(t.Context(), profile); err != nil {

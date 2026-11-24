@@ -102,8 +102,13 @@ func TestSetupProfileGuidance(t *testing.T) {
 			for range 2 {
 				w := h.request("GET", "/profile", nil, hx)
 				requireStatus(t, w, http.StatusOK)
-				if !strings.Contains(w.Body.String(), introduction) || strings.Contains(w.Body.String(), "Profile saved") {
+				body := w.Body.String()
+				if !strings.Contains(body, introduction) || strings.Contains(body, "Profile saved") {
 					t.Fatal("unsaved profile needs guidance, not a success message")
+				}
+				theme, name := strings.Index(body, `id="profile-theme"`), strings.Index(body, `id="profile-name"`)
+				if theme < 0 || name < theme {
+					t.Fatal("first-time profile editor must show Theme before Display name")
 				}
 				if err := h.app.ShutdownContext(t.Context()); err != nil {
 					t.Fatal(err)
@@ -111,7 +116,7 @@ func TestSetupProfileGuidance(t *testing.T) {
 				h = startHarness(t, cfg)
 				h.login(t)
 			}
-			fields := url.Values{"version": {"0"}, "name": {""}}
+			fields := url.Values{"version": {"0"}, "name": {""}, "theme": {"christmas"}}
 			requireStatus(t, h.request("POST", "/profile", fields, hx), http.StatusUnprocessableEntity)
 			fields.Set("name", "My new blog")
 			store := h.blog.profileStore
@@ -133,7 +138,7 @@ func TestSetupProfileGuidance(t *testing.T) {
 			}
 			w = h.request("GET", "/", nil, false)
 			requireStatus(t, w, http.StatusOK)
-			for _, want := range []string{"Profile saved", "My new blog"} {
+			for _, want := range []string{"Profile saved", "My new blog", `data-theme="christmas"`} {
 				if !strings.Contains(w.Body.String(), want) {
 					t.Errorf("missing %q", want)
 				}

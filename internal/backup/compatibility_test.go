@@ -57,7 +57,6 @@ func TestIncompatibleBackupsLeaveOriginalsUntouched(t *testing.T) {
 			changes[i] = fmt.Sprintf(changes[i], role.table)
 		}
 		if role.name == "blog" {
-			changes[1] = "UPDATE blog_schema_version SET version=1"
 			changes = append(changes, imageOnlyBlogSchemaChange, "DROP INDEX blog_post_media_url", "ALTER TABLE blog_media DROP COLUMN size_bytes")
 		}
 		for _, change := range changes {
@@ -148,7 +147,7 @@ func TestBackupCompatibilityCustomSessionTable(t *testing.T) {
 }
 
 func TestIncompatibleSourceDoesNotPublishBackup(t *testing.T) {
-	for _, change := range []string{`UPDATE blog_schema_version SET version=3`, imageOnlyBlogSchemaChange} {
+	for _, change := range []string{`UPDATE blog_schema_version SET version=2`, imageOnlyBlogSchemaChange} {
 		t.Run(change, func(t *testing.T) {
 			cfg := fixture(t)
 			filename := filepath.Join(cfg.App.WorkingDirectory, "blog.db")

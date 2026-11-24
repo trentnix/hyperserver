@@ -275,7 +275,7 @@ func TestBlogSchemaRejection(t *testing.T) {
 		`DROP TABLE blog_schema_version`,
 		`DELETE FROM blog_schema_version`,
 		`UPDATE blog_schema_version SET version=0`,
-		`UPDATE blog_schema_version SET version=1`,
+		`UPDATE blog_schema_version SET version=2`,
 		`UPDATE blog_schema_version SET version=3`,
 		`UPDATE blog_schema_version SET version=-1`,
 		`UPDATE blog_schema_version SET dirty=1`,
@@ -336,7 +336,7 @@ INSERT INTO blog_media(id,filename,label,version) VALUES('old.png','old.png','Ke
 		t.Fatal(err)
 	}
 	before := schemaSnapshot(t, db)
-	if err := prepareBlogSchema(t.Context(), db); err == nil || !strings.Contains(err.Error(), "unsupported blog schema version") {
+	if err := prepareBlogSchema(t.Context(), db); err == nil || !strings.Contains(err.Error(), "incompatible blog schema") {
 		t.Fatal("startup accepted the earlier version 1 layout", err)
 	}
 	if schemaSnapshot(t, db) != before {

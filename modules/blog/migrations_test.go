@@ -42,12 +42,10 @@ func TestBlogMigrationCompatibility(t *testing.T) {
 			if _, err := db.Exec(`CREATE TABLE other_version(version INTEGER); INSERT INTO other_version VALUES(73)`); err != nil {
 				t.Fatal(err)
 			}
-			switch source {
-			case "startup":
+			if source == "startup" {
 				if err := prepareBlogSchema(t.Context(), db); err != nil {
 					t.Fatal(err)
 				}
-
 			}
 			for range 2 {
 				if output, err := run("up"); err != nil {
@@ -57,7 +55,7 @@ func TestBlogMigrationCompatibility(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			// Exercise the self-referencing page table during the destructive down.
+			// Exercise the page tree and a populated series during the destructive down.
 			tx, err := db.BeginTx(t.Context(), nil)
 			if err != nil {
 				t.Fatal(err)
@@ -68,7 +66,18 @@ func TestBlogMigrationCompatibility(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			if err := seedCurrentPost(t.Context(), tx, Post{ID: "post", Slug: "post", Title: "Part one"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.ExecContext(t.Context(), `INSERT INTO blog_collections(id,title,author_id) VALUES('series','A series','author');
+INSERT INTO blog_collection_content(collection_id,post_id,position) VALUES('series','post',0)`); err != nil {
+				t.Fatal(err)
+			}
 			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			repo := &sqliteRepository{db: db}
+			if err := repo.SaveProfile(t.Context(), Profile{Name: "Example Blog", Theme: "christmas"}); err != nil {
 				t.Fatal(err)
 			}
 			before := schemaSnapshot(t, db)
@@ -77,6 +86,10 @@ func TestBlogMigrationCompatibility(t *testing.T) {
 			}
 			if output, err := run("down", strconv.Itoa(requiredBlogSchemaVersion)); err != nil {
 				t.Fatal(output, err)
+			}
+			var remaining int
+			if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name GLOB 'blog_*' AND type IN ('table','view','trigger') AND name<>'blog_schema_version'`).Scan(&remaining); err != nil || remaining != 0 {
+				t.Fatal("down left blog schema objects", remaining, err)
 			}
 			if err := prepareBlogSchema(t.Context(), db); err == nil {
 				t.Fatal("startup silently recreated storage after explicit down")
@@ -116,7 +129,7 @@ func TestBlogBaselineOwnership(t *testing.T) {
 INSERT INTO blog_media(id,filename,label,version,uploaded_by) VALUES('image','image.png','Example',1,'account')`); err != nil {
 		t.Fatal(err)
 	}
-	before := blogMigrationSnapshot(t, db, "schema", "blog_collections", "blog_collection_content")
+	before := blogMigrationSnapshot(t, db, "schema")
 	for range 2 {
 		if output, err := run("up"); err != nil {
 			t.Fatal(output, err)
@@ -124,7 +137,7 @@ INSERT INTO blog_media(id,filename,label,version,uploaded_by) VALUES('image','im
 		if err := prepareBlogSchema(t.Context(), db); err != nil {
 			t.Fatal(err)
 		}
-		if got := blogMigrationSnapshot(t, db, "schema", "blog_collections", "blog_collection_content"); got != before {
+		if got := blogMigrationSnapshot(t, db, "schema"); got != before {
 			t.Fatal("repeated setup changed ownership, content, versions, references, or another module")
 		}
 	}

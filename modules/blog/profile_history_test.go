@@ -18,7 +18,7 @@ import (
 func profileRevisionForm(t *testing.T, body string) url.Values {
 	t.Helper()
 	values := url.Values{}
-	for _, name := range []string{"version", "name", "imageURL", "faviconURL", "backgroundURL"} {
+	for _, name := range []string{"version", "name", "imageURL", "faviconURL"} {
 		match := regexp.MustCompile(`name="` + name + `" value="([^"]*)"`).FindStringSubmatch(body)
 		if len(match) != 2 {
 			t.Fatal("missing profile input", name)
@@ -56,7 +56,7 @@ func TestProfileHistoryStorage(t *testing.T) {
 		t.Fatal("unchanged content created history")
 	}
 	p, _ := s.GetProfile(t.Context())
-	p.Name, p.Bio, p.ImageURL, p.FaviconURL, p.BackgroundURL = "Changed", "New bio", "/portrait.png", "/icon.png", "/background.png"
+	p.Name, p.Bio, p.ImageURL, p.FaviconURL = "Changed", "New bio", "/portrait.png", "/icon.png"
 	if err := s.SaveProfile(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,8 @@ func TestRestoreProfile(t *testing.T) {
 		h.verify(t)
 
 		p := original
-		p.Name, p.Bio, p.ImageURL, p.FaviconURL, p.BackgroundURL = "Changed", "Changed bio", "", "", ""
+		p.Name, p.Bio, p.ImageURL, p.FaviconURL = "Changed", "Changed bio", "", ""
+		p.Theme = "christmas"
 		if err := h.blog.persistProfile(t.Context(), p); err != nil {
 			t.Fatal(err)
 		}
@@ -292,7 +293,7 @@ func TestProfileHistoryMedia(t *testing.T) {
 	m := h.blog
 	f := mediaUpload(t, m, "historical profile")
 	p := m.profile.Current()
-	p.ImageURL, p.FaviconURL, p.BackgroundURL = "/images/"+f.ID, "/images/"+f.ID, "/images/"+f.ID
+	p.ImageURL, p.FaviconURL = "/images/"+f.ID, "/images/"+f.ID
 	if err := m.persistProfile(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +303,7 @@ func TestProfileHistoryMedia(t *testing.T) {
 	versions, _ := m.profileStore.ListProfileRevisions(t.Context())
 	old := strconv.FormatInt(versions[0].ID, 10)
 	p = m.profile.Current()
-	p.ImageURL, p.FaviconURL, p.BackgroundURL = "", "", ""
+	p.ImageURL, p.FaviconURL = "", ""
 	if err := m.persistProfile(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
@@ -333,14 +334,14 @@ func TestProfileHistoryMedia(t *testing.T) {
 	for _, hx := range []bool{false, true} {
 		w = h.request("GET", "/profile/history?revision="+old, nil, hx)
 		requireStatus(t, w, http.StatusOK)
-		if strings.Count(w.Body.String(), "Image deleted") != 3 || strings.Contains(w.Body.String(), `src="/images/`+f.ID) {
+		if strings.Count(w.Body.String(), "Image deleted") != 2 || strings.Contains(w.Body.String(), `src="/images/`+f.ID) {
 			t.Fatal("history did not mark deleted images")
 		}
 		w = h.request("GET", "/profile?revision="+old, nil, hx)
 		if !strings.Contains(w.Body.String(), "Replace or remove their references before saving.") {
 			t.Fatal("restoration lacks missing-image guidance")
 		}
-		if strings.Contains(w.Body.String(), `src="/images/`+f.ID) || strings.Count(w.Body.String(), "data-image-missing") != 3 {
+		if strings.Contains(w.Body.String(), `src="/images/`+f.ID) || strings.Count(w.Body.String(), "data-image-missing") != 2 {
 			t.Fatal("editor shows broken image previews")
 		}
 		values := profileRevisionForm(t, w.Body.String())
@@ -404,7 +405,7 @@ func TestProfileHistoryFailure(t *testing.T) {
 
 // TestProfileHistoryMediaRoles checks each image role independently, including original-host URLs.
 func TestProfileHistoryMediaRoles(t *testing.T) {
-	for _, role := range []string{"portrait", "favicon", "background"} {
+	for _, role := range []string{"portrait", "favicon"} {
 		t.Run(role, func(t *testing.T) {
 			h := newHarness(t)
 			m := h.blog
@@ -416,14 +417,12 @@ func TestProfileHistoryMediaRoles(t *testing.T) {
 				p.ImageURL = ref
 			case "favicon":
 				p.FaviconURL = ref
-			case "background":
-				p.BackgroundURL = ref
 			}
 			if err := m.persistProfile(t.Context(), p); err != nil {
 				t.Fatal(err)
 			}
 			p = m.profile.Current()
-			p.ImageURL, p.FaviconURL, p.BackgroundURL = "", "", ""
+			p.ImageURL, p.FaviconURL = "", ""
 			if err := m.persistProfile(t.Context(), p); err != nil {
 				t.Fatal(err)
 			}

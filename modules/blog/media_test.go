@@ -71,7 +71,7 @@ func TestMediaReferences(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	profile := Profile{Name: "Profile", ImageURL: "/images/" + add("portrait"), FaviconURL: "https://blog.example/images/" + add("favicon"), BackgroundURL: "/images/" + add("background")}
+	profile := Profile{Name: "Profile", ImageURL: "/images/" + add("portrait"), FaviconURL: "https://blog.example/images/" + add("favicon")}
 	profile.Version = m.profile.Current().Version
 	if err := m.persistProfile(t.Context(), profile); err != nil {
 		t.Fatal(err)

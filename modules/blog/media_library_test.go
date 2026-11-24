@@ -171,7 +171,7 @@ func TestMediaReuse(t *testing.T) {
 	h.cookies = nil
 	requireStatus(t, h.request("GET", "/images/"+f.ID, nil, false), http.StatusNotFound)
 	h.cookies = cookies
-	requireStatus(t, h.request("POST", "/profile", url.Values{"version": {"1"}, "name": {"Profile"}, "imageURL": {"/images/" + f.ID}, "faviconURL": {"/images/" + f.ID}, "backgroundURL": {"/images/" + f.ID}}, false), http.StatusSeeOther)
+	requireStatus(t, h.request("POST", "/profile", url.Values{"version": {"1"}, "name": {"Profile"}, "imageURL": {"/images/" + f.ID}, "faviconURL": {"/images/" + f.ID}}, false), http.StatusSeeOther)
 	h.cookies = nil
 	requireStatus(t, h.request("GET", "/images/"+f.ID, nil, false), http.StatusOK)
 	files, err := h.blog.media.List(t.Context())

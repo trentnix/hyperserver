@@ -13,6 +13,10 @@ INSERT INTO blog_posts(id,owner_id,title,summary,markdown,preview_image,recorded
  (5,'draft','Draft post','Private summary','![Private](/images/private.png)','private.png',1700000000000000000,'private','/post/s/draft'),
  (6,'scheduled','Scheduled post','Future summary','Future content','',1700000000000000000,'future','/post/s/scheduled');
 
+INSERT INTO blog_collections(id,title,author_id) VALUES('series','A series','author');
+INSERT INTO blog_collection_content(collection_id,post_id,position) VALUES
+ ('series','live',0),('series','draft',1);
+
 INSERT INTO blog_current_pages(id,version_id,slug,published,parent_id,children_display,display_order,updated,ever_published,version) VALUES
  ('parent',4,'projects',1,NULL,'blocks',10,1700000000000000000,1,3),
  ('child',5,'example',1,'parent','hidden',20,1700000000000000001,1,5),
@@ -26,9 +30,9 @@ INSERT INTO blog_pages(id,owner_id,title,summary,markdown,preview_image,recorded
  (6,'private-page','Private page','Not public','Private content','private.png',1700000000000000000,'private','/page/private-page');
 
 INSERT INTO blog_current_profile(id,version_id,version) VALUES(1,2,6);
-INSERT INTO blog_profile(id,owner_id,name,bio,image_url,favicon_url,background_url,recorded) VALUES
+INSERT INTO blog_profile(id,owner_id,name,bio,image_url,favicon_url,theme,recorded) VALUES
  (1,1,'Earlier Blog','Earlier bio','/images/older-portrait.png','','',1600000000000000000),
- (2,1,'Example Blog','A test profile','/images/portrait.png','/images/icon.png','/images/background.png',1700000000000000000);
+ (2,1,'Example Blog','A test profile','/images/portrait.png','/images/icon.png','christmas',1700000000000000000);
 INSERT INTO blog_setup(email,complete) VALUES('admin@example.invalid',1);
 INSERT INTO blog_media(id,filename,label,version,tags) VALUES
  ('public.png','public-original.png','Public image',3,'public, example'),

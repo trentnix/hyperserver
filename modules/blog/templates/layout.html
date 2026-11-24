@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" prefix="og: https://ogp.me/ns#">
+<html lang="en" prefix="og: https://ogp.me/ns#" data-theme="{{ .LayoutData.Profile.ThemeID }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,6 +9,7 @@
   <link rel="icon" href="{{ .LayoutData.Profile.IconURL }}">
   <link rel="alternate" type="application/rss+xml" title="{{ .LayoutData.Profile.Name }}" href="/rss">
   <link rel="stylesheet" href="/assets/css/blog.css">
+  {{ range .LayoutData.Profile.Themes }}<link rel="stylesheet" href="/assets/css/themes/{{ .ID }}.css" data-blog-theme="{{ .ID }}">{{ end }}
   <link rel="preload" href="/assets/fonts/source-sans-3.woff2" as="font" type="font/woff2" crossorigin>
   <script src="/assets/js/startup.js"></script>
   {{ if .LayoutData.Writer }}<link rel="stylesheet" href="/assets/lib/easymde/easymde.min.css">
@@ -26,8 +27,12 @@
   <script type="module" src="/assets/js/forms.js"></script>
   {{ if .LayoutData.Writer }}<script type="module" src="/assets/js/admin.js"></script>{{ end }}
 </head>
-<body{{ if .LayoutData.Profile.BackgroundURL }} style="--site-background: url('{{ .LayoutData.Profile.BackgroundURL }}')"{{ end }}>
+<body>
   <a class="skip-link" href="#article-content">Skip to content</a>
+  <div class="theme-preview">
+    <span>Theme preview</span>
+    <a href="?preview-theme=off" hx-boost="false">Exit preview</a>
+  </div>
   {{ if .LayoutData.Setup }}
   {{ template "blog.setupPanel" . }}
   {{ else }}

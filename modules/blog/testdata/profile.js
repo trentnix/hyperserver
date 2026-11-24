@@ -27,20 +27,22 @@
       await wait(() => document.querySelector('#profile-form') && !document.querySelector('#article-content').classList.contains('htmx-settling'));
       stage = 'edit';
     }
-    if (location.pathname === '/' && ['saved', 'background', 'cleared'].includes(stage)) {
+    if (location.pathname === '/' && ['saved', 'replaced-portrait', 'cleared'].includes(stage)) {
       assert(document.querySelector('#notifications').textContent.includes('Profile saved'), 'Missing profile confirmation.');
+      assert(getComputedStyle(document.body).backgroundImage.includes('/assets/img/site-bg-christmas.webp'), 'The saved Christmas theme should supply its background.');
       if (stage === 'saved') {
+        assert(document.documentElement.dataset.theme === 'christmas' && getComputedStyle(document.documentElement).backgroundColor === 'rgb(255, 253, 249)', 'Save did not apply the theme.');
         assert(document.querySelector('.profile-name').textContent === 'Updated Writer', 'Header did not reload.');
         assert(document.title.startsWith('Updated Writer') && !document.title.includes('Site Profile'), 'Title did not update.');
         assert(document.querySelector('meta[name="description"]').content === 'An updated biography.', 'Description did not update.');
         assert(document.querySelector('link[rel="icon"]').getAttribute('href') === sessionStorage.getItem('faviconURL'), 'Favicon did not update.');
         assert(document.querySelector('.portrait').getAttribute('src') === sessionStorage.getItem('imageURL'), 'Portrait did not update.');
-        assert(getComputedStyle(document.body).backgroundImage === 'none' && getComputedStyle(document.querySelector('.page-top')).backgroundImage === 'none', 'Cleared background is still visible.');
       }
       location.href = '/profile';
       return;
     }
     const form = document.querySelector('#profile-form');
+    assert(!form.elements.backgroundURL && form.querySelectorAll('[data-image-picker]').length === 2, 'Site Profile should offer portrait and favicon pickers.');
     const formStyle = getComputedStyle(form);
     assert(formStyle.fontSize === '16px' && formStyle.lineHeight === '24px', 'Profile typography differs from other administrative forms.');
     assert(document.documentElement.scrollWidth <= innerWidth, 'Profile controls overflow the viewport.');
@@ -89,6 +91,18 @@
       sessionStorage.setItem(field, path);
     };
     if (stage === 'edit') {
+      const theme = form.elements.theme;
+      assert(theme.getBoundingClientRect().bottom < form.elements.name.getBoundingClientRect().top, 'Theme should be above the display name.');
+      assert(theme.value === 'default', 'Default theme is not selected.');
+      const previewTheme = form.querySelector('[data-preview-profile-theme]');
+      const open = window.open;
+      let previewURL;
+      window.open = url => { previewURL = url; };
+      theme.value = 'christmas';
+      previewTheme.click();
+      window.open = open;
+      assert(previewURL === '/?preview-theme=christmas', 'Preview did not open the selected theme.');
+      assert(document.documentElement.dataset.theme === 'default', 'Preview changed the editor theme.');
       for (const fieldset of form.querySelectorAll('[data-image-picker]')) {
         const input = fieldset.querySelector('input[type=file]');
         assert(input.hidden && getComputedStyle(input).display === 'none', 'Native file controls should not duplicate the upload button.');
@@ -107,7 +121,7 @@
         const reset = fieldset.querySelector('[data-image-reset]').getBoundingClientRect();
         assert(reset.top >= preview.bottom && Math.abs(reset.left + reset.right - preview.left - preview.right) < 1, 'Reset action must be centered below the preview.');
         const controls = fieldset.querySelector('.profile-image-controls').getBoundingClientRect();
-        const stacked = innerWidth < 768 || fieldset.dataset.imageField === 'backgroundURL';
+        const stacked = innerWidth < 768;
         assert(stacked ? controls.top >= preview.bottom : controls.left > preview.right, 'Image controls do not follow the responsive layout.');
         const details = fieldset.querySelector('details');
         assert(!details.open, 'Image URL should start collapsed.');
@@ -119,8 +133,6 @@
       assert(getComputedStyle(portrait).borderRadius === '50%', 'Portrait preview is not rounded like the site portrait.');
       const favicon = picker('faviconURL').querySelector('[data-image-preview]').getBoundingClientRect();
       assert(favicon.width === 16 && favicon.height === 16, 'Favicon is not shown at browser-tab size.');
-      const background = picker('backgroundURL').querySelector('.profile-image-preview').getBoundingClientRect();
-      assert(background.width > background.height, 'Background preview is not landscape-shaped.');
       assert(form.elements.name.value === 'Trent Nix', 'Editor did not load stored profile.');
       form.elements.name.value = 'Updated Writer';
       form.elements.bio.value = 'An updated biography.';
@@ -141,13 +153,12 @@
       // Uploads must not publish anything until the profile is saved.
       const before = await (await fetch('/')).text();
       assert(!before.includes(sessionStorage.getItem('imageURL')) && !before.includes(sessionStorage.getItem('faviconURL')), 'Upload published unsaved profile changes.');
-      picker('backgroundURL').querySelector('[data-image-reset]').click();
-      assert(form.elements.backgroundURL.value === '' && picker('backgroundURL').querySelector('[data-image-preview]').hidden, 'Background reset failed.');
       sessionStorage.setItem('profile-stage', 'saved');
       form.requestSubmit();
       return;
     }
     if (stage === 'saved') {
+      assert(form.elements.theme.value === 'christmas', 'Editor did not load the saved theme.');
       // A failed network request must leave the saved image selected and controls usable.
       const originalFetch = window.fetch;
       window.fetch = (...args) => args[0] === '/post/images/upload' ? Promise.reject(new Error('Network unavailable')) : originalFetch(...args);
@@ -201,20 +212,13 @@
       assert(form.elements.imageURL.value !== sessionStorage.getItem('imageURL'), 'Retry did not use the retained file.');
       form.elements.name.value = originalName;
       await upload('imageURL', '#44aa66', 1000, 1);
-      await upload('backgroundURL', '#aabbcc');
-      const backgroundImage = picker('backgroundURL').querySelector('[data-image-preview]').getBoundingClientRect();
-      const backgroundFrame = picker('backgroundURL').querySelector('.profile-image-preview').getBoundingClientRect();
-      assert(Math.abs(backgroundFrame.left + backgroundFrame.right - backgroundImage.left - backgroundImage.right) < 1 && Math.abs(backgroundFrame.top + backgroundFrame.bottom - backgroundImage.top - backgroundImage.bottom) < 1, 'Background preview is not centered.');
-      assert(backgroundImage.width <= backgroundFrame.width - 26 && backgroundImage.height <= backgroundFrame.height - 26, 'Background preview exceeds its frame.');
-      assert(Math.abs(backgroundImage.width / backgroundImage.height - 80 / 60) < 0.01, 'Background preview distorts the image proportions.');
-      sessionStorage.setItem('profile-stage', 'background');
+      sessionStorage.setItem('profile-stage', 'replaced-portrait');
       form.requestSubmit();
       return;
     }
     if (stage === 'cleared') {
       assert(document.querySelector('.portrait').getAttribute('src') === '/assets/img/profile-default.svg', 'Portrait default was not restored.');
       assert(document.querySelector('link[rel="icon"]').getAttribute('href') === '/assets/img/favicon.svg', 'Favicon default was not restored.');
-      assert(getComputedStyle(document.body).backgroundImage === 'none' && getComputedStyle(document.querySelector('.page-top')).backgroundImage === 'none', 'Background reset was not saved.');
       // The Markdown toolbar must offer the same recovery without losing writing.
       await htmx.ajax('GET', '/post/create', {target: '#article-content'});
       await wait(() => document.querySelector('.CodeMirror')?.CodeMirror);
@@ -315,13 +319,11 @@
       await report('PASS');
       return;
     }
-    assert(stage === 'background', 'Unexpected profile stage.');
-    const target = document.body;
-    assert(getComputedStyle(target).backgroundImage.includes(sessionStorage.getItem('backgroundURL')), 'Uploaded background was not rendered.');
+    assert(stage === 'replaced-portrait', 'Unexpected profile stage.');
     assert(document.querySelector('.portrait').getAttribute('src') === sessionStorage.getItem('imageURL'), 'Replacement portrait was not saved.');
     const feed = await (await fetch('/rss')).text();
     assert(feed.includes('Updated Writer') && feed.includes('An updated biography.'), 'RSS did not update.');
-    for (const field of ['imageURL', 'faviconURL', 'backgroundURL']) {
+    for (const field of ['imageURL', 'faviconURL']) {
       assert(form.elements[field].value === sessionStorage.getItem(field), 'Saved image was not loaded into the editor.');
       picker(field).querySelector('[data-image-reset]').click();
       assert(form.elements[field].value === '', 'Reset retained the image URL.');

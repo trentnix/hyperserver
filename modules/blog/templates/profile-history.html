@@ -19,10 +19,11 @@
   {{ if and (not .Data.Current) .Data.MatchesCurrent }}<p class="form-hint">This version matches the current content.</p>{{ end }}
   <h2>{{ .Data.Selected.Name }}</h2>
   {{ if .Data.Selected.Bio }}<p class="profile-history-bio">{{ .Data.Selected.Bio }}</p>{{ end }}
+  <p class="form-hint">Theme · {{ .Data.Selected.ThemeLabel }}</p>
   <div class="profile-history-images">
     {{ range .Data.Images }}<figure class="revision-image">
       <figcaption>{{ .Label }}</figcaption>
-      {{ if .Missing }}<span class="missing-image">Image deleted</span>{{ else if .URL }}<img src="{{ .URL }}" alt="Saved {{ .Label }}">{{ else }}<p class="form-hint">No background</p>{{ end }}
+      {{ if .Missing }}<span class="missing-image">Image deleted</span>{{ else }}<img src="{{ .URL }}" alt="Saved {{ .Label }}">{{ end }}
     </figure>{{ end }}
   </div>
 </div>

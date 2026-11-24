@@ -15,24 +15,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestLinkHoverContrast checks both general and article hover colors against white.
-// Static audits can miss hover states even when the default link color passes.
-func TestLinkHoverContrast(t *testing.T) {
-	css, err := blogModuleFS.ReadFile("static/css/blog.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, selector := range []string{"a:hover", ":where(.page-content) a:hover"} {
-		pattern := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(selector) + ` \{ color: #([0-9a-f]{6});`)
-		match := pattern.FindSubmatch(css)
-		if len(match) != 2 {
-			t.Fatalf("missing hover color for %s", selector)
-		}
-		rgb, err := hex.DecodeString(string(match[1]))
+// TestThemeLinkContrast includes hover states that static browser audits can miss.
+func TestThemeLinkContrast(t *testing.T) {
+	luminance := func(t *testing.T, color []byte) float64 {
+		t.Helper()
+		rgb, err := hex.DecodeString(string(color))
 		if err != nil {
 			t.Fatal(err)
 		}
-		var luminance float64
+		var result float64
 		for i, weight := range []float64{0.2126, 0.7152, 0.0722} {
 			channel := float64(rgb[i]) / 255
 			if channel <= 0.04045 {
@@ -40,11 +31,33 @@ func TestLinkHoverContrast(t *testing.T) {
 			} else {
 				channel = math.Pow((channel+0.055)/1.055, 2.4)
 			}
-			luminance += weight * channel
+			result += weight * channel
 		}
-		if ratio := 1.05 / (luminance + 0.05); ratio < 4.5 {
-			t.Errorf("%s has %.2f:1 contrast against white, need at least 4.5:1", selector, ratio)
-		}
+		return result
+	}
+	for _, theme := range (Profile{}).Themes() {
+		t.Run(theme.ID, func(t *testing.T) {
+			css, err := blogModuleFS.ReadFile("static/css/themes/" + theme.ID + ".css")
+			if err != nil {
+				t.Fatal(err)
+			}
+			color := func(property string) []byte {
+				t.Helper()
+				match := regexp.MustCompile(property + `: #([0-9a-f]{6});`).FindSubmatch(css)
+				if len(match) != 2 {
+					t.Fatalf("missing %s color", property)
+				}
+				return match[1]
+			}
+			background := color("--page-bg")
+			for _, property := range []string{"--link-color", "--link-hover"} {
+				foreground := color(property)
+				ratio := (luminance(t, background) + .05) / (luminance(t, foreground) + .05)
+				if ratio < 4.5 {
+					t.Errorf("#%s has %.2f:1 contrast against #%s, need at least 4.5:1", foreground, ratio, background)
+				}
+			}
+		})
 	}
 }
 

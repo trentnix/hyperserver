@@ -468,7 +468,7 @@
       return;
     }
     const form = document.querySelector('#profile-form');
-    for (const field of ['imageURL', 'faviconURL', 'backgroundURL']) {
+    for (const field of ['imageURL', 'faviconURL']) {
       const picker = form.elements[field].closest('[data-image-picker]');
       const id = await choose(picker.querySelector('[data-media-browse]'));
       assert(form.elements[field].value === '/images/' + id, 'Profile selection must store the URL.');

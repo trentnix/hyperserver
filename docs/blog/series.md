@@ -20,6 +20,4 @@ Draft and scheduled posts keep their membership and order but stay out of reader
 
 `blog_collections` stores the series name, owner, and version. `blog_collection_content` stores each member's post ID and position. A unique post ID enforces one series per post. Version checks, ownership checks, and membership changes share the post save transaction.
 
-Migration `000002_collections` adds these tables without rewriting posts. Fresh storage includes both migrations. Existing version 1 databases require an [offline migration](readme.md#database-migrations). Downgrading removes series data and preserves posts, revisions, media, accounts, and sessions. Back up before migrating.
-
 `GET /post/series/{id}` supplies series details and post choices for an existing post. `GET /post/series` serves the same purpose for a new post. Both routes require writing permission, and the existing-post route also checks ownership. The ordinary post submission saves series changes. Series navigation renders on ordinary post pages and in feeds. There is no separate series overview post or reader route.

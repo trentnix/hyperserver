@@ -1,0 +1,34 @@
+:root:is([data-theme="christmas"]:not([data-theme-preview]), [data-theme-preview="christmas"]) {
+  --page-bg: #fffdf9;
+  --theme-background: url('/assets/img/site-bg-christmas.webp');
+  --page-ink: #222b25;
+  --surface: #dcebe1;
+  --panel-bg: #eff4ef;
+  --panel-border: #b9cebf;
+  --muted: #4f6355;
+  --link-color: #8b2637;
+  --link-hover: #621a2a;
+  --button-bg: #234e3b;
+  --button-hover: #316348;
+  --christmas-pine: #174434;
+  --christmas-cranberry: #a52c42;
+  --christmas-ivory: #fff6e8;
+
+  & body { background-color: var(--page-bg); background-blend-mode: multiply; }
+  & .site-sidebar {
+    background: var(--christmas-pine);
+    color: var(--christmas-ivory);
+    box-shadow: inset 0 -5px var(--christmas-cranberry);
+  }
+  & :is(.header-menu, .site-links, .child-toggle.text-button) { background: transparent; border-color: #86a394; }
+  & .site-sidebar :is(.header-sign-in, .child-links a, .child-toggle, .archive-heading, .post-archive li a, .archive-links a) { color: inherit; }
+  & .site-sidebar :is(a, .post-archive li a, .archive-links a):hover { color: #ffd69c; }
+  & .site-sidebar :focus-visible { outline-color: #ffd69c; }
+  & .site-header::after { border-color: #86a394; }
+  & .post-toc { border-inline-start-color: var(--panel-border); }
+  & .post-toc :is(a, strong) { color: var(--link-color); }
+
+  @media (min-width: 1680px) {
+    & .site-sidebar { box-shadow: inset -5px 0 var(--christmas-cranberry); }
+  }
+}

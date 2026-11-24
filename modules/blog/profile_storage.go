@@ -10,11 +10,12 @@ import (
 // GetProfile returns the stored profile or errNotFound if none has been saved.
 func (s *sqliteRepository) GetProfile(ctx context.Context) (Profile, error) {
 	var p Profile
-	err := s.db.QueryRowContext(ctx, "SELECT name, bio, image_url, favicon_url, background_url, version FROM blog_profile_current WHERE id=1").Scan(&p.Name, &p.Bio, &p.ImageURL, &p.FaviconURL, &p.BackgroundURL, &p.Version)
+	err := s.db.QueryRowContext(ctx, "SELECT name, bio, image_url, favicon_url, theme, version FROM blog_profile_current WHERE id=1").
+		Scan(&p.Name, &p.Bio, &p.ImageURL, &p.FaviconURL, &p.Theme, &p.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Profile{}, errNotFound
 	}
-	return p, err
+	return profileWithAvailableTheme(p), err
 }
 
 // SaveProfile saves only against the expected version and records changed content
@@ -53,7 +54,8 @@ func (s *sqliteRepository) SaveProfile(ctx context.Context, p Profile) error {
 	if count == 0 {
 		return errEditConflict
 	}
-	result, err = tx.ExecContext(ctx, `INSERT INTO blog_profile (owner_id,name,bio,image_url,favicon_url,background_url,recorded) VALUES (1,?,?,?,?,?,?)`, p.Name, p.Bio, p.ImageURL, p.FaviconURL, p.BackgroundURL, time.Now().UTC().UnixNano())
+	result, err = tx.ExecContext(ctx, `INSERT INTO blog_profile (owner_id,name,bio,image_url,favicon_url,theme,recorded) VALUES (1,?,?,?,?,?,?)`,
+		p.Name, p.Bio, p.ImageURL, p.FaviconURL, p.Theme, time.Now().UTC().UnixNano())
 	if err != nil {
 		return err
 	}
@@ -91,13 +93,22 @@ func (s *sqliteRepository) ListProfileRevisions(ctx context.Context) ([]ProfileR
 func (s *sqliteRepository) GetProfileRevision(ctx context.Context, id int64) (ProfileRevision, error) {
 	var v ProfileRevision
 	var recorded int64
-	err := s.db.QueryRowContext(ctx, "SELECT id, name, bio, image_url, favicon_url, background_url, recorded FROM blog_profile WHERE id=?", id).
-		Scan(&v.ID, &v.Name, &v.Bio, &v.ImageURL, &v.FaviconURL, &v.BackgroundURL, &recorded)
+	err := s.db.QueryRowContext(ctx, "SELECT id, name, bio, image_url, favicon_url, theme, recorded FROM blog_profile WHERE id=?", id).
+		Scan(&v.ID, &v.Name, &v.Bio, &v.ImageURL, &v.FaviconURL, &v.Theme, &recorded)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = errNotFound
 	}
 	v.RecordedAt = time.Unix(0, recorded).UTC()
+	v.Profile = profileWithAvailableTheme(v.Profile)
 	return v, err
+}
+
+// Old profiles and revisions can still refer to a retired theme.
+func profileWithAvailableTheme(p Profile) Profile {
+	if p.ThemeLabel() == "" {
+		p.Theme = ""
+	}
+	return p
 }
 
 // DeleteProfileRevision atomically protects the latest saved profile, including concurrent saves.

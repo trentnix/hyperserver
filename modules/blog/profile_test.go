@@ -14,20 +14,20 @@ import (
 )
 
 func profileFields(name string) url.Values {
-	return url.Values{"version": {"1"}, "name": {name}, "bio": {"Notes about <software> & life."}, "imageURL": {"/assets/img/profile-default.svg"}, "faviconURL": {"https://example.test/icon.png"}, "backgroundURL": {"/assets/img/site-bg.jpg"}}
+	return url.Values{"version": {"1"}, "name": {name}, "bio": {"Notes about <software> & life."}, "imageURL": {"/assets/img/profile-default.svg"}, "faviconURL": {"https://example.test/icon.png"}}
 }
 
 // TestProfileImageFields preserves draft URLs and supplies neutral picker previews.
 func TestProfileImageFields(t *testing.T) {
 	for _, p := range []Profile{
 		{},
-		{ImageURL: "/images/portrait.png", FaviconURL: "/local-assets/icon.ico", BackgroundURL: "https://example.test/background.jpg"},
+		{ImageURL: "/images/portrait.png", FaviconURL: "/local-assets/icon.ico"},
 	} {
 		fields := (profileEditorData{Profile: p}).ImageFields()
-		values := map[string]string{"imageURL": p.ImageURL, "faviconURL": p.FaviconURL, "backgroundURL": p.BackgroundURL}
-		previews := []string{p.PortraitURL(), p.IconURL(), p.BackgroundURL}
-		if len(fields) != 3 {
-			t.Fatal("expected three profile image fields")
+		values := map[string]string{"imageURL": p.ImageURL, "faviconURL": p.FaviconURL}
+		previews := []string{p.PortraitURL(), p.IconURL()}
+		if len(fields) != 2 {
+			t.Fatal("expected portrait and favicon fields")
 		}
 		for i, field := range fields {
 			value, ok := values[field.Name]
@@ -52,6 +52,7 @@ func TestStoredProfile(t *testing.T) {
 		h.verify(t)
 		oldFeed := h.request("GET", "/rss", nil, false)
 		fields := profileFields(`A & B <writers>`)
+		fields.Set("theme", "thanksgiving")
 		w := h.request("POST", "/profile", fields, hx)
 		status, header := http.StatusSeeOther, "Location"
 		if hx {
@@ -69,10 +70,13 @@ func TestStoredProfile(t *testing.T) {
 		if strings.Contains(h.request("GET", "/", nil, false).Body.String(), "Profile saved") {
 			t.Fatal("profile confirmation replayed on refresh")
 		}
+		if !strings.Contains(home.Body.String(), `data-theme="thanksgiving"`) {
+			t.Fatal("theme did not take effect after save")
+		}
 		for _, path := range []string{"/about", "/projects", loginURL, "/missing-page", "/profile"} {
 			w := h.request("GET", path, nil, false)
 			body := w.Body.String()
-			if !strings.Contains(body, html.EscapeString(fields.Get("name"))) || !strings.Contains(body, html.EscapeString(fields.Get("bio"))) || !strings.Contains(body, `href="https://example.test/icon.png"`) || !strings.Contains(body, "--site-background:") {
+			if !strings.Contains(body, html.EscapeString(fields.Get("name"))) || !strings.Contains(body, html.EscapeString(fields.Get("bio"))) || !strings.Contains(body, `href="https://example.test/icon.png"`) {
 				t.Fatal("stored profile missing or unescaped", path, body)
 			}
 		}
@@ -85,8 +89,54 @@ func TestStoredProfile(t *testing.T) {
 			t.Fatal(err)
 		}
 		h = startHarness(t, cfg)
-		if h.blog.profile.Current().Name != fields.Get("name") {
+		if current := h.blog.profile.Current(); current.Name != fields.Get("name") || current.ThemeID() != "thanksgiving" {
 			t.Fatal("profile did not survive restart")
+		}
+		h.login(t)
+		fields.Set("version", strconv.FormatInt(h.blog.profile.Current().Version, 10))
+		fields.Set("theme", "unknown")
+		requireStatus(t, h.request("POST", "/profile", fields, hx), http.StatusUnprocessableEntity)
+		if h.blog.profile.Current().ThemeID() != "thanksgiving" {
+			t.Fatal("unknown theme changed the site")
+		}
+		fields.Set("theme", "default")
+		requireStatus(t, h.request("POST", "/profile", fields, hx), status)
+		if !strings.Contains(h.request("GET", "/", nil, false).Body.String(), `data-theme="default"`) {
+			t.Fatal("default theme could not be restored")
+		}
+	}
+}
+
+func TestRetiredProfileThemes(t *testing.T) {
+	h := newHarness(t)
+	store := h.blog.profileStore
+	profile := h.blog.profile.Current()
+	for _, theme := range []string{"editorial", "notebook"} {
+		// Seed a profile revision as the older application would have stored it.
+		profile.Theme = theme
+		if err := store.SaveProfile(t.Context(), profile); err != nil {
+			t.Fatal(err)
+		}
+		profile.Version++
+	}
+	cfg := *h.app.Config
+	if err := h.app.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	h = startHarness(t, cfg)
+	want := profile
+	want.Theme = ""
+	if got := h.blog.profile.Current(); got != want {
+		t.Fatalf("current profile = %+v, want %+v", got, want)
+	}
+	versions, err := h.blog.profileStore.ListProfileRevisions(t.Context())
+	if err != nil || len(versions) != 3 {
+		t.Fatalf("profile revisions = %v, error = %v", versions, err)
+	}
+	for _, version := range versions[:2] {
+		revision, err := h.blog.profileStore.GetProfileRevision(t.Context(), version.ID)
+		if err != nil || revision.Name != want.Name || revision.ThemeID() != "default" {
+			t.Fatalf("retired theme revision = %+v, error = %v", revision, err)
 		}
 	}
 }
@@ -102,7 +152,7 @@ func TestProfileValidation(t *testing.T) {
 		{"name", " "}, {"name", strings.Repeat("x", 241)}, {"name", string([]byte{0xff})},
 		{"bio", strings.Repeat("x", 501)}, {"bio", string([]byte{0xff})},
 		{"imageURL", "javascript:alert(1)"}, {"faviconURL", "//other.test/icon"},
-		{"backgroundURL", "http://other.test/background"}, {"backgroundURL", "https://user:pass@other.test/image"},
+		{"imageURL", "http://other.test/portrait"}, {"faviconURL", "https://user:pass@other.test/icon"},
 		{"imageURL", strings.Repeat("x", 2049)},
 	} {
 		for _, hx := range []bool{false, true} {
@@ -129,14 +179,14 @@ func TestProfileValidation(t *testing.T) {
 		t.Fatal("validation changed stored profile", err)
 	}
 	for _, image := range []string{"", "/local-assets/icon.ico", "https://example.test/image.png"} {
-		p := Profile{Name: "Example Author", ImageURL: image, FaviconURL: image, BackgroundURL: image}
+		p := Profile{Name: "Example Author", ImageURL: image, FaviconURL: image}
 		if err := p.validate(); err != nil {
 			t.Fatal(err)
 		}
 	}
 	requireStatus(t, h.request("POST", "/profile", url.Values{"name": {"Minimal"}, "version": {strconv.FormatInt(original.Version, 10)}}, false), http.StatusSeeOther)
 	p := h.blog.profile.Current()
-	if p.Bio != "" || p.BackgroundURL != "" || p.PortraitURL() != "/assets/img/profile-default.svg" || p.IconURL() != "/assets/img/favicon.svg" {
+	if p.Bio != "" || p.PortraitURL() != "/assets/img/profile-default.svg" || p.IconURL() != "/assets/img/favicon.svg" {
 		t.Fatal("clearing optional fields did not restore defaults")
 	}
 }
@@ -336,7 +386,7 @@ func TestFreshProfile(t *testing.T) {
 			t.Fatal("missing fresh-install default", want)
 		}
 	}
-	for _, unwanted := range []string{"Trent Nix", "technologist", "--site-background:"} {
+	for _, unwanted := range []string{"Trent Nix", "technologist"} {
 		if strings.Contains(body, unwanted) {
 			t.Fatal("fresh profile retained personal content", unwanted)
 		}

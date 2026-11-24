@@ -458,7 +458,7 @@ func newHarnessWithRecentPostCount(t *testing.T, count int) *harness {
 	if err := h.blog.access.setup.finish(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.blog.persistProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software.", BackgroundURL: "/assets/img/site-bg.jpg"}); err != nil {
+	if err := h.blog.persistProfile(t.Context(), Profile{Name: "Trent Nix", Bio: "Trent is a technologist interested in building and delivering better software."}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := savePageFixture(h.blog.pageStore, t.Context(), Page{Slug: "about", Title: "About Me", DisplayOrder: new(0), Published: true}); err != nil {

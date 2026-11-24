@@ -1,0 +1,21 @@
+:root:is([data-theme="thanksgiving"]:not([data-theme-preview]), [data-theme-preview="thanksgiving"]) {
+  --page-bg: #fffaf2;
+  --theme-background: url('/assets/img/site-bg-thanksgiving.webp');
+  --page-ink: #30241d;
+  --surface: #f4e7d5;
+  --panel-bg: #f8eee0;
+  --panel-border: #d8ba98;
+  --muted: #695344;
+  --link-color: #773c21;
+  --link-hover: #512913;
+  --button-bg: #6d3d24;
+  --button-hover: #874a2c;
+  --season-accent: #9d502b;
+
+  & body { background-color: var(--page-bg); background-blend-mode: multiply; }
+  & :is(.site-sidebar, .header-menu) { background: var(--surface); }
+  & .site-sidebar { box-shadow: inset 0 3px var(--season-accent); }
+  & .site-header::after { border-color: color-mix(in srgb, var(--season-accent) 55%, var(--surface)); }
+  & .post-toc { border-inline-start-color: var(--panel-border); }
+  & .post-toc :is(a, strong) { color: var(--link-color); }
+}

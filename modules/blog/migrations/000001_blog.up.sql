@@ -15,6 +15,17 @@ CREATE TABLE blog_posts (
  preview_image TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '', recorded INTEGER NOT NULL, content_path TEXT NOT NULL,
  UNIQUE (owner_id, id)
 );
+CREATE TABLE blog_collections (
+ id TEXT PRIMARY KEY, title TEXT NOT NULL,
+ author_id TEXT NOT NULL,
+ version INTEGER NOT NULL DEFAULT 1 CHECK (version>0)
+);
+CREATE TABLE blog_collection_content (
+ collection_id TEXT NOT NULL REFERENCES blog_collections(id) ON DELETE CASCADE,
+ post_id TEXT NOT NULL PRIMARY KEY REFERENCES blog_current_posts(id) ON DELETE CASCADE,
+ position INTEGER NOT NULL CHECK (position>=0),
+ UNIQUE (collection_id, position)
+);
 CREATE TABLE blog_current_pages (
  id TEXT PRIMARY KEY, version_id INTEGER NOT NULL,
  slug TEXT NOT NULL UNIQUE, published INTEGER NOT NULL CHECK (published IN (0, 1)),
@@ -51,7 +62,7 @@ CREATE TABLE blog_profile (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  owner_id INTEGER NOT NULL REFERENCES blog_current_profile(id) ON DELETE CASCADE,
  name TEXT NOT NULL, bio TEXT NOT NULL, image_url TEXT NOT NULL,
- favicon_url TEXT NOT NULL, background_url TEXT NOT NULL, recorded INTEGER NOT NULL,
+ favicon_url TEXT NOT NULL, theme TEXT NOT NULL DEFAULT '', recorded INTEGER NOT NULL,
  UNIQUE (owner_id, id)
 );
 CREATE TABLE blog_post_media (
@@ -89,5 +100,5 @@ CREATE VIEW blog_page_current AS
  c.ever_published, c.version, p.tags
  FROM blog_current_pages c JOIN blog_pages p ON p.id=c.version_id AND p.owner_id=c.id;
 CREATE VIEW blog_profile_current AS
- SELECT c.id, c.version_id, p.name, p.bio, p.image_url, p.favicon_url, p.background_url, c.version
+ SELECT c.id, c.version_id, p.name, p.bio, p.image_url, p.favicon_url, p.theme, c.version
  FROM blog_current_profile c JOIN blog_profile p ON p.id=c.version_id AND p.owner_id=c.id;

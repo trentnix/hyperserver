@@ -3,6 +3,11 @@ import './component-editors.js';
 import './series-editor.js';
 import './editor-drafts.js';
 
+document.addEventListener('click', event => {
+  const preview = event.target.closest('[data-preview-profile-theme]');
+  if (preview) window.open('/?preview-theme=' + encodeURIComponent(preview.form.elements.theme.value), '_blank', 'noopener');
+});
+
 // Browser Back can restore a whole document without contacting the server.
 // HTMX history already fetches fresh content. Refresh native restored lists too.
 window.addEventListener('pageshow', event => {

@@ -20,14 +20,9 @@ const blogVersionSchema = `CREATE TABLE blog_schema_version (version uint64, dir
 // only this schema. Existing storage must migrate offline.
 //
 //go:embed migrations/000001_blog.up.sql
-var blogBaselineSchema string
+var blogSchema string
 
-//go:embed migrations/000002_collections.up.sql
-var blogCollectionSchema string
-
-var blogSchema = blogBaselineSchema + "\n" + blogCollectionSchema
-
-const requiredBlogSchemaVersion = 2
+const requiredBlogSchemaVersion = 1
 
 // sqliteRepository stores blog content and the site profile.
 type sqliteRepository struct {
@@ -109,7 +104,7 @@ func checkBlogVersion(ctx context.Context, tx *sql.Tx) error {
 		return fmt.Errorf("blog schema version %d is dirty: repair the failed migration or restore a compatible backup before starting", version.Int64)
 	}
 	if version.Int64 != requiredBlogSchemaVersion {
-		return fmt.Errorf("unsupported blog schema version %d: this application requires version %d; apply compatible migrations before starting", version.Int64, requiredBlogSchemaVersion)
+		return fmt.Errorf("unsupported blog schema version %d: this application requires version %d; use a compatible database before starting", version.Int64, requiredBlogSchemaVersion)
 	}
 	return nil
 }

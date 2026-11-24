@@ -64,7 +64,7 @@ func (m *module) profileHistory(w http.ResponseWriter, r *http.Request) {
 		m.storageError(w, r, err)
 		return
 	}
-	missing, err := m.missingMedia(r.Context(), []string{selected.ImageURL, selected.FaviconURL, selected.BackgroundURL})
+	missing, err := m.missingMedia(r.Context(), []string{selected.ImageURL, selected.FaviconURL})
 	if err != nil {
 		m.storageError(w, r, err)
 		return

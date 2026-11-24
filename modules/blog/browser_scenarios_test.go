@@ -94,9 +94,9 @@ func profileHistoryBrowserHarness(t *testing.T) *harness {
 	for i := range 12 {
 		p := h.blog.profile.Current()
 		p.Name, p.Bio = fmt.Sprintf("Profile %02d", i), "A saved biography."
-		p.ImageURL, p.FaviconURL, p.BackgroundURL = "", "", ""
+		p.ImageURL, p.FaviconURL = "", ""
 		if i == 0 {
-			p.ImageURL, p.FaviconURL, p.BackgroundURL = "/images/"+image.ID, "/images/"+image.ID, "/images/"+image.ID
+			p.ImageURL, p.FaviconURL = "/images/"+image.ID, "/images/"+image.ID
 		}
 		if err := h.blog.persistProfile(t.Context(), p); err != nil {
 			t.Fatal(err)

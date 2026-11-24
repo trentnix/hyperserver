@@ -25,7 +25,7 @@ Verification checks the inventory, file checksums, SQLite integrity, foreign key
 
 ## Compatibility
 
-This maintenance binary supports ZIP archive format **1** with blog schema **2**, account schema **1**, and SQLite session schema **1**. Each database role must be present exactly once, including when roles share a snapshot. Custom session table names are supported. Every session version table in a session snapshot must have a supported version.
+This maintenance binary supports ZIP archive format **1** with the [current blog schema **1**](readme.md#database-migrations), account schema **1**, and SQLite session schema **1**. Each database role must be present exactly once, including when roles share a snapshot. Custom session table names are supported. Every session version table in a session snapshot must have a supported version.
 
 Missing, malformed, duplicate, dirty, older, or newer schema version markers fail verification. A valid checksum or SQLite integrity check alone does not establish recovery compatibility.
 
@@ -33,7 +33,7 @@ Use the maintenance binary for the release you intend to recover. If a backup ha
 
 The archive format version is independent of database schema versions. A database migration does not by itself require a new ZIP format. When adding a migration, update the recovery compatibility policy and its tests deliberately. Once deployed, existing migration files must remain unchanged.
 
-Series metadata is included in database snapshots. To recover a version 1 backup, use the matching older maintenance binary, then apply [migration 2](readme.md#database-migrations) offline. Earlier development layouts remain unsupported.
+Database snapshots include series and profile themes. Use the maintenance binary from the matching release to recover earlier development layouts.
 
 Verification reads only temporary snapshot copies. Failed verification leaves the archive and existing installation unchanged. A failed backup is not published. Recovery remains manual, and application startup performs its normal schema validation. Verification does not prove that archived credentials, configuration, or session payloads work with another release. Confirm those during staged recovery before switching traffic.
 

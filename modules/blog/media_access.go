@@ -24,7 +24,7 @@ type mediaAccessRepository interface {
 func (m *module) publicMedia(ctx context.Context, id string) (bool, error) {
 	references := m.mediaLookupReferences(id)
 	profile := m.profile.Current()
-	for _, raw := range []string{profile.ImageURL, profile.FaviconURL, profile.BackgroundURL} {
+	for _, raw := range []string{profile.ImageURL, profile.FaviconURL} {
 		if ref := mediaReferenceURL(raw, "/"); ref != "" && slices.Contains(references, ref) {
 			return true, nil
 		}

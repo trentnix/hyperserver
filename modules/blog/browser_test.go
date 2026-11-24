@@ -383,7 +383,7 @@ func TestBrowserDraftRecovery(t *testing.T) {
 	}
 }
 
-// TestBrowserProfile checks profile edits across the header, favicon, and background.
+// TestBrowserProfile checks profile edits across the header, favicon, and theme.
 func TestBrowserProfile(t *testing.T) {
 	browser := os.Getenv("HS_TEST_FIREFOX")
 	if browser == "" {

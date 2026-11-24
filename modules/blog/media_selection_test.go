@@ -33,7 +33,7 @@ func TestMediaUsageSelection(t *testing.T) {
 		}
 	}
 	for _, profile := range []Profile{
-		{Name: "Old profile", ImageURL: "https://old.example/images/%61" + ids[0][1:] + "?size=1#portrait", FaviconURL: "/images/" + ids[0], BackgroundURL: "//old.example/images/" + ids[2]},
+		{Name: "Old profile", ImageURL: "https://old.example/images/%61" + ids[0][1:] + "?size=1#portrait", FaviconURL: "/images/" + ids[0]},
 		{Name: "Current profile", ImageURL: "//old.example/images/" + ids[1], Version: 1},
 	} {
 		if err := store.SaveProfile(t.Context(), profile); err != nil {
@@ -44,7 +44,7 @@ func TestMediaUsageSelection(t *testing.T) {
 	if err != nil || len(all) != len(ids) {
 		t.Fatalf("all usage = %+v, %v", all, err)
 	}
-	if all[ids[0]].Current || len(all[ids[0]].History) != 3 || !all[ids[1]].Current || len(all[ids[2]].History) != 3 {
+	if all[ids[0]].Current || len(all[ids[0]].History) != 3 || !all[ids[1]].Current || len(all[ids[2]].History) != 2 {
 		t.Fatalf("fixture lost current or historical references: %+v", all)
 	}
 	missing := strings.Repeat("d", 64) + ".png"

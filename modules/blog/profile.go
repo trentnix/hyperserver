@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -16,10 +17,10 @@ import (
 	"github.com/trentnix/hyperserver/pkg/util"
 )
 
-// Profile is the stored public identity used by shared layouts and RSS.
+// Profile is the stored public identity and appearance used by shared layouts.
 // Image URLs can be local absolute paths or HTTPS URLs. Empty uses neutral defaults.
 type Profile struct {
-	Name, Bio, ImageURL, FaviconURL, BackgroundURL string
+	Name, Bio, ImageURL, FaviconURL, Theme string
 	// Version is the expected edit token. Zero creates the first stored profile.
 	Version int64
 }
@@ -32,7 +33,7 @@ func (p Profile) sameContent(other Profile) bool {
 	return p == other
 }
 
-// validate rejects incomplete text and unsafe image URLs before saving.
+// validate rejects incomplete text, unknown themes, and unsafe image URLs.
 func (p Profile) validate() error {
 	if strings.TrimSpace(p.Name) == "" || !utf8.ValidString(p.Name) || utf8.RuneCountInString(p.Name) > 240 {
 		return writingFieldError{errors.New("Enter a name of 1–240 characters."), "name"}
@@ -40,10 +41,12 @@ func (p Profile) validate() error {
 	if !utf8.ValidString(p.Bio) || utf8.RuneCountInString(p.Bio) > 500 {
 		return writingFieldError{errors.New("Keep the short bio under 500 characters."), "bio"}
 	}
+	if p.ThemeLabel() == "" {
+		return writingFieldError{errors.New("Choose an available theme."), "theme"}
+	}
 	for _, image := range []struct{ name, value, field string }{
 		{"Portrait", p.ImageURL, "imageURL"},
 		{"Favicon", p.FaviconURL, "faviconURL"},
-		{"Background", p.BackgroundURL, "backgroundURL"},
 	} {
 		if !utf8.ValidString(image.value) || len(image.value) > 2048 {
 			return writingFieldError{errors.New(image.name + " URL must contain at most 2,048 UTF-8 bytes."), image.field}
@@ -57,6 +60,23 @@ func (p Profile) validate() error {
 		}
 	}
 	return nil
+}
+
+type siteTheme struct{ ID, Label string }
+
+func (Profile) Themes() []siteTheme {
+	return []siteTheme{{"default", "Default"}, {"thanksgiving", "Thanksgiving"}, {"christmas", "Christmas"}}
+}
+
+func (p Profile) ThemeID() string { return cmp.Or(p.Theme, "default") }
+
+func (p Profile) ThemeLabel() string {
+	for _, theme := range p.Themes() {
+		if theme.ID == p.ThemeID() {
+			return theme.Label
+		}
+	}
+	return ""
 }
 
 // PortraitURL selects the stored profile image or the bundled neutral image.
@@ -122,7 +142,7 @@ type profileImageField struct {
 	Missing                        bool
 }
 
-// PreviewURL shows the selected image, a neutral default, or no background.
+// PreviewURL shows the selected image or its neutral default.
 func (f profileImageField) PreviewURL() string {
 	if f.Missing {
 		return ""
@@ -138,7 +158,6 @@ func (p profileEditorData) ImageFields() []profileImageField {
 	fields := []profileImageField{
 		{Name: "imageURL", Label: "Portrait", Value: p.ImageURL, DefaultURL: (Profile{}).PortraitURL()},
 		{Name: "faviconURL", Label: "Favicon", Value: p.FaviconURL, DefaultURL: (Profile{}).IconURL()},
-		{Name: "backgroundURL", Label: "Background", Value: p.BackgroundURL},
 	}
 	for i := range fields {
 		fields[i].Missing = p.MissingImages[mediaReferenceURL(fields[i].Value, "/")]
@@ -170,11 +189,16 @@ func (m *module) profileEditor(w http.ResponseWriter, r *http.Request) {
 func (m *module) saveProfile(w http.ResponseWriter, r *http.Request) {
 	parseError := form.Parse(r)
 	p := Profile{
-		Name:          strings.TrimSpace(r.PostForm.Get("name")),
-		Bio:           r.PostForm.Get("bio"),
-		ImageURL:      strings.TrimSpace(r.PostForm.Get("imageURL")),
-		FaviconURL:    strings.TrimSpace(r.PostForm.Get("faviconURL")),
-		BackgroundURL: strings.TrimSpace(r.PostForm.Get("backgroundURL")),
+		Name:       strings.TrimSpace(r.PostForm.Get("name")),
+		Bio:        r.PostForm.Get("bio"),
+		ImageURL:   strings.TrimSpace(r.PostForm.Get("imageURL")),
+		FaviconURL: strings.TrimSpace(r.PostForm.Get("faviconURL")),
+		Theme:      r.PostForm.Get("theme"),
+	}
+	if !r.PostForm.Has("theme") {
+		p.Theme = m.profile.Current().Theme
+	} else if p.Theme == "default" {
+		p.Theme = ""
 	}
 	if parseError != nil {
 		m.renderProfileEditor(w, r, p, parseError.Message, parseError.StatusCode)
@@ -222,7 +246,7 @@ func (m *module) saveProfileContent(w http.ResponseWriter, r *http.Request, p Pr
 			logger.LogRequestError(r, errors.New("profile saved but its notification could not be saved"))
 		}
 	}
-	// Reload the whole document so the header, favicon, and background update together.
+	// Reload the whole document so the header, favicon, and theme update together.
 	util.RedirectToURL(w, r, destination)
 }
 
@@ -242,7 +266,7 @@ func (m *module) persistProfile(ctx context.Context, p Profile) error {
 
 	m.profile.saveMu.Lock()
 	defer m.profile.saveMu.Unlock()
-	for _, image := range []struct{ field, value string }{{"imageURL", p.ImageURL}, {"faviconURL", p.FaviconURL}, {"backgroundURL", p.BackgroundURL}} {
+	for _, image := range []struct{ field, value string }{{"imageURL", p.ImageURL}, {"faviconURL", p.FaviconURL}} {
 		if err := m.checkMediaReferences(ctx, []string{image.value}); err != nil {
 			return writingFieldError{err, image.field}
 		}
@@ -286,7 +310,7 @@ func (m *module) renderProfileEditor(w http.ResponseWriter, r *http.Request, p P
 				}
 			}
 		}
-		missing, err := m.missingMedia(r.Context(), []string{p.ImageURL, p.FaviconURL, p.BackgroundURL})
+		missing, err := m.missingMedia(r.Context(), []string{p.ImageURL, p.FaviconURL})
 		if err != nil && status < 400 {
 			m.storageError(w, r, err)
 			return

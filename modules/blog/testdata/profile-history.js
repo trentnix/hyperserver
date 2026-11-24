@@ -55,7 +55,7 @@
       assert(document.querySelector('.history-page') === shell, 'Selecting a version replaced the history page.');
       assert(Math.abs(window.scrollY - scroll) < 2, 'Selecting a profile version changed scroll position.');
       assert(selected.getAttribute('aria-current') === 'true', 'Selected revision is not identified.');
-      assert(preview.querySelectorAll('.missing-image').length === 3, 'History must explain deleted images for all three roles.');
+      assert(preview.querySelectorAll('.missing-image').length === 2, 'History must explain deleted portraits and favicons.');
       assert(preview.querySelector('.form-actions a').textContent === 'Edit' && preview.querySelector('button[type=submit]').textContent === 'Restore this version', 'Previous versions must offer Edit and Restore.');
       assert(Array.from(preview.querySelectorAll('.form-actions button, .form-actions a'), el => el.textContent).join('|') === 'Restore this version|Edit|Delete revision', 'Profile history actions must place Restore first and Delete last.');
       assert(document.querySelector('.profile-name').textContent === 'Profile 11', 'Preview changed the public profile.');
@@ -70,7 +70,7 @@
       assert(form.elements.version.value === '13', 'History reused an old edit token.');
       assert(document.querySelector('.profile-name').textContent === 'Profile 11', 'Loading history published it.');
       assert(document.querySelector('.revision-notice').textContent.includes('Save to apply'), 'Editor lacks an unsaved-history notice.');
-      assert(form.querySelectorAll('[data-image-missing]').length === 3, 'Editor must mark missing images.');
+      assert(form.querySelectorAll('[data-image-missing]').length === 2, 'Editor must mark missing images.');
       form.requestSubmit();
       await wait(() => document.querySelector('#profile-errors').textContent.includes('no longer available'));
       for (const reset of form.querySelectorAll('[data-image-reset]')) reset.click();

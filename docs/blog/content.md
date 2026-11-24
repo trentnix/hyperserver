@@ -36,7 +36,9 @@ Draft pages and descendants of draft parents return 404 to visitors. Administrat
 
 ## Site Profile
 
-Edit the name, short bio, portrait, favicon, and background through **Site Profile**. Changes are stored in SQLite and take effect without restarting. Clearing images restores the neutral portrait/favicon or removes the background. The administrator email remains in module configuration. Saving returns to the site root with a brief confirmation.
+Edit the name, short bio, portrait, and favicon through **Site Profile**. Changes take effect when you save. Clearing an image restores its default. The administrator email comes from module configuration. Saving returns to the site root with a brief confirmation.
+
+Choose **Default**, **Thanksgiving**, or **Christmas** under **Theme**. The theme supplies the page colors and background image. Choose **Preview theme** to try it in a new tab. The preview follows you as you browse that tab. Choose **Exit preview** to return to the site's theme. Choose **Save profile** to apply the selected theme site-wide. Profile history includes the theme.
 
 Images can be uploaded, selected from Media, or supplied as local absolute paths or HTTPS URLs. Use PNG for uploaded favicons. Upload controls require JavaScript. See [images](media.md) for privacy and local-file setup.
 

@@ -67,7 +67,9 @@ Posts, pages, and profiles store revisions separately from current identity and 
 
 ## Database migrations
 
-Fresh storage bootstraps blog schema 2 from the embedded [baseline](../../modules/blog/migrations/000001_blog.up.sql) and [collections migration](../../modules/blog/migrations/000002_collections.up.sql). Existing databases must have clean schema 2 and pass structural validation. Startup does not upgrade them. Version 1 databases using the current baseline can apply migration 2, which preserves posts. Earlier development schemas remain unsupported.
+Fresh storage bootstraps blog schema 1 from [the initial migration](../../modules/blog/migrations/000001_blog.up.sql). It includes series and profile themes. Startup checks both the schema version and the database structure.
+
+The consolidated baseline requires a fresh blog database when replacing an older development installation. Stop all writers and archive the old database before configuring a fresh database path. Keep separately configured account and session databases to preserve logins.
 
 Stop all writers and verify a [backup](backup.md) before migrating. Install the CLI and follow the shared [migration precautions](../storage.md#account-schema-migrations), using the blog path and version table:
 
@@ -76,7 +78,7 @@ migrate -path modules/blog/migrations \
   -database 'sqlite3://file:///absolute/path/blog.db?x-migrations-table=blog_schema_version&_foreign_keys=on' up
 ```
 
-Downgrading migration 2 deletes series data. Reversing the baseline deletes all blog content and ownership metadata. Accounts and sessions have independent version tables. Never change a version marker to bypass validation. Deployed migrations must remain immutable. Add numbered migration pairs and update bootstrap, validation, repositories, and backup compatibility together.
+Reversing the baseline deletes all blog content and ownership metadata. Accounts and sessions have independent version tables. Never change a version marker to bypass validation. Add new changes as numbered migration pairs and update bootstrap, validation, repositories, and backup compatibility together.
 
 ## Public deployment
 

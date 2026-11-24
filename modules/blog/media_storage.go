@@ -64,7 +64,6 @@ func (s *sqliteRepository) ReferencedMedia(ctx context.Context, ids ...string) (
 UNION SELECT i.url, '/pages/update/' || p.id, p.title FROM page_images i JOIN blog_page_current p ON p.version_id=i.version_id
 UNION SELECT image_url, '/profile', 'Site portrait' FROM blog_profile_current
 UNION SELECT favicon_url, '/profile', 'Site favicon' FROM blog_profile_current
-UNION SELECT background_url, '/profile', 'Site background' FROM blog_profile_current
 ORDER BY location, title, url`, args...)
 	if err != nil {
 		return nil, err
@@ -126,20 +125,20 @@ ORDER BY recorded DESC, kind, owner_id, revision_id DESC`, args...)
 		return nil, err
 	}
 
-	rows, err = s.db.QueryContext(ctx, "SELECT id, name, image_url, favicon_url, background_url, recorded FROM blog_profile ORDER BY id DESC")
+	rows, err = s.db.QueryContext(ctx, "SELECT id, name, image_url, favicon_url, recorded FROM blog_profile ORDER BY id DESC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var number, recorded int64
-		var name, portrait, favicon, background string
-		if err := rows.Scan(&number, &name, &portrait, &favicon, &background, &recorded); err != nil {
+		var name, portrait, favicon string
+		if err := rows.Scan(&number, &name, &portrait, &favicon, &recorded); err != nil {
 			return nil, err
 		}
 		revision := mediaRevision{URL: "/profile/history?revision=" + strconv.FormatInt(number, 10), Title: "Site Profile — " + name, RecordedAt: time.Unix(0, recorded).UTC()}
 		seen := make(map[string]bool)
-		for _, ref := range []string{portrait, favicon, background} {
+		for _, ref := range []string{portrait, favicon} {
 			if id := referencedMediaID(ref); selected(id) && !seen[id] {
 				usage := used[id]
 				usage.History = append(usage.History, revision)
