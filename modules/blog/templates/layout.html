@@ -9,7 +9,9 @@
   <link rel="icon" href="{{ .LayoutData.Profile.IconURL }}">
   <link rel="alternate" type="application/rss+xml" title="{{ .LayoutData.Profile.Name }}" href="/rss">
   <link rel="stylesheet" href="/assets/css/blog.css">
+  {{ if .LayoutData.Admin }}
   {{ range .LayoutData.Profile.Themes }}<link rel="stylesheet" href="/assets/css/themes/{{ .ID }}.css" data-blog-theme="{{ .ID }}">{{ end }}
+  {{ else }}<link rel="stylesheet" href="/assets/css/themes/{{ .LayoutData.Profile.ThemeID }}.css">{{ end }}
   <link rel="preload" href="/assets/fonts/source-sans-3.woff2" as="font" type="font/woff2" crossorigin>
   <script src="/assets/js/startup.js"></script>
   {{ if .LayoutData.Writer }}<link rel="stylesheet" href="/assets/lib/easymde/easymde.min.css">
@@ -29,10 +31,10 @@
 </head>
 <body>
   <a class="skip-link" href="#article-content">Skip to content</a>
-  <div class="theme-preview">
+  {{ if .LayoutData.Admin }}<div class="theme-preview">
     <span>Theme preview</span>
-    <a href="?preview-theme=off" hx-boost="false">Exit preview</a>
-  </div>
+    <button type="button" class="text-button" data-exit-theme-preview>Exit preview</button>
+  </div>{{ end }}
   {{ if .LayoutData.Setup }}
   {{ template "blog.setupPanel" . }}
   {{ else }}

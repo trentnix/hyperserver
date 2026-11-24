@@ -1,11 +1,3 @@
 :root:is([data-theme="default"]:not([data-theme-preview]), [data-theme-preview="default"]) {
-  --muted: #626975;
-  --surface: #f3f4f8;
-  --page-bg: #ffffff;
   --theme-background: url('/assets/img/site-bg.jpg');
-  --page-ink: #212529;
-  --panel-bg: #f4f6f9;
-  --panel-border: #dce2e9;
-  --link-color: #000064;
-  --link-hover: #245b85;
 }

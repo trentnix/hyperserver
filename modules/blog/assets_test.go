@@ -37,7 +37,11 @@ func TestThemeLinkContrast(t *testing.T) {
 	}
 	for _, theme := range (Profile{}).Themes() {
 		t.Run(theme.ID, func(t *testing.T) {
-			css, err := blogModuleFS.ReadFile("static/css/themes/" + theme.ID + ".css")
+			filename := "static/css/themes/" + theme.ID + ".css"
+			if theme.ID == "default" {
+				filename = "static/css/blog.css"
+			}
+			css, err := blogModuleFS.ReadFile(filename)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -49,12 +53,14 @@ func TestThemeLinkContrast(t *testing.T) {
 				}
 				return match[1]
 			}
-			background := color("--page-bg")
-			for _, property := range []string{"--link-color", "--link-hover"} {
-				foreground := color(property)
-				ratio := (luminance(t, background) + .05) / (luminance(t, foreground) + .05)
-				if ratio < 4.5 {
-					t.Errorf("#%s has %.2f:1 contrast against #%s, need at least 4.5:1", foreground, ratio, background)
+			for _, surface := range []string{"--page-bg", "--panel-bg", "--surface"} {
+				background := color(surface)
+				for _, property := range []string{"--link-color", "--link-hover"} {
+					foreground := color(property)
+					ratio := (luminance(t, background) + .05) / (luminance(t, foreground) + .05)
+					if ratio < 4.5 {
+						t.Errorf("#%s has %.2f:1 contrast against #%s, need at least 4.5:1", foreground, ratio, background)
+					}
 				}
 			}
 		})

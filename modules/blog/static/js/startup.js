@@ -3,10 +3,11 @@
 document.documentElement.classList.add('js');
 
 // Apply a tab's theme preview before the body paints.
-{
+if (document.querySelector('link[data-blog-theme]')) {
+  const root = document.documentElement;
+  const key = 'preview-theme';
   const themes = new Set(Array.from(document.querySelectorAll('link[data-blog-theme]'), link => link.dataset.blogTheme));
   function applyThemePreview() {
-    const key = 'preview-theme';
     const url = new URL(location.href);
     const requested = url.searchParams.get(key);
     let preview = requested;
@@ -18,22 +19,31 @@ document.documentElement.classList.add('js');
       } else {
         preview = sessionStorage.getItem(key);
       }
-      if (themes.has(requested) || requested === 'off') {
-        url.searchParams.delete(key);
-        history.replaceState(history.state, '', url);
-      }
     } catch {
       // An explicit preview also works when tab storage is unavailable.
     }
+    if (themes.has(requested) || requested === 'off') {
+      url.searchParams.delete(key);
+      history.replaceState(history.state, '', url);
+    }
     if (themes.has(preview)) {
-      document.documentElement.dataset.themePreview = preview;
+      root.dataset.themePreview = preview;
     } else {
-      delete document.documentElement.dataset.themePreview;
+      delete root.dataset.themePreview;
     }
   }
   applyThemePreview();
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) applyThemePreview();
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('[data-exit-theme-preview]')) return;
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      // Reloading also drops a preview that could not be stored.
+    }
+    location.reload();
   });
 }
 

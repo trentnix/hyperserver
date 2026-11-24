@@ -1,10 +1,27 @@
 @font-face { font-family: 'Source Sans 3'; src: url('../fonts/source-sans-3.woff2') format('woff2'); font-style: normal; font-weight: 200 900; font-display: optional; }
 @font-face { font-family: 'Source Sans 3'; src: url('../fonts/source-sans-3-italic.woff2') format('woff2'); font-style: italic; font-weight: 200 900; font-display: optional; }
-:root { --min-page-width: 320px; --button-bg: #343d4b; --button-hover: #495569; color-scheme: light; font-family: 'Source Sans 3', sans-serif; color: var(--page-ink); background: var(--page-bg); }
+:root {
+  --min-page-width: 320px;
+  --page-bg: #ffffff;
+  --page-ink: #212529;
+  --surface: #f3f4f8;
+  --panel-bg: #f4f6f9;
+  --panel-border: #dce2e9;
+  --muted: #626975;
+  --link-color: #000064;
+  --link-hover: #245b85;
+  --button-bg: #343d4b;
+  --button-hover: #495569;
+  color-scheme: light;
+  font-family: 'Source Sans 3', sans-serif;
+  color: var(--page-ink);
+  background: var(--page-bg);
+}
 
 .theme-preview { display: none; }
 :root[data-theme-preview] .theme-preview { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0 16px; padding-inline: 12px; border-block-end: 1px solid var(--panel-border); background: var(--surface); font-size: .875rem; font-weight: 600; }
-.theme-preview a { display: inline-flex; align-items: center; min-height: 44px; color: var(--link-color); text-decoration: underline; text-underline-offset: .16em; }
+.theme-preview .text-button { min-height: 44px; color: var(--link-color); }
+.theme-preview .text-button:hover { color: var(--link-hover); }
 .theme-controls { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; }
 .theme-controls select { flex: 1 1 9rem; width: auto; max-width: 14rem; min-height: 44px; }
 .theme-controls button { display: none; min-height: 44px; }
@@ -55,8 +72,9 @@ body:has(> .setup-panel) { background-image: none; }
 .menu-toggle:not([hidden]), .child-toggle:not([hidden]) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .menu-toggle::-webkit-details-marker, .child-toggle::-webkit-details-marker { display: none; }
 .portrait { display: block; width: 100%; aspect-ratio: 1; height: auto; object-fit: cover; border-radius: 50%; }
-.profile-name { font-size: 1.3em; font-weight: 700; }
-.profile-details p { font-size: .9em; margin: 0 0 5px; }
+.profile-details { display: grid; justify-items: start; gap: 4px; overflow-wrap: anywhere; }
+.profile-name { font-size: 1.3em; font-weight: 700; line-height: 1.2; }
+.profile-details p { font-size: .9em; line-height: 1.35; margin: 0; }
 .site-links { line-height: 1.4; overflow-wrap: anywhere; text-align: left; }
 .site-links > li + li { margin-top: 6px; }
 .site-links a { display: block; padding-block: 6px; }

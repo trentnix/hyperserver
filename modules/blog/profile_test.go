@@ -141,6 +141,38 @@ func TestRetiredProfileThemes(t *testing.T) {
 	}
 }
 
+func TestThemePreviewPermissions(t *testing.T) {
+	h := newHarness(t)
+	profile := h.blog.profile.Current()
+	profile.Theme = "thanksgiving"
+	if err := h.blog.persistProfile(t.Context(), profile); err != nil {
+		t.Fatal(err)
+	}
+	check := func(t *testing.T, allowed bool) {
+		t.Helper()
+		w := h.request("GET", "/?preview-theme=christmas", nil, false)
+		requireStatus(t, w, http.StatusOK)
+		body := w.Body.String()
+		if !strings.Contains(body, `data-theme="thanksgiving"`) || !strings.Contains(body, `href="/assets/css/themes/thanksgiving.css"`) {
+			t.Fatal("request did not render the saved theme")
+		}
+		for _, marker := range []string{`data-blog-theme="default"`, `href="/assets/css/themes/christmas.css"`, "data-exit-theme-preview"} {
+			if present := strings.Contains(body, marker); present != allowed {
+				t.Errorf("preview marker %q present = %t, want %t", marker, present, allowed)
+			}
+		}
+	}
+	t.Run("signed out", func(t *testing.T) { check(t, false) })
+	h.register(t)
+	h.login(t)
+	t.Run("unverified setup account", func(t *testing.T) { check(t, false) })
+	h.verify(t)
+	t.Run("administrator", func(t *testing.T) { check(t, true) })
+	registeredPoster(t, h)
+	requireStatus(t, h.request("GET", "/post/manage", nil, false), http.StatusOK)
+	t.Run("poster", func(t *testing.T) { check(t, false) })
+}
+
 // TestProfileValidation rejects invalid text and URLs without changing published content.
 func TestProfileValidation(t *testing.T) {
 	h := newHarness(t)
