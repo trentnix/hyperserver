@@ -80,3 +80,23 @@ async function moveTestComponent(section, direction) {
   await waitForComponent(() => row() && (form.elements.content.value !== before || form.elements.componentOrder.value !== order), 'component movement');
   await waitForComponent(() => row()?.querySelector('[data-component-shift]:focus, [data-component-place]:focus'), 'focus after movement');
 }
+// Canvas resolves computed CSS colors such as color-mix() to sRGB bytes.
+function testColorContrast(first, second) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 1;
+  const context = canvas.getContext('2d');
+  function luminance(color) {
+    context.clearRect(0, 0, 1, 1);
+    context.fillStyle = color;
+    context.fillRect(0, 0, 1, 1);
+    const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+    return [red, green, blue].reduce((sum, value, index) => {
+      const channel = value / 255;
+      return sum + [.2126, .7152, .0722][index] *
+        (channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4);
+    }, 0);
+  }
+  const a = luminance(first) + .05;
+  const b = luminance(second) + .05;
+  return Math.max(a, b) / Math.min(a, b);
+}

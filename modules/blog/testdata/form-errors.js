@@ -3,6 +3,9 @@
   await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once: true}));
   const report = message => fetch('/test/result', {method: 'POST', body: message});
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const dark = innerWidth === 1100;
+  const errorInk = dark ? 'rgb(255, 195, 189)' : 'rgb(161, 38, 38)';
+  const errorSurface = dark ? 'rgb(65, 41, 43)' : 'rgb(255, 243, 242)';
   const wait = async predicate => {
     const deadline = Date.now() + 12000;
     while (!predicate()) {
@@ -28,12 +31,12 @@
     assert(descriptions.some(node => node?.textContent.trim() && node.matches('.field-error, .form-error')), input.name + ' must describe its error.');
     input.focus();
     const style = getComputedStyle(input);
-    assert(style.borderTopColor === 'rgb(161, 38, 38)' && style.outlineColor === 'rgb(161, 38, 38)' && style.outlineOffset === '0px' && style.boxShadow === 'none', input.name + ' must use the shared red border and focus outline.');
+    assert(style.borderTopColor === errorInk && style.outlineColor === errorInk && style.outlineOffset === '0px' && style.boxShadow === 'none', input.name + ' must use the shared red border and focus outline.');
     assert(document.documentElement.scrollWidth <= innerWidth, 'Error feedback must not overflow.');
   };
   const assertPanel = panel => {
     const style = getComputedStyle(panel);
-    assert(panel.getAttribute('role') === 'alert' && style.color === 'rgb(161, 38, 38)' && style.backgroundColor === 'rgb(255, 243, 242)' && style.borderLeftWidth === '4px' && style.borderRightWidth === '1px', 'Operation errors must use the shared panel treatment.');
+    assert(panel.getAttribute('role') === 'alert' && style.color === errorInk && style.backgroundColor === errorSurface && style.borderLeftWidth === '4px' && style.borderRightWidth === '1px', 'Operation errors must use the shared panel treatment.');
   };
   const nativeError = async (form, field) => {
     edit(form.elements[field], '');
@@ -47,6 +50,7 @@
   try {
     const stage = sessionStorage.getItem('form-errors-stage');
     if (!stage) {
+      if (dark) document.querySelector('[data-appearance-toggle]').click();
       let form = document.querySelector('#login-form');
       await nativeError(form, 'email');
       edit(form.elements.email, 'invalid');
@@ -110,7 +114,7 @@
       await wait(() => form.elements.imageURL.getAttribute('aria-invalid') === 'true' && settled());
       assert(form.elements.imageURL.closest('details').open, 'An invalid image URL must be exposed for correction.');
       assertField(form.elements.imageURL);
-      assert(getComputedStyle(form.elements.imageURL.closest('fieldset')).borderTopColor === 'rgb(161, 38, 38)', 'An invalid image URL must mark its picker.');
+      assert(getComputedStyle(form.elements.imageURL.closest('fieldset')).borderTopColor === errorInk, 'An invalid image URL must mark its picker.');
 
       form = await navigate('/media', '[data-media-upload]');
       form.querySelector('details').open = true;

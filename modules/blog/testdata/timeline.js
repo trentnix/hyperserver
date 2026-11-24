@@ -35,7 +35,7 @@
         'The detail must render as Markdown.');
       assert(timeline.dataset.timelineStyle === 'white' && usesPalette(timeline, 'white'),
         'The saved palette must color the published background, dates, dots, and rail.');
-      assert(isBorderless(timeline), 'The published White timeline must be borderless.');
+      assert(isBorderless(timeline), 'The published Plain timeline must be borderless.');
       const bounds = timeline.getBoundingClientRect();
       assert(bounds.left >= 0 && bounds.right <= innerWidth + 1 && getComputedStyle(items[0], '::after').width === '1px' &&
         getComputedStyle(items[2], '::after').content === 'none', 'The rail must fit the viewport and stop at the final milestone.');
@@ -85,7 +85,7 @@
       assert(usesPalette(preview, color) && preview.getBoundingClientRect().height === previewBounds.height,
         'Changing the palette must update the preview without resizing it.');
     }
-    assert(isBorderless(preview), 'The White palette preview must be borderless.');
+    assert(style.selectedOptions[0].label === 'Plain' && isBorderless(preview), 'The Plain option must preview a borderless timeline.');
     set(heading, 'Project milestones');
     set(date, '2025-02-29');
     set(field(first, 'title'), 'Version 1.0');

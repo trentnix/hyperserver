@@ -1,4 +1,4 @@
-:root:is([data-theme="thanksgiving"]:not([data-theme-preview]), [data-theme-preview="thanksgiving"]) {
+:root:is([data-theme|="thanksgiving"]:not([data-theme-preview]), [data-theme-preview|="thanksgiving"]) {
   --page-bg: #fffaf2;
   --theme-background: url('/assets/img/site-bg-thanksgiving.webp');
   --page-ink: #30241d;
@@ -18,4 +18,18 @@
   & .site-header::after { border-color: color-mix(in srgb, var(--season-accent) 55%, var(--surface)); }
   & .post-toc { border-inline-start-color: var(--panel-border); }
   & .post-toc :is(a, strong) { color: var(--link-color); }
+}
+
+:root:is([data-theme="thanksgiving-dark"]:not([data-theme-preview]), [data-theme-preview="thanksgiving-dark"]) {
+  --dark-page-bg: #211b17;
+  --dark-page-ink: #f1e7dc;
+  --dark-surface: #2c231e;
+  --dark-panel-bg: #362b24;
+  --dark-panel-border: #665043;
+  --dark-muted: #cbb6a6;
+  --dark-link-color: #fac494;
+  --dark-link-hover: #ffe0bc;
+  --dark-button-bg: #784a2d;
+  --dark-button-hover: #8b5835;
+  --season-accent: #b56b40;
 }

@@ -1,3 +1,3 @@
-:root:is([data-theme="default"]:not([data-theme-preview]), [data-theme-preview="default"]) {
+:root:is([data-theme|="default"]:not([data-theme-preview]), [data-theme-preview|="default"]) {
   --theme-background: url('/assets/img/site-bg.jpg');
 }

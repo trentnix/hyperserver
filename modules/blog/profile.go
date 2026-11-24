@@ -64,15 +64,24 @@ func (p Profile) validate() error {
 
 type siteTheme struct{ ID, Label string }
 
+const darkThemeSuffix = "-dark"
+
 func (Profile) Themes() []siteTheme {
 	return []siteTheme{{"default", "Default"}, {"thanksgiving", "Thanksgiving"}, {"christmas", "Christmas"}}
 }
 
 func (p Profile) ThemeID() string { return cmp.Or(p.Theme, "default") }
 
+func (p Profile) BaseThemeID() string { return strings.TrimSuffix(p.ThemeID(), darkThemeSuffix) }
+
+func (p Profile) DarkMode() bool { return strings.HasSuffix(p.Theme, darkThemeSuffix) }
+
 func (p Profile) ThemeLabel() string {
 	for _, theme := range p.Themes() {
-		if theme.ID == p.ThemeID() {
+		if theme.ID == p.BaseThemeID() {
+			if p.DarkMode() {
+				return theme.Label + " (dark)"
+			}
 			return theme.Label
 		}
 	}
@@ -197,6 +206,8 @@ func (m *module) saveProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if !r.PostForm.Has("theme") {
 		p.Theme = m.profile.Current().Theme
+	} else if r.PostForm.Get("darkMode") == "1" {
+		p.Theme += darkThemeSuffix
 	} else if p.Theme == "default" {
 		p.Theme = ""
 	}

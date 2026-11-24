@@ -63,6 +63,9 @@
       assert(filePickerOpened === 1, 'The device button must open the file picker once.');
       form.elements.title.value = 'Photo album';
       form.elements.slug.value = 'photo-album';
+      const appearance = document.querySelector('[data-appearance-toggle]');
+      const testDarkSelection = innerWidth === 1100;
+      if (testDarkSelection) appearance.click();
       choosePhotoAction('[data-album-browse]');
       await wait(() => document.querySelector('.media-browser [data-media-select]'));
       const library = document.querySelector('.media-browser');
@@ -73,6 +76,11 @@
       cards[1].click();
       assert(library.querySelectorAll('[aria-pressed=true] .media-selection-check').length === 2, 'Selected photos need visible corner checkboxes.');
       assert(library.open && library.querySelectorAll('[aria-pressed=true]').length === 2, 'Album picker must keep multiple photos selected.');
+      if (testDarkSelection) {
+        const label = getComputedStyle(cards[0].querySelector('.media-filename'));
+        assert(testColorContrast(label.color, getComputedStyle(cards[0]).backgroundColor) >= 4.5,
+          'Selected photo labels must remain readable in dark mode.');
+      }
       assert(!form.elements.album.value, 'Selections must not be applied before confirmation.');
       library.querySelector('[data-media-show-selected]').click();
       let selectionReview = library.querySelector('.media-selection-review');
@@ -188,6 +196,7 @@
       assert(library.scrollWidth <= library.clientWidth + 1, 'Multiple-selection footer overflows the picker.');
       library.querySelector('[data-media-add-selected]').click();
       await wait(() => !library.isConnected);
+      if (testDarkSelection) appearance.click();
       assert(form.querySelectorAll('[data-album-index]').length === 3, 'Library selections were lost.');
       assert(document.activeElement === form.querySelector('[data-album-browse]'), 'Closing the library must return focus to the Library button.');
       assert(form.querySelector('[data-album-count]').textContent === '3 photos', 'The heading must show the album size.');

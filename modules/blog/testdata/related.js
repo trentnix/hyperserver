@@ -37,6 +37,8 @@
       return;
     }
     await wait(() => document.querySelector('#post-form .CodeMirror') && document.querySelector('[name="related"]').hidden);
+    const testDarkSearch = innerWidth === 1100;
+    if (testDarkSearch) document.querySelector('[data-appearance-toggle]').click();
     const form = document.querySelector('#post-form');
     await addTestComponent(form.querySelector('[data-component-add="related-posts"]'));
     const section = form.querySelector('[data-related-editor]');
@@ -81,10 +83,21 @@
       await wait(() => !results.hidden && results.children.length > 0);
       search.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true}));
       assert(search.getAttribute('aria-activedescendant') === results.firstElementChild.id, 'Arrow keys must identify the active suggestion.');
+      if (testDarkSearch) {
+        const active = getComputedStyle(results.firstElementChild);
+        const surface = getComputedStyle(results).backgroundColor;
+        assert(active.backgroundColor !== surface && testColorContrast(active.color, active.backgroundColor) >= 4.5,
+          'Dark mode must keep the keyboard highlight distinct and readable.');
+      }
       search.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
       await wait(() => rows().some(row => row.textContent.includes(title)) && !results.hasAttribute('aria-busy'));
       assert(!results.hidden && search.value === title && search.getAttribute('aria-expanded') === 'true', 'Adding a post must preserve the query and keep suggestions open.');
       assert(results.firstElementChild.getAttribute('aria-selected') === 'true' && results.firstElementChild.querySelector('small').textContent.endsWith(' · Added'), 'Added posts must be marked in the results.');
+      if (testDarkSearch) {
+        const added = results.firstElementChild;
+        assert(testColorContrast(getComputedStyle(added.querySelector('small')).color, getComputedStyle(added).backgroundColor) >= 4.5,
+          'Dark mode must keep added search results readable.');
+      }
     }
     assert(JSON.parse(source.value).links.length === 3 && source.getAttribute('aria-invalid') !== 'true', 'Selection must update source and clear its error.');
     assert(rows()[0].querySelector('small').textContent === 'Post' && rows()[1].querySelector('small').textContent === 'Page', 'Posts and pages must be easy to distinguish in the selection.');

@@ -107,6 +107,48 @@ func TestStoredProfile(t *testing.T) {
 	}
 }
 
+func TestProfileDarkMode(t *testing.T) {
+	h := newHarness(t)
+	h.register(t)
+	h.login(t)
+	h.verify(t)
+	fields := profileFields("Example site")
+	fields.Set("darkMode", "1")
+	for _, theme := range (Profile{}).Themes() {
+		fields.Set("theme", theme.ID)
+		fields.Set("version", strconv.FormatInt(h.blog.profile.Current().Version, 10))
+		requireStatus(t, h.request("POST", "/profile", fields, false), http.StatusSeeOther)
+		profile, err := h.blog.profileStore.GetProfile(t.Context())
+		if err != nil || profile.ThemeID() != theme.ID+"-dark" || profile.ThemeLabel() != theme.Label+" (dark)" {
+			t.Fatalf("dark mode for %s did not round-trip: %v", theme.ID, err)
+		}
+		editor := h.request("GET", "/profile", nil, false).Body.String()
+		if !strings.Contains(editor, `value="`+theme.ID+`" selected`) ||
+			!strings.Contains(editor, `name="darkMode" value="1" checked`) {
+			t.Fatalf("the editor did not restore the %s selection and its dark mode", theme.ID)
+		}
+		home := h.request("GET", "/", nil, false).Body.String()
+		if !strings.Contains(home, `data-theme="`+theme.ID+`-dark"`) {
+			t.Fatalf("dark mode was not applied to %s", theme.ID)
+		}
+	}
+	dark := h.blog.profile.Current()
+	fields.Del("darkMode")
+	fields.Set("version", strconv.FormatInt(dark.Version, 10))
+	requireStatus(t, h.request("POST", "/profile", fields, false), http.StatusSeeOther)
+	if current := h.blog.profile.Current(); current.DarkMode() || current.BaseThemeID() != dark.BaseThemeID() {
+		t.Fatal("clearing dark mode changed the selected theme")
+	}
+	versions, err := h.blog.profileStore.ListProfileRevisions(t.Context())
+	if err != nil || len(versions) < 2 {
+		t.Fatalf("dark mode history is missing: %v", err)
+	}
+	history := h.request("GET", "/profile/history?revision="+strconv.FormatInt(versions[1].ID, 10), nil, false).Body.String()
+	if !strings.Contains(history, dark.ThemeLabel()) {
+		t.Fatal("profile history does not identify the saved dark mode")
+	}
+}
+
 func TestRetiredProfileThemes(t *testing.T) {
 	h := newHarness(t)
 	store := h.blog.profileStore

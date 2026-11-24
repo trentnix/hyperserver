@@ -5,7 +5,11 @@ import './editor-drafts.js';
 
 document.addEventListener('click', event => {
   const preview = event.target.closest('[data-preview-profile-theme]');
-  if (preview) window.open('/?preview-theme=' + encodeURIComponent(preview.form.elements.theme.value), '_blank', 'noopener');
+  if (preview) {
+    const {theme, darkMode} = preview.form.elements;
+    const selected = theme.value + (darkMode.checked ? '-dark' : '');
+    window.open('/?preview-theme=' + encodeURIComponent(selected), '_blank', 'noopener');
+  }
 });
 
 // Browser Back can restore a whole document without contacting the server.

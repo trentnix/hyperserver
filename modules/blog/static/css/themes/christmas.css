@@ -1,4 +1,4 @@
-:root:is([data-theme="christmas"]:not([data-theme-preview]), [data-theme-preview="christmas"]) {
+:root:is([data-theme|="christmas"]:not([data-theme-preview]), [data-theme-preview|="christmas"]) {
   --page-bg: #fffdf9;
   --theme-background: url('/assets/img/site-bg-christmas.webp');
   --page-ink: #222b25;
@@ -31,4 +31,19 @@
   @media (min-width: 1680px) {
     & .site-sidebar { box-shadow: inset -5px 0 var(--christmas-cranberry); }
   }
+}
+
+:root:is([data-theme="christmas-dark"]:not([data-theme-preview]), [data-theme-preview="christmas-dark"]) {
+  --dark-page-bg: #151e1b;
+  --dark-page-ink: #f0eee5;
+  --dark-surface: #202c27;
+  --dark-panel-bg: #27362e;
+  --dark-panel-border: #486154;
+  --dark-muted: #bdc9bd;
+  --dark-link-color: #ffc0bf;
+  --dark-link-hover: #ffe0d1;
+  --dark-button-bg: #704048;
+  --dark-button-hover: #885057;
+  --christmas-pine: #15362d;
+  --christmas-cranberry: #b04b5a;
 }

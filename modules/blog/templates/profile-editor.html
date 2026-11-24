@@ -10,11 +10,12 @@
     <label for="profile-theme">Theme</label>
     <div class="theme-controls">
       <select id="profile-theme" name="theme" aria-describedby="profile-theme-help">
-        {{ range .Data.Themes }}<option value="{{ .ID }}"{{ if eq .ID $.Data.ThemeID }} selected{{ end }}>{{ .Label }}</option>{{ end }}
+        {{ range .Data.Themes }}<option value="{{ .ID }}"{{ if eq .ID $.Data.BaseThemeID }} selected{{ end }}>{{ .Label }}</option>{{ end }}
       </select>
       <button type="button" class="button-secondary" data-preview-profile-theme>Preview theme</button>
     </div>
-    <p class="form-hint" id="profile-theme-help">Preview opens in a new tab. Save profile to apply the theme.</p>
+    <label class="profile-dark-mode"><input type="checkbox" name="darkMode" value="1"{{ if .Data.DarkMode }} checked{{ end }}> Default to dark mode</label>
+    <p class="form-hint" id="profile-theme-help">Readers can choose light or dark in their browser. Preview opens in a new tab.</p>
   </div>
   <div class="profile-identity">
     <label for="profile-name">Display name</label><input id="profile-name" name="name" value="{{ .Data.Name }}" maxlength="240" required autocomplete="name">

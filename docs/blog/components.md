@@ -101,7 +101,7 @@ Enter Markdown text and an optional heading. Each callout defaults to Parchment.
 
 Add up to 20 milestones with a date and title. Enter a year such as `2025`, a month such as `2025-10`, or a day such as `2025-10-18`. Each date appears at the precision you entered. You can give the timeline a heading and use **Add detail** to write Markdown for a milestone.
 
-Choose a **Color** to preview how the timeline will look. Slate is the default. White, Parchment, Forest, and Brick are also available.
+Choose a **Color** to preview how the timeline will look. Slate is the default. Plain, Parchment, Forest, and Brick are also available. Plain is borderless.
 
 Readers see the oldest milestones first. A year entry comes before its months, and a month entry comes before its days. Milestones with identical dates keep the order you entered. The timeline also appears in RSS.
 
