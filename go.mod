@@ -3,7 +3,7 @@ module github.com/trentnix/hyperserver
 go 1.27.4
 
 require (
-	github.com/bep/imagemeta v1.1.0
+	github.com/bep/imagemeta v1.1.2
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/golang-jwt/jwt/v5 v5.3.1
